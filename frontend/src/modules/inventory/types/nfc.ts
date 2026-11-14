@@ -263,6 +263,8 @@ export interface InventoryNfcUntaggedItem {
   name: string;
   serial_number: string | null;
   asset_tag: string | null;
+  /** Null only on a legacy row; every new item gets one. */
+  barcode: string | null;
   category_name: string | null;
   storage_area_name: string | null;
 }
@@ -277,7 +279,15 @@ export interface InventoryNfcUntaggedListResponse {
 // ---------------------------------------------------------------------------
 
 export type LastSeenSource =
-  'nfc_tap' | 'assignment' | 'return' | 'checkout' | 'check_in' | 'issuance' | 'issuance_return';
+  | 'nfc_tap'
+  | 'barcode_put_away'
+  | 'assignment'
+  | 'return'
+  | 'checkout'
+  | 'check_in'
+  | 'issuance'
+  | 'issuance_return'
+  | 'created';
 
 export interface NotSeenItem {
   id: string;

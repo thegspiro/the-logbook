@@ -38,25 +38,12 @@ interface CardContent {
   to: string;
 }
 
-function Card({
-  title,
-  value,
-  detail,
-  to,
-  period,
-}: {
-  title: string;
-  value: string;
-  detail: string;
-  to: string;
-  period: string;
-}) {
+function Card({ title, value, detail, to }: { title: string; value: string; detail: string; to: string }) {
+  // Every card covers the one period the section header names, so a per-card
+  // badge repeated it eight times and wrapped narrow titles onto two lines.
   return (
     <Link to={to} className="card block p-4 transition-shadow hover:shadow-md">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="text-theme-text-primary text-sm font-semibold">{title}</h3>
-        <span className="bg-theme-surface-secondary text-theme-text-muted rounded px-2 py-1 text-[11px]">{period}</span>
-      </div>
+      <h3 className="text-theme-text-primary text-sm font-semibold">{title}</h3>
       <p className="text-theme-text-primary mt-3 text-2xl font-bold tabular-nums">{value}</p>
       <p className="text-theme-text-muted mt-1 text-xs">{detail}</p>
     </Link>
@@ -130,7 +117,10 @@ function availableCards(data: MainDashboardWidgets, period: WidgetPeriod): Parti
 
 export default function DashboardOrganizationWidgets() {
   const { confirm } = useConfirm();
-  const canSetDepartmentDefault = useAuthStore((state) => state.checkPermission('settings.manage'));
+  // The same pair the server accepts on /dashboard/pulse-layout/default.
+  const canSetDepartmentDefault = useAuthStore(
+    (state) => state.checkPermission('settings.manage') || state.checkPermission('organization.update_settings')
+  );
   const [period, setPeriod] = useState<WidgetPeriod>('month');
   const [data, setData] = useState<MainDashboardWidgets | null>(null);
   const [pulse, setPulse] = useState<DashboardPulseResponse | null>(null);
@@ -262,9 +252,7 @@ export default function DashboardOrganizationWidgets() {
           <h2 id="dashboard-widgets-title" className="text-theme-text-primary font-bold">
             Department pulse
           </h2>
-          <p className="text-theme-text-muted text-sm">
-            Summaries for the areas you can access, over the period you choose.
-          </p>
+          <p className="text-theme-text-muted text-sm">Summaries for the areas you can access · {data.period_label}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-theme-text-secondary text-sm">
@@ -319,7 +307,6 @@ export default function DashboardOrganizationWidgets() {
                 value={content.value}
                 detail={content.detail}
                 to={content.to}
-                period={data.period_label}
               />
             ) : null;
           })}

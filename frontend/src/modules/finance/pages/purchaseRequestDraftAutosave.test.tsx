@@ -188,3 +188,70 @@ describe('purchase request draft autosave', () => {
     expect(screen.queryByText('The request list')).not.toBeInTheDocument();
   });
 });
+
+// A draft opened again from the list is already on the server. Nothing is
+// sent until something changes, and the status line said "Saving soon…"
+// anyway, for a save that never came.
+describe('an existing draft opened for editing', () => {
+  const DRAFT = {
+    id: 'pr-1',
+    title: 'Smoke alarms for the spring giveaway',
+    description: '',
+    vendor: '',
+    estimatedAmount: '240.00',
+    priority: 'medium',
+    budgetId: null,
+    fundCampaignId: null,
+    fiscalYearId: 'fy-1',
+    status: 'draft',
+  };
+
+  const renderEdit = () =>
+    render(
+      <ConfirmProvider>
+        <MemoryRouter initialEntries={['/finance/purchase-requests/pr-1/edit']}>
+          <Routes>
+            <Route path="/finance/purchase-requests/:id/edit" element={<PurchaseRequestFormPage />} />
+          </Routes>
+        </MemoryRouter>
+      </ConfirmProvider>
+    );
+
+  beforeEach(() => {
+    storeState = {
+      createPurchaseRequest,
+      isLoading: false,
+      fetchPurchaseRequest: vi.fn(),
+      selectedPurchaseRequest: DRAFT,
+    };
+  });
+
+  it('says the draft is saved, and sends nothing, while it is unchanged', async () => {
+    renderEdit();
+    expect(await screen.findByDisplayValue('Smoke alarms for the spring giveaway')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(screen.getByText('Draft saved')).toBeInTheDocument();
+    expect(screen.queryByText('Saving soon…')).not.toBeInTheDocument();
+    expect(updateRequest).not.toHaveBeenCalled();
+  });
+
+  it('still saves it once something changes', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderEdit();
+    await user.type(await screen.findByDisplayValue('Smoke alarms for the spring giveaway'), ' (20)');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    expect(updateRequest).toHaveBeenCalledTimes(1);
+    expect(updateRequest).toHaveBeenCalledWith(
+      'pr-1',
+      expect.objectContaining({ title: 'Smoke alarms for the spring giveaway (20)' })
+    );
+    expect(await screen.findByText(/^Draft saved at/)).toBeInTheDocument();
+  });
+});

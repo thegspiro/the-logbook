@@ -57,23 +57,41 @@ describe('BallotVotingPage public error states (W50-44, W50-52)', () => {
     window.history.replaceState(null, '', '/ballot#token=tok');
   });
 
-  it('renders the friendly "already submitted" sentence even though the API error carries a code', async () => {
+  // W50-13: a spent link is the voter having voted, not a failure, so it is
+  // neither headed "Unable to Load Ballot" nor told it may be a mistake.
+  it('greets a spent link as a vote already recorded, not as a failure', async () => {
     mockLookupBallot.mockRejectedValue(apiError('This ballot has already been fully submitted'));
 
     render(<BallotVotingPage />);
 
-    await screen.findByText('This ballot has already been submitted. Each voting link can only be used once.');
+    expect(await screen.findByRole('heading', { name: "You've already voted" })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'This ballot has already been submitted, so your vote is recorded. Each voting link can only be used once.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Unable to Load Ballot' })).not.toBeInTheDocument();
+    expect(screen.queryByText(SECRETARY_HINT)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/open this election under Elections, then use "Verify a vote receipt"/)
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Error code/)).not.toBeInTheDocument();
-    expect(screen.getByText(SECRETARY_HINT)).toBeInTheDocument();
   });
 
-  it('says voting has closed, with a results hint and no "mistake" footer', async () => {
+  // W50-92: a receipt saved while voting stays checkable after close, from
+  // the signed-in election page; this page says where.
+  it('says voting has closed, where results come from, and where to check a receipt', async () => {
     mockLookupBallot.mockRejectedValue(apiError('Voting has closed'));
 
     render(<BallotVotingPage />);
 
-    await screen.findByText('Voting has closed for this election.');
-    expect(screen.getByText('Results will be shared by your organization.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Voting has closed' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Voting has closed for this election. Results will be shared by your organization.')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/open this election under Elections, then use "Verify a vote receipt"/)
+    ).toBeInTheDocument();
     expect(screen.queryByText(SECRETARY_HINT)).not.toBeInTheDocument();
     expect(screen.queryByText(/Error code/)).not.toBeInTheDocument();
   });

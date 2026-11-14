@@ -2,7 +2,7 @@
  * ComplianceSection — Compliance checklists for a single facility.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ShieldCheck, Plus, Trash2, Loader2, CheckCircle2, Circle, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
@@ -11,8 +11,25 @@ import { enumLabel } from '../types';
 import { inputCls, labelCls, COMPLIANCE_TYPE_OPTIONS } from '../constants';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, isPastDate } from '../../../utils/dateFormatting';
-
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+
+const EMPTY_FORM = { compliance_type: 'nfpa', checklist_name: '', description: '', due_date: '' };
+type ChecklistForm = typeof EMPTY_FORM;
+type ChecklistField = keyof ChecklistForm;
+
+// Ordered as on screen, so the first refusal takes focus.
+const CHECKLIST_FIELDS: FieldSpecs<ChecklistField> = {
+  checklist_name: { id: 'compliance-checklist-name', label: 'Title' },
+  compliance_type: { id: 'compliance-checklist-type', label: 'Type' },
+  due_date: { id: 'compliance-checklist-due-date', label: 'Due date' },
+  description: { id: 'compliance-checklist-description', label: 'Description' },
+};
+// Mirrors FacilityComplianceChecklistBase.checklist_name.
+const CHECKLIST_NAME_LIMIT = 300;
+
 interface Props {
   facilityId: string;
   canCreate: boolean;
@@ -26,11 +43,22 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    compliance_type: 'nfpa',
-    checklist_name: '',
-    description: '',
-    due_date: '',
+  const [formData, setFormData] = useState<ChecklistForm>(EMPTY_FORM);
+  const checklistErrors = useFieldErrors(CHECKLIST_FIELDS);
+  const set = (patch: Partial<ChecklistForm>) => {
+    setFormData((p) => ({ ...p, ...patch }));
+    for (const key of Object.keys(patch)) checklistErrors.setError(key as ChecklistField, null);
+  };
+  const closeForm = () => {
+    setShowForm(false);
+    setFormData(EMPTY_FORM);
+    checklistErrors.clear();
+  };
+  // Cancel (and the header's Add Checklist, which toggles the form) asks
+  // before throwing typed changes away (forms review F-6).
+  const requestCancel = useDiscardGuard({
+    isDirty: showForm && JSON.stringify(formData) !== JSON.stringify(EMPTY_FORM),
+    onClose: closeForm,
   });
 
   const loadChecklists = useCallback(async () => {
@@ -49,9 +77,15 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
     void loadChecklists();
   }, [loadChecklists]);
 
-  const handleCreate = async () => {
-    if (!formData.checklist_name.trim()) {
-      toast.error('Title is required');
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // Named on the field rather than in a toast that vanished (forms review F-3).
+    const problems: FieldErrors<ChecklistField> = {};
+    if (!formData.checklist_name.trim()) problems.checklist_name = 'Enter a title for the checklist.';
+    checklistErrors.setFormError(null);
+    checklistErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      checklistErrors.focusFirst(problems);
       return;
     }
     setIsSaving(true);
@@ -66,11 +100,14 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
 
       await facilitiesService.createComplianceChecklist(payload);
       toast.success('Checklist created');
-      setShowForm(false);
-      setFormData({ compliance_type: 'nfpa', checklist_name: '', description: '', due_date: '' });
+      closeForm();
       void loadChecklists();
-    } catch {
-      toast.error('Failed to create checklist');
+    } catch (err: unknown) {
+      // A refused field is flagged on that field (forms review F-2); anything
+      // no field answers for is said in the form. Nothing is created until
+      // it is fixed.
+      const placed = checklistErrors.setFromApiError(err, 'Failed to create checklist');
+      checklistErrors.focusFirst(placed);
     } finally {
       setIsSaving(false);
     }
@@ -103,7 +140,7 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
         </h2>
         {canCreate && (
           <button
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => (showForm ? requestCancel() : setShowForm(true))}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
           >
             <Plus className="h-3.5 w-3.5" /> Add Checklist
@@ -113,70 +150,96 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
 
       <div className="p-4">
         {canCreate && showForm && (
-          <div className="bg-theme-surface-hover/50 mb-5 space-y-3 rounded-lg p-4">
+          <form
+            onSubmit={(e) => void handleCreate(e)}
+            noValidate
+            className="bg-theme-surface-hover/50 mb-5 space-y-3 rounded-lg p-4"
+          >
             <h3 className="text-theme-text-primary text-sm font-medium">New Compliance Checklist</h3>
+            {checklistErrors.formError && (
+              <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                {checklistErrors.formError}
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="compliance-checklist-name" className={labelCls}>
-                  Title *
-                </label>
-                <input
-                  id="compliance-checklist-name"
-                  type="text"
-                  value={formData.checklist_name}
-                  onChange={(e) => setFormData((p) => ({ ...p, checklist_name: e.target.value }))}
-                  placeholder="e.g., NFPA 1500 Annual Review"
-                  className={inputCls}
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label htmlFor="compliance-checklist-type" className={labelCls}>
-                  Type
-                </label>
-                <select
-                  id="compliance-checklist-type"
-                  value={formData.compliance_type}
-                  onChange={(e) => setFormData((p) => ({ ...p, compliance_type: e.target.value }))}
-                  className={inputCls}
-                >
-                  {COMPLIANCE_TYPE_OPTIONS.map((ct) => (
-                    <option key={ct} value={ct}>
-                      {enumLabel(ct)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="compliance-checklist-due-date" className={labelCls}>
-                  Due Date
-                </label>
-                <input
-                  id="compliance-checklist-due-date"
-                  type="date"
-                  value={formData.due_date}
-                  onChange={(e) => setFormData((p) => ({ ...p, due_date: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label htmlFor="compliance-checklist-description" className={labelCls}>
-                  Description
-                </label>
-                <input
-                  id="compliance-checklist-description"
-                  type="text"
-                  value={formData.description}
-                  onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
+              <FormField
+                id={CHECKLIST_FIELDS.checklist_name.id}
+                label="Title"
+                required
+                error={checklistErrors.errors.checklist_name}
+                labelClassName={labelCls}
+                maxLength={CHECKLIST_NAME_LIMIT}
+                count={formData.checklist_name.length}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="text"
+                    value={formData.checklist_name}
+                    onChange={(e) => set({ checklist_name: e.target.value })}
+                    placeholder="e.g., NFPA 1500 Annual Review"
+                    className={inputCls}
+                    autoFocus
+                  />
+                )}
+              </FormField>
+              <FormField
+                id={CHECKLIST_FIELDS.compliance_type.id}
+                label="Type"
+                error={checklistErrors.errors.compliance_type}
+                labelClassName={labelCls}
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    value={formData.compliance_type}
+                    onChange={(e) => set({ compliance_type: e.target.value })}
+                    className={inputCls}
+                  >
+                    {COMPLIANCE_TYPE_OPTIONS.map((ct) => (
+                      <option key={ct} value={ct}>
+                        {enumLabel(ct)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
+              <FormField
+                id={CHECKLIST_FIELDS.due_date.id}
+                label="Due Date"
+                error={checklistErrors.errors.due_date}
+                labelClassName={labelCls}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="date"
+                    value={formData.due_date}
+                    onChange={(e) => set({ due_date: e.target.value })}
+                    className={inputCls}
+                  />
+                )}
+              </FormField>
+              <FormField
+                id={CHECKLIST_FIELDS.description.id}
+                label="Description"
+                error={checklistErrors.errors.description}
+                labelClassName={labelCls}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="text"
+                    value={formData.description}
+                    onChange={(e) => set({ description: e.target.value })}
+                    className={inputCls}
+                  />
+                )}
+              </FormField>
             </div>
             <div className="flex gap-2 pt-1">
               <button
-                onClick={() => {
-                  void handleCreate();
-                }}
+                type="submit"
                 disabled={isSaving}
                 className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
               >
@@ -184,13 +247,14 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
                 Create Checklist
               </button>
               <button
-                onClick={() => setShowForm(false)}
-                className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1.5 text-xs transition-colors"
+                type="button"
+                onClick={requestCancel}
+                className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 px-3 py-1.5 text-xs transition-colors"
               >
                 Cancel
               </button>
             </div>
-          </div>
+          </form>
         )}
 
         {isLoading ? (

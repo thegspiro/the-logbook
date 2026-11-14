@@ -127,12 +127,189 @@ _is_ the upgrade. Before it:
   locally.
 - **Never downgrade to "repair" a migration fork.** Several migrations
   deliberately do not reverse, and one loses data on the way down — the entries
-  below name them.
+  below name them. Downgrading past `20260201_0016` is no longer possible at
+  all: `d75ecbc15bae` dropped the tables that revision's downgrade removes.
 
 ## Changes that can stop an existing deployment from starting
 
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
+
+### Duplicate meeting attendance rows are removed, and cannot be restored (2026-11-11)
+
+A migration (`7b6db9dd8e4f`) runs on the next start and adds a unique index on
+`meeting_attendees (meeting_id, user_id)`, so a member is recorded once per
+meeting. Nothing stopped a member being entered twice until now, and the index
+cannot be added while two rows share a pair, so **the migration first deletes
+the extra rows** (owner-approved, 2026-11-10). For each member entered more
+than once on one meeting it keeps one row:
+
+- a row carrying a waiver, if any does (the most recent of them);
+- otherwise the most recent row.
+
+The kept row also takes "present" and "excused" from the deleted ones when any
+of them was set, so a check-in recorded only on a deleted row is not lost.
+Each deleted row is written to the migration log by its ids (meeting, member,
+deleted row, kept row); no reason text is logged.
+
+- **Take the database backup first.** This step cannot be undone: the
+  downgrade drops the index and the new column but cannot bring the deleted
+  rows back. Only the backup has them.
+- The same migration adds `meeting_attendees.waiver_request_id`, a nullable
+  link to the member request a waiver came from (empty for every existing
+  row).
+- Adding a member who is already on a meeting is now refused with a message
+  ("already an attendee"), and creating a meeting whose attendee list names a
+  member twice is refused (400).
+
+### A screening record's type and requirement link are encrypted at rest (2026-11-08)
+
+A migration (`ac1687769b62`) runs on the next start and turns
+`screening_records.screening_type` from an `ENUM` and
+`screening_records.requirement_id` from a `VARCHAR(36)` into `TEXT`, then
+**encrypts every existing value of both in place**. It first drops the
+**foreign key** from `requirement_id` to `screening_requirements` (whatever
+the constraint is named on your database) and the index under it: the
+database cannot match ciphertext. Same rules as the status change below:
+
+- `ENCRYPTION_KEY` must be set when screening records exist; with it missing
+  the migration stops with a clear error and changes nothing.
+- **Take the database backup first.** The downgrade decrypts both columns,
+  restores the `ENUM` and the `ON DELETE SET NULL` foreign key, and clears any
+  link whose requirement no longer exists (the restored key would refuse it).
+  Only the same `ENCRYPTION_KEY` / `ENCRYPTION_SALT` can read the ciphertext.
+  Backups taken before the upgrade still hold both columns in plaintext.
+- **Deleting a requirement still keeps its records**, now unlinking them in
+  the application rather than through the database. A requirement deleted by
+  hand in SQL leaves its records pointing at nothing; they then count toward
+  no requirement, as an unlinked record always has.
+- **New audit entries no longer name a screening's type**: the record-created
+  entry drops `screening_type`, and the records-list entry records only
+  `screening_type_filtered: true/false`. Existing entries are unchanged — the
+  audit log is hash-chained, and rewriting a row would break the chain.
+- The screens, compliance grading, the expiring list, the Members hub, the
+  membership pipeline's screening stage, the data export and anonymisation
+  behave as before. A report or query of your own that reads, filters or joins
+  on either column directly will now see ciphertext.
+- `scripts/rotate_encryption_key.py` and `scripts/reencrypt_to_aesgcm.py` cover
+  both columns.
+- **Still plaintext:** the dates and which member a record belongs to (see
+  `docs/KNOWN_LIMITATIONS.md`, MS-18).
+
+### Positions held now have a dated history (2026-11-08)
+
+A migration (`67ad01c43434`) runs on the next start, creates
+`member_position_terms` and gives every existing `user_positions` row one
+open term. It does not refuse to start on any data it meets, but what it
+records is worth knowing before an evaluation cycle relies on it:
+
+- Each current position's history starts at its `assigned_at` (or, where
+  that is empty, the member's `created_at`). **Nothing earlier is
+  reconstructed:** a position a member gave up before this upgrade does not
+  appear, and the audit log is not replayed into the history.
+- From then on every assignment and removal opens or closes a term in the
+  same transaction, whichever screen or service made it. A report or script
+  of your own that writes `user_positions` with raw SQL bypasses that; call
+  `sync_position_terms` (`app/models/member_position_term.py`) after it, as
+  `scripts/seed_test_users.py` now does.
+- The downgrade drops the table and the history with it; `user_positions` is
+  untouched, so the previous release boots. Take the backup first if the
+  history matters to you.
+
+### A screening record's status is encrypted at rest (2026-11-05)
+
+A migration (`80fa2c83bf9d`) runs on the next start and turns
+`screening_records.status` (passed, failed, waived, …) from an `ENUM` into
+`TEXT`, then **encrypts every existing value in place**. The provider, results
+and notes beside it were already encrypted; until now the outcome itself was
+readable in a dump or backup. It also drops the `idx_screening_rec_status`
+index, which an encrypted column cannot use. Same rules as the other
+encryption changes:
+
+- `ENCRYPTION_KEY` must be set when screening records exist; with it missing
+  the migration stops with a clear error and changes nothing.
+- **Take the database backup first.** The downgrade decrypts and restores the
+  `ENUM`, but only the same `ENCRYPTION_KEY` / `ENCRYPTION_SALT` can read the
+  ciphertext. Backups taken before the upgrade still hold every status in
+  plaintext.
+- The screens, compliance grading, the expiring list, the Members hub, the
+  membership pipeline's screening stage, the data export and anonymisation
+  behave as before. A report or query of your own that reads or filters the
+  column directly will now see ciphertext.
+- `scripts/rotate_encryption_key.py` and `scripts/reencrypt_to_aesgcm.py` cover
+  the column.
+- **Not part of this change:** the screening type, the dates and which member a
+  record belongs to remain plaintext (see `docs/KNOWN_LIMITATIONS.md`, MS-18).
+
+### `REDIS_REQUIRED=true` now refuses to start without Redis (2026-11-04)
+
+`REDIS_REQUIRED` was documented — here, in `.env.example.full` and in the
+deployment guides — as making the backend refuse to start when it cannot reach
+Redis. It never did: the startup code caught the connection failure, logged a
+warning and carried on in degraded mode (caching off, rate limiting per
+process). It now does what it says. After its connection retries
+(`REDIS_CONNECT_RETRIES`, default 3) the backend logs
+`Redis connection failed and REDIS_REQUIRED is true - refusing to start` and
+exits, and Docker restarts it until Redis answers.
+
+**Only a deployment that sets `REDIS_REQUIRED=true` is affected**; the default
+is `false`, and nothing shipped in this repository sets it. If yours does,
+check that the backend actually reaches Redis on the version you are leaving:
+
+```bash
+docker compose logs backend | grep -E "Redis connected|Redis connection failed|degraded mode"
+```
+
+`✓ Redis connected` means nothing changes. `Redis connection failed` or
+`degraded mode` means the backend has been running without Redis and will
+**not start** after this upgrade until the Redis settings are fixed — the host,
+port, `REDIS_PASSWORD`, or `REDIS_SSL` / `REDIS_SSL_CA`. To keep the old
+behaviour while you fix them, set `REDIS_REQUIRED=false`.
+
+### A self-hosted S3 / MinIO endpoint must be listed in `S3_ALLOWED_ENDPOINTS` (2026-11-03)
+
+**Do this before upgrading if any department stores files in MinIO or another
+S3-compatible store.** The backend still starts without it; what stops is that
+department's file storage, which is why it is listed here. A custom S3 endpoint is now chosen by whoever runs the
+installation, not typed by a department administrator (owner decision
+2026-11-01; `docs/KNOWN_LIMITATIONS.md`, SCH-10). List every endpoint a
+department uses, comma-separated, in the new `S3_ALLOWED_ENDPOINTS` setting —
+for the bundled MinIO:
+
+```bash
+S3_ALLOWED_ENDPOINTS=http://minio:9000
+S3_ALLOW_PRIVATE_ENDPOINT=true   # still needed for a private or plain-HTTP one
+```
+
+The variable is in all three compose files' `environment:` blocks (Docker
+Compose, both Unraid files), so setting it in `.env` is enough. Find what your
+departments use under **Organization Settings → File Storage**, or in the
+`file_storage.s3_endpoint_url` key of `organizations.settings`.
+
+What happens if you do not:
+
+- **A department whose endpoint is not listed stops using its bucket at
+  once.** Nothing is migrated or deleted, but uploads to it and downloads of
+  files already in it are refused with a 503 (`LB-UPLD-006`) — the same as a
+  bucket that cannot be reached — rather than going somewhere else. The
+  backend log names the organization (by id) and says the endpoint is not
+  allowed; the endpoint's URL is not logged. The File Storage screen shows the
+  same reason. Adding the endpoint to the setting and restarting puts
+  everything back with no further step: the saved connection test still
+  matches.
+- **Saving a new unlisted endpoint is refused with a 400** naming
+  `S3_ALLOWED_ENDPOINTS`, on the settings screen and in onboarding. The screen
+  now offers the listed endpoints as a choice instead of a free-text box. An
+  endpoint already saved does not block other changes, so a department can
+  still switch to local storage while it is unlisted.
+- **Amazon S3 is unaffected.** A department with no custom endpoint connects to
+  AWS's own regional endpoint, and needs nothing listed.
+
+Matching is exact on scheme, host, port and path; `HTTP://MinIO:9000/` and
+`http://minio:9000` are the same endpoint, `https://minio:9000` is not. **A
+malformed entry stops the backend from starting** (`python -m app.preflight`
+reports it): each entry must be an `http://` or `https://` URL with a host and
+no user name, password, query or fragment.
 
 ### Leave and training-waiver reasons are encrypted at rest (2026-10-28)
 
@@ -624,6 +801,1082 @@ every authentication and public endpoint at once.
 
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
+
+### Waiver requests nobody decides close after seven days (2026-11-13)
+
+Nothing blocks a restart, and no migration is involved.
+
+- **A new hourly task, `attendance_waiver_expiry`, closes undecided waiver
+  requests** (training sessions and business meetings) seven days after the
+  session, as the owner decided. **Its first run after the upgrade closes
+  every request already past that point at once**, and each member whose
+  request closes gets an in-app notice and an email. An officer who wants to
+  decide old requests rather than let them close should do so before
+  upgrading: `/attendance-waivers` lists them.
+- An expired request counts as an absence. Nothing is written to a meeting's
+  roll call, and no training requirement is excused.
+- **Business-meeting waiver requests start being emailed**, from the
+  _Meeting Waiver Requested / Decided / Withdrawn_ templates that have sat
+  unsent since the waiver emails landed: the secretary (or whoever the meeting
+  policy routes to) when a member asks, the member when it is decided. They
+  follow the event-duty and event-change email preferences. Word those
+  templates before upgrading if the defaults do not suit.
+- **A waiver policy's CC positions are copied in the app only.** Holders get
+  the bell, not an email; to email a copy of each decision, add the positions
+  to the _Waiver Decided_ template's CC positions.
+
+### Email templates: saved CC and BCC addresses start being used, and waiver requests are emailed (2026-11-11)
+
+Nothing blocks a restart. Migration `1c6632035ccd` widens the template type
+list, adds `email_templates.default_cc_position_ids` (NULL on every existing
+row) and creates the empty `attendance_waiver_email_sends` table.
+
+- **Saved default CC and BCC addresses start being copied.** The Email
+  Templates editor has always said its CC addresses are "CC'd on every email
+  sent with this template", but until now only scheduled emails used them;
+  every email the application sends on its own dropped them. After the
+  upgrade they are copied on every email sent with that template. **Before
+  upgrading, open Communications → Email Templates and check each template's
+  Default CC / BCC**: an address saved long ago and forgotten starts receiving
+  mail. A template sent to many members at once (an event reminder, say)
+  copies the address on every member's message.
+- **Never copied:** the templates that carry a password, a sign-in or reset
+  link, a ballot link or an applicant's private link — Welcome, Password
+  Reset, IT Password Notification, Ballot Notification, Application Status
+  Link, Application Follow-Up Form and Application Contact Changed. A copy of
+  one would hand the credential to somebody else. Test sends are not copied
+  either.
+- **CC by position.** A template can now also copy whoever currently holds a
+  position (the Secretary, say). Nobody is copied this way until a department
+  picks a position.
+- **Training waiver requests are emailed.** Approvers are emailed when a
+  member asks to be excused (with Approve and Deny buttons that open the
+  request in the Logbook; opening one changes nothing), the member when it is
+  decided, and approvers when it is withdrawn. Six new templates —
+  _Session Waiver Requested / Decided / Withdrawn_ and the three meeting
+  equivalents, which nothing sends yet — appear under Communications → Email
+  Templates. People a waiver template CCs get a separate copy without the
+  buttons, the category or the decider's note.
+- **Downgrading** deletes the six waiver templates' rows (a department's edits
+  included), the position CC choices and the send log.
+
+### Training: documents on waiver requests, kept a year (2026-11-11)
+
+Nothing blocks a restart. Migration `86722d75b5a2` creates one empty table,
+`attendance_waiver_attachments`. No existing row changes.
+
+- **Off until a department turns it on.** The waiver policy gains
+  `attachment` (`off` by default) and `attachment_retention_days` (365 by
+  default); a policy saved before the upgrade reads both at their defaults,
+  so no member can file a document until a training officer chooses
+  `optional` or `required`.
+- **Files go under `<org>/attendance-waivers/`** on the uploads volume (or the
+  department's bucket), through the same storage service, scanning and
+  encryption as every other upload. Back that directory up with the rest of
+  the volume.
+- **A new daily task, `attendance_waiver_attachment_retention`, permanently
+  deletes documents** once their request has been closed longer than the
+  retention period. It deletes nothing on the day of the upgrade: no document
+  exists yet. A department whose records policy needs them longer should raise
+  `attachment_retention_days` before the first anniversary.
+- **Downgrading past `86722d75b5a2`** drops the table; the files stay on the
+  volume with nothing pointing at them.
+
+### Meetings: a member who was present counts as attending, waiver or not; members can ask to be excused (2026-11-11)
+
+- **Attendance figures and voting eligibility can rise on upgrade, with no
+  setting changed.** Until now a meeting waiver beat being present: a member
+  marked present at a meeting they also held a waiver for was counted as
+  excused from it, not as attending. The owner decided check-in wins
+  (2026-11-10), so such a meeting now counts as attended in the voting
+  check's attendance percentage and recent-meetings count, the Secretary's
+  attendance dashboard and the annual evaluation's business-meeting figure.
+  A member with such meetings can move above a voting threshold. A waiver
+  still excuses a meeting the member missed. The election attendee import
+  already copied members marked present; it now agrees with the tally about
+  them (D12).
+- **The Secretary's grant takes a JSON body** (D7):
+  `POST /api/v1/meetings/{id}/attendance-waiver` now reads `user_id` and
+  `reason` from the body, which is what the app already sent (so the call
+  used to fail with 422). A script that passed them as query parameters must
+  send a JSON body instead. The reason is no longer written to the audit log.
+- **Members can ask to be excused from a business meeting**, off until the
+  Secretary saves a policy (`PUT /api/v1/meetings/waiver-requests/policy`,
+  `meetings.manage`; stored in the organization's settings, so nothing to
+  configure at upgrade time). The screens arrive in a later release. An
+  approved request writes the same waiver the Secretary grants by hand onto
+  the minutes record, with the text "Excused: approved request" and the
+  category, never the member's reason.
+- **Cancelling or deleting an event now closes the pending waiver requests
+  about it**, training and meeting alike; approved and denied ones are kept.
+
+### Finance: a budget request draft can be saved blank (2026-11-11)
+
+Nothing blocks a restart. Migration `0136dd6d4144` makes
+`budget_requests.requested_amount` and `budget_requests.justification`
+nullable. Every existing request already holds both, and none is rewritten.
+
+- **What changes for owners.** A line owner can save a draft before deciding
+  the amount or writing the justification. Submit still needs both: pressing
+  it on an unfinished draft opens the draft with the missing fields flagged,
+  and the API refuses the submit with a 422 naming them. A submitted request's
+  edit still needs both, as before.
+- **The Treasurer's review screen** lists a blank draft's amount as _Not
+  entered yet_, and its totals count only what has been entered.
+- **Rolling back.** The previous release cannot read a blank draft: its
+  response schema requires both fields, so listing a year that has one fails.
+  Run the downgrade (`alembic downgrade 09f0171ccf5e`) before restoring the
+  previous image, or restore the database backup taken before upgrading. The
+  downgrade fills each blank draft with an amount of 0.00 and an empty
+  justification so the columns can be NOT NULL again; upgrading again does not
+  undo that fill, so those drafts then read $0.00 until their owner edits them.
+
+### Training: members can ask to be excused from a session (2026-11-10)
+
+Nothing blocks a restart. Migration `8b1cf6f55425` creates two empty tables,
+`attendance_waiver_requests` and `attendance_waiver_request_actions`. No
+existing row changes.
+
+- **Off until a training officer saves a policy.** The policy is stored in the
+  organization's settings, so there is nothing to configure at upgrade time,
+  and until it is saved members cannot ask. The screens arrive in a later
+  release; until then the policy can only be saved through the API
+  (`PUT /api/v1/training/waivers/requests/policy`, `training.manage`).
+- **Compliance exports can change on upgrade, with no policy saved.** The
+  department compliance CSV, the compliance PDF and the compliance forecast now
+  apply the training waivers, leaves of absence and Chief overrides already on
+  file, the way the compliance screens always have. Before, they graded every
+  member as if none existed, so an export could print _Not Met_ for a member
+  the compliance matrix showed as met. A member with an active leave or waiver,
+  or a Chief override, can therefore move from _Not Met_ to _Met_ in an export
+  taken after the upgrade. The data did not change; the exports now agree with
+  the screens.
+- **Once requests are approved, attendance figures move.** An approved request
+  drops its session from the member's held and attended counts for every
+  session-attendance requirement it counts toward, and from their missed
+  mandatory events. Approved requests keep doing so if the policy is later
+  turned off; turning it off only stops new requests.
+- **Downgrading** drops both tables, and every approved request with them, so
+  the sessions they excused count against those members again. Take a backup
+  first (see above) once requests are in use.
+
+### Evaluations: training-session attendance is graded by the attendance requirement (2026-11-10)
+
+Nothing blocks a restart, and no migration runs. The **Training session
+attendance** figure on an evaluation (`training.session_attendance_pct`) now
+uses the same rule as the session-attendance requirement on the training
+screens. **The percentage will change** on any evaluation template that shows
+it:
+
+- **Only sessions that count toward the member's session-attendance
+  requirement are measured.** Before, every training event in the period was,
+  including optional ones nobody was asked to attend.
+- **Attendance is what finalizing the session recorded**, not an RSVP
+  check-in. A session whose attendance has not been finalized is not counted
+  yet, as on the training screens.
+- **Every waiver and leave the training screens apply now excuses a session**,
+  including waivers limited to that requirement, which were ignored before. A
+  member who attended an excused session anyway is credited with it; before,
+  that session was dropped.
+- **The requirement is the one that applies to the member.** If several
+  apply, the one naming the member's membership type is used. If that still
+  leaves more than one, the figure reads "unavailable" rather than guessing.
+  It also reads unavailable for a member exempt from training requirements,
+  and when no requirement applies at all. Departments that never set up a
+  session-attendance requirement will see "unavailable" where a percentage
+  used to appear.
+- **The figure covers the evaluation's review period**, not the requirement's
+  own window.
+
+**Stored figures are not recalculated.** A finalized evaluation keeps the
+figure it was signed with. So does an evaluation already open at the upgrade,
+and an amendment of a finalized one, until the evaluator or a manager presses
+**Update figures**. That is possible only until the evaluator locks their part,
+so an evaluation whose evaluator had already locked it is signed with the old
+figure. Evaluations drafted after the upgrade, refreshed figures and template
+previews show the new one. The stored snapshot's `version` is now `2`; a
+snapshot still at `version` 1 holds the old figure.
+
+### Medical screening: expiry reminder emails, and new requirements recur by default (2026-11-08)
+
+Nothing blocks a restart. Migration `cf93f3b65274` creates an empty table,
+`screening_reminder_sends`, and lets `notification_rules.trigger` hold
+`medical_screening_expiry`. No existing row changes.
+
+- **Members start receiving emails.** A new daily scheduled task,
+  `medical_screening_expiry_reminders` (06:15 in the external crontab, and in
+  the in-process scheduler), emails a member 90, 60, 30 and 7 days before
+  one of their medical screenings falls due — the certification reminders'
+  tiers. Only the most urgent tier a screening has reached is sent, so on the
+  first run after the upgrade a member whose physical is due in three weeks
+  gets the 30-day email once, not three. The subject is "A medical screening
+  is due soon"; the body names the requirement and the due date, nothing
+  about the result.
+- **On by default** for every department with the Medical Screening module
+  switched on. To turn them off, add a **Medical Screening Expiry** rule under
+  **Notifications › Rules** and disable it. A member who has turned off
+  "Training and certification reminders" (or all reminder emails) is not
+  emailed. There is no text message and no notification-bell entry.
+- **Each reminder goes once.** A second run the same day, or two runs at once,
+  sends nothing more. An officer who corrects a screening's expiration date
+  re-arms the reminders for the new date.
+- **A new screening requirement starts recurring every 12 months**; the
+  One-time box starts unticked. Requirements already saved keep their setting.
+- **Downgrading** drops the table, so the next run after re-upgrading may send
+  a screening's current tier again, and deletes any Medical Screening Expiry
+  rule.
+
+### QuickBooks Online: checks post as checks, card payments as credit card expenses (2026-11-08)
+
+Nothing blocks a restart, and nothing changes for a department that has not
+connected QuickBooks Online. No migration. For a connected department, from
+the next posting run:
+
+- **An issued check posts as a QuickBooks Check**, numbered with its check
+  number, with the check request's number in the transaction's private note.
+  It used to post as a cash expense numbered with the request number. Checks
+  already in QuickBooks are left as they were posted.
+- **A payment from a category whose paid-from account is a QuickBooks Credit
+  Card account now posts** as a credit card expense. It used to be refused
+  ("not a Bank account") and left for the CSV export. A payment refused that
+  way before the upgrade stays refused: press **Send again** on it to post it
+  live, or send it in the CSV export as before — not both.
+- **A check paid from a credit card account, or numbered past QuickBooks' 21
+  characters, is refused** and left for the CSV export. A check number already
+  used in the QuickBooks company is refused by QuickBooks, with its reason on
+  the posting.
+- A posting already waiting on a retry is resent under its original request
+  id; if QuickBooks had created it, QuickBooks answers with that original
+  (cash) Purchase rather than creating a Check beside it.
+
+### Finance: an optional live QuickBooks Online connection (2026-11-06)
+
+Nothing blocks a restart. Migration `e4c6e82acbc2` creates two empty tables,
+`quickbooks_connections` and `quickbooks_postings`, and changes no existing
+row.
+
+- **Four new, optional settings**, all blank by default, which leaves the
+  feature off: `QBO_CLIENT_ID`, `QBO_CLIENT_SECRET`, `QBO_REDIRECT_URI` and
+  `QBO_ENVIRONMENT` (`sandbox`, the default, or `production`; anything else
+  refuses to start, like any invalid setting). They are passed through all
+  three compose files. While any of the first three is blank, **Finance ›
+  QuickBooks Export** says the connection is not configured and the CSV export
+  works exactly as before.
+- **Setting it up.** Register an app at developer.intuit.com with the
+  QuickBooks Online Accounting scope (`com.intuit.quickbooks.accounting`),
+  add `https://<your-domain>/api/v1/finance/quickbooks/oauth/callback` as a
+  redirect URI (exactly, trailing slash and all), and copy the Client ID and
+  Client secret from **Keys & OAuth** — the Development keys with
+  `QBO_ENVIRONMENT=sandbox`, the Production keys with `production`. The
+  backend must be able to reach `appcenter.intuit.com` (the browser only),
+  `oauth.platform.intuit.com`, `developer.api.intuit.com` and
+  `quickbooks.api.intuit.com` (or `sandbox-quickbooks.api.intuit.com`) over
+  HTTPS. See `docs/FINANCE_MODULE.md`, "QuickBooks Online connection".
+- **Changing `QBO_ENVIRONMENT` after a department connects** stops its posting
+  and asks the Treasurer to reconnect: tokens issued for one environment are
+  never sent to the other.
+- **A new scheduled task, `quickbooks_sync`**, every five minutes; it does
+  nothing until the settings are present and a department has connected.
+- **Downgrading** drops both tables. Payments QuickBooks already accepted are
+  then offered to the CSV export again, and importing that file would record
+  them twice; exclude them by period, or delete the imported duplicates in
+  QuickBooks.
+
+### Expense receipts: one receipt on several lines, a mileage trip log, and three board reports (2026-11-06)
+
+Nothing blocks a restart. Migration `5f3bc23bc9a6` adds two nullable columns
+to `expense_line_items` — `mileage_trips` and `mileage_rate` — and backfills
+nothing.
+
+- **Mileage trip logs need a rate before members can use them.** Set it on
+  **Finance › Settings › Approval chains** (_Mileage rate_, dollars a mile,
+  `settings.manage`). There is no default; until it is set, the expense form
+  says so and members claim mileage with an amount and an uploaded log
+  exactly as before.
+- **A receipt can be shared between lines of one report**, and taken off one
+  draft line without touching the others. A document that a submitted line
+  refers to still cannot be deleted.
+- **Three new tabs on Finance › Reports** — _Expenses by member_, _Dues
+  delinquency_ and _Purchases by vendor_ — for anyone who could already read
+  the reports (`finance.view`). Nothing else changes for them.
+- **API.** `POST /finance/expense-reports/{id}/items` (and lines in a new
+  report) no longer require `amount` and `dateIncurred` when the line carries
+  `mileageTrips`; without a log, a line missing either is now a 400 rather
+  than a 422.
+- **Downgrading** drops both columns: a line priced from a log keeps its
+  amount but loses its trips, and having no uploaded receipt it cannot be
+  submitted again until one is attached.
+
+### Pledges follow donations, Federal Programs become opportunities, and two Treasurer reminders (2026-11-06)
+
+Nothing blocks a restart. Migration `6dadac1674c8` adds a nullable
+`donations.pledge_id` and backfills nothing; migration `3c1f5e2a9d47` inserts
+rows.
+
+- **Every department gains up to four grant opportunities** — AFG, SAFER,
+  FP&S and the Firehouse Subs Public Safety Foundation — replacing the fixed
+  "Federal Programs" cards on **Grants › Opportunities**. A department that
+  already has an opportunity with one of those program codes (retired or not)
+  is not given a second. They can be edited or retired like any other.
+- **A donation can pay toward a pledge.** From now on a linked donation moves
+  the pledge's received amount and status. Existing donations stay unlinked
+  and existing pledges keep the amounts entered by hand.
+- **Budget-request reminders are a department setting** (**Finance ›
+  Settings**). Unset, they go out 7 and 1 days before the deadline by email
+  only, exactly as before.
+- **A new daily scheduled task, `fiscal_year_due_reminders`,** emails the
+  Treasurers when an adopted fiscal year reaches its start date or the active
+  one passes its end date. A department whose active year ended before the
+  upgrade and was never closed is emailed on the first run. Deployments that
+  drive scheduled tasks from an external crontab rather than the in-process
+  scheduler need the new line from the `SCHEDULE` block in
+  `app/services/scheduled_tasks.py` (08:15 daily).
+- **Downgrading** drops `donations.pledge_id` (pledge amounts already moved
+  stay as they are) and removes the seeded opportunities that still carry
+  their seeded name and have no application started from them.
+
+### Dues: schedule terms apply, late fees, My Dues and dues reminder emails (2026-11-06)
+
+Nothing blocks a restart. Migration `ba80cc574948` adds three nullable
+columns — `dues_schedules.terms_effective_at`,
+`member_dues.due_reminder_sent_at` and `member_dues.overdue_reminder_sent_at`
+— and backfills nothing.
+
+- **Existing dues schedules behave exactly as before until someone saves
+  one.** Their new `terms_effective_at` is empty, so they keep billing every
+  active member and charge no late fee, even if a grace period, late fee,
+  fiscal year or membership list was stored on them through the API. Saving a
+  schedule from **Finance › Dues** applies those four (the form warns first);
+  a late fee is then charged only where the grace period ends after that save.
+  New schedules apply them from the start: generation bills only the chosen
+  membership types (none chosen bills everyone), a due date outside the chosen
+  fiscal year is refused, and generation is refused once that year is closing
+  or locked.
+- **Two new daily scheduled tasks.** `dues_late_fees` adds a schedule's late
+  fee, once, to dues still owing after the due date plus the grace period —
+  `amount_due` grows by the fee, so dues totals and exports include it.
+  `dues_reminders` emails a member a week before their dues fall due and once
+  when they become overdue (only dues overdue for 30 days or less, so the
+  first run does not email about dues long since dealt with). The emails are
+  the new optional **Your dues** kind: on by default, a member can turn it off
+  and a department can make it required.
+- **Members see Finance › My Dues** (`/finance/my-dues`), which needs no
+  finance permission, and the Treasurer's payment history names who recorded
+  each payment.
+- **Downgrading** drops the three columns: every schedule reads as never
+  saved again, and a reminder already sent may be sent once more after a
+  re-upgrade. A late fee already charged stays in `amount_due` and
+  `late_fee_applied`, which the older release shows but does not add to.
+
+### Budget amendments: partial reversals, a pending queue, and two new finance emails (2026-11-06)
+
+Nothing blocks a restart. Migration `0961ffc2cdf1` adds a nullable
+`budget_amendments.reverses_amendment_ref` and fills it for reversals already
+on record — from their link, or for rejected ones from the audit log — so a
+rejected reversal keeps naming the amendment it tried to reverse.
+
+- **Officers who may confirm a budget amendment are now emailed** when one is
+  entered (`finance.budget_review` and `finance.manage` holders, not whoever
+  entered it), and **budget-line owners are emailed** when leadership changes
+  their amount in leadership review. Both are optional email kinds a member can
+  turn off (_Finance duties_ and _Next year's budget requests_); a department
+  can make them required. Amendments already pending at upgrade are not
+  emailed retroactively — they are listed on the new **Finance › Budget
+  amendments** queue.
+- **A reversal can now take back part of an amendment.** The reverse endpoint
+  (`POST …/amendments/{id}/reverse`) accepts an optional `amount`; a script
+  that sends none still reverses the whole amendment.
+- **Downgrading** drops the column; nothing that moves money reads it, and the
+  audit log keeps the pairs. The older release's screen strikes a
+  part-reversed amendment through as if wholly reversed; the budget figures
+  stay right, since they are sums of the stored amounts.
+
+### Finance payments: the amount paid, a receipt before payment, and expense reports committed on approval (2026-11-06)
+
+Nothing blocks a restart. Migration `100121b59d94` adds a nullable, indexed
+`check_requests.receipt_document_id` and a nullable
+`expense_reports.budget_committed_at`; nothing is backfilled.
+
+- **Mark Paid now asks for the amount paid.** The screen always sends it;
+  the mark-paid endpoint (`POST /finance/purchase-requests/{id}/mark-paid`)
+  still accepts a call without `actual_amount` and records the approved
+  estimate, so existing scripts keep working (an amount of zero or less is a
+  422). The budget line spends the amount paid and the request shows the
+  difference from the approved amount. Requests paid before the upgrade with no amount recorded
+  show no difference.
+- **No payment without a receipt.** Mark Paid on a purchase request, and
+  Issue Check on a check request, are refused with a 400 until a receipt or
+  invoice is uploaded to the request. A typed receipt link does not count.
+  An advance and a reimbursement check need none (the expense report's lines
+  carry them). **Before upgrading, look at purchase requests that are
+  approved, ordered or received, and check requests that are approved:**
+  each one without an uploaded receipt needs one attached before it can be
+  paid. The receipt upload is on each request's page; check requests gain one
+  with this release.
+- **An expense report's lines are committed to their budget lines on
+  approval**, as a purchase request's estimate is, and the member now picks
+  each line's budget line. An approval the line cannot cover is refused like
+  a purchase request's. Reports already approved at upgrade committed
+  nothing; paying or cancelling one moves only what it always did. A report
+  claiming back a purchase commits nothing of its own (the purchase's
+  approval already did).
+- **Downgrading** drops both columns: a check request's link to its receipt
+  is lost (the file stays under Finance → Receipts), and a report approved
+  after the upgrade keeps its commitment on the budget line while the older
+  release, paying it, would not release it — correct those lines by hand.
+
+### Finance approvals: a named approver can act, approvers and requesters are emailed, and each chain routes only its own type (2026-11-06)
+
+**Each approval chain routes only its own request type.** A chain whose
+**Applies To** is Purchase Requests no longer routes expense reports or check
+requests — before 2026-10-17 every purchase chain did, and outranked a default
+expense or check chain whenever it had an amount range or a category. Nothing
+is migrated:
+
+- requests already submitted keep the steps they were given;
+- an expense report or check request submitted from now on goes through a
+  chain for **its own type**, and when the department has none it waits in
+  Pending Approval for any `finance.approve` holder to approve or deny it on
+  the request's own page (the same "no chain applies" path a department with
+  no chains always had).
+
+**What to check.** Open **Finance → Settings → Approval Chains**. If your
+reimbursements or payouts were meant to follow a purchase chain's approvers,
+create an Expense Reports chain and a Check Requests chain with those steps.
+No chain was copied for you, because which approvers a reimbursement should
+have is the department's call, not the upgrade's.
+
+**A member a chain step names can now approve or deny that step** without the
+`finance.approve` permission — a Chief named on a step no longer gets a 403.
+It covers that step only: a step that names nobody, a request no chain routes
+and the Approvals page still need `finance.approve`, and an override still
+needs both `finance.approve` and `finance.configure_approvals`. The member
+works from the request's page, which the approval email links to. The
+approver-coverage report stops flagging such steps (`no_approve_permission`
+is no longer reported). If you relied on a named position being unable to
+approve, change that step's approver.
+
+**Two new emails, both optional and on by default** (migration
+`50c94d5c30f8` adds `approval_step_records.approvers_notified_at`; nothing is
+backfilled, so steps already waiting at upgrade are not emailed):
+
+- the members a step names are emailed when a request reaches it (**Finance
+  duties**, formerly labelled "Treasurer duties");
+- the requester is emailed when their request is approved or denied (**Your
+  purchase, expense and check requests**).
+
+A department can make either required on **Member Emails & Texts**.
+
+### Finance dual approval: per-type thresholds, a named second approver, and an email when a request waits (2026-11-06)
+
+Nothing blocks a restart. Migration `ee9ff4596ce7` adds a nullable
+`second_approval_requested_at` to `purchase_requests`, `expense_reports` and
+`check_requests`; nothing is backfilled.
+
+- **A new email.** When a request at or above the dual-approval threshold is
+  held for its second approval, the members who could give it are emailed
+  once (**Finance duties**, optional, on by default). A request already
+  waiting at upgrade is not emailed.
+- **One person by email.** An approval from an emailed link now counts as the
+  member whose account has that address. A member who approved that way can
+  no longer give the in-app second approval as well; if your department used
+  one person's two routes as its two approvals, someone else now has to give
+  the second.
+- **Two new settings, both off until set** (Finance → Settings → Approval
+  Chains, `settings.manage`): a threshold per request type (every type follows
+  the existing threshold until changed), and the position that must give the
+  second approval. A position named there and later deleted holds every large
+  request until the setting is changed — the card says so.
+
+### Integrations: catalog changes reach existing departments, and calendar publishing settings on the card (2026-11-05)
+
+Nothing blocks a restart. Migration `7c41e9a2b6d8` changes no schema. Two
+owner decisions of 2026-11-01:
+
+- **Integration cards may read differently after the upgrade.** The migration
+  rewrites every department's integration rows to the current catalog's name,
+  description and category, and moves a row between **Available** and
+  **Coming soon** where the catalog has promoted or demoted it since the
+  department was set up. A connected integration, or one showing an error,
+  keeps its status, settings and credentials; a demoted one that is connected
+  stays connected until someone disconnects it. From now on the Integrations
+  page applies the same rule each time it loads, so a later catalog change
+  needs no migration.
+- **Google Calendar and Outlook publishing** gains **Days ahead** and
+  **Event types** on the connected card. Nothing changes until someone saves
+  them: 180 days and every type remain the default. The API
+  (`PATCH /integrations/{id}`) now refuses an `event_types_to_sync` value that
+  is not an event type (422); a value stored before the upgrade is left as it
+  is.
+- Rollback: the downgrade does not restore the old catalog text or statuses
+  (they were stale copies); the previous version simply stops reconciling.
+
+### Legal documents: headings and lists render on `/privacy` and `/terms`, and reverts appear in the history (2026-11-05)
+
+Nothing blocks a restart. Migration `81b38694152f` adds three columns to
+`legal_document_revisions` (`reverts_to_default`, false for every existing
+row; `edited_by` and `edited_at`, empty) and changes no existing row. Three
+owner decisions of 2026-11-01:
+
+- **Published department text may change appearance.** A line starting `## `,
+  `# ` or `### ` now renders as a heading, and lines starting `- `, `* ` or
+  `1. ` as a list, on `/privacy` and `/terms`. Text published before the
+  upgrade that used those marks as plain characters — most often a list typed
+  as `- ` lines, which is how the built-in text used to be seeded — now shows
+  as a real list. Open each page once after upgrading. HTML and links are
+  still shown as typed, never interpreted.
+- **Reverting to the built-in text is recorded in the published history**,
+  naming who did it and when. Reverts made before the upgrade are in the audit
+  log only.
+- **An edit to someone else's proposal names the editor** beside the
+  proposer.
+- Rollback: the downgrade drops the three columns and deletes the revert
+  history rows (the audit log keeps each revert). The previous version renders
+  any headings and lists as plain characters again.
+
+### Minutes: attachments reach the published copy and the PDF, and meeting action item reminders are emailed (2026-11-05)
+
+Nothing blocks a restart. Migration `a42466630e74` adds two nullable columns
+(`minutes_attachments.published_at`, `meeting_action_items.reminder_emailed_on`)
+and changes no existing row. Two owner decisions of 2026-11-01:
+
+- **Files filed with minutes become readable by the published copy's
+  audience.** From the next publish of a set of minutes, its library copy in
+  Documents lists those files and anyone who can open that document can
+  download them (a paperclip on the document). For ordinary minutes that is
+  every member with `documents.view` who can see the Meeting Minutes folder —
+  a wider audience than before, when only those who could read the minutes
+  themselves could. Copies published before the upgrade list nothing until
+  they are published again. Review what is attached before republishing old
+  minutes. Executive-session copies stay in their leadership-only folder.
+- **`GET /minutes-records/{id}/pdf` embeds attachments.** Images are printed,
+  PDFs appended and other files listed; the export reads up to 40 MB of files
+  and appends up to 300 pages, so a minutes PDF can be much larger and slower
+  to produce than before.
+- **New emails start going out.** Action items on a meeting record are now
+  emailed to their assignee on the days the bell already reminded them (3 and
+  1 days before, the due date, the day after), from the daily
+  `action_item_reminders` task. Members who switched off "Action items from
+  meetings and minutes" (formerly "Action items from meeting minutes") get the
+  bell only. The first run after the upgrade emails only items whose reminder
+  day it is.
+- Rollback: the downgrade drops both columns. The previous version reads
+  neither; a library copy published by this version keeps its attachment list
+  in its text, but the previous version has no route to open the files from it.
+
+### Elections: the synchronous ballot and reminder sends are gone, and a rollback files a correction in the minutes (2026-11-05)
+
+Nothing blocks a restart. Two owner decisions of 2026-11-01; migration
+`61e85742f52b` carries the data side.
+
+- **`POST /api/v1/elections/{id}/send-ballot` and
+  `POST /api/v1/elections/{id}/remind-non-voters` are removed** and now answer
+  404/405. Two calls to either could both pass the in-progress check and mail
+  every member twice. API clients must queue the send instead, with the same
+  JSON bodies and `elections.manage` as before:
+  `POST /api/v1/elections/{id}/ballot-send-jobs` (an `EmailBallot` body) or
+  `POST /api/v1/elections/{id}/reminder-send-jobs` (optional `subject`,
+  `message`). Each answers `202` with a job; poll
+  `GET /api/v1/elections/{id}/ballot-send-jobs/{job_id}` until `status` is
+  `completed` (its `result` is the response the old routes returned) or
+  `failed` (`error`). A send already in progress is refused with `409`, and a
+  refused reminder (election not open, reminders off, inside the cooldown) with
+  `400`, before anything is queued. No screen called the old routes.
+- **Rolling back a closed election now corrects its filed result.** A result
+  in circulated or adopted minutes is kept and marked superseded, with the
+  date, the reason given for the rollback and who rolled it back; a draft's own
+  result is removed. When the election closes again, its new result is filed
+  beside the superseded one and shown as replacing it. Published library and
+  public copies of the minutes are re-rendered in place to show the
+  correction, keeping their version and posting date.
+- **Existing results.** The migration marks as superseded every filed result
+  whose election was rolled back from closed after it was filed, dated from
+  the election's rollback history. A draft's stale result is marked, not
+  removed; the secretary can remove it. An election that has already re-closed
+  has no new result filed (the old one blocked it): import it by hand from the
+  minutes page. Published copies show the correction from their next publish.
+- Rollback: the downgrade keeps one result per minutes and election (the one
+  standing, else the latest superseded one), deletes the other superseded
+  results, and drops the correction columns. The previous version reads none of
+  them.
+
+### `GET /dashboard/action-items` is capped at 200 items, and the Action Items tile counts the Minutes module's open items (2026-11-05)
+
+Nothing blocks a restart, and nothing in the app needs changing. Two things
+an operator or an API client may notice:
+
+- **The feed is capped.** `GET /api/v1/dashboard/action-items` still answers
+  the same bare JSON list, but now at most 200 items (it used to return every
+  matching item). `limit` (up to 200) and `offset` move through it. For totals
+  and paging, use the new `GET /api/v1/dashboard/action-items/page`, which
+  takes the same filters and answers an object with `items`, `total`,
+  `open_total`, `overdue_total`, `limit` and `offset`.
+- **The dashboard's Action Items figures may move.** The open and overdue
+  counts now use the Minutes module's own rule: a minutes item someone marked
+  `overdue` by hand counts as open (and, past its due date, as overdue), and
+  an item carried forward into later minutes is counted there only, not twice.
+  The tile, the Minutes page's tile and the Action Items list now agree.
+
+### Event-request status links are encrypted at rest, and copied event reminder markers are cleared (2026-11-05)
+
+Nothing blocks a restart. Two migrations change stored data:
+
+- **`e429ae62992e`** — the token in a public event request's status link
+  (`/event-request/status/<token>`) is now looked up by its SHA-256 hash and
+  stored encrypted, as the applicant status token has been since
+  `f7c09cfec5b0`. Existing tokens are converted in place and do not change, so
+  a link a coordinator has already shared keeps working. A database or backup
+  read no longer yields a live link. The column is encrypted with
+  `ENCRYPTION_KEY`; a rollback decrypts it back to plaintext and needs the same
+  key. `scripts/rotate_encryption_key.py` and `scripts/reencrypt_to_aesgcm.py`
+  now include it. If `event_requests` has not been built yet (it is created at
+  first startup), the migration does nothing.
+- **`f4583df5025b`** — before 2026-10-04, saving "This and all future events"
+  copied the edited occurrence's reminder-sent and validation-prompt-sent
+  markers onto every later occurrence, which then skipped those notices. On
+  rows in a recurring series, the migration removes a reminder marker whose
+  send time, for that occurrence's own start, has not arrived yet, and a
+  validation marker on an event that has not ended — unless a reminder (or
+  validation prompt) was actually logged for that occurrence, so nothing is
+  sent twice. **Members may receive reminders for upcoming recurring events
+  they would previously have missed.** The cleanup cannot be undone; its
+  downgrade leaves the rows as they are.
+
+### Facility files filed outside the facility folders are moved into them (2026-11-05)
+
+Nothing blocks a restart, but who can open some files changes. Migration
+`986b38c2086b` finds every file a facility photo or facility document points
+at that sits outside that facility's folders — in General Documents, a
+member's or library folder, another facility's folders, or no folder at all —
+and moves it into the facility's own folders under **Facility Files**:
+
+- a file a facility **document** points at goes to the facility's
+  **Facility Documents** folder, which needs `facilities.view_sensitive`,
+  `.edit` or `.manage`;
+- a file only facility **photos** point at goes to the facility's **Photos**
+  folder, open to any facilities access (`facilities.view` and up).
+
+Missing facility folders are created. **Whoever could open the file only
+through the folder it left loses it** — most often a member holding
+`documents.view` who could download a facility file from General Documents
+without any facilities permission. Facility roles see it where the facility
+record already showed it.
+
+Not moved: a file another module also uses — an apparatus photo or document,
+a purchase-request or expense receipt, published meeting minutes, or one that
+module generated — stays where that module filed it, and a file already in
+one of its own facilities' folders stays. A file two facilities point at goes
+to the facility that attached it first; if either attaches it as a document,
+it goes to the restricted Facility Documents folder.
+
+Rollback: the downgrade moves each file back while it is still where the
+migration put it, and removes the folders it created once they are empty. The
+moves are recorded in a `facility_outside_refile_backfill` table, which exists
+only on a database where something was moved and is dropped by the downgrade.
+
+### Locations: duplicate names are renamed, and deleting one in use by training or meetings deactivates it (2026-11-05)
+
+Nothing blocks a restart, but some location names change. Migration
+`2bb7c963f351` makes a location's name unique within its building in the
+database, and a location with no building counts as one building for this.
+Before it can, it settles the duplicates already stored: in each group of
+locations sharing a name and building in a department, **the oldest keeps its
+name and each later one gets ` (2)`, ` (3)`, … appended** — for example a
+second "Bunk Room" becomes "Bunk Room (2)". Names are compared the way the
+database compares them, so "Bunk Room" and "bunk room" are the same name. A
+number already in use is skipped. Nothing that points at a location changes;
+only its name. Rename them to something meaningful afterwards from the
+Locations page. A facility room's location follows the same numbering from now
+on when two rooms in one building share a name.
+
+The renaming is **not undone by a downgrade**: nothing records which rows were
+renamed, and putting the old names back would recreate the duplicates. The
+downgrade removes only the unique key and its generated `building_key` column.
+Before upgrading, an operator who wants a record can list the affected rows:
+
+```sql
+SELECT organization_id, name, COALESCE(building, '') AS building, COUNT(*)
+FROM locations
+GROUP BY organization_id, name, COALESCE(building, '')
+HAVING COUNT(*) > 1;
+```
+
+The same migration changes six foreign keys to `locations` from `ON DELETE SET
+NULL` to `ON DELETE RESTRICT` — training records, course classes, cohorts,
+cohort classes, meetings and event requests. Deleting a location any of them
+names now deactivates it (it leaves every picker but stays on those records)
+instead of removing it and blanking their location. The downgrade restores
+`SET NULL`. No row changes.
+
+### Scheduling: outside-shift approval, open-swap bell notices, close-out caps (2026-11-04)
+
+Nothing blocks a restart, and no figure moves on upgrade.
+
+- **Outside-department shifts can require approval** (`c4ee38cd931c`).
+  Scheduling Settings gains **Require approval for outside-department
+  shifts**, off by default, so every department keeps counting an entry as
+  soon as it is logged. The migration widens the `external_shift_hours`
+  status check to allow `pending`; no existing row changes, so everything
+  that counted before the upgrade still counts. Switched on, a new entry
+  counts once a scheduling officer approves it, and officers are emailed
+  under **Scheduling officer duties** when one is waiting.
+- **Open swaps put a bell entry in front of eligible members.** Posting an
+  open swap now gives every member cleared for its seat an in-app notice —
+  no email, text or push. The same migration adds `open_swap_notices`,
+  which keeps each member from being told about the same seat twice.
+- **Close-out payloads are capped.** A shift close-out takes at most 100
+  per-member call credits and 200 call-type entries; a larger API request is
+  refused with a 422. The app's own close-out stays under the cap.
+- Rollback: the downgrade drops `open_swap_notices` and restores the
+  two-state check, marking any entry still awaiting approval as rejected
+  with a reason saying it never counted — not as counted, which would credit
+  hours nobody approved. The previous version already leaves `pending`
+  entries out of every total, so restoring the previous image without
+  downgrading is also safe; it just cannot approve them.
+
+### Training: requirements match records by a stored key, and `POST /training/enrollments` is gone (2026-11-04)
+
+Nothing blocks a restart, but compliance figures a department already reads
+can move. Check certification, skills-evaluation, checklist and
+knowledge-test standings after the upgrade.
+
+- **Records carry a match key** (`bd8fc0c4a941`). Every training record gets
+  `match_key` (from its course name) and `certification_key` (from its
+  certification number): the text with case, spacing and punctuation removed,
+  so "CPR", "cpr" and "C.P.R." share a key and "CPR Refresher" does not. The
+  migration keys every existing record; one whose course name has no letter or
+  digit gets no key and can then match only by linked course or training type.
+  On a large records table the backfill adds time to the first start.
+- **Certification requirements match by key, not by text.** A record that
+  predates the requirement's name cut-off (`name_match_until`, set on
+  2026-10-05's upgrade) now counts by name only when its course name has the
+  **same key** as the requirement's name — a course name that merely
+  _contains_ it ("CPR Recertification" for "CPR") no longer counts, even
+  before the cut-off. A registry code now has to be **the start** of the
+  certification number ("NFPA 1001" matches "NFPA-1001-0042", not
+  "TX-NFPA-1001"). Linked courses and the training type are unchanged.
+- **Skills-evaluation, checklist and knowledge-test requirements stop matching
+  by name, as certifications did.** The migration sets `name_match_until` to
+  **the day it runs (UTC)** on every existing requirement of those types (and
+  of every other type graded the same way — evaluated shifts, transports,
+  refusals), so a record completed by then still counts by name, by key.
+  A record completed later needs the requirement's training type. Requirements
+  created after the upgrade never match by name.
+- **Members can lose credit.** A member whose only match for one of these
+  requirements was a course name containing the requirement's name, a later
+  record matched only by name, or a certification number with the code
+  elsewhere than at its start, reads not started (or in progress) on that
+  requirement, on every screen at once. Link the course on the requirement, or
+  set its training type, to credit them.
+- **`POST /api/v1/training/enrollments` is removed.** API clients must use
+  `POST /api/v1/training/programs/enrollments` with a JSON body
+  `{"user_id": ..., "program_id": ...}` (optional `target_completion_date`,
+  `notes`), `training.manage` as before. It answers 201 with the enrollment,
+  creates its progress rows, starting phase and recert deadline, notifies the
+  member, and refuses a second active enrollment under a lock. The old route,
+  which did none of that, now answers 404/405. No screen called it.
+- Rollback: the downgrade drops the two key columns and their indexes. It
+  leaves the fallback requirements' new `name_match_until`, which the previous
+  version does not read for those types.
+
+### Tier names for every member, tier benefits by status, and plain applicant names (2026-11-04)
+
+Four owner decisions of 2026-11-01. Migration `67fac0bf1c09` carries the
+data side.
+
+- **Applicant names are unescaped once.** Applicants created from a
+  membership interest form were stored with HTML entities (`O&#x27;Brien`,
+  `Smith &amp; Sons`). The migration converts `first_name`, `last_name`,
+  `interest_reason` and `referral_source` on `prospective_members` back to the
+  text the applicant typed, and new interest-form applicants are stored plain.
+  It changes only values that are exactly what HTML escaping produces, so it
+  is safe to run twice; the upgrade log reports how many it changed and how
+  many ambiguous values (such as `&amp;amp;`) it left as they were. **It
+  cannot be undone by a downgrade**, which leaves the plain text — restore the
+  pre-upgrade backup if the escaped form is needed. Encrypted columns (email,
+  phone, address) are not converted.
+- **Tier benefits follow Membership status everywhere.** The remaining
+  readers — who may vote and stand for office, the ballot check, the turnout
+  denominator, and which members a tier-scoped mandatory event expects —
+  now find a member's tier from their status, as the training report and
+  attendance dashboard already did. Nothing in the database changes, but
+  **an administrative or social member on a tier now gets that tier's rules
+  the moment you upgrade**: a tier that cannot vote or hold office refuses
+  them, a percentage quorum's denominator can shrink, and events mandatory for
+  their tier start listing them as expected.
+- **Members see the department's tier names.** The member directory's status
+  filter and profiles show the department's own names ("Senior Member")
+  instead of "Regular member" / "Life member", from the new
+  `GET /users/membership-tiers/names`, open to every signed-in member (ids and
+  names only).
+- **The Convert dialog offers the department's tiers** as starting statuses,
+  and the conversion accepts a tier on the organization's ladder.
+
+### Medical screening: a detail permission, grace periods, and linked requirements (2026-11-04)
+
+Three owner decisions of 2026-11-01 change who reads what and who counts as
+compliant. Migration `d6906e3dd76c` carries the data side.
+
+- **Clinical narrative needs `medical_screening.view_details`.** The provider,
+  result summary, structured results and notes on a screening record are now
+  returned only to holders of the new permission (or of
+  `medical_screening.manage`, which edits them). `medical_screening.view`
+  alone shows compliance status: who is due, dates, requirements and the
+  passed/failed/waived outcome. **So nobody loses access on upgrade, the
+  migration gives `view_details` to every position that holds
+  `medical_screening.view`.** If a position should see status only — a
+  scheduler, say — remove `medical_screening.view_details` from it on the
+  Positions screen after upgrading. Removing it from a position that also
+  holds `medical_screening.manage` changes nothing; take away `manage` too.
+  Holders of the new permission must use MFA, like the other two.
+- **Grace periods are enforced.** A requirement's _Grace Period_ (default 30
+  days on every existing requirement) now keeps a member compliant that many
+  days after a screening falls due; meanwhile it shows as past due and counts
+  as expiring soon. Members who lapsed within the grace period read compliant
+  again after the upgrade. Set a requirement's grace period to 0 to keep the
+  old behaviour.
+- **A screening record counts only toward the requirement it is linked to.**
+  It used to count toward every requirement of its screening type. The
+  migration links each unlinked record to its department's one requirement of
+  that type. Where two or more requirements share the type, it cannot choose,
+  and leaves the record unlinked: such a record **stops counting**, which can
+  make a member read not compliant. Open the Records tab, look for records
+  marked _Not linked to a requirement_, and link each from its Edit dialog.
+  The link is not removed by a downgrade, and is harmless to the previous
+  build.
+
+### Files stored before malware scanning are scanned now (2026-11-03)
+
+Upload scanning only ever covered new uploads, so files and images stored
+before it was turned on — or while `CLAMAV_ENABLED=false` — had never been
+scanned. After this upgrade the backend scans them by itself: the
+`stored_file_malware_scan` task runs hourly, up to 500 objects a run, until
+every stored file and database-held image (logos, member photos, store and
+equipment-check photos) has been scanned once. Migration `b5e906ebdd7d`
+creates the `stored_file_scans` table it keeps its progress in.
+
+- **Expect extra clamd load for a while.** A department with many stored files
+  sees one batch an hour until the backlog is gone, then almost nothing.
+- **Nothing happens while scanning is off.** With `CLAMAV_ENABLED=false` the
+  task does nothing, and starts the first hour after scanning is turned on.
+  With clamd down it records nothing and tries again the next hour.
+- **An infected file is removed, as an upload would have been refused.** The
+  file is deleted (an image is cleared from its row) and the detection is
+  audited as `upload_malware_detected`, with `upload: stored_file_rescan` and
+  the row's id. The record that held it remains, and its download then reports
+  the file as not found. If you want to keep a copy of anything before it is
+  judged, take the backup this document already asks for before upgrading.
+
+### Sign-in limits are counted per member, and step-up has its own limit (2026-11-03)
+
+A station's members share one public address, and the sign-in limit used to
+be counted per address: the sixth member signing in within a minute was
+turned away, and with Redis down the whole address was locked out for half an
+hour. The backend now counts **5 attempts a minute per account at an
+address**, with a looser **30 a minute per address** backstop. Account lockout
+and the suspicious-IP throttle are unchanged.
+
+- **The bundled nginx configs change to match.** `infrastructure/nginx/nginx.conf`
+  and `infrastructure/nginx/docker.conf` raise the `login_limit` zone from
+  `5r/m` (burst 3) to `30r/m` (burst 30). **A host install that copied
+  `nginx.conf` into `/etc/nginx` keeps the old 5 a minute until you copy it
+  again**, and the backend change does not help until you do. A proxy of your
+  own in front (SWAG, Nginx Proxy Manager, a load balancer) that limits
+  sign-in per address needs raising the same way.
+- **"Confirm it's you" (step-up) is limited per account.** After 5 failed
+  re-verifications in 15 minutes the member is refused with a 429 for the rest
+  of the window. It never locks the account or affects signing in. Tunable with
+  `STEPUP_MAX_FAILED_ATTEMPTS` and `STEPUP_FAILURE_WINDOW_MINUTES`.
+
+### Public Information turns on where setup left it off (2026-11-03)
+
+Setup used to store the **Public Information** module as off on every new
+installation, although the wizard never asked about it and Settings → Modules
+lists it as on by default. Migration `289504a34d3c` turns it **on** for each
+department whose stored setting is off **unless an administrator set it
+themselves** under Settings → Modules, as recorded in the audit log (switching
+it off is how a department retires its public portal, so that choice is kept).
+
+- The **public portal itself has its own switch** (`config.enabled`) and does
+  not start publishing on its own: it serves data only when both the portal and
+  the module are on. A department that never set the portal up sees only the
+  module in its menus and Settings.
+- If the audit log table does not exist, the migration changes nothing.
+- A department changed by this carries `settings.modules._public_info_backfilled`
+  (a timestamp). The downgrade turns it back off for those departments unless
+  an administrator has set Public Information since.
+
+### Eight unused tables are dropped, with any rows in them (2026-11-03)
+
+Migration `d75ecbc15bae` drops eight tables on the next start. **Whatever rows
+they hold are deleted and cannot be brought back by a downgrade**, so take the
+database backup described in
+[Before every upgrade](#before-every-upgrade-back-up-and-do-not-downgrade-to-fix-a-fork)
+first if you might want them.
+
+- **Five old compliance tables:** `compliance_policies`,
+  `policy_acknowledgments`, `compliance_checklists`, `checklist_submissions`
+  and `compliance_incidents`. No screen or report ever read or wrote them, so
+  rows exist only if something outside The Logbook put them there. The
+  facilities checklists are separate tables and are not touched.
+- **Three folder-backfill records:** `document_unfiled_backfill`,
+  `facility_folder_tier_backfill` and `facility_document_refile_backfill`.
+  They existed only so a downgrade past `dcb8a46ac50c` or `65128d5ccd50`
+  (2026-10-11) could move documents back to where they were. Those downgrades
+  now leave documents filed where they are.
+
+The application behaves exactly as before. A query or report of your own that
+reads one of these tables will fail.
+
+### Adopting minutes now approves their meeting, and existing meetings catch up (2026-11-03)
+
+**Adopt Minutes** now also approves the meeting the minutes record. Migration
+`6b81e95d4157` brings existing data in line: every meeting whose minutes were
+already adopted becomes **approved**, stamped with the earliest adoption's
+approver and date. Those meetings stop reading _Draft_ and can no longer be
+deleted from the meeting list. A meeting already approved keeps its own stamp,
+and minutes adopted before adoptions were stamped give their meeting no
+approver or date. See
+[Events & Meetings](training/04-events-meetings.md#submitting-and-approving-minutes).
+
+### A month partly on leave now excuses the whole month by default (2026-11-02)
+
+Training compliance has a new department rule, **Months on leave** (Training
+Admin → Compliance Reporting → Configure → **Thresholds**), for a month that a
+leave of absence or training waiver only partly covers. Migration
+`5438939506b9` sets every department to **Full month (default)**: any day of
+leave excuses the whole month. Before, a month was excused only when leave
+covered 15 or more of its days. **Members' standing can change the moment you
+upgrade:**
+
+- A member with a short leave now owes less, and may turn compliant.
+- Shift and call targets reduced for leave are now rounded down (1.6 shifts
+  owed is 1, not 2), and a target that rounds to 0 is met.
+- The two other options are **15-day rule: proportional** and **15-day rule:
+  half**. Neither is the old rule exactly, so a department that wants close to
+  the old behaviour picks the half rule. See
+  [Training](training/02-training.md#months-on-leave--the-department-rule-2026-11-02).
+
+The downgrade drops the column and returns every department to the old 15-day
+rule.
+
+### A member's tier is found by their membership status, whatever their class (2026-11-01)
+
+Two readers still found a member's membership tier from the legacy
+`membership_type`, which since the class/status split names an administrative
+member "administrative" and a social member "honorary" whatever their status:
+the training report's tier exemption and the attendance dashboard's vote
+check. Both now use the member's **Membership status**, as tier advancement
+already did. Nothing in the database changes, but **standing can change the
+moment you upgrade**:
+
+- An administrative or social member on a tier with **Exempt from training
+  requirements** now shows compliant.
+- On the attendance dashboard, the same members now follow their tier's voting
+  rules (not eligible, or an attendance minimum).
+- A compliance profile with the **junior** membership type now matches members
+  whose status is Junior; before, it matched nobody.
+
+### Election Settings gains a Voter Eligibility section (2026-10-29)
+
+Nothing changes who may vote in any existing election. Migration
+`e1a7c4b2d9f3` adds a nullable `elections.eligibility_rules` column and leaves
+every existing row NULL, which means "no election-wide rules", the behaviour
+every election had before. The downgrade drops the column.
+
+What is new:
+
+- **Election Settings → Voter Eligibility** sets the department's default
+  meeting-attendance rule ("attended N of the last M meetings" or "N% of
+  meetings over M months"), a waiting period per member type, the check-in default
+  for new ballot items, and who votes for named positions. These defaults
+  start empty or match the previous behaviour, so an upgrade changes nothing
+  until someone sets them.
+- **A new election copies the defaults when it is created.** It can change its
+  own copy on its Eligibility tab until voting opens. After that the copy is
+  fixed, and changing the defaults never reaches an election that already
+  exists.
+- **The election-wide rules apply alongside each membership tier's own voting
+  rules**, which are unchanged and still edited under Members → Settings →
+  Tiers. A secretary's voter override bypasses both.
+- **The annual meeting can carry its own rules.** Migration `b3d58e0c71a4`
+  adds `elections.meeting_kind` (`regular` or `annual`, not nullable, database
+  default `regular`). Every existing election reads as a regular-meeting
+  election, and the annual meeting uses the regular rules until someone turns
+  on **Use different rules at the annual meeting**. The downgrade drops the
+  column. Elections lose the label, and their copied rules are untouched.
+- **Waiting periods count from when a member became their type.** For
+  example, administrative members may vote a year after becoming
+  administrative, and probationary members never. Migration `c7e2a91f4d36`
+  adds five columns to `users`:
+  - `member_class_since` and `member_status_since`, stamped from now on
+    whenever a member's class or status changes;
+  - `voting_wait_from`, `voting_wait_waived` (not nullable, default false) and
+    `voting_wait_override_reason`, for a per-member override.
+
+  **Existing members get a best guess** of when they became their type: their
+  last tier change, or else their hire date. Nothing records the real date
+  before this release. No waiting period is set until someone sets one, so this
+  changes nothing on upgrade. Before you add one, check members whose date
+  matters. A secretary corrects the date, or waives the wait, from the
+  member's profile under **Voting eligibility**. The downgrade drops the
+  columns, and the backfilled dates are lost with them.
+
+  A member on one of your department's own tiers (`senior`) gets the waiting
+  period of the built-in status that tier's **Counts as** names, and none at
+  all while it is unset, the same way the tier decides who may vote.
+
+### Member class and membership status are two controls; four committees appear (2026-10-29)
+
+**Every department gains four positions:** Community Education / Outreach
+Team, History Committee, Fundraising Committee and Membership Committee.
+Migration `d8f1a4c27b93` inserts them for every organization that does not
+already have a position under those slugs. They are committees — a new
+`positions.kind` column, `office` / `committee` / `system` — and grant nothing
+beyond the baseline every member already holds (they carry a copy of the
+Member position's list). They can be assigned from Manage Positions like any
+office; a department that does not want one can simply leave it unassigned
+(seeded positions cannot be deleted). The onboarding wizard offers the same
+four to new installations.
+
+**The single "Membership Type" dropdown is gone.** Add Member, the member edit
+page, the CSV import and the roster now carry **Member class** and
+**Membership status** separately, so an administrative life member can be
+recorded. Nothing changes on existing rows except the point below. The old
+`membership_type` value is still stored and derived from the pair, so reports
+and integrations reading it keep working; the `membershipType` import column
+still works, and `memberClass` / `memberStatus` columns are added.
+
+**`users.member_status` now holds your department's own tier ids** and is
+widened from 20 to 50 characters (migration `c4d7e2a91b60`). A member on a
+tier such as `senior` used to have the ladder column stale or empty; the
+migration settles it to the tier. Their **class is not touched**: a tier
+member whose class was never recorded shows **Not set** on the profile and
+under the roster's **Class not set** filter, and stays outside shifts and
+class-restricted ballots until an officer sets it on the edit page.
+
+**Check the Senior tier's "Counts as".** Tiers gain a **Counts as** setting
+(the built-in status a custom tier stands in for). It is **left unset on
+upgrade**, so a member on Senior keeps matching no ballot restricted to
+regular or life members, exactly as before. If your bylaws treat senior
+members as regular members, set it under Members Admin → Settings →
+Membership Tiers.
+
+**Automatic tier advancement now moves administrative and social members
+too**, by status only; their class is never changed. An administrative
+member with twenty years reaches Life like anyone else.
+
+**An administrative or social probationer is now put on Probationary account
+status** when their status is set to probationary, as operational probationers
+already were.
+
+**A new "Officer in Charge" qualification** can be granted from a member's
+profile and clears the officer, captain and lieutenant seats.
+
+**Downgrade.** Reverting `c4d7e2a91b60` nulls any `member_status` longer than
+20 characters before narrowing the column. Reverting `d8f1a4c27b93` removes
+only the seeded committees nobody holds; one a member serves on survives as an
+ordinary position.
 
 ### A template switched Off now stops its email (2026-10-27)
 
@@ -2121,7 +3374,9 @@ Phase 2 of the file-storage hardening (`docs/FILE_STORAGE_HARDENING.md`).
 - **Scanning now covers every upload**, not just self-reported certificates:
   documents, all attachments, applicant files, email-template attachments,
   suggestion screenshots, member photos, logos, storefront and equipment-check
-  photos, and every CSV import. Files already stored are not rescanned.
+  photos, and every CSV import. Files already stored are not rescanned
+  (until the 2026-11-03 release, which scans them once — see "Files stored
+  before malware scanning are scanned now" above).
 - **New uploads use a new folder layout**:
   `/app/uploads/<organization_id>/<area>/<record_id>/<uuid><ext>`. Existing
   files keep working where they are. To move them, run (dry run first — it
@@ -3960,7 +5215,8 @@ of `false`.
 
 **What to check:** if you publish an event-request form and do _not_ want
 public submissions, the toggle now genuinely controls it — turn it off at
-**Events → Settings → Pipeline**.
+**Events → Settings → Public Requests → Overview** (called **Pipeline**
+before 2026-11-05).
 
 ### Applicant pipeline stages are renumbered (2026-09-08)
 

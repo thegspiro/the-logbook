@@ -73,6 +73,8 @@ interface PublicContent {
     excused?: number;
     absent?: number;
     guests: number;
+    // Sent only when the department recorded someone represented by proxy.
+    proxies?: number;
     officers_present: { name: string; role: string }[];
   };
   sections: PublicSection[];
@@ -93,6 +95,9 @@ interface PublicContent {
     title: string | null;
     closed: string | null;
     addendum: boolean;
+    // Absent from copies posted before corrections were filed (2026-11-05).
+    superseded_on?: string | null;
+    replaces_superseded_on?: string | null;
     eligible_voters: number | null;
     ballots_cast: number | null;
     turnout_percentage: number | null;
@@ -291,6 +296,7 @@ const MinutesDocument: React.FC<{ id: string }> = ({ id }) => {
           {a.excused !== undefined && <Stat label="Excused" value={a.excused} />}
           {a.absent !== undefined && <Stat label="Absent" value={a.absent} />}
           <Stat label="Guests" value={a.guests} />
+          {a.proxies !== undefined && <Stat label="Represented by proxy" value={a.proxies} />}
         </div>
         {a.officers_present.length > 0 && (
           <p className={body}>Officers present: {a.officers_present.map((o) => `${o.name} (${o.role})`).join(', ')}.</p>
@@ -386,7 +392,19 @@ const MinutesDocument: React.FC<{ id: string }> = ({ id }) => {
             <h2 className={heading}>
               {election.title || 'Election results'}
               {election.addendum ? ' (added after adoption)' : ''}
+              {election.superseded_on ? ' (superseded)' : ''}
             </h2>
+            {election.superseded_on && (
+              <p className="alert-warning mt-2 text-sm" role="note">
+                Correction filed {election.superseded_on}: this result has been superseded. The election was rolled back
+                and reopened, so the result below no longer stands. It is kept as the minutes recorded it.
+              </p>
+            )}
+            {election.replaces_superseded_on && (
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Corrected result: replaces the result superseded on {election.replaces_superseded_on}.
+              </p>
+            )}
             <p className="text-theme-text-muted mt-1 text-xs">
               {[
                 election.closed && `Closed ${election.closed}`,

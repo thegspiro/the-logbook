@@ -21,6 +21,7 @@ import { SkeletonCard } from '../components/ux/Skeleton';
 import { EmptyState } from '../components/ux/EmptyState';
 import { SortableHeader, type SortDirection } from '../components/ux/SortableHeader';
 import { expectArray } from '../utils/asArray';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 const MONTHS = [
   'January',
@@ -217,8 +218,8 @@ const MemberTrainingStatusPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Controls */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="split-row mb-6 gap-3 sm:items-center">
+        <div className="split-row-main flex flex-wrap items-center gap-2">
           <div className="border-theme-surface-border inline-flex overflow-hidden rounded-lg border">
             <button
               onClick={() => setMode('month')}
@@ -272,7 +273,7 @@ const MemberTrainingStatusPage: React.FC = () => {
         <button
           onClick={exportCsv}
           disabled={loading || rows.length === 0}
-          className="btn-primary inline-flex items-center gap-2 disabled:opacity-50"
+          className="split-row-aside btn-primary inline-flex items-center gap-2 disabled:opacity-50"
         >
           <Download className="h-4 w-4" />
           <span>Export CSV</span>
@@ -280,7 +281,7 @@ const MemberTrainingStatusPage: React.FC = () => {
       </div>
 
       {/* Summary tiles */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <StatGrid columns={4} className="mb-6">
         {[
           { label: 'Members', value: summary.totalMembers },
           { label: 'Trained this period', value: summary.activeMembers },
@@ -292,7 +293,7 @@ const MemberTrainingStatusPage: React.FC = () => {
             <p className="text-theme-text-muted text-xs">{t.label}</p>
           </div>
         ))}
-      </div>
+      </StatGrid>
 
       {/* Table */}
       {loading ? (

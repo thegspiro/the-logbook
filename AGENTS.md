@@ -142,7 +142,7 @@ Before considering a task complete:
 
 When diagnosing CI, start with the **first meaningful failure**, not the final non-zero exit-code message. Later failures may be cascading symptoms.
 
-Do not repeatedly rerun a deterministic failed job without changing anything. A rerun is appropriate when evidence indicates an infrastructure, network, runner, timing, or known flaky-test failure. Otherwise diagnose the failure first.
+Do not repeatedly rerun a deterministic failed job without changing anything. A rerun is appropriate when evidence indicates an infrastructure, network or runner failure, such as a job that died before any test ran. A test that failed and then passed on a retry has failed: diagnose and fix it, and do not rerun until it goes green. CI's Playwright runs fail on such a test (see `CLAUDE.md` pitfall #38). Otherwise diagnose the failure first.
 
 ## Repository Validation Commands
 

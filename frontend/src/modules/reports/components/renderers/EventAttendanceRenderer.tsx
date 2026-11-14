@@ -7,6 +7,7 @@ import type { EventAttendanceReport } from '../../types';
 import { toStr } from '../../utils/export';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
+import { renderCalendarDate } from '../../utils/reportDates';
 
 interface Props {
   data: EventAttendanceReport;
@@ -15,7 +16,7 @@ interface Props {
 export const EventAttendanceRenderer: React.FC<Props> = ({ data }) => {
   const columns = [
     { key: 'event_title', header: 'Event' },
-    { key: 'event_date', header: 'Date' },
+    { key: 'event_date', header: 'Date', render: renderCalendarDate },
     { key: 'total_rsvps', header: 'RSVPs', align: 'right' as const },
     { key: 'attended', header: 'Attended', align: 'right' as const },
     {

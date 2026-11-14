@@ -48,9 +48,9 @@ const created: IPException = {
 
 const fillAndSubmit = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.click(await screen.findByRole('button', { name: 'New Request' }));
-  await user.type(screen.getByLabelText('IP Address'), '203.0.113.50');
-  await user.selectOptions(screen.getByLabelText('Use Case'), 'travel');
-  await user.type(screen.getByLabelText('Justification'), 'Deployed overseas');
+  await user.type(screen.getByLabelText(/^IP Address/), '203.0.113.50');
+  await user.selectOptions(screen.getByLabelText(/^Use Case/), 'travel');
+  await user.type(screen.getByLabelText(/^Justification/), 'Deployed overseas');
   await user.click(screen.getByRole('button', { name: 'Submit Request' }));
 };
 
@@ -74,9 +74,9 @@ describe('MyIPExceptionsPage request form', () => {
     await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
     expect(mockRequestException).toHaveBeenCalledTimes(1);
     expect(mockToastSuccess).not.toHaveBeenCalled();
-    expect(screen.getByLabelText('IP Address')).toHaveValue('203.0.113.50');
-    expect(screen.getByLabelText('Use Case')).toHaveValue('travel');
-    expect(screen.getByLabelText('Justification')).toHaveValue('Deployed overseas');
+    expect(screen.getByLabelText(/^IP Address/)).toHaveValue('203.0.113.50');
+    expect(screen.getByLabelText(/^Use Case/)).toHaveValue('travel');
+    expect(screen.getByLabelText(/^Justification/)).toHaveValue('Deployed overseas');
   });
 
   it('closes the form after an accepted request', async () => {
@@ -87,6 +87,37 @@ describe('MyIPExceptionsPage request form', () => {
     await fillAndSubmit(user);
 
     await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('IP exception request submitted'));
-    expect(screen.queryByLabelText('IP Address')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^IP Address/)).not.toBeInTheDocument();
+  });
+
+  it('puts a server refusal on the field it names, without a toast naming the API field', async () => {
+    mockRequestException.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'ip_address', message: 'String should have at most 45 characters' }] },
+      },
+    });
+    const user = userEvent.setup();
+    render(<MyIPExceptionsPage />);
+
+    await fillAndSubmit(user);
+
+    const ip = screen.getByLabelText(/^IP Address/);
+    await waitFor(() => expect(ip).toHaveAccessibleDescription('IP address is too long — keep it to 45 characters.'));
+    expect(ip).toHaveAttribute('aria-invalid', 'true');
+    expect(ip).toHaveValue('203.0.113.50');
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('says on the field what a request is missing, and files nothing', async () => {
+    const user = userEvent.setup();
+    render(<MyIPExceptionsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'New Request' }));
+    await user.click(screen.getByRole('button', { name: 'Submit Request' }));
+
+    expect(screen.getByLabelText(/^IP Address/)).toHaveAccessibleDescription('Enter the IP address to allow.');
+    expect(screen.getByLabelText(/^Justification/)).toHaveAttribute('aria-required', 'true');
+    expect(mockRequestException).not.toHaveBeenCalled();
   });
 });

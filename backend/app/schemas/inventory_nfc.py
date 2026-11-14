@@ -414,6 +414,7 @@ class InventoryNfcUntaggedItem(BaseModel):
     name: str
     serial_number: Optional[str] = None
     asset_tag: Optional[str] = None
+    barcode: Optional[str] = None
     category_name: Optional[str] = None
     storage_area_name: Optional[str] = None
 

@@ -29,14 +29,23 @@ Applications template, and the guides below.
   onboarding wizard. Requires Docker Compose — install the **Docker Compose
   Manager** plugin from Community Applications first.
 
-- **Community Applications (not available yet).** The template
-  ([the-logbook.xml](./the-logbook.xml)) is a draft: the image it names is not
-  built or published, and the project has no single combined image for it to
-  run (see "Unraid Community Apps Template — Not Installable Yet" in
-  [KNOWN_LIMITATIONS.md](../docs/KNOWN_LIMITATIONS.md)). Its installation guide
-  ([UNRAID-INSTALLATION.md](./UNRAID-INSTALLATION.md)) describes the intended
-  path. Searching "The Logbook" in the Apps tab will not find it; use the
-  Docker Compose path.
+- **Community Applications template (once a release is published).** The
+  template ([the-logbook.xml](./the-logbook.xml)) runs one combined container,
+  `ghcr.io/thegspiro/the-logbook`, holding the web interface and the API
+  (built from [`docker/combined/`](../docker/combined/Dockerfile), published by
+  the `Release Image` workflow on each `v*.*.*` tag). MySQL 8.0 and Redis are
+  **not** inside it: install them as their own containers first and give the
+  template their addresses. Until the first release is published the pull
+  fails with "manifest unknown", and the template has not yet been submitted
+  to Community Applications, so searching the Apps tab will not find it — add
+  it by its template URL (see
+  [UNRAID-INSTALLATION.md](./UNRAID-INSTALLATION.md)). Status: "Unraid
+  Community Apps Template" in
+  [KNOWN_LIMITATIONS.md](../docs/KNOWN_LIMITATIONS.md).
+
+  The container runs as uid 1000: create its appdata folders and
+  `chown -R 1000:1000` them before the first start, or it exits naming the
+  folder it cannot write.
 
 ## Security posture
 

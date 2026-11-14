@@ -378,27 +378,6 @@ describe('GuestCheckInPage', () => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
-    it('points a member account at the member QR code', async () => {
-      const user = userEvent.setup();
-      mockFetchSequence(
-        { ok: true, body: pipelineEventInfo },
-        {
-          ok: true,
-          body: {
-            status: 'member',
-            message:
-              'This looks like a department member account. Please scan the member QR code on the display instead.',
-          },
-        }
-      );
-
-      renderWithRouter(<GuestCheckInPage />);
-      await lookUp(user);
-
-      expect(await screen.findByText(/department member account/i)).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /yes, check me in/i })).not.toBeInTheDocument();
-    });
-
     it('sends an unrecognised visitor to staff, with a way to retry a typo', async () => {
       const user = userEvent.setup();
       mockFetchSequence(

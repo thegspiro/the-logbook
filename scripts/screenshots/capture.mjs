@@ -30,6 +30,7 @@ import {
   DEMO_GEARLESS_CREDENTIALS,
   DEMO_TRAINING_OFFICER_CREDENTIALS,
   DEMO_MEMBER_CREDENTIALS,
+  DEMO_MFA_GRACE_CREDENTIALS,
   DEMO_SECOND_MEMBER_CREDENTIALS,
   DEMO_SECRETARY_CREDENTIALS,
   DEMO_TREASURER_CREDENTIALS,
@@ -39,6 +40,7 @@ import {
   TOTP_PERIOD_SECONDS,
   codeStepVerdict,
   readAdminTotpSecret,
+  readMemberTotpSecret,
   totpForStep,
   totpStep,
 } from "./totp.mjs";
@@ -486,23 +488,25 @@ function adminSecret() {
 }
 
 // The server accepts each time-step once per account, and the light and dark
-// admin contexts sign in back to back, so the second must not reuse the first
-// one's step.
-let lastTotpStep = -1;
+// contexts of one account sign in back to back, so the second must not reuse
+// the first one's step. Kept per account: two different accounts may share one.
+const lastTotpStep = new Map();
 
-async function freshTotpCode(page, secret) {
+async function freshTotpCode(page, secret, username) {
   let step = totpStep();
-  if (step <= lastTotpStep) {
-    step = lastTotpStep + 1;
+  const last = lastTotpStep.get(username) ?? -1;
+  if (step <= last) {
+    step = last + 1;
     const waitMs = step * TOTP_PERIOD_SECONDS * 1000 - Date.now() + 1000;
     await page.waitForTimeout(Math.max(0, waitMs));
   }
-  lastTotpStep = step;
+  lastTotpStep.set(username, step);
   return totpForStep(secret, step);
 }
 
 /**
- * Complete the login page's code step for the administrator.
+ * Complete the login page's code step for the administrator, or for a member
+ * the seeder enrolled and stored a secret for (`ENROLLED_MEMBER_USERNAMES`).
  *
  * A first refusal is expected now and then: the seeder (or another capture)
  * may have spent the current step moments earlier. The next step's code is
@@ -510,16 +514,20 @@ async function freshTotpCode(page, secret) {
  */
 async function enterAuthenticatorCode(page, credentials) {
   // Neither of these is cured by signing in again, so `login` must not retry.
-  if (credentials !== DEMO_CREDENTIALS) {
+  const isAdmin = credentials === DEMO_CREDENTIALS;
+  const secret = isAdmin
+    ? adminSecret()
+    : readMemberTotpSecret(credentials.username);
+  if (!isAdmin && !secret) {
     throw Object.assign(
       new Error(
-        `${credentials.username} asked for a two-factor code; only the ` +
-          "administrator is expected to be enrolled",
+        `${credentials.username} asked for a two-factor code and the seeder ` +
+          "stored no secret for it; run seed_demo_data.py, whose " +
+          '"capture member two-factor" step enrols the capture accounts',
       ),
       { noRetry: true },
     );
   }
-  const secret = adminSecret();
   if (!secret) {
     throw Object.assign(
       new Error(
@@ -533,7 +541,7 @@ async function enterAuthenticatorCode(page, credentials) {
   const field = page.locator("#mfa-code");
   const verify = page.getByRole("button", { name: /^verify$/i });
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    await field.fill(await freshTotpCode(page, secret));
+    await field.fill(await freshTotpCode(page, secret, credentials.username));
     // Read the verdict off the response rather than the page: a refusal's
     // alert from the first attempt is still on screen when the second is
     // submitted, so the page alone cannot say which attempt it belongs to.
@@ -636,6 +644,10 @@ function makeSessions(browser, baseOptions) {
         // Holds the Training Officer position, which is what a new training
         // submission prompts in the inbox.
         await login(page, DEMO_TRAINING_OFFICER_CREDENTIALS);
+      } else if (auth === "mfagrace") {
+        // Privileged and deliberately not enrolled in two-step sign-in, for
+        // the grace-period banner and the password step-up box.
+        await login(page, DEMO_MFA_GRACE_CREDENTIALS);
       } else if (auth !== "anonymous") {
         throw new Error(`unknown auth mode '${auth}' on shot ${shot.id}`);
       }

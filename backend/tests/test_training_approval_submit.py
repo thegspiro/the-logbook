@@ -196,6 +196,27 @@ class TestRoster:
         assert approval.status == ApprovalStatus.PENDING
         db.commit.assert_not_awaited()
 
+    async def test_an_approver_on_the_roster_cannot_approve_it(self):
+        """Workflow review, training events: a training officer checked into
+        their own session approved their own credit, at whatever minutes they
+        typed. Another officer or the Chief approves such a roster."""
+        approval = _approval()
+        svc, db = _service(approval)
+
+        ok, error = await svc.submit_training_approval(
+            token="tok",
+            attendees=[_attendee()],
+            approval_notes=None,
+            approved_by=MEMBER,
+            organization_id="org-1",
+        )
+
+        assert ok is False
+        assert error.startswith("You are on this roster")
+        assert approval.status == ApprovalStatus.PENDING
+        svc._finalize_training_records.assert_not_awaited()
+        db.commit.assert_not_awaited()
+
     async def test_a_member_no_longer_on_the_attendance_is_refused(self):
         approval = _approval()
         svc, db = _service(approval, rsvps=[])

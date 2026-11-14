@@ -86,6 +86,12 @@ has actually drifted could not be established from it. Fixing it means deciding 
 the catalog owns (status, description, category) and writing a reconciliation — and a status
 reconcile can flip a row a department sees as connected — so it is flagged, not applied.
 
+**✅ Resolved 2026-11-05 (owner decision 2026-11-01: reconcile chosen columns).** The
+catalog owns `name`, `description` and `category`, and `status` only between `available`
+and `coming_soon`; a connected or errored row keeps its status. Migration `7c41e9a2b6d8`
+settled existing rows and `ensure_catalog` now reconciles on every list. See
+`docs/KNOWN_LIMITATIONS.md` (INT2-4).
+
 ### INT2-5 — INFO — unused `COLOR_RED` in the Discord sender — ✅ REMOVED
 
 The scan (counting `tests/`, `scripts/` and `alembic/`) over the endpoints, health service,

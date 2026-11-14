@@ -94,12 +94,17 @@ without the fix).
 - **Touch targets.** In the report viewer, CSV, Print / PDF and Compare were
   32px, the close X 20px, and Close and Remove comparison 36px.
 
-### W72-4 — NIT — Report dates are ISO strings — OPEN (lead)
+### W72-4 — NIT — Report dates are ISO strings — FIXED
 
 Every renderer prints dates and periods as `2026-01-01 — 2026-12-31` and
 `2026-10-15`. They are consistent with the CSV and unambiguous, but read
 unlike the rest of the app. Changing it touches all thirteen renderers; left
 as a lead.
+
+Fixed 2026-11-03: the on-screen tables, the period lines, the Busiest Day card
+and the compliance deadlines read `Sep 30, 2026`
+(`modules/reports/utils/reportDates.ts`). The exports keep ISO values, so a CSV
+still sorts.
 
 ## Checklist
 

@@ -18,7 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from app.services import module_documents
+from app.services import attendance_waiver_attachments, module_documents
+from app.services.history_media_service import HistoryMediaService
 
 pytestmark = pytest.mark.unit
 
@@ -34,6 +35,13 @@ SCANNING_CALLS = {
     "store_as_document",
     # app.services.minutes_record_service: stores through store_upload.
     "store_minutes_attachment",
+    # app.services.attendance_waiver_attachments: both store through
+    # store_bytes (see the guard below).
+    "submit_with_attachments",
+    "add_attachments",
+    # app.services.history_media_service: stores through store_bytes (see the
+    # guard below).
+    "store_media_upload",
 }
 
 
@@ -109,3 +117,17 @@ def test_store_as_document_really_routes_through_the_scanning_service():
     """The entry above is trusted only while this holds."""
     source = inspect.getsource(module_documents.store_as_document)
     assert ".store_upload(" in source
+
+
+def test_the_waiver_attachment_entry_points_route_through_the_scanning_service():
+    """The two waiver entries above are trusted only while this holds."""
+    service = attendance_waiver_attachments.AttendanceWaiverAttachmentService
+    assert ".store_bytes(" in inspect.getsource(service._store)
+    for entry in (service.submit_with_attachments, service.add_attachments):
+        assert "self._store(" in inspect.getsource(entry)
+
+
+def test_the_history_media_entry_point_routes_through_the_scanning_service():
+    """The history media entry above is trusted only while this holds."""
+    source = inspect.getsource(HistoryMediaService.store_media_upload)
+    assert ".store_bytes(" in source

@@ -35,6 +35,10 @@ interface DateTimeQuarterHourProps {
   timeLabel?: string | undefined;
   /** Earliest selectable calendar date (YYYY-MM-DD), passed to the native date input. */
   min?: string | undefined;
+  /** Error and required state from a wrapping FormField, carried by the date input the label names. */
+  'aria-invalid'?: true | undefined;
+  'aria-describedby'?: string | undefined;
+  'aria-required'?: true | undefined;
 }
 
 const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
@@ -46,6 +50,9 @@ const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
   timezone,
   timeLabel,
   min,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
+  'aria-required': ariaRequired,
 }) => {
   const { datePart, timePart } = useMemo(() => {
     if (!value) return { datePart: '', timePart: '' };
@@ -79,6 +86,9 @@ const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
         type="date"
         id={id}
         required={required}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
+        aria-required={ariaRequired}
         value={datePart}
         {...(min ? { min } : {})}
         onChange={(e) => handleDateChange(e.target.value)}

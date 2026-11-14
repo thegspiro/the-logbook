@@ -199,7 +199,8 @@ export const learningPaths: LearningPath[] = [
           'Check the App tab for your installed version, and use Check for updates to see whether a newer one is waiting.',
           'Open any form you might need while you still have signal. Once it is open you can fill it in and send it with none; a form you try to open with no signal shows an error instead.',
           'Look for the offline notice. In the side menu and the phone menu it reads Offline — will sync when reconnected, or Offline · N pending when work is waiting. With a top navigation bar it is a pill in that bar.',
-          'Back online it reads N pending sync — tap it to send now. Equipment checks and shift reports send from their own pages: open the equipment check, or the Shift Reports tab in Scheduling, with a connection.',
+          'Back online it reads N pending sync — tap it to send now. That sends everything except equipment checks, which the phone sends in the background where it can; if it cannot, a message tells you to open the equipment check with a connection.',
+          'If a notice says offline items are on hold, they were saved on that device before it recorded who saved them, and it will not send them on its own. Choose Send as me only if you saved them yourself; Discard deletes them for good.',
           'Treat a queued action as unfinished until the pill clears.',
         ],
         screenshots: [

@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { renderWithRouter } from '../../../../test/utils';
 
 const mockGetSettings = vi.fn();
@@ -126,21 +126,30 @@ describe('MembersSettingsPage', () => {
   // legitimately — from the relocation link on /settings, or a legacy ?tab=
   // redirect. /members/admin refuses them, so a back control pointing there
   // answered Access Denied from the page's own chrome.
+  // The way back is the header's trail, as on every admin page; the screen
+  // used to carry a back arrow beside its title instead.
   it('sends an officer without the hub grant back to organization settings', async () => {
     granted.current = ['settings.manage'];
+    window.history.pushState({}, '', '/members/admin/settings/visibility');
 
     renderWithRouter(<MembersSettingsPage section="visibility" />);
 
-    expect(await screen.findByRole('button', { name: /back to organization settings/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /back to members administration/i })).not.toBeInTheDocument();
+    const trail = await screen.findByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(trail).getByRole('link', { name: 'Organization Settings' })).toHaveAttribute('href', '/settings');
+    expect(within(trail).queryByRole('link', { name: 'Members Administration' })).not.toBeInTheDocument();
   });
 
   it('keeps the members administration destination for an officer who holds it', async () => {
     granted.current = ['members.manage', 'settings.manage'];
+    window.history.pushState({}, '', '/members/admin/settings/visibility');
 
     renderWithRouter(<MembersSettingsPage section="visibility" />);
 
-    expect(await screen.findByRole('button', { name: /back to members administration/i })).toBeInTheDocument();
+    const trail = await screen.findByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(trail).getByRole('link', { name: 'Members Administration' })).toHaveAttribute(
+      'href',
+      '/members/admin'
+    );
   });
 
   // A grant per section, not one for the screen: an officer with settings.edit

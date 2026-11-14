@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router';
+import { useNavigate, Link, useSearchParams } from 'react-router';
 import {
   Users,
   UserPlus,
@@ -33,9 +33,12 @@ import { SortableHeader } from '../components/ux/SortableHeader';
 import { sortItems } from '../utils/sortItems';
 import type { SortDirection } from '../components/ux/SortableHeader';
 import type { MemberStats } from '../types/member';
-import { UserStatus, isActiveAccount } from '../constants/enums';
+import { MEMBER_CLASS_LABELS, MemberClass, UserStatus, isActiveAccount } from '../constants/enums';
+import { canonicalMemberStatus, effectiveMemberClass, statusOptionsFor } from '../utils/membership';
+import { useMembershipTierOptions } from '../hooks/useMembershipTierOptions';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { displayNameOf } from '../utils/memberName';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 /**
  * A roster row. A coordinator's rows are full `GET /users` records; everybody
@@ -89,7 +92,42 @@ const Members: React.FC = () => {
   // archived, so an older department's "All" is mostly people who left decades
   // ago. They stay one filter choice away, under Archived or All Statuses.
   const defaultFilterStatus = canManageMembers ? CURRENT_MEMBERS_FILTER : UserStatus.ACTIVE;
-  const [filterStatus, setFilterStatus] = useState<string>(defaultFilterStatus);
+  // `?status=` seeds the status filter: the dashboard's Active members tile
+  // links here with `?status=active`, and the Active choice below selects
+  // the same accounts it counts (isActiveAccount, so probationary members
+  // too). Only a value the select offers this viewer is taken.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [filterStatus, setFilterStatus] = useState<string>(() => {
+    const requested = searchParams.get('status');
+    const offered: readonly string[] = [
+      ...(canManageMembers ? [CURRENT_MEMBERS_FILTER, UserStatus.ARCHIVED] : []),
+      'all',
+      UserStatus.ACTIVE,
+      UserStatus.INACTIVE,
+      UserStatus.LEAVE,
+      UserStatus.RETIRED,
+    ];
+    return requested && offered.includes(requested) ? requested : defaultFilterStatus;
+  });
+  const changeFilterStatus = (value: string) => {
+    setFilterStatus(value);
+    // Changed on the page, the filter no longer answers to the link that
+    // seeded it, and a reload must not bring the old one back.
+    if (searchParams.has('status')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('status');
+      setSearchParams(next, { replace: true });
+    }
+  };
+  // Class and membership status are two more axes a coordinator slices the
+  // roster by: "every administrative member", "every life member". 'all' on
+  // each is the default; 'unset' on class finds the members whose class was
+  // never recorded (a tier member backfilled before the class existed), so an
+  // officer can set it from the edit page.
+  const [filterClass, setFilterClass] = useState<string>('all');
+  const [filterMemberStatus, setFilterMemberStatus] = useState<string>('all');
+  // The department's tier names, which every member may read.
+  const { tiers } = useMembershipTierOptions();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [contactInfoEnabled, setContactInfoEnabled] = useState({
@@ -217,7 +255,14 @@ const Members: React.FC = () => {
         (filterStatus === UserStatus.ACTIVE && isActiveAccount(member.status)) ||
         member.status === filterStatus;
 
-      return matchesSearch && matchesFilter;
+      const memberClass = effectiveMemberClass(member.member_class, member.membership_type);
+      const matchesClass =
+        filterClass === 'all' || (filterClass === 'unset' ? memberClass === undefined : memberClass === filterClass);
+
+      const memberStatus = canonicalMemberStatus(member.member_status) ?? canonicalMemberStatus(member.membership_type);
+      const matchesMemberStatus = filterMemberStatus === 'all' || memberStatus === filterMemberStatus;
+
+      return matchesSearch && matchesFilter && matchesClass && matchesMemberStatus;
     });
 
     // Apply sorting (#30)
@@ -237,7 +282,16 @@ const Members: React.FC = () => {
     });
 
     return result;
-  }, [members, searchQuery, filterStatus, sortField, sortDirection, canManageMembers]);
+  }, [members, searchQuery, filterStatus, filterClass, filterMemberStatus, sortField, sortDirection, canManageMembers]);
+
+  const memberStatusOptions = useMemo(
+    () => statusOptionsFor(tiers, members.map((m) => m.member_status ?? m.membership_type ?? '').filter(Boolean)),
+    [tiers, members]
+  );
+  const anyClassUnset = useMemo(
+    () => members.some((m) => effectiveMemberClass(m.member_class, m.membership_type) === undefined),
+    [members]
+  );
 
   // Paginated subset (#11)
   // A column of dashes tells a member nothing when the department has not
@@ -254,13 +308,14 @@ const Members: React.FC = () => {
   // a blank panel rather than a prompt to do something they cannot. An empty
   // result that follows from a search or a status filter is still reported to
   // everyone — that is feedback on what they asked for.
-  const listIsNarrowed = searchQuery !== '' || filterStatus !== defaultFilterStatus;
+  const listIsNarrowed =
+    searchQuery !== '' || filterStatus !== defaultFilterStatus || filterClass !== 'all' || filterMemberStatus !== 'all';
   const showEmptyState = canManageMembers || listIsNarrowed;
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterStatus, sortField, sortDirection]);
+  }, [searchQuery, filterStatus, filterClass, filterMemberStatus, sortField, sortDirection]);
 
   const handleSort = (field: string, direction: SortDirection) => {
     setSortField(direction ? field : null);
@@ -387,7 +442,7 @@ const Members: React.FC = () => {
         )}
 
         {/* Stats Cards */}
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
+        <StatGrid columns={5} className="mb-6 sm:mb-8">
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Total Members</p>
             <p className="text-theme-text-primary mt-1 text-2xl font-bold">{stats.total}</p>
@@ -408,7 +463,7 @@ const Members: React.FC = () => {
             <p className="text-theme-text-muted text-xs font-medium uppercase">Retired</p>
             <p className="mt-1 text-2xl font-bold text-blue-700 dark:text-blue-400">{stats.retired}</p>
           </div>
-        </div>
+        </StatGrid>
 
         {/* Actions Bar */}
         <div className="card mb-6 p-4">
@@ -435,7 +490,7 @@ const Members: React.FC = () => {
               <select
                 aria-label="Filter by status"
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
+                onChange={(e) => changeFilterStatus(e.target.value)}
                 className="form-input"
               >
                 {canManageMembers && <option value={CURRENT_MEMBERS_FILTER}>All Current</option>}
@@ -445,6 +500,33 @@ const Members: React.FC = () => {
                 <option value="leave">On Leave</option>
                 <option value="retired">Retired</option>
                 {canManageMembers && <option value={UserStatus.ARCHIVED}>Archived</option>}
+              </select>
+              <select
+                aria-label="Filter by member class"
+                value={filterClass}
+                onChange={(e) => setFilterClass(e.target.value)}
+                className="form-input"
+              >
+                <option value="all">All Classes</option>
+                {(Object.values(MemberClass) as MemberClass[]).map((value) => (
+                  <option key={value} value={value}>
+                    {MEMBER_CLASS_LABELS[value]}
+                  </option>
+                ))}
+                {anyClassUnset && <option value="unset">Class not set</option>}
+              </select>
+              <select
+                aria-label="Filter by membership status"
+                value={filterMemberStatus}
+                onChange={(e) => setFilterMemberStatus(e.target.value)}
+                className="form-input"
+              >
+                <option value="all">All Membership Statuses</option>
+                {memberStatusOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -487,8 +569,9 @@ const Members: React.FC = () => {
           <SkeletonPage rows={8} showStats={false} />
         ) : filteredMembers.length === 0 ? (
           showEmptyState && (
-            <div className="card p-12">
+            <div className="card p-6">
               <EmptyState
+                compact
                 icon={Users}
                 title="No Members Found"
                 description={
@@ -650,8 +733,8 @@ const Members: React.FC = () => {
 
             {/* Desktop table view */}
             <div className="card hidden overflow-hidden md:block">
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="rwd-table-container overflow-x-auto">
+                <table className="rwd-table rwd-table-xwide w-full">
                   <thead className="bg-theme-input-bg border-theme-surface-border border-b">
                     <tr>
                       {canPrintBadges && (
@@ -737,7 +820,7 @@ const Members: React.FC = () => {
                         className={`hover:bg-theme-surface-secondary cursor-pointer transition-colors ${selectedIds.has(member.id) ? 'bg-blue-500/5' : ''}`}
                       >
                         {canPrintBadges && (
-                          <td className="w-10 py-4 pr-1 pl-4">
+                          <td data-label="Select" className="w-10 py-4 pr-1 pl-4">
                             <input
                               type="checkbox"
                               checked={selectedIds.has(member.id)}
@@ -747,7 +830,7 @@ const Members: React.FC = () => {
                             />
                           </td>
                         )}
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td data-label="Member" className="px-6 py-4">
                           <div className="flex items-center">
                             <Avatar
                               firstName={member.first_name}
@@ -764,16 +847,16 @@ const Members: React.FC = () => {
                                 {displayNameOf(member)}
                               </Link>
                               {canManageMembers && (
-                                <div className="text-theme-text-muted text-sm">@{member.username}</div>
+                                <div className="text-theme-text-muted text-sm break-all">@{member.username}</div>
                               )}
                             </div>
                           </div>
                         </td>
-                        <td className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap">
+                        <td data-label="Rank" className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap">
                           {member.rank ? formatRank(member.rank) : <span className="text-theme-text-muted">-</span>}
                         </td>
                         {showMemberNumber && (
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td data-label="Member #" className="px-6 py-4 whitespace-nowrap">
                             {member.membership_number && (
                               <div className="text-theme-text-primary font-mono text-sm">
                                 {member.membership_number}
@@ -783,7 +866,7 @@ const Members: React.FC = () => {
                           </td>
                         )}
                         {contactInfoEnabled.enabled && (
-                          <td className="px-6 py-4">
+                          <td data-label="Contact" className="px-6 py-4">
                             <div className="text-sm">
                               {contactInfoEnabled.show_phone && member.phone && (
                                 <div className="text-theme-text-secondary mb-1 flex items-center">
@@ -809,7 +892,7 @@ const Members: React.FC = () => {
                             </div>
                           </td>
                         )}
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td data-label="Status" className="px-6 py-4 whitespace-nowrap">
                           <span
                             className={`rounded border px-2 py-1 text-xs font-semibold ${getStatusColor(
                               member.status
@@ -819,14 +902,14 @@ const Members: React.FC = () => {
                           </span>
                         </td>
                         {canManageMembers && (
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td data-label="Hire Date" className="px-6 py-4 whitespace-nowrap">
                             <div className="text-theme-text-secondary text-sm">
                               {member.hire_date ? formatDate(member.hire_date, tz) : '-'}
                             </div>
                           </td>
                         )}
                         {canManageMembers && (
-                          <td className="px-6 py-4 text-right whitespace-nowrap">
+                          <td data-label="Actions" className="px-6 py-4 text-right whitespace-nowrap">
                             <div className="flex items-center justify-end space-x-2">
                               <button
                                 onClick={() => openMemberProfile(member.id)}

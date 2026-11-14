@@ -2,6 +2,7 @@
  * adminServices — extracted from services/api.ts
  */
 
+import type { AxiosRequestConfig } from 'axios';
 import api from './apiClient';
 import { dedupeInFlight } from '../utils/inFlight';
 import type { SecurityStatus, SecurityAlert } from './facilitiesServices';
@@ -9,8 +10,9 @@ import type {
   DashboardStats,
   AdminSummary,
   OperationsDashboard,
-  ActionItemSummary,
+  ActionItemPage,
   CommunityEngagement,
+  CommunityPeriod,
   DashboardPulseLayout,
   DashboardPulseResponse,
   MainDashboardWidgets,
@@ -101,6 +103,11 @@ export interface TrainingSessionResponse {
   program_id?: string;
   phase_id?: string;
   requirement_id?: string;
+  /**
+   * Session-attendance requirements this session counts toward. Absent from a
+   * backend that predates them; treat that as none.
+   */
+  attendance_requirement_ids?: string[];
   course_name: string;
   course_code?: string;
   training_type: string;
@@ -478,12 +485,27 @@ export const dashboardService = {
   async getActionItems(params?: {
     status_filter?: string | undefined;
     assigned_to_me?: boolean | undefined;
-  }): Promise<ActionItemSummary[]> {
-    const response = await api.get<ActionItemSummary[]>('/dashboard/action-items', { params });
-    return asArray(response.data);
+    overdue?: boolean | undefined;
+    open_only?: boolean | undefined;
+    source?: 'meeting' | 'minutes' | undefined;
+    assignee_id?: string | undefined;
+    source_id?: string | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
+  }): Promise<ActionItemPage> {
+    const response = await api.get<Partial<ActionItemPage> | undefined>('/dashboard/action-items/page', { params });
+    const page = response.data ?? {};
+    return {
+      items: asArray(page.items ?? []),
+      total: page.total ?? 0,
+      open_total: page.open_total ?? 0,
+      overdue_total: page.overdue_total ?? 0,
+      limit: page.limit ?? 0,
+      offset: page.offset ?? 0,
+    };
   },
-  async getCommunityEngagement(): Promise<CommunityEngagement> {
-    const response = await api.get<CommunityEngagement>('/dashboard/community-engagement');
+  async getCommunityEngagement(period: CommunityPeriod = 'all'): Promise<CommunityEngagement> {
+    const response = await api.get<CommunityEngagement>('/dashboard/community-engagement', { params: { period } });
     return response.data;
   },
   /**
@@ -536,6 +558,8 @@ export interface EmailTemplate {
   is_active: boolean;
   default_cc?: string[];
   default_bcc?: string[];
+  /** Positions whose current holders are CC'd; resolved when each email is sent. */
+  default_cc_position_ids?: string[] | null;
   available_variables: TemplateVariable[];
   /**
    * Whether the department has changed anything Reset would put back.
@@ -582,6 +606,7 @@ export interface EmailTemplateUpdate {
   allow_attachments?: boolean;
   default_cc?: string[] | null;
   default_bcc?: string[] | null;
+  default_cc_position_ids?: string[] | null;
 }
 
 /** What the preview endpoint will render instead of the stored template. */
@@ -878,6 +903,47 @@ export const memberStatusService = {
     return response.data;
   },
 
+  /** Who the member reports to now, and every earlier assignment. */
+  async getSupervisor(userId: string): Promise<import('../types/user').MemberSupervisor> {
+    const response = await api.get<import('../types/user').MemberSupervisor>(`/users/${userId}/supervisor`);
+    return { ...response.data, history: asArray(response.data?.history) };
+  },
+
+  /** The current members the caller supervises today (owner decision 2026-11-01, crew views). */
+  async getMyCrew(): Promise<import('../types/user').CrewMember[]> {
+    const response = await api.get<{ members?: import('../types/user').CrewMember[] }>('/users/me/crew');
+    return asArray(response.data?.members ?? []);
+  },
+
+  /** Current members who may be named as this member's supervisor. */
+  async getSupervisorCandidates(userId: string): Promise<import('../types/user').SupervisorCandidate[]> {
+    const response = await api.get<{ candidates: import('../types/user').SupervisorCandidate[] }>(
+      `/users/${userId}/supervisor/candidates`
+    );
+    return asArray(response.data?.candidates);
+  },
+
+  /** Set or change the supervisor; an omitted start date means today on the department's calendar. */
+  async setSupervisor(
+    userId: string,
+    payload: { supervisor_id: string; starts_on?: string | undefined }
+  ): Promise<import('../types/user').MemberSupervisor> {
+    const response = await api.put<import('../types/user').MemberSupervisor>(`/users/${userId}/supervisor`, payload);
+    return { ...response.data, history: asArray(response.data?.history) };
+  },
+
+  /** End the current assignment on `ends_on` (inclusive; omitted means today). */
+  async endSupervisor(
+    userId: string,
+    payload: { ends_on?: string | undefined }
+  ): Promise<import('../types/user').MemberSupervisor> {
+    const response = await api.post<import('../types/user').MemberSupervisor>(
+      `/users/${userId}/supervisor/end`,
+      payload
+    );
+    return { ...response.data, history: asArray(response.data?.history) };
+  },
+
   async getOverduePropertyReturns(): Promise<{
     overdue_count: number;
     members: import('../types/user').OverdueMember[];
@@ -899,7 +965,15 @@ export const memberStatusService = {
     const response = await api.get<import('../types/user').PropertyReturnReport>(
       `/users/${userId}/property-return-report`
     );
-    return response.data;
+    return { ...response.data, items: asArray(response.data?.items) };
+  },
+
+  /** The department's tier names, for any signed-in member (no rules or benefits). */
+  async getTierNames(): Promise<import('../types/user').MembershipTierName[]> {
+    const response = await api.get<{ tiers: import('../types/user').MembershipTierName[] }>(
+      '/users/membership-tiers/names'
+    );
+    return asArray(response.data?.tiers ?? []);
   },
 
   async getTierConfig(): Promise<import('../types/user').MembershipTierConfig> {
@@ -934,8 +1008,8 @@ export const memberStatusService = {
     return asArray(response.data);
   },
 
-  async getMyLeaves(): Promise<LeaveOfAbsenceResponse[]> {
-    const response = await api.get<LeaveOfAbsenceResponse[]>('/users/leaves-of-absence/me');
+  async getMyLeaves(config?: AxiosRequestConfig): Promise<LeaveOfAbsenceResponse[]> {
+    const response = await api.get<LeaveOfAbsenceResponse[]>('/users/leaves-of-absence/me', config);
     return asArray(response.data);
   },
 
@@ -1198,6 +1272,12 @@ export const shiftCompletionService = {
     return response.data;
   },
 
+  /** Whether the caller may review reports, and whether that comes from the department's reviewer role. */
+  async getReviewAccess(): Promise<{ can_review: boolean; by_role: boolean }> {
+    const response = await api.get<{ can_review: boolean; by_role: boolean }>('/training/shift-reports/review-access');
+    return response.data;
+  },
+
   async getPendingReviewReports(): Promise<import('../types/training').ShiftCompletionReport[]> {
     const response = await api.get<import('../types/training').ShiftCompletionReport[]>(
       '/training/shift-reports/pending-review'
@@ -1385,6 +1465,21 @@ export interface IntegrationStatus {
   enabled: boolean;
 }
 
+// An active Severe or Extreme NWS alert, as the dashboard banner shows it
+// (GET /integrations/weather/active-alerts). Empty unless the department turned
+// the banner on for its NWS Weather Alerts integration.
+export interface ActiveWeatherAlert {
+  id: string;
+  event: string;
+  /** "Severe" or "Extreme". */
+  severity: string;
+  headline: string | null;
+  instruction: string | null;
+  area_desc: string | null;
+  onset: string | null;
+  expires: string | null;
+}
+
 // ---- Claude (MCP) service keys ------------------------------------------
 // The plaintext key appears exactly once, in the create response; every
 // other shape carries only the display prefix.
@@ -1461,6 +1556,11 @@ export const integrationsService = {
   // options without holding the integrations-admin permission (INT-3).
   async getConnectedIntegrationStatus(): Promise<IntegrationStatus[]> {
     const response = await api.get<IntegrationStatus[]>('/integrations/connected');
+    return asArray(response.data);
+  },
+
+  async getActiveWeatherAlerts(): Promise<ActiveWeatherAlert[]> {
+    const response = await api.get<ActiveWeatherAlert[]>('/integrations/weather/active-alerts');
     return asArray(response.data);
   },
 

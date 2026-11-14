@@ -23,7 +23,9 @@ from typing import (
 )
 
 from loguru import logger
-from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy import and_, delete
+from sqlalchemy import false as sa_false
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -31,6 +33,11 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.audit import log_audit_event
 from app.core.constants import OFFICE_CATALOG, office_label
+from app.core.permissions import (
+    POSITION_KIND_COMMITTEE,
+    POSITION_KIND_OFFICE,
+    POSITION_KIND_SYSTEM,
+)
 from app.core.security import email_fingerprints
 from app.core.utils import list_within_detail_limit
 from app.models.election import Election, ElectionStatus
@@ -46,6 +53,7 @@ from app.models.membership_pipeline import (
     ProspectDocument,
     ProspectElectionPackage,
     ProspectEventLink,
+    ProspectFormRequest,
     ProspectInterview,
     ProspectiveMember,
     ProspectStatus,
@@ -69,10 +77,15 @@ from app.services.email_policy import (
 )
 from app.services.file_storage_service import StorageArea
 from app.services.integration_services.directory_common import DirectoryProviderInfo
+from app.services.prospect_assignment_service import ProspectAssignmentService
 from app.utils.membership import (
     ADMINISTRATIVE_RANK_MESSAGE,
     DEACTIVATED_EMAIL_MESSAGE,
+    MemberStatus,
+    canonical_member_status,
+    configured_tiers,
     is_administrative,
+    tier_for_status,
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org, is_in_org
@@ -83,6 +96,13 @@ from app.utils.prospect_fields import (
     REQUIRED_PROSPECT_FIELDS as _SHARED_REQUIRED_FIELDS,
 )
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+
+# The starting statuses a pipeline's conversion rule may name
+# (``ConversionStatus``); any other starting status must be one of the
+# department's own tiers.
+CONVERSION_STARTING_STATUSES = frozenset(
+    {MemberStatus.PROBATIONARY, MemberStatus.REGULAR}
+)
 
 
 def prospect_document_path(file_path: Any, organization_id: Any) -> Optional[str]:
@@ -492,11 +512,12 @@ def _incomplete_required_steps(
 
 
 def _required_steps_refusal(names: List[str]) -> str:
-    listed = ", ".join(f"'{n}'" for n in names)
     noun = "stage is" if len(names) == 1 else "stages are"
-    return (
+    return list_within_detail_limit(
         f"This applicant cannot be converted yet: the required {noun} not "
-        f"complete: {listed}."
+        "complete: ",
+        [f"'{n}'" for n in names],
+        ".",
     )
 
 
@@ -542,6 +563,48 @@ def _required_approver_roles(config: Optional[Dict[str, Any]]) -> List[str]:
     approvers, which would let it complete without any sign-off at all.
     """
     return [str(r).strip() for r in (config or {}).get("required_approvers") or []]
+
+
+def _required_interviewer_positions(config: Optional[Dict[str, Any]]) -> List[str]:
+    """An interview stage's required interviewer positions, as matched.
+
+    Stripped and blank-keeping for the reason :func:`_required_approver_roles`
+    gives: a blank entry nobody can hold keeps the stage closed rather than
+    quietly dropping a requirement.
+    """
+    raw = (config or {}).get("required_interviewer_positions") or []
+    if not isinstance(raw, list):
+        return []
+    return [str(p).strip() for p in raw]
+
+
+# Office over committee over platform position, before priority is compared.
+# A position with no kind predates the column and is an office.
+_TITLE_KIND_RANK = {
+    POSITION_KIND_OFFICE: 2,
+    POSITION_KIND_COMMITTEE: 1,
+    POSITION_KIND_SYSTEM: 0,
+}
+
+
+def interviewer_title(positions: Iterable[Any]) -> Optional[str]:
+    """The title an interviewer signs an interview with, from their positions.
+
+    The most senior office, then committee, by ``priority``; a platform
+    position (a rank mirror, the owner) only when the member holds nothing
+    else. The baseline ``member`` position is never a title: every member
+    holds it, so it says nothing about who conducted the interview.
+    """
+    candidates = [
+        p for p in positions if p.name and (p.slug or "").casefold() != "member"
+    ]
+    if not candidates:
+        return None
+    best = max(
+        candidates,
+        key=lambda p: (_TITLE_KIND_RANK.get(p.kind, 2), p.priority or 0),
+    )
+    return str(best.name)
 
 
 def _assert_movable(prospect: ProspectiveMember, action: str) -> None:
@@ -956,6 +1019,20 @@ class MembershipPipelineService:
         await assert_in_org(
             self.db, Form, form_id, organization_id, allow_none=True, label="form"
         )
+        # A Follow-up Form stage names its form under its own key. Sharing
+        # `form_id` would run _ensure_membership_form_integration on it, and
+        # every follow-up submission would then file a new applicant.
+        follow_up_id = (
+            config.get("follow_up_form_id") if isinstance(config, dict) else None
+        )
+        await assert_in_org(
+            self.db,
+            Form,
+            follow_up_id,
+            organization_id,
+            allow_none=True,
+            label="follow-up form",
+        )
 
     async def add_step(
         self, pipeline_id: str, organization_id: str, data: Dict[str, Any]
@@ -1003,6 +1080,18 @@ class MembershipPipelineService:
         ):
             max_order = max(taken, default=-1)
             data["sort_order"] = max_order + 1
+
+        config = dict(data.get("config") or {})
+        if (
+            getattr(data.get("step_type"), "value", data.get("step_type"))
+            == PipelineStepType.FOLLOW_UP_FORM.value
+            and "auto_advance" not in config
+        ):
+            # A Follow-up Form stage advances on submission unless the
+            # department unticks it. Stored rather than read as a default
+            # because _try_auto_advance_step treats a missing key as off.
+            config["auto_advance"] = True
+        data["config"] = config
 
         step = MembershipPipelineStep(
             id=generate_uuid(),
@@ -1233,6 +1322,8 @@ class MembershipPipelineService:
                         row.completed_at = None
                         row.completed_by = None
                     await self.ensure_election_package_on_entry(prospect, fallback_step)
+                    await self._send_follow_up_on_entry(prospect, fallback_step)
+                    await self._notify_case_managers_on_entry(prospect, fallback_step)
                 await self._log_activity(
                     prospect_id=prospect.id,
                     action="step_deleted_auto_moved",
@@ -1438,17 +1529,26 @@ class MembershipPipelineService:
 
     @staticmethod
     def _apply_prospect_exclusions(
-        query, exclude_prospect_ids: Optional[Iterable[str]]
+        query,
+        exclude_prospect_ids: Optional[Iterable[str]],
+        only_prospect_ids: Optional[Iterable[str]] = None,
     ):
         """Drop specific prospect rows from a query over ``ProspectiveMember``.
 
-        Used to keep a caller's own prospective-membership record out of the
-        lists, boards and counts they can see (see app/api/prospect_privacy.py).
+        ``exclude_prospect_ids`` keeps a caller's own prospective-membership
+        record out of the lists, boards and counts they can see (see
+        app/api/prospect_privacy.py). ``only_prospect_ids`` keeps everything
+        but the applicants they are assigned to out, for a member without
+        ``prospective_members.view_all`` (app/services/prospect_access.py):
+        None means no such limit, and an empty collection means none at all.
         """
         ids = [str(i) for i in (exclude_prospect_ids or []) if i]
-        if not ids:
-            return query
-        return query.where(ProspectiveMember.id.notin_(ids))
+        if ids:
+            query = query.where(ProspectiveMember.id.notin_(ids))
+        if only_prospect_ids is not None:
+            only = [str(i) for i in only_prospect_ids if i]
+            query = query.where(ProspectiveMember.id.in_(only) if only else sa_false())
+        return query
 
     @staticmethod
     def _prospect_search_filter(search: str) -> ColumnElement[bool]:
@@ -1542,6 +1642,7 @@ class MembershipPipelineService:
         offset: int = 0,
         exclude_prospect_ids: Optional[Iterable[str]] = None,
         open_only: bool = False,
+        only_prospect_ids: Optional[Iterable[str]] = None,
     ) -> tuple[List[ProspectiveMember], int]:
         """List prospects with filters.
 
@@ -1580,7 +1681,9 @@ class MembershipPipelineService:
                 selectinload(ProspectiveMember.target_role),
             )
         )
-        query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
+        query = self._apply_prospect_exclusions(
+            query, exclude_prospect_ids, only_prospect_ids
+        )
 
         # Count query
         count_query = select(func.count()).select_from(query.subquery())
@@ -1952,6 +2055,11 @@ class MembershipPipelineService:
         ):
             await self.db.commit()
             created = await self.get_prospect(prospect.id, organization_id)
+        # A pipeline can also open on a follow-up form.
+        if created is not None and created.current_step is not None:
+            if await self._send_follow_up_on_entry(created, created.current_step):
+                await self.db.commit()
+                created = await self.get_prospect(prospect.id, organization_id)
         if created is None:
             raise RuntimeError(f"Prospect {prospect.id} not found after commit")
         return created
@@ -2196,29 +2304,30 @@ class MembershipPipelineService:
         step_type = effective_step_type(step)
 
         if step_type == PipelineStepType.INTERVIEW_REQUIREMENT:
-            required_count = config.get("required_count", 1)
-            required_rec = config.get("required_recommendation")
-            interviews = [
-                i
-                for i in getattr(prospect, "interviews", [])
-                if str(i.step_id) == str(step.id)
-            ]
-            if len(interviews) < required_count:
+            progress = await self.interview_requirement_progress(prospect, step)
+            required_count = progress["required_count"]
+            recorded = progress["recorded_count"]
+            if recorded < required_count:
                 raise ValueError(
                     f"This step requires at least {required_count} "
-                    f"interview(s); only {len(interviews)} recorded."
+                    f"interview(s); only {recorded} recorded."
                 )
-            if required_rec:
-                matching = [
-                    i
-                    for i in interviews
-                    if i.recommendation and i.recommendation.value == required_rec
-                ]
-                if not matching:
-                    raise ValueError(
-                        f"At least one interview must have a "
-                        f"'{required_rec}' recommendation."
+            if progress["recommendation_met"] is False:
+                raise ValueError(
+                    f"At least one interview must have a "
+                    f"'{progress['required_recommendation']}' recommendation."
+                )
+            missing_positions = [
+                p["label"] for p in progress["positions"] if not p["satisfied"]
+            ]
+            if missing_positions:
+                raise ValueError(
+                    list_within_detail_limit(
+                        "An interview is still needed from: ",
+                        missing_positions,
+                        ".",
                     )
+                )
 
         elif step_type == PipelineStepType.CHECKLIST:
             items = config.get("items", [])
@@ -2312,23 +2421,21 @@ class MembershipPipelineService:
                     ScreeningStatus,
                 )
 
+                # Scoped through the prospect, already resolved in-org.
                 screening_result = await self.db.execute(
                     select(ScreeningRecord).where(
-                        and_(
-                            ScreeningRecord.prospect_id == prospect.id,
-                            ScreeningRecord.screening_type.in_(required_screenings),
-                            ScreeningRecord.status.in_(
-                                [
-                                    ScreeningStatus.PASSED,
-                                    ScreeningStatus.COMPLETED,
-                                ]
-                            ),
-                        )
+                        ScreeningRecord.prospect_id == prospect.id
                     )
                 )
-                screening_records = screening_result.scalars().all()
+                # The status and the type are ciphertext (MS-18), so the
+                # cleared results of the required types are picked here
+                # rather than in the query.
+                cleared = (ScreeningStatus.PASSED, ScreeningStatus.COMPLETED)
                 passed_types = {
-                    record.screening_type.value for record in screening_records
+                    record.screening_type.value
+                    for record in screening_result.scalars().all()
+                    if record.status in cleared
+                    and record.screening_type.value in required_screenings
                 }
                 missing = [s for s in required_screenings if s not in passed_types]
                 if missing:
@@ -3395,6 +3502,8 @@ class MembershipPipelineService:
             progress.completed_by = None
 
         await self.ensure_election_package_on_entry(prospect, step, assigned_by)
+        await self._send_follow_up_on_entry(prospect, step)
+        await self._notify_case_managers_on_entry(prospect, step)
 
         await self._log_activity(
             prospect_id=prospect.id,
@@ -4014,6 +4123,8 @@ class MembershipPipelineService:
             )
 
         await self.ensure_election_package_on_entry(prospect, prev_step, regressed_by)
+        await self._send_follow_up_on_entry(prospect, prev_step)
+        await self._notify_case_managers_on_entry(prospect, prev_step)
 
         await self._log_activity(
             prospect_id=prospect_id,
@@ -4093,6 +4204,9 @@ class MembershipPipelineService:
                 # email stage stays for a coordinator to complete.
                 if sent and not next_step.is_final_step:
                     return (str(next_step.id), "stage_email_sent")
+
+            await self._send_follow_up_on_entry(prospect, next_step)
+            await self._notify_case_managers_on_entry(prospect, next_step)
 
             if is_status_page_stage(next_step):
                 await self.db.flush()
@@ -4228,6 +4342,73 @@ class MembershipPipelineService:
             ).scalar_one_or_none()
         return resolve_conversion_outcome(config, prospect.desired_membership_type)
 
+    async def _relink_screenings_to_member(
+        self, prospect: ProspectiveMember, user_id: str
+    ) -> int:
+        """File the applicant's screening records under the new member too.
+
+        Departments that screen before the membership election record those
+        screenings against the prospect; left there, the new member reads as
+        owing every one of them again (W71b-2). ``prospect_id`` is kept so the
+        pipeline's history of the applicant is unchanged; a record created
+        afterwards names only one subject, so "both ids" marks exactly the
+        records a transfer re-linked (migration ``beedcad5b36a`` relies on
+        this for its downgrade, and member anonymization scrubs them with the
+        member). Runs after the new user row is flushed: ``user_id`` is a
+        foreign key.
+        """
+        from app.models.medical_screening import ScreeningRecord
+        from app.utils.sql_results import rows_affected
+
+        result = await self.db.execute(
+            update(ScreeningRecord)
+            .where(
+                ScreeningRecord.organization_id == prospect.organization_id,
+                ScreeningRecord.prospect_id == prospect.id,
+                ScreeningRecord.user_id.is_(None),
+            )
+            .values(user_id=user_id)
+            .execution_options(synchronize_session=False)
+        )
+        relinked = rows_affected(result)
+        if relinked:
+            logger.info(
+                "Re-linked {} screening record(s) of prospect {} to member {}",
+                relinked,
+                prospect.id,
+                user_id,
+            )
+        return relinked
+
+    async def _starting_status_or_none(
+        self, organization_id: str, member_status: str
+    ) -> Optional[str]:
+        """A converted applicant's chosen starting status, canonically spelled,
+        or None when this department does not offer it.
+
+        The two built-in starting statuses (the pipeline outcomes' own
+        vocabulary), or a tier on the organization's ladder -- the Convert
+        dialog lists the department's tiers (owner decision 2026-11-01). The
+        Organization row is locked first, as ``_accepted_member_status_or_400``
+        does for the profile, so the tier editor cannot remove the rung
+        between this check and the commit (Pitfall #27).
+        """
+        canonical = canonical_member_status(member_status)
+        if canonical is None:
+            return None
+        if canonical in CONVERSION_STARTING_STATUSES:
+            return canonical
+        org = (
+            await self.db.execute(
+                select(Organization)
+                .where(Organization.id == organization_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        tiers = configured_tiers(org.settings if org else None)
+        return canonical if tier_for_status(tiers, canonical) else None
+
     async def _do_transfer(
         self,
         prospect: ProspectiveMember,
@@ -4326,7 +4507,19 @@ class MembershipPipelineService:
 
         outcome: Optional[Tuple[str, str]]
         if member_class and member_status:
-            outcome = (member_class, member_status)
+            starting_status = await self._starting_status_or_none(
+                str(prospect.organization_id), member_status
+            )
+            if starting_status is None:
+                return {
+                    "success": False,
+                    "message": (
+                        f"'{member_status}' is not a starting status this "
+                        "department offers. Choose Probationary, Regular or "
+                        "one of the department's membership tiers."
+                    ),
+                }
+            outcome = (member_class, starting_status)
         elif membership_type:
             outcome = None
         else:
@@ -4648,6 +4841,8 @@ class MembershipPipelineService:
         )
 
         await self.db.flush()
+
+        await self._relink_screenings_to_member(prospect, user_id)
 
         # Auto-enroll into probationary training pipeline if one exists
         enrollment_result = await self._auto_enroll_probationary(
@@ -5577,6 +5772,7 @@ class MembershipPipelineService:
         pipeline_id: str,
         organization_id: str,
         exclude_prospect_ids: Optional[Iterable[str]] = None,
+        only_prospect_ids: Optional[Iterable[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Get the kanban board view for a pipeline.
 
@@ -5602,6 +5798,7 @@ class MembershipPipelineService:
                 func.count(ProspectiveMember.id),
             ).where(scope),
             exclude_prospect_ids,
+            only_prospect_ids,
         ).group_by(ProspectiveMember.current_step_id)
         count_rows = (await self.db.execute(count_query)).all()
         counts = {
@@ -5628,7 +5825,9 @@ class MembershipPipelineService:
             .order_by(ProspectiveMember.created_at)
             .limit(self.MAX_KANBAN_CARDS)
         )
-        query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
+        query = self._apply_prospect_exclusions(
+            query, exclude_prospect_ids, only_prospect_ids
+        )
         result = await self.db.execute(query)
         prospects = list(result.scalars().all())
 
@@ -5795,6 +5994,35 @@ class MembershipPipelineService:
                 f"Failed to auto-advance prospect " f"{prospect_id} on {trigger}: {e}"
             )
             return False
+
+    async def try_auto_advance_step(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        step_id: str,
+        *,
+        step_type: PipelineStepType,
+        trigger: str,
+        completed_by: Optional[str] = None,
+        action_result: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Auto-advance past one named stage of ``step_type``.
+
+        For evidence that names its stage — a follow-up form belongs to the
+        stage that sent it — where :meth:`try_auto_advance_current_step` would
+        have to guess it from the current one. The same gates apply: the
+        stage's ``auto_advance`` box, the applicant being on that stage, and
+        the stage's own completion check.
+        """
+        return await self._try_auto_advance_step(
+            prospect_id=prospect_id,
+            organization_id=organization_id,
+            step_id=step_id,
+            completed_by=completed_by,
+            trigger=trigger,
+            for_step_types={step_type},
+            action_result=action_result,
+        )
 
     async def try_auto_advance_current_step(
         self,
@@ -6507,14 +6735,15 @@ class MembershipPipelineService:
         exclude_prospect_ids: Optional[Iterable[str]] = None,
         search: Optional[str] = None,
         event_id: Optional[str] = None,
+        only_prospect_ids: Optional[Iterable[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Get statistics for a pipeline.
 
-        ``search`` and ``event_id`` narrow the counted population exactly as
-        they narrow :meth:`list_prospects`, so the stat header and the tab
-        badges describe the same applicants the list below them is showing.
-        Both default to off, which reproduces the whole-pipeline counts this
-        returned before they existed.
+        ``search``, ``event_id`` and ``only_prospect_ids`` narrow the counted
+        population exactly as they narrow :meth:`list_prospects`, so the stat
+        header and the tab badges describe the same applicants the list below
+        them is showing. All default to off, which reproduces the
+        whole-pipeline counts this returned before they existed.
 
         Deliberately *not* filtered by status: the caller's status filter
         applies to the open-pipeline view only, and folding it in here would
@@ -6546,6 +6775,7 @@ class MembershipPipelineService:
                 func.count(ProspectiveMember.id),
             ).where(base_scope),
             exclude_prospect_ids,
+            only_prospect_ids,
         ).group_by(ProspectiveMember.status)
         status_rows = (await self.db.execute(status_query)).all()
 
@@ -6564,6 +6794,7 @@ class MembershipPipelineService:
                 and_(base_scope, ProspectiveMember.status == ProspectStatus.ACTIVE)
             ),
             exclude_prospect_ids,
+            only_prospect_ids,
         ).group_by(ProspectiveMember.current_step_id)
         step_rows = (await self.db.execute(step_query)).all()
         step_counts = {str(step_id): count or 0 for step_id, count in step_rows}
@@ -6597,6 +6828,7 @@ class MembershipPipelineService:
                     )
                 ),
                 exclude_prospect_ids,
+                only_prospect_ids,
             )
             result = await self.db.execute(avg_query)
             avg_days = result.scalar()
@@ -6734,6 +6966,32 @@ class MembershipPipelineService:
                     "Could not delete an applicant's document file, so "
                     "nothing was purged; please try again"
                 )
+
+        # A follow-up form's submission belongs to the application alone, but
+        # sits in the Forms module, linked only through the request row the
+        # cascade below removes. Deleted first, or the answers — sensitive ones
+        # included — would outlive the application they were collected for.
+        from app.models.forms import FormSubmission
+
+        follow_up_submissions = (
+            (
+                await self.db.execute(
+                    select(ProspectFormRequest.submission_id).where(
+                        ProspectFormRequest.prospect_id.in_(ids),
+                        ProspectFormRequest.submission_id.isnot(None),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if follow_up_submissions:
+            await self.db.execute(
+                delete(FormSubmission).where(
+                    FormSubmission.id.in_(list(follow_up_submissions)),
+                    FormSubmission.organization_id == organization_id,
+                )
+            )
 
         # Cascade handles the dependent rows.
         await self.db.execute(
@@ -6875,10 +7133,11 @@ class MembershipPipelineService:
         date it acts on.
 
         Recipients are the members the withdrawal notice goes to (Membership
-        Coordinator / Assistant, else whoever can manage prospective members),
-        filtered by their email preferences. Nothing is marked as warned
-        unless the email was accepted, so a failed send is retried next run.
-        Returns how many applications were included in a sent warning.
+        Coordinator / Assistant, else whoever can manage prospective members).
+        Each gets a bell entry; those whose email preferences allow it also get
+        the email. When there is an email to send, nothing is marked as warned
+        unless it was accepted, so a failed send is retried next run. Returns
+        how many applications were included in the warning.
         """
         import html as _html
 
@@ -6955,18 +7214,19 @@ class MembershipPipelineService:
         ).scalar_one_or_none()
         if org is None:
             return 0
-        recipients = recipients_for(
-            await self._withdrawal_notice_recipients(organization_id),
-            EmailKind.MEMBERSHIP_ADMIN,
-            department_required_kinds(org),
-        )
-        if not recipients:
+        coordinators = await self._withdrawal_notice_recipients(organization_id)
+        if not coordinators:
             logger.warning(
                 f"Auto-purge warning: {len(due)} application(s) in org "
                 f"{organization_id} are due for purge and no coordinator can be "
-                "emailed; the purge will still run"
+                "told; the purge will still run"
             )
             return 0
+        recipients = recipients_for(
+            coordinators,
+            EmailKind.MEMBERSHIP_ADMIN,
+            department_required_kinds(org),
+        )
 
         from app.core.config import settings as app_settings
         from app.services.email_service import EmailService, build_email_logo_html
@@ -7006,19 +7266,43 @@ class MembershipPipelineService:
 </div>"""
         text_body = f"{explain}\n\n{items_text}\n\n{queue_url}\n"
 
-        success, _ = await EmailService(org).send_email(
-            to_emails=[u.email for u in recipients],
+        # Every coordinator gets a bell entry, emailed or not. Refreshed in
+        # place while unread, so a retry after a failed send adds no second one.
+        from app.services.officer_alert_copies import add_in_app_copies
+
+        shown = [f"{name} ({_on(purge_at)})" for _, name, _, purge_at in due[:5]]
+        await add_in_app_copies(
+            self.db,
+            organization_id=str(organization_id),
+            recipient_ids=[str(u.id) for u in coordinators],
+            category="prospect_auto_purge",
             subject=subject,
-            html_body=html_body,
-            text_body=text_body,
-            db=self.db,
+            message=(
+                "These inactive applications will be permanently deleted unless "
+                "reactivated first: "
+                + ", ".join(shown)
+                + (f", and {count - len(shown)} more" if count > len(shown) else "")
+                + "."
+            ),
+            action_url="/prospective-members?status=inactive",
+            replace_unread=True,
         )
-        if not success:
-            logger.warning(
-                f"Auto-purge warning email for org {organization_id} was not "
-                "sent; it will be retried on the next run"
+        await self.db.commit()
+
+        if recipients:
+            success, _ = await EmailService(org).send_email(
+                to_emails=[u.email for u in recipients],
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+                db=self.db,
             )
-            return 0
+            if not success:
+                logger.warning(
+                    f"Auto-purge warning email for org {organization_id} was not "
+                    "sent; it will be retried on the next run"
+                )
+                return 0
 
         for prospect_id, _, _, purge_at in due:
             await self._log_activity(
@@ -7027,6 +7311,7 @@ class MembershipPipelineService:
                 details={
                     "purge_on": purge_at.isoformat(),
                     "recipient_count": len(recipients),
+                    "in_app_count": len(coordinators),
                 },
             )
         await self.db.commit()
@@ -7577,6 +7862,19 @@ class MembershipPipelineService:
             snapshot["date_of_birth"] = (
                 str(prospect.date_of_birth) if prospect.date_of_birth else None
             )
+        # Only when the stage asks for it: a stage configured before this
+        # setting existed has no package_fields to say so, and _field_enabled
+        # reads that as "everything" -- which must not start copying answers
+        # into packages that never carried them.
+        if (
+            package_fields is not None
+            and package_fields.get("include_follow_up_answers") is True
+        ):
+            from app.services.follow_up_form_service import FollowUpFormService
+
+            snapshot["follow_up_forms"] = await FollowUpFormService(
+                self.db
+            ).package_answers(str(prospect.id), str(prospect.organization_id))
 
         pkg = ProspectElectionPackage(
             id=generate_uuid(),
@@ -7597,6 +7895,65 @@ class MembershipPipelineService:
             performed_by=created_by,
         )
         return pkg
+
+    async def _send_follow_up_on_entry(
+        self, prospect: ProspectiveMember, step: Optional[MembershipPipelineStep]
+    ) -> bool:
+        """Email the follow-up form of a Follow-up Form stage just entered.
+
+        Called beside ensure_election_package_on_entry on every path onto a
+        stage, so the applicant gets the link however they arrive. Only the
+        first arrival sends; the stage stays open until the applicant submits
+        (FollowUpFormService.submit). Returns True when a request was written,
+        for a caller that commits on its own.
+        """
+        if step is None or effective_step_type(step) != PipelineStepType.FOLLOW_UP_FORM:
+            return False
+        from app.services.follow_up_form_service import FollowUpFormService
+
+        await self.db.flush()
+        request, _ = await FollowUpFormService(self.db).send_for_stage(
+            prospect, step, only_if_unsent=True
+        )
+        return request is not None
+
+    # The stages that wait on people other than the coordinators, so arriving
+    # at one is news to the applicant's case managers.
+    _CASE_MANAGER_ENTRY_NOTICES = {
+        PipelineStepType.INTERVIEW_REQUIREMENT: "interview_stage",
+        PipelineStepType.MULTI_APPROVAL: "approval_stage",
+    }
+
+    async def _notify_case_managers_on_entry(
+        self, prospect: ProspectiveMember, step: Optional[MembershipPipelineStep]
+    ) -> int:
+        """Tell the applicant's case managers they reached an interview or
+        sign-off stage, and ask their interviewers to interview them at an
+        interview stage.
+
+        Called beside _send_follow_up_on_entry on every path that moves an
+        existing applicant onto a stage. Creation is not one of them: nobody
+        can be assigned to an applicant before the applicant exists. Sent
+        within the entry, as the stage's own emails are; best-effort, so a
+        mail failure never undoes the move. A member who is both interviewer
+        and case manager gets the interview request only: it is the more
+        specific ask. Returns how many case managers were told.
+        """
+        if step is None:
+            return 0
+        step_type = effective_step_type(step)
+        event = self._CASE_MANAGER_ENTRY_NOTICES.get(step_type)
+        if event is None or prospect.status != ProspectStatus.ACTIVE:
+            return 0
+        assignments = ProspectAssignmentService(self.db)
+        asked: List[str] = []
+        if step_type == PipelineStepType.INTERVIEW_REQUIREMENT:
+            asked = await assignments.notify_interviewers(
+                prospect, str(step.id), step.name
+            )
+        return await assignments.notify_case_managers(
+            prospect, event, detail=step.name, already_told=asked
+        )
 
     async def ensure_election_package_on_entry(
         self,
@@ -8006,7 +8363,10 @@ class MembershipPipelineService:
             by_applicant=True,
         )
         await self.db.commit()
-        await self._notify_coordinators_of_withdrawal(prospect, reason)
+        told = await self._notify_coordinators_of_withdrawal(prospect, reason)
+        await ProspectAssignmentService(self.db).notify_case_managers(
+            prospect, "withdrew", already_told=told
+        )
         await self._confirm_withdrawal_to_applicant(prospect)
         return prospect
 
@@ -8105,12 +8465,15 @@ class MembershipPipelineService:
 
     async def _notify_coordinators_of_withdrawal(
         self, prospect: ProspectiveMember, reason: Optional[str]
-    ) -> None:
-        """Email the membership coordinators that an applicant withdrew.
+    ) -> List[str]:
+        """Tell the membership coordinators that an applicant withdrew: a bell
+        entry for each, and the email for those who receive it.
 
         Best-effort and after the withdrawal has committed: the applicant's
         decision stands whether or not the email goes out, so a mail failure is
-        logged rather than raised back to the public status page.
+        logged rather than raised back to the public status page. Returns the
+        ids of the members emailed, so the case managers' notice can skip
+        them.
         """
         import html as _html
 
@@ -8120,22 +8483,21 @@ class MembershipPipelineService:
             )
             org = org_result.scalar_one_or_none()
             if not org:
-                return
+                return []
 
-            recipients = recipients_for(
-                await self._withdrawal_notice_recipients(str(prospect.organization_id)),
-                EmailKind.MEMBERSHIP_ADMIN,
-                department_required_kinds(org),
+            coordinators = await self._withdrawal_notice_recipients(
+                str(prospect.organization_id)
             )
-            if not recipients:
+            if not coordinators:
                 logger.warning(
                     f"No coordinator to notify of withdrawal by prospect "
                     f"{prospect.id} in org {prospect.organization_id}"
                 )
-                return
+                return []
 
             from app.core.config import settings as app_settings
             from app.services.email_service import EmailService, build_email_logo_html
+            from app.services.officer_alert_copies import add_in_app_copies
 
             applicant_name = f"{prospect.first_name} {prospect.last_name}".strip()
             pipeline_name = prospect.pipeline.name if prospect.pipeline else None
@@ -8144,6 +8506,39 @@ class MembershipPipelineService:
             pipeline_url = f"{frontend_url}/prospective-members"
 
             subject = f"Application withdrawn: {applicant_name}"
+
+            # Every coordinator gets a bell entry, emailed or not: the email is
+            # optional, and nothing else tells the department.
+            await add_in_app_copies(
+                self.db,
+                organization_id=str(prospect.organization_id),
+                recipient_ids=[str(u.id) for u in coordinators],
+                category="prospect_withdrawn",
+                subject=subject,
+                message=(
+                    f"{applicant_name} withdrew their application. It is in the "
+                    "Withdrawn tab and can be reactivated there."
+                ),
+                action_url="/prospective-members",
+                metadata={"prospect_id": str(prospect.id)},
+            )
+            recipients = recipients_for(
+                coordinators,
+                EmailKind.MEMBERSHIP_ADMIN,
+                department_required_kinds(org),
+            )
+            if not recipients:
+                await self._log_activity(
+                    prospect_id=str(prospect.id),
+                    action="withdrawal_notice_sent",
+                    details={
+                        "recipient_count": 0,
+                        "in_app_count": len(coordinators),
+                        "delivered": 0,
+                    },
+                )
+                await self.db.commit()
+                return []
 
             e_name = _html.escape(applicant_name)
             rows = [f"<li><strong>Applicant:</strong> {e_name}</li>"]
@@ -8193,14 +8588,20 @@ class MembershipPipelineService:
             await self._log_activity(
                 prospect_id=str(prospect.id),
                 action="withdrawal_notice_sent",
-                details={"recipient_count": len(recipients), "delivered": success},
+                details={
+                    "recipient_count": len(recipients),
+                    "in_app_count": len(coordinators),
+                    "delivered": success,
+                },
             )
             await self.db.commit()
+            return [str(u.id) for u in recipients] if success else []
         except Exception as e:
             logger.warning(
                 f"Failed to notify coordinators of withdrawal by prospect "
                 f"{prospect.id}: {e}"
             )
+            return []
 
     @staticmethod
     def _build_current_stage_action(step: Any) -> Optional[Dict[str, Any]]:
@@ -8494,6 +8895,16 @@ class MembershipPipelineService:
             current_stage_action = self._build_current_stage_action(
                 prospect.current_step
             )
+            if (
+                current_stage_action is None
+                and effective_step_type(prospect.current_step)
+                == PipelineStepType.FOLLOW_UP_FORM
+            ):
+                from app.services.follow_up_form_service import FollowUpFormService
+
+                current_stage_action = await FollowUpFormService(
+                    self.db
+                ).status_page_action(prospect)
 
         next_meeting = None
         found = await self._status_page_meeting(prospect, public_step_ids, show_future)
@@ -8719,7 +9130,8 @@ class MembershipPipelineService:
     async def _email_inactivity_warnings(
         self, organization_id: str, warnings: List[Dict[str, Any]], now: datetime
     ) -> None:
-        """Email this run's inactivity warnings, as each pipeline is set to.
+        """Send this run's inactivity warnings, as each pipeline is set to:
+        a bell entry for each coordinator, and the email for those who receive it.
 
         Best-effort: a mail failure is logged and the sweep carries on, since
         the activity entry and the inactive marking are the record.
@@ -8728,6 +9140,7 @@ class MembershipPipelineService:
 
         from app.core.config import settings as app_settings
         from app.services.email_service import EmailService
+        from app.services.officer_alert_copies import add_in_app_copies
 
         try:
             org = (
@@ -8744,15 +9157,40 @@ class MembershipPipelineService:
                 "/prospective-members"
             )
 
-            coordinators: Optional[List[User]] = None
+            all_coordinators: Optional[List[User]] = None
+            coordinators: List[User] = []
             for w in warnings:
                 if w.get("notify_coordinator"):
-                    if coordinators is None:
+                    if all_coordinators is None:
+                        all_coordinators = await self._withdrawal_notice_recipients(
+                            organization_id
+                        )
                         coordinators = recipients_for(
-                            await self._withdrawal_notice_recipients(organization_id),
+                            all_coordinators,
                             EmailKind.MEMBERSHIP_ADMIN,
                             department_required_kinds(org),
                         )
+                    # A bell entry for every coordinator, emailed or not;
+                    # committed with the sweep's activity entries. Refreshed
+                    # while unread, so next week's warning for the same
+                    # applicant does not stack a second one.
+                    prospect_name = w.get("prospect_name") or "An applicant"
+                    await add_in_app_copies(
+                        self.db,
+                        organization_id=str(organization_id),
+                        recipient_ids=[str(u.id) for u in all_coordinators],
+                        category="prospect_inactivity",
+                        subject=f"Application going inactive: {prospect_name}",
+                        message=(
+                            f"{prospect_name} has had no activity for "
+                            f"{w['days_inactive']} days and will be marked "
+                            f"inactive at {w['timeout_days']}."
+                        ),
+                        action_url="/prospective-members",
+                        metadata={"prospect_id": str(w.get("prospect_id"))},
+                        replace_unread=True,
+                        dedupe_key=str(w.get("prospect_id")),
+                    )
                     for coordinator in coordinators:
                         await email_svc.send_inactivity_warning_email(
                             to_email=coordinator.email,
@@ -8830,6 +9268,138 @@ class MembershipPipelineService:
     # Interview Management
     # =========================================================================
 
+    async def _interviewer_roles_by_interview(
+        self, interviews: List[ProspectInterview], organization_id: str
+    ) -> Dict[str, set[str]]:
+        """The roles each interview counts for, keyed by interview id.
+
+        An interview logged since the snapshot column existed counts for what
+        its interviewer held that day. An older one has no snapshot and counts
+        for what its interviewer holds now, which is the only evidence left;
+        an interviewer since removed from the department counts for nothing.
+        """
+        unsnapshotted = {
+            str(i.interviewer_id)
+            for i in interviews
+            if i.interviewer_positions is None and i.interviewer_id
+        }
+        current: Dict[str, set[str]] = {}
+        if unsnapshotted:
+            result = await self.db.execute(
+                select(User)
+                .where(
+                    User.id.in_(unsnapshotted),
+                    User.organization_id == organization_id,
+                    User.deleted_at.is_(None),
+                )
+                .options(selectinload(User.positions))
+            )
+            current = {
+                str(u.id): _approval_roles_held(u.positions)
+                for u in result.scalars().all()
+            }
+        held: Dict[str, set[str]] = {}
+        for interview in interviews:
+            if interview.interviewer_positions is not None:
+                held[str(interview.id)] = {
+                    str(r).casefold() for r in interview.interviewer_positions if r
+                }
+            else:
+                held[str(interview.id)] = current.get(
+                    str(interview.interviewer_id), set()
+                )
+        return held
+
+    async def _position_labels(
+        self, organization_id: str, keys: List[str]
+    ) -> Dict[str, str]:
+        """Display labels for required-position keys, keyed as stored.
+
+        An office key reads as the catalog label ("chief" -> "Chief"); a
+        department position as its own name ("board_of_directors" -> "Board
+        of Directors"); anything else is humanized by :func:`office_label`.
+        """
+        office_keys = {str(o["key"]).casefold() for o in OFFICE_CATALOG}
+        wanted = {k.casefold() for k in keys if k and k.casefold() not in office_keys}
+        names: Dict[str, str] = {}
+        if wanted:
+            result = await self.db.execute(
+                select(Role.slug, Role.name).where(
+                    Role.organization_id == organization_id,
+                    func.lower(Role.slug).in_(wanted),
+                )
+            )
+            names = {str(slug).casefold(): str(name) for slug, name in result.all()}
+        labels: Dict[str, str] = {}
+        for key in keys:
+            folded = key.casefold()
+            if folded in office_keys or folded not in names:
+                labels[key] = office_label(key) if key else "(blank position)"
+            else:
+                labels[key] = names[folded]
+        return labels
+
+    async def interview_requirement_progress(
+        self, prospect: ProspectiveMember, step: MembershipPipelineStep
+    ) -> Dict[str, Any]:
+        """Where an Interview Requirement stage stands for this applicant.
+
+        The single grading of the stage: completion (_validate_step_completion)
+        refuses on exactly what this reports as unmet, and the applicant's
+        page shows this, so the two cannot disagree about what is missing.
+        Only interviews logged against this stage count.
+        """
+        config = step.config or {}
+        try:
+            required_count = int(config.get("required_count", 1) or 0)
+        except (TypeError, ValueError):
+            required_count = 1
+        required_rec = config.get("required_recommendation") or None
+        interviews = [
+            i
+            for i in getattr(prospect, "interviews", [])
+            if str(i.step_id) == str(step.id)
+        ]
+
+        recommendation_met: Optional[bool] = None
+        if required_rec:
+            recommendation_met = any(
+                i.recommendation and i.recommendation.value == required_rec
+                for i in interviews
+            )
+
+        required_positions = _required_interviewer_positions(config)
+        positions: List[Dict[str, Any]] = []
+        if required_positions:
+            organization_id = str(prospect.organization_id)
+            held = await self._interviewer_roles_by_interview(
+                interviews, organization_id
+            )
+            labels = await self._position_labels(organization_id, required_positions)
+            for key in required_positions:
+                folded = key.casefold()
+                positions.append(
+                    {
+                        "position": key,
+                        "label": labels[key],
+                        # A blank key matches nothing: no role is ever "".
+                        "satisfied": bool(folded)
+                        and any(folded in roles for roles in held.values()),
+                    }
+                )
+
+        return {
+            "step_id": str(step.id),
+            "required_count": required_count,
+            "recorded_count": len(interviews),
+            "required_recommendation": required_rec,
+            "recommendation_met": recommendation_met,
+            "positions": positions,
+            "complete": len(interviews) >= required_count
+            and recommendation_met is not False
+            and all(p["satisfied"] for p in positions),
+        }
+
     async def list_interviews(
         self,
         prospect_id: str,
@@ -8906,6 +9476,17 @@ class MembershipPipelineService:
                     "do_not_recommend, undecided"
                 )
 
+        interviewer = await self.db.scalar(
+            select(User)
+            .where(User.id == interviewer_id, User.organization_id == organization_id)
+            .options(selectinload(User.positions))
+        )
+        # What the interviewer held today, so a stage naming required
+        # positions grades this interview by the office it was given in.
+        interviewer_positions = (
+            sorted(_approval_roles_held(interviewer.positions)) if interviewer else []
+        )
+
         interview = ProspectInterview(
             id=generate_uuid(),
             prospect_id=prospect_id,
@@ -8914,6 +9495,7 @@ class MembershipPipelineService:
             or (str(prospect.current_step_id) if prospect.current_step_id else None),
             interviewer_id=interviewer_id,
             interviewer_role=interviewer_role,
+            interviewer_positions=interviewer_positions,
             notes=notes,
             recommendation=rec_enum,
             recommendation_notes=recommendation_notes,

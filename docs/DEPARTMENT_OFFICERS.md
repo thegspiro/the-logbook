@@ -119,6 +119,12 @@ variable catalogue, the admin UI rows, the editor's variable palette, and the
 render-time directory are all generated from that list — nothing else needs to
 change.
 
+A **committee** is not an office. Committee membership is a position of kind
+`committee` (`positions.kind`, seeded in `DEFAULT_POSITIONS`), held by every
+member serving on it; an office here is one holder who signs correspondence.
+The chair of a committee is the matching office (Historian for the History
+Committee, and so on).
+
 ## API
 
 | Method   | Path                            | Purpose                                             |

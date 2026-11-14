@@ -93,7 +93,18 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/facilities': {},
   '/finance': { permissions: ['finance.view'] },
   '/grants': { permissions: ['fundraising.view'] },
+  // Published history is read by any signed-in member.
+  '/history': {},
+  '/history/people': {},
+  '/history/import': { permissions: ['history.manage'] },
+  '/history/media': {},
+  '/history/albums': {},
   '/integrations': { permissions: ['settings.manage'] },
+  // Registered for its label: the segment is "historical-import".
+  '/integrations/historical-import': {
+    label: 'Historical Data Import',
+    permissions: ['integrations.historical_import'],
+  },
   '/inventory': { permissions: ['inventory.manage'] },
   '/ip-security': { permissions: ['security.manage', 'settings.manage'] },
   '/learning': {},
@@ -105,6 +116,10 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/onboarding': {},
   '/prospective-members': { permissions: ['prospective_members.manage'] },
   '/reports': { permissions: ['reports.view'] },
+  '/reports/evaluations': {
+    label: 'Templates & periods',
+    permissions: ['evaluations.configure', 'evaluations.manage'],
+  },
   '/scheduling': {},
   '/settings': { permissions: ['settings.manage'] },
   '/store': { permissions: ['storefront.view'] },
@@ -151,6 +166,12 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/inventory/items': { permissions: ['inventory.manage'] },
   '/inventory/storage-areas': { label: 'Storage Areas', permissions: ['inventory.manage'] },
   '/onboarding/modules': {},
+  // An ancestor because the opt-out list sits beneath it; labelled as its own
+  // heading says, and gated as its route is.
+  '/communications/member-emails': {
+    label: 'Member Emails & Texts',
+    permissions: ['settings.manage', 'organization.update_settings', 'notifications.manage'],
+  },
   // An ancestor only because a posted set of minutes sits beneath the public
   // list; no gate, since the page is open to anyone the department chose to show it to.
   '/public/minutes': {},
@@ -177,6 +198,11 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/training/programs': {},
   '/training/skills-testing': {},
   '/training/knowledge-tests': {},
+  // The approver queue; ungated like its route, which the API scopes.
+  '/attendance-waivers': { label: 'Waiver Requests' },
+  '/meetings/waiver-requests': { label: 'Meeting Waiver Requests' },
+  // Parent of the meeting waiver settings; gated like its route.
+  '/minutes/attendance': { label: 'Attendance', permissions: ['meetings.manage'] },
 };
 
 /**

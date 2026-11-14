@@ -15,6 +15,7 @@ import { formatDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { TRAINING_TYPE_LABELS } from '../../constants/enums';
 import { TrainingDetailsFields } from '../training/TrainingDetailsFields';
+import SessionAttendanceRequirements from './SessionAttendanceRequirements';
 import {
   EMPTY_TRAINING_DETAILS,
   hasExplicitTrainingDetails,
@@ -393,6 +394,12 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
               </div>
             )}
           </div>
+          <SessionAttendanceRequirements
+            session={session}
+            requirements={requirements}
+            canManage={canManage}
+            onChange={setSession}
+          />
         </>
       )}
     </div>

@@ -17,8 +17,11 @@ Deadline reminder      those owners who still owe a request for at   ``BUDGET_RE
 
 Never SMS: these are administrative notices with a deadline days away, not
 alerts, and none is in ``SmsAlert`` (CLAUDE.md pitfall #18). No bell entry
-either — the Finance module has none for anything, and the deadline and the
-decision are on the owner's screen. Both kinds are optional and on by
+for the first three; the deadline reminder adds one alongside its email when
+the department turns ``budget_request_bell_notices`` on (owner decision,
+2026-11-01), and goes out on the department's own
+``budget_request_reminder_days`` — 7 and 1 when unset
+(``app/utils/finance_settings.py``). Both kinds are optional and on by
 default (``email_policy``), so a member can turn them off and a department
 can make them required.
 
@@ -34,7 +37,9 @@ deadline" alone would send twice after a restart. Each reminder sent is
 recorded as an email-channel ``NotificationLog`` row (category
 :data:`REMINDER_LOG_CATEGORY`, metadata naming the year, the deadline and the
 offset); a member already recorded for that (year, deadline, offset) is not
-sent it again. The requests-open notice is recorded the same way
+sent it again. A bell entry is recorded the same way on the in-app
+channel, so each channel is sent at most once per key and a member whose
+email was skipped still gets the entry. The requests-open notice is recorded the same way
 (:data:`WINDOW_LOG_CATEGORY`) so a member told on the day the window began
 is not reminded the same week as well. Moving the deadline starts a fresh
 set, because the deadline is part of the key.
@@ -42,10 +47,11 @@ set, because the deadline is part of the key.
 
 from __future__ import annotations
 
+import copy
 import html
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Sequence
 
 from loguru import logger
 from sqlalchemy import or_, select
@@ -74,16 +80,23 @@ from app.services.finance_budget_ownership import (
     line_owner_members_query,
     position_holders_query,
 )
+from app.utils.finance_settings import (
+    BUDGET_REQUEST_BELL_KEY,
+    BUDGET_REQUEST_REMINDER_DAYS_KEY,
+    DEFAULT_BUDGET_REQUEST_REMINDER_DAYS,
+    FINANCE_SETTINGS_KEY,
+    BudgetRequestReminderSettings,
+    budget_request_reminders_in,
+)
 from app.utils.org_timezone import org_today
 
 OWNER_PATH = "/finance/budget-requests"
 MY_BUDGETS_PATH = "/finance/my-budgets"
 REVIEW_PATH = "/finance/budget-requests/review"
 
-# Days before the deadline a reminder goes out. Constants rather than a
-# department setting: no existing finance setting holds one, and a new
-# settings section for two numbers is more surface than the reminder is worth.
-REMINDER_OFFSETS_DAYS = (7, 1)
+# Days before the deadline a reminder goes out when the department has not
+# chosen its own (``budget_request_reminder_days``).
+REMINDER_OFFSETS_DAYS = DEFAULT_BUDGET_REQUEST_REMINDER_DAYS
 
 REMINDER_LOG_CATEGORY = "budget_request_reminder"
 WINDOW_LOG_CATEGORY = "budget_request_window"
@@ -676,19 +689,22 @@ async def notify_budget_adopted(
 # ============================================
 
 
-def due_offset(deadline: date, today: date) -> Optional[int]:
+def due_offset(
+    deadline: date, today: date, offsets: Sequence[int] = REMINDER_OFFSETS_DAYS
+) -> Optional[int]:
     """The reminder whose window has begun, the most urgent first.
 
-    The 7-day reminder is due from seven days before the deadline, the 1-day
-    one from the day before. A reminder missed because the scheduler was
-    down still goes out on the next run inside its window; once the next one
-    is due, the earlier one is skipped. ``None`` before the first window and
-    after the deadline.
+    With the default schedule the 7-day reminder is due from seven days
+    before the deadline, the 1-day one from the day before. A reminder
+    missed because the scheduler was down still goes out on the next run
+    inside its window; once the next one is due, the earlier one is skipped.
+    ``None`` before the first window, after the deadline, and always when the
+    department has no reminders (an empty schedule).
     """
     days_left = (deadline - today).days
     if days_left < 0:
         return None
-    due = [offset for offset in REMINDER_OFFSETS_DAYS if days_left <= offset]
+    due = [offset for offset in offsets if days_left <= offset]
     return min(due) if due else None
 
 
@@ -751,17 +767,89 @@ async def _already_told(
     return told
 
 
+async def _already_rung(
+    db: AsyncSession,
+    org_id: str,
+    fy: FiscalYear,
+    users: list[User],
+    offset: int,
+) -> set[str]:
+    """Members already given this reminder's bell entry."""
+    deadline = fy.request_deadline
+    if not users or deadline is None:
+        return set()
+    result = await db.execute(
+        select(NotificationLog).where(
+            NotificationLog.organization_id == org_id,
+            NotificationLog.channel == NotificationChannel.IN_APP,
+            NotificationLog.category == REMINDER_LOG_CATEGORY,
+            NotificationLog.recipient_id.in_([str(u.id) for u in users]),
+        )
+    )
+    rung: set[str] = set()
+    for log in result.scalars().all():
+        meta = log.notification_metadata or {}
+        if (
+            isinstance(meta, dict)
+            and meta.get("fiscal_year_id") == str(fy.id)
+            and meta.get("deadline") == deadline.isoformat()
+            and meta.get("offset_days") == offset
+        ):
+            rung.add(str(log.recipient_id))
+    return rung
+
+
+def _ring(
+    db: AsyncSession,
+    org_id: str,
+    users: list[User],
+    *,
+    subject: str,
+    message: str,
+    deadline: date,
+    metadata: dict,
+) -> None:
+    """Bell entries for the reminder, beside the email (never instead of it).
+
+    They lapse the day after the deadline: by then the reminder is about a
+    window that has closed.
+    """
+    expires = datetime.combine(
+        deadline + timedelta(days=1), time.min, tzinfo=timezone.utc
+    )
+    for user in users:
+        db.add(
+            NotificationLog(
+                organization_id=org_id,
+                recipient_id=str(user.id),
+                channel=NotificationChannel.IN_APP,
+                category=REMINDER_LOG_CATEGORY,
+                subject=_subject_safe(subject)[:500],
+                message=message,
+                action_url=OWNER_PATH,
+                expires_at=expires,
+                delivered=True,
+                notification_metadata=dict(metadata),
+            )
+        )
+
+
 async def send_deadline_reminders(db: AsyncSession, org: Organization) -> int:
-    """One department's reminders for today. Returns the number sent.
+    """One department's reminders for today. Returns the number of emails sent.
 
     For each draft, unlocked year whose deadline is today or later and whose
-    reminder window has begun (:func:`due_offset`): the owners who still owe
-    a request and have not been told for this (year, deadline, offset).
-    Commits once, after the department is done, so the sent-log and the
-    sends agree; the scheduler's per-org guard rolls back a failure.
+    reminder window has begun (:func:`due_offset`, on the department's own
+    schedule): the owners who still owe a request and have not been told for
+    this (year, deadline, offset) — by email, and by a bell entry too when
+    the department turned those on. Commits once, after the department is
+    done, so the sent-log and the sends agree; the scheduler's per-org guard
+    rolls back a failure.
     """
     org_id = str(org.id)
     today = org_today(org)
+    reminders = budget_request_reminders_in(org.settings)
+    if not reminders.offsets_days:
+        return 0
     years = await db.execute(
         select(FiscalYear).where(
             FiscalYear.organization_id == org_id,
@@ -783,19 +871,11 @@ async def send_deadline_reminders(db: AsyncSession, org: Organization) -> int:
         request_deadline = fy.request_deadline
         if request_deadline is None:
             continue
-        offset = due_offset(request_deadline, today)
+        offset = due_offset(request_deadline, today, reminders.offsets_days)
         if offset is None:
             continue
         owners = await year_owners(db, org_id, fy.id)
         owing = await _owing(db, org_id, fy, owners)
-        told = await _already_told(db, org_id, fy, owing, offset)
-        recipients = _who_receive(
-            [u for u in owing if str(u.id) not in told],
-            EmailKind.BUDGET_REQUESTS,
-            org,
-        )
-        if not recipients:
-            continue
         deadline = long_date(request_deadline)
         days_left = (request_deadline - today).days
         when = {0: "today", 1: "tomorrow"}.get(days_left, f"in {days_left} days")
@@ -805,6 +885,33 @@ async def send_deadline_reminders(db: AsyncSession, org: Organization) -> int:
             f"{deadline}. At least one budget line your position owns has no "
             "request submitted yet."
         )
+        metadata = {
+            "fiscal_year_id": str(fy.id),
+            "deadline": request_deadline.isoformat(),
+            "offset_days": offset,
+            "org_date": today.isoformat(),
+        }
+        if reminders.bell_notices:
+            # Not filtered by the email preference: muting the emails is a
+            # choice about the inbox, and the department asked for the bell.
+            rung = await _already_rung(db, org_id, fy, owing, offset)
+            _ring(
+                db,
+                org_id,
+                [u for u in owing if str(u.id) not in rung],
+                subject=subject,
+                message=lead,
+                deadline=request_deadline,
+                metadata=metadata,
+            )
+        told = await _already_told(db, org_id, fy, owing, offset)
+        recipients = _who_receive(
+            [u for u in owing if str(u.id) not in told],
+            EmailKind.BUDGET_REQUESTS,
+            org,
+        )
+        if not recipients:
+            continue
         link = _link(OWNER_PATH)
         body = (
             f"<p>{html.escape(lead)}</p>"
@@ -829,13 +936,49 @@ async def send_deadline_reminders(db: AsyncSession, org: Organization) -> int:
             sent,
             category=REMINDER_LOG_CATEGORY,
             subject=subject,
-            metadata={
-                "fiscal_year_id": str(fy.id),
-                "deadline": request_deadline.isoformat(),
-                "offset_days": offset,
-                "org_date": today.isoformat(),
-            },
+            metadata=metadata,
         )
         total += len(sent)
     await db.commit()
     return total
+
+
+# ============================================
+# The department's reminder schedule
+# ============================================
+
+
+async def reminder_settings(
+    db: AsyncSession, org_id: str
+) -> BudgetRequestReminderSettings:
+    result = await db.execute(
+        select(Organization.settings).where(Organization.id == str(org_id))
+    )
+    return budget_request_reminders_in(result.scalar_one_or_none())
+
+
+async def set_reminder_settings(
+    db: AsyncSession, org_id: str, offsets_days: Sequence[int], bell_notices: bool
+) -> BudgetRequestReminderSettings:
+    """Store the department's reminder schedule and bell choice.
+
+    The organization row is locked so two saves of different finance
+    settings cannot each write back a copy missing the other's change; the
+    section is deep-copied because it is nested JSON (CLAUDE.md pitfall #12).
+    """
+    result = await db.execute(
+        select(Organization).where(Organization.id == str(org_id)).with_for_update()
+    )
+    org = result.scalar_one_or_none()
+    if org is None:
+        raise ValueError("Organization not found")
+    org_settings = copy.deepcopy(org.settings or {})
+    section = org_settings.get(FINANCE_SETTINGS_KEY)
+    if not isinstance(section, dict):
+        section = {}
+    section[BUDGET_REQUEST_REMINDER_DAYS_KEY] = sorted(set(offsets_days), reverse=True)
+    section[BUDGET_REQUEST_BELL_KEY] = bool(bell_notices)
+    org_settings[FINANCE_SETTINGS_KEY] = section
+    org.settings = org_settings
+    await db.flush()
+    return budget_request_reminders_in(org_settings)

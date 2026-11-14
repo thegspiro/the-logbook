@@ -1,6 +1,475 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), [#3580](https://github.com/thegspiro/the-logbook/pull/3580) (pass 11), pass 12 (this PR)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14), 2026-11-06 (pass 15, watchdog pickup) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), [#3580](https://github.com/thegspiro/the-logbook/pull/3580) (pass 11), [#3738](https://github.com/thegspiro/the-logbook/pull/3738) (pass 12), [#3823](https://github.com/thegspiro/the-logbook/pull/3823) (pass 13), [#3919](https://github.com/thegspiro/the-logbook/pull/3919) (pass 14), pass 15 (this PR)
+
+---
+
+## Pass 15 (2026-11-06) — watchdog pickup, real delta (15 commits, 4 backend: category-name uniqueness + grandfathering, item-date validation against the department's own date, creation/barcode-put-away sightings, dashboard low-stock/overdue-tile filters), 0 fixed, 0 new findings, INV-22 re-verified open/accepted
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+remains unreachable; this iteration was handed Step 0/1 already done — 0
+open PRs with a `claude/security-review-` head branch, confirmed against a
+freshly-fetched `origin/main` (`fb288610f`). PR #4103 (Feature 10, Documents
+& legal, pass 15) had already merged, and row 11 (Inventory) was the next
+`⬜` in `PROGRESS.md`'s rotation table.
+
+**Baseline.** Pass 14's own merge, PR #3919 → `6f0a2d577f`, confirmed an
+ancestor of `origin/main` via `git merge-base --is-ancestor` (the working
+tree started as a shallow clone; `git fetch --unshallow` was needed before
+the ancestor check or any full-history `git log` would resolve — recorded
+here since the rotation's own briefing flags this baseline-resolution class
+of problem as recurring). Pass 14's own text separately named `d65ad33f7`
+(PR #3823's merge, pass 13) as **its own** starting point; the two SHAs
+differ because PR #3919 carried 3 frontend-only commits of its own
+(`233b8af39`, `ab879fc7d`, `cf8fdae30` — label/layout CSS, already reviewed
+by pass 14), confirmed by diffing `d65ad33f7..6f0a2d577f` against every
+scope file and finding exactly those three, nothing else.
+
+**Head:** `fb288610f` (current `origin/main`). 693 commits between baseline
+and head repo-wide, 378 non-merge — this is a full rotation lap elapsing
+(every other feature's own pass since 2026-11-01) — but `git log --no-merges`
+scoped to this feature's declared files (five endpoint files, `inventory_service.py`
+and every other `inventory_*`/`nfc_*`-adjacent service/schema file reachable
+from them, `models/inventory.py`, `mcp/tools/inventory.py`,
+`frontend/src/modules/inventory`) returns **15** commits, none made through
+this rotation.
+
+### Real delta reviewed
+
+**Four backend commits**, all read in full, not sampled:
+
+1. **`f00f433093`** ("Inventory: build the owner's 2026-11-01 decisions
+   (batch 5)") — the largest. Four independent pieces, each checked against
+   the checklist:
+   - **Category-name uniqueness among siblings**
+     (`_assert_category_name_free`, `create_category`/`update_category` in
+     `inventory_service.py`). This is exactly the Pitfall #27 shape (a
+     read-then-insert cap) and is built to the rule: `lock_organization_scope`
+     (an upsert against `OrganizationLock`, held until the transaction ends)
+     is taken **before** the sibling read, and the sibling read itself is a
+     locking `SELECT ... FOR UPDATE`
+     (`query.with_for_update()` in `_assert_category_name_free`) rather than a
+     plain `SELECT` that would answer from the transaction's pre-lock
+     snapshot under REPEATABLE READ. The lock scope is per-organization
+     (`INVENTORY_CATEGORY_NAMES` in `app/utils/org_locks.py`) rather than
+     per-parent-row, with the reasoning stated in the docstring (a top-level
+     category has no parent row to lock) — the same shape Pitfall #27's own
+     doc calls out as the correct choice when there is no natural parent row.
+     `get_category_presets`'s own insert-if-not-taken path takes the same
+     lock before its own locking read of `_taken_category_names(..., for_update=True)`,
+     so a preset and a hand-made category of the same name cannot both land.
+     A dedicated concurrency test,
+     `test_inventory_input_rules.py::test_the_check_sees_a_sibling_committed_after_its_snapshot`,
+     drives two sessions through the exact race this guards against. No
+     database constraint backs this (the commit message says so explicitly:
+     "No database constraint backs this: installations already hold
+     duplicates"), so `flag_duplicate_category_names` separately stamps
+     every already-stored duplicate for display rather than refusing to show
+     them — read and confirmed it is a pure read-side annotation with no
+     write.
+   - **Item-date validation** reuses the existing `item_date_error` (now
+     requiring a caller-supplied `today`, enforced by `924cb7e219` below) on
+     both `create_item` and `update_item`; `update_item`'s check only fires
+     on the dates actually present in `update_data`, each checked against
+     the _stored_ other half of its pair — confirmed by reading the merged
+     dict construction, not inferred.
+   - **Sighting recording on creation and barcode put-away**
+     (`app/services/inventory_sightings.py`, new file). `add_sighting` never
+     checks permissions itself — by design, per its own docstring — and
+     every one of its three callers (`create_item`, `put_away_items`,
+     the two bulk-creation paths) is already behind `require_permission`
+     at the endpoint layer; confirmed by reading `inventory.py`'s decorator
+     on `POST /items` and `POST /items/put-away` rather than assuming it.
+     `put_away_items` gained an optional `barcode_scanned_by` kwarg (the
+     endpoint passes `current_user.id`); the NFC put-away path, which
+     records its own sighting through a different caller, does not pass it,
+     so a barcode put-away and an NFC put-away of the same move cannot
+     double-count — confirmed by reading `inventory_nfc.py`'s call site,
+     which omits the kwarg. Every write stays inside the same session/
+     transaction as the item/move it documents (`record_creation_sightings`
+     flushes but the caller still commits), so a sighting can never exist
+     for an item that was rolled back. Org-scoped throughout — every
+     `add_sighting` call is passed the acting item's own
+     `organization_id`, never a client-supplied one.
+   - **Migration `d1165a97b48e`** (`inventory_nfc_scans.action` ENUM gains
+     `created`/`barcode_put_away`) — read in full. Guards the table's
+     existence first (Pitfall #26, `create_all` may have already built it on
+     a fresh install), `MODIFY` with the full value list is idempotent on a
+     second run, and the docstring states the lossy-downgrade tradeoff
+     (rows written with either new value are deleted on downgrade, "by
+     necessity" since the narrower enum cannot hold them) rather than
+     leaving it implicit. `downgrade()` does real, non-`pass` work.
+   - A small cross-cutting touch in the same commit: `medical_supplies.py`'s
+     `list_medical_categories` also calls the new
+     `flag_duplicate_category_names` — read the surrounding handler; it
+     stays correctly scoped to `current_user.organization_id` and reuses
+     the shared `InventoryService` method rather than reimplementing the
+     comparison, the same pattern pass 13 found for the vendor-contact
+     encryption touch in that other module.
+2. **`924cb7e219`** ("Inventory: check item dates against the department's
+   date") — `item_date_error` now takes a required `today: date` (no longer
+   defaulting to the server's UTC clock) and a new `touches_item_dates`
+   guard means the extra `resolve_org_today` query only runs when the
+   payload actually writes one of the four checked date fields. No tenancy
+   or injection surface; a pure correctness fix for a US department already
+   on the next UTC calendar day every evening. Not itself owned by this
+   feature's file list exclusively (`resolve_org_today` is shared
+   infrastructure), but its only caller in scope is `inventory_service.py`.
+3. **`7f0ef2c1d2`** ("Dashboard tiles land on the rows they counted",
+   DASH-37) — touches `dashboard.py`/`apparatus.py`/`facilities.py`/
+   `notifications.py` too (out of this feature's scope, and each of those
+   is that other feature's own concern), but this feature's own slice —
+   `GET /items` and the CSV export gain `low_stock_categories`, and
+   `InventoryService.item_ids_in_low_stock_categories` — reuses
+   `get_low_stock_items`'s own org-scoped scan rather than introducing a
+   second definition of "low" (the Pitfall #29 shape, done right this
+   time: the tile and the list it links to now share one scan). The new
+   `overdue_checkout_clause` SQL clause and its call sites
+   (`get_overdue_checkouts`, the dashboard's Overdue tile) are both
+   org-filtered on `CheckOutRecord.organization_id` before the clause is
+   ever applied — read the surrounding `select()` to confirm the org filter
+   sits in the same `.where()`, not appended after a cross-org query already
+   ran.
+4. **`66d878e144`** — pure refactor of `overdue_checkout_clause` from a
+   `@staticmethod` to a module-level function (so a test that replaces
+   `InventoryService` with a mock still gets real SQL); no behavior change,
+   confirmed by the diff being a cut-and-paste of the same clause body.
+
+**Eleven frontend-only commits** (`3b3e779ab3`, `d66f6462b0`, `80e0fa35d3`,
+`b2e89ebb4c`, `d6f0aaa4a3`, `fa048c98d1`, `c6393506f1`, `d70bfb10a7`,
+`fcf45e7917`, `dd5241de5a`, `1a4e65a2df`) — confirmed to touch no file under
+`backend/` (`git show --stat <sha> -- backend/` empty for all eleven).
+Mostly layout/theme-token/copy changes with no data-flow effect. The two
+exceptions read in full rather than assumed clean:
+
+- **`dd5241de5a`/`1a4e65a2df`** ("Share the equipment-check and skills-test
+  send logic between page and worker" / "Send queued equipment checks and
+  skills evaluations by Background Sync") add a second, offline-capable
+  transport (`frontend/src/sw/backgroundSync.ts`, driven by the browser's
+  Background Sync API) for `EquipmentCheckForm.tsx`'s own queue — this file
+  lives under `modules/inventory/pages/`, which is this feature's own
+  declared scope. Read `backgroundSync.ts` in full: every request goes
+  through `fetch` with `credentials: 'include'` and an `X-CSRF-Token` header
+  read fresh from the `csrf_token` cookie on each attempt (never cached
+  across the one retry-after-401 it performs); the session is established by
+  asking the server (`GET /auth/me`), never by reading a store the worker
+  cannot see, and every queue is filtered to `item.ownerId === member`
+  before anything is sent, so a worker servicing a shared device cannot ship
+  one member's queued photos under another's woken-up session. A 401 is
+  retried once through `/auth/refresh` and a `409 LB-AUTH-012` (another tab's
+  concurrent refresh already won) is treated as success rather than
+  sign-out, matching the page's own `refreshPromise` handling. No token or
+  credential is held in the worker's own state between requests. This is a
+  new mechanism, not a change to an existing one, so it is reported here in
+  full rather than waved through on the commit message's own description.
+- **`80e0fa35d3`** (table→card reflow at narrow widths) — pure CSS class
+  changes plus a new Playwright layout spec; no field newly rendered,
+  confirmed by the diff touching only `className` expressions.
+
+### Route inventory (re-confirmed by AST, not grep)
+
+| File                     | Routes            |
+| ------------------------ | ----------------- |
+| `inventory.py`           | 150 + 1 WebSocket |
+| `inventory_nfc.py`       | 29                |
+| `labels.py`              | 12                |
+| `inventory_kiosk.py`     | 4                 |
+| `inventory_last_seen.py` | 2                 |
+| **Total**                | **198**           |
+
+Identical set and count to pass 14 — this delta added no new route, only new
+query parameters on two existing ones (`GET /items`, `GET /items/export`,
+both already behind `require_permission`). `check_route_permissions.py
+--strict`: 302 routes repo-wide (up from 298, from other features' own
+rotation passes in this window), 0 errors, 0 warnings.
+
+### Re-verified: INV-22, still OPEN, owner-accepted, unchanged
+
+`get_fulfillment_options` / `get_requestable_categories` in
+`inventory_service.py` carry zero diff since pass 12 — confirmed by `grep`
+for both names across the full `6f0a2d577f..origin/main` diff of
+`inventory_service.py`, zero hits. `docs/KNOWN_LIMITATIONS.md`'s entry
+(the one referencing `INV-22`) is unchanged.
+
+### Verified good ✅ (pass 15)
+
+- **The category-name race is closed to the rule's own standard**
+  (Pitfall #27): lock-before-read, and the read itself is a locking read —
+  confirmed by reading `_assert_category_name_free` and
+  `get_category_presets` directly, plus the dedicated concurrency test
+  passing.
+- **Every new sighting write is org-scoped and sits behind an existing
+  `require_permission` gate** at its endpoint — confirmed by reading each of
+  the three call sites, not assumed from the service method's own
+  docstring.
+- **The new migration is `create_all`-tolerant, idempotent, and documents
+  its lossy downgrade** — read in full.
+- **The dashboard's new `low_stock_categories` filter reuses the existing
+  org-scoped low-stock scan** rather than defining "low" a second time
+  (Pitfall #29) — confirmed by reading `item_ids_in_low_stock_categories`.
+- **198 routes, identical set to pass 14** — no auth-dependency or
+  permission regression possible; the only two changed routes gained
+  optional query parameters behind their existing permission dependency.
+- **The new Background Sync transport for equipment checks carries
+  credentials, CSRF and per-owner filtering correctly**, and is not a
+  change to an existing, already-reviewed mechanism — read in full as a new
+  surface rather than assumed safe because its sibling (the page's own
+  drain) was already sound.
+- **No new `window.confirm`/`.alert`/`.prompt`, `dangerouslySetInnerHTML`,
+  banned date-formatting call, or raw `csv.writer`** anywhere in this
+  window's diff of this feature's scope — swept directly across all 15
+  commits, not sampled.
+- **INV-22's "owner-accepted, leave as is" status is unchanged** in code and
+  in `KNOWN_LIMITATIONS.md`.
+
+### Findings
+
+**0 fixed, 0 new findings.** The real backend delta this pass (category-name
+uniqueness, item-date validation, creation/barcode-put-away sightings, and
+the dashboard low-stock/overdue-tile parameters) was built correctly against
+this rotation's own standing rules (Pitfall #27's locking shape, Pitfall
+#14's org-scoping, Pitfall #26's `create_all` guard, Pitfall #29's
+single-source-of-truth scan reuse) rather than needing a security-review fix.
+The new frontend Background Sync transport for equipment checks, reviewed
+here for the first time as a genuinely new surface, carries the same
+credential/CSRF/ownership discipline as the page drain it mirrors. INV-22 is
+the only standing item and remains unchanged.
+
+| ID     | Status                                        |
+| ------ | --------------------------------------------- |
+| INV-22 | Re-confirmed OPEN, unchanged (owner-accepted) |
+
+### Schema & migration notes
+
+One migration this pass, `d1165a97b48e` (`inventory_nfc_scans.action` ENUM
+gains two values) — reviewed above under the real delta; `create_all`-guarded,
+idempotent, lossy downgrade documented. No seeded-grant change, no JSON
+column touched, no new FK.
+
+### Guard tests added
+
+None by this security-review pass — the real delta's own commits already
+carry their guard/regression tests (the category-name race test named
+above, and the creation-sighting assertions in `test_inventory_service.py`
+the commit message describes), authored as part of that ordinary
+development work rather than this review.
+
+### Completion gate {#completion-gate-pass-15}
+
+| Check                                                                                                                                | Result                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1, pinned to CI)                                                                                  | ✅ 0 violations                                          |
+| `black --check app/ tests/ alembic/` (26.10.1)                                                                                       | ✅ 2981 files unchanged                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                                                                    | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                                                    | ✅ 734 revisions, single head (`f4583df5025b`)           |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                | ✅ 302 routes, 0 errors, 0 warnings                      |
+| `pytest tests/ -k "inventory or label or nfc or kiosk or vendor or encrypt"`                                                         | ✅ 2450 passed, 1 skipped (`py_vapid`, environment-only) |
+| `pytest tests/test_capacity_locking.py tests/test_org_scoping_ratchet.py tests/test_like_escaping.py tests/test_csv_writer_sweep.py` | ✅ 86 passed                                             |
+| `pytest tests/test_alembic_migrations.py tests/test_migration_create_all_tables.py`                                                  | ✅ 80 passed                                             |
+| `cd frontend && npm run typecheck`                                                                                                   | ✅ exit 0                                                |
+| `cd frontend && npm run lint`                                                                                                        | ✅ exit 0 (`NODE_OPTIONS=--max-old-space-size=6144`)     |
+| `npx vitest run src/modules/inventory`                                                                                               | ✅ 1899 passed (127 files)                               |
+
+Rotation row 11 → ✅ (pending this PR's merge); next is Feature 12
+(Facilities).
+
+---
+
+## Pass 14 (2026-11-01) — watchdog pickup, no backend delta, 0 fixed, 0 new findings; INV-22 re-confirmed
+
+**Step 0.** The GitHub search tools were unavailable this iteration, so open PRs
+were read with `list_pull_requests` (state open): no head branch started with
+`claude/security-review-`. PR #3823 (this feature, pass 13) had merged. The
+rotation table showed rows 01–10 done for this lap and row 00 still marked 🔄
+(its pass 14 PR had merged while in progress), so row 11 was the first pending
+row; row 00 is corrected to ✅ in this PR.
+
+**Scope.** Baseline `d65ad33f7` (PR #3823's merge). Three commits touch the
+declared files since: `233b8af39` (labels: Code 128 bars a whole number of
+printer dots wide), `ab879fc7d` and `cf8fdae30` (page and list-row layout
+classes). `git show --stat` over `backend/` is empty for all three.
+
+**Verified good (mechanisms).**
+
+- **No backend change.** None of the five endpoint files, the service, schema or
+  model changed, so the 198 routes (150 HTTP plus the one WebSocket route in
+  `inventory.py`, 29 NFC, 12 labels, 4 kiosk, 2 last-seen) are as pass 13 left
+  them, each behind `require_permission`, `get_current_user` or the WebSocket's
+  origin check and token. `check_route_permissions.py --strict`: 0 errors,
+  0 warnings.
+- **`233b8af39`** adds `components/labels/barcodeGeometry.ts` (pure arithmetic
+  that rounds module widths to whole printer dots) and uses it from
+  `LabelPrintPage.tsx` and `InventoryBarcodePrintPage.tsx`. A scan of the diff
+  for `innerHTML`, `document.write`, `window.open`, `dangerouslySetInnerHTML`,
+  `fetch(`, browser dialogs and storage access found none; the preferences the
+  page already keeps (`inventory:labelPreset` and friends) are unchanged.
+- **Layout commits** change class names only.
+
+**Standing: INV-22** (full catalog materialized by `get_fulfillment_options` /
+`get_requestable_categories`, owner-accepted) is unchanged: neither function is
+in the window.
+
+**Repo-wide error found, not mine to fix here.** `validate_migrations.py
+--strict` fails on `main` (`2b1884237`): three Alembic heads, `aefb58788235`,
+`b65eaef983b9` and `e9bfa68963ce`, all revising `5781476f2012`. PR #3916 (a
+merge revision over all three) was open during this pass; #3915, which joins
+only the first two, would have left a second fork, and a comment saying so was
+left there. This PR adds no migration, so it does not touch the chain.
+
+### Completion gate (pass 14)
+
+| Check                                                                 | Result                                                                                                 |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                 | ✅ 0 violations                                                                                        |
+| `black --check app/ tests/ alembic/` (26.10.1)                        | ✅ clean                                                                                               |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                     | ✅ clean                                                                                               |
+| `python3 scripts/validate_migrations.py --strict`                     | ❌ three heads on `main`, see above; not caused by this PR                                             |
+| `python3 scripts/check_route_permissions.py --strict`                 | ✅ 0 errors, 0 warnings                                                                                |
+| `pytest -k "inventory or label or nfc or kiosk or vendor or encrypt"` | ✅ 2319 passed, 1 skipped (`py_vapid`); the sandbox database was migrated with `alembic upgrade heads` |
+| `cd frontend && npm run typecheck`                                    | ✅ exit 0 (after `npm ci`)                                                                             |
+| `cd frontend && npm run lint`                                         | ✅ exit 0, no errors or warnings (NODE_OPTIONS=--max-old-space-size=6144)                              |
+
+---
+
+## Pass 13 (2026-10-29) — watchdog pickup, near-zero delta (frontend print/a11y/dashboard-naming fixes, 2 cross-cutting encryption touches on `InventoryVendorContact`), 0 fixed, 0 new findings
+
+**Watchdog pickup.** No PR with a `claude/security-review-` head branch was
+open (`list_pull_requests`, state=open, 0 results among `claude/security-review-*`
+head branches — the 5 open PRs at the time were all unrelated feature work).
+The dedicated `/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+remains unreachable, confirmed via `ListAgents` ("No reachable agents"). PR
+#3816 (Feature 10, Documents & legal, pass 13) had already merged
+(`e8a5c00b`); this pickup followed promptly rather than waiting for the next
+scheduled tick. Per `PROGRESS.md`'s rotation table and PR #3816's own "Next
+feature" note, row 11 (Inventory) was the next pending feature.
+
+**Backend:** zero diff across all five endpoint files (`inventory.py` 150
+routes, `inventory_nfc.py` 29, `labels.py` 12, `inventory_kiosk.py` 4,
+`inventory_last_seen.py` 2 — all unchanged from pass 12) and both
+`inventory_service.py` / `schemas/inventory.py` (confirmed via
+`git diff <pass-12-merge>..HEAD --stat` returning nothing for any of these
+paths). **Frontend:** `modules/inventory/*` — 7 commits, all UX/print/a11y,
+no data-flow change. **Migrations:** none touching an inventory table;
+`models/inventory.py` picked up two column-type changes from cross-cutting
+PII/PHI encryption sweeps that landed independently of this rotation.
+
+### Scope
+
+Baseline is pass 12's own merge commit, `6eefb3c4` (PR #3738) — confirmed an
+ancestor of `HEAD` via `git merge-base --is-ancestor`. `git log --no-merges
+6eefb3c4..HEAD` against every declared scope file (five endpoint files, both
+services, both schema/model files, `frontend/src/modules/inventory`) returns
+**7** commits, none made through this rotation:
+
+1. **`fde3d647` / `b48d63f2`** — repo-wide PII/PHI encryption sweeps
+   ("Encrypt personal phone numbers and addresses at rest" /
+   "Encrypt email columns and add fingerprint columns to the models"). Their
+   only touch inside this feature's scope is `InventoryVendorContact.phone`
+   and `.email` in `models/inventory.py`, both switched from `String` to
+   `EncryptedText`. Verified, not assumed: `grep`ped every reference to
+   `InventoryVendorContact` across `inventory_service.py`,
+   `endpoints/inventory.py` and `schemas/inventory.py` — the only query
+   touching these rows orders by `.name` (`inventory_service.py:1576`); no
+   `.ilike()`, `.filter()` or `.order_by()` ever targets `.phone` or
+   `.email`, so the encrypted columns cannot be SQL-filtered/sorted/searched
+   anywhere in this feature. The accompanying migrations
+   (`20261025_1852_5510d5ff49eb_encrypt_contact_phone_numbers_and_.py`,
+   `20261026_1211_b8236e29ec44_encrypt_email_addresses_at_rest.py`) both
+   check `inventory_vendor_contacts` against `inspector.get_table_names()`
+   before touching it (Pitfall #26 — the table is `create_all`-built on a
+   fresh install) and both detect already-encrypted values by a frozen
+   ciphertext-prefix check before re-encrypting, so either migration no-ops
+   safely on a second run. Read in full, not sampled.
+2. **Five frontend-only commits** (`4c643e01`, `955ebfd3`, `e60143a8`,
+   `2a9b11c9`, `c5640463`) — a label-printing "Print stays disabled" bug fix
+   (new test proven to fail pre-fix, per the commit's own description), a
+   dashboard work-queue rename (`W79-10`, owner decision, Pitfall #29 shape),
+   label font/wrap/paper-size print fixes, and one WCAG contrast-token swap
+   on `EquipmentCheckForm.tsx`. `git diff 6eefb3c4..HEAD -- frontend/src/modules/inventory`
+   swept for every previously-found-unsafe pattern (`window.confirm` /
+   `.alert` / `.prompt`, `dangerouslySetInnerHTML`, `.toLocaleString()` /
+   `.toLocaleDateString()` / `.toLocaleTimeString()`, a bare `date-fns`
+   import) — zero matches in the added lines.
+
+Route decorators re-enumerated **by AST** (not grep) across all five
+endpoint files this pass: `inventory.py` 150, `inventory_nfc.py` 29,
+`labels.py` 12, `inventory_kiosk.py` 4, `inventory_last_seen.py` 2 — **197
+total, identical set and count to pass 12.** Every one of the 197 route
+handlers' AST dump contains a `Depends` reference (crude auth-presence
+check); `check_route_permissions.py --strict` — 279 routes repo-wide
+(unchanged from pass 12's own count, since this feature added none),
+0 errors, 0 warnings.
+
+### Re-verified: INV-22, still OPEN, owner-accepted, unchanged
+
+`get_fulfillment_options` / `get_requestable_categories` in
+`inventory_service.py` carry zero diff since pass 12 (confirmed by the
+file-level `git diff` above returning nothing), so the finding is
+unaffected. `docs/KNOWN_LIMITATIONS.md`'s entry (the one referencing
+`INV-22`, around line 3888) is unchanged; nothing new to add.
+
+### Verified good ✅ (pass 13)
+
+- **Zero backend diff since pass 12** across every declared endpoint,
+  service and schema file — confirmed by `git diff <merge-sha>..HEAD --stat`
+  returning empty for all eight backend scope files, not inferred from the
+  commit list.
+- **The two cross-cutting encryption touches on `InventoryVendorContact`
+  introduce no SQL-queryable-ciphertext risk** — the only query against the
+  table orders by `.name`, never `.phone`/`.email`, confirmed by grep across
+  every file in scope.
+- **Both accompanying migrations are `create_all`-tolerant and idempotent**
+  on `inventory_vendor_contacts` specifically — read directly, not inferred
+  from the commit message.
+- **All 197 routes re-enumerated by AST this pass, identical set and count
+  to pass 12** — no auth-dependency or permission regression possible from
+  zero route-file diff.
+- **No new `window.confirm`/`.alert`/`.prompt`, no new
+  `dangerouslySetInnerHTML`, no new banned date-formatting call** anywhere
+  in this window's frontend diff of this feature's scope — swept directly,
+  not sampled.
+- **INV-22's "owner-accepted, leave as is" status is unchanged** in code and
+  in `KNOWN_LIMITATIONS.md`.
+
+### Findings
+
+**0 fixed, 0 new findings.** No application code in this feature's own
+backend scope changed since pass 12; the only in-scope change
+(`InventoryVendorContact` column-type swap) was reviewed and found sound,
+and the frontend changes carry no security-relevant behavior. INV-22 is the
+only standing item and remains unchanged.
+
+| ID     | Status                                        |
+| ------ | --------------------------------------------- |
+| INV-22 | Re-confirmed OPEN, unchanged (owner-accepted) |
+
+### Schema & migration notes
+
+No migration in this pass touches an inventory table. The two migrations
+that touch `inventory_vendor_contacts` as part of a repo-wide column-type
+change were authored and reviewed outside this rotation; verified here only
+for this feature's own table (see Scope above).
+
+### Guard tests added
+
+None this pass — no new code in this feature's own scope to guard.
+
+### Completion gate {#completion-gate-pass-13}
+
+| Check                                                   | Result                                                       |
+| ------------------------------------------------------- | ------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                           | ✅ 0 violations                                              |
+| `black --check app/ tests/ alembic/`                    | ✅ 2714 files unchanged                                      |
+| `isort --check-only app/ tests/ alembic/`               | ✅ clean                                                     |
+| `python3 scripts/validate_migrations.py --strict`       | ✅ 667 revisions, single head (`b74bcce55c11`)               |
+| `python3 scripts/check_route_permissions.py --strict`   | ✅ 279 routes, 0 errors, 0 warnings                          |
+| `pytest tests/ -k "inventory or label or nfc or kiosk"` | ✅ 2040 passed, 1 pre-existing skip (`py_vapid`/`pywebpush`) |
+| `cd frontend && npm run typecheck`                      | ✅ 0 errors                                                  |
+| `cd frontend && npm run lint`                           | ✅ 0 errors, 0 warnings                                      |
+| `npx vitest run src/modules/inventory`                  | ✅ 1875 passed (126 files)                                   |
+
+Rotation row 11 → ✅ (pending this PR's merge); next is Feature 12
+(Facilities).
 
 ---
 

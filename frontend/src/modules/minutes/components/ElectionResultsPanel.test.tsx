@@ -67,17 +67,50 @@ describe('ElectionResultsPanel', () => {
     mockImportable.mockResolvedValue([]);
   });
 
+  // total_votes counts votes, one per race a ballot marked, so "ballots cast"
+  // overstated a multi-race election (W50-76, as the certified PDF reads).
+  it('labels the total as votes, in the singular for one', async () => {
+    mockList.mockResolvedValue([{ ...filed, snapshot: { ...filed.snapshot, total_votes: 1 } }]);
+    renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
+
+    expect(await screen.findByText(/12 eligible · 1 vote cast ·/)).toBeInTheDocument();
+  });
+
   it('shows the filed tally with turnout, quorum and the winner', async () => {
     renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
 
     expect(await screen.findByRole('heading', { name: 'Officer election' })).toBeInTheDocument();
-    expect(screen.getByText(/12 eligible · 9 ballots cast · 75% turnout · Quorum met/)).toBeInTheDocument();
+    expect(screen.getByText(/12 eligible · 9 votes cast · 75% turnout · Quorum met/)).toBeInTheDocument();
     expect(screen.getByText(/Filed .* by Sam Secretary/)).toBeInTheDocument();
     const table = screen.getByRole('table', { name: 'Results for Chief' });
     expect(within(table).getByText('Winner')).toBeInTheDocument();
     expect(within(table).getByText('Blake Brown')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'File an election result' })).not.toBeInTheDocument();
+  });
+
+  it('records where the voter rules departed from the defaults, and why', async () => {
+    mockList.mockResolvedValue([
+      {
+        ...filed,
+        snapshot: {
+          ...filed.snapshot,
+          voter_rule_exceptions: [
+            { scope: 'ballot_item', title: 'Amend Article IV', meeting_kind: null, reason: 'Bylaws Article XII' },
+          ],
+        },
+      },
+    ]);
+    renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
+
+    const exceptions = await screen.findByTestId('filed-voter-rule-exceptions');
+    expect(exceptions).toHaveTextContent('"Amend Article IV" had custom voter rules. Reason: Bylaws Article XII');
+  });
+
+  it('says nothing about voter rules for a result filed without them', async () => {
+    renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
+    await screen.findByRole('heading', { name: 'Officer election' });
+    expect(screen.queryByTestId('filed-voter-rule-exceptions')).not.toBeInTheDocument();
   });
 
   it('renders nothing for a reader when no result is filed', async () => {
@@ -210,6 +243,52 @@ describe('ElectionResultsPanel', () => {
       await user.click(await screen.findByRole('button', { name: 'File an election result' }));
       const dialog = await screen.findByRole('dialog');
       expect(within(dialog).queryByText(/permanent, dated addendum/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('after the election was rolled back', () => {
+    const superseded = {
+      ...filed,
+      is_addendum: true,
+      superseded_at: '2026-10-20T15:30:00Z',
+      superseded_reason: 'Two ballots were counted twice',
+      superseded_by_name: 'Ada Approver',
+    };
+    const rerun = {
+      ...filed,
+      id: 'r3',
+      is_addendum: true,
+      created_at: '2026-10-27T12:00:00Z',
+      replaces_superseded_at: '2026-10-20T15:30:00Z',
+    };
+
+    beforeEach(() => {
+      mockList.mockReset();
+      mockList.mockResolvedValue([superseded, rerun]);
+    });
+
+    it('shows the dated correction over the superseded result, which stays in full', async () => {
+      renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
+
+      expect(await screen.findByText('Superseded')).toBeInTheDocument();
+      const note = screen.getByRole('note');
+      expect(note).toHaveTextContent(
+        /Correction filed .*October 20, 2026.* by Ada Approver: this result has been superseded/
+      );
+      expect(note).toHaveTextContent('Reason given: Two ballots were counted twice');
+      expect(screen.getAllByRole('table', { name: 'Results for Chief' })).toHaveLength(2);
+    });
+
+    it("links the re-run's result to the correction it replaces", async () => {
+      renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
+
+      const replaces = await screen.findByText(
+        (_text, element) =>
+          element?.tagName === 'P' &&
+          /^Corrected result: replaces the result superseded on .*October 20, 2026/.test(element.textContent ?? '')
+      );
+      expect(replaces).toBeInTheDocument();
+      expect(screen.getAllByText('Superseded')).toHaveLength(1);
     });
   });
 });

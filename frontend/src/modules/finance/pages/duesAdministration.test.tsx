@@ -55,7 +55,11 @@ vi.mock('../services/api', () => ({
     listPayments: (...args: unknown[]) => listPayments(...args) as unknown,
     waive: (...args: unknown[]) => waive(...args) as unknown,
     unwaive: (...args: unknown[]) => unwaive(...args) as unknown,
+    // The schedule form's membership-type picker; none configured here.
+    membershipTypeOptions: () => Promise.resolve([]),
   },
+  // The schedule form's fiscal-year picker; none open here.
+  fiscalYearService: { options: () => Promise.resolve([]) },
 }));
 
 import DuesManagementPage from './DuesManagementPage';
@@ -171,10 +175,10 @@ describe('schedules', () => {
 
     await user.click(screen.getByRole('button', { name: /new schedule/i }));
     const dialog = screen.getByRole('dialog');
-    await user.type(within(dialog).getByLabelText('Name'), '2028 annual dues');
-    await user.type(within(dialog).getByLabelText('Amount per member'), '150');
-    await user.selectOptions(within(dialog).getByLabelText('Frequency'), 'quarterly');
-    await user.type(within(dialog).getByLabelText('Due date'), '2028-03-01');
+    await user.type(within(dialog).getByLabelText(/^Name/), '2028 annual dues');
+    await user.type(within(dialog).getByLabelText(/^Amount per member/), '150');
+    await user.selectOptions(within(dialog).getByLabelText(/^Frequency/), 'quarterly');
+    await user.type(within(dialog).getByLabelText(/^Due date/), '2028-03-01');
     await user.click(within(dialog).getByRole('button', { name: 'Create schedule' }));
 
     await waitFor(() => expect(createSchedule).toHaveBeenCalledTimes(1));
@@ -183,6 +187,12 @@ describe('schedules', () => {
       amount: '150.00',
       frequency: 'quarterly',
       dueDate: '2028-03-01T00:00:00.000Z',
+      // The form's 2026-11-01 terms: the default grace period, no fee, no
+      // fiscal year, every member.
+      gracePeriodDays: 30,
+      lateFeeAmount: undefined,
+      fiscalYearId: undefined,
+      appliesToMembershipTypes: undefined,
       notes: undefined,
     });
     await waitFor(() => expect(fetchDuesSchedules).toHaveBeenCalledTimes(2));
@@ -207,7 +217,7 @@ describe('schedules', () => {
     await user.click(screen.getByRole('button', { name: /2027 annual dues/ }));
     await user.click(screen.getByRole('button', { name: /edit schedule/i }));
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByLabelText('Due date')).toHaveValue('2027-03-01');
+    expect(within(dialog).getByLabelText(/^Due date/)).toHaveValue('2027-03-01');
     await user.clear(within(dialog).getByLabelText(/notes/i));
     await user.click(within(dialog).getByRole('checkbox'));
     await user.click(within(dialog).getByRole('button', { name: 'Save schedule' }));
@@ -218,6 +228,10 @@ describe('schedules', () => {
         amount: '120.00',
         frequency: 'annual',
         dueDate: '2027-03-01T00:00:00.000Z',
+        gracePeriodDays: 30,
+        lateFeeAmount: null,
+        fiscalYearId: null,
+        appliesToMembershipTypes: null,
         isActive: false,
         notes: null,
         // Blank: the department's defaults apply.
@@ -234,9 +248,9 @@ describe('schedules', () => {
 
     await user.click(screen.getByRole('button', { name: /new schedule/i }));
     const dialog = screen.getByRole('dialog');
-    await user.type(within(dialog).getByLabelText('Name'), 'Fines');
-    await user.type(within(dialog).getByLabelText('Amount per member'), '10');
-    await user.type(within(dialog).getByLabelText('Due date'), '2028-03-01');
+    await user.type(within(dialog).getByLabelText(/^Name/), 'Fines');
+    await user.type(within(dialog).getByLabelText(/^Amount per member/), '10');
+    await user.type(within(dialog).getByLabelText(/^Due date/), '2028-03-01');
     await user.type(within(dialog).getByLabelText(/Income account/), ' Fines Income ');
     await user.click(within(dialog).getByRole('button', { name: 'Create schedule' }));
 
@@ -278,7 +292,7 @@ describe('member dues', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole('button', { name: 'Record a payment for Terry Heather' }));
+    await user.click(screen.getByRole('button', { name: 'Record payment for Terry Heather' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByLabelText('Amount received')).toHaveValue(100);
     await user.selectOptions(within(dialog).getByLabelText(/method/i), 'check');
@@ -300,7 +314,7 @@ describe('member dues', () => {
     recordPayment.mockRejectedValue(new Error('These dues are marked waived and are not owing.'));
     const user = userEvent.setup();
     renderPage();
-    await user.click(screen.getByRole('button', { name: 'Record a payment for Terry Heather' }));
+    await user.click(screen.getByRole('button', { name: 'Record payment for Terry Heather' }));
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Record payment' }));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('These dues are marked waived and are not owing.'));
   });
@@ -324,9 +338,9 @@ describe('member dues', () => {
     const user = userEvent.setup();
     renderPage();
 
-    expect(screen.queryByRole('button', { name: 'Record a payment for Ann Lee' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Record payment for Ann Lee' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Waive the dues for Ann Lee' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Reverse the waiver for Ann Lee' }));
+    await user.click(screen.getByRole('button', { name: 'Reverse waiver for Ann Lee' }));
     const dialog = screen.getByRole('dialog');
     await user.type(within(dialog).getByLabelText(/why are you reversing/i), 'Waived by mistake');
     await user.click(within(dialog).getByRole('button', { name: 'Reverse waiver' }));

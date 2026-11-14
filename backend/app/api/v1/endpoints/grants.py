@@ -1421,6 +1421,33 @@ async def list_donations(
         )
 
 
+@router.get("/donations/{donation_id}", response_model=DonationResponse)
+async def get_donation(
+    donation_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("fundraising.view")),
+):
+    """
+    Get one donation, for the edit page (W69)
+
+    **Authentication required**
+    **Requires permission: fundraising.view**
+    """
+    service = FundraisingService(db)
+    donation = await service.get_donation(
+        str(donation_id), str(current_user.organization_id)
+    )
+    if not donation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Donation not found",
+        )
+    # GF-8: presented as the list presents it, so an anonymous gift's donor
+    # stays hidden from a view-only caller who asks for the one row.
+    can_see_identity = user_has_permission(current_user, MANAGE_PERMISSION)
+    return present_donation(donation, can_see_identity)
+
+
 @router.post(
     "/donations",
     response_model=DonationResponse,

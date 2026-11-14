@@ -33,11 +33,13 @@ import {
 } from 'lucide-react';
 import { HelpLink } from '../../../components/HelpLink';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { toLocalISODate } from '../../../utils/dateFormatting';
+import { formatCalendarDate, toLocalISODate } from '../../../utils/dateFormatting';
 import { useRanks } from '../../../hooks/useRanks';
+import { useAuthStore } from '../../../stores/authStore';
 import { useReportsStore } from '../store/reportsStore';
 import type { ReportCardDefinition, ReportData, DatePreset } from '../types';
 import { ExportControls } from '../components/ExportControls';
+import { ReportContentBoundary } from '../components/ReportContentBoundary';
 import {
   MemberRosterRenderer,
   getMemberRosterExportData,
@@ -81,6 +83,7 @@ import type {
   CallVolumeReport,
   PipelineOverviewReport,
 } from '../types';
+import { AdminPageHeader } from '../../../components/admin/AdminPageHeader';
 
 // ============================================================================
 // Report type → API mapping
@@ -266,9 +269,56 @@ const DATE_PRESETS: Array<{ id: DatePreset; label: string }> = [
 // Component
 // ============================================================================
 
+// ---- Export data resolver ----
+function getExportData(data: ReportData, reportType: string) {
+  const exportMap: Record<
+    string,
+    (d: ReportData) => { rows: Array<Record<string, unknown>>; columns: Array<{ key: string; header: string }> }
+  > = {
+    member_roster: (d) => getMemberRosterExportData(d as MemberRosterReport),
+    training_summary: (d) => getTrainingSummaryExportData(d as TrainingSummaryReport),
+    event_attendance: (d) => getEventAttendanceExportData(d as EventAttendanceReport),
+    training_progress: (d) => getTrainingProgressExportData(d as TrainingProgressReport),
+    annual_training: (d) => getAnnualTrainingExportData(d as AnnualTrainingReport),
+    admin_hours: (d) => getAdminHoursExportData(d as AdminHoursReport),
+    department_overview: (d) => getDepartmentOverviewExportData(d as DepartmentOverviewReport),
+    certification_expiration: (d) => getCertExpirationExportData(d as CertExpirationReport),
+    apparatus_status: (d) => getApparatusStatusExportData(d as ApparatusStatusReport),
+    inventory_status: (d) => getInventoryStatusExportData(d as InventoryStatusReport),
+    compliance_status: (d) => getComplianceStatusExportData(d as ComplianceStatusReport),
+    call_volume: (d) => getCallVolumeExportData(d as CallVolumeReport),
+    pipeline_overview: (d) => getPipelineOverviewExportData(d as PipelineOverviewReport),
+  };
+
+  const fn = exportMap[reportType];
+  if (!fn) return { rows: [], columns: [] };
+  const exported = fn(data);
+  // Each helper hands back the report's own list (`entries`, `members`,
+  // ...) as its rows, so a report body without that list would reach
+  // ExportControls as undefined; export nothing rather than crash.
+  return { ...exported, rows: Array.isArray(exported.rows) ? exported.rows : [] };
+}
+
+/**
+ * The export buttons for one report, computed where a malformed body can be
+ * contained: each helper reads its report's own shape, and one that throws
+ * must not take the page down with it (ReportContentBoundary around it).
+ */
+const ReportExport: React.FC<{ title: string; data: ReportData; reportType: string }> = ({
+  title,
+  data,
+  reportType,
+}) => {
+  const exportData = getExportData(data, reportType);
+  return <ExportControls reportTitle={title} rows={exportData.rows} columns={exportData.columns} />;
+};
+
 export const ReportsPage: React.FC = () => {
   const tz = useTimezone();
   const { formatRank } = useRanks();
+  const canSetUpEvaluations = useAuthStore(
+    (state) => state.checkPermission('evaluations.configure') || state.checkPermission('evaluations.manage')
+  );
 
   const {
     generatingReportType,
@@ -409,33 +459,6 @@ export const ReportsPage: React.FC = () => {
     }
   };
 
-  // ---- Export data resolver ----
-  const getExportData = (data: ReportData, reportType: string) => {
-    const exportMap: Record<
-      string,
-      (d: ReportData) => { rows: Array<Record<string, unknown>>; columns: Array<{ key: string; header: string }> }
-    > = {
-      member_roster: (d) => getMemberRosterExportData(d as MemberRosterReport),
-      training_summary: (d) => getTrainingSummaryExportData(d as TrainingSummaryReport),
-      event_attendance: (d) => getEventAttendanceExportData(d as EventAttendanceReport),
-      training_progress: (d) => getTrainingProgressExportData(d as TrainingProgressReport),
-      annual_training: (d) => getAnnualTrainingExportData(d as AnnualTrainingReport),
-      admin_hours: (d) => getAdminHoursExportData(d as AdminHoursReport),
-      department_overview: (d) => getDepartmentOverviewExportData(d as DepartmentOverviewReport),
-      certification_expiration: (d) => getCertExpirationExportData(d as CertExpirationReport),
-      apparatus_status: (d) => getApparatusStatusExportData(d as ApparatusStatusReport),
-      inventory_status: (d) => getInventoryStatusExportData(d as InventoryStatusReport),
-      compliance_status: (d) => getComplianceStatusExportData(d as ComplianceStatusReport),
-      call_volume: (d) => getCallVolumeExportData(d as CallVolumeReport),
-      pipeline_overview: (d) => getPipelineOverviewExportData(d as PipelineOverviewReport),
-    };
-
-    const fn = exportMap[reportType];
-    return fn ? fn(data) : { rows: [], columns: [] };
-  };
-
-  const exportData = activeReportData && activeReportType ? getExportData(activeReportData, activeReportType) : null;
-
   const closeModal = () => {
     clearActiveReport();
     clearComparison();
@@ -443,30 +466,30 @@ export const ReportsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-theme-text-primary mb-2 text-3xl font-bold">Reports</h1>
-              <p className="text-theme-text-secondary">Run department reports and export them to CSV or PDF</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link
-                to="/reports/saved"
-                className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-medium"
-              >
+      <div data-page-main className="mx-auto max-w-7xl">
+        <AdminPageHeader
+          title="Reports"
+          description="Run department reports and export them to CSV or PDF"
+          actions={
+            <>
+              <Link to="/reports/saved" className="btn-secondary inline-flex items-center text-sm">
                 Saved reports
               </Link>
+              {canSetUpEvaluations && (
+                <Link to="/reports/evaluations" className="btn-secondary inline-flex items-center text-sm">
+                  Member evaluations
+                </Link>
+              )}
               <HelpLink
                 topic="reports"
                 variant="icon"
                 tooltip="Select Generate Report on a card. Filter by category, set the reporting period for Date Range reports, then export to CSV or print to PDF."
                 tooltipPosition="left"
               />
-            </div>
-          </div>
-        </div>
+            </>
+          }
+          className="mb-8"
+        />
 
         {/* Category Filter */}
         <div className="mb-6 flex items-center space-x-2">
@@ -579,7 +602,7 @@ export const ReportsPage: React.FC = () => {
                     </span>
                   )}
                   {report.usesDateRange && report.available && (
-                    <span className="rounded-sm bg-blue-500/20 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
+                    <span className="rounded-sm bg-blue-500/20 px-2 py-1 text-xs font-medium text-blue-900 dark:text-blue-300">
                       Date Range
                     </span>
                   )}
@@ -657,8 +680,8 @@ export const ReportsPage: React.FC = () => {
               >
                 {/* Modal header */}
                 <div className="px-6 pt-5 pb-4">
-                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex items-center space-x-3">
+                  <div className="split-row mb-4 gap-3 sm:items-start">
+                    <div className="split-row-main flex items-center space-x-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-600/20">
                         {React.createElement(ICON_MAP[activeCard.icon] ?? FileText, {
                           className: 'w-5 h-5 text-red-500',
@@ -676,21 +699,17 @@ export const ReportsPage: React.FC = () => {
                           startDate &&
                           endDate && (
                             <p className="text-theme-text-muted mt-0.5 text-xs">
-                              {startDate} — {endDate}
+                              {formatCalendarDate(startDate)} — {formatCalendarDate(endDate)}
                             </p>
                           )
                         )}
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="split-row-aside flex flex-wrap items-center gap-2">
                       {/* Export Controls */}
-                      {exportData && (
-                        <ExportControls
-                          reportTitle={activeCard.title}
-                          rows={exportData.rows}
-                          columns={exportData.columns}
-                        />
-                      )}
+                      <ReportContentBoundary resetKey={activeReportData} fallback={null}>
+                        <ReportExport title={activeCard.title} data={activeReportData} reportType={activeReportType} />
+                      </ReportContentBoundary>
                       {/* Compare button */}
                       {activeCard.usesDateRange && !comparisonData && (
                         <button
@@ -714,25 +733,30 @@ export const ReportsPage: React.FC = () => {
                   </div>
 
                   {/* Main report content */}
-                  {renderReportContent(activeReportData, activeReportType)}
+                  <ReportContentBoundary resetKey={activeReportData}>
+                    {renderReportContent(activeReportData, activeReportType)}
+                  </ReportContentBoundary>
 
                   {/* Comparison section */}
                   {comparisonData && comparisonPeriod && (
                     <div className="border-theme-surface-border mt-6 border-t pt-6">
-                      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
+                      <div className="split-row mb-3 gap-3 sm:items-center">
+                        <h3 className="split-row-main text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
                           <GitCompareArrows className="h-4 w-4" />
-                          Previous Period: {comparisonPeriod.start} — {comparisonPeriod.end}
+                          Previous Period: {formatCalendarDate(comparisonPeriod.start)} —{' '}
+                          {formatCalendarDate(comparisonPeriod.end)}
                         </h3>
                         <button
                           type="button"
                           onClick={clearComparison}
-                          className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 text-xs"
+                          className="split-row-aside text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 text-xs"
                         >
                           Remove comparison
                         </button>
                       </div>
-                      {renderReportContent(comparisonData, activeReportType)}
+                      <ReportContentBoundary resetKey={comparisonData}>
+                        {renderReportContent(comparisonData, activeReportType)}
+                      </ReportContentBoundary>
                     </div>
                   )}
                 </div>

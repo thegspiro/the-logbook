@@ -52,8 +52,12 @@ class CallSource:
     MANUAL = "manual"
     DISPATCH = "dispatch"
     DERIVED = "derived"
+    # Brought in from a previous system's per-member shift records by the
+    # shift history import. Counts are the most any one crew member logged,
+    # so a call two units both ran is counted for each unit.
+    IMPORT = "import"
 
-    ALL = (MANUAL, DISPATCH, DERIVED)
+    ALL = (MANUAL, DISPATCH, DERIVED, IMPORT)
 
 
 # An officer closing out a shift is reporting a tour, not a year. The cap keeps

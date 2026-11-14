@@ -91,8 +91,8 @@ const CheckRequestsPage: React.FC = () => {
       <Breadcrumbs />
 
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="page-header gap-4 sm:items-center">
+        <div className="page-header-title">
           <h1 className="text-theme-text-primary text-2xl font-bold">{pageTitle}</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">{pageSubtitle}</p>
         </div>
@@ -123,7 +123,7 @@ const CheckRequestsPage: React.FC = () => {
             key={tab.value}
             type="button"
             onClick={() => setStatusFilter(tab.value)}
-            className={`touch:min-h-11 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`touch:min-h-11 touch:min-w-11 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               statusFilter === tab.value
                 ? 'bg-red-800 text-white'
                 : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover'
@@ -186,8 +186,8 @@ const CheckRequestsPage: React.FC = () => {
         />
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Check requests">
-            <table className="w-full">
+          <div className="rwd-table-container overflow-x-auto" tabIndex={0} role="region" aria-label="Check requests">
+            <table className="rwd-table rwd-table-wide w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th
@@ -235,22 +235,32 @@ const CheckRequestsPage: React.FC = () => {
                     onClick={() => void navigate(`/finance/check-requests/${cr.id}`)}
                     className="hover:bg-theme-surface-hover cursor-pointer transition-colors"
                   >
-                    <td className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-600">{cr.requestNumber}</td>
-                    <td className="text-theme-text-primary px-4 py-3 text-sm">{cr.payeeName}</td>
-                    <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
+                    <td
+                      data-label="Request #"
+                      className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-800 dark:text-red-300"
+                    >
+                      {cr.requestNumber}
+                    </td>
+                    <td data-label="Payee" className="text-theme-text-primary px-4 py-3 text-sm">
+                      {cr.payeeName}
+                    </td>
+                    <td
+                      data-label="Amount"
+                      className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap"
+                    >
                       {formatCurrency(cr.amount)}
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                    <td data-label="Check #" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                       {cr.checkNumber ?? '--'}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td data-label="Status" className="px-4 py-3 whitespace-nowrap">
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${CHECK_REQUEST_STATUS_COLORS[cr.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                       >
                         {STATUS_LABEL_MAP[cr.status] ?? cr.status}
                       </span>
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                    <td data-label="Date" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                       {formatDate(cr.createdAt, tz)}
                     </td>
                   </tr>

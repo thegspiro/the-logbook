@@ -377,3 +377,141 @@ describe('EquipmentKitsPage', () => {
     expect(screen.queryByRole('button', { name: 'Edit Recruit Kit' })).not.toBeInTheDocument();
   });
 });
+
+describe('EquipmentKitsPage add dialog validation', () => {
+  beforeEach(() => {
+    mockGetEquipmentKits.mockReset();
+    mockGetKitProductOptions.mockReset();
+    mockGetCategories.mockReset();
+    mockCreateEquipmentKit.mockReset();
+    mockCheckPermission.mockReset();
+    mockToastError.mockReset();
+    mockGetEquipmentKits.mockResolvedValue([makeKit()]);
+    mockGetKitProductOptions.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([]);
+    mockCreateEquipmentKit.mockResolvedValue({});
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  const openAdd = async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentKitsPage />);
+    await screen.findByText('Recruit Kit');
+    await user.click(screen.getByRole('button', { name: /Add Kit/ }));
+    await screen.findByText('Add Equipment Kit');
+    return user;
+  };
+
+  it('names the missing name under its field and sends nothing', async () => {
+    const user = await openAdd();
+    await user.click(screen.getByRole('button', { name: 'Create Kit' }));
+    const name = screen.getByRole('textbox', { name: 'Name' });
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('Enter a name for the kit.');
+    expect(name).toHaveFocus();
+    expect(screen.getByRole('group', { name: 'Line Items' })).toHaveAccessibleDescription(
+      'Add at least one item to the kit.'
+    );
+    expect(mockCreateEquipmentKit).not.toHaveBeenCalled();
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('names a kit with no items under the line items and focuses them', async () => {
+    const user = await openAdd();
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Officer Kit');
+    await user.click(screen.getByRole('button', { name: 'Create Kit' }));
+    const group = screen.getByRole('group', { name: 'Line Items' });
+    expect(group).toHaveAccessibleDescription('Add at least one item to the kit.');
+    expect(group).toHaveFocus();
+    expect(mockCreateEquipmentKit).not.toHaveBeenCalled();
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 on the field it names', async () => {
+    mockCreateEquipmentKit.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
+    });
+    const user = await openAdd();
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Officer Kit');
+    await user.type(screen.getByPlaceholderText('Custom item name'), 'Helmet');
+    await user.click(screen.getByRole('button', { name: 'Create Kit' }));
+    expect(await screen.findByRole('textbox', { name: 'Name', description: 'Value is too long.' })).toHaveFocus();
+  });
+
+  it('shows a server failure inside the dialog, not as a toast', async () => {
+    mockCreateEquipmentKit.mockRejectedValue(new Error('Database unavailable'));
+    const user = await openAdd();
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Officer Kit');
+    await user.type(screen.getByPlaceholderText('Custom item name'), 'Helmet');
+    await user.click(screen.getByRole('button', { name: 'Create Kit' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Database unavailable');
+    expect(mockToastError).not.toHaveBeenCalled();
+    expect(screen.getByText('Add Equipment Kit')).toBeInTheDocument();
+  });
+});
+
+describe('EquipmentKitsPage dialog: edits and discarding', () => {
+  beforeEach(() => {
+    mockGetEquipmentKits.mockReset();
+    mockGetKitProductOptions.mockReset();
+    mockGetCategories.mockReset();
+    mockGetEquipmentKit.mockReset();
+    mockUpdateEquipmentKit.mockReset();
+    mockCheckPermission.mockReset();
+    mockToastSuccess.mockReset();
+    mockGetEquipmentKits.mockResolvedValue([makeKit()]);
+    mockGetKitProductOptions.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([]);
+    mockGetEquipmentKit.mockResolvedValue(
+      makeKit({
+        line_items: [
+          {
+            id: 'li-1',
+            kit_id: 'k-1',
+            item_name: 'Helmet',
+            quantity: 1,
+            size_selectable: false,
+            optional: false,
+            sort_order: 0,
+          },
+        ],
+      })
+    );
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  it('saves the name of an edit whose line items are refused, keeping the stored lines', async () => {
+    mockUpdateEquipmentKit
+      .mockRejectedValueOnce({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'line_items', message: 'List should have at most 100 items' }] },
+        },
+      })
+      .mockResolvedValueOnce({});
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentKitsPage />);
+    await screen.findByText('Recruit Kit');
+    await user.click(screen.getByRole('button', { name: 'Edit Recruit Kit' }));
+    const name = await screen.findByRole('textbox', { name: 'Name' });
+    await user.type(name, ' 2027');
+    await user.click(screen.getByRole('button', { name: 'Update Kit' }));
+
+    await waitFor(() => expect(mockUpdateEquipmentKit).toHaveBeenCalledTimes(2));
+    expect(mockUpdateEquipmentKit.mock.calls[1]?.[1]).not.toHaveProperty('line_items');
+    expect(mockUpdateEquipmentKit.mock.calls[1]?.[1]).toMatchObject({ name: 'Recruit Kit 2027' });
+    expect(screen.getByRole('alert')).toHaveTextContent('Kit saved, except line items.');
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('asks before Cancel discards an edit', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentKitsPage />);
+    await screen.findByText('Recruit Kit');
+    await user.click(screen.getByRole('button', { name: 'Edit Recruit Kit' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Name' }), ' 2027');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Recruit Kit 2027');
+  });
+});

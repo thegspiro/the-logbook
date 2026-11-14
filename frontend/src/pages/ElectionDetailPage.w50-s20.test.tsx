@@ -1,8 +1,8 @@
 /**
  * A reminder send that failed must not be reported as a success.
  *
- * `POST /elections/{id}/remind-non-voters` returns the same EmailBallotResponse
- * as send-ballot, with `success: failed == 0`. `handleSendBallotEmails` reads
+ * A finished reminder job carries the same EmailBallotResponse as a ballot
+ * send, with `success: failed == 0`. `handleSendBallotEmails` reads
  * that flag and toasts red when it is false; `handleSendReminders` ignored it
  * and called `toast.success` unconditionally, so "Reminders sent to 0
  * non-voter(s), 12 failed" appeared in green. The same handler also feeds

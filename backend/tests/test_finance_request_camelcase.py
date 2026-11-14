@@ -28,6 +28,7 @@ from app.schemas.finance import (
     ApprovalChainStepCreate,
     ApprovalChainStepUpdate,
     ApprovalChainUpdate,
+    ApprovalEmailResendRequest,
     BudgetAmendmentCreate,
     BudgetAmendmentReject,
     BudgetAmendmentReverse,
@@ -37,6 +38,7 @@ from app.schemas.finance import (
     BudgetCreate,
     BudgetRequestCreate,
     BudgetRequestDecision,
+    BudgetRequestReminderSettingsUpdate,
     BudgetRequestReview,
     BudgetRequestUpdate,
     BudgetUpdate,
@@ -62,10 +64,13 @@ from app.schemas.finance import (
     MemberDuesPayment,
     MemberDuesUnwaive,
     MemberDuesWaive,
+    MileageTrip,
     PurchaseRequestCreate,
     PurchaseRequestUpdate,
+    QuickBooksPostFromUpdate,
     ReimbursementCheckCreate,
     ReimbursementReportCreate,
+    ShareLineReceiptRequest,
 )
 
 _STEP = {
@@ -202,6 +207,7 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "is_active": False,
     },
     ApprovalActionRequest: {"notes": "Looks fine"},
+    ApprovalEmailResendRequest: {"link_version": 3},
     FunctionalClassUpdate: {"functional_class": "fundraising"},
     BudgetCategoryChargeAccessUpdate: {
         "charge_access": "restricted",
@@ -233,6 +239,14 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "apparatus_id": "app-1",
     },
     ExpenseLineItemCreate: dict(_LINE_ITEM),
+    MileageTrip: {
+        "trip_date": "2026-10-01",
+        "from_location": "Station 1",
+        "to_location": "Supply house",
+        "purpose": "Collect couplings",
+        "miles": "12.5",
+    },
+    ShareLineReceiptRequest: {"from_item_id": "li-1"},
     ExpenseReportCreate: {
         "fiscal_year_id": "fy-1",
         "title": "Conference",
@@ -251,6 +265,7 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "fiscal_year_id": "fy-1",
         "budget_id": "budget-1",
         "is_advance": True,
+        "advance_holder_id": "member-1",
         "payee_name": "Vendor Inc",
         "payee_address": "1 Main St",
         "amount": "99.99",
@@ -329,6 +344,7 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "income_account": "Dues Income",
         "deposit_account": "Operating Checking",
     },
+    QuickBooksPostFromUpdate: {"post_from": "2026-11-06T05:00:00Z"},
     AdvanceAccountsUpdate: {
         "advances_account": "Employee Advances",
         "cash_account": "Operating Checking",
@@ -351,6 +367,10 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "date_range_start": "2026-01-01T00:00:00Z",
         "date_range_end": "2026-02-01T00:00:00Z",
         "file_format": "csv",
+    },
+    BudgetRequestReminderSettingsUpdate: {
+        "offsets_days": [7, 1],
+        "bell_notices": True,
     },
 }
 

@@ -15,6 +15,17 @@ const mockCheckExisting = vi.fn();
 const mockCreateApplicant = vi.fn();
 const mockFetchApplicant = vi.fn();
 
+// A coordinator holding prospective_members.view_all: the pipeline-wide stats,
+// bulk actions and purge these tests drive are offered only with it.
+vi.mock('../../../stores/authStore', () => {
+  const state = { user: { id: 'coordinator-1' }, checkPermission: () => true };
+  return {
+    useAuthStore: Object.assign((select?: (s: typeof state) => unknown) => (select ? select(state) : state), {
+      getState: () => state,
+    }),
+  };
+});
+
 vi.mock('../services/api', () => ({
   applicantService: {
     bulkSetStatus: (...a: unknown[]) => mockBulkSetStatus(...a) as unknown,
@@ -73,7 +84,7 @@ const storeState = {
   totalApplicants: 2,
   currentPage: 1,
   totalPages: 1,
-  filters: { pipeline_id: 'pipe-1' },
+  filters: { pipeline_id: 'pipe-1' } as { pipeline_id: string; assigned_to_me?: boolean },
   viewMode: 'table',
   activeTab: 'active',
   detailDrawerOpen: false,
@@ -270,8 +281,8 @@ describe('ProspectiveMembersPage — Add Applicant (workflow review W16)', () =>
     await user.click(screen.getByRole('button', { name: /add applicant/i }));
     const dialog = screen.getByRole('dialog', { name: 'Add Applicant' });
 
-    expect(within(dialog).getByRole('textbox', { name: 'First Name *' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('textbox', { name: 'Email *' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('textbox', { name: 'First Name' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('textbox', { name: 'Email' })).toBeInTheDocument();
     expect(within(dialog).getByRole('combobox', { name: 'Membership Type' })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Close' })).toBeInTheDocument();
   });
@@ -320,9 +331,9 @@ describe('ProspectiveMembersPage — adding an applicant who already exists', ()
   const fillAndSubmit = async (user: ReturnType<typeof userEvent.setup>) => {
     await user.click(screen.getByRole('button', { name: /add applicant/i }));
     const dialog = screen.getByRole('dialog', { name: 'Add Applicant' });
-    await user.type(within(dialog).getByRole('textbox', { name: 'First Name *' }), 'Jordan');
-    await user.type(within(dialog).getByRole('textbox', { name: 'Last Name *' }), 'Vale');
-    await user.type(within(dialog).getByRole('textbox', { name: 'Email *' }), 'jordan@example.com');
+    await user.type(within(dialog).getByRole('textbox', { name: 'First Name' }), 'Jordan');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Last Name' }), 'Vale');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Email' }), 'jordan@example.com');
     await user.type(within(dialog).getByRole('textbox', { name: 'Phone' }), '555-0100');
     await user.click(within(dialog).getByRole('button', { name: 'Add to Pipeline' }));
   };
@@ -381,8 +392,59 @@ describe('ProspectiveMembersPage — adding an applicant who already exists', ()
     expect(mockToastSuccess).not.toHaveBeenCalled();
     expect(mockToastError).not.toHaveBeenCalled();
     const form = screen.getByRole('dialog', { name: 'Add Applicant' });
-    expect(within(form).getByRole('textbox', { name: 'Email *' })).toHaveValue('jordan@example.com');
+    expect(within(form).getByRole('textbox', { name: 'Email' })).toHaveValue('jordan@example.com');
     expect(within(form).getByRole('textbox', { name: 'Phone' })).toHaveValue('555-0100');
+  });
+
+  it('puts a server refusal on the field it names, not the API key in a toast', async () => {
+    mockCreateApplicant.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'phone', message: 'String should have at most 20 characters' }] },
+      },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    await fillAndSubmit(user);
+
+    const form = screen.getByRole('dialog', { name: 'Add Applicant' });
+    const phone = within(form).getByRole('textbox', { name: 'Phone' });
+    await waitFor(() => expect(phone).toHaveAccessibleDescription('Phone is too long — keep it to 20 characters.'));
+    expect(phone).toHaveAttribute('aria-invalid', 'true');
+    expect(mockToastError).not.toHaveBeenCalled();
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('says on the field what is missing, and creates nothing', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    await user.click(screen.getByRole('button', { name: /add applicant/i }));
+    const form = screen.getByRole('dialog', { name: 'Add Applicant' });
+    await user.type(within(form).getByRole('textbox', { name: 'Email' }), 'not-an-email{Enter}');
+
+    expect(within(form).getByRole('textbox', { name: 'First Name' })).toHaveAccessibleDescription(
+      'Enter the applicant’s first name.'
+    );
+    expect(within(form).getByRole('textbox', { name: 'Email' })).toHaveAccessibleDescription(
+      'Enter a valid email address.'
+    );
+    expect(mockCreateApplicant).not.toHaveBeenCalled();
+  });
+
+  it('asks before Escape discards a half-filled applicant', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    await user.click(screen.getByRole('button', { name: /add applicant/i }));
+    const form = screen.getByRole('dialog', { name: 'Add Applicant' });
+    await user.type(within(form).getByRole('textbox', { name: 'First Name' }), 'Jordan');
+    await user.keyboard('{Escape}');
+
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByRole('dialog', { name: 'Add Applicant' })).toBeInTheDocument();
+    expect(within(form).getByRole('textbox', { name: 'First Name' })).toHaveValue('Jordan');
   });
 
   it('still offers "Create anyway" for a match on an existing member only', async () => {
@@ -405,5 +467,41 @@ describe('ProspectiveMembersPage — adding an applicant who already exists', ()
       )
     );
     await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Applicant added to pipeline'));
+  });
+});
+
+describe('ProspectiveMembersPage — My applicants', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    storeState.activeTab = 'active';
+    storeState.filters = { pipeline_id: 'pipe-1' };
+  });
+  afterEach(() => {
+    storeState.filters = { pipeline_id: 'pipe-1' };
+  });
+
+  it('narrows the board and table to the caller’s applicants', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    const toggle = screen.getByRole('button', { name: 'My applicants' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await user.click(toggle);
+
+    expect(vi.mocked(storeState.setFilters).mock.lastCall?.[0]).toStrictEqual({ assigned_to_me: true });
+  });
+
+  it('shows everyone again when switched off', async () => {
+    storeState.filters = { pipeline_id: 'pipe-1', assigned_to_me: true };
+    const user = userEvent.setup();
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    const toggle = screen.getByRole('button', { name: 'My applicants' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await user.click(toggle);
+
+    // Strict and last: the page's mount effects also call setFilters with
+    // other keys set to undefined, which a loose match would accept.
+    expect(vi.mocked(storeState.setFilters).mock.lastCall?.[0]).toStrictEqual({ assigned_to_me: undefined });
   });
 });

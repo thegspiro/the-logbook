@@ -3,6 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import type { AdminHubSummary } from '../types/adminHub';
+import type { CurrentUser } from '../types/auth';
 
 // Mock all lazy-loaded page imports before importing the component
 // Hoisted because AdminMetricsSettings is imported eagerly, so its mock factory
@@ -26,6 +27,7 @@ vi.mock('./TrainingProgramsPage', () => lazy('Programs List'));
 vi.mock('./training/SkillEvaluationsTab', () => lazy('Skill Evaluations'));
 vi.mock('./training/KnowledgeTestsTab', () => lazy('Knowledge Tests'));
 vi.mock('./training/ManualEntrySettingsPanel', () => lazy('Manual Entry'));
+vi.mock('./training/ComplianceSettingsPanel', () => lazy('Compliance Settings Panel'));
 vi.mock('./ExternalTrainingPage', () => lazy('External'));
 vi.mock('./HistoricalImportPage', () => lazy('Historical'));
 vi.mock('./SkillsTestingTemplatesTab', () => lazy('Templates'));
@@ -45,6 +47,13 @@ vi.mock('../components/HelpLink', () => ({
   HelpLink: () => null,
 }));
 
+const mockListWaivers = vi.fn();
+vi.mock('../services/attendanceWaiverService', () => ({
+  attendanceWaiverService: { list: (...args: unknown[]) => mockListWaivers(...args) as unknown },
+}));
+vi.mock('./training/AttendanceWaiverQueuePage', () => lazy('Waiver Queue'));
+vi.mock('./training/SessionWaiverSettingsPanel', () => lazy('Session Waiver Settings'));
+
 const mockGetSummary = vi.fn();
 vi.mock('../services/adminHubService', () => ({
   adminHubService: {
@@ -53,6 +62,25 @@ vi.mock('../services/adminHubService', () => ({
 }));
 
 import TrainingAdminPage from './TrainingAdminPage';
+import { useAuthStore } from '../stores/authStore';
+
+const signedInWith = (permissions: string[]): CurrentUser => ({
+  id: 'u-1',
+  username: 'officer',
+  email: 'officer@example.test',
+  organization_id: 'org-1',
+  timezone: 'UTC',
+  roles: [],
+  positions: [],
+  rank: null,
+  membership_type: null,
+  permissions,
+  is_active: true,
+  email_verified: true,
+  mfa_enabled: false,
+  password_expired: false,
+  must_change_password: false,
+});
 
 const summaryWithAttention: AdminHubSummary = {
   moduleKey: 'training',
@@ -81,7 +109,10 @@ describe('TrainingAdminPage', () => {
     vi.clearAllMocks();
     mockGetSummary.mockReset();
     mockGetSummary.mockResolvedValue({ ...summaryWithAttention, attention: [] });
+    mockListWaivers.mockReset();
+    mockListWaivers.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 1 });
     window.history.replaceState({}, '', '/training/admin');
+    useAuthStore.setState({ user: signedInWith(['training.manage']) });
   });
 
   it('shows every area at once, with what each holds', () => {
@@ -271,11 +302,77 @@ describe('TrainingAdminPage', () => {
     expect(areaTab('Overview')).not.toHaveAccessibleDescription(expect.stringContaining('need attention'));
   });
 
+  it('badges Waiver Requests, beside Submissions to Review, with the caller’s own pending count', async () => {
+    mockGetSummary.mockResolvedValue(summaryWithAttention);
+    mockListWaivers.mockResolvedValue({ items: [], total: 2, skip: 0, limit: 1 });
+    window.history.replaceState({}, '', '/training/admin?page=records&tab=sessions');
+    renderWithRouter(<TrainingAdminPage />);
+
+    expect(await screen.findByRole('tab', { name: /Waiver Requests/ })).toHaveTextContent('2 need attention');
+    expect(screen.getByRole('tab', { name: /Submissions to Review/ })).toHaveTextContent('3 need attention');
+    expect(mockListWaivers).toHaveBeenCalledWith({ status: 'pending', limit: 1 });
+  });
+
+  it('opens the waiver queue and the waiver settings as hub destinations', async () => {
+    window.history.replaceState({}, '', '/training/admin?page=records&tab=waiver-requests');
+    const { unmount } = renderWithRouter(<TrainingAdminPage />);
+    expect(await screen.findByTestId('lazy-component')).toHaveTextContent('Waiver Queue');
+    unmount();
+
+    window.history.replaceState({}, '', '/training/admin?page=settings&tab=session-waivers');
+    renderWithRouter(<TrainingAdminPage />);
+    expect(await screen.findByTestId('lazy-component')).toHaveTextContent('Session Waiver Settings');
+  });
+
   it('shows no badges when the summary cannot be loaded', async () => {
     mockGetSummary.mockRejectedValue(new Error('boom'));
     renderWithRouter(<TrainingAdminPage />);
 
     await screen.findByRole('button', { name: 'Try again' });
     expect(areaTablist()).not.toHaveTextContent('need attention');
+  });
+
+  describe('Compliance Settings', () => {
+    beforeEach(() => {
+      useAuthStore.setState({ user: signedInWith(['training.manage', 'compliance.manage']) });
+    });
+
+    it('is listed under Settings & Data for a viewer who may change it', async () => {
+      window.history.replaceState({}, '', '/training/admin?page=settings&tab=compliance-settings');
+      renderWithRouter(<TrainingAdminPage />);
+
+      const pages = screen.getByRole('tablist', { name: 'Settings & Data pages' });
+      expect(within(pages).getByRole('tab', { name: 'Compliance' })).toHaveAttribute('aria-selected', 'true');
+      await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent('Compliance Settings Panel'));
+    });
+
+    it('is not listed for training.manage alone, and its link falls back to the area', async () => {
+      useAuthStore.setState({ user: signedInWith(['training.manage']) });
+      window.history.replaceState({}, '', '/training/admin?page=settings&tab=compliance-settings');
+      renderWithRouter(<TrainingAdminPage />);
+
+      const pages = screen.getByRole('tablist', { name: 'Settings & Data pages' });
+      expect(within(pages).queryByRole('tab', { name: 'Compliance' })).not.toBeInTheDocument();
+      await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent('Manual Entry'));
+    });
+  });
+
+  // The panel is rendered for real here, not mocked, so the test follows its
+  // link the way an officer would.
+  describe('Requirements under Settings & Data', () => {
+    it('is listed for training.manage and opens Curriculum → Requirements', async () => {
+      const user = userEvent.setup();
+      window.history.replaceState({}, '', '/training/admin?page=settings&tab=requirements-link');
+      renderWithRouter(<TrainingAdminPage />);
+
+      const pages = screen.getByRole('tablist', { name: 'Settings & Data pages' });
+      expect(within(pages).getByRole('tab', { name: 'Requirements' })).toHaveAttribute('aria-selected', 'true');
+
+      await user.click(await screen.findByRole('link', { name: 'Open requirements' }));
+
+      expect(window.location.search).toBe('?page=curriculum&tab=requirements');
+      expect(areaTab('Curriculum')).toHaveAttribute('aria-selected', 'true');
+      await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent('Requirements'));
+    });
   });
 });

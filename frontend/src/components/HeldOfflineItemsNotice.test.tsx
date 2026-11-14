@@ -21,7 +21,7 @@ vi.mock('../utils/offlineQueueQuarantine', async (importOriginal) => {
   };
 });
 vi.mock('../hooks/useOfflineSyncEngine', () => ({
-  triggerOfflineDrain: () => mockDrain() as Promise<void>,
+  triggerAllOfflineDrains: () => mockDrain() as Promise<void>,
 }));
 vi.mock('../stores/authStore', () => {
   const state = { user: { id: 'member-b', username: 'druiz', first_name: 'Dana', last_name: 'Ruiz' } };
@@ -84,6 +84,29 @@ describe('HeldOfflineItemsNotice', () => {
     await waitFor(() => expect(mockSend).toHaveBeenCalledWith(held));
     await waitFor(() => expect(mockDrain).toHaveBeenCalled());
     expect(mockRefresh).toHaveBeenCalled();
+  });
+
+  it('says equipment checks send in the background, or from their page when the browser cannot', async () => {
+    renderWithRouter(<HeldOfflineItemsNotice />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Send as me' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Equipment checks are sent in the background/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/open the equipment check with a connection/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/shift reports/i)).not.toBeInTheDocument();
+  });
+
+  it('does not tell the member to open a page when only shift reports are held', async () => {
+    const reportOnly: HeldOfflineItem[] = [{ queue: 'report', id: 'r-1', kind: 'shift-report', queuedAt: 1 }];
+    mockList.mockResolvedValue(reportOnly);
+    usePendingSyncStore.setState({ heldCount: reportOnly.length });
+    renderWithRouter(<HeldOfflineItemsNotice />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Send as me' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/sent under your name/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/open .* with a connection/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/next time you open/)).not.toBeInTheDocument();
   });
 
   it('keeps the items on hold when the member backs out', async () => {

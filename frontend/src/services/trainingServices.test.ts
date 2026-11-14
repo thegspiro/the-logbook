@@ -244,6 +244,26 @@ describe('trainingService', () => {
 
       expect(mockDelete).toHaveBeenCalledWith('/training/requirements/req1');
     });
+
+    it('asks for a permanent delete only when told to', async () => {
+      mockDelete.mockResolvedValueOnce({ data: undefined });
+
+      await trainingService.deleteRequirement('req1', { permanent: true });
+
+      expect(mockDelete).toHaveBeenCalledWith('/training/requirements/req1', { params: { permanent: true } });
+    });
+  });
+
+  describe('getRequirementDeletionImpact', () => {
+    it('should GET /training/requirements/:id/deletion-impact', async () => {
+      const impact = { requirement_id: 'req1', name: 'HIPAA', active: true, total: 0, references: [] };
+      mockGet.mockResolvedValueOnce({ data: impact });
+
+      const result = await trainingService.getRequirementDeletionImpact('req1');
+
+      expect(mockGet).toHaveBeenCalledWith('/training/requirements/req1/deletion-impact');
+      expect(result).toEqual(impact);
+    });
   });
 
   // ── Categories ───────────────────────────────────────────────────────

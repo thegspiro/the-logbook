@@ -276,6 +276,24 @@ class EventOrganizerService:
             if user_has_permission(user, EVENT_MANAGER_PERMISSION)
         ]
 
+    async def may_decide_attendance_request(
+        self, event: Event, user: User, requester_id: str
+    ) -> bool:
+        """Whether *user* may decide *requester_id*'s attendance request.
+
+        Whoever may run the event, and whoever the request is routed to. The
+        second half is ``attendance_request_recipients`` itself, so the people
+        asked and the people allowed are one definition (CLAUDE.md #29): a
+        fallback position holder without events.manage who is sent a request
+        can decide it, and one it was not sent to cannot.
+        """
+        if can_manage_organizers(event, user):
+            return True
+        recipients = await self.attendance_request_recipients(
+            event, exclude_user_id=requester_id
+        )
+        return any(str(u.id) == str(user.id) for u in recipients)
+
     async def organizer_duty_recipients(self, event: Event) -> List[User]:
         """Who is told about a duty that belongs to whoever runs *event*: the
         series-end reminder and the post-event "validate attendance" prompt.
@@ -297,10 +315,10 @@ class EventOrganizerService:
 
     async def _series_events(self, anchor: Event, organization_id: str) -> List[Event]:
         """This occurrence, every upcoming one in its series, and the series
-        parent — which carries the series-end reminder and is what a rolling
-        series copies new occurrences from, so a handover that skipped it
-        would be undone the next time the series extends. Past occurrences
-        keep the organizer who ran them."""
+        parent, which carries the series-end reminder. The latest upcoming
+        occurrence is what a rolling series copies new occurrences from, so
+        reaching it is what keeps the handover when the series extends. Past
+        occurrences keep the organizer who ran them."""
         parent_id = str(anchor.recurrence_parent_id or anchor.id)
         result = await self.db.execute(
             select(Event)

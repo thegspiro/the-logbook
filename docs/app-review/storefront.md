@@ -3,6 +3,44 @@
 **Prefix:** `SF` · **Iteration:** A1 · **Reviewed:** 2026-08-05 (pass 1),
 2026-08-08 (pass 2), 2026-09-09 (pass 5)
 
+## Pass 6 (2026-11-02) — the delta since pass 5, and a stale OPEN entry
+
+Lens: not a fresh sweep. Pass 5 and security-review pass 14 had both been through this module, so this
+pass took what changed since 2026-09-09 (encrypting email and phone columns, matching by fingerprint,
+settlement locking on a move to PAID, switched-off email templates) and re-tested the one entry still
+marked OPEN. **0 code changes; 1 documentation correction (SF-3).**
+
+### Verified good
+
+- **The encryption delta did not break a lookup.** `StoreOrder.customer_email` is now `EncryptedText`,
+  and a query that still filtered it by value would silently match nothing. The order search matches
+  `customer_email_hash` against `email_fingerprints(search)` (a complete address only, as the
+  encryption commit documented) and the name search is on a plain column. No other storefront query
+  filters an encrypted column.
+- **SF-3 is fixed, not open** (corrected above). Proved by disabling the handler: the test fails;
+  restored, it passes.
+- **A payment stranded between the two commits reaches a person.** `record_external_payment` commits
+  the event as `MATCHED` and then applies it in a second transaction. If the process dies, or
+  `record_payment` refuses, in between, a redelivery returns the stored event without re-applying
+  it. That is the at-most-once ordering pitfall #36 recommends for money, and it is safe here only
+  because `MATCHED` counts as unresolved: it is in `_UNRESOLVED_PAYMENT_STATUSES` (the
+  reconciliation queue) and `_UNSETTLED_PAYMENT_EVENTS` (the admin hub). Nothing needs to change, but
+  the dependency is real: removing `MATCHED` from either list would turn this into a silent failure.
+- **Order numbers.** `_generate_order_number` reads the highest suffix and adds one, which is a
+  read-then-write, but `uq_store_orders_org_number` plus the savepoint retry in
+  `_flush_with_unique_number` settles a collision. Pitfall #27 is met by the constraint, not a lock.
+- **`apply_payment_event`** still locks the event row and marks it applied in the same commit as the
+  payment (SF-9), and the currency guard (SF-4) is intact.
+
+### Still open
+
+Nothing new. The `SF-` prefix is still shared with the security-review track (see Pass 5); that is an
+owner call.
+
+**Completion gate (pass 6):** no code changed. Storefront and PayPal tests: see the PROGRESS entry.
+
+---
+
 ## Pass 5 (2026-09-09) — concurrency, and the ratchet that did not cover this module
 
 First Tier A re-run since pass 2 (passes 3 and 4 were Tier B only). The module
@@ -486,7 +524,14 @@ would be echoed verbatim to an anonymous caller.
 for the existing message is unchanged — `safe_error_detail` passes `ValueError`
 text through unless it contains SQL, file paths, or tracebacks.
 
-### SF-3 — NIT — Payment-event dedup is check-then-insert — OPEN
+### SF-3 — NIT — Payment-event dedup is check-then-insert — ✅ FIXED (found fixed 2026-11-02; this entry was stale)
+
+> **Pass 6 correction.** The handler this entry said was missing exists: `record_external_payment`
+> now catches the `IntegrityError` from the `(org, provider, external_id)` unique key, rolls
+> back, re-reads and returns the winning row, and never applies it a second time. It landed
+> on 2026-10-06 and the entry was never updated. Guarded by
+> `test_paypal_backfill.py::test_a_concurrent_duplicate_returns_the_row_that_won`, which fails
+> when the handler is disabled. The original text follows unchanged for the record.
 
 **What:** `record_external_payment` (`storefront_service.py:2138`) SELECTs for an
 existing `(org, provider, external_id)` row before inserting. Two concurrent

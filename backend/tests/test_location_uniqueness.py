@@ -92,8 +92,11 @@ async def test_explicit_null_building_is_checked_for_duplicates():
 
     db.commit.assert_not_awaited()
     # The query must have checked the *new* (null) scope, not the old one.
-    dup_query = str(db.execute.await_args.args[0])
-    assert "building IS NULL" in dup_query
+    # No building is scoped through building_key, COALESCE(building, ''), the
+    # column the database's unique key is built on (LOC-41).
+    statement = db.execute.await_args.args[0]
+    assert "locations.building_key =" in str(statement)
+    assert statement.compile().params["building_key_1"] == ""
 
 
 async def test_explicit_null_building_with_no_conflict_clears_it():

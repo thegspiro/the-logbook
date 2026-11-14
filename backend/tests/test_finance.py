@@ -14,6 +14,7 @@ from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams
+from app.models.document import Document
 from app.models.finance import (
     ApprovalEntityType,
     ApprovalStepStatus,
@@ -1800,6 +1801,11 @@ class TestPurchaseRequestService:
         received = await service.mark_pr_received(pr.id, org_id)
         assert received.status == PurchaseRequestStatus.RECEIVED
 
+        # Payment needs a receipt on file (owner decision 2026-11-01).
+        receipt = Document(organization_id=org_id, name="Receipt", file_name="r.pdf")
+        db_session.add(receipt)
+        await db_session.flush()
+        received.receipt_document_id = receipt.id
         paid = await service.mark_pr_paid(pr.id, org_id, actual_amount=4800.00)
         assert paid.status == PurchaseRequestStatus.PAID
         assert float(paid.actual_amount) == 4800.00

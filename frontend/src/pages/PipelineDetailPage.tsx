@@ -62,6 +62,7 @@ import {
   phaseHasNoActiveRequirements,
 } from '../utils/pipelineProgress';
 import { checklistClaimedIds, checklistDoneIds } from '../utils/checklistItems';
+import { compareMilestones, describeRecipients, describeTrigger } from '../utils/milestoneSummary';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ENROLLMENT_STATUSES } from '../types/training';
 import type {
@@ -79,6 +80,7 @@ import type {
   RequirementProgressUpdate,
 } from '../types/training';
 import { useTablist } from '../hooks/useTablist';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 // Format a calendar-date-only value (e.g. the recert deadline "2028-03-30")
 // without a timezone shift: build it at local midnight from its Y-M-D parts so
@@ -295,7 +297,14 @@ const RequirementList: React.FC<{
                 )}
                 <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
                   {pr.requirement?.required_hours && <span>{pr.requirement.required_hours}h required</span>}
-                  {pr.requirement?.required_shifts && <span>{pr.requirement.required_shifts} shifts</span>}
+                  {pr.requirement?.required_shifts && (
+                    <span>
+                      {pr.requirement.required_shifts}{' '}
+                      {pr.requirement.requirement_type === 'evaluated_shifts' ? 'evaluated shifts' : 'shifts'}
+                    </span>
+                  )}
+                  {pr.requirement?.required_transports && <span>{pr.requirement.required_transports} transports</span>}
+                  {pr.requirement?.required_refusals && <span>{pr.requirement.required_refusals} refusals</span>}
                   {pr.requirement?.checklist_items && <span>{pr.requirement.checklist_items.length} items</span>}
                   {pr.requirement?.recency_days != null && <span>within last {pr.requirement.recency_days}d</span>}
                   {pr.requirement?.required_courses?.length ? (
@@ -655,7 +664,7 @@ const EnrollModal: React.FC<{
 // Requirement types whose progress is a numeric accrual (log a value); all
 // other types (courses, certification, checklist, knowledge test, skills) are
 // completed by setting status.
-const NUMERIC_TYPES = new Set(['hours', 'shifts', 'calls', 'courses']);
+const NUMERIC_TYPES = new Set(['hours', 'shifts', 'calls', 'courses', 'evaluated_shifts', 'transports', 'refusals']);
 
 // Requirement types an officer scores by entering a percentage; pass/fail is
 // derived from the requirement's passing_score. Groundwork for a fuller
@@ -667,6 +676,12 @@ function requirementTarget(req?: TrainingRequirementEnhanced): { value: number; 
   if (req.requirement_type === 'hours' && req.required_hours) return { value: req.required_hours, label: 'hours' };
   if (req.requirement_type === 'shifts' && req.required_shifts) return { value: req.required_shifts, label: 'shifts' };
   if (req.requirement_type === 'calls' && req.required_calls) return { value: req.required_calls, label: 'calls' };
+  if (req.requirement_type === 'evaluated_shifts' && req.required_shifts)
+    return { value: req.required_shifts, label: 'evaluated shifts' };
+  if (req.requirement_type === 'transports' && req.required_transports)
+    return { value: req.required_transports, label: 'transports' };
+  if (req.requirement_type === 'refusals' && req.required_refusals)
+    return { value: req.required_refusals, label: 'refusals' };
   if (req.requirement_type === 'courses' && req.required_courses?.length)
     return { value: req.required_courses.length, label: 'courses' };
   return null;
@@ -1814,7 +1829,7 @@ const PipelineDetailPage: React.FC = () => {
             <>
               <button
                 onClick={() => window.open(`/training/print/program?id=${programId}`, '_blank')}
-                className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm print:hidden"
+                className="btn-secondary flex items-center space-x-1 text-sm print:hidden"
               >
                 <Printer className="h-4 w-4" />
                 <span>Print</span>
@@ -1837,7 +1852,7 @@ const PipelineDetailPage: React.FC = () => {
               {canManage && (
                 <button
                   onClick={() => setShowEditProgram(true)}
-                  className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+                  className="btn-secondary flex items-center space-x-1 text-sm"
                 >
                   <Pencil className="h-4 w-4" />
                   <span>Edit</span>
@@ -1858,7 +1873,7 @@ const PipelineDetailPage: React.FC = () => {
                     void handleDuplicate();
                   }}
                   disabled={isDuplicating}
-                  className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm disabled:opacity-50"
+                  className="btn-secondary flex items-center space-x-1 text-sm"
                 >
                   <Copy className="h-4 w-4" />
                   <span>{isDuplicating ? 'Copying...' : 'Duplicate'}</span>
@@ -1868,7 +1883,7 @@ const PipelineDetailPage: React.FC = () => {
                 <button
                   onClick={() => void confirmDeleteProgram()}
                   title="Delete pipeline"
-                  className="flex items-center space-x-1 rounded-lg px-3 py-2 text-sm text-red-700 hover:bg-red-500/10 dark:text-red-400"
+                  className="btn-secondary flex items-center space-x-1 text-sm"
                 >
                   <Trash2 className="h-4 w-4" />
                   <span>Delete</span>
@@ -1879,7 +1894,7 @@ const PipelineDetailPage: React.FC = () => {
         />
 
         {/* Stats Cards */}
-        <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatGrid columns={4} gap={4} className="mb-8">
           <div className="bg-theme-surface rounded-lg p-4">
             <div className="text-theme-text-muted mb-1 flex items-center space-x-2">
               <Layers className="h-4 w-4" />
@@ -1913,7 +1928,7 @@ const PipelineDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-2xl font-bold">{enrollments.length}</p>
             </div>
           )}
-        </div>
+        </StatGrid>
 
         {noActiveRequirements && (
           <div className="mb-6">
@@ -2152,7 +2167,7 @@ const PipelineDetailPage: React.FC = () => {
                 <div className="space-y-2">
                   {milestones
                     .slice()
-                    .sort((a, b) => a.completion_percentage_threshold - b.completion_percentage_threshold)
+                    .sort(compareMilestones)
                     .map((m) => (
                       <div
                         key={m.id}
@@ -2161,8 +2176,12 @@ const PipelineDetailPage: React.FC = () => {
                         <div className="min-w-0">
                           <p className="text-theme-text-primary truncate text-sm">{m.name}</p>
                           <p className="text-theme-text-muted text-xs">
-                            Triggers at {Math.round(m.completion_percentage_threshold)}%
+                            {describeTrigger(
+                              m,
+                              (m.items ?? []).map((item) => item.name || 'a removed course or test')
+                            )}
                           </p>
+                          {canManage && <p className="text-theme-text-muted text-xs">{describeRecipients(m)}</p>}
                         </div>
                         {canManage && (
                           <div className="flex shrink-0 items-center gap-0.5">

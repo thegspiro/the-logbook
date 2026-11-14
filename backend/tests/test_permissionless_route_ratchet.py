@@ -39,7 +39,17 @@ BASELINE = pathlib.Path(__file__).with_name("permissionless_route_baseline.txt")
 
 ROUTE_METHODS = {"get", "post", "put", "patch", "delete"}
 AUTH_DEPS = {"get_current_user", "get_current_active_user", "get_current_user_optional"}
-PERMISSION_DEPS = {"require_permission", "require_all_permissions", "require_role"}
+PERMISSION_DEPS = {
+    "require_permission",
+    "require_all_permissions",
+    "require_role",
+    # Per-applicant access (app/api/prospect_access.py): a permission, or an
+    # assignment to the applicant, which is a grant a coordinator made.
+    "require_prospect_access",
+    "require_interview_access",
+    "require_pipeline_reader",
+    "require_view_all",
+}
 
 
 def _names(node):

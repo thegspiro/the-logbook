@@ -110,3 +110,21 @@ export function stackUnreadCount(
   const loaded = notifications.filter((n) => !n.read).length;
   return Math.max(loaded, serverCount ?? 0);
 }
+
+/**
+ * The one-line preview after "Latest:" for a collapsed stack.
+ *
+ * A stack is one category, and many senders reuse a single subject for it
+ * ("New Shift Assignment"), so the subject alone just repeats the stack's
+ * title. When every subject matches, the newest message says what actually
+ * changed; when they differ, the subject already names the item. Shared by
+ * the dashboard feed and the notification inbox so the two read the same.
+ */
+export function stackPreview(notifications: readonly NotificationLogRecord[]): string {
+  const newest = notifications[0];
+  if (!newest) return '';
+  const subject = newest.subject || 'Notification';
+  const sameSubject = notifications.every((n) => (n.subject ?? '') === (newest.subject ?? ''));
+  const message = newest.message?.trim();
+  return sameSubject && message ? message : subject;
+}

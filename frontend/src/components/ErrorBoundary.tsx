@@ -8,6 +8,7 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { errorTracker } from '../services/errorTracking';
 import { sanitizePath } from '../services/errorReporting';
+import { isChunkLoadError } from '../utils/chunkLoadError';
 
 interface Props {
   children: ReactNode;
@@ -26,16 +27,6 @@ interface State {
 
 /** Enough of the component stack to name the failing component and its parents. */
 export const MAX_COMPONENT_STACK_LENGTH = 2000;
-
-function isChunkLoadError(error: Error): boolean {
-  const msg = error.message.toLowerCase();
-  return (
-    msg.includes('failed to fetch dynamically imported module') ||
-    msg.includes('loading chunk') ||
-    msg.includes('loading css chunk') ||
-    msg.includes('importing a module script failed')
-  );
-}
 
 function sanitizeDiagnosticUrl(href: string): string {
   const url = new URL(href, window.location.origin);

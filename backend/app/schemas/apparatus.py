@@ -7,7 +7,7 @@ Request and response schemas for apparatus-related endpoints.
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Literal, Optional, Sequence
 
 from pydantic import (
     BaseModel,
@@ -1553,6 +1553,11 @@ class ApparatusListFilters(BaseModel):
     year_max: Optional[int] = None
     make: Optional[str] = None
     search: Optional[str] = None  # Search in unit_number, name, vin
+    # The dashboard's fleet-readiness tiles link here with these, so each
+    # must select exactly the rows its tile counted (dashboard.py).
+    service_status: Optional[Literal["unavailable"]] = None
+    has_deficiency: Optional[bool] = None
+    inspection: Optional[Literal["overdue"]] = None
 
 
 class PaginatedApparatusList(BaseModel):

@@ -90,6 +90,17 @@ naming the details row; the row click still works.
 error (its error type and the first part of its id, "View details of …" / "Hide details of …") and is 44px
 on a touch screen. The existing test was updated to the new name.
 
+### W75-5 — LOW — Integration connect, update and disconnect were audited without an IP — ✅ FIXED (2026-11-06)
+
+Read from code, after the pass: the `integration.connected`,
+`integration.updated` and `integration.disconnected` rows were written with no
+`ip_address` or `user_agent`, so the audit log showed who changed a connection
+but not from where.
+
+**Fix:** `app/api/v1/endpoints/integrations.py` passes `get_client_ip(request)`
+and the request's user agent on all three rows.
+`test_integrations_lifecycle_integration.py` checks both columns on each row.
+
 ## Checklist
 
 | Section                 | Result                                                         |

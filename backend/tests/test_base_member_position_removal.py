@@ -21,6 +21,7 @@ from app.api.v1.endpoints.users import (
     remove_role_from_user,
 )
 from app.models.user import Organization, Role, User, UserStatus, user_roles
+from tests.fake_request import fake_request
 
 
 class TestRule:
@@ -121,6 +122,7 @@ class TestRemovalEndpoint:
                 role_id=uuid.UUID(member_role.id),
                 db=db_session,
                 current_user=officer,
+                request=fake_request(),
             )
 
         assert exc.value.status_code == 400
@@ -134,6 +136,7 @@ class TestRemovalEndpoint:
             role_id=uuid.UUID(driver.id),
             db=db_session,
             current_user=officer,
+            request=fake_request(),
         )
 
         assert await _held_slugs(db_session, member) == ["member"]
@@ -146,6 +149,7 @@ class TestRemovalEndpoint:
             role_id=uuid.UUID(member_role.id),
             db=db_session,
             current_user=officer,
+            request=fake_request(),
         )
 
         assert "member" not in await _held_slugs(db_session, member)

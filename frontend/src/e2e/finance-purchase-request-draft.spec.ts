@@ -125,6 +125,34 @@ test.describe('purchase request draft', () => {
     await expect(page.getByPlaceholder('Brief title for the purchase')).toHaveValue('Lad');
   });
 
+  test('still asks before leaving when the entries were typed before the fiscal years arrived', async ({ page }) => {
+    // The active fiscal year is selected when the options arrive. That used to
+    // reset the form with the member's current entries as its new defaults,
+    // so whatever they had typed by then counted as unchanged and neither
+    // leave warning fired. The two tests around this one raced the same
+    // response, which is why they failed on some runs and not others; here
+    // the options are held back until after the typing, every time.
+    let releaseOptions: () => void = () => undefined;
+    const optionsHeld = new Promise<void>((resolve) => {
+      releaseOptions = resolve;
+    });
+    await signIn(page, { permissions: ['finance.request'] });
+    await stubFinance(page);
+    await page.route('**/api/v1/finance/fiscal-years/options', async (route) => {
+      await optionsHeld;
+      await route.fulfill(json([FISCAL_YEAR]));
+    });
+    await page.goto('/finance/purchase-requests/new');
+    await expect(page.getByRole('heading', { name: 'New Purchase Request' })).toBeVisible();
+
+    await page.getByPlaceholder('Brief title for the purchase').fill('Lad');
+    releaseOptions();
+    await expect(page.getByLabel('Fiscal Year *')).toHaveValue(FISCAL_YEAR.id);
+
+    await page.getByRole('button', { name: 'Close' }).click();
+    await expect(page.getByRole('dialog').getByText('Leave without saving?')).toBeVisible();
+  });
+
   test('warns before the tab is closed or reloaded with unsaved entries', async ({ page }) => {
     await openForm(page);
     await page.getByPlaceholder('Brief title for the purchase').fill('Lad');

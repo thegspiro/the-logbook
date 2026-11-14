@@ -13,6 +13,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.document import Document
 from app.models.finance import (
     ApprovalEntityType,
     Budget,
@@ -84,6 +85,18 @@ async def dept(db_session: AsyncSession):
 async def _deactivate(dept) -> None:
     dept["gear"].is_active = False
     await dept["db"].flush()
+
+
+async def _attach_receipt(db, record) -> None:
+    """Paying a request or issuing a check needs a receipt on file (owner
+    decision 2026-11-01)."""
+    receipt = Document(
+        organization_id=record.organization_id, name="Receipt", file_name="r.pdf"
+    )
+    db.add(receipt)
+    await db.flush()
+    record.receipt_document_id = receipt.id
+    await db.flush()
 
 
 def _pr_fields(dept, budget_id) -> dict:
@@ -301,6 +314,7 @@ class TestRequestsInFlightFinish:
 
         await service.manual_approve(PR, pr.id, dept["treasurer"].id, org_id=org_id)
         assert pr.status == PurchaseRequestStatus.APPROVED
+        await _attach_receipt(db, pr)
         await service.mark_pr_paid(pr.id, org_id, acted_by=dept["treasurer"].id)
         assert pr.status == PurchaseRequestStatus.PAID
         line = dept["gear_line"]
@@ -322,6 +336,7 @@ class TestRequestsInFlightFinish:
 
         await service.manual_approve(CR, cr.id, dept["treasurer"].id, org_id=org_id)
         assert cr.status == CheckRequestStatus.APPROVED
+        await _attach_receipt(db, cr)
         await service.issue_check(cr.id, org_id, "1001", acted_by=dept["treasurer"].id)
         assert cr.status == CheckRequestStatus.ISSUED
         line = dept["gear_line"]

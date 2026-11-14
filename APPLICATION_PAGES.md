@@ -173,6 +173,9 @@ Complete reference of all pages in the application, organized by module.
 | `/members`                  | Member Directory        | Authenticated |
 | `/members/:userId`          | Member Profile          | Authenticated |
 | `/members/:userId/training` | Member Training History | Authenticated |
+| `/members/my-crew`          | My Crew                 | Authenticated |
+
+> **My Crew (`/members/my-crew`)** _(added 2026-11-04)_. The members the signed-in member supervises today, by the dated Reports To assignments (owner decision 2026-11-01, crew views). Authenticated with no permission: the assignment is the grant, and the server lists only the caller's current crew (`GET /users/me/crew`). Each card shows the member's training standing from `GET /training/compliance-summary/{id}` and links to their training records; the page also lists the evaluations written about the crew (`GET /evaluations/crew`). The menu offers My Crew only to a member who supervises someone. Medical records and contact details are not part of crew access.
 
 > _(2026-08-04)_ **Member Profile** is authenticated-only, but two of its fields are not. Date of birth and emergency contacts are served only to `members.manage` holders and to the member themselves; the page hides the emergency-contacts section entirely for everyone else rather than rendering it empty. No organization setting can publish them — `contact_info_visibility` (email/phone/mobile) has no flag for either. The rest of the contact block is redacted against that setting, on the same terms as the member directory.
 
@@ -183,6 +186,7 @@ Requires `members.manage` permission. Drawn with the same two-level navigation a
 | Area         | `?tab=`          | Label                 | Additional Permission |
 | ------------ | ---------------- | --------------------- | --------------------- |
 | Roster       | `manage`         | Member Management     | —                     |
+| Roster       | `former`         | Former Members        | —                     |
 | Add & Import | `add`            | Add Member            | `users.create`        |
 | Add & Import | `import`         | Import Members        | `users.create`        |
 | Add & Import | `qualifications` | Import Qualifications | —                     |
@@ -190,14 +194,16 @@ Requires `members.manage` permission. Drawn with the same two-level navigation a
 
 A missing or unknown `?tab=`, or one the viewer lacks the permission for, opens Member Management.
 
+Member Management lists every member except the archived and dropped (voluntary or involuntary) ones; Former Members lists only those, with the same views and actions. Retired and on-leave members stay on Member Management.
+
 ### Members Admin Pages
 
 | URL                                  | Page                                  | Permission                                                                                                                                       |
 | ------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `/members/admin/edit/:userId`        | Admin Member Edit                     | `members.manage`                                                                                                                                 |
 | `/members/admin/history/:userId`     | Member Audit History                  | `members.manage`                                                                                                                                 |
-| `/members/admin/waivers`             | Waiver Management                     | `members.manage`                                                                                                                                 |
-| `/members/admin/id-cards`            | Member ID Cards                       | `members.manage_id_cards`                                                                                                                        |
+| `/members/admin/waivers`             | Waivers                               | `members.manage`                                                                                                                                 |
+| `/members/admin/id-cards`            | ID Cards                              | `members.manage_id_cards`                                                                                                                        |
 | `/members/admin/settings`            | Members Settings                      | `members.manage`, `settings.manage`, `settings.manage_contact_visibility`, `settings.edit`, `organization.update_settings` or `apparatus.manage` |
 | `/members/admin/settings/visibility` | Members Settings — Contact Visibility | `members.manage`, `settings.manage`, `settings.manage_contact_visibility` or `organization.update_settings`                                      |
 | `/members/admin/settings/ids`        | Members Settings — Membership IDs     | `members.manage`, `settings.edit` or `organization.update_settings`                                                                              |
@@ -252,9 +258,11 @@ A missing or unknown `?tab=`, or one the viewer lacks the permission for, opens 
 | --------------------------------------------- | ---------------------------- | ---------------------------------------------------- |
 | `/prospective-members`                        | Prospective Members Pipeline | `prospective_members.manage`                         |
 | `/prospective-members/settings`               | Pipeline Settings            | `prospective_members.manage`                         |
-| `/prospective-members/:applicantId/interview` | Applicant Interview          | `prospective_members.manage`                         |
+| `/prospective-members/:applicantId/interview` | Applicant Interview          | Authenticated                                        |
+| `/prospective-members/my-applicants`          | My Applicants                | Authenticated                                        |
 | `/prospective-members/sign-offs`              | Sign-offs                    | Authenticated                                        |
 | `/application-status/:token`                  | Public Application Status    | None (token-based; see the public-routes note above) |
+| `/application-form/:token`                    | Applicant Follow-up Form     | None (token-based; see the public-routes note above) |
 
 > **Board view fetch size** _(2026-08-08)_: the kanban view requests `KANBAN_PAGE_SIZE` (**200**, the list endpoint's ceiling), not `DEFAULT_PAGE_SIZE` (25) — it groups applicants into stage columns client-side, so a page of 25 produced a board silently assembled from a fraction of the pipeline. Switching between board and table **refetches** rather than inheriting the other view's page. Past 200 the board renders a truncation notice naming the real total. Column headers count only the cards that loaded, so a stage on a truncated board can read low — the table view is the accurate one at that size.
 >
@@ -394,20 +402,33 @@ A missing or unknown `?tab=` opens Create Event.
 
 ### Member-Facing Pages
 
-| URL                                   | Page                                      | Permission        |
-| ------------------------------------- | ----------------------------------------- | ----------------- |
-| `/training`                           | My Training                               | Authenticated     |
-| `/training/my-training`               | My Training                               | Authenticated     |
-| `/training/submit`                    | Submit Training                           | Authenticated     |
-| `/training/record-crew`               | Record Crew Training                      | Authenticated     |
-| `/training/courses`                   | Course Library                            | Authenticated     |
-| `/training/programs`                  | Training Programs                         | Authenticated     |
-| `/training/programs/:programId`       | Program Detail                            | Authenticated     |
-| `/training/cohorts`                   | Course Cohorts                            | `training.manage` |
-| `/training/cohorts/:cohortId`         | Cohort Detail (class timeline + roster)   | `training.manage` |
-| `/training/my-skill-tests/:testId`    | My Skill Test Result (read-only)          | Authenticated     |
-| `/training/my-progress/:enrollmentId` | My Program Progress                       | Authenticated     |
-| `/training/approve/:token`            | Training Approval (officer credit review) | `training.manage` |
+| URL                                   | Page                                        | Permission        |
+| ------------------------------------- | ------------------------------------------- | ----------------- |
+| `/training`                           | My Training                                 | Authenticated     |
+| `/training/my-training`               | My Training                                 | Authenticated     |
+| `/training/submit`                    | Submit Training                             | Authenticated     |
+| `/training/record-crew`               | Record Crew Training                        | Authenticated     |
+| `/training/courses`                   | Course Library                              | Authenticated     |
+| `/training/programs`                  | Training Programs                           | Authenticated     |
+| `/training/programs/:programId`       | Program Detail                              | Authenticated     |
+| `/training/cohorts`                   | Course Cohorts                              | `training.manage` |
+| `/training/cohorts/:cohortId`         | Cohort Detail (class timeline + roster)     | Authenticated     |
+| `/training/my-skill-tests/:testId`    | My Skill Test Result (read-only)            | Authenticated     |
+| `/training/my-progress/:enrollmentId` | My Program Progress                         | Authenticated     |
+| `/training/approve/:token`            | Training Approval (officer credit review)   | `training.manage` |
+| `/attendance-waivers`                 | Attendance Waiver Requests (approver queue) | Authenticated     |
+| `/attendance-waivers/:id`             | Attendance Waiver Decision                  | Authenticated     |
+
+> **`/attendance-waivers` and `/attendance-waivers/:id` are the session waiver
+> request screens** _(2026-11-11)_. A member asks to be excused from a training
+> session that counts toward their attendance requirement from the event page;
+> the queue lists the requests the viewer may decide or has decided, and the
+> decision page is the one the approver's email opens. Neither route names a
+> permission: who decides is the positions the department chose in Training
+> Admin → Settings & Data → Session Waivers, the Chief and, failing both, the
+> training managers, and the API scopes the queue and answers 404 for a request
+> the viewer may not see. `?action=approve|deny` only pre-selects the choice; the
+> decision is a POST after a confirmation, because mail scanners open links.
 
 > **`/training/approve/:token` is the officer's review of a Training event's
 > credit** _(2026-09-29)_. When a Training event's session requires officer
@@ -419,6 +440,14 @@ A missing or unknown `?tab=` opens Create Event.
 > approval's organization. The link had no route before this, so the email
 > bounced officers to the dashboard. An expired link is replaced by reopening the
 > event's attendance and finalizing it again.
+
+> **`/training/cohorts/:cohortId` is open to a cohort's own roster**
+> _(2026-11-01)_. A member reaches it from **My classes** on My Training and sees
+> the class timeline only — no roster, classmates, progress or officer actions.
+> The API is the authority: it returns 404 to a member who is not on the roster
+> and `members: []` with no attendance counts to one who is, so the route gates
+> on sign-in and the Training module only. A `training.manage` holder gets the
+> full management page at the same URL.
 
 > **`/training/my-progress/:enrollmentId` is where every training notification
 > now lands** _(2026-08-09)_. All eight `action_url`s previously pointed at
@@ -742,27 +771,30 @@ only from a row of cards on the member-facing `/scheduling` page — so an
 administrator opened the schedule to find the settings, and the Administration
 section had no scheduling entry at all. That row is gone.
 
-| URL                                            | Page                           | Permission          |
-| ---------------------------------------------- | ------------------------------ | ------------------- |
-| `/scheduling/admin`                            | Scheduling Administration hub  | `scheduling.manage` |
-| `/scheduling/admin/planning`                   | Shift Planning — staffing gaps | `scheduling.manage` |
-| `/scheduling/admin/planning/templates`         | Shift Templates Management     | `scheduling.manage` |
-| `/scheduling/admin/planning/patterns`          | Shift Pattern Management       | `scheduling.manage` |
-| `/scheduling/admin/closeout`                   | Shift Close-Out — the queue    | `scheduling.manage` |
-| `/scheduling/admin/history-import`             | Shift History Import           | `scheduling.manage` |
-| `/scheduling/admin/history-import/:importId`   | Shift History Import — review  | `scheduling.manage` |
-| `/scheduling/admin/reports`                    | Scheduling Reports             | `scheduling.manage` |
-| `/scheduling/admin/platoons`                   | Platoon Management             | `scheduling.manage` |
-| `/scheduling/admin/positions`                  | Position Qualification Roster  | `scheduling.manage` |
-| `/scheduling/admin/settings`                   | `?tab=` → the section's route  | `scheduling.manage` |
-| `/scheduling/admin/settings/general`           | Scheduling Settings — General  | `scheduling.manage` |
-| `/scheduling/admin/settings/apparatus`         | Settings — Apparatus           | `scheduling.manage` |
-| `/scheduling/admin/settings/platoons`          | Settings — Platoons            | `scheduling.manage` |
-| `/scheduling/admin/settings/eligibility`       | Settings — Eligibility         | `scheduling.manage` |
-| `/scheduling/admin/settings/notifications`     | Settings — Notifications       | `scheduling.manage` |
-| `/scheduling/admin/settings/shift-reports`     | Settings — Shift Reports       | `scheduling.manage` |
-| `/scheduling/admin/settings/outside-apparatus` | Settings — Outside Apparatus   | `scheduling.manage` |
-| `/scheduling/checkin`                          | Shift Check-In                 | Authenticated       |
+| URL                                                                  | Page                           | Permission          |
+| -------------------------------------------------------------------- | ------------------------------ | ------------------- |
+| `/scheduling/admin`                                                  | Scheduling Administration hub  | `scheduling.manage` |
+| `/scheduling/admin/planning`                                         | Shift Planning — staffing gaps | `scheduling.manage` |
+| `/scheduling/admin/planning/templates`                               | Shift Templates Management     | `scheduling.manage` |
+| `/scheduling/admin/planning/patterns`                                | Shift Pattern Management       | `scheduling.manage` |
+| `/scheduling/admin/closeout`                                         | Shift Close-Out — the queue    | `scheduling.manage` |
+| `/scheduling/admin/history-import`                                   | Shift History Import           | `scheduling.manage` |
+| `/scheduling/admin/history-import/:importId`                         | Shift History Import — review  | `scheduling.manage` |
+| `/scheduling/admin/reports`                                          | Scheduling Reports             | `scheduling.manage` |
+| `/scheduling/admin/platoons`                                         | Platoon Management             | `scheduling.manage` |
+| `/scheduling/admin/positions`                                        | Position Qualification Roster  | `scheduling.manage` |
+| `/scheduling/admin/settings`                                         | `?tab=` → the section's route  | `scheduling.manage` |
+| `/scheduling/admin/settings/general`                                 | Scheduling Settings — General  | `scheduling.manage` |
+| `/scheduling/admin/settings/apparatus`                               | Settings — Apparatus           | `scheduling.manage` |
+| `/scheduling/admin/settings/platoons`                                | Settings — Platoons            | `scheduling.manage` |
+| `/scheduling/admin/settings/eligibility`                             | Settings — Eligibility         | `scheduling.manage` |
+| `/scheduling/admin/settings/notifications`                           | Settings — Notifications       | `scheduling.manage` |
+| `/scheduling/admin/settings/shift-reports`                           | Settings — Shift Reports       | `scheduling.manage` |
+| `/scheduling/admin/settings/outside-apparatus`                       | Settings — Outside Apparatus   | `scheduling.manage` |
+| `/scheduling/checkin`                                                | Shift Check-In                 | Authenticated       |
+| `/scheduling/shift-reports/:shiftId/evaluations/:memberId/:scopeKey` | Shift Evaluation               | Authenticated       |
+| `/scheduling/outside-shifts/:entryId/evaluations/:scopeKey`          | Outside Shift Evaluation       | Authenticated       |
+| `/shift-evaluation/:token`                                           | Preceptor Shift Evaluation     | None (token-based)  |
 
 > **The old URLs are gone, with no redirect.** `/scheduling/templates`,
 > `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/platoons`,
@@ -1155,11 +1187,12 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Elections
 
-| URL                   | Page              | Permission         |
-| --------------------- | ----------------- | ------------------ |
-| `/elections`          | Elections List    | Authenticated      |
-| `/elections/:id`      | Election Detail   | Authenticated      |
-| `/elections/settings` | Election Settings | `elections.manage` |
+| URL                     | Page                        | Permission         |
+| ----------------------- | --------------------------- | ------------------ |
+| `/elections`            | Elections List              | Authenticated      |
+| `/elections/:id`        | Election Detail             | Authenticated      |
+| `/elections/settings`   | Election Settings           | `elections.manage` |
+| `/elections/attendance` | Election Meeting Attendance | `elections.manage` |
 
 > **Voiding a paper-ballot batch** used to ask for its reason with
 > `window.prompt`, which a browser may suppress — and which silently dropped any
@@ -1170,13 +1203,28 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Minutes
 
-| URL                   | Page                         | Permission        |
-| --------------------- | ---------------------------- | ----------------- |
-| `/minutes`            | Minutes List                 | Authenticated     |
-| `/minutes/attendance` | Meeting Attendance Dashboard | `meetings.manage` |
-| `/minutes/outlines`   | Meeting Outlines             | `minutes.manage`  |
-| `/minutes/settings`   | Minutes Settings             | `minutes.manage`  |
-| `/minutes/:minutesId` | Minutes Detail               | Authenticated     |
+| URL                                   | Page                                     | Permission        |
+| ------------------------------------- | ---------------------------------------- | ----------------- |
+| `/minutes`                            | Minutes List                             | Authenticated     |
+| `/minutes/attendance`                 | Meeting Attendance Dashboard             | `meetings.manage` |
+| `/minutes/attendance/waiver-settings` | Meeting Waiver Request Settings          | `meetings.manage` |
+| `/minutes/outlines`                   | Meeting Outlines                         | `minutes.manage`  |
+| `/minutes/settings`                   | Minutes Settings                         | `minutes.manage`  |
+| `/minutes/:minutesId`                 | Minutes Detail                           | Authenticated     |
+| `/meetings/waiver-requests`           | Meeting Waiver Requests (approver queue) | Authenticated     |
+| `/meetings/waiver-requests/:id`       | Meeting Waiver Decision                  | Authenticated     |
+
+> **`/meetings/waiver-requests` and `/meetings/waiver-requests/:id` are the
+> business-meeting waiver request screens** _(2026-11-13)_. They are the session
+> waiver screens above, bound to the meeting workflow. A member asks to be
+> excused from a business meeting on its event page, and answers an officer's
+> question or confirms a moved meeting on that same card. Neither route names a
+> permission: who decides is the positions chosen in the meeting waiver settings,
+> the Chief and President, then the Secretary and, failing both, the members who
+> manage meetings, and the API scopes the queue and answers 404 for a request the
+> viewer may not see. The paths are the backend's `decider_path`, which the
+> deciders' emails link to. The settings live under the attendance dashboard and
+> need `meetings.manage`, the permission the API saves the policy under.
 
 ---
 
@@ -1187,6 +1235,32 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/medical-screening` | Medical Screening | `medical_screening.view` |
 
 > Compliance dashboard for tracking member and prospect medical screenings (physicals, drug tests, fitness assessments, psychological evaluations). Includes screening requirements configuration, individual records management, compliance status per member, and expiring screenings alerts. Availability is controlled per organization via the `enabled_modules` setting in Organization/Admin Settings.
+
+---
+
+## History _(2026-11-03)_
+
+| URL                               | Page                       | Permission                            |
+| --------------------------------- | -------------------------- | ------------------------------------- |
+| `/history`                        | History home               | Authenticated                         |
+| `/history/people`                 | Past members               | Authenticated                         |
+| `/history/people/new`             | Add a past member          | `history.manage`                      |
+| `/history/people/:personId`       | Past member                | Authenticated                         |
+| `/history/people/:personId/edit`  | Edit a past member         | `history.manage`                      |
+| `/history/people/:personId/merge` | Merge two records          | `history.manage`                      |
+| `/history/import`                 | Import a roster            | `history.manage`                      |
+| `/history/media`                  | Photos and media           | Authenticated                         |
+| `/history/media/upload`           | Upload photos and media    | `history.manage`                      |
+| `/history/media/:mediaId`         | Photo or media item        | Authenticated                         |
+| `/history/media/:mediaId/edit`    | Edit a photo or media item | `history.manage`                      |
+| `/history/albums`                 | Albums                     | Authenticated                         |
+| `/history/albums/:albumId`        | Album                      | Authenticated                         |
+| `/history/import/:importId`       | Review a roster import     | `history.manage`                      |
+| `/history/honor-roll`             | Honor Roll                 | Authenticated                         |
+| `/history/clearance/:requestId`   | Clearance review           | Authenticated                         |
+| `/history/settings`               | Titles and clearance list  | `history.manage` or `settings.manage` |
+
+> The department archive, off by default and turned on under Settings → Modules. Any signed-in member reads what is published to members; the server decides what each caller receives, so a member's response never carries a past member's birth date, addresses, verification sources or research notes, and each memorial detail (date of death, circumstances, resting place) only where its own visibility allows. `history.view` reads drafts and research without editing, `history.manage` creates and edits, and `history.publish` publishes. Publishing to the public needs the department's clearance list — each step a position, any one holder of which clears it — to have cleared the record's latest substantial revision; with no list, a publisher publishes directly. The review page opens for the archive's keepers, the member who submitted the record and holders of a step's position. Public records are stored now and appear on the department's website once the public feed ships. A roster CSV is imported through a reviewed draft: each row is matched to an existing record (which only gains the fields it is missing), mapped to a member account, created as a new draft record, or skipped, and no login account is ever created. Merging two records of one person keeps one, moves the other's service, family links and change history to it, and forwards the removed record's address. Photos, audio and video keep their original exactly as uploaded, downloadable by `history.manage` only; everyone else sees a photo as a re-encoded copy with its location and camera data stripped, and audio and video as a copy with their recording-device tags and data tracks removed. TIFF is not accepted. A tagged person's photo-use answer is shown to the archive's keepers as a warning, never a block.
 
 ---
 
@@ -1265,21 +1339,30 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Reports
 
-| URL              | Page          | Permission     |
-| ---------------- | ------------- | -------------- |
-| `/reports`       | Reports       | `reports.view` |
-| `/reports/saved` | Saved Reports | `reports.view` |
+| URL                                          | Page                        | Permission                                                            |
+| -------------------------------------------- | --------------------------- | --------------------------------------------------------------------- |
+| `/reports`                                   | Reports                     | `reports.view`                                                        |
+| `/reports/saved`                             | Saved Reports               | `reports.view`                                                        |
+| `/reports/evaluations`                       | Templates & periods (setup) | `evaluations.configure` or `evaluations.manage`                       |
+| `/reports/evaluations/templates/:templateId` | Evaluation Template Builder | `evaluations.configure`                                               |
+| `/reports/evaluations/conduct`               | Evaluations I conduct       | `evaluations.conduct`, `evaluations.view_all` or `evaluations.manage` |
+| `/reports/evaluations/mine`                  | My evaluations              | Authenticated                                                         |
+| `/reports/evaluations/:evaluationId`         | Evaluation                  | Authenticated                                                         |
+
+> **Member Evaluations** _(added 2026-10-31)_. Templates for each member class and status (sections, evaluation tools with behavior descriptions, data blocks with scoring rules, rank-triggered officer sections, and a forward-only workflow with deadlines) and the review periods they are completed for. Drafting, the data snapshot, the self-evaluation and evaluator parts and calibration _(added 2026-11-01)_ run from **Evaluations**; a member reads their own on **My Evaluations**, with their figures for the current period measured live. An evaluation's own page is open to any signed-in member because the server decides access: it admits only the evaluation's member, its evaluator, approvers at an open step and holders of the view-all or manage grants, and answers anyone else as not found. Signing, the final PDF, emails, bulk drafting, amendment, the member's response and calibration flags shipped 2026-11-02. _(2026-11-03)_ The navigation carries a single **Evaluations** entry for every member, opening My evaluations; the conduct list and Templates & periods are reached from the section strip at the top of each evaluation page, shown only to holders of their grants. The conduct list is labelled All evaluations for `view_all` and `manage` holders. Reports no longer highlights on evaluation pages. Templates & periods shows a Getting started checklist until the first evaluation is drafted, and a new template can start from a ready-made Annual Member Evaluation or Probationary Check-in. The template builder's Preview tab renders the unsaved form with sample figures, or a chosen member's real figures for builders who also hold `evaluations.view_all` (audited). A form can be **graded by section**: each section's weighted ratings give a score on the 1–5 scale and a grade from the form's grade ranges, the sections' weights give the overall, and the evaluator may change a grade with a reason; the evaluation screen, the preview and the PDF show both.
 
 ---
 
 ## Integrations
 
-| URL                            | Page                                                             | Permission        |
-| ------------------------------ | ---------------------------------------------------------------- | ----------------- |
-| `/integrations`                | Integrations                                                     | `settings.manage` |
-| `/integrations/:integrationId` | Integration detail — health, last error, run history, Retry Sync | `settings.manage` |
-| `/claude/authorize`            | Connect Claude (consent)                                         | Authenticated     |
-| `/claude/connections`          | My Claude connections                                            | Authenticated     |
+| URL                                         | Page                                                             | Permission                       |
+| ------------------------------------------- | ---------------------------------------------------------------- | -------------------------------- |
+| `/integrations`                             | Integrations                                                     | `settings.manage`                |
+| `/integrations/:integrationId`              | Integration detail — health, last error, run history, Retry Sync | `settings.manage`                |
+| `/integrations/historical-import`           | Historical Data Import — upload a previous system's export       | `integrations.historical_import` |
+| `/integrations/historical-import/:importId` | Historical Data Import — columns, sorting, shift batches, log    | `integrations.historical_import` |
+| `/claude/authorize`                         | Connect Claude (consent)                                         | Authenticated                    |
+| `/claude/connections`                       | My Claude connections                                            | Authenticated                    |
 
 > _(2026-10-06)_ **Claude (MCP) member sign-in.** `/claude/authorize` is the OAuth consent screen the backend's `/api/oauth/authorize` sends a member to (with `?request=`); `/claude/connections` lists and ends the member's own connections. Both need only a session and the Integrations module: what a connection can reach is bounded server-side by the member's own permissions. See `wiki/Integration-Claude-MCP.md`.
 
@@ -1297,6 +1380,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/finance/my-budgets`                 | My Budgets                 | Authenticated                                                            |
 | `/finance/budget-requests`            | Next Year's Budget         | Authenticated                                                            |
 | `/finance/budget-requests/review`     | Budget Requests (review)   | `finance.manage` or `finance.budget_review`                              |
+| `/finance/budget-amendments`          | Budget Amendments (queue)  | `finance.manage` or `finance.budget_review`                              |
 | `/finance/purchase-requests`          | Purchase Requests          | `finance.request`, `finance.view` or `finance.manage`                    |
 | `/finance/purchase-requests/new`      | New Purchase Request       | `finance.request` or `finance.manage`                                    |
 | `/finance/purchase-requests/:id`      | Purchase Request Detail    | `finance.request`, `finance.view` or `finance.manage`                    |
@@ -1307,6 +1391,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/finance/check-requests`             | Check Requests             | `finance.request`, `finance.view` or `finance.manage`                    |
 | `/finance/check-requests/new`         | New Check Request          | `finance.request` or `finance.manage`                                    |
 | `/finance/check-requests/:id`         | Check Request Detail       | `finance.request`, `finance.view` or `finance.manage`                    |
+| `/finance/my-dues`                    | My Dues                    | Authenticated                                                            |
 | `/finance/dues`                       | Dues                       | `finance.view`                                                           |
 | `/finance/reports`                    | Finance Reports            | `finance.view`                                                           |
 | `/finance/approvals`                  | Approvals                  | `finance.approve`                                                        |
@@ -1374,23 +1459,25 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Grants & Fundraising _(documented 2026-08-10)_
 
-| URL                              | Page                | Permission           |
-| -------------------------------- | ------------------- | -------------------- |
-| `/grants`                        | Grants Dashboard    | `fundraising.view`   |
-| `/grants/opportunities`          | Grant Opportunities | `fundraising.view`   |
-| `/grants/opportunities/new`      | New Opportunity     | `fundraising.manage` |
-| `/grants/opportunities/:id/edit` | Edit Opportunity    | `fundraising.manage` |
-| `/grants/applications`           | Grant Applications  | `fundraising.view`   |
-| `/grants/applications/new`       | New Application     | `fundraising.manage` |
-| `/grants/applications/:id`       | Grant Detail        | `fundraising.view`   |
-| `/grants/applications/:id/edit`  | Edit Application    | `fundraising.manage` |
-| `/grants/campaigns`              | Campaigns           | `fundraising.view`   |
-| `/grants/donors`                 | Donors              | `fundraising.view`   |
-| `/grants/donations`              | Donations           | `fundraising.view`   |
-| `/grants/donations/new`          | Record Donation     | `fundraising.manage` |
-| `/grants/pledges`                | Pledges             | `fundraising.view`   |
-| `/grants/events`                 | Fundraising Events  | `fundraising.view`   |
-| `/grants/reports`                | Fundraising Reports | `fundraising.view`   |
+| URL                                  | Page                | Permission           |
+| ------------------------------------ | ------------------- | -------------------- |
+| `/grants`                            | Grants Dashboard    | `fundraising.view`   |
+| `/grants/opportunities`              | Grant Opportunities | `fundraising.view`   |
+| `/grants/opportunities/new`          | New Opportunity     | `fundraising.manage` |
+| `/grants/opportunities/:id/edit`     | Edit Opportunity    | `fundraising.manage` |
+| `/grants/applications`               | Grant Applications  | `fundraising.view`   |
+| `/grants/applications/new`           | New Application     | `fundraising.manage` |
+| `/grants/applications/:id`           | Grant Detail        | `fundraising.view`   |
+| `/grants/applications/:id/edit`      | Edit Application    | `fundraising.manage` |
+| `/grants/campaigns`                  | Campaigns           | `fundraising.view`   |
+| `/grants/donors`                     | Donors              | `fundraising.view`   |
+| `/grants/donations`                  | Donations           | `fundraising.view`   |
+| `/grants/donations/new`              | Record Donation     | `fundraising.manage` |
+| `/grants/donations/:donationId/edit` | Edit Donation       | `fundraising.manage` |
+| `/grants/pledges`                    | Pledges             | `fundraising.view`   |
+| `/grants/events`                     | Fundraising Events  | `fundraising.view`   |
+| `/grants/zeffy`                      | Zeffy               | `fundraising.view`   |
+| `/grants/reports`                    | Fundraising Reports | `fundraising.view`   |
 
 ---
 
@@ -1439,16 +1526,17 @@ A missing or unknown `?tab=` opens Overview.
 
 ## Communications & Messaging _(documented 2026-08-10)_
 
-| URL                                 | Page                      | Permission                                                                                      |
-| ----------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------- |
-| `/messages`                         | Messages                  | Authenticated                                                                                   |
-| `/messages/:messageId`              | Message Detail            | Authenticated _(2026-08-26)_                                                                    |
-| `/communications/messages`          | Message Administration    | `notifications.manage`                                                                          |
-| `/communications/email-templates`   | Email Template Management | `settings.manage`                                                                               |
-| `/communications/member-emails`     | Member Emails & Texts     | any of `settings.manage`, `organization.update_settings`, `notifications.manage` _(2026-09-28)_ |
-| `/communications/photo-use-consent` | Photo Use Consent         | any of `users.view_consents`, `notifications.manage`, `members.manage`, `users.edit`            |
-| `/communications/suggestion-boxes`  | Suggestion Box Management | `suggestions.manage` _(2026-09-23)_                                                             |
-| `/suggestions`                      | Suggestions               | Authenticated _(2026-09-23)_                                                                    |
+| URL                                      | Page                      | Permission                                                                                      |
+| ---------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------- |
+| `/messages`                              | Messages                  | Authenticated                                                                                   |
+| `/messages/:messageId`                   | Message Detail            | Authenticated _(2026-08-26)_                                                                    |
+| `/communications/messages`               | Message Administration    | `notifications.manage`                                                                          |
+| `/communications/email-templates`        | Email Template Management | `settings.manage`                                                                               |
+| `/communications/member-emails`          | Member Emails & Texts     | any of `settings.manage`, `organization.update_settings`, `notifications.manage` _(2026-09-28)_ |
+| `/communications/member-emails/opt-outs` | Member Email Opt-Outs     | any of `settings.manage`, `organization.update_settings`, `notifications.manage` _(2026-11-05)_ |
+| `/communications/photo-use-consent`      | Photo Use Consent         | any of `users.view_consents`, `notifications.manage`, `members.manage`, `users.edit`            |
+| `/communications/suggestion-boxes`       | Suggestion Box Management | `suggestions.manage` _(2026-09-23)_                                                             |
+| `/suggestions`                           | Suggestions               | Authenticated _(2026-09-23)_                                                                    |
 
 > **Suggestions** _(2026-09-23)_ is where every member submits to the
 > department's suggestion boxes — named or anonymously, as each box allows —
@@ -1544,22 +1632,23 @@ A missing or unknown `?tab=` opens Overview.
 Print-optimized routes. They render a print layout rather than an app screen, and
 are opened from the corresponding module's list view.
 
-| URL                                     | Prints                  | Permission                                                     |
-| --------------------------------------- | ----------------------- | -------------------------------------------------------------- |
-| `/members/print-labels`                 | Member labels           | `members.manage` **OR** `members.manage_id_cards`              |
-| `/members/print-id-cards`               | Member ID cards         | `members.manage` **OR** `members.manage_id_cards`              |
-| `/members/:userId/id-card`              | Member ID card          | Authenticated                                                  |
-| `/members/scan`                         | Member badge scanner    | `users.view` **OR** `members.manage`                           |
-| `/prospective-members/print-labels`     | Applicant badges        | `prospective_members.view` **OR** `prospective_members.manage` |
-| `/inventory/print-labels`               | Inventory labels        | `inventory.manage`                                             |
-| `/inventory/storage-areas/print-labels` | Storage area labels     | `inventory.manage`                                             |
-| `/apparatus/print-labels`               | Apparatus labels        | `apparatus.view` **OR** `apparatus.manage`                     |
-| `/facilities/print-labels`              | Facility / room labels  | `facilities.view` **OR** `facilities.manage`                   |
-| `/training/print/member`                | Member training history | Authenticated                                                  |
-| `/training/print/program`               | Training program        | Authenticated                                                  |
-| `/training/print/compliance`            | Compliance matrix       | `training.manage`                                              |
-| `/scheduling/checkin/print`             | Shift check-in sheet    | Authenticated                                                  |
-| `/scheduling/shift-reports/print`       | Shift report            | Authenticated                                                  |
+| URL                                     | Prints                  | Permission                                        |
+| --------------------------------------- | ----------------------- | ------------------------------------------------- |
+| `/members/print-labels`                 | Member labels           | `members.manage` **OR** `members.manage_id_cards` |
+| `/members/print-id-cards`               | Member ID cards         | `members.manage` **OR** `members.manage_id_cards` |
+| `/members/:userId/id-card`              | Member ID card          | Authenticated                                     |
+| `/members/scan`                         | Member badge scanner    | `users.view` **OR** `members.manage`              |
+| `/prospective-members/print-labels`     | Applicant badges        | `prospective_members.view_all`                    |
+| `/inventory/print-labels`               | Inventory labels        | `inventory.manage`                                |
+| `/inventory/storage-areas/print-labels` | Storage area labels     | `inventory.manage`                                |
+| `/apparatus/print-labels`               | Apparatus labels        | `apparatus.view` **OR** `apparatus.manage`        |
+| `/facilities/print-labels`              | Facility / room labels  | `facilities.view` **OR** `facilities.manage`      |
+| `/training/print/member`                | Member training history | Authenticated                                     |
+| `/training/print/program`               | Training program        | Authenticated                                     |
+| `/training/print/compliance`            | Compliance matrix       | `training.manage`                                 |
+| `/scheduling/checkin/print`             | Shift check-in sheet    | Authenticated                                     |
+| `/scheduling/shift-reports/print`       | Shift report            | Authenticated                                     |
+| `/scheduling/shift-evaluations/print`   | Shift evaluation        | Authenticated                                     |
 
 ---
 
@@ -1697,7 +1786,7 @@ the click.
 | `/settings`              | Organization Settings | `settings.manage`              |
 | `/settings/roles`        | Role Management       | `positions.manage_permissions` |
 | `/setup`                 | Department Setup      | `settings.manage`              |
-| `/admin/errors`          | Error Monitoring      | `settings.manage`              |
+| `/admin/errors`          | Error Monitor         | `settings.manage`              |
 | `/admin/analytics`       | Analytics Dashboard   | `analytics.view`               |
 | `/admin/audit-log`       | `AuditLogPage`        | `audit.view`                   |
 | `/admin/security-alerts` | `SecurityAlertsPage`  | `audit.view`                   |
@@ -1722,6 +1811,8 @@ the click.
 | ------------------------------- | ---------------------------- | ---------------------------- |
 | `/prospective-members`          | Prospective Members Pipeline | `prospective_members.manage` |
 | `/prospective-members/settings` | Pipeline Settings            | `prospective_members.manage` |
+
+> **My Applicants (`/prospective-members/my-applicants`) and the Interview page** _(added 2026-10-31)_. A member assigned to an applicant as case manager or interviewer (`prospect_assignments`) reaches them here, and the Interview page is open to them for that applicant. Authenticated with the module on, and no permission beyond it: an assigned board member or trustee holds no `prospective_members` access, and the server admits the caller per applicant — `prospective_members.view_all`, or an assignment to that applicant — answering 404 otherwise. The menu offers My Applicants only to a member who has an assignment.
 
 > **Sign-offs (`/prospective-members/sign-offs`)** _(added 2026-09-28)_. Where the officers a Multi-Signer Approval stage names (the Chief, the President) approve an applicant. Authenticated with the module on, and no permission beyond it: those officers rarely hold `prospective_members` access, and `GET /prospective-members/my-sign-offs` lists only stages asking for a role the caller holds — by applicant name and stage, not their record. Conversion refuses until every required stage is complete.
 

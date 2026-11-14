@@ -59,6 +59,10 @@ DOCUMENT_LABEL = {
     LegalDocumentType.TERMS_OF_SERVICE: "the terms of service",
 }
 
+# The change note stored on a revert row. change_note is NOT NULL, and the
+# history renders it like any other entry's reason.
+REVERT_NOTE = "Restored the built-in text."
+
 PUBLIC_PATH = {
     LegalDocumentType.PRIVACY_POLICY: "/privacy",
     LegalDocumentType.TERMS_OF_SERVICE: "/terms",
@@ -130,7 +134,13 @@ class LegalDocumentService:
         100,000 characters, and nothing caps how many drafts a department
         accumulates, so returning them all made every load of the screen cost
         more than the last. Newest first, with ``id`` breaking ties so an
-        offset never skips or repeats a row whose ``created_at`` it shares.
+        offset never skips or repeats a row whose timestamp it shares.
+
+        Drafts are ordered by when they were proposed; history by when each
+        entry went live (``published_at``). The history is a timeline of what
+        members saw, and a revision drafted before a revert but published
+        after it went live after it — ordering by ``created_at`` would put the
+        revert row above the text that replaced it.
         """
         status_filter = (
             LegalDocumentRevision.status == LegalRevisionStatus.DRAFT
@@ -147,13 +157,17 @@ class LegalDocumentService:
                 select(func.count(LegalDocumentRevision.id)).where(*scope)
             )
         ).scalar_one()
+        newest = (
+            LegalDocumentRevision.created_at
+            if drafts
+            else func.coalesce(
+                LegalDocumentRevision.published_at, LegalDocumentRevision.created_at
+            )
+        )
         result = await self.db.execute(
             select(LegalDocumentRevision)
             .where(*scope)
-            .order_by(
-                LegalDocumentRevision.created_at.desc(),
-                LegalDocumentRevision.id.desc(),
-            )
+            .order_by(newest.desc(), LegalDocumentRevision.id.desc())
             .offset(offset)
             .limit(limit)
         )
@@ -308,7 +322,16 @@ class LegalDocumentService:
         revision_id: str,
         organization_id: str,
         updates: dict,
+        edited_by: Optional[str] = None,
     ) -> LegalDocumentRevision:
+        """Edit a draft, naming the editor when it is not the proposer.
+
+        ``edited_by`` is the member making the edit. When that is someone other
+        than the proposer, the revision records them and the time (owner
+        decision W54-4) — the card keeps "Sam proposed this" and adds who
+        changed the wording since. ``None`` is an internal caller with no
+        member behind it and attributes nothing.
+        """
         revision = await self.get_revision(revision_id, organization_id)
         if revision.status != LegalRevisionStatus.DRAFT:
             # Editing a published revision in place would rewrite what the
@@ -323,8 +346,19 @@ class LegalDocumentService:
         apply_updates(
             revision,
             updates,
-            skip={"id", "organization_id", "document_type", "status"},
+            skip={
+                "id",
+                "organization_id",
+                "document_type",
+                "status",
+                "reverts_to_default",
+                "edited_by",
+                "edited_at",
+            },
         )
+        if edited_by is not None and str(edited_by) != str(revision.created_by or ""):
+            revision.edited_by = edited_by
+            revision.edited_at = datetime.now(timezone.utc)
         await self.db.flush()
         return revision
 
@@ -367,21 +401,61 @@ class LegalDocumentService:
         return revision
 
     async def revert_to_default(
-        self, organization_id: str, document_type: LegalDocumentType
-    ) -> None:
-        """Drop the department's custom text so the built-in default shows."""
+        self,
+        organization_id: str,
+        document_type: LegalDocumentType,
+        reverted_by: Optional[str] = None,
+    ) -> Optional[LegalDocumentRevision]:
+        """Drop the department's custom text so the built-in default shows.
+
+        Records the revert as a history row (owner decision W54-3) naming who
+        restored the built-in text and when, so the published history can say
+        what members saw after it. Returns that row, or ``None`` when the
+        built-in text was already live — a revert that changed nothing is not
+        an event in what members saw, and recording it would put a phantom
+        entry in the timeline.
+        """
         organization = await self._get_organization_for_update(organization_id)
         if organization is None:
             raise ValueError("Organization not found")
-        await self._archive_published(organization_id, document_type)
+        settings = (
+            organization.settings if isinstance(organization.settings, dict) else {}
+        )
+        legal = settings.get("legal")
+        live = (
+            legal.get(SETTINGS_KEY[document_type]) if isinstance(legal, dict) else None
+        )
+        had_custom_text = isinstance(live, str) and bool(live.strip())
+
+        archived = await self._archive_published(organization_id, document_type)
         self._write_settings(
             organization, document_type, body=None, effective_date=None
         )
+
+        revert: Optional[LegalDocumentRevision] = None
+        if had_custom_text or archived:
+            # Born ARCHIVED: it is a history entry, never a draft (which could
+            # be edited or published) and never PUBLISHED (which the overview
+            # reads as "the department's own text is live").
+            revert = LegalDocumentRevision(
+                organization_id=organization_id,
+                document_type=document_type,
+                status=LegalRevisionStatus.ARCHIVED,
+                reverts_to_default=True,
+                body="",
+                change_note=REVERT_NOTE,
+                created_by=reverted_by,
+                published_by=reverted_by,
+                published_at=datetime.now(timezone.utc),
+            )
+            self.db.add(revert)
         await self.db.flush()
+        return revert
 
     async def _archive_published(
         self, organization_id: str, document_type: LegalDocumentType
-    ) -> None:
+    ) -> int:
+        """Archive the live revision(s) of one document; return how many."""
         # A locking read, not a plain one: under InnoDB REPEATABLE READ (this
         # app's default), a plain SELECT answers from the snapshot taken at
         # the transaction's first read, which predates the organization-row
@@ -398,8 +472,10 @@ class LegalDocumentService:
             )
             .with_for_update()
         )
-        for previous in result.scalars().all():
+        previous_rows = result.scalars().all()
+        for previous in previous_rows:
             previous.status = LegalRevisionStatus.ARCHIVED
+        return len(previous_rows)
 
     def _write_settings(
         self,

@@ -7,6 +7,9 @@
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { FormField } from '../../../components/ux/FormField';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { DialogPortal } from '../../../components/DialogPortal';
 import {
   Users,
@@ -30,9 +33,11 @@ import {
   RotateCcw,
   Info,
   Archive,
+  UserCheck,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
+import AdminPageHeader from '../../../components/admin/AdminPageHeader';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import type { PipelineTab } from '../store/prospectiveMembersStore';
 import { PipelineKanban } from '../components/PipelineKanban';
@@ -56,6 +61,40 @@ import { formatDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { useAuthStore } from '../../../stores/authStore';
+import { StatGrid } from '@/components/ux/StatGrid';
+type ApplicantField = 'first_name' | 'last_name' | 'email' | 'phone' | 'target_membership_type' | 'target_role_id';
+
+/** ProspectCreate in schemas/membership_pipeline.py: snake_case, and its limits. */
+const APPLICANT_FIELDS: Record<ApplicantField, ServerFieldSpec> = {
+  first_name: { label: 'First name', maxLength: 100 },
+  last_name: { label: 'Last name', maxLength: 100 },
+  email: { label: 'Email', maxLength: 255 },
+  phone: { label: 'Phone', maxLength: 20 },
+  // The service sends the membership type as desired_membership_type.
+  target_membership_type: { label: 'Membership type', api: 'desired_membership_type' },
+  target_role_id: { label: 'Target position' },
+};
+
+/** In the order they appear, so the first failing one takes focus. */
+const APPLICANT_FIELD_IDS: Record<ApplicantField, string> = {
+  first_name: 'new-applicant-first-name',
+  last_name: 'new-applicant-last-name',
+  email: 'new-applicant-email',
+  phone: 'new-applicant-phone',
+  target_membership_type: 'new-applicant-membership-type',
+  target_role_id: 'new-applicant-target-role',
+};
+
+const EMPTY_APPLICANT = {
+  first_name: '',
+  last_name: '',
+  email: '',
+  phone: '',
+  target_membership_type: 'regular' as 'regular' | 'administrative',
+  target_role_id: '',
+};
+
 export const ProspectiveMembersPage: React.FC = () => {
   const { confirm } = useConfirm();
   const navigate = useNavigate();
@@ -167,6 +206,10 @@ export const ProspectiveMembersPage: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [conversionApplicant, setConversionApplicant] = useState<Applicant | null>(null);
   const [selectedInactive, setSelectedInactive] = useState<Set<string>>(new Set());
+  // Bulk actions, badges and the purge reach every applicant they name, so
+  // the backend asks for prospective_members.view_all; without it a
+  // coordinator works their assigned applicants one at a time.
+  const seesAll = useAuthStore((st) => st.checkPermission)('prospective_members.view_all');
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
   const [selectedApplicants, setSelectedApplicants] = useState<Set<string>>(new Set());
   const [isBulkAdvancing, setIsBulkAdvancing] = useState(false);
@@ -179,15 +222,18 @@ export const ProspectiveMembersPage: React.FC = () => {
   const [isBulkReactivating, setIsBulkReactivating] = useState(false);
 
   // New applicant form state
-  const [newApplicant, setNewApplicant] = useState({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-    target_membership_type: 'regular' as 'regular' | 'administrative',
-    target_role_id: '',
-  });
+  const [newApplicant, setNewApplicant] = useState(EMPTY_APPLICANT);
   const [isCreating, setIsCreating] = useState(false);
+  const [applicantErrors, setApplicantErrors] = useState<Partial<Record<ApplicantField, string>>>({});
+  const setApplicantField = <K extends ApplicantField>(field: K, value: (typeof EMPTY_APPLICANT)[K]) => {
+    setNewApplicant((prev) => ({ ...prev, [field]: value }));
+    setApplicantErrors((prev) => ({ ...prev, [field]: undefined }));
+  };
+  const showApplicantErrors = (next: Partial<Record<ApplicantField, string>>) => {
+    setApplicantErrors(next);
+    const first = (Object.keys(APPLICANT_FIELD_IDS) as ApplicantField[]).find((field) => next[field]);
+    if (first) window.setTimeout(() => document.getElementById(APPLICANT_FIELD_IDS[first])?.focus(), 0);
+  };
 
   // Load pipelines on mount
   useEffect(() => {
@@ -407,12 +453,15 @@ export const ProspectiveMembersPage: React.FC = () => {
       toast.error('Set up a pipeline before adding applicants.');
       return;
     }
-    if (!newApplicant.first_name.trim() || !newApplicant.last_name.trim() || !newApplicant.email.trim()) {
-      toast.error('First name, last name, and email are required');
-      return;
-    }
-    if (!isValidEmail(newApplicant.email.trim())) {
-      toast.error('Enter a valid email address');
+    // Each reason is said on its field (forms review F-3), and nothing is
+    // created until they are fixed.
+    const missing: Partial<Record<ApplicantField, string>> = {};
+    if (!newApplicant.first_name.trim()) missing.first_name = 'Enter the applicant’s first name.';
+    if (!newApplicant.last_name.trim()) missing.last_name = 'Enter the applicant’s last name.';
+    if (!newApplicant.email.trim()) missing.email = 'Enter the applicant’s email address.';
+    else if (!isValidEmail(newApplicant.email.trim())) missing.email = 'Enter a valid email address.';
+    if (Object.keys(missing).length > 0) {
+      showApplicantErrors(missing);
       return;
     }
     setIsCreating(true);
@@ -472,16 +521,17 @@ export const ProspectiveMembersPage: React.FC = () => {
       });
       toast.success('Applicant added to pipeline');
       setShowAddModal(false);
-      setNewApplicant({
-        first_name: '',
-        last_name: '',
-        email: '',
-        phone: '',
-        target_membership_type: 'regular',
-        target_role_id: '',
-      });
+      setNewApplicant(EMPTY_APPLICANT);
+      setApplicantErrors({});
       void refreshPipelineView();
     } catch (err: unknown) {
+      // A refused field is shown on that field, in its own words (forms review F-2).
+      const mapped = mapServerFieldErrors(err, APPLICANT_FIELDS);
+      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
+        showApplicantErrors(mapped.fieldErrors);
+        if (mapped.unmatched.length) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       const msg = getErrorMessage(err, 'Failed to create applicant');
       // 409: the applicant or member already exists. A warning rather than an
       // error, and the modal stays open with the typing intact.
@@ -504,45 +554,54 @@ export const ProspectiveMembersPage: React.FC = () => {
 
   const dialogRef2 = useDialog<HTMLDivElement>({ isOpen: showPurgeConfirm, onClose: () => setShowPurgeConfirm(false) });
 
-  const dialogRef3 = useDialog<HTMLDivElement>({ isOpen: showAddModal, onClose: () => setShowAddModal(false) });
+  // Closing discards what was entered, so "Discard changes" means what it
+  // says; Escape, the X and Cancel ask first once anything is entered (forms
+  // review F-6). Contact details are not drafted anywhere.
+  const closeAddModal = () => {
+    setShowAddModal(false);
+    setNewApplicant(EMPTY_APPLICANT);
+    setApplicantErrors({});
+  };
+  const requestCloseAddModal = useDiscardGuard({
+    isDirty: JSON.stringify(newApplicant) !== JSON.stringify(EMPTY_APPLICANT),
+    onClose: closeAddModal,
+  });
+  const dialogRef3 = useDialog<HTMLDivElement>({ isOpen: showAddModal, onClose: requestCloseAddModal });
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
-      {/* Header */}
-      <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-theme-text-primary flex items-center gap-3 text-xl font-bold sm:text-2xl">
-            <Users className="h-6 w-6 text-red-700 sm:h-7 sm:w-7 dark:text-red-500" />
-            Prospective Members
-          </h1>
-          <p className="text-theme-text-muted mt-1 text-sm">Manage your organization's applicant pipeline</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => void navigate('/prospective-members/settings')}
-            className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors sm:px-4"
-          >
-            <Settings className="h-4 w-4" />
-            <span className="hidden sm:inline">Pipeline Settings</span>
-            <span className="sm:hidden">Settings</span>
-          </button>
-          <button
-            onClick={() => setShowAddModal(true)}
-            disabled={!currentPipeline}
-            title={currentPipeline ? undefined : 'Set up a pipeline first'}
-            className="btn-primary flex items-center gap-2 px-3 text-sm sm:px-4"
-          >
-            <UserPlus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Applicant</span>
-            <span className="sm:hidden">Add</span>
-          </button>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Prospective Members"
+        description="Manage your organization's applicant pipeline"
+        className="mb-6"
+        actions={
+          <>
+            <button
+              onClick={() => void navigate('/prospective-members/settings')}
+              className="btn-secondary flex items-center gap-2 text-sm"
+            >
+              <Settings className="h-4 w-4" />
+              <span className="hidden sm:inline">Pipeline Settings</span>
+              <span className="sm:hidden">Settings</span>
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              disabled={!currentPipeline}
+              title={currentPipeline ? undefined : 'Set up a pipeline first'}
+              className="btn-primary flex items-center gap-2 px-3 text-sm sm:px-4"
+            >
+              <UserPlus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add Applicant</span>
+              <span className="sm:hidden">Add</span>
+            </button>
+          </>
+        }
+      />
 
       {/* Stats Bar */}
       {pipelineStats && !isLoadingStats && (
         <>
-          <div className="mb-2 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
+          <StatGrid columns={6} className="mb-2">
             <div className="card bg-theme-input-bg p-4">
               <div className="text-theme-text-muted mb-1 flex items-center gap-2 text-xs">
                 <Users className="h-3.5 w-3.5" />
@@ -602,7 +661,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 <p className="text-theme-text-muted text-2xl font-bold">{pipelineStats.withdrawn_count}</p>
               </div>
             )}
-          </div>
+          </StatGrid>
           <div className="mb-6 flex items-center gap-1.5 px-1">
             <Info className="text-theme-text-muted h-3 w-3 shrink-0" />
             <p className="text-theme-text-muted text-xs">
@@ -728,6 +787,25 @@ export const ProspectiveMembersPage: React.FC = () => {
                   </option>
                 ))}
               </select>
+            )}
+
+            {/* A member who can see every applicant narrows the board and the
+              table to the ones they are assigned to. Without view_all the
+              server already shows only those, so there is nothing to narrow. */}
+            {seesAll && (
+              <button
+                type="button"
+                aria-pressed={filters.assigned_to_me === true}
+                onClick={() => setFilters({ assigned_to_me: filters.assigned_to_me ? undefined : true })}
+                className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  filters.assigned_to_me
+                    ? 'border-red-500 bg-red-500/10 text-red-700 dark:text-red-400'
+                    : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'
+                }`}
+              >
+                <UserCheck className="h-4 w-4" aria-hidden="true" />
+                My applicants
+              </button>
             )}
 
             {/* Status Filter */}
@@ -856,7 +934,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             ) : (
               <>
                 {/* Bulk Actions Bar */}
-                {selectedApplicants.size > 0 && (
+                {selectedApplicants.size > 0 && seesAll && (
                   <div className="card mb-3 flex flex-wrap items-center gap-3 p-3">
                     <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                       <input
@@ -994,7 +1072,7 @@ export const ProspectiveMembersPage: React.FC = () => {
         {activeTab === 'inactive' && (
           <div>
             {/* Inactive Bulk Actions */}
-            {selectedInactive.size > 0 && (
+            {selectedInactive.size > 0 && seesAll && (
               <div className="card mb-3 flex flex-wrap items-center gap-3 p-3">
                 <span className="text-theme-text-secondary text-sm">{selectedInactive.size} selected</span>
                 <div className="ml-auto flex items-center gap-2">
@@ -1037,8 +1115,8 @@ export const ProspectiveMembersPage: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
-                <table className="w-full">
+              <div className="card bg-theme-input-bg rwd-table-container overflow-hidden overflow-x-auto">
+                <table className="rwd-table rwd-table-wide w-full">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
                       <th scope="col" className="w-10 p-3">
@@ -1095,7 +1173,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         key={applicant.id}
                         className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
                       >
-                        <td className="p-3">
+                        <td data-label="Select" className="p-3">
                           <input
                             type="checkbox"
                             checked={selectedInactive.has(applicant.id)}
@@ -1112,7 +1190,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                             className="form-checkbox h-6 w-6 text-red-700 dark:text-red-500"
                           />
                         </td>
-                        <td className="p-3">
+                        <td data-label="Name" className="p-3">
                           <div className="flex items-center gap-2.5">
                             <div className="bg-theme-surface-hover text-theme-text-secondary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
                               {getInitials(applicant.first_name, applicant.last_name)}
@@ -1122,15 +1200,22 @@ export const ProspectiveMembersPage: React.FC = () => {
                             </span>
                           </div>
                         </td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                        <td data-label="Email" className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                          {applicant.email}
+                        </td>
+                        <td data-label="Last Stage" className="text-theme-text-muted table-col-secondary p-3 text-sm">
                           {applicant.current_stage_name ?? '—'}
                         </td>
-                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        <td
+                          data-label="Inactive Since"
+                          className="text-theme-text-muted table-col-tertiary p-3 text-sm"
+                        >
                           {applicant.deactivated_at ? formatDate(applicant.deactivated_at, tz) : '—'}
                         </td>
-                        <td className="text-theme-text-muted p-3 text-sm">{applicant.days_since_activity}d</td>
-                        <td className="p-3">
+                        <td data-label="Days Idle" className="text-theme-text-muted p-3 text-sm">
+                          {applicant.days_since_activity}d
+                        </td>
+                        <td data-label="Actions" className="p-3">
                           <button
                             onClick={() => {
                               void (async () => {
@@ -1212,8 +1297,8 @@ export const ProspectiveMembersPage: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
-                <table className="w-full">
+              <div className="card bg-theme-input-bg rwd-table-container overflow-hidden overflow-x-auto">
+                <table className="rwd-table rwd-table-wide w-full">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
                       <th
@@ -1255,7 +1340,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         key={applicant.id}
                         className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
                       >
-                        <td className="p-3">
+                        <td data-label="Name" className="p-3">
                           <div
                             className="flex cursor-pointer items-center gap-2.5"
                             onClick={() => {
@@ -1270,17 +1355,25 @@ export const ProspectiveMembersPage: React.FC = () => {
                             </span>
                           </div>
                         </td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                        <td data-label="Email" className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                          {applicant.email}
+                        </td>
+                        <td
+                          data-label="Stage Reached"
+                          className="text-theme-text-muted table-col-secondary p-3 text-sm"
+                        >
                           {applicant.current_stage_name ?? '—'}
                         </td>
-                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        <td data-label="Last Activity" className="text-theme-text-muted table-col-tertiary p-3 text-sm">
                           {applicant.last_activity_at ? formatDate(applicant.last_activity_at, tz) : '—'}
                         </td>
-                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        <td
+                          data-label="Days in Pipeline"
+                          className="text-theme-text-muted table-col-tertiary p-3 text-sm"
+                        >
                           {applicant.days_in_pipeline}d
                         </td>
-                        <td className="p-3">
+                        <td data-label="Actions" className="p-3">
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => {
@@ -1373,8 +1466,8 @@ export const ProspectiveMembersPage: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
-                <table className="w-full">
+              <div className="card bg-theme-input-bg rwd-table-container overflow-hidden overflow-x-auto">
+                <table className="rwd-table rwd-table-wide w-full">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
                       <th
@@ -1416,7 +1509,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         key={applicant.id}
                         className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
                       >
-                        <td className="p-3">
+                        <td data-label="Name" className="p-3">
                           <div
                             className="flex cursor-pointer items-center gap-2.5"
                             onClick={() => {
@@ -1431,17 +1524,25 @@ export const ProspectiveMembersPage: React.FC = () => {
                             </span>
                           </div>
                         </td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                        <td data-label="Email" className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                          {applicant.email}
+                        </td>
+                        <td data-label="Last Stage" className="text-theme-text-muted table-col-secondary p-3 text-sm">
                           {applicant.current_stage_name ?? '—'}
                         </td>
-                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        <td
+                          data-label="Withdrawn Date"
+                          className="text-theme-text-muted table-col-tertiary p-3 text-sm"
+                        >
                           {applicant.withdrawn_at ? formatDate(applicant.withdrawn_at, tz) : '—'}
                         </td>
-                        <td className="text-theme-text-muted table-col-tertiary max-w-[200px] truncate p-3 text-sm">
+                        <td
+                          data-label="Reason"
+                          className="text-theme-text-muted table-col-tertiary max-w-[200px] truncate p-3 text-sm"
+                        >
                           {applicant.withdrawal_reason ?? '—'}
                         </td>
-                        <td className="p-3">
+                        <td data-label="Actions" className="p-3">
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => {
@@ -1533,8 +1634,8 @@ export const ProspectiveMembersPage: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
-                <table className="w-full">
+              <div className="card bg-theme-input-bg rwd-table-container overflow-hidden overflow-x-auto">
+                <table className="rwd-table rwd-table-wide w-full">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
                       <th
@@ -1576,7 +1677,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         key={applicant.id}
                         className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
                       >
-                        <td className="p-3">
+                        <td data-label="Name" className="p-3">
                           <div
                             className="flex cursor-pointer items-center gap-2.5"
                             onClick={() => {
@@ -1591,17 +1692,22 @@ export const ProspectiveMembersPage: React.FC = () => {
                             </span>
                           </div>
                         </td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                        <td data-label="Email" className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                          {applicant.email}
+                        </td>
+                        <td data-label="Final Stage" className="text-theme-text-muted table-col-secondary p-3 text-sm">
                           {applicant.current_stage_name ?? '—'}
                         </td>
-                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        <td data-label="Last Activity" className="text-theme-text-muted table-col-tertiary p-3 text-sm">
                           {applicant.last_activity_at ? formatDate(applicant.last_activity_at, tz) : '—'}
                         </td>
-                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        <td
+                          data-label="Days in Pipeline"
+                          className="text-theme-text-muted table-col-tertiary p-3 text-sm"
+                        >
                           {applicant.days_in_pipeline}d
                         </td>
-                        <td className="p-3">
+                        <td data-label="Actions" className="p-3">
                           {/* View only. These applicants are members now — there
                             is no reactivating them, and the backend refuses it. */}
                           <button
@@ -1756,108 +1862,140 @@ export const ProspectiveMembersPage: React.FC = () => {
                   Add Applicant
                 </h2>
                 <button
-                  onClick={() => setShowAddModal(false)}
+                  type="button"
+                  onClick={requestCloseAddModal}
                   aria-label="Close"
                   className="text-theme-text-muted hover:text-theme-text-primary btn-icon transition-colors"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <div className="space-y-4 p-6">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="new-applicant-first-name" className="text-theme-text-muted mb-1 block text-sm">
-                      First Name *
-                    </label>
-                    <input
+              <form
+                noValidate
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleCreateApplicant();
+                }}
+              >
+                <div className="space-y-4 p-6">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <FormField
+                      label="First Name"
+                      required
+                      error={applicantErrors.first_name}
                       id="new-applicant-first-name"
-                      type="text"
-                      value={newApplicant.first_name}
-                      onChange={(e) => setNewApplicant({ ...newApplicant, first_name: e.target.value })}
-                      className="form-input text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="new-applicant-last-name" className="text-theme-text-muted mb-1 block text-sm">
-                      Last Name *
-                    </label>
-                    <input
+                      maxLength={APPLICANT_FIELDS.first_name.maxLength}
+                      count={newApplicant.first_name.length}
+                    >
+                      {(field) => (
+                        <input
+                          {...field}
+                          type="text"
+                          autoComplete="off"
+                          value={newApplicant.first_name}
+                          onChange={(e) => setApplicantField('first_name', e.target.value)}
+                          className="form-input text-sm"
+                        />
+                      )}
+                    </FormField>
+                    <FormField
+                      label="Last Name"
+                      required
+                      error={applicantErrors.last_name}
                       id="new-applicant-last-name"
-                      type="text"
-                      value={newApplicant.last_name}
-                      onChange={(e) => setNewApplicant({ ...newApplicant, last_name: e.target.value })}
-                      className="form-input text-sm"
-                    />
+                      maxLength={APPLICANT_FIELDS.last_name.maxLength}
+                      count={newApplicant.last_name.length}
+                    >
+                      {(field) => (
+                        <input
+                          {...field}
+                          type="text"
+                          autoComplete="off"
+                          value={newApplicant.last_name}
+                          onChange={(e) => setApplicantField('last_name', e.target.value)}
+                          className="form-input text-sm"
+                        />
+                      )}
+                    </FormField>
                   </div>
-                </div>
-                <div>
-                  <label htmlFor="new-applicant-email" className="text-theme-text-muted mb-1 block text-sm">
-                    Email *
-                  </label>
-                  <input
+                  <FormField
+                    label="Email"
+                    required
+                    error={applicantErrors.email}
                     id="new-applicant-email"
-                    type="email"
-                    value={newApplicant.email}
-                    onChange={(e) => setNewApplicant({ ...newApplicant, email: e.target.value })}
-                    className="form-input text-sm"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="new-applicant-phone" className="text-theme-text-muted mb-1 block text-sm">
-                    Phone
-                  </label>
-                  <input
-                    id="new-applicant-phone"
-                    type="tel"
-                    value={newApplicant.phone}
-                    onChange={(e) => setNewApplicant({ ...newApplicant, phone: e.target.value })}
-                    className="form-input text-sm"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="new-applicant-membership-type" className="text-theme-text-muted mb-1 block text-sm">
-                    Membership Type
-                  </label>
-                  <select
-                    id="new-applicant-membership-type"
-                    value={newApplicant.target_membership_type}
-                    onChange={(e) =>
-                      setNewApplicant({
-                        ...newApplicant,
-                        target_membership_type: e.target.value as 'regular' | 'administrative',
-                      })
-                    }
-                    className="form-input text-sm"
+                    maxLength={APPLICANT_FIELDS.email.maxLength}
+                    count={newApplicant.email.length}
                   >
-                    <option value="regular">Regular Member</option>
-                    <option value="administrative">Administrative</option>
-                  </select>
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="email"
+                        autoComplete="off"
+                        value={newApplicant.email}
+                        onChange={(e) => setApplicantField('email', e.target.value)}
+                        className="form-input text-sm"
+                      />
+                    )}
+                  </FormField>
+                  <FormField
+                    label="Phone"
+                    error={applicantErrors.phone}
+                    id="new-applicant-phone"
+                    maxLength={APPLICANT_FIELDS.phone.maxLength}
+                    count={newApplicant.phone.length}
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="tel"
+                        autoComplete="off"
+                        value={newApplicant.phone}
+                        onChange={(e) => setApplicantField('phone', e.target.value)}
+                        className="form-input text-sm"
+                      />
+                    )}
+                  </FormField>
+                  <FormField
+                    label="Membership Type"
+                    error={applicantErrors.target_membership_type}
+                    id="new-applicant-membership-type"
+                  >
+                    {(field) => (
+                      <select
+                        {...field}
+                        value={newApplicant.target_membership_type}
+                        onChange={(e) =>
+                          setApplicantField('target_membership_type', e.target.value as 'regular' | 'administrative')
+                        }
+                        className="form-input text-sm"
+                      >
+                        <option value="regular">Regular Member</option>
+                        <option value="administrative">Administrative</option>
+                      </select>
+                    )}
+                  </FormField>
+                  <TargetRolePicker
+                    id="new-applicant-target-role"
+                    value={newApplicant.target_role_id}
+                    onChange={(target_role_id) => setApplicantField('target_role_id', target_role_id)}
+                    hint="Applied to the member record when this applicant is converted."
+                    error={applicantErrors.target_role_id}
+                  />
                 </div>
-                <TargetRolePicker
-                  id="new-applicant-target-role"
-                  value={newApplicant.target_role_id}
-                  onChange={(target_role_id) => setNewApplicant({ ...newApplicant, target_role_id })}
-                  hint="Applied to the member record when this applicant is converted."
-                />
-              </div>
-              <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
-                <button
-                  onClick={() => setShowAddModal(false)}
-                  className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    void handleCreateApplicant();
-                  }}
-                  disabled={isCreating}
-                  className="btn-primary flex items-center gap-2 px-6"
-                >
-                  {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Add to Pipeline
-                </button>
-              </div>
+                <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
+                  <button
+                    type="button"
+                    onClick={requestCloseAddModal}
+                    className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={isCreating} className="btn-primary flex items-center gap-2 px-6">
+                    {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Add to Pipeline
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </DialogPortal>

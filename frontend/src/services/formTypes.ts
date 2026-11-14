@@ -32,6 +32,8 @@ export interface FormField {
   width: string;
   /** Answers are stored encrypted and served only with `sensitive_answers.view`. */
   is_sensitive?: boolean | undefined;
+  /** Follow-up forms: the applicant-record field this one pre-fills from. */
+  applicant_field?: string | null | undefined;
   created_at: string;
   updated_at: string;
 }
@@ -55,6 +57,7 @@ export interface FormFieldCreate {
   sort_order?: number;
   width?: string;
   is_sensitive?: boolean;
+  applicant_field?: string | undefined;
 }
 
 /**

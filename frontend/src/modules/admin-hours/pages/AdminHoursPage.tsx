@@ -28,9 +28,12 @@ import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { addCalendarDays, formatDate, formatTime, getTodayLocalDate, localToUTC } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useFirstLoadHold } from '../../../hooks/useFirstLoadHold';
 import { useAuthStore } from '../../../stores/authStore';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
+import { FormField } from '../../../components/ux/FormField';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { NfcTapButton } from '../../../components/nfc/NfcTapButton';
 import { formatDuration } from '../utils/formatDuration';
 import { QUARTER_HOUR, formatHours, formatHoursExact, roundHoursToQuarter } from '../../../utils/hoursFormatting';
@@ -38,6 +41,23 @@ import { endOfReportingDayUTC, startOfReportingDayUTC } from '../utils/reporting
 import { addHoursExact, syncEndToStartExact, resolveEndUtc, type DerivedEndTime } from '../utils/entryTimes';
 import QuickDurationButtons from '../components/QuickDurationButtons';
 import MyEntryEditForm from '../components/MyEntryEditForm';
+
+type ManualField = 'category_id' | 'clock_in_at' | 'clock_out_at' | 'description';
+
+/** The manual entry's fields as a 422 names them; `AdminHoursEntryCreate` is snake_case with no max_length. */
+const MANUAL_SERVER_FIELDS: Record<ManualField, ServerFieldSpec> = {
+  category_id: { label: 'Category' },
+  clock_in_at: { label: 'Start Time' },
+  clock_out_at: { label: 'End Time' },
+  description: { label: 'Description' },
+};
+
+const MANUAL_FIELD_IDS: Record<ManualField, string> = {
+  category_id: 'manual-category',
+  clock_in_at: 'manual-clock-in',
+  clock_out_at: 'manual-clock-out',
+  description: 'manual-description',
+};
 import { entryMethodLabel } from '../utils/entryMethod';
 import { entryStatusLabel } from '../utils/entryStatus';
 
@@ -139,6 +159,14 @@ const AdminHoursPage: React.FC = () => {
   // DST fall-back fold instead of being re-derived (and silently shortened)
   // from the ambiguous wall-clock string alone — see `resolveEndUtc`.
   const [manualEndPin, setManualEndPin] = useState<DerivedEndTime | null>(null);
+  const [manualErrors, setManualErrors] = useState<Partial<Record<ManualField, string>>>({});
+  const clearManualError = (field: ManualField) =>
+    setManualErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
 
   // Filters
   // The month people are currently reporting against is what they open this
@@ -199,6 +227,19 @@ const AdminHoursPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // The clocked-in card is drawn only while a session is open, ~150-230px
+  // above everything else, so the rest waits for this visit's first answer
+  // rather than being pushed down by it (see useFirstLoadHold). The store's
+  // flag is shared and starts false, so the answer is the flag falling after
+  // it rose, not the flag being false.
+  const sessionRequested = useRef(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  useEffect(() => {
+    if (activeSessionLoading) sessionRequested.current = true;
+    else if (sessionRequested.current) setSessionChecked(true);
+  }, [activeSessionLoading]);
+  const held = useFirstLoadHold(!sessionChecked);
 
   useEffect(() => {
     if (!currentUserId) return;
@@ -299,11 +340,22 @@ const AdminHoursPage: React.FC = () => {
       setShowManualForm(false);
       setManualData({ category_id: '', clock_in_at: '', clock_out_at: '', description: '' });
       setManualEndPin(null);
+      setManualErrors({});
       void fetchMyEntries(entryQuery);
       if (currentUserId) {
         void fetchMySummary({ userId: currentUserId, ...dateBounds });
       }
     } catch (err) {
+      // An entry is created only once nothing is refused, so each refusal
+      // goes on its field (forms review F-2).
+      const mapped = mapServerFieldErrors(err, MANUAL_SERVER_FIELDS);
+      const keys = Object.keys(mapped?.fieldErrors ?? {}) as ManualField[];
+      if (mapped && keys[0]) {
+        setManualErrors(mapped.fieldErrors);
+        document.getElementById(MANUAL_FIELD_IDS[keys[0]])?.focus();
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       toast.error(getErrorMessage(err, 'Failed to submit hours'));
     } finally {
       setIsSubmitting(false);
@@ -428,9 +480,13 @@ const AdminHoursPage: React.FC = () => {
   const totalPages = Math.ceil(myEntriesTotal / PAGE_SIZE);
 
   return (
-    <div className="mx-auto max-w-4xl p-6">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    // While held, everything after the header — its first child — is invisible.
+    <div
+      data-testid="admin-hours-page"
+      className={`mx-auto max-w-4xl p-6 ${held ? '[&>*:not(:first-child)]:invisible' : ''}`}
+    >
+      <div className="page-header mb-6 gap-4 sm:items-center">
+        <div className="page-header-title">
           <h1 className="text-theme-text-primary text-3xl font-bold">My Admin Hours</h1>
           <p className="text-theme-text-secondary mt-1">Log your administrative hours and see what has been approved</p>
         </div>
@@ -616,7 +672,7 @@ const AdminHoursPage: React.FC = () => {
             <p className="text-theme-text-secondary text-sm font-medium">Approved</p>
             <CheckCircle2 className="h-5 w-5 text-green-700 dark:text-green-600" aria-hidden="true" />
           </div>
-          <p className="mt-2 text-3xl font-bold text-green-700 dark:text-green-400">
+          <p className="mt-2 text-3xl font-bold text-green-900 dark:text-green-300">
             {formatHours(mySummary?.approvedHours)}
             <span className="ml-1 text-base font-medium">hrs</span>
           </p>
@@ -634,7 +690,7 @@ const AdminHoursPage: React.FC = () => {
             <p className="text-theme-text-secondary text-sm font-medium">Awaiting review</p>
             <ListChecks className="h-5 w-5 text-amber-700 dark:text-amber-600" aria-hidden="true" />
           </div>
-          <p className="mt-2 text-3xl font-bold text-amber-700 dark:text-amber-400">
+          <p className="mt-2 text-3xl font-bold text-amber-900 dark:text-amber-300">
             {formatHours(mySummary?.pendingHours)}
             <span className="ml-1 text-base font-medium">hrs</span>
           </p>
@@ -756,57 +812,66 @@ const AdminHoursPage: React.FC = () => {
             className="space-y-4"
           >
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="md:col-span-2">
-                <label htmlFor="manual-category" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                  Category *
-                </label>
-                <select
-                  id="manual-category"
-                  value={manualData.category_id}
-                  onChange={(e) => setManualData({ ...manualData, category_id: e.target.value })}
-                  required
-                  className="form-input md:max-w-sm"
-                >
-                  <option value="">Select category...</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                      {cat.maxHoursPerSession ? ` (max ${cat.maxHoursPerSession}h)` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="manual-clock-in" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                  Start Time *
-                </label>
-                <DateTimeQuarterHour
-                  id="manual-clock-in"
-                  timeLabel="Start time"
-                  value={manualData.clock_in_at}
-                  onChange={handleManualStartChange}
-                  required
-                  className="form-input"
-                  timezone={tz}
-                />
-              </div>
-              <div>
-                <label htmlFor="manual-clock-out" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                  End Time *
-                </label>
-                <DateTimeQuarterHour
-                  id="manual-clock-out"
-                  timeLabel="End time"
-                  value={manualData.clock_out_at}
-                  onChange={(val) => {
-                    setManualData({ ...manualData, clock_out_at: val });
-                    setManualEndPin(null);
-                  }}
-                  required
-                  className="form-input"
-                  timezone={tz}
-                />
-              </div>
+              <FormField
+                className="md:col-span-2"
+                id={MANUAL_FIELD_IDS.category_id}
+                label="Category"
+                required
+                error={manualErrors.category_id}
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    value={manualData.category_id}
+                    onChange={(e) => {
+                      setManualData({ ...manualData, category_id: e.target.value });
+                      clearManualError('category_id');
+                    }}
+                    className="form-input md:max-w-sm"
+                  >
+                    <option value="">Select category...</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                        {cat.maxHoursPerSession ? ` (max ${cat.maxHoursPerSession}h)` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
+              <FormField id={MANUAL_FIELD_IDS.clock_in_at} label="Start Time" required error={manualErrors.clock_in_at}>
+                {(field) => (
+                  <DateTimeQuarterHour
+                    {...field}
+                    timeLabel="Start time"
+                    value={manualData.clock_in_at}
+                    onChange={(value) => {
+                      handleManualStartChange(value);
+                      clearManualError('clock_in_at');
+                    }}
+                    required
+                    className="form-input"
+                    timezone={tz}
+                  />
+                )}
+              </FormField>
+              <FormField id={MANUAL_FIELD_IDS.clock_out_at} label="End Time" required error={manualErrors.clock_out_at}>
+                {(field) => (
+                  <DateTimeQuarterHour
+                    {...field}
+                    timeLabel="End time"
+                    value={manualData.clock_out_at}
+                    onChange={(val) => {
+                      setManualData({ ...manualData, clock_out_at: val });
+                      setManualEndPin(null);
+                      clearManualError('clock_out_at');
+                    }}
+                    required
+                    className="form-input"
+                    timezone={tz}
+                  />
+                )}
+              </FormField>
             </div>
 
             <QuickDurationButtons onSelect={handleManualDuration} disabled={!manualData.clock_in_at} />
@@ -824,19 +889,22 @@ const AdminHoursPage: React.FC = () => {
               </p>
             )}
 
-            <div>
-              <label htmlFor="manual-description" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                Description
-              </label>
-              <input
-                id="manual-description"
-                type="text"
-                value={manualData.description ?? ''}
-                onChange={(e) => setManualData({ ...manualData, description: e.target.value })}
-                className="form-input"
-                placeholder="What did you work on?"
-              />
-            </div>
+            <FormField id={MANUAL_FIELD_IDS.description} label="Description" error={manualErrors.description}>
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  autoComplete="off"
+                  value={manualData.description ?? ''}
+                  onChange={(e) => {
+                    setManualData({ ...manualData, description: e.target.value });
+                    clearManualError('description');
+                  }}
+                  className="form-input"
+                  placeholder="What did you work on?"
+                />
+              )}
+            </FormField>
             <div className="flex gap-3">
               <button
                 type="submit"

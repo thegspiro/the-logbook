@@ -9,6 +9,10 @@
  * them with the raw axios client (the app instance is scoped to /api/v1 and
  * attaches session/CSRF the external approver doesn't have).
  *
+ * The page shows the request's title, amount and requester's name (owner
+ * decision 2026-11-01) and nothing else of it: the description, vendor and
+ * lines stay behind the login, since the link may be forwarded.
+ *
  * An expense report with lines submitted after the department's deadline
  * (`late_line_count`) can be approved only once the approver ticks that they
  * have reviewed them; the API refuses the approval without it.
@@ -19,6 +23,7 @@ import { useParams } from 'react-router';
 import axios from 'axios';
 import { CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatCurrency, type Money } from '../utils/currencyFormatting';
 
 interface ApprovalDetail {
   step_name: string;
@@ -27,6 +32,11 @@ interface ApprovalDetail {
   actionable: boolean;
   expired: boolean;
   late_line_count?: number;
+  /** What is being decided: filled only while the link can be acted on. */
+  title?: string | null;
+  /** Numeric from the API, which serializes it as a string. */
+  amount?: Money;
+  requester_name?: string | null;
 }
 
 const BASE = '/api/public/v1/finance/approvals';
@@ -188,6 +198,24 @@ export const FinanceApprovalPage: React.FC = () => {
   return (
     <Shell>
       <dl className="mb-4 space-y-2 text-sm">
+        {detail.title && (
+          <div className="flex justify-between gap-4">
+            <dt className="text-theme-text-secondary">Request</dt>
+            <dd className="text-theme-text-primary text-right font-medium">{detail.title}</dd>
+          </div>
+        )}
+        {detail.amount != null && detail.amount !== '' && (
+          <div className="flex justify-between gap-4">
+            <dt className="text-theme-text-secondary">Amount</dt>
+            <dd className="text-theme-text-primary font-semibold">{formatCurrency(detail.amount)}</dd>
+          </div>
+        )}
+        {detail.requester_name && (
+          <div className="flex justify-between gap-4">
+            <dt className="text-theme-text-secondary">Requested by</dt>
+            <dd className="text-theme-text-primary text-right">{detail.requester_name}</dd>
+          </div>
+        )}
         <div className="flex justify-between gap-4">
           <dt className="text-theme-text-secondary">Item</dt>
           <dd className="text-theme-text-primary">{prettyEntity(detail.entity_type)}</dd>

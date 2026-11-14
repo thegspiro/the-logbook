@@ -68,6 +68,13 @@ import type {
   InactivityAlertLevel,
   CurrentStageAction,
   NextMeeting,
+  AssignmentRole,
+  FollowUpAnswers,
+  FollowUpFormRequest,
+  InterviewRequirementProgress,
+  ProspectAccess,
+  ProspectAssignment,
+  PublicFollowUpForm,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus, defaultStageConfig } from '../types';
 import { StageType as StageTypeConst } from '../../../constants/enums';
@@ -104,6 +111,8 @@ function mapStageTypeToBackend(stageType: StageType): { step_type: string; actio
       return { step_type: 'multi_approval' };
     case StageTypeConst.MEDICAL_SCREENING:
       return { step_type: 'medical_screening' };
+    case StageTypeConst.FOLLOW_UP_FORM:
+      return { step_type: 'follow_up_form' };
     case StageTypeConst.MANUAL_APPROVAL:
     default:
       return { step_type: 'manual_approval' };
@@ -153,6 +162,8 @@ function mapStepTypeToFrontend(
       return StageTypeConst.MULTI_APPROVAL;
     case 'medical_screening':
       return StageTypeConst.MEDICAL_SCREENING;
+    case 'follow_up_form':
+      return StageTypeConst.FOLLOW_UP_FORM;
   }
   // Legacy format: step_type='action' with action_type disambiguation
   if (stepType === 'action') {
@@ -422,6 +433,8 @@ function mapProspectListToApplicantList(data: BackendProspectListResponse): Appl
     deactivated_at: data.deactivated_at || undefined,
     withdrawn_at: data.withdrawn_at || undefined,
     withdrawal_reason: data.withdrawal_reason || undefined,
+    contact_change_pending: data.contact_change_pending ?? false,
+    my_roles: data.my_roles?.length ? data.my_roles : undefined,
     created_at: data.created_at,
   };
 }
@@ -457,6 +470,7 @@ export function mapElectionPackageResponse(data: BackendElectionPackageResponse)
     documents: config.documents ?? (snapshotDocs.length > 0 ? snapshotDocs : undefined),
     stage_summary: config.stage_summary ?? (snapshotStages.length > 0 ? snapshotStages : undefined),
     custom_fields: config.custom_fields,
+    follow_up_forms: snapshot.follow_up_forms?.length ? snapshot.follow_up_forms : undefined,
     recommended_ballot_item: config.recommended_ballot_item,
     status: data.status,
     election_id: data.election_id || undefined,
@@ -598,12 +612,14 @@ export const pipelineService = {
    */
   async getPipelineStats(
     pipelineId: string,
-    filters?: Pick<ApplicantListFilters, 'search' | 'event_id'>
+    filters?: Pick<ApplicantListFilters, 'search' | 'event_id' | 'assigned_to_me'>
   ): Promise<PipelineStats> {
     const response = await api.get<BackendPipelineStatsResponse>(`/prospective-members/pipelines/${pipelineId}/stats`, {
       params: {
         search: filters?.search,
         event_id: filters?.event_id,
+        // Omitted rather than false, so the whole-pipeline request is unchanged.
+        assigned_to_me: filters?.assigned_to_me ? true : undefined,
       },
     });
     return mapPipelineStatsResponse(response.data);
@@ -674,6 +690,30 @@ interface BackendPaginatedProspectList {
 }
 
 export const applicantService = {
+  /** What the caller may do with this applicant (roles and allowed actions). */
+  async getMyAccess(applicantId: string): Promise<ProspectAccess> {
+    const response = await api.get<ProspectAccess>(`/prospective-members/prospects/${applicantId}/my-access`);
+    return { ...response.data, roles: asArray(response.data.roles) };
+  },
+
+  /**
+   * The applicant's current Interview Requirement stage as the server grades
+   * it, or null when they are not on one.
+   */
+  async getInterviewRequirement(applicantId: string): Promise<InterviewRequirementProgress | null> {
+    const response = await api.get<InterviewRequirementProgress | null>(
+      `/prospective-members/prospects/${applicantId}/interview-requirement`
+    );
+    const data = response.data;
+    return data ? { ...data, positions: asArray(data.positions) } : null;
+  },
+
+  /** The applicants the caller is assigned to, with their roles on each. */
+  async getMyApplicants(): Promise<ApplicantListItem[]> {
+    const response = await api.get<BackendProspectListResponse[]>('/prospective-members/my-applicants');
+    return asArray(response.data).map(mapProspectListToApplicantList);
+  },
+
   async getApplicants(params?: {
     filters?: ApplicantListFilters | undefined;
     page?: number | undefined;
@@ -704,6 +744,7 @@ export const applicantService = {
           // Omitted rather than sent as false, so the archive tabs' request
           // URLs (and their cache keys) are unchanged by this parameter.
           open_only: params?.openOnly ? true : undefined,
+          assigned_to_me: params?.filters?.assigned_to_me ? true : undefined,
           limit: pageSize,
           offset,
         },
@@ -963,6 +1004,8 @@ export const applicantService = {
   async getInactiveApplicants(params?: {
     pipeline_id?: string | undefined;
     search?: string | undefined;
+    event_id?: string | undefined;
+    assigned_to_me?: boolean | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
   }): Promise<PaginatedApplicantList> {
@@ -971,6 +1014,8 @@ export const applicantService = {
         pipeline_id: params?.pipeline_id,
         status: 'inactive',
         search: params?.search,
+        event_id: params?.event_id,
+        assigned_to_me: params?.assigned_to_me,
       },
       page: params?.page,
       pageSize: params?.pageSize,
@@ -980,6 +1025,8 @@ export const applicantService = {
   async getWithdrawnApplicants(params?: {
     pipeline_id?: string | undefined;
     search?: string | undefined;
+    event_id?: string | undefined;
+    assigned_to_me?: boolean | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
   }): Promise<PaginatedApplicantList> {
@@ -988,6 +1035,8 @@ export const applicantService = {
         pipeline_id: params?.pipeline_id,
         status: 'withdrawn',
         search: params?.search,
+        event_id: params?.event_id,
+        assigned_to_me: params?.assigned_to_me,
       },
       page: params?.page,
       pageSize: params?.pageSize,
@@ -997,6 +1046,8 @@ export const applicantService = {
   async getRejectedApplicants(params?: {
     pipeline_id?: string | undefined;
     search?: string | undefined;
+    event_id?: string | undefined;
+    assigned_to_me?: boolean | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
   }): Promise<PaginatedApplicantList> {
@@ -1005,6 +1056,8 @@ export const applicantService = {
         pipeline_id: params?.pipeline_id,
         status: 'rejected',
         search: params?.search,
+        event_id: params?.event_id,
+        assigned_to_me: params?.assigned_to_me,
       },
       page: params?.page,
       pageSize: params?.pageSize,
@@ -1014,6 +1067,8 @@ export const applicantService = {
   async getConvertedApplicants(params?: {
     pipeline_id?: string | undefined;
     search?: string | undefined;
+    event_id?: string | undefined;
+    assigned_to_me?: boolean | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
   }): Promise<PaginatedApplicantList> {
@@ -1022,6 +1077,8 @@ export const applicantService = {
         pipeline_id: params?.pipeline_id,
         status: 'converted',
         search: params?.search,
+        event_id: params?.event_id,
+        assigned_to_me: params?.assigned_to_me,
       },
       page: params?.page,
       pageSize: params?.pageSize,
@@ -1229,6 +1286,34 @@ export const publicStatusService = {
   },
 };
 
+/**
+ * The applicant's follow-up form, reached through the personal link a
+ * Follow-up Form stage emails. Unauthenticated: the token is the credential,
+ * so these use bare axios rather than the signed-in client.
+ */
+export const publicFollowUpFormService = {
+  async getForm(token: string): Promise<PublicFollowUpForm> {
+    const response = await axios.get<PublicFollowUpForm>(`/api/public/v1/follow-up-forms/${encodeURIComponent(token)}`);
+    return response.data;
+  },
+
+  async saveDraft(token: string, data: Record<string, string>): Promise<{ draft_saved_at: string }> {
+    const response = await axios.put<{ draft_saved_at: string }>(
+      `/api/public/v1/follow-up-forms/${encodeURIComponent(token)}/draft`,
+      { data }
+    );
+    return response.data;
+  },
+
+  async submit(token: string, data: Record<string, string>): Promise<{ submitted_at: string; message: string }> {
+    const response = await axios.post<{ submitted_at: string; message: string }>(
+      `/api/public/v1/follow-up-forms/${encodeURIComponent(token)}/submit`,
+      { data }
+    );
+    return response.data;
+  },
+};
+
 // =============================================================================
 // Interview Service
 // =============================================================================
@@ -1257,6 +1342,63 @@ export const interviewService = {
 // =============================================================================
 // Event Link Service
 // =============================================================================
+
+/** Follow-up forms sent to an applicant by Follow-up Form stages. */
+export const followUpFormService = {
+  async list(applicantId: string): Promise<FollowUpFormRequest[]> {
+    const response = await api.get<FollowUpFormRequest[]>(
+      `/prospective-members/prospects/${applicantId}/follow-up-forms`
+    );
+    return asArray(response.data);
+  },
+
+  /** Send, or resend, a stage's form. A resend repeats the same link. */
+  async send(applicantId: string, stepId: string): Promise<FollowUpFormRequest> {
+    const response = await api.post<FollowUpFormRequest>(
+      `/prospective-members/prospects/${applicantId}/follow-up-forms/${stepId}/send`
+    );
+    return response.data;
+  },
+
+  async reviewContactChange(applicantId: string, requestId: string): Promise<FollowUpFormRequest> {
+    const response = await api.post<FollowUpFormRequest>(
+      `/prospective-members/prospects/${applicantId}/follow-up-forms/${requestId}/review-contact-change`
+    );
+    return response.data;
+  },
+
+  /**
+   * A submitted form's answers, for the Interview page. Sensitive ones reach
+   * holders of sensitive_answers.view and, on this route only, the
+   * applicant's assigned interviewers; anyone else sees them withheld.
+   */
+  async getInterviewAnswers(applicantId: string, requestId: string): Promise<FollowUpAnswers> {
+    const response = await api.get<FollowUpAnswers>(
+      `/prospective-members/prospects/${applicantId}/interview/follow-up-forms/${requestId}/answers`
+    );
+    return { ...response.data, answers: asArray(response.data.answers) };
+  },
+};
+
+export const assignmentService = {
+  async list(applicantId: string): Promise<ProspectAssignment[]> {
+    const response = await api.get<ProspectAssignment[]>(`/prospective-members/prospects/${applicantId}/assignments`);
+    return asArray(response.data);
+  },
+
+  /** Assign a member; assigning someone already assigned in that role changes nothing. */
+  async add(applicantId: string, userId: string, role: AssignmentRole): Promise<ProspectAssignment> {
+    const response = await api.post<ProspectAssignment>(`/prospective-members/prospects/${applicantId}/assignments`, {
+      user_id: userId,
+      role,
+    });
+    return response.data;
+  },
+
+  async remove(applicantId: string, assignmentId: string): Promise<void> {
+    await api.delete(`/prospective-members/prospects/${applicantId}/assignments/${assignmentId}`);
+  },
+};
 
 export const eventLinkService = {
   /**

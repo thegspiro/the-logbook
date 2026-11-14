@@ -6,21 +6,28 @@ meeting attendance percentages, waivers, and voting eligibility.
 """
 
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.meeting import Meeting, MeetingAttendee
+from app.models.meeting import AttendanceRecordedVia, Meeting, MeetingAttendee
 from app.models.user import (
     ACTIVE_ACCOUNT_STATUSES,
     MemberLeaveOfAbsence,
     Organization,
     User,
 )
+from app.services.election_defaults import _defaults_for_kind
+from app.services.election_service import ElectionService
 from app.services.member_service_history_service import MemberServiceHistoryService
-from app.services.membership_tier_service import attendance_window, tally_attendance
+from app.services.membership_tier_service import (
+    MembershipTierService,
+    attendance_window,
+    tally_attendance,
+)
+from app.services.voter_rules import is_attendance_reason
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import scheduling_timezone, today_in
 
@@ -123,7 +130,14 @@ class AttendanceDashboardService:
                 attendance_by_user[uid] = []
             attendance_by_user[uid].append(att)
 
-        rows = []
+        gate = ElectionService(self.db)
+        regular_rules = _defaults_for_kind(
+            (org.settings or {}) if org else {}, "regular"
+        ).rules.model_dump()
+
+        rows: List[Dict[str, Any]] = []
+        voting_eligible_count = 0
+        below_threshold_count = 0
         for member in members:
             uid = str(member.id)
             records = attendance_by_user.get(uid, [])
@@ -134,9 +148,9 @@ class AttendanceDashboardService:
                     member, stints_by_user.get(uid, []), period_months, today
                 ),
                 waived_ids={r.meeting_id for r in records if r.waiver_reason},
-                present_ids={
-                    r.meeting_id for r in records if r.present and not r.waiver_reason
-                },
+                # Waived or not: a member who was present attended
+                # (check-in wins, reconciled in tally_attendance).
+                present_ids={r.meeting_id for r in records if r.present},
                 leaves=leaves_by_user.get(uid, []),
             )
             eligible_meetings = len(tally.eligible)
@@ -145,24 +159,22 @@ class AttendanceDashboardService:
             pct = tally.pct
 
             # Tier and voting info
-            member_tier_id = member.membership_type or "active"
-            tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
-            benefits = tier_def.get("benefits", {}) if tier_def else {}
-
-            voting_eligible = benefits.get("voting_eligible", True)
-            voting_blocked_reason = None
-            if not voting_eligible:
-                voting_blocked_reason = (
-                    f"Tier '{member_tier_id}' is not eligible to vote"
-                )
-            elif benefits.get("voting_requires_meeting_attendance", False):
-                min_pct = benefits.get("voting_min_attendance_pct", 0.0)
-                if pct < min_pct:
-                    voting_eligible = False
-                    voting_blocked_reason = (
-                        f"Attendance {pct}% below minimum {min_pct}% "
-                        f"(requires {min_pct}% over {period_months} months)"
-                    )
+            tier_def = MembershipTierService.tier_for_member(tiers, member)
+            member_tier_id = (
+                tier_def.get("id") if tier_def else member.membership_type or "active"
+            )
+            # Whether the member could vote under the department's regular
+            # business meeting rules, judged by the gate the ballot send
+            # applies rather than re-derived from the tier ladder, so this
+            # column cannot disagree with a ballot (pitfall #29). Those rules
+            # carry their own look-back; the period chosen above only decides
+            # which meetings this screen counts.
+            voting_blocked_reason = await gate.voting_reason_under_rules(
+                member, org_id, regular_rules, org
+            )
+            voting_eligible = voting_blocked_reason is None
+            voting_eligible_count += int(voting_eligible)
+            below_threshold_count += int(is_attendance_reason(voting_blocked_reason))
 
             rows.append(
                 {
@@ -195,13 +207,6 @@ class AttendanceDashboardService:
             if rows
             else 0.0
         )
-        voting_eligible_count = sum(1 for r in rows if r["voting_eligible"])
-        below_threshold_count = sum(
-            1
-            for r in rows
-            if r["voting_blocked_reason"]
-            and "Attendance" in (r["voting_blocked_reason"] or "")
-        )
 
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -227,8 +232,8 @@ class AttendanceDashboardService:
     ) -> Optional[Dict]:
         """
         Grant a meeting attendance waiver to a member.
-        The member won't be able to vote in this meeting, but their
-        attendance percentage won't be penalized.
+        A meeting they missed then does not count against their attendance
+        percentage; one they were present at still counts as attended.
         """
         # The current endpoint caller already re-fetches both Meeting and
         # User scoped to the org before calling this, but that validation
@@ -240,13 +245,25 @@ class AttendanceDashboardService:
         )
         await assert_in_org(self.db, User, user_id, organization_id, label="User")
 
+        # The meeting row is the parent both grant paths lock (this one and an
+        # approved member request, attendance_waiver_service), so the one
+        # (meeting, member) row is found by whichever comes second rather
+        # than inserted twice against the unique index (pitfall #27).
+        await self.db.execute(
+            select(Meeting.id)
+            .where(Meeting.id == meeting_id, Meeting.organization_id == organization_id)
+            .with_for_update()
+        )
         # Find or create the attendance record (org-scoped)
         result = await self.db.execute(
-            select(MeetingAttendee).where(
+            select(MeetingAttendee)
+            .where(
                 MeetingAttendee.meeting_id == meeting_id,
                 MeetingAttendee.user_id == user_id,
                 MeetingAttendee.organization_id == organization_id,
             )
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         attendee = result.scalar_one_or_none()
         granted_at = datetime.now(timezone.utc)
@@ -262,13 +279,20 @@ class AttendanceDashboardService:
                 waiver_reason=reason,
                 waiver_granted_by=granted_by,
                 waiver_granted_at=granted_at,
+                recorded_by=granted_by,
+                recorded_via=AttendanceRecordedVia.WAIVER,
             )
             self.db.add(attendee)
         else:
+            # present is left alone: a member who attended still counts as
+            # attending (check-in wins). The Secretary's words replace any
+            # standard text an approved request wrote, so the waiver is now
+            # theirs rather than the request's.
             attendee.excused = True
             attendee.waiver_reason = reason
             attendee.waiver_granted_by = granted_by
             attendee.waiver_granted_at = granted_at
+            attendee.waiver_request_id = None
 
         await self.db.commit()
 

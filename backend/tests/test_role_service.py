@@ -117,6 +117,10 @@ def _mutation_db():
     db.commit = AsyncMock()
     db.rollback = AsyncMock()
     db.refresh = AsyncMock()
+    # sync_position_terms reconciles the dated history through run_sync and
+    # reads the session's noted actor from info.
+    db.run_sync = AsyncMock()
+    db.info = {}
     return db
 
 
@@ -268,6 +272,8 @@ class TestRoleMutationAuditing:
         audit.assert_awaited_once()
         assert audit.await_args.kwargs["event_type"] == "role_assigned"
         db.commit.assert_awaited_once()
+        # The dated position history is reconciled in the same transaction.
+        db.run_sync.assert_awaited_once()
 
     async def test_assignment_audit_failure_rolls_back_without_commit(self):
         db = _mutation_db()

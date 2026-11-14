@@ -20,6 +20,7 @@ import toast from 'react-hot-toast';
 import { organizationService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useEmailListInput } from '../../../hooks/useEmailListInput';
+import { FormField } from '../../../components/ux/FormField';
 
 interface DeclineSettings {
   notify_on_decline: boolean;
@@ -91,6 +92,75 @@ const AVAILABLE_ROLES = [
   { value: 'lieutenant', label: 'Lieutenant' },
   { value: 'sergeant', label: 'Sergeant' },
 ];
+
+interface CcEmailInputProps {
+  id: string;
+  cc: ReturnType<typeof useEmailListInput>;
+  emails: string[];
+}
+
+/**
+ * One "CC additional email addresses" list. Its box was labelled only by its
+ * placeholder, and Add stored whatever was typed; the hook now refuses an
+ * address that is not one and this shows why, on the field.
+ */
+const CcEmailInput: React.FC<CcEmailInputProps> = ({ id, cc, emails }) => (
+  <FormField
+    id={id}
+    label="CC additional email addresses"
+    labelClassName="text-theme-text-secondary mb-1.5 block text-xs font-medium"
+    error={cc.error}
+  >
+    {(field) => (
+      <>
+        <div className="mb-2 flex items-center gap-2">
+          <input
+            {...field}
+            type="email"
+            autoComplete="off"
+            value={cc.inputValue}
+            onChange={(e) => cc.setInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                cc.add();
+              }
+            }}
+            placeholder="email@example.com"
+            className="form-input-sm flex-1"
+          />
+          <button
+            type="button"
+            onClick={() => cc.add()}
+            className="touch:min-h-11 rounded-lg bg-violet-700 px-3 py-1 text-xs text-white hover:bg-violet-800"
+          >
+            Add
+          </button>
+        </div>
+        {emails.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {emails.map((email) => (
+              <span
+                key={email}
+                className="bg-theme-surface-hover text-theme-text-secondary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+              >
+                {email}
+                <button
+                  type="button"
+                  onClick={() => cc.remove(email)}
+                  aria-label={`Remove ${email}`}
+                  className="text-theme-text-muted hover:text-red-500"
+                >
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </>
+    )}
+  </FormField>
+);
 
 export const SchedulingNotificationsPanel: React.FC = () => {
   const reminderLookaheadId = useId();
@@ -344,48 +414,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                 {/* CC emails */}
                 {declineSettings.send_email && (
                   <div className="ml-4">
-                    <p className="text-theme-text-secondary mb-1.5 text-xs font-medium">
-                      CC additional email addresses:
-                    </p>
-                    <div className="mb-2 flex items-center gap-2">
-                      <input
-                        type="email"
-                        value={declineCc.inputValue}
-                        onChange={(e) => declineCc.setInputValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            declineCc.add();
-                          }
-                        }}
-                        placeholder="email@example.com"
-                        className="form-input-sm flex-1"
-                      />
-                      <button
-                        onClick={declineCc.add}
-                        className="touch:min-h-11 rounded-lg bg-violet-700 px-3 py-1 text-xs text-white hover:bg-violet-800"
-                      >
-                        Add
-                      </button>
-                    </div>
-                    {declineSettings.cc_emails.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {declineSettings.cc_emails.map((email) => (
-                          <span
-                            key={email}
-                            className="bg-theme-surface-hover text-theme-text-secondary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-                          >
-                            {email}
-                            <button
-                              onClick={() => declineCc.remove(email)}
-                              className="text-theme-text-muted hover:text-red-500"
-                            >
-                              &times;
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <CcEmailInput id="cc-decline" cc={declineCc} emails={declineSettings.cc_emails} />
                   </div>
                 )}
               </>
@@ -440,48 +469,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                 {/* CC emails */}
                 {assignmentSettings.send_email && (
                   <div className="ml-4">
-                    <p className="text-theme-text-secondary mb-1.5 text-xs font-medium">
-                      CC additional email addresses:
-                    </p>
-                    <div className="mb-2 flex items-center gap-2">
-                      <input
-                        type="email"
-                        value={assignCc.inputValue}
-                        onChange={(e) => assignCc.setInputValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            assignCc.add();
-                          }
-                        }}
-                        placeholder="email@example.com"
-                        className="form-input-sm flex-1"
-                      />
-                      <button
-                        onClick={assignCc.add}
-                        className="touch:min-h-11 rounded-lg bg-red-800 px-3 py-1 text-xs text-white hover:bg-red-900"
-                      >
-                        Add
-                      </button>
-                    </div>
-                    {assignmentSettings.cc_emails.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {assignmentSettings.cc_emails.map((email) => (
-                          <span
-                            key={email}
-                            className="bg-theme-surface-hover text-theme-text-secondary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-                          >
-                            {email}
-                            <button
-                              onClick={() => assignCc.remove(email)}
-                              className="text-theme-text-muted hover:text-red-500"
-                            >
-                              &times;
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <CcEmailInput id="cc-assignment" cc={assignCc} emails={assignmentSettings.cc_emails} />
                   </div>
                 )}
               </>
@@ -574,48 +562,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                 {/* CC emails */}
                 {reminderSettings.send_email && (
                   <div className="ml-4">
-                    <p className="text-theme-text-secondary mb-1.5 text-xs font-medium">
-                      CC additional email addresses:
-                    </p>
-                    <div className="mb-2 flex items-center gap-2">
-                      <input
-                        type="email"
-                        value={reminderCc.inputValue}
-                        onChange={(e) => reminderCc.setInputValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            reminderCc.add();
-                          }
-                        }}
-                        placeholder="email@example.com"
-                        className="form-input-sm flex-1"
-                      />
-                      <button
-                        onClick={reminderCc.add}
-                        className="touch:min-h-11 rounded-lg bg-green-800 px-3 py-1 text-xs text-white hover:bg-green-900"
-                      >
-                        Add
-                      </button>
-                    </div>
-                    {reminderSettings.cc_emails.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {reminderSettings.cc_emails.map((email) => (
-                          <span
-                            key={email}
-                            className="bg-theme-surface-hover text-theme-text-secondary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-                          >
-                            {email}
-                            <button
-                              onClick={() => reminderCc.remove(email)}
-                              className="text-theme-text-muted hover:text-red-500"
-                            >
-                              &times;
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <CcEmailInput id="cc-reminder" cc={reminderCc} emails={reminderSettings.cc_emails} />
                   </div>
                 )}
               </>
@@ -715,48 +662,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                 {/* CC emails */}
                 {equipAlertSettings.send_email && (
                   <div className="ml-4">
-                    <p className="text-theme-text-secondary mb-1.5 text-xs font-medium">
-                      CC additional email addresses:
-                    </p>
-                    <div className="mb-2 flex items-center gap-2">
-                      <input
-                        type="email"
-                        value={equipCc.inputValue}
-                        onChange={(e) => equipCc.setInputValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            equipCc.add();
-                          }
-                        }}
-                        placeholder="email@example.com"
-                        className="form-input-sm flex-1"
-                      />
-                      <button
-                        onClick={equipCc.add}
-                        className="touch:min-h-11 rounded-lg bg-red-800 px-3 py-1 text-xs text-white hover:bg-red-900"
-                      >
-                        Add
-                      </button>
-                    </div>
-                    {equipAlertSettings.cc_emails.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {equipAlertSettings.cc_emails.map((email) => (
-                          <span
-                            key={email}
-                            className="bg-theme-surface-hover text-theme-text-secondary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-                          >
-                            {email}
-                            <button
-                              onClick={() => equipCc.remove(email)}
-                              className="text-theme-text-muted hover:text-red-500"
-                            >
-                              &times;
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <CcEmailInput id="cc-equipment-alert" cc={equipCc} emails={equipAlertSettings.cc_emails} />
                   </div>
                 )}
               </>

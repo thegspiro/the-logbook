@@ -17,6 +17,16 @@ describe('hasAdministrationAccess', () => {
       expect(hasAdministrationAccess(checkerFor(permission))).toBe(true);
     }
   );
+
+  // Evaluation setup is reached from the Evaluations entry every member has,
+  // so these grants alone would open an Administration heading with nothing
+  // under it.
+  it.each(['evaluations.configure', 'evaluations.manage'])(
+    'does not treat %s alone as administrative',
+    (permission) => {
+      expect(hasAdministrationAccess(checkerFor(permission))).toBe(false);
+    }
+  );
 });
 
 describe('canOpenAdministrationSection', () => {

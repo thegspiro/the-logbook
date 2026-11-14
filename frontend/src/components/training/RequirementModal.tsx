@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { CourseLibraryPicker } from './CourseLibraryPicker';
 import { RecencyWindowField } from './RecencyWindowField';
+import { EvaluationRequirementFields } from './EvaluationRequirementFields';
 import { ChecklistItemsEditor } from './ChecklistItemsEditor';
 import { ChangeScopeDialog } from './ChangeScopeDialog';
 import { useCourseLibrary } from '../../hooks/useCourseLibrary';
@@ -35,12 +36,16 @@ const MEMBERSHIP_TYPES = [
 ] as const;
 
 /**
- * Every membership type an operational-class member is stored under. Mirrors
- * the operational rows of `_SPLIT` in backend/app/utils/membership.py, which
- * derives `membership_type` from the member's class and status; `prospective`
- * is left out because prospects are not member accounts and are never graded.
+ * The membership types of the operational members who are still serving.
+ *
+ * `retired` is an operational-class rung in `_SPLIT` (backend/app/utils/
+ * membership.py), but a department reads "operational members" as the people
+ * who ride, and ticking Retired from this shortcut held stepped-back members
+ * to riding requirements (owner decision 2026-11-06). An officer who does
+ * mean them ticks Retired by hand. `prospective` is left out because
+ * prospects are not member accounts and are never graded.
  */
-const OPERATIONAL_MEMBERSHIP_TYPES: readonly string[] = ['active', 'probationary', 'life', 'retired'];
+const OPERATIONAL_MEMBERSHIP_TYPES: readonly string[] = ['active', 'probationary', 'life'];
 
 interface MembershipTypeOption {
   value: string;
@@ -104,6 +109,11 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
     required_hours: seed?.required_hours || undefined,
     required_shifts: seed?.required_shifts || undefined,
     required_calls: seed?.required_calls || undefined,
+    required_transports: seed?.required_transports || undefined,
+    required_refusals: seed?.required_refusals || undefined,
+    required_attendance_pct: seed?.required_attendance_pct || undefined,
+    allows_chief_override: seed?.allows_chief_override ?? false,
+    evaluation_excludes_lowest_rating: seed?.evaluation_excludes_lowest_rating ?? false,
     required_call_types: seed?.required_call_types ?? ([] as string[]),
     checklist_items: seed?.checklist_items ?? [],
     passing_score: seed?.passing_score || undefined,
@@ -187,9 +197,9 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
   const allOperationalSelected = OPERATIONAL_MEMBERSHIP_TYPES.every((t) =>
     formData.required_membership_types.includes(t)
   );
-  // Adds whichever operational types are missing, or clears all four when
-  // they are already ticked; any other category (Administrative, Honorary)
-  // is left as the officer set it.
+  // Adds whichever operational types are missing, or clears all three when
+  // they are already ticked; any other category (Retired, Administrative,
+  // Honorary) is left as the officer set it.
   const toggleOperational = () => {
     setFormData((prev) => {
       const hasAll = OPERATIONAL_MEMBERSHIP_TYPES.every((t) => prev.required_membership_types.includes(t));
@@ -230,6 +240,22 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
     }
     if (formData.requirement_type === 'calls' && !formData.required_calls) {
       toast.error('Required calls must be set for a calls requirement');
+      return;
+    }
+    if (formData.requirement_type === 'evaluated_shifts' && !formData.required_shifts) {
+      toast.error('Required evaluated shifts must be set for an evaluated shifts requirement');
+      return;
+    }
+    if (formData.requirement_type === 'transports' && !formData.required_transports) {
+      toast.error('Required transports must be set for a transports requirement');
+      return;
+    }
+    if (formData.requirement_type === 'refusals' && !formData.required_refusals) {
+      toast.error('Required refusals must be set for a refusals requirement');
+      return;
+    }
+    if (formData.requirement_type === 'session_attendance' && !formData.required_attendance_pct) {
+      toast.error('Attendance percentage must be set for a session attendance requirement');
       return;
     }
     if (formData.requirement_type === 'knowledge_test' && !formData.passing_score) {
@@ -282,8 +308,19 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
         formData.requirement_type === 'courses' || formData.requirement_type === 'certification'
           ? (recencyDays ?? null)
           : null,
-      required_shifts: formData.requirement_type === 'shifts' ? (formData.required_shifts ?? null) : null,
+      required_shifts:
+        formData.requirement_type === 'shifts' || formData.requirement_type === 'evaluated_shifts'
+          ? (formData.required_shifts ?? null)
+          : null,
       required_calls: formData.requirement_type === 'calls' ? (formData.required_calls ?? null) : null,
+      required_transports: formData.requirement_type === 'transports' ? (formData.required_transports ?? null) : null,
+      required_refusals: formData.requirement_type === 'refusals' ? (formData.required_refusals ?? null) : null,
+      required_attendance_pct:
+        formData.requirement_type === 'session_attendance' ? (formData.required_attendance_pct ?? null) : null,
+      allows_chief_override: formData.requirement_type === 'session_attendance' && formData.allows_chief_override,
+      // A boolean on every save: the column refuses null.
+      evaluation_excludes_lowest_rating:
+        formData.requirement_type === 'evaluated_shifts' && formData.evaluation_excludes_lowest_rating,
       // An empty list means every call counts, so switching away clears it.
       required_call_types: formData.requirement_type === 'calls' ? formData.required_call_types : [],
       checklist_items: formData.requirement_type === 'checklist' ? checklistItems : null,
@@ -493,61 +530,72 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                   <option value="skills_evaluation">Skills Evaluation</option>
                   <option value="checklist">Checklist</option>
                   <option value="knowledge_test">Knowledge Test</option>
+                  <option value="evaluated_shifts">Evaluated Shifts</option>
+                  <option value="transports">Transports</option>
+                  <option value="refusals">Refusals</option>
+                  <option value="session_attendance">Session Attendance</option>
                 </select>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label
-                    htmlFor="req-training-type"
-                    className="text-theme-text-secondary mb-2 block text-sm font-medium"
-                  >
-                    Training Type
-                  </label>
-                  <select
-                    id="req-training-type"
-                    value={formData.training_type}
-                    onChange={(e) => setFormData({ ...formData, training_type: e.target.value })}
-                    className="form-input"
-                  >
-                    <option value="">Any Type</option>
-                    <option value="certification">Certification</option>
-                    <option value="continuing_education">Continuing Education</option>
-                    <option value="skills_practice">Skills Practice</option>
-                    <option value="orientation">Orientation</option>
-                    <option value="refresher">Refresher</option>
-                    <option value="specialty">Specialty</option>
-                    <option value="policy_acknowledgment">Policy Acknowledgment</option>
-                  </select>
-                </div>
+              {/* Neither applies to session attendance, which counts linked
+                  sessions attended and reads no record's type or hours. */}
+              {formData.requirement_type !== 'session_attendance' && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="req-training-type"
+                      className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                    >
+                      Training Type
+                    </label>
+                    <select
+                      id="req-training-type"
+                      value={formData.training_type}
+                      onChange={(e) => setFormData({ ...formData, training_type: e.target.value })}
+                      className="form-input"
+                    >
+                      <option value="">Any Type</option>
+                      <option value="certification">Certification</option>
+                      <option value="continuing_education">Continuing Education</option>
+                      <option value="skills_practice">Skills Practice</option>
+                      <option value="orientation">Orientation</option>
+                      <option value="refresher">Refresher</option>
+                      <option value="specialty">Specialty</option>
+                      <option value="policy_acknowledgment">Policy Acknowledgment</option>
+                    </select>
+                  </div>
 
-                <div>
-                  <label
-                    htmlFor="req-required-hours"
-                    className="text-theme-text-secondary mb-2 block text-sm font-medium"
-                  >
-                    Required Hours
-                    {formData.requirement_type === 'hours' && (
-                      <span aria-hidden="true" className="text-red-700 dark:text-red-400">
-                        {' '}
-                        *
-                      </span>
-                    )}
-                  </label>
-                  <input
-                    id="req-required-hours"
-                    type="number"
-                    value={formData.required_hours || ''}
-                    onChange={(e) =>
-                      setFormData({ ...formData, required_hours: e.target.value ? Number(e.target.value) : undefined })
-                    }
-                    className="form-input placeholder-theme-text-muted"
-                    placeholder="e.g., 36"
-                    min="0"
-                    step="0.5"
-                  />
+                  <div>
+                    <label
+                      htmlFor="req-required-hours"
+                      className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                    >
+                      Required Hours
+                      {formData.requirement_type === 'hours' && (
+                        <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                          {' '}
+                          *
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      id="req-required-hours"
+                      type="number"
+                      value={formData.required_hours || ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          required_hours: e.target.value ? Number(e.target.value) : undefined,
+                        })
+                      }
+                      className="form-input placeholder-theme-text-muted"
+                      placeholder="e.g., 36"
+                      min="0"
+                      step="0.5"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Per-type quantity fields */}
               {/* Courses are picked from the library, never typed: compliance
@@ -622,6 +670,63 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                       onChange={(next) => setFormData({ ...formData, required_call_types: next })}
                     />
                   </div>
+                </div>
+              )}
+
+              <EvaluationRequirementFields
+                idPrefix="req"
+                type={formData.requirement_type}
+                shifts={formData.required_shifts?.toString() ?? ''}
+                transports={formData.required_transports?.toString() ?? ''}
+                refusals={formData.required_refusals?.toString() ?? ''}
+                excludesLowest={formData.evaluation_excludes_lowest_rating}
+                onShiftsChange={(v) => setFormData({ ...formData, required_shifts: v ? Number(v) : undefined })}
+                onTransportsChange={(v) => setFormData({ ...formData, required_transports: v ? Number(v) : undefined })}
+                onRefusalsChange={(v) => setFormData({ ...formData, required_refusals: v ? Number(v) : undefined })}
+                onExcludesLowestChange={(v) => setFormData({ ...formData, evaluation_excludes_lowest_rating: v })}
+              />
+
+              {formData.requirement_type === 'session_attendance' && (
+                <div>
+                  <label
+                    htmlFor="req-attendance-pct"
+                    className="text-theme-text-secondary mb-2 block text-sm font-medium"
+                  >
+                    Sessions to Attend (%){' '}
+                    <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                      *
+                    </span>
+                  </label>
+                  <input
+                    id="req-attendance-pct"
+                    type="number"
+                    value={formData.required_attendance_pct || ''}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        required_attendance_pct: e.target.value ? Number(e.target.value) : undefined,
+                      })
+                    }
+                    className="form-input placeholder-theme-text-muted"
+                    placeholder="e.g., 60"
+                    min="1"
+                    max="100"
+                    aria-describedby="req-attendance-pct-help"
+                  />
+                  <p id="req-attendance-pct-help" className="text-theme-text-muted mt-1 text-xs">
+                    Of the training sessions linked to this requirement and held in the period. Link sessions when you
+                    create them or from their event pages; sessions not linked are optional. A waiver or leave covering
+                    a session&apos;s day excuses the member from it.
+                  </p>
+                  <label className="text-theme-text-primary mt-3 flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={formData.allows_chief_override}
+                      onChange={(e) => setFormData({ ...formData, allows_chief_override: e.target.checked })}
+                    />
+                    Allow the Chief to override it for a member
+                  </label>
                 </div>
               )}
 
@@ -1137,7 +1242,8 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                       Operational members
                     </button>
                     <span className="text-theme-text-muted text-xs">
-                      Active, Probationary, Life and Retired — every operational member, whatever their status.
+                      Active, Probationary and Life — the operational members still serving. Tick Retired yourself to
+                      include them.
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 md:grid-cols-3" role="group" aria-label="Member categories">

@@ -9,6 +9,10 @@ before the requirement's ``name_match_until`` (set by migration to the day the
 rule changed); later records need a linked course, the training type or the
 registry code. Every grader goes through the one matcher, so the matrix, the
 dashboard percentage, the annual report and My Training all agree.
+
+Since 2026-11-01 the legacy name match compares stored keys rather than
+testing for a substring (``test_training_match_key.py``), so the records here
+are named "CPR"/"cpr"; the cut-off itself is unchanged.
 """
 
 import uuid
@@ -37,6 +41,7 @@ from app.services.training_compliance import (
     compute_org_compliance_tally,
 )
 from app.utils.org_timezone import resolve_org_today
+from app.utils.training_match_key import training_match_key
 
 CUTOFF = date(2026, 10, 5)
 
@@ -56,13 +61,16 @@ def _req(**fields):
 def _rec(**fields):
     values = dict(
         course_id=None,
-        course_name="CPR Refresher",
+        course_name="CPR",
         training_type=TrainingType.CONTINUING_EDUCATION,
         certification_number=None,
         completion_date=CUTOFF,
         created_at=None,
     )
     values.update(fields)
+    # Keyed as the model keys a saved record (app/models/training.py).
+    values["match_key"] = training_match_key(values["course_name"])
+    values["certification_key"] = training_match_key(values["certification_number"])
     return SimpleNamespace(**values)
 
 
@@ -103,7 +111,7 @@ class TestTheMatcher:
         )
         assert certification_record_matches(
             _req(registry_code="BLS"),
-            _rec(certification_number="AHA-BLS-1", completion_date=late),
+            _rec(certification_number="BLS-1", completion_date=late),
         )
 
 
@@ -137,7 +145,7 @@ async def _member(db, org, name: str) -> User:
 async def _department(db):
     """A "CPR" certification whose cut-off is ten days ago.
 
-    Legacy holds a "CPR Refresher" record completed before the cut-off;
+    Legacy holds a "cpr" record completed before the cut-off;
     Recent one completed after it; Linked a record for the linked CPR course,
     completed after the cut-off under an unrelated name.
     """
@@ -180,7 +188,7 @@ async def _department(db):
     linked = await _member(db, org, "Linked")
 
     def record(member, completed, **fields):
-        fields.setdefault("course_name", "CPR Refresher")
+        fields.setdefault("course_name", "cpr")
         return TrainingRecord(
             id=_uid(),
             organization_id=org.id,

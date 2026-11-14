@@ -152,8 +152,9 @@ is locked." and leaves it out of the save.
 
 A mistaken amendment is corrected by a **reversing entry**, never by editing or
 deleting it (owner decision, 2026-10-09). The reversal is another
-`budget_amendments` row: its `amount` is the original's, negated, and
-`reverses_amendment_id` names the original (nullable FK to
+`budget_amendments` row: its `amount` is negative — the whole original, or
+since 2026-11-01 any part of it (below) — and `reverses_amendment_id` names
+the original (nullable FK to
 `budget_amendments.id`, `ON DELETE SET NULL`, with a UNIQUE key — migration
 `c62a98b47406`). It carries its own reason, approver, approval date and
 entering member; the original row is untouched.
@@ -162,14 +163,21 @@ entering member; the original row is untouched.
 original budget stays `amount_budgeted − Σ amount` over every row, reversals
 included, so it does not move. `amendmentsTotal` is the net sum (never negative:
 each positive amendment is reversed at most once, for exactly its amount), and
-`amendmentCount` counts both rows — an amended-then-reversed line still shows
+`amendmentCount` counts both rows (`amendmentsTotal` stays non-negative with
+partial reversals too: a reversal never exceeds its amendment) — an
+amended-then-reversed line still shows
 the Original / Current tiles, and the list explains the zero.
 
 **Rules** (`FinanceService.reverse_budget_amendment`):
 
-- whole-amendment only — no partial reversal; the body carries no amount;
-- an amendment is reversed **once** — a second attempt is **409** "This
-  amendment has already been reversed.";
+- **partial reversals** _(owner decision, 2026-11-01)_ — the body's optional
+  `amount` (> 0, two places) is how much to take back, up to the whole
+  amendment; more is **400** "A reversal can take back at most the
+  amendment's $X.". Left out, the whole amendment is reversed, as before.
+  $2,500 entered for $250 is one reversal of $2,250. What is left of the
+  amendment stays and still counts;
+- an amendment is reversed **once**, whole or in part — a second attempt is
+  **409** "This amendment has already been reversed.";
 - a reversal is never reversed — **400**; to restore the money, record a new
   amendment. A negative row whose link a downgrade dropped still counts as a
   reversal;
@@ -191,7 +199,8 @@ check (mapped to the same 409).
 **API** (camelCase both ways):
 
 - `POST /finance/budgets/{id}/amendments/{amendmentId}/reverse`
-  (`finance.manage`) — `reason` (≤ 2000), `approvedBy` (≤ 200), `approvedOn`.
+  (`finance.manage`) — `reason` (≤ 2000), `approvedBy` (≤ 200), `approvedOn`,
+  and optionally `amount` (the part to reverse; whole if left out).
   Returns `{amendment, budget}` (201), `amendment` being the reversal. Audited
   as `finance.budget_amendment_reversed` with `budget_id`, `amendment_id` (the
   reversal), `reversed_amendment_id`, `amount` (negative), `approved_by` and
@@ -200,19 +209,24 @@ check (mapped to the same 409).
   `reversesAmendmentId`, and — on a reversed amendment —
   `reversedByAmendmentId`, `reversedAt` (when the reversal was entered) and
   `reversedByName` (who entered it), from one more in-org self-join. Existing
-  fields are unchanged.
+  fields are unchanged. Since 2026-11-01 a reversed amendment also carries
+  `reversedAmount` (what its reversal takes back), and every row
+  `reversesAmendmentRef` (see "Second-officer confirmation").
 
 **Screen.** In the Amendments list a manager gets **Reverse** on a confirmed
 amendment that is neither a reversal nor already reversed, unless the year is
 locked; an
 owner sees the list but no button. `ReverseAmendmentDialog` says "This lowers
 the current budget by $X. The original amendment stays on record." (prefixed
-"Once a second officer confirms it," since 2026-10-09, below), takes Reason,
-Approved by and Approval date (today by default), and confirms with **Record
-reversal**, after which the page re-reads
+"Once a second officer confirms it," since 2026-10-09, below), takes **Amount
+to reverse** (since 2026-11-01: the whole amendment by default; a smaller
+figure makes the text say how much of the amendment stays, and the whole is
+sent as no amount), Reason, Approved by and Approval date (today by default),
+and confirms with **Record reversal**, after which the page re-reads
 the line and the list. A reversal reads "−$X · Reverses the {date} amendment of
 +$Y"; a reversed amendment's amount is struck through, with "Reversed {date} by
-{name}".
+{name}". A part-reversed one is **not** struck through — what is left still
+counts — and reads "Reduced by $X on {date} by {name}".
 
 ### Second-officer confirmation _(2026-10-09)_
 
@@ -284,6 +298,51 @@ is not struck through. The Edit dialog shows the amount read-only when
 `amountEditable` is false, and the lock dialog links a pending amendment to its
 line.
 
+### Who is told an amendment is waiting, and the pending queue _(2026-11-06)_
+
+Owner decisions of 2026-11-01 ("Email + pending queue", "Keep a display-only
+link"); `app/services/finance_budget_change_notifications.py`.
+
+**The email.** Entering an amendment or a reversal emails every active member
+who may confirm it — a `finance.budget_review` or `finance.manage` holder,
+wildcards and legacy aliases counted as at the confirm endpoint — other than
+whoever entered it, inside the department only. Subject `Budget amendment to
+confirm: {line} (+$X)` or `Budget reversal to confirm: {line} (-$X)`; the body
+names who entered it, what it raises or lowers once confirmed, the approval and
+the reason (escaped), and links to the queue. Email only, under the optional
+**Finance duties** kind (`finance_duties`): no text, no bell entry (pitfall
+#18). A failed send is logged and never fails the entry. **Idempotent:** each
+send is an email-channel `NotificationLog` row (category
+`budget_amendment_pending`, metadata `{amendment_id}`), and a member already
+recorded for that amendment is not sent it again; a decided amendment sends
+nothing.
+
+**The queue.** `GET /finance/budget-amendments/pending` (`finance.budget_review`
+or `finance.manage`, the confirm gate) lists every pending amendment and
+reversal across the department's lines, oldest first: the amendment row plus
+`categoryName`, `stationName`, `fiscalYearId`, `fiscalYearName`, `yearLocked`,
+and on a reversal `reversedAmendmentAmount` and `reversedAmendmentApprovedOn`.
+Every join is in-org. **Finance › Budget amendments**
+(`/finance/budget-amendments`, `PendingAmendmentsPage`, in the Finance
+navigation for the same two permissions) shows them with a link to each line,
+and offers **Confirm** and **Reject** on the row — a reviewer holding only
+`finance.budget_review` cannot open the line, so the queue is where they act.
+Confirm is hidden on the viewer's own entry, where Reject reads **Withdraw**; a
+locked year's row offers neither and says why.
+
+**The display-only link.** `budget_amendments.reverses_amendment_ref`
+(migration `0961ffc2cdf1`, nullable `VARCHAR(36)`, no foreign or unique key) is
+written with every reversal and never cleared. Rejecting a reversal still
+clears `reverses_amendment_id` so its unique key frees the amendment; the
+reference stays, so the rejected row reads "Would have reversed the {date}
+amendment of +$Y", and `finance.budget_amendment_rejected`'s
+`reversed_amendment_id` is now read from it. Rows list it as
+`reversesAmendmentRef`. Nothing that moves money reads it. The migration filled
+it for existing reversals: from `reverses_amendment_id` where that still
+stands, and for reversals already rejected from the audit log's
+`finance.budget_amendment_reversed` / `finance.budget_amendment_rejected`
+events — only where the named amendment is on the same line.
+
 ## My Budgets: the owner's view, and the transaction list _(2026-10-08)_
 
 **Who reads a line.** `GET /finance/budgets/{id}`, `…/amendments` and
@@ -336,9 +395,10 @@ against the line, from the same `budget_id` its callers pass, so the listed
 | Record                       | Status listed                 | Effect                                         | Date        |
 | ---------------------------- | ----------------------------- | ---------------------------------------------- | ----------- |
 | Purchase request             | approved / ordered / received | `encumbered`, the estimate                     | approved at |
-| Purchase request             | paid                          | `spent`, the actual amount (else the estimate) | paid at     |
+| Purchase request             | paid                          | `spent`, the amount paid (else the estimate)   | paid at     |
 | Check request                | issued                        | `spent`                                        | check date  |
 | Check request                | voided                        | `none` — reversed by `void_check`, shown so    | check date  |
+| Expense report **line item** | report approved, committed    | `encumbered`, the item's amount (2026-11-06)   | approved at |
 | Expense report **line item** | report paid                   | `spent`, the item's amount, on the item's line | paid at     |
 
 Excluded because they never moved the totals: drafts, submitted, pending,
@@ -582,10 +642,16 @@ members) and **Treasurer duties** (`finance_duties`, officers).
 | A request is approved / adjusted / declined               | The submitter and the active holders of the owning position (line's own, else category's), not the decider | `Budget request approved: {line}` · `… adjusted: {line}` · `… declined: {line}` | `budget_requests` |
 | A deadline is set on a draft year while requests are open | Active holders of every position owning a line in that year, once each                                     | `Budget requests for {year} are open until {date}`                              | `budget_requests` |
 | The deadline is changed (still open)                      | As above                                                                                                   | `Budget request deadline for {year} changed to {date}`                          | `budget_requests` |
-| Scheduled: 7 days and 1 day before the deadline           | Those owners with at least one line in the year no request was submitted for                               | `Reminder: budget requests for {year} close {date}`                             | `budget_requests` |
+| Scheduled: the department's reminder days (7 and 1 unset) | Those owners with at least one line in the year no request was submitted for                               | `Reminder: budget requests for {year} close {date}`                             | `budget_requests` |
+| Leadership changes a request's amount _(2026-11-06)_      | The submitter and the active holders of the owning position, not the reviewer                              | `Leadership changed a budget request: {line} ({amount})`                        | `budget_requests` |
 
 Clearing a deadline, saving the same date again, or setting one already past
-sends nothing. The decision email carries the approved amount and the note;
+sends nothing. The leadership-change email _(owner decision, 2026-11-01)_
+carries the owner's amount before and after and leadership's note; saving the
+amount the owner already had sends nothing, and it is idempotent through the
+sent-log (category `budget_request_leadership_change`, keyed on the request,
+the review time and the amount) — see
+`app/services/finance_budget_change_notifications.py`. The decision email carries the approved amount and the note;
 the submitted email carries this year's figures and the justification; all
 link to the owner's or the review screen. User text is escaped.
 
@@ -602,9 +668,37 @@ reminder and each requests-open email is recorded as an email-channel
 `budget_request_window`, metadata naming the year, the deadline and the
 offset). A member already recorded for that year, deadline and offset is not
 sent it again, and a member sent the requests-open email inside a reminder's
-window is not sent that reminder. Moving the deadline starts a fresh set. The
-offsets are constants (see
-[KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#finance--budget-request-reminders-go-out-7-days-and-1-day-before-for-every-department-2026-10-08)).
+window is not sent that reminder. Moving the deadline starts a fresh set.
+
+**The schedule is the department's** _(owner decision 2026-11-01, built
+2026-11-06)_. **Budget request reminders** on _Finance › Settings_
+(`GET`/`PUT /finance/settings/budget-request-reminders`, `finance.manage` to
+change) sets the reminder days — up to five, 0 (the deadline day) to 60 —
+and whether each reminder also puts an entry in the owner's notification
+bell. They are stored as `budget_request_reminder_days` and
+`budget_request_bell_notices` in the finance settings and read by
+`budget_request_reminders_in` (`app/utils/finance_settings.py`), which both
+the task and the screen use. Unset or malformed reads as 7 and 1, email only
+— the schedule before the setting existed; an empty list sends none. The
+bell entry goes with the email, never instead of it, and also reaches an
+owner who muted the emails; it is recorded on the in-app channel with the
+same key, so it too is sent once per year, deadline, day and member, and it
+lapses the day after the deadline.
+
+**The Treasurer is emailed when a year's start or close is due** _(owner
+decision 2026-11-01, built 2026-11-06)_. The `fiscal_year_due_reminders`
+scheduled task (daily, cron `15 8 * * *` where an external scheduler is used)
+emails the active `finance.manage` holders, under **Treasurer duties**, when
+an adopted, unlocked draft reaches its start date (`Subject: {year} can be
+started`, naming the year still active if there is one) and when the active,
+unlocked year passes its end date (`{year} has ended: begin its year-end
+close`). `close_due` and `start_due` in
+`app/services/finance_year_due_notifications.py` are the one definition —
+the Fiscal Years banner's `closeDue` reads `close_due` too. Each email is
+recorded in the sent-log (categories `fiscal_year_start_due` /
+`fiscal_year_close_due`, keyed on the year and the date it fell due on), so a
+Treasurer is emailed once per event; a moved date that passes again is a new
+event. Nothing is started or closed automatically.
 
 ## Adopting the budget: planning stages, leadership review and the board _(2026-10-09)_
 
@@ -632,7 +726,9 @@ adoption — recorded — is what activates it. Migration `5c8be05f2f0f`.
   amount is written to the line under the decision's locking read (409 below
   spent + committed) and kept in `budget_requests.review_amount`, `review_note`,
   `reviewed_by`, `reviewed_at` beside the Treasurer's `approved_amount`;
-  audited `finance.budget_request_reviewed`. A new Treasurer decision (after
+  audited `finance.budget_request_reviewed`. When the amount changes, the
+  line's owners and the submitter are emailed (since 2026-11-06; "Budget
+  request emails" above). A new Treasurer decision (after
   moving back to `requests`) clears it. `finance.budget_review` also reads every
   request (list and detail), as `finance.manage` does.
 - **Adoption** — `POST /finance/fiscal-years/{id}/adopt` on a draft in
@@ -684,9 +780,16 @@ takes (`finance.manage`), each audited. Migration `af92f1496c43`.
   `submitted`, `pending_approval`, `approved`, `ordered` or `received`;
   expense reports and check requests `submitted`, `pending_approval` or
   `approved`. Drafts are not open items — they moved no money and can no
-  longer be submitted. The lock re-reads the list under the year's row lock
-  and refuses while it is non-empty, naming the count and the first five
-  numbers.
+  longer be submitted. Each item carries `blocksLock`. The lock re-reads the
+  list under the year's row lock and refuses while any blocking item is
+  left, naming the count and the first five numbers.
+- **Outstanding cash advances** _(owner decision 2026-11-01, built
+  2026-11-06)_ are listed too: the year's issued advances not yet fully
+  accounted for, kind `cash_advance`, at what is outstanding, with status
+  `overdue` or `outstanding` (`advance_balances`, the advances report's
+  figures). They are `blocksLock: false`: a member may take the full deadline,
+  and a return can be recorded after the lock, so the Treasurer is shown what
+  is owed at year end without the close waiting on it.
 - **`closeDue`** on the year response: active, not locked, and the
   department's today is after its end date. _Finance › Settings_ shows a
   banner for it.
@@ -694,8 +797,9 @@ takes (`finance.manage`), each audited. Migration `af92f1496c43`.
 **Screens.** _Finance › Settings_ labels a closed, unlocked year **Closing**
 and a locked one **Closed**. The active year offers **Begin year-end close**; a
 closing year offers **Reopen** and **Lock**, which opens
-`FiscalYearLockDialog`: the open items (each linked to its request), and the
-required reconciliation notes, with the lock disabled while anything is open.
+`FiscalYearLockDialog`: the open items (each linked to its request), the
+year's outstanding cash advances in a list of their own, and the required
+reconciliation notes, with the lock disabled while anything blocking is open.
 A locked year shows _"Locked {date} · {notes}"_.
 
 ## Expense receipts are required _(2026-10-09)_
@@ -723,6 +827,99 @@ Receipts**, linked by `receipt_document_id`, migration `c0bf0b155719`).
   file evidence for what it is settling.
 - **Screen.** _Expense report_ disables **Submit for Approval** while any line
   has no receipt, with the count of lines still missing one beside it.
+
+### One receipt on several lines, and the mileage trip log _(2026-11-06)_
+
+Owner decisions of 2026-11-01 (`docs/KNOWN_LIMITATIONS.md`, "Finance — Expense
+Receipts: What the Requirement Does Not Cover").
+
+- **Sharing a receipt.** `POST /finance/expense-reports/{id}/items/{item}/receipt/share`
+  with `{"fromItemId": …}` points a line at the receipt already uploaded to
+  another line **of the same report** (`FinanceService.share_line_receipt`): a
+  hotel folio covering the room and the parking is uploaded once. A line on
+  another report, or another member's report, is not a source (404). Who may
+  and when is an upload's rule: the requester while the report is a draft or
+  submitted, `finance.manage` until it is denied or cancelled. The document is
+  share-locked before the report, Documents before Finance, as the canonical
+  lock order at the top of `documents_service.py` requires.
+- **Taking it off one line.** `DELETE …/items/{item}/receipt`, on a draft only
+  (`detach_line_receipt`): the other lines keep the receipt and the document
+  stays under **Finance > Receipts**. Past draft it is refused, since the
+  report was submitted with that evidence.
+- **Deleting a shared receipt.** Unchanged and now pinned with several lines:
+  `_release_document_references` reads every line naming the document, so a
+  document any line of a report past draft refers to cannot be deleted; a
+  draft's may still go, clearing it from each of its lines.
+- **The mileage trip log.** A mileage line may carry `mileageTrips` — each
+  trip's date, from, to, purpose and miles (to a tenth, at most 1,000 a trip,
+  100 trips a line; no trip after today) — instead of an amount
+  (`app/services/expense_mileage.py`). The server prices it: the miles at the
+  department's rate, to the cent, half up, stored with the rate used
+  (`expense_line_items.mileage_trips`, `mileage_rate`, migration
+  `5f3bc23bc9a6`); an amount or date sent beside a log is replaced, and the
+  line's date is its earliest trip. A line with a log needs no uploaded
+  receipt to be submitted. An edit that leaves the log alone keeps the rate it
+  was priced at; a new log is priced at today's rate; emptying it leaves the
+  amount and the line needs a receipt again. Only a mileage line takes a log.
+- **The rate.** `finance.mileage_rate` in the organization settings, dollars a
+  mile to three places (0.001–5), set on **Finance › Settings › Approval
+  chains** beside the expense deadline (`settings.manage`) and reported as
+  `mileageRate` by `GET /finance/settings`. There is no built-in figure: until
+  a department sets one, a trip log is refused with a message saying so, and
+  mileage is claimed with an amount and an uploaded log as before.
+- **Screens.** The expense form and the line dialog show a trip list for a
+  mileage line, previewing the amount (`utils/mileage.ts`, in whole tenths and
+  thousandths so it matches the server). The report page lists a line's trips
+  for the approvers, offers **Use the receipt from…** on each line, says which
+  lines share a receipt, and on a draft offers **Remove from this line**.
+
+## Paying: the amount paid, a receipt first, and expense lines committed on approval _(2026-11-06)_
+
+Owner decisions of 2026-11-01 (`docs/KNOWN_LIMITATIONS.md`, the Finance
+sections on receipts, the paid amount and expense reports).
+
+- **Mark Paid asks what was paid.** The purchase request's **Mark Paid** opens
+  a dialog for the amount paid, starting from the approved estimate;
+  `POST /finance/purchase-requests/{id}/mark-paid` takes `actual_amount`
+  (more than zero, else 422). It stays optional so API clients written before
+  this keep working: left out, the approved estimate is recorded.
+  `mark_pr_paid` stores the amount on every payment — never a value a draft's
+  edit form left in `actual_amount` — and, in one
+  locked budget mutation, releases the whole approved estimate from the line's
+  committed figure and spends the amount paid. The line's actuals are
+  therefore what was paid, over or under. Paying over the estimate still needs
+  the line's ceiling, and a restricted fund under `block`, to cover the
+  difference. A paid request reports `paid_difference` (paid less approved);
+  the page shows it as "$30.00 over" or "$14.50 under". A request paid before
+  this with no amount recorded shows none.
+- **A receipt before payment.** `mark_pr_paid` and `issue_check` refuse (400,
+  `ReceiptRequiredError`, which says to attach it) a purchase request or a
+  check request with no uploaded receipt; a typed `receipt_url` does not
+  count. Check requests take an upload like purchase requests
+  (`check_requests.receipt_document_id`, migration `100121b59d94`;
+  `GET/POST /finance/check-requests/{id}/receipt` — the requester until the
+  check is issued, `finance.manage` until it is denied, cancelled or voided).
+  An **advance** and a **reimbursement check** need none: an advance is paid
+  before anything is bought and a reimbursement check pays a report whose
+  lines carry them. `check_request_needs_receipt` (in `app/models/finance.py`)
+  is that rule, read by `issue_check` and reported as `receiptRequired`. The
+  pages keep **Mark Paid** and **Issue Check** visible but disabled, with the
+  reason beside them, until the receipt is attached. A document that is a
+  check request's receipt past draft cannot be deleted, as for the other two
+  (`documents_service`, the DOC-31 lock order, check requests last).
+- **The member picks the line; approval commits it.** The report form and the
+  line dialog offer each expense a budget line from the year's lines the
+  member may charge (`GET /finance/budgets/options`). On approval
+  `_commit_report_lines` raises each line's committed figure by its lines'
+  total, under the budget row's lock with the ceiling check — an approval the
+  line cannot cover is refused (409) — and stamps
+  `expense_reports.budget_committed_at`. Payment releases it in the same
+  mutation as the spend, cancelling an approved report releases it, and a
+  voided reimbursement check restores it with the report. Only a committed
+  report releases anything: one approved before 2026-11-06, and one claiming
+  back a purchase (whose own approval already encumbered it), commit nothing.
+  The report's page names each line's budget line (`budgetLabel`, the picker's
+  label). A line may still be left without one, as a purchase request may.
 
 ## Functional expense classification _(2026-10-13)_
 
@@ -947,18 +1144,70 @@ by mistake can be removed (`DELETE …/returns/{return_id}`, audit-logged) until
 an export carries it. An advance with a report or return against it cannot be
 voided.
 
-**Overdue.** An issued advance still outstanding 120 days after its check
-(`ADVANCE_RETURN_DAYS`, fixed at the safe harbor, not configurable) is
+**Overdue.** An issued advance still outstanding past its deadline is
 **overdue**. While a member has one, submitting another advance is refused
 (400, naming it); ordinary check requests, purchases and reimbursements are
-not blocked (owner decision, 2026-10-14).
+not blocked (owner decision, 2026-10-14). The deadline follows one of the two
+IRS safe harbors, which the department chooses _(owner decision 2026-11-01,
+built 2026-11-06)_:
+
+- **Fixed date** (`fixed_date`, the default): 120 days after the check
+  (`ADVANCE_RETURN_DAYS`, fixed at the safe harbor, not configurable).
+- **Periodic statements** (`periodic_statement`, Treas. Reg.
+  1.62-2(g)(2)(ii)): a statement falls on each calendar-quarter end after the
+  check — never on the check's own day — on the department's calendar
+  (`scheduling_timezone`). The advance is due through the end of the 120th
+  day after the **first** statement: what it listed was everything not yet
+  accounted for, so anything still outstanding then was on it. Later
+  statements remind; they do not move the deadline.
+
+The setting is `finance.advance_return_method` in the organization settings
+(`PATCH /organization/settings`, `settings.manage`; absent or unreadable is
+`fixed_date`), reported by `GET /finance/settings` as `advanceReturnMethod`.
+An advance takes the method in force **when its check is issued**
+(`check_requests.advance_return_method`, migration `fd900bc2c9e7`) and keeps
+it, so changing the setting moves no running deadline; advances issued before
+2026-11-06 have none and read as fixed-date. `AdvanceBalance.due_at` in
+`app/services/cash_advances.py` is the one place either deadline is worked
+out, and `overdue`, the submission block, the advance page and the advances
+report all read it.
+
+**Statements.** The daily `advance_statements` task
+(`app/services/cash_advance_statements.py`) emails the holder of each
+outstanding periodic-method advance the statement for the latest quarter end
+on or before today: the advance, what is outstanding and the date to account
+for it by. Email only, never SMS, and not subject to the member's email
+preferences — the deadline runs from it. Each is recorded in
+`advance_statements` (`statement_date`, `due_date`, `outstanding`,
+`emailed_at`), unique per advance and quarter: a run claims the row, commits,
+then sends and stamps `emailed_at`, so a second run sends nothing and a row a
+crash left unstamped goes out on the next one (at least once). A quarter the
+scheduler misses entirely is not sent late. The advance's page lists the
+statements — those emailed, with what each listed, the ones due so far and
+the next.
+
+**On a member's behalf** _(owner decision 2026-11-01, built 2026-11-06)_. A
+`finance.manage` holder can raise an advance for a named member:
+`advanceHolderId` on `POST /finance/check-requests` (403 without
+`finance.manage`; 400 unless it is an advance and the member is a current
+member of the department — active or probationary). The member becomes
+`requested_by` and **holds** it: it is paid to them, it is theirs to account
+for, their overdue advance blocks it, and its statements go to them. The
+officer is stored in `check_requests.raised_by`, shown on the advance's page
+("Raised by … for …") and audit-logged `finance.advance_raised_on_behalf`.
+Separation of duties binds the officer as it binds the holder: they cannot
+approve it (`approve_step`, `manual_approve`; on an emailed-link step whose
+address is theirs, `approve_by_token`) or issue its check (`assert_not_raiser`).
+Raising one's own id is an ordinary advance. Only an advance can be raised on
+someone else's behalf.
 
 **Endpoints.**
 
 | Endpoint                                      | Permission                                            | What                                                                                                                                |
 | --------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /finance/advances?mine&outstanding_only` | `finance.request`, `finance.view` or `finance.manage` | issued advances with amount, accounted, returned, outstanding, `dueAt`, `overdue`; a requester sees only their own                  |
-| `GET /finance/advances/{id}`                  | same                                                  | one advance with its reports (`advanceApplied` of each) and returns; another member's is a 404 to a requester                       |
+| `GET /finance/advances/holders`               | `finance.manage`                                      | the current members an advance can be raised for (`id`, `name`, `legalName`)                                                        |
+| `GET /finance/advances/{id}`                  | same as the list                                      | one advance with its reports (`advanceApplied` of each), returns, `raisedByName` and, on the periodic method, `statements`          |
 | `POST /finance/advances/{id}/returns`         | `finance.manage`                                      | record returned cash                                                                                                                |
 | `DELETE /finance/advances/{id}/returns/{rid}` | `finance.manage`                                      | remove an unexported return                                                                                                         |
 | `GET /finance/reports/advances?format`        | `finance.view`                                        | every advance not yet fully accounted for, oldest first, with the total outstanding and the part overdue; `format=csv` downloads it |
@@ -966,7 +1215,11 @@ not blocked (owner decision, 2026-10-14).
 
 **Screens.** The check request form has **This is a cash advance to me**,
 which hides the budget and fund, fills the payee with the member's legal name
-and warns while one of their advances is overdue. An issued advance's page
+and warns while one of their advances is overdue; its hint states the
+department's deadline method. For the finance office it reads **This is a
+cash advance** and adds **Advance for** (Me, or a member), which makes the
+payee follow the member chosen. **Finance › Approval Chains** has the **Cash
+advance deadline** card for the method. An issued advance's page
 shows **Accounting for this advance** — the balance, due date, the reports and
 the returns — with **Record returned cash** for the finance office. The expense
 report form offers **Accounts for a cash advance** when the member has an open
@@ -1061,8 +1314,8 @@ the report it pays and offers no expense classification of its own.
 
 ## Board reports _(2026-10-12)_
 
-**Finance › Reports** (`/finance/reports`, `finance.view`) holds the three
-reports a treasurer takes to a board meeting. Each is a JSON endpoint for the
+**Finance › Reports** (`/finance/reports`, `finance.view`) holds the reports a
+treasurer takes to a board meeting. Each is a JSON endpoint for the
 screen and the same endpoint with `format=csv` for the download, built from one
 query, so the file matches what was shown. The page formats what the server
 sends and sums nothing itself (CLAUDE.md pitfall #29). **Print** uses the
@@ -1080,6 +1333,9 @@ belonging to another department answers 404.
 | `GET /finance/reports/budget-vs-actual?fiscal_year_id&as_of&format` | each budget line of the year, through `as_of` (default: the department's today), with a total row |
 | `GET /finance/reports/amendment-log?fiscal_year_id&format`          | every amendment on the year's lines, oldest first, with who entered, approved and decided it      |
 | `GET /finance/reports/payments-register?start&end&format`           | every payment dated in the period, oldest first, with a total; at most 366 days (400 beyond that) |
+| `GET /finance/reports/expense-summary-by-member?start&end&format`   | what each member was reimbursed in the period _(2026-11-06)_                                      |
+| `GET /finance/reports/dues-delinquency?start&end&format`            | dues falling due in the period: collection totals, and each member overdue today _(2026-11-06)_   |
+| `GET /finance/reports/purchases-by-vendor?fiscal_year_id&format`    | the year's approved and paid purchase requests, by vendor _(2026-11-06)_                          |
 
 **Budget vs actual, through a date.** The report answers "where did this line
 stand at the end of the day on `as_of`", in the department's timezone
@@ -1118,6 +1374,31 @@ the budget-vs-actual report, for payments charged to that year's lines.
 reason, the approval it cites (who and when), who entered it and when, and its
 status with who confirmed or rejected it and their note. `confirmedNet` is what
 the confirmed amendments moved the year's budget by.
+
+**Expenses by member, dues delinquency, purchases by vendor** _(2026-11-06;
+owner decision 2026-11-01)_. The rest of the original plan, each `finance.view`
+with a CSV:
+
+- **Expenses by member** is the payments register for the same period,
+  totalled by the member who submitted each report: the expense reports paid
+  to them directly or by reimbursement check, less any of those checks voided
+  in the period. It is built from `payments_register` itself, so its total is
+  the register's reimbursements to the cent; what a cash advance covered is not
+  counted again.
+- **Dues delinquency** takes the dues falling due in the period (the
+  department's calendar) and reports `get_dues_summary`'s expected, collected,
+  waived and outstanding over them, then each member with a record there that
+  is overdue **today** by `dues_overdue_clause` — the rule the dues screen, its
+  summary and the daily task use, grace periods and late fees included as the
+  dues code applies them. A partly paid record is not overdue under that rule
+  and is not listed. A member's amount overdue is the amount due (a charged
+  late fee is already in it) less what was paid; the late fees are shown too.
+- **Purchases by vendor** groups a fiscal year's purchase requests by vendor,
+  ignoring case and spacing, under the spelling used most. Approved, ordered
+  and received ones are **open** at their estimate; paid ones, and ones the
+  member bought and was reimbursed for, are **paid** at the actual amount, else
+  the estimate (the payments register's figure). Drafts, pending, denied and
+  cancelled requests are left out.
 
 **CSV.** Written with `SafeCsvWriter`. Amounts are written as numbers, not
 formatted text, so a negative (a void, an overspent line) stays a number a
@@ -1262,7 +1543,7 @@ Enums:
 
 **Chain resolution (on submit):**
 
-1. Look up chains matching `applies_to` + `budget_category_id` + amount within `min_amount`/`max_amount` range
+1. Look up chains matching `applies_to` + `budget_category_id` + amount within `min_amount`/`max_amount` range. `applies_to` must be the request's own type: a purchase-request chain never routes an expense report or a check request _(since 2026-10-17; owner decision 2026-11-01 "match own type only")_
 2. If multiple match, use the most specific (category + amount > category only > amount only > default)
 3. If no chain matches, use the org's `is_default` chain
 4. If no default chain exists (or the chain has no steps), the request waits in `pending_approval` with no approval steps, and anyone with `finance.approve` other than the requester approves or denies it directly from the request's detail page (`/finance/approvals/manual/...`)
@@ -1309,7 +1590,7 @@ Any Trustee approves Step 2 → Step 3 fires automatically
 
 ### Who may act on a step _(2026-10-04)_
 
-Approve and deny check the caller against the step's named approver, in addition to `finance.approve` on the endpoint. The rule lives in one place, `app/services/finance_approver_matching.py`, and the pending list, the request detail pages and the coverage report all read it from there:
+Approve and deny check the caller against the step's named approver. **Being named is the grant** _(owner decision 2026-11-01, built 2026-11-06)_: the endpoints admit any member, and a member a step names may approve or deny that step without `finance.approve`. A caller without `finance.approve` whom the step does not name is refused (403, "Only the approver this step names can act on it.") before the step's order or its request is read (`may_reach_step`). It reaches that step only — not a later step naming someone else, another request, a step that names nobody, the manual decision on a request no chain routes, or the Approvals page. The rule lives in one place, `app/services/finance_approver_matching.py`, and the pending list, the request detail pages and the coverage report all read it from there:
 
 | `approver_type` | Who matches                                                                                                                                                                    |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -1319,12 +1600,13 @@ Approve and deny check the caller against the step's named approver, in addition
 | `specific_user` | the member whose id is `approver_value`                                                                                                                                        |
 | `email`         | the active member whose account email is `approver_value` (case-insensitive); an outside approver uses the emailed link instead                                                |
 
-- **Override.** A `finance.configure_approvals` holder who does not match may still approve or deny by giving `overrideReason` (up to 2000 characters). Without one the call is refused with 403, naming who the step is assigned to. Anyone else who does not match gets 403 "This step is waiting on …".
+- **Override.** A `finance.configure_approvals` holder who also holds `finance.approve` (`may_override`) and does not match may still approve or deny by giving `overrideReason` (up to 2000 characters). Without one the call is refused with 403, naming who the step is assigned to. Anyone else who does not match gets 403 "This step is waiting on …".
 - **Separation of duties is unaffected.** The requester can never approve their own request, override or not; a requester may still deny (withdraw) their own.
 - **Audit.** `finance.approval_step_approved` / `finance.approval_step_denied` record `override`, `approver_type`, `approver_value`, and `override_reason` when overriding; an override is logged at `warning`.
 - **Steps are validated when saved.** Setting an approver on an approval step requires a value that resolves: a position slug that exists in the organization, an active member of the organization, a known permission name (or `*`; a module wildcard such as `finance.*` is refused), or one valid email address. A step saved before this rule keeps working and can still be renamed; changing its approver re-validates it. Notification steps are not checked.
-- **Detail pages.** Each entry in a request's `approvalSteps` carries `assigneeLabel`, and, for the viewer, `canAct` / `requiresOverride` on the step the request is waiting on, so a page does not re-derive the rule.
-- **Finding steps nobody can act on.** `GET /finance/approval-chains/approver-coverage` lists every approval step with the number of active members who can act on it (who match it and, unless it is an email step, hold `finance.approve`, which approve and deny require), a `problem` (`no_value`, `not_found`, `no_active_members`, `no_approve_permission` when members match but none holds `finance.approve`, `invalid_email`) and how many requests are waiting on it now.
+- **Detail pages.** Each entry in a request's `approvalSteps` carries `assigneeLabel`, and, for the viewer, `canAct` / `requiresOverride` on the step the request is waiting on, so a page does not re-derive the rule. A member who is one of a request's approvers (`reviews_entity`) opens it even when it is another member's, which is where a named member without `finance.approve` acts.
+- **Finding steps nobody can act on.** `GET /finance/approval-chains/approver-coverage` lists every approval step with the number of active members who can act on it (who match it — being named is enough), a `problem` (`no_value`, `not_found`, `no_active_members`, `invalid_email`; `no_approve_permission` was retired on 2026-11-06 with the decision that naming grants the step) and how many requests are waiting on it now.
+- **Approval emails** _(owner decision 2026-11-01, built 2026-11-06; `app/services/finance_approval_notifications.py`)_. When a request reaches an approval step, the active members it names are emailed (optional kind `finance_duties`), never the requester; an EMAIL-type step's approval link is its only notice. When a request is approved or denied, its requester is emailed (optional kind `finance_requests`), with the denial reason, unless they withdrew it themselves. Email only. Queued while the request changes and sent after the commit (`_commit_and_send_notices`), so no email announces a rolled-back step or decision; a step is stamped `approvers_notified_at` when its notice is queued and never notified twice, and a decision is notified only by the call that moves the request out of pending approval.
 - Requests with no approval chain are unchanged: any `finance.approve` holder other than the requester decides them manually. The dashboard's pending-approvals count is also unchanged and still counts every request waiting on a step.
 
 ### Endpoints
@@ -1335,7 +1617,7 @@ Approve and deny check the caller against the step's named approver, in addition
 - `GET /finance/approval-chains/preview?entity_type=purchase_request&amount=3000&category_id=X` (preview which chain would be selected — useful for the UI)
 - `GET /finance/approval-chains/approver-coverage` (every approval step and who can act on it; `finance.configure_approvals`)
 - `GET /finance/approvals/pending` (the step each request is currently waiting on, one row per request, across all entity types, limited to the steps the caller is the named approver of; an approvals admin also sees the rest, flagged `requiresOverride`. Each row carries `approverType`, `approverValue`, `assigneeLabel`, `canAct`, `requiresOverride`; powers the Approvals page)
-- `POST /finance/approvals/{step_record_id}/approve` and `.../deny` (body `{notes?, overrideReason?}`; 403 when the caller is not the step's named approver — see above)
+- `POST /finance/approvals/{step_record_id}/approve` and `.../deny` (body `{notes?, overrideReason?}`; signed-in members — `finance.approve`, or being named on the step; 403 when the caller is not the step's named approver — see above)
 - `GET /finance/approvals/unrouted` (requests in `pending_approval` with no approval step still pending: no chain applied, or held for a second approver — `awaitingSecondApproval`, `firstApprovedBy`; see **Dual approval** below)
 - `POST /finance/approvals/manual/{entity_type}/{entity_id}/approve` (body `{notes?}`; notes go to the audit log, with `completed` false when the approval was the first of two) and `.../deny` (body `{reason}`, required) — only for a request with no approval step still pending; a request whose chain is still running returns 409
 - `GET /finance/settings` (`finance.view`, `finance.approve`, `finance.manage` or `finance.configure_approvals`) — `{dualApprovalThreshold}` as the approval path reads it, null when off
@@ -1386,6 +1668,54 @@ rather than refusing the first.
   rows, the requests decided on their own page (`GET /finance/approvals/unrouted`),
   each marked "A second approver" or "An approver (no chain applies)".
 
+##### Refinements _(owner decisions 2026-11-01, built 2026-11-06)_
+
+- **A threshold per request type.** `finance.dual_approval_thresholds` is a
+  map of `purchase_request`, `check_request` and `expense_report` to whole
+  dollars (`DualApprovalThresholdsUpdate`, 0 to 9,999,999,999; an unknown key
+  is refused). A type that is absent, null or malformed **follows**
+  `dual_approval_threshold`, so a department that never sets one keeps its
+  single figure; `0` turns the rule off for that type only; a type may be on
+  while the department figure is off. `FinanceSettings.threshold_for(type)` is
+  the single reader — `_held_for_second_approver`, the route preview and
+  `GET /finance/settings` (`dualApprovalThresholds`: `entityType`,
+  `threshold`, `followsDefault`) all call it.
+- **A named office.** `finance.second_approver_position` is a position slug,
+  matched as a chain's position step is (case-insensitive, active members). A
+  request at or above its threshold then completes only once two different
+  people have approved it **and** one of them holds the position. While no
+  approver so far holds it, `manual_approve` refuses anyone else with a 400
+  naming the office (`_refuse_outside_the_office`); a chain approved by two
+  people outside it ends held, and the office's holder completes it manually.
+  `PATCH /organization/settings` refuses a slug the department does not have
+  and stores the position's own slug (`OrganizationService._settle_second_approver_position`);
+  blank clears it. A slug whose position was later deleted fails closed and
+  `GET /finance/settings` reports `secondApproverPositionName: null`.
+- **One person by email.** `_approvers_so_far` counts an emailed-link approval
+  as the member whose account email is the step's address
+  (`finance_second_approval.email_identity`), falling back to the address.
+- **The notice.** On the first hold, `claim_second_approval_notice` sets the
+  request's `second_approval_requested_at` with
+  `UPDATE … WHERE second_approval_requested_at IS NULL` (migration
+  `ee9ff4596ce7`), and only the call that changed the row queues an
+  `ApprovalNotice` of kind `second_approval`. Every path that can first hold a
+  request — manual approve, a chain's last step (`approve_step`), the emailed
+  link, and a submit whose steps all auto-approve — sends its queue only after
+  the commit (`_commit_and_send_notices`, or the public token routes), where
+  `notify_held_request` re-reads the request and skips one no longer waiting.
+  The email itself is `notify_second_approval_needed` (template
+  `finance_second_approval_needed`,
+  kind `finance_duties`): active `finance.approve` holders other than those who
+  approved and the requester, only the office's holders while it is owed. The
+  email names the request, amount, who approved so far and, when relevant,
+  the office, and links to `/finance/approvals`. A send failure is logged,
+  never raised.
+- **Screens.** `DualApprovalSettingsCard` adds "By request type" (per type:
+  Same as above / Its own threshold / Off for this type; every type is sent on
+  each save, null for "same as above") and "Who gives the second approval"
+  (a position picker from the page's approver options, or a slug field when
+  positions cannot be listed). Both are read-only without `settings.manage`.
+
 ### Frontend
 
 Pages:
@@ -1396,7 +1726,7 @@ Pages:
 Components:
 
 - **ApprovalTimeline** — shown on PurchaseRequestDetailPage, ExpenseReportDetailPage, CheckRequestDetailPage. Displays each step's status, timestamps and notes
-- **ApprovalStepActions** — above the timeline on the same three pages. When the request is pending approval, shows "Waiting on <assigneeLabel>." for the step it is waiting on, to anyone who can see the request. Buttons come from that step's `canAct` / `requiresOverride`, which the detail endpoint sets for the viewer (false on notification steps and without `finance.approve`): Approve / Deny for the named approver, "Approve / Deny as approvals admin" with a required override reason for an approvals admin who is not. A requester who is also the named approver still sees Approve; the API refuses it (separation of duties) and the dialog shows why. Re-fetches the request after a decision. Shares **ApprovalDecisionDialog** with the Approvals page
+- **ApprovalStepActions** — above the timeline on the same three pages. When the request is pending approval, shows "Waiting on <assigneeLabel>." for the step it is waiting on, to anyone who can see the request. Buttons come from that step's `canAct` / `requiresOverride`, which the detail endpoint sets for the viewer (false on notification steps; a member the step names gets `canAct` without `finance.approve`): Approve / Deny for the named approver, "Approve / Deny as approvals admin" with a required override reason for an approvals admin who is not. A requester who is also the named approver still sees Approve; the API refuses it (separation of duties) and the dialog shows why. Re-fetches the request after a decision. Shares **ApprovalDecisionDialog** with the Approvals page
 - **ManualApprovalPanel** _(2026-09-30)_ — on the same three pages, for a request in `pending_approval` with **no** approval steps (no chain matched, or the chain had none). Shown only to `finance.approve` holders; offers Approve (optional note, audit log only) and Deny (reason required, shown to the requester) through `/finance/approvals/manual/...`. The requester sees Deny only — the backend refuses their approval too. Since 2026-10-11 it also shows on a request held for a second approver (`awaitingSecondApproval`), and the Approvals page lists both kinds below its step rows, from `GET /finance/approvals/unrouted`
 - **ApprovalRoutePreview** _(built 2026-10-23)_ — **Who will approve this**, on the purchase request, expense report and check request forms (as the amount and budget line change, debounced) and on a draft's page beside **Submit**. It reads `GET /finance/approval-chains/route-preview?entity_type&amount&budget_id` (`finance.request`, `finance.view` or `finance.manage`), which answers from `FinanceService._request_chain`, the resolver submission itself uses, so the route shown is the route taken: a purchase or check request is matched on its budget line's category (an unknown or other department's line counts as none), an expense report on its total alone. The response is the chain's name, each step's name, type and approver **as the request's own timeline names them** (`describe_assignee`; a notification step names nobody), which steps the amount auto-approves, whether the dual-approval threshold applies, and `manual` when no chain does. It carries no approver configuration. `GET /finance/approval-chains/preview` (`finance.view`, the raw chain) is unchanged; the settings page still has no preview tool
 
@@ -1436,7 +1766,9 @@ Enums:
 - `POST /finance/purchase-requests/{id}/cancel`
 - `POST /finance/purchase-requests/{id}/mark-ordered`
 - `POST /finance/purchase-requests/{id}/mark-received`
-- `POST /finance/purchase-requests/{id}/mark-paid`
+- `POST /finance/purchase-requests/{id}/mark-paid?actual_amount=` — the
+  amount paid (optional; the approved estimate when left out); refused
+  without an uploaded receipt (2026-11-06)
 - `GET/POST /finance/purchase-requests/{id}/receipt`
 - `PUT /finance/purchase-requests/{id}/functional-class`
 - `POST /finance/purchase-requests/{id}/reimbursement-report` — claim it back; see [Reimbursing a purchase](#reimbursing-a-purchase-2026-10-23)
@@ -1451,7 +1783,7 @@ for expense reports and check requests.
 Business logic:
 
 - On approval: encumber budget (add to amount_encumbered)
-- On paid: move from encumbered to spent
+- On paid: release the estimate and spend the amount paid
 - On denial/cancel: release encumbrance
 - Auto-number generation per fiscal year
 
@@ -1498,17 +1830,22 @@ Enums:
   submitted until one is added.
 - `POST /finance/expense-reports/{id}/cancel` — withdraw a draft, or (finance
   office) cancel a submitted, pending or approved report. Its approval steps
-  are skipped and their emailed links revoked. Nothing was spent or encumbered
-  for an unpaid report, so no budget line moves; a cancelled report stops
+  are skipped and their emailed links revoked. Nothing was spent for an unpaid
+  report; what an approved one's approval committed is released (2026-11-06),
+  and otherwise no budget line moves. A cancelled report stops
   counting against its cash advance and its restricted funds, and frees the
   purchase request it claimed back for a new claim. Refused while a
   reimbursement check is paying the report, and for a paid report.
 - `GET/POST /finance/expense-reports/{id}/items/{item_id}/receipt`
+- `DELETE /finance/expense-reports/{id}/items/{item_id}/receipt` — take a draft line's receipt off it alone (2026-11-06)
+- `POST /finance/expense-reports/{id}/items/{item_id}/receipt/share` — use another line's receipt (2026-11-06)
 - `PUT /finance/expense-reports/{id}/items/{item_id}/functional-class`
 - `GET/POST /finance/check-requests`
 - `GET/PUT /finance/check-requests/{id}`
 - `POST /finance/check-requests/{id}/submit`
-- `POST /finance/check-requests/{id}/issue`
+- `POST /finance/check-requests/{id}/issue` — refused without an uploaded
+  receipt, an advance's and a reimbursement check's aside (2026-11-06)
+- `GET/POST /finance/check-requests/{id}/receipt`
 - `POST /finance/check-requests/{id}/void`
 - `POST /finance/check-requests/{id}/cancel` — withdraw a draft, or (finance
   office) cancel one not yet issued; an issued check is voided instead. An
@@ -1565,15 +1902,23 @@ Enums:
 
 - `GET/POST /finance/dues-schedules`
 - `PUT /finance/dues-schedules/{id}`
-- `POST /finance/dues-schedules/{id}/generate` (bulk-create member_dues for all eligible members)
+- `POST /finance/dues-schedules/{id}/generate` (bulk-create member_dues for all eligible members — see "Schedule terms" below)
+- `GET /finance/dues-schedules/membership-type-options` _(2026-11-06)_ — the department's membership tiers (`id`, `name`), for the schedule form's "Applies to". `finance.manage`
 - `GET /finance/dues` (list with member/status filters). Each row carries `memberName` _(2026-10-11)_ — the member's display name, joined in the query, because the Treasurer reading the Dues page holds `finance.manage` but not necessarily `users.view`. The single-record write responses (payment, waive, unwaive) do not carry it; the page re-reads the list after every write
 - `PUT /finance/dues/{id}` (record payment — appends to the ledger; idempotent on `transaction_reference`; refuses `WAIVED`/`EXEMPT`)
-- `GET /finance/dues/{id}/payments` _(2026-08-02)_ — the payment ledger, oldest first. `finance.view` or `finance.manage`; a `finance.view` holder sees only their own, because the handler narrows to the caller for anyone without `finance.manage`. The only place earlier payments can be read back, since the dues record itself carries only the derived total and the newest payment's detail
+- `GET /finance/dues/{id}/payments` _(2026-08-02)_ — the payment ledger, oldest first. Each row carries `recordedByName` _(2026-11-06)_, the display name of whoever recorded it (null when that account is gone or nobody did, as for a Zeffy payment). `finance.view` or `finance.manage`; a `finance.view` holder sees only their own, because the handler narrows to the caller for anyone without `finance.manage`. The only place earlier payments can be read back, since the dues record itself carries only the derived total and the newest payment's detail
 - `POST /finance/dues/{id}/waive` — locks the row; refuses (400) dues already `WAIVED` ("These dues are already waived.") so a repeat cannot overwrite who waived, when and why. Reverse with `unwaive` to re-record
 - `POST /finance/dues/{id}/unwaive` _(2026-08-02; reason handling reversed 2026-08-13)_ — reverse a waiver. `finance.manage`, reason required. Restores whatever the ledger says (PENDING / PARTIAL / PAID) and writes a `finance.dues_waiver_reversed` audit event. **Free-text reasons are kept out of the immutable audit log**: the original waive reason is erased from the record and _not_ copied into the event (it may carry personal information that must remain eligible for privacy scrubbing) — the event records only the dues id and restored status
 - `GET /finance/dues/summary` (collection rates, outstanding totals)
+- `GET /finance/my-dues` _(2026-11-06)_ — the caller's own dues, any signed-in member, no permission: schedule name, `amountDue` (including any late fee charged), `amountPaid`, `balance`, effective `status`, `dueDate`, `lateFeeApplied`, a late fee still to come (`lateFeeAmount`, `lateFeeAfter`) and the payments. Status and fee come from `effective_dues_status` and `late_fee_deadline`, the rules the Treasurer's list and the late-fee task use (`app/services/my_dues.py`)
 
-No dues reminder is sent: there is no reminder endpoint or scheduled task.
+**Schedule terms** _(owner decision 2026-11-01, built 2026-11-06; `app/services/dues_terms.py`)_. A schedule's grace period, late fee, fiscal year and membership types apply once `dues_schedules.terms_effective_at` is set — on create, and on the first save of a schedule that existed at upgrade (migration `ba80cc574948` leaves those NULL, so they keep billing every active member and charging nothing until saved):
+
+- **Membership types** — generation bills a member only when their standing is one of the listed tier ids (`member_holds_tier`, the rule an event's "mandatory for" list uses). Empty or absent bills everyone; the stored list is cleaned to trimmed, de-duplicated ids, or NULL.
+- **Fiscal year** — create and update refuse a due date outside the year, on the department's calendar (the year's bounds read as stored dates); generation is refused once the year is closing or locked.
+- **Late fee** — the daily `dues_late_fees` task (`apply_late_fees`) charges dues still owing (`PENDING`, `OVERDUE`, `PARTIAL` with a balance) once their due date plus `grace_period_days` has passed and that instant is after `terms_effective_at`: `late_fee_applied` is set and `amount_due` grows by the fee. A stored charge, not an on-read rule, so every reader that totals `amount_due` agrees. The UPDATE requires `late_fee_applied IS NULL`, so a second or concurrent run is a no-op (pitfall #36). A charged fee is not re-priced when the schedule's fee changes.
+
+**Reminders** _(2026-11-06; `app/services/dues_reminders.py`)_. The daily `dues_reminders` task emails the member once when their dues fall due within 7 days and once when they become overdue (only for dues overdue 30 days or less). Email only, never SMS; the optional `dues_reminders` email kind ("Your dues"), on by default. Markers `member_dues.due_reminder_sent_at` / `overdue_reminder_sent_at`; send-then-stamp (at least once), a failed send left unstamped for the next run, a member who opted out stamped without an email.
 
 > **The dues screen calls every write endpoint.** `duesService` in
 > `modules/finance/services/api.ts` wraps schedule create and update, dues
@@ -1581,9 +1926,8 @@ No dues reminder is sent: there is no reminder endpoint or scheduled task.
 > **Finance › Dues** (`DuesManagementPage`) offers each to a `finance.manage`
 > holder: **New schedule** / **Edit schedule**, **Generate dues**, **Record
 > payment**, **Waive**, **Reverse waiver** and **Payment history**. The schedule
-> form offers only name, amount, frequency, due date, notes and active, because
-> nothing reads the stored grace period, late fee, fiscal year or membership
-> types — see `KNOWN_LIMITATIONS.md`.
+> form also offers the grace period, late fee, fiscal year and membership types
+> _(2026-11-06)_, and warns before a schedule saved earlier has them applied.
 
 > **Why `unwaive` exists.** Payments against waived dues are refused, and
 > `PUT /finance/dues/{id}` _is_ the payment route, so without a reversal there
@@ -1598,6 +1942,7 @@ Pages:
 
 - `DuesManagementPage` — `/finance/dues` — schedules, member dues, and the
   write actions described above
+- `MyDuesPage` — `/finance/my-dues` _(2026-11-06)_ — the signed-in member's own dues; in the Finance navigation for everyone who sees the group
 
 ---
 
@@ -1671,6 +2016,105 @@ Export format:
 - **IIF** (future): QuickBooks Desktop interchange format
 - Design the export service with a strategy pattern so adding QBO API later is straightforward
 
+**QuickBooks Online connection** _(owner decision 2026-11-01, built 2026-11-06, migration `e4c6e82acbc2`)_
+
+A department may connect its QuickBooks Online company; payments then post to
+it as QuickBooks **Purchases** to their vendors, as decided on 2026-10-09
+(`docs/KNOWN_LIMITATIONS.md`, "Finance — QuickBooks Export Gaps"), instead of
+going in the journal-entry file. A department that does not connect sees no
+change. What remains open is under "Finance — QuickBooks Online Connection
+Limits" in `docs/KNOWN_LIMITATIONS.md`.
+
+- **Setup (the operator).** Register an app at developer.intuit.com with the
+  **QuickBooks Online Accounting** scope (`com.intuit.quickbooks.accounting`,
+  the only scope requested). Add the redirect URI
+  `https://<your-domain>/api/v1/finance/quickbooks/oauth/callback`, exactly.
+  Set `QBO_CLIENT_ID`, `QBO_CLIENT_SECRET` and `QBO_REDIRECT_URI` from the app's
+  **Keys & OAuth** page, and `QBO_ENVIRONMENT` to `sandbox` (the Development
+  keys and a sandbox company; the default) or `production` (the Production
+  keys and real books). The names follow the repo's `<PROVIDER>_CLIENT_ID` /
+  `_CLIENT_SECRET` / `_REDIRECT_URI` convention. With any of the first three
+  blank the connection reports `configured: false` and nothing is posted.
+- **Connecting (the Treasurer).** **Connect to QuickBooks** on Finance ›
+  QuickBooks Export sends the browser to Intuit's consent page, where they pick
+  the company. The attempt is bound three ways, like the calendar connects: a
+  signed ten-minute `state` (purpose `quickbooks_connect`), its nonce in an
+  httpOnly cookie on `/api/v1/finance/quickbooks/` (double-submitted), and the
+  same nonce stored encrypted as the connection's single pending attempt, which
+  the callback removes before anything else, so a state works once. The
+  Treasurer must still hold `finance.manage` when it finishes. The callback
+  stores the company (`realmId`) and the tokens, encrypted at rest
+  (`EncryptedText`), and redirects back with `?quickbooks=connected` or
+  `?quickbooks_error=<reason>`.
+- **Tokens.** Access tokens last an hour and are refreshed five minutes before
+  they expire, or on a 401; Intuit rotates refresh tokens, and the newest one
+  replaces the stored one every time. A refresh token expires 100 days after
+  issue (rolling), so a run with nothing to post renews the grant once fewer
+  than 30 days are left. A refused refresh (`invalid_grant`), a
+  403, or a change of `QBO_ENVIRONMENT` sets the connection to
+  `reconnect_required`, and posting waits for a reconnect. **Disconnect**
+  discards the tokens, revokes them at Intuit (reporting `revoked: false` if
+  Intuit did not confirm), and returns payments still queued to the CSV
+  export.
+- **What posts.** A paid purchase request (one line, to `vendor`; none is
+  refused), an issued check that is not an advance (one line, to `payeeName`;
+  a reimbursement check carries its report's lines), and a paid expense report
+  not paid by a reimbursement check (its lines, to the member). Each must be
+  dated on or after the connection's **post from** date (the moment of
+  connecting, changeable) and not already stamped by a CSV export. Advances and
+  anything that accounts for one, dues, advance returns and voids stay on the
+  CSV export.
+- **The Purchase.** `AccountRef` the category's paid-from account, and
+  `PaymentType` from what the payment is and that account's QuickBooks
+  `AccountType` _(2026-11-08, owner decision 2026-11-06)_: an issued check is a
+  `Check` (paid-from must be **Bank**; `DocNumber` its check number, left out
+  when blank and refused past QuickBooks' 21 characters; `PrivateNote` its
+  request number; `PrintStatus` `NotSet`, so it does not wait in QuickBooks'
+  print queue); anything else paid from a **Credit Card** account is a
+  `CreditCard` expense (`Credit` false, a charge); anything else paid from a
+  **Bank** account is `Cash`. Any other account type is refused. One
+  `AccountBasedExpenseLineDetail` line per amount, to the category's expense
+  account; `EntityRef` the vendor; `TxnDate` the payment's day on the
+  department's calendar; `DocNumber` the request number (but a check's, as
+  above). The Intuit sources for each value are in
+  `quickbooks_online_client.py`. Accounts come from
+  `_resolve_category_accounts` (the export's own resolver, so the mappings on
+  this page drive both) and are found among QuickBooks' accounts by exact name
+  (`Parent:Child` through `FullyQualifiedName` when QuickBooks returns it). The
+  vendor is found by display name among QuickBooks' vendors, or created.
+  Minor version `75` on every call.
+- **Posted once.** `quickbooks_postings` holds one row per payment, unique on
+  (organization, payment type, payment), with QuickBooks' Purchase id (unique
+  per company). Every create carries Intuit's `requestid` (the posting's, and
+  `<id>-v` for a vendor), which Intuit answers with the original response when
+  it sees one again; it is kept across timeouts and 5xx, so a resent request
+  whose first answer was lost gets the same Purchase back, and replaced only
+  after a refusal, when nothing was created. The CSV export leaves out any
+  payment with a `queued`, `retrying` or `posted` posting; a `failed` one may go
+  in a file, and is then marked `superseded`.
+- **Running.** The `quickbooks_sync` scheduled task runs every five minutes, up
+  to 50 postings per department per run, holding a ten-minute lease on the
+  connection so it and **Post now** never refresh the same token at once.
+  Queuing takes the department's `quickbooks_export` lock (the CSV export's) and
+  waits while an export is being prepared. Statuses: `queued`; `retrying` (a
+  timeout or 5xx: 5 min, 15 min, 1 h, 4 h, then every 12 h; a 429 waits 60
+  seconds and ends the run, as Intuit asks); `posted`; `failed` (Intuit's
+  `Message - Detail`, or the local reason, such as "has no vendor" or "is not a
+  Bank or Credit Card account"; **Send again** queues it under a new request id); `superseded`.
+  No Finance or Documents row is locked, so the lock order at the top of
+  `documents_service.py` is not involved.
+
+| Endpoint                                                        | Permission       | What                                                                                         |
+| --------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------- |
+| `GET /finance/quickbooks/connection`                            | `finance.view`   | configured, environment, status, company id, who connected, post-from date, last run, counts |
+| `PUT /finance/quickbooks/connection`                            | `finance.manage` | `postFrom`, audit-logged `finance.quickbooks_post_from_set`                                  |
+| `POST /finance/quickbooks/oauth/start`                          | `finance.manage` | Intuit's consent URL, and the nonce cookie; 400 when not configured                          |
+| `GET /finance/quickbooks/oauth/callback`                        | none (see above) | where Intuit returns; audit-logged `finance.quickbooks_connected`                            |
+| `POST /finance/quickbooks/disconnect`                           | `finance.manage` | revoke and forget; audit-logged `finance.quickbooks_disconnected`                            |
+| `POST /finance/quickbooks/sync`                                 | `finance.manage` | post due payments now; returns the counts, or `skipped`                                      |
+| `GET /finance/quickbooks/postings?status&paymentType&paymentId` | `finance.view`   | postings, newest first; a detail page reads its payment's this way                           |
+| `POST /finance/quickbooks/postings/{id}/retry`                  | `finance.manage` | send a refused posting again; audit-logged `finance.quickbooks_posting_retried`              |
+
 ### Frontend
 
 Pages:
@@ -1683,6 +2127,7 @@ Pages:
   - The mapping dialog picks the category from the department's categories rather than taking typed text (the export matches by name, so a misspelling matches nothing) and requires the paid-from account, which the export cannot do without even though the API accepts a mapping lacking one.
   - The budget category dialog on Finance Settings carries the category's own **QuickBooks account** (`qbAccountName`), which takes precedence over its mapping's account.
   - A checklist of QuickBooks' own import requirements closes the page _(2026-10-09)_, and a category posting to Accounts Payable or Receivable is shown as **Payable/receivable account**.
+  - **QuickBooks Online connection** _(2026-11-06)_ — first on the page: not configured, connect, reconnect, **Post now**, **Disconnect** (confirmed first), the post-from date, and every posting with its status (_Waiting to post_, _Retrying_, _Accepted by QuickBooks_ with QuickBooks' record number, _Refused by QuickBooks_ with the reason and **Send again**, _Sent in a CSV file_). The purchase request, check and expense report detail pages show the payment's own posting (`QuickBooksPostingNote`, `finance.view`).
   - **Run an export** _(2026-10-14)_ — first and last day (last month by default), **Include payments already sent to QuickBooks** (confirmed first, since QuickBooks would import them again), and **Download QuickBooks file**. The days are the department's (`useTimezone`), sent as local midnight to the instant before the next local midnight (`utils/exportPeriod.ts`); a period over 366 days is refused before the request. The server's refusal (for example a category with no account) is shown as is, and the history reloads after a run.
 
 ---
@@ -1774,11 +2219,11 @@ Already tracks:
 
 ### Other Modules
 
-| Module            | Integration                                                                                                                       |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| **Members/Users** | Dues linked to user_id; expense reports submitted by users; approval workflows reference approvers; member financial summary page |
-| **Notifications** | Approval-link emails to EMAIL-type approvers and budget request emails; no dues reminders or budget threshold alerts are sent     |
-| **Audit**         | All financial state changes logged via `log_audit_event()`                                                                        |
+| Module            | Integration                                                                                                                                                                                        |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Members/Users** | Dues linked to user_id; expense reports submitted by users; approval workflows reference approvers; member financial summary page                                                                  |
+| **Notifications** | Approval-link emails to EMAIL-type approvers, step-reached emails to named approvers, decision emails to requesters, budget request emails and dues reminders; no budget threshold alerts are sent |
+| **Audit**         | All financial state changes logged via `log_audit_event()`                                                                                                                                         |
 
 ---
 

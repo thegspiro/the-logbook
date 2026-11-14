@@ -10,8 +10,10 @@
  * is signal; what cannot be sent is the examiner's call to keep (stay signed
  * in) or to delete (sign out anyway).
  *
- * Only an interactive sign-out can ask. The idle timeout and an expired
- * session still purge without asking — see KNOWN_LIMITATIONS.md.
+ * Only an interactive sign-out can ask, so only it deletes. The idle timeout,
+ * an expired session and another member signing in keep the examiner's unsent
+ * evaluations on the device for them alone, for a bounded time (owner
+ * decision 2026-11-01; see purgeSkillsStores).
  */
 
 import { useCallback } from 'react';

@@ -83,10 +83,12 @@ describe('RequirementModal', () => {
       await user.click(shortcut);
 
       expect(shortcut).toHaveAttribute('aria-pressed', 'true');
-      for (const name of ['Active', 'Probationary', 'Life', 'Retired', 'Administrative']) {
+      for (const name of ['Active', 'Probationary', 'Life', 'Administrative']) {
         expect(screen.getByRole('checkbox', { name })).toBeChecked();
       }
-      expect(screen.getByRole('checkbox', { name: 'Honorary' })).not.toBeChecked();
+      for (const name of ['Retired', 'Honorary']) {
+        expect(screen.getByRole('checkbox', { name })).not.toBeChecked();
+      }
 
       await saveAsEveryone(user);
       const [payload] = onSave.mock.calls[0] as [{ required_membership_types: string[] }];
@@ -95,7 +97,6 @@ describe('RequirementModal', () => {
         'administrative',
         'life',
         'probationary',
-        'retired',
       ]);
     });
 
@@ -109,10 +110,10 @@ describe('RequirementModal', () => {
 
       await saveAsEveryone(user);
       const [payload] = onSave.mock.calls[0] as [{ required_membership_types: string[] }];
-      expect([...payload.required_membership_types].sort()).toEqual(['active', 'life', 'probationary', 'retired']);
+      expect([...payload.required_membership_types].sort()).toEqual(['active', 'life', 'probationary']);
     });
 
-    it('reads as selected when all four are already ticked, and clears only them', async () => {
+    it('reads as selected without Retired, and clears only the three it ticks', async () => {
       const user = userEvent.setup();
       render(
         <RequirementModal
@@ -130,10 +131,23 @@ describe('RequirementModal', () => {
       expect(shortcut).toHaveAttribute('aria-pressed', 'false');
       await saveAsEveryone(user);
       expect(onSave).toHaveBeenCalledWith(
-        expect.objectContaining({ applies_to_all: false, required_membership_types: ['honorary'] }),
+        expect.objectContaining({ applies_to_all: false, required_membership_types: ['retired', 'honorary'] }),
         true,
         'req-1'
       );
+    });
+
+    it('reads as selected for Active, Probationary and Life alone', () => {
+      render(
+        <RequirementModal
+          requirement={scoped(['active', 'probationary', 'life'])}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+      expect(screen.getByRole('button', { name: 'Operational members' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('checkbox', { name: 'Retired' })).not.toBeChecked();
     });
 
     it('is not offered while the requirement applies to all members', () => {
@@ -514,5 +528,158 @@ describe('RequirementModal', () => {
       'value',
       'policy_acknowledgment'
     );
+  });
+
+  describe('shift evaluation types', () => {
+    it('creates an evaluated shifts requirement with its target and lowest-rating rule', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      await user.type(screen.getByLabelText(/^Name/), 'Evaluated field shifts');
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'evaluated_shifts');
+      await user.type(screen.getByLabelText(/Required evaluated shifts/), '10');
+      await user.click(screen.getByRole('checkbox', { name: /no item at the lowest rating/ }));
+      await user.click(screen.getByRole('button', { name: 'Create Requirement' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requirement_type: 'evaluated_shifts',
+          required_shifts: 10,
+          required_transports: null,
+          required_refusals: null,
+          evaluation_excludes_lowest_rating: true,
+        }),
+        false,
+        undefined
+      );
+    });
+
+    it('will not create a transports requirement without a count', async () => {
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      await user.type(screen.getByLabelText(/^Name/), 'Transports');
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'transports');
+      await user.click(screen.getByRole('button', { name: 'Create Requirement' }));
+
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it('clears the evaluation targets when the type is switched away', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={existing({ requirement_type: 'refusals', required_refusals: 5 })}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      expect(screen.getByLabelText(/Required refusals/)).toHaveValue(5);
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'hours');
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requirement_type: 'hours',
+          required_hours: 24,
+          required_refusals: null,
+          evaluation_excludes_lowest_rating: false,
+        }),
+        true,
+        'req-1'
+      );
+    });
+  });
+
+  describe('session attendance', () => {
+    it('creates one with its attendance percentage', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      await user.type(screen.getByLabelText(/^Name/), 'Company drills');
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'session_attendance');
+      await user.type(screen.getByLabelText(/^Sessions to Attend/), '60');
+      await user.click(screen.getByRole('button', { name: 'Create Requirement' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requirement_type: 'session_attendance',
+          required_attendance_pct: 60,
+          required_hours: null,
+        }),
+        false,
+        undefined
+      );
+    });
+
+    it('does not offer the hours and training-type fields it never reads', async () => {
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      expect(screen.getByLabelText(/^Required Hours/)).toBeInTheDocument();
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'session_attendance');
+
+      expect(screen.queryByLabelText(/^Required Hours/)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Training Type/)).not.toBeInTheDocument();
+    });
+
+    it('sends whether the Chief may override it, and clears it for another type', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      await user.type(screen.getByLabelText(/^Name/), 'Company drills');
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'session_attendance');
+      await user.type(screen.getByLabelText(/^Sessions to Attend/), '60');
+      await user.click(screen.getByRole('checkbox', { name: /Allow the Chief to override/ }));
+      await user.click(screen.getByRole('button', { name: 'Create Requirement' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ requirement_type: 'session_attendance', allows_chief_override: true }),
+        false,
+        undefined
+      );
+    });
+
+    it('will not create one without a percentage', async () => {
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      await user.type(screen.getByLabelText(/^Name/), 'Company drills');
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'session_attendance');
+      await user.click(screen.getByRole('button', { name: 'Create Requirement' }));
+
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it('clears the percentage when the type is switched away', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={existing({ requirement_type: 'session_attendance', required_attendance_pct: 60 })}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      expect(screen.getByLabelText(/^Sessions to Attend/)).toHaveValue(60);
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'hours');
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ requirement_type: 'hours', required_attendance_pct: null }),
+        true,
+        'req-1'
+      );
+    });
   });
 });

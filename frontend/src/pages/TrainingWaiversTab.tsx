@@ -17,24 +17,27 @@ import type { TrainingWaiverResponse, LeaveOfAbsenceResponse } from '../services
 import type { User } from '../types/user';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { getWaiverStatusBadge } from '../utils/waiverStatus';
+import type { WaiverDates, WaiverStatusBadge } from '../utils/waiverStatus';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 type StatusFilter = 'all' | 'active' | 'future' | 'expired' | 'inactive';
 
-function getStatusBadge(waiver: { start_date: string; end_date: string | null; active: boolean }, today: string) {
-  if (!waiver.active) {
-    return { label: 'Deactivated', color: 'bg-theme-surface-secondary text-theme-text-muted' };
-  }
-  if (waiver.start_date > today) {
-    return { label: 'Future', color: 'bg-blue-500/20 text-blue-700 dark:text-blue-400' };
-  }
-  if (!waiver.end_date) {
-    return { label: 'Permanent', color: 'bg-purple-500/20 text-purple-700 dark:text-purple-400' };
-  }
-  if (waiver.end_date < today) {
-    return { label: 'Expired', color: 'bg-yellow-500/20 text-yellow-800 dark:text-yellow-400' };
-  }
-  return { label: 'Active', color: 'bg-green-500/20 text-green-800 dark:text-green-400' };
-}
+/**
+ * Which badge each status filter keeps. The filters and the counts above them
+ * read the same badge the row shows (``getWaiverStatusBadge``, shared with the
+ * member profile and the Waivers screen), so a row can never be counted under
+ * one status and badged with another.
+ */
+const FILTER_LABELS: Record<Exclude<StatusFilter, 'all'>, ReadonlyArray<WaiverStatusBadge['label']>> = {
+  active: ['Active', 'Permanent'],
+  future: ['Future'],
+  expired: ['Expired'],
+  inactive: ['Inactive'],
+};
+
+const hasStatus = (waiver: WaiverDates, today: string, filter: Exclude<StatusFilter, 'all'>): boolean =>
+  FILTER_LABELS[filter].includes(getWaiverStatusBadge(waiver, today).label);
 
 const WAIVER_TYPE_LABELS: Record<string, string> = {
   leave_of_absence: 'Leave of Absence',
@@ -143,14 +146,8 @@ const TrainingWaiversTab: React.FC = () => {
     const today = getTodayLocalDate(tz);
     let result = waiverList;
 
-    if (statusFilter === 'active') {
-      result = result.filter((w) => w.active && w.start_date <= today && (!w.end_date || w.end_date >= today));
-    } else if (statusFilter === 'future') {
-      result = result.filter((w) => w.active && w.start_date > today);
-    } else if (statusFilter === 'expired') {
-      result = result.filter((w) => w.active && w.end_date && w.end_date < today);
-    } else if (statusFilter === 'inactive') {
-      result = result.filter((w) => !w.active);
+    if (statusFilter !== 'all') {
+      result = result.filter((w) => hasStatus(w, today, statusFilter));
     }
 
     if (searchQuery) {
@@ -169,10 +166,9 @@ const TrainingWaiversTab: React.FC = () => {
   // Summary stats
   const stats = useMemo(() => {
     const today = getTodayLocalDate(tz);
-    const active = waiverList.filter((w) => w.active && w.start_date <= today && (!w.end_date || w.end_date >= today));
-    const future = waiverList.filter((w) => w.active && w.start_date > today);
-    const expired = waiverList.filter((w) => w.active && w.end_date && w.end_date < today);
-    return { active: active.length, future: future.length, expired: expired.length, total: waiverList.length };
+    const count = (filter: Exclude<StatusFilter, 'all'>) =>
+      waiverList.filter((w) => hasStatus(w, today, filter)).length;
+    return { active: count('active'), future: count('future'), expired: count('expired'), total: waiverList.length };
   }, [waiverList, tz]);
 
   if (loading) {
@@ -194,7 +190,7 @@ const TrainingWaiversTab: React.FC = () => {
   return (
     <div className="py-6">
       {/* Summary Cards */}
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <StatGrid columns={4} gap={4} className="mb-6">
         <div className="card p-4">
           <p className="text-theme-text-muted text-xs tracking-wider uppercase">Active</p>
           <p className="text-2xl font-bold text-green-700 dark:text-green-400">{stats.active}</p>
@@ -211,7 +207,7 @@ const TrainingWaiversTab: React.FC = () => {
           <p className="text-theme-text-muted text-xs tracking-wider uppercase">Total</p>
           <p className="text-theme-text-primary text-2xl font-bold">{stats.total}</p>
         </div>
-      </div>
+      </StatGrid>
 
       {/* Filters */}
       <div className="mb-4 flex flex-wrap gap-3">
@@ -258,8 +254,8 @@ const TrainingWaiversTab: React.FC = () => {
           <p className="text-theme-text-muted">No training waivers match the current filter.</p>
         </div>
       ) : (
-        <div className="card overflow-hidden overflow-x-auto">
-          <table className="divide-theme-surface-border min-w-full divide-y">
+        <div className="rwd-table-container card overflow-hidden overflow-x-auto">
+          <table className="rwd-table rwd-table-xwide divide-theme-surface-border min-w-full divide-y">
             <thead className="bg-theme-surface-hover">
               <tr>
                 <th
@@ -308,10 +304,10 @@ const TrainingWaiversTab: React.FC = () => {
             </thead>
             <tbody className="divide-theme-surface-border divide-y">
               {filteredWaivers.map((waiver) => {
-                const badge = getStatusBadge(waiver, getTodayLocalDate(tz));
+                const badge = getWaiverStatusBadge(waiver, getTodayLocalDate(tz));
                 return (
                   <tr key={waiver.id} className="hover:bg-theme-surface-hover">
-                    <td className="px-4 py-3">
+                    <td data-label="Member" className="px-4 py-3">
                       <Link
                         to={`/members/${waiver.user_id}`}
                         className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
@@ -320,26 +316,26 @@ const TrainingWaiversTab: React.FC = () => {
                       </Link>
                       {waiver.member_rank && <p className="text-theme-text-muted text-xs">{waiver.member_rank}</p>}
                     </td>
-                    <td className="px-4 py-3">
+                    <td data-label="Status" className="px-4 py-3">
                       <span className={`rounded-full px-2 py-1 text-xs font-medium ${badge.color}`}>{badge.label}</span>
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                    <td data-label="Type" className="text-theme-text-secondary px-4 py-3 text-sm">
                       {WAIVER_TYPE_LABELS[waiver.waiver_type] || waiver.waiver_type}
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                    <td data-label="Period" className="text-theme-text-secondary px-4 py-3 text-sm">
                       <span>{formatDate(waiver.start_date, tz)}</span>
                       <span className="text-theme-text-muted mx-1">to</span>
                       <span>{waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}</span>
                     </td>
-                    <td className="text-theme-text-muted px-4 py-3 text-sm">
+                    <td data-label="Scope" className="text-theme-text-muted px-4 py-3 text-sm">
                       {waiver.requirement_ids
                         ? `${waiver.requirement_ids.length} requirement${waiver.requirement_ids.length !== 1 ? 's' : ''}`
                         : 'All requirements'}
                     </td>
-                    <td className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
+                    <td data-label="Reason" className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
                       {waiver.reason || '-'}
                     </td>
-                    <td className="px-4 py-3">
+                    <td data-label="Source" className="px-4 py-3">
                       <span
                         className={`rounded px-2 py-0.5 text-xs ${
                           waiver.source === 'leave_linked'
@@ -364,7 +360,7 @@ const TrainingWaiversTab: React.FC = () => {
           to="/members/admin/waivers"
           className="inline-flex min-h-11 items-center text-sm text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
-          Open full Waiver Management page (includes meetings & shifts)
+          Open the full Waivers page (includes meetings & shifts)
         </Link>
       </div>
     </div>

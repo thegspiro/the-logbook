@@ -276,6 +276,12 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
                     Mandatory
                   </span>
                 )}
+                {event.counts_toward_attendance && (
+                  <span className="bg-theme-alert-info-bg text-theme-alert-info-title inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium">
+                    <ClipboardCheck className="h-3 w-3" aria-hidden="true" />
+                    Counts toward attendance
+                  </span>
+                )}
                 {(event.is_recurring || event.recurrence_parent_id) && (
                   <span className="bg-theme-alert-purple-bg text-theme-alert-purple-text inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium">
                     <Repeat className="h-3 w-3" />
@@ -298,6 +304,17 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
             {event.is_cancelled && (
               <span className="ml-2 inline-flex shrink-0 items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-300">
                 Cancelled
+              </span>
+            )}
+            {/* A postponed event, so a member scanning the list sees it moved
+                without opening it (W80-11 follow-up). */}
+            {!event.is_cancelled && event.postponed_from_start && (
+              <span
+                className="bg-theme-alert-warning-bg ml-2 inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300"
+                title={`Postponed from ${formatAbsoluteDate(event.postponed_from_start, timezone)}`}
+                aria-label={`Postponed from ${formatAbsoluteDate(event.postponed_from_start, timezone)}`}
+              >
+                Postponed
               </span>
             )}
           </div>

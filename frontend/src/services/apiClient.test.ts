@@ -32,6 +32,7 @@ vi.mock('./errorReporting', () => ({
 // Import AFTER the mocks are in place.
 import api from './apiClient';
 import { clearCache } from '../utils/apiCache';
+import { postLoginRedirect } from '../utils/postLoginRedirect';
 import { registerStepUpRequester } from '../utils/stepUp';
 
 /**
@@ -184,6 +185,32 @@ describe('apiClient — 401 handling on auth-flow endpoints', () => {
 
     expect(mockPurgeLocalMemberData).toHaveBeenCalledTimes(1);
     expect(window.location.href).toBe('/login');
+  });
+
+  // LOC-37: a member taps a room's NFC tag on a phone whose session lapsed
+  // but still carries `has_session`. The page renders, its API call 401s, and
+  // this redirect is a full page load: router state cannot survive it, so the
+  // room has to travel in the URL or sign-in lands on the dashboard.
+  it('sends the page it left along to sign-in, for sign-in to return to', async () => {
+    mockAxiosPost.mockRejectedValue(
+      Object.assign(new Error('refresh failed'), {
+        isAxiosError: true,
+        config: { url: '/auth/refresh' },
+        response: { status: 401 },
+      })
+    );
+    withAdapter(failThenOkAdapter(401, 99, []));
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: { ...originalLocation, pathname: '/locations/room-7/check-in', search: '?tag=door', hash: '', href: '' },
+    });
+
+    await api.get('/locations/room-7/display').catch(() => undefined);
+
+    const sentTo = window.location.href;
+    expect(sentTo).toBe('/login?from=%2Flocations%2Froom-7%2Fcheck-in%3Ftag%3Ddoor');
+    expect(postLoginRedirect(null, sentTo.slice(sentTo.indexOf('?')))).toBe('/locations/room-7/check-in?tag=door');
   });
 });
 

@@ -2,14 +2,19 @@
 
 Complete guide for installing The Logbook on Unraid using Community Applications.
 
-> **Status: the Community Applications listing is not yet published** —
-> searching "The Logbook" in the Apps tab will not find it yet. This guide
-> documents the CA template install path for when the listing is live (the
-> template ships in this directory as [the-logbook.xml](./the-logbook.xml);
-> maintainers, see [COMMUNITY-APP-SUBMISSION.md](./COMMUNITY-APP-SUBMISSION.md)).
-> **To install today, use the Docker Compose path:**
-> [QUICK-START.md](./QUICK-START.md) for the fast version or
-> [docs/deployment/unraid.md](../docs/deployment/unraid.md) for the full guide.
+> **Status:** the template ([the-logbook.xml](./the-logbook.xml)) runs one
+> combined container, `ghcr.io/thegspiro/the-logbook`, which the `Release
+Image` workflow publishes when a `v*.*.*` release tag is pushed. **Until the
+> first release is published, the pull fails with "manifest unknown".** The
+> template is not yet listed in Community Applications either, so searching the
+> Apps tab will not find it; add it by URL (Step 2 below). Maintainers, see
+> [COMMUNITY-APP-SUBMISSION.md](./COMMUNITY-APP-SUBMISSION.md). The Docker
+> Compose path — [QUICK-START.md](./QUICK-START.md), or
+> [docs/deployment/unraid.md](../docs/deployment/unraid.md) for the full guide —
+> also runs MySQL, Redis, ClamAV and the nightly backup for you.
+>
+> **The container holds the web interface and the API only.** MySQL 8.0 and
+> Redis run as separate containers you install first.
 
 ## Table of Contents
 
@@ -33,12 +38,23 @@ Complete guide for installing The Logbook on Unraid using Community Applications
 - **Unraid 6.9.0 or later**
 - **Community Applications plugin installed**
 - **MySQL 8.0 database** (can use existing Unraid MySQL instance)
+- **Redis** — production startup requires a Redis password to be set
+- **Appdata folders writable by uid 1000** — the container runs as uid 1000,
+  not `nobody:users`. Create them before the first start:
+
+  ```bash
+  mkdir -p /mnt/user/appdata/the-logbook/uploads /mnt/user/appdata/the-logbook/logs
+  chown -R 1000:1000 /mnt/user/appdata/the-logbook
+  ```
+
+  If they are not writable, the container exits at once and its log names the
+  folder.
+
 - **8GB RAM minimum** (16GB recommended for production)
 - **20GB free disk space** (50GB+ recommended)
 
 ### Recommended (Optional)
 
-- **Redis** (for caching - improves performance)
 - **Reverse proxy** (nginx, Swag, or npm for HTTPS)
 - **Backup destination** (for automated backups)
 
@@ -54,11 +70,17 @@ If not already installed:
 2. Install **Community Applications** plugin
 3. Restart Unraid (if prompted)
 
-### Step 2: Search for The Logbook
+### Step 2: Add the template
 
-1. Click **Apps** tab
-2. Search for "The Logbook"
-3. Click **Install**
+Once the listing is live: **Apps** tab, search for "The Logbook", **Install**.
+
+Until then, add the template by hand from the Unraid terminal, then open
+**Docker → Add Container** and pick **TheLogbook** from the template list:
+
+```bash
+curl -fsSL -o /boot/config/plugins/dockerMan/templates-user/my-TheLogbook.xml \
+  https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/the-logbook.xml
+```
 
 ### Step 3: Configure Required Settings
 
@@ -67,13 +89,15 @@ If not already installed:
 | Setting                 | Value                                                                     | Notes                                                                                                                                                                  |
 | ----------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **WebUI Port**          | 7880                                                                      | Or any available port                                                                                                                                                  |
-| **API Port**            | 7881                                                                      | Or any available port                                                                                                                                                  |
 | **Database Host**       | Your Unraid IP or MySQL container name                                    |                                                                                                                                                                        |
 | **Database Name**       | the_logbook                                                               | Create this database first                                                                                                                                             |
 | **Database User**       | logbook_user                                                              | Create this user first                                                                                                                                                 |
 | **Database Password**   | _strong password_                                                         | **REQUIRED**                                                                                                                                                           |
 | **Secret Key**          | Generate with: `openssl rand -hex 32`                                     | **REQUIRED**                                                                                                                                                           |
 | **Encryption Key**      | Generate with: `openssl rand -hex 32`                                     | **REQUIRED**                                                                                                                                                           |
+| **Encryption Salt**     | Generate with: `openssl rand -hex 16`                                     | **REQUIRED.** Set once; never change it                                                                                                                                |
+| **Redis Password**      | Your Redis container's password                                           | **REQUIRED** in production                                                                                                                                             |
+| **Served Over HTTPS**   | `true` once an HTTPS reverse proxy is in front                            | Production will not start while it is `false` — see [HTTPS reverse proxy](#https-reverse-proxy-is-required-production)                                                 |
 | **Public Site Address** | The address members open the site at, e.g. `https://logbook.yourdept.org` | Every link in outgoing email is built from it. Leave blank to use the first address in **Allowed Origins** (an advanced field — set it to the same `https://` address) |
 
 ### Step 4: Generate Security Keys
@@ -203,10 +227,11 @@ networks:
 
 ### Port Configuration
 
-**Default Ports** (conflict-free):
+**Default Port** (conflict-free):
 
-- **Frontend:** 7880 (WebUI)
-- **Backend API:** 7881
+- **WebUI:** 7880, mapped to 3000 in the container. The API is served on the
+  same port under `/api`; it has no port of its own (inside the container it
+  listens on 127.0.0.1:3001 only).
 
 **If Ports Are In Use:**
 
@@ -236,10 +261,12 @@ Alternative ports you can use:
 
 | Container Path | Host Path                             | Purpose          |
 | -------------- | ------------------------------------- | ---------------- |
-| /app/data      | /mnt/user/appdata/the-logbook         | Application data |
 | /app/uploads   | /mnt/user/appdata/the-logbook/uploads | User uploads     |
 | /backups       | /mnt/user/backups/the-logbook         | Backups          |
 | /app/logs      | /mnt/user/appdata/the-logbook/logs    | Application logs |
+
+Each host folder must be writable by uid 1000 (`chown -R 1000:1000` it); the
+container refuses to start otherwise.
 
 **Use Cache Drive:**
 
@@ -356,6 +383,11 @@ reverse proxy — so the connecting peer IS the real client. **Leave
 without a real proxy, clients could spoof the `X-Forwarded-For` header to bypass
 geo-blocking and rate limiting.
 
+**Community Applications container:** set `TRUSTED_PROXY_IPS` (the template's
+**Trusted Proxy IPs**) to your reverse proxy's address when one is in front of
+the container; leave it empty when members connect to the WebUI port directly.
+The container's own nginx is trusted already. `*` is refused.
+
 ### Host-header allowlist (`TRUSTED_HOSTS`)
 
 `TRUSTED_HOSTS` is a Host-header allowlist. If left empty, it is derived
@@ -440,7 +472,8 @@ These ports are commonly used by Unraid and should be avoided:
 **The Logbook Defaults (Safe):**
 
 - 7880 - Frontend WebUI
-- 7881 - Backend API
+- 7881 - Backend API (Docker Compose stack only; the Community Applications
+  container serves the API on the WebUI port)
 
 **If These Conflict:**
 
@@ -901,10 +934,11 @@ FRONTEND_URL: https://your-logbook.example.org
 every setting the plugin's file is missing before an upgrade starts requiring
 it.
 
-**Installed from the Community Applications template — once the listing is
-live.** The three methods below pull `ghcr.io/thegspiro/the-logbook`, which is
-not published yet (see the status note at the top of this guide); until it
-is, they fail with "manifest unknown" or "not found".
+**Installed from the Community Applications template.** The three methods
+below pull `ghcr.io/thegspiro/the-logbook`. `:latest` moves only when a
+release tag is published; until the first one, they fail with "manifest
+unknown" (see the status note at the top of this guide). Migrations run when
+the new container starts, as they do in the compose stack.
 
 **Method 1: Community Applications (Recommended)**
 
@@ -970,8 +1004,7 @@ docker restart TheLogbook
 
 A Docker Compose install rolls back by restoring the dump `update.sh` took and
 checking out the previous commit; the script prints both commands when an
-update fails. The steps below are for the Community Applications image, once
-it is published.
+update fails. The steps below are for the Community Applications image.
 
 ```bash
 # Stop container
@@ -1129,7 +1162,7 @@ Add to Unraid dashboard:
 
 1. Install **Organizr** or **Heimdall** from Community Apps
 2. Add The Logbook as a tile
-3. Icon URL: `https://raw.githubusercontent.com/thegspiro/the-logbook/main/unraid/icon.png`
+3. Icon URL: `https://raw.githubusercontent.com/thegspiro/the-logbook/main/static/logo.png`
 
 ### User Scripts
 
@@ -1139,7 +1172,9 @@ Create custom scripts in: `/boot/config/plugins/user.scripts/scripts/`
 
 ```bash
 #!/bin/bash
-HEALTH=$(docker exec TheLogbook curl -s http://localhost:3001/health | grep -o '"status":"[^"]*"')
+# The image has no curl; host-side curl against the WebUI port reaches the
+# API's /health through the container's nginx.
+HEALTH=$(curl -s http://localhost:7880/health | grep -o '"status":"[^"]*"')
 if [[ "$HEALTH" != *"healthy"* ]]; then
     echo "The Logbook health check failed!"
     # Send notification

@@ -5,9 +5,17 @@ import {
   TRAINING_ADMIN_AREAS,
   attentionCountsByTab,
   isHiddenByPracticalSkills,
+  isPermittedDestination,
+  REQUIREMENTS_HREF,
   resolveTrainingAdminLocation,
   trainingAdminAreasFor,
 } from './trainingAdminAreas';
+
+const grantsAll = () => true;
+const grantsOnly =
+  (...held: string[]) =>
+  (permission: string) =>
+    held.includes(permission);
 
 const attention = (href: string, count: number): AdminAttentionItem => ({
   key: href,
@@ -111,7 +119,7 @@ describe('attentionCountsByTab', () => {
 
 describe('the practical-skills method', () => {
   const evaluationIds = (method: PracticalSkillsMethod | null) =>
-    trainingAdminAreasFor(method)
+    trainingAdminAreasFor(method, grantsAll)
       .find((area) => area.id === 'evaluations')
       ?.destinations.map((destination) => destination.id);
 
@@ -131,7 +139,7 @@ describe('the practical-skills method', () => {
 
   it('describes the Evaluations area by what it holds under each method', () => {
     const description = (method: PracticalSkillsMethod | null) =>
-      trainingAdminAreasFor(method).find((area) => area.id === 'evaluations')?.description;
+      trainingAdminAreasFor(method, grantsAll).find((area) => area.id === 'evaluations')?.description;
 
     expect(description(PracticalSkillsMethod.SKILLS_TESTING)).toBe('Skills tests and knowledge tests');
     expect(description(PracticalSkillsMethod.SHIFT_SIGNOFFS)).toBe('Skill sign-offs and knowledge tests');
@@ -140,14 +148,18 @@ describe('the practical-skills method', () => {
 
   it('touches no destination outside the two systems', () => {
     const all = (areas: typeof TRAINING_ADMIN_AREAS) => areas.flatMap((area) => area.destinations).length;
-    expect(all(trainingAdminAreasFor(PracticalSkillsMethod.SKILLS_TESTING))).toBe(all(TRAINING_ADMIN_AREAS) - 1);
-    expect(all(trainingAdminAreasFor(PracticalSkillsMethod.SHIFT_SIGNOFFS))).toBe(all(TRAINING_ADMIN_AREAS) - 2);
+    expect(all(trainingAdminAreasFor(PracticalSkillsMethod.SKILLS_TESTING, grantsAll))).toBe(
+      all(TRAINING_ADMIN_AREAS) - 1
+    );
+    expect(all(trainingAdminAreasFor(PracticalSkillsMethod.SHIFT_SIGNOFFS, grantsAll))).toBe(
+      all(TRAINING_ADMIN_AREAS) - 2
+    );
   });
 
   // A bookmark or attention link to a hidden destination must not open a
   // screen the department switched off.
   it('sends a link to a hidden destination to its area instead', () => {
-    const areas = trainingAdminAreasFor(PracticalSkillsMethod.SHIFT_SIGNOFFS);
+    const areas = trainingAdminAreasFor(PracticalSkillsMethod.SHIFT_SIGNOFFS, grantsAll);
     expect(resolveTrainingAdminLocation('evaluations', 'tests', areas)).toEqual({
       area: 'evaluations',
       tab: 'skill-evaluations',
@@ -159,6 +171,74 @@ describe('the practical-skills method', () => {
     expect(resolveTrainingAdminLocation('settings', 'practical-skills')).toEqual({
       area: 'settings',
       tab: 'practical-skills',
+    });
+  });
+});
+
+describe('destinations needing more than training.manage', () => {
+  const settingsIds = (check: (permission: string) => boolean) =>
+    trainingAdminAreasFor(null, check)
+      .find((area) => area.id === 'settings')
+      ?.destinations.map((destination) => destination.id);
+
+  // Saving the compliance configuration takes settings.manage or
+  // compliance.manage; a training officer without either would be turned
+  // away by the page the link opens.
+  it('offers Compliance Settings to a viewer who may change it', () => {
+    expect(settingsIds(grantsOnly('training.manage', 'compliance.manage'))).toContain('compliance-settings');
+    expect(settingsIds(grantsOnly('training.manage', 'settings.manage'))).toContain('compliance-settings');
+  });
+
+  it('leaves Compliance Settings out for training.manage alone', () => {
+    expect(settingsIds(grantsOnly('training.manage'))).toEqual([
+      'manual-entry',
+      'practical-skills',
+      'session-waivers',
+      'shift-evaluations',
+      'requirements-link',
+      'integrations',
+      'import',
+      'metrics',
+    ]);
+  });
+
+  it('sends a link to a destination the viewer may not open to its area instead', () => {
+    const areas = trainingAdminAreasFor(null, grantsOnly('training.manage'));
+    expect(resolveTrainingAdminLocation('settings', 'compliance-settings', areas)).toEqual({
+      area: 'settings',
+      tab: 'manual-entry',
+    });
+  });
+
+  it('gates nothing that declares no extra permission', () => {
+    const ungated = TRAINING_ADMIN_AREAS.flatMap((area) => area.destinations).filter((d) => !d.anyPermission);
+    expect(ungated.every((destination) => isPermittedDestination(destination, () => false))).toBe(true);
+    expect(ungated).toHaveLength(TRAINING_ADMIN_AREAS.flatMap((area) => area.destinations).length - 1);
+  });
+});
+
+describe('the Requirements link under Settings & Data', () => {
+  // Officers look for setup under Settings & Data; the requirements are
+  // managed under Curriculum, so that is where the link must land.
+  it('is offered on the hub permission alone', () => {
+    const settings = trainingAdminAreasFor(null, grantsOnly('training.manage')).find((area) => area.id === 'settings');
+    expect(settings?.destinations.map((destination) => destination.id)).toContain('requirements-link');
+  });
+
+  it('links to Curriculum → Requirements', () => {
+    const params = new URLSearchParams(REQUIREMENTS_HREF.split('?')[1] ?? '');
+    expect(REQUIREMENTS_HREF.split('?')[0]).toBe('/training/admin');
+    expect(resolveTrainingAdminLocation(params.get('page'), params.get('tab'))).toEqual({
+      area: 'curriculum',
+      tab: 'requirements',
+    });
+  });
+
+  it('keeps Curriculum’s own Requirements destination where it was', () => {
+    expect(resolveTrainingAdminLocation(null, 'requirements')).toEqual({ area: 'curriculum', tab: 'requirements' });
+    expect(resolveTrainingAdminLocation(null, 'requirements-link')).toEqual({
+      area: 'settings',
+      tab: 'requirements-link',
     });
   });
 });

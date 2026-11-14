@@ -85,7 +85,7 @@ frontend/src/modules/medical-screening/
 | `user_id`         | `String(36)`       | FK to users (nullable — NULL if prospect)            |
 | `prospect_id`     | `String(36)`       | FK to prospective_members (nullable — NULL if user)  |
 | `screening_type`  | `ScreeningType`    | Type of screening                                    |
-| `status`          | `ScreeningStatus`  | Current status                                       |
+| `status`          | `EncryptedEnum` 🔒 | Current status (`ScreeningStatus`)                   |
 | `scheduled_date`  | `DateTime`         | When screening is scheduled                          |
 | `completed_date`  | `DateTime`         | When screening was completed                         |
 | `expiration_date` | `DateTime`         | When this screening expires                          |
@@ -118,11 +118,23 @@ frontend/src/modules/medical-screening/
 > A value that _is_ marked as ciphertext and fails to decrypt **raises** rather
 > than being returned as ciphertext or as empty — it fails closed.
 >
-> The remaining columns are deliberately **not** encrypted: dates, status and the
-> foreign keys are what every query filters, sorts and joins on, and encrypting
-> them would make the module's compliance views unimplementable without buying
-> meaningful protection — the sensitive content is the result, not the fact that a
-> screening is on file. Cross-reference:
+> **`status` is encrypted too** _(2026-11-05, MS-18, owner decision)_. The
+> outcome is PHI in its own right: "failed" beside a member's name and a
+> psychological evaluation says what the encrypted notes would. It uses
+> `EncryptedEnum`, which reads back as `ScreeningStatus` and **refuses any SQL
+> comparison** (`TypeError`), because the same status encrypts differently on
+> every write and a forgotten `.where(status == …)` would otherwise match
+> nothing in silence. Every reader that filtered on it in SQL now loads the
+> rows and compares in Python: `list_records` (filters, then pages), the
+> expiring list (`deciding_records` picks the latest result per subject and
+> requirement, replacing the old `superseded_record_clause`), the Members
+> hub's missed-appointment item, and the pipeline's screening stage gate.
+> Migration `80fa2c83bf9d`.
+>
+> Still plaintext: the screening type, the dates and the member and
+> requirement links, which every query filters, sorts and joins on. The type
+> also leaks through the requirement a record is linked to and through older
+> audit-log entries; see `docs/KNOWN_LIMITATIONS.md` (MS-18). Cross-reference:
 > [wiki/Security-Encryption](../wiki/Security-Encryption.md#what-is-encrypted).
 
 > **Schema note.** [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) is the generated,
@@ -167,10 +179,11 @@ frontend/src/modules/medical-screening/
 
 ## Permissions
 
-| Permission                 | Description                                              |
-| -------------------------- | -------------------------------------------------------- |
-| `medical_screening.view`   | View requirements, records, and compliance status        |
-| `medical_screening.manage` | Full CRUD: create/update/delete requirements and records |
+| Permission                       | Description                                                                                                                        |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `medical_screening.view`         | View requirements, records (without their clinical narrative) and compliance status                                                |
+| `medical_screening.view_details` | Also read a record's clinical narrative: `provider_name`, `result_summary`, `result_data`, `notes` (MS-14). `.manage` reads it too |
+| `medical_screening.manage`       | Full CRUD: create/update/delete requirements and records                                                                           |
 
 ---
 
@@ -256,18 +269,21 @@ Module availability is controlled per organization at runtime via the organizati
 
 ## Edge Cases
 
-| Scenario                                                | Behavior                                                                                                                                                                                                                                                                                                                                       |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Record linked to both user_id and prospect_id           | Rejected with a 422 on create — a record names exactly one member or one prospect                                                                                                                                                                                                                                                              |
-| Record linked to neither                                | Rejected with a 422 on create; rows created before 2026-10-05 may still carry neither                                                                                                                                                                                                                                                          |
-| `frequency_months = NULL`                               | One-time screening that does not recur and has no automatic expiration                                                                                                                                                                                                                                                                         |
-| Record saved with no `expiration_date`                  | Falls due `frequency_months` after `completed_date` — the frequency of its linked requirement, else of the requirement it is graded against (`_effective_expiration`). Its own date always wins; with no positive frequency or no completed date it stays compliant indefinitely. Responses mark such a date `expiration_from_frequency: true` |
-| Grace period after expiration                           | Saved but not applied: a member is non-compliant the day after the expiration date                                                                                                                                                                                                                                                             |
-| Expiring query with days=0 or >365                      | Rejected with a 422 — `days` must be between 1 and 365 (default 30); it is not clamped                                                                                                                                                                                                                                                         |
-| Member, prospect or requirement from another department | Rejected with a 400 on create: "Invalid member", "Invalid prospect" or "Invalid screening requirement"                                                                                                                                                                                                                                         |
-| Requirement deactivated                                 | Existing records preserved; requirement excluded from future compliance calculations                                                                                                                                                                                                                                                           |
-| Screening waived                                        | Status set to `WAIVED`; satisfies a requirement like `PASSED`/`COMPLETED` (`_SATISFYING_STATUSES`), and a lapsing waiver is listed by `/expiring`                                                                                                                                                                                              |
-| Provider name not provided                              | Optional field; no provider info displayed in compliance dashboard                                                                                                                                                                                                                                                                             |
+| Scenario                                                | Behavior                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Record linked to both user_id and prospect_id           | Rejected with a 422 on create — a record names exactly one member or one prospect                                                                                                                                                                                                                                                                                                                               |
+| Prospect transferred to membership                      | The transfer sets the new member's `user_id` on the prospect's records and keeps `prospect_id`, so they count for the member (`_relink_screenings_to_member`). Migration `beedcad5b36a` does the same for prospects transferred earlier; both ids on one record mark exactly the records carried across (W71b-2, owner decision 2026-11-02)                                                                     |
+| Record linked to neither                                | Rejected with a 422 on create; rows created before 2026-10-05 may still carry neither                                                                                                                                                                                                                                                                                                                           |
+| `frequency_months = NULL`                               | One-time screening that does not recur and has no automatic expiration                                                                                                                                                                                                                                                                                                                                          |
+| Record saved with no `expiration_date`                  | Falls due `frequency_months` after `completed_date` — the frequency of the requirement it is linked to (`_effective_expiration`). Its own date always wins; with no positive frequency or no completed date it stays compliant indefinitely. Responses mark such a date `expiration_from_frequency: true`                                                                                                       |
+| Grace period after expiration                           | Applied (MS-16): compliant until the due date plus `grace_period_days`; meanwhile `in_grace_period: true`, `grace_period_ends`, a negative `days_until_expiration`, and counted as expiring soon (`screening_deadline`)                                                                                                                                                                                         |
+| Record linked to no requirement                         | Counts toward no requirement and is not on the expiring list; a record satisfies only the requirement it is linked to. Link it from the Edit dialog (`requirement_id` on `PUT /records/{id}`)                                                                                                                                                                                                                   |
+| Expiring query with days=0 or >365                      | Rejected with a 422 — `days` must be between 1 and 365 (default 30); it is not clamped                                                                                                                                                                                                                                                                                                                          |
+| Member, prospect or requirement from another department | Rejected with a 400 on create: "Invalid member", "Invalid prospect" or "Invalid screening requirement"                                                                                                                                                                                                                                                                                                          |
+| Requirement deactivated                                 | Existing records preserved; requirement excluded from future compliance calculations                                                                                                                                                                                                                                                                                                                            |
+| A newer `FAILED` record for the requirement             | The latest result decides (`_DECIDING_STATUSES`: passed, completed, waived, failed): a failure leaves the requirement unmet, with no expiration, until a later satisfying record supersedes it, and the older pass leaves `/expiring`. Scheduled, pending-review and expired records decide nothing. Ties: latest `completed_date`, undated lowest, then later `created_at` (owner decision 2026-11-02, W71b-1) |
+| Screening waived                                        | Status set to `WAIVED`; satisfies a requirement like `PASSED`/`COMPLETED` (`_SATISFYING_STATUSES`), and a lapsing waiver is listed by `/expiring`                                                                                                                                                                                                                                                               |
+| Provider name not provided                              | Optional field; no provider info displayed in compliance dashboard                                                                                                                                                                                                                                                                                                                                              |
 
 ---
 

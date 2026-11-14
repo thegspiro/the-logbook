@@ -14,6 +14,9 @@ from app.schemas.base import UTCResponseBase
 from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 from app.schemas.reminder_limits import ReminderLeadDays
 
+# Mirrors ``LeaveMonthRule`` in app/models/compliance_config.py.
+LeaveMonthRuleValue = Literal["full_month", "proportional", "half"]
+
 # =============================================================================
 # Admin Hours Requirement (embedded in ComplianceProfile)
 # =============================================================================
@@ -126,6 +129,14 @@ class ComplianceConfigBase(BaseModel):
             "previous month instead of counting the in-progress current month."
         ),
     )
+    leave_month_rule: LeaveMonthRuleValue = Field(
+        "full_month",
+        description=(
+            "How a month that leave or a waiver only partly covers reduces a "
+            "target: full_month (any day excuses the month), proportional (by "
+            "the share of its days on leave) or half (15+ days excuses half)."
+        ),
+    )
     auto_report_frequency: str = Field(
         "none",
         description="none, monthly, quarterly, or yearly",
@@ -162,6 +173,7 @@ class ComplianceConfigUpdate(BaseModel):
     at_risk_threshold: Optional[float] = Field(None, ge=0, le=100)
     grace_period_days: Optional[int] = Field(None, ge=0, le=365)
     include_current_month: Optional[bool] = None
+    leave_month_rule: Optional[LeaveMonthRuleValue] = None
     auto_report_frequency: Optional[str] = None
     report_email_recipients: Optional[List[str]] = None
     report_day_of_month: Optional[int] = Field(None, ge=1, le=28)

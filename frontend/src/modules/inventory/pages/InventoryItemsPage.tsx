@@ -611,14 +611,16 @@ const ItemTable: React.FC<ItemTableProps> = ({
         <h2 className="text-theme-text-secondary text-sm font-semibold tracking-wide uppercase">{label}</h2>
         <span className="text-theme-text-muted text-xs">{countLabel}</span>
       </div>
-      <div className="card-secondary overflow-x-auto">
-        {/* Single responsive table: a table on >=md, stacked cards below.
+      <div className="card-secondary rwd-table-container overflow-x-auto">
+        {/* Single responsive table: stacked cards when this wrapper is under
+            80rem (a phone, a tablet, or a laptop up to ~1366px with the side
+            navigation open), a table above. It needs ~1010px.
             Cells marked `hidden` are mobile-only (revealed by the reflow);
             cells with no data-label are hidden in the stacked view. */}
         {/* Named, because the page renders up to three of these and a screen
             reader announcing "table" three times gives no way to tell the
             pinned shortlist from the rest of the shelf. */}
-        <table aria-label={label} className="rwd-table w-full text-sm">
+        <table aria-label={label} className="rwd-table rwd-table-xwide w-full text-sm">
           <thead>
             <tr className="border-theme-surface-border border-b">
               {pinnedMode && <th scope="col" className="w-24 px-2 py-3" />}
@@ -832,13 +834,17 @@ const ItemTable: React.FC<ItemTableProps> = ({
                           </td>
                         )}
                         <td data-label="" className="px-3 py-3">
-                          <input
-                            type="checkbox"
-                            checked={selIds.has(item.id)}
-                            onChange={() => toggle(item.id)}
-                            className="form-checkbox"
-                            aria-label={`Select ${item.name}`}
-                          />
+                          {/* The label is the touch target: a native checkbox is 16px
+                              and cannot be padded. */}
+                          <label className="touch-target-phone -m-3 cursor-pointer p-3">
+                            <input
+                              type="checkbox"
+                              checked={selIds.has(item.id)}
+                              onChange={() => toggle(item.id)}
+                              className="form-checkbox"
+                              aria-label={`Select ${item.name}`}
+                            />
+                          </label>
                         </td>
                         {/* Indented under its product row, on the table layout
                             only: below 768px `rwd-table` stacks each row into
@@ -848,7 +854,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
                         <td data-label="Name" className={`py-3 pr-3 ${clusterLeadId ? 'pl-3 md:pl-9' : 'pl-3'}`}>
                           <Link
                             to={`/inventory/items/${item.id}`}
-                            className="text-theme-text-primary font-medium hover:text-blue-600 dark:hover:text-blue-400"
+                            className="text-theme-text-primary touch:min-h-11 touch:inline-flex touch:items-center font-medium hover:text-blue-600 dark:hover:text-blue-400"
                           >
                             {/* The size, not the shared product name: under an
                                 open product row every member would otherwise
@@ -935,7 +941,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
                               onClick={() => onTogglePin(item)}
                               className={`btn-icon-sm ${
                                 item.pin_position != null
-                                  ? 'text-amber-700 dark:text-amber-400'
+                                  ? 'text-amber-900 dark:text-amber-300'
                                   : 'text-theme-text-muted hover:text-theme-text-primary'
                               }`}
                               aria-label={`${item.pin_position != null ? 'Unpin' : 'Pin'} ${getDisplayName(item)}`}
@@ -994,6 +1000,12 @@ const InventoryItemsPage: React.FC = () => {
   // vendor scope. Only the literal 'true' turns it on: anything else is an
   // unrecognized value and degrades to the full list rather than an error.
   const lowStockOnly = searchParams.get('low_stock') === 'true';
+  // The dashboard's Low stock tile links here as ?stock=low. That tile counts
+  // categories whose summed stock is at or below the category's threshold —
+  // a different question from an item's own reorder point above — so it gets
+  // its own filter, backed by the tile's own scan, rather than being mapped
+  // onto `low_stock` and listing rows the tile never counted.
+  const lowStockCategoriesOnly = searchParams.get('stock') === 'low';
   // The type filter is URL-driven for the same reason vendor scoping is: the
   // inventory hub's supply-line cards link straight at one domain
   // (?item_type=uniform), and that only works if the list reads the URL.
@@ -1172,6 +1184,7 @@ const InventoryItemsPage: React.FC = () => {
       unassigned_location: fLoc === UNASSIGNED_LOCATION ? true : undefined,
       vendor_id: vendorFilter || undefined,
       low_stock: lowStockOnly || undefined,
+      low_stock_categories: lowStockCategoriesOnly || undefined,
       size: fSize || undefined,
       color: fColor || undefined,
       style: fStyle || undefined,
@@ -1189,6 +1202,7 @@ const InventoryItemsPage: React.FC = () => {
       fLoc,
       vendorFilter,
       lowStockOnly,
+      lowStockCategoriesOnly,
       fSize,
       fColor,
       fStyle,
@@ -1834,8 +1848,13 @@ const InventoryItemsPage: React.FC = () => {
   // of the rows shown. The low-stock filter has no print-page equivalent, so
   // under it "this list" is not offered rather than quietly labelling more.
   const listLabelPath = (() => {
-    if (!loadedParams || loadedParams.low_stock) return null;
-    const { group_by: _groupBy, low_stock: _lowStock, ...filters } = loadedParams;
+    if (!loadedParams || loadedParams.low_stock || loadedParams.low_stock_categories) return null;
+    const {
+      group_by: _groupBy,
+      low_stock: _lowStock,
+      low_stock_categories: _lowStockCategories,
+      ...filters
+    } = loadedParams;
     return buildLabelFilterPath(filters);
   })();
 
@@ -1966,8 +1985,8 @@ const InventoryItemsPage: React.FC = () => {
       {/* Vendor scope, arrived at from a vendor card */}
       {vendorFilter && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2">
-          <Truck className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-          <p className="text-xs text-blue-700 dark:text-blue-300">
+          <Truck className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-300" />
+          <p className="text-xs text-blue-900 dark:text-blue-300">
             Showing items purchased from{' '}
             <span className="font-semibold">
               {items.find((i) => i.vendor_id === vendorFilter)?.vendor_name ?? 'this vendor'}
@@ -1979,7 +1998,7 @@ const InventoryItemsPage: React.FC = () => {
               next.delete('vendor_id');
               setSearchParams(next, { replace: true });
             }}
-            className="ml-auto text-xs font-medium text-blue-700 hover:underline dark:text-blue-300"
+            className="ml-auto text-xs font-medium text-blue-900 hover:underline dark:text-blue-300"
           >
             Clear vendor filter
           </button>
@@ -2000,6 +2019,24 @@ const InventoryItemsPage: React.FC = () => {
             className="touch-target-phone font-medium underline"
           >
             Show all items
+          </button>
+        </div>
+      )}
+
+      {/* Low-stock categories, arrived at from the dashboard tile */}
+      {lowStockCategoriesOnly && (
+        <div className="alert-warning mb-4 flex flex-wrap items-center justify-between gap-2 text-sm" role="status">
+          <span>Showing only items in categories at or below their low-stock threshold.</span>
+          <button
+            type="button"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete('stock');
+              setSearchParams(next, { replace: true });
+            }}
+            className="touch-target-phone font-medium underline"
+          >
+            Show all categories
           </button>
         </div>
       )}
@@ -2188,7 +2225,7 @@ const InventoryItemsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setNeedsLabelDismissed(true)}
-            className="text-theme-text-muted hover:text-theme-text-primary ml-auto text-xs"
+            className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone ml-auto text-xs"
           >
             Not now
           </button>
@@ -2200,7 +2237,7 @@ const InventoryItemsPage: React.FC = () => {
           className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3"
           role="status"
         >
-          <span className="text-sm text-emerald-800 dark:text-emerald-300">
+          <span className="text-sm text-emerald-900 dark:text-emerald-300">
             {formatNumber(justAdded.ids.length)} {justAdded.ids.length === 1 ? 'item' : 'items'} {justAdded.verb}. Label{' '}
             {justAdded.ids.length === 1 ? 'it' : 'them'} now?
           </span>
@@ -2233,7 +2270,7 @@ const InventoryItemsPage: React.FC = () => {
               <button
                 onClick={() => void selectAllMatching()}
                 disabled={selectingAll || !loadedParams}
-                className="text-sm font-medium text-blue-700 hover:underline disabled:opacity-60 dark:text-blue-300"
+                className="text-sm font-medium text-blue-900 hover:underline disabled:opacity-60 dark:text-blue-300"
               >
                 {selectingAll ? 'Selecting…' : `Select all ${formatNumber(total)} matching`}
               </button>
@@ -2245,13 +2282,13 @@ const InventoryItemsPage: React.FC = () => {
                 <span className="text-theme-text-muted text-xs">
                   {formatNumber(total)} match — select-all is limited to {formatNumber(MAX_LABEL_BATCH)}
                 </span>
-                {total <= MAX_LABEL_ITEMS_TOTAL && loadedParams && (
+                {/* `listLabelPath`, not the raw filters: the print page has no
+                    low-stock filter, so under one this would print more
+                    labels than the list matched. */}
+                {total <= MAX_LABEL_ITEMS_TOTAL && listLabelPath && (
                   <button
-                    onClick={() => {
-                      const { group_by: _groupBy, ...filters } = loadedParams;
-                      void navigate(buildLabelFilterPath(filters));
-                    }}
-                    className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300"
+                    onClick={() => void navigate(listLabelPath)}
+                    className="text-sm font-medium text-blue-900 hover:underline dark:text-blue-300"
                   >
                     Print labels for all {formatNumber(total)} matching
                   </button>
@@ -2380,7 +2417,8 @@ const InventoryItemsPage: React.FC = () => {
           fStyle ||
           fLabel ||
           vendorFilter ||
-          lowStockOnly ? (
+          lowStockOnly ||
+          lowStockCategoriesOnly ? (
           <EmptyState
             icon={Package}
             title="No items found"
@@ -2461,7 +2499,7 @@ const InventoryItemsPage: React.FC = () => {
           </select>
           <button
             onClick={() => setSortOrd((p) => (p === 'asc' ? 'desc' : 'asc'))}
-            className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary active:bg-theme-surface-hover rounded border p-2"
+            className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary active:bg-theme-surface-hover touch-target-phone rounded border p-2"
             aria-label={`Sort ${sortOrd === 'asc' ? 'descending' : 'ascending'}`}
           >
             {sortOrd === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -2477,7 +2515,7 @@ const InventoryItemsPage: React.FC = () => {
               into maintenance is exactly what its owner needs to see. */}
           <ItemTable
             label="Pinned"
-            icon={<Pin className="h-4 w-4 text-amber-700 dark:text-amber-400" />}
+            icon={<Pin className="h-4 w-4 text-amber-900 dark:text-amber-300" />}
             items={pinnedItems}
             categories={categories}
             locations={locations}
@@ -2498,7 +2536,7 @@ const InventoryItemsPage: React.FC = () => {
           />
           <ItemTable
             label="Available"
-            icon={<CheckCircle2 className="h-4 w-4 text-green-700 dark:text-green-400" />}
+            icon={<CheckCircle2 className="h-4 w-4 text-green-900 dark:text-green-300" />}
             items={availableItems}
             categories={categories}
             locations={locations}
@@ -2526,7 +2564,7 @@ const InventoryItemsPage: React.FC = () => {
           />
           <ItemTable
             label="Unavailable"
-            icon={<XCircle className="h-4 w-4 text-red-500 dark:text-red-400" />}
+            icon={<XCircle className="h-4 w-4 text-red-500 dark:text-red-300" />}
             items={unavailableItems}
             categories={categories}
             locations={locations}

@@ -10,6 +10,7 @@ import type {
   AdvanceAccountsPayload,
   AdvanceDetail,
   AdvanceExportReadiness,
+  AdvanceHolder,
   AdvanceReturn,
   AdvanceReturnPayload,
   AdvancesReport,
@@ -30,6 +31,7 @@ import type {
   BudgetAmendmentCreated,
   BudgetAmendmentRejectPayload,
   BudgetAmendmentReversePayload,
+  PendingBudgetAmendment,
   BudgetCategory,
   BudgetCategoryUpdatePayload,
   BudgetCreatePayload,
@@ -72,9 +74,11 @@ import type {
   FiscalYearUpdatePayload,
   FinanceNamedOption,
   MemberDues,
+  MyDues,
   MyBudget,
   MyBudgetRequestLines,
   MyBudgetsSummary,
+  ApprovalEmailResendResult,
   PendingApproval,
   PurchaseRequest,
   MonetaryAmount,
@@ -83,10 +87,14 @@ import type {
   StartFromLastYearResult,
   UnroutedApproval,
   FinanceSettings,
+  BudgetRequestReminderSettings,
   AmendmentLogReport,
   BudgetVsActualReport,
   PaymentsRegisterReport,
   LateSubstantiationReport,
+  ExpenseSummaryByMemberReport,
+  DuesDelinquencyReport,
+  PurchasesByVendorReport,
   FunctionalClass,
   FunctionalExpensesReport,
   FundBalancesReport,
@@ -95,6 +103,11 @@ import type {
   DuesDefaultAccountsPayload,
   DuesExportReadiness,
   QuickBooksChart,
+  QuickBooksConnection,
+  QuickBooksPaymentType,
+  QuickBooksPosting,
+  QuickBooksPostingStatus,
+  QuickBooksSyncResult,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 import { readDeleteOutcome, type DeleteOutcome } from '../../../utils/deleteOutcome';
@@ -317,6 +330,12 @@ export const budgetService = {
       `/finance/budgets/${id}/amendments/${amendmentId}/reverse`,
       data
     );
+    return response.data;
+  },
+
+  /** Every amendment and reversal awaiting confirmation, across the department's lines. */
+  async listPendingAmendments(): Promise<PendingBudgetAmendment[]> {
+    const response = await api.get<PendingBudgetAmendment[]>('/finance/budget-amendments/pending');
     return response.data;
   },
 
@@ -628,6 +647,45 @@ export const financeReportService = {
     const query = new URLSearchParams({ start, end, format: 'csv' });
     return fetchFile(api, `/finance/reports/late-substantiation?${query.toString()}`, 'outside-accountable-plan.csv');
   },
+
+  /** What each member was reimbursed in the period (the payments register's reimbursements, by member). */
+  async expenseSummaryByMember(start: string, end: string): Promise<ExpenseSummaryByMemberReport> {
+    const response = await api.get<ExpenseSummaryByMemberReport>('/finance/reports/expense-summary-by-member', {
+      params: { start, end },
+    });
+    return response.data;
+  },
+
+  async expenseSummaryByMemberCsv(start: string, end: string): Promise<DownloadedFile> {
+    const query = new URLSearchParams({ start, end, format: 'csv' });
+    return fetchFile(api, `/finance/reports/expense-summary-by-member?${query.toString()}`, 'expenses-by-member.csv');
+  },
+
+  /** Dues falling due in the period, and the members overdue on them today. */
+  async duesDelinquency(start: string, end: string): Promise<DuesDelinquencyReport> {
+    const response = await api.get<DuesDelinquencyReport>('/finance/reports/dues-delinquency', {
+      params: { start, end },
+    });
+    return response.data;
+  },
+
+  async duesDelinquencyCsv(start: string, end: string): Promise<DownloadedFile> {
+    const query = new URLSearchParams({ start, end, format: 'csv' });
+    return fetchFile(api, `/finance/reports/dues-delinquency?${query.toString()}`, 'dues-delinquency.csv');
+  },
+
+  /** A fiscal year's approved and paid purchase requests, by vendor. */
+  async purchasesByVendor(fiscalYearId: string): Promise<PurchasesByVendorReport> {
+    const response = await api.get<PurchasesByVendorReport>('/finance/reports/purchases-by-vendor', {
+      params: { fiscal_year_id: fiscalYearId },
+    });
+    return response.data;
+  },
+
+  async purchasesByVendorCsv(fiscalYearId: string): Promise<DownloadedFile> {
+    const query = new URLSearchParams({ fiscal_year_id: fiscalYearId, format: 'csv' });
+    return fetchFile(api, `/finance/reports/purchases-by-vendor?${query.toString()}`, 'purchases-by-vendor.csv');
+  },
 };
 
 /**
@@ -682,6 +740,18 @@ export const approvalService = {
       `/finance/approvals/${stepRecordId}/deny`,
       stepDecisionBody(notes, overrideReason)
     );
+    return response.data;
+  },
+
+  /**
+   * Email an external approver a fresh link; the old one stops working.
+   * `linkVersion` is the `emailLinkVersion` the queue showed, so a repeated
+   * click sends nothing (`resent: false`).
+   */
+  async resendEmail(stepRecordId: string, linkVersion: number): Promise<ApprovalEmailResendResult> {
+    const response = await api.post<ApprovalEmailResendResult>(`/finance/approvals/${stepRecordId}/resend-email`, {
+      linkVersion,
+    });
     return response.data;
   },
 
@@ -755,7 +825,8 @@ export const purchaseRequestService = {
     return response.data;
   },
 
-  async markPaid(id: string, actualAmount?: MonetaryAmount): Promise<PurchaseRequest> {
+  /** Record the request paid, and what was actually paid; the screen always sends it and the budget line spends it. */
+  async markPaid(id: string, actualAmount: MonetaryAmount): Promise<PurchaseRequest> {
     const response = await api.post<PurchaseRequest>(`/finance/purchase-requests/${id}/mark-paid`, undefined, {
       params: { actual_amount: actualAmount },
     });
@@ -840,6 +911,21 @@ export const expenseReportService = {
     return response.data;
   },
 
+  /** Use the receipt already uploaded to another line of the same report. */
+  async shareLineItemReceipt(reportId: string, itemId: string, fromItemId: string): Promise<ExpenseLineItem> {
+    const response = await api.post<ExpenseLineItem>(
+      `/finance/expense-reports/${reportId}/items/${itemId}/receipt/share`,
+      { fromItemId }
+    );
+    return response.data;
+  },
+
+  /** Take the receipt off one line of a draft; other lines sharing it keep it. */
+  async detachLineItemReceipt(reportId: string, itemId: string): Promise<ExpenseLineItem> {
+    const response = await api.delete<ExpenseLineItem>(`/finance/expense-reports/${reportId}/items/${itemId}/receipt`);
+    return response.data;
+  },
+
   downloadLineItemReceipt(reportId: string, itemId: string): Promise<DownloadedFile> {
     return fetchFile(api, `/finance/expense-reports/${reportId}/items/${itemId}/receipt`, 'receipt');
   },
@@ -885,6 +971,12 @@ export const advanceService = {
   async get(id: string): Promise<AdvanceDetail> {
     const response = await api.get<AdvanceDetail>(`/finance/advances/${id}`);
     return response.data;
+  },
+
+  /** The members the finance office can raise an advance for (`finance.manage`). */
+  async holders(): Promise<AdvanceHolder[]> {
+    const response = await api.get<AdvanceHolder[]>('/finance/advances/holders');
+    return asArray(response.data);
   },
 
   async recordReturn(id: string, data: AdvanceReturnPayload): Promise<AdvanceReturn> {
@@ -939,6 +1031,18 @@ export const checkRequestService = {
   async void(id: string): Promise<CheckRequest> {
     const response = await api.post<CheckRequest>(`/finance/check-requests/${id}/void`);
     return response.data;
+  },
+
+  /** The receipt or invoice the check pays; issuing the check needs one unless `receiptRequired` is false. */
+  async uploadReceipt(id: string, file: File): Promise<CheckRequest> {
+    const response = await api.post<CheckRequest>(`/finance/check-requests/${id}/receipt`, receiptForm(file), {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  downloadReceipt(id: string): Promise<DownloadedFile> {
+    return fetchFile(api, `/finance/check-requests/${id}/receipt`, 'receipt');
   },
 };
 
@@ -996,6 +1100,18 @@ export const duesService = {
   async unwaive(duesId: string, reason: string): Promise<MemberDues> {
     const response = await api.post<MemberDues>(`/finance/dues/${duesId}/unwaive`, { reason });
     return response.data;
+  },
+
+  /** The department's membership tiers, for a schedule's "applies to" list. */
+  async membershipTypeOptions(): Promise<FinanceNamedOption[]> {
+    const response = await api.get<FinanceNamedOption[]>('/finance/dues-schedules/membership-type-options');
+    return asArray(response.data);
+  },
+
+  /** The signed-in member's own dues. Needs no finance permission. */
+  async listMine(): Promise<MyDues[]> {
+    const response = await api.get<MyDues[]>('/finance/my-dues');
+    return asArray(response.data);
   },
 
   async getSummary(scheduleId?: string): Promise<DuesSummary> {
@@ -1105,5 +1221,61 @@ export const exportMappingService = {
       filename:
         filenameFromContentDisposition(typeof header === 'string' ? header : undefined) ?? 'quickbooks-journal.csv',
     };
+  },
+};
+
+/** The department's QuickBooks Online connection and its per-payment postings. */
+export const quickBooksOnlineService = {
+  async connection(): Promise<QuickBooksConnection> {
+    const response = await api.get<QuickBooksConnection>('/finance/quickbooks/connection');
+    return response.data;
+  },
+
+  /** Intuit's consent URL; the browser navigates there to connect. */
+  async startConnect(): Promise<string> {
+    const response = await api.post<{ authorizationUrl: string }>('/finance/quickbooks/oauth/start');
+    return response.data.authorizationUrl;
+  },
+
+  /** Disconnect and revoke; `revoked` is false when Intuit did not confirm. */
+  async disconnect(): Promise<{ revoked: boolean }> {
+    const response = await api.post<{ revoked: boolean }>('/finance/quickbooks/disconnect');
+    return response.data;
+  },
+
+  async setPostFrom(postFrom: string): Promise<QuickBooksConnection> {
+    const response = await api.put<QuickBooksConnection>('/finance/quickbooks/connection', { postFrom });
+    return response.data;
+  },
+
+  /** Post due payments now rather than at the next scheduled run. */
+  async syncNow(): Promise<QuickBooksSyncResult> {
+    const response = await api.post<QuickBooksSyncResult>('/finance/quickbooks/sync');
+    return response.data;
+  },
+
+  async postings(params?: {
+    status?: QuickBooksPostingStatus;
+    paymentType?: QuickBooksPaymentType;
+    paymentId?: string;
+  }): Promise<QuickBooksPosting[]> {
+    const response = await api.get<QuickBooksPosting[]>('/finance/quickbooks/postings', { params });
+    return asArray(response.data);
+  },
+
+  async retry(postingId: string): Promise<void> {
+    await api.post(`/finance/quickbooks/postings/${encodeURIComponent(postingId)}/retry`);
+  },
+};
+
+/** The budget-request reminder schedule (`finance.manage` to change it). */
+export const budgetRequestReminderService = {
+  async get(): Promise<BudgetRequestReminderSettings> {
+    const response = await api.get<BudgetRequestReminderSettings>('/finance/settings/budget-request-reminders');
+    return response.data;
+  },
+  async update(data: Omit<BudgetRequestReminderSettings, 'isDefault'>): Promise<BudgetRequestReminderSettings> {
+    const response = await api.put<BudgetRequestReminderSettings>('/finance/settings/budget-request-reminders', data);
+    return response.data;
   },
 };

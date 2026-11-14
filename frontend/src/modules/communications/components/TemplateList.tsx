@@ -51,6 +51,9 @@ import {
   PackageCheck,
   BadgeCheck,
   Link2,
+  ClipboardPen,
+  BellRing,
+  MessageSquare,
 } from 'lucide-react';
 import { formatNumber } from '../../../utils/dateFormatting';
 import type { EmailTemplate } from '../types';
@@ -103,6 +106,57 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
     label: 'Application Status Link',
     color: 'text-blue-700 dark:text-blue-400',
   },
+  application_follow_up_form: {
+    icon: ClipboardPen,
+    label: 'Application Follow-up Form',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
+  application_contact_changed: {
+    icon: ShieldAlert,
+    label: 'Application Contact Details Changed',
+    color: 'text-amber-700 dark:text-amber-600',
+  },
+  application_follow_up_reminder: {
+    icon: ClipboardPen,
+    label: 'Application Follow-up Form Reminder',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
+  application_follow_up_submitted: {
+    icon: ClipboardPen,
+    label: 'Application Follow-up Form Submitted',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
+  application_assigned: {
+    icon: UserPlus,
+    label: 'Applicant Assigned',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
+  application_needs_attention: {
+    icon: BellRing,
+    label: 'Applicant Needs Your Attention',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
+  application_interview_requested: {
+    icon: MessageSquare,
+    label: 'Interview Requested',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
+  evaluation_step_waiting: {
+    icon: ClipboardPen,
+    label: 'Evaluation Waiting on You',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
+  evaluation_deadline_reminder: {
+    icon: Hourglass,
+    label: 'Evaluation Step Due Soon',
+    color: 'text-amber-700 dark:text-amber-600',
+  },
+  evaluation_overdue: { icon: AlertTriangle, label: 'Evaluation Step Overdue', color: 'text-red-600' },
+  evaluation_finalized: {
+    icon: BadgeCheck,
+    label: 'Evaluation Finalized',
+    color: 'text-green-700 dark:text-green-600',
+  },
   suggestion_submitted: { icon: Lightbulb, label: 'Suggestion Submitted', color: 'text-amber-700 dark:text-amber-600' },
   equipment_request_update: {
     icon: PackageCheck,
@@ -112,6 +166,29 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   external_course_match: { icon: GraduationCap, label: 'New Course Version to Map', color: 'text-purple-500' },
   training_record_voided: { icon: Ban, label: 'Training Record Voided', color: 'text-amber-700 dark:text-amber-600' },
   training_record_changed: { icon: GraduationCap, label: 'Training Record Updated', color: 'text-purple-500' },
+  shift_evaluation_preceptor_link: {
+    icon: GraduationCap,
+    label: 'Shift Evaluation Preceptor Link',
+    color: 'text-purple-500',
+  },
+  session_waiver_requested: { icon: ClipboardCheck, label: 'Training Waiver Requested', color: 'text-purple-500' },
+  session_waiver_decided: { icon: BadgeCheck, label: 'Training Waiver Decided', color: 'text-purple-500' },
+  session_waiver_withdrawn: { icon: Undo2, label: 'Training Waiver Withdrawn', color: 'text-purple-500' },
+  meeting_waiver_requested: {
+    icon: ClipboardCheck,
+    label: 'Meeting Waiver Requested',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
+  meeting_waiver_decided: {
+    icon: BadgeCheck,
+    label: 'Meeting Waiver Decided',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
+  meeting_waiver_withdrawn: {
+    icon: Undo2,
+    label: 'Meeting Waiver Withdrawn',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
   series_end_reminder: { icon: CalendarRange, label: 'Series End Reminder', color: 'text-purple-400' },
   shift_assignment: { icon: CalendarCheck, label: 'Shift Assignment', color: 'text-green-700 dark:text-green-600' },
   shift_decline: { icon: UserX, label: 'Shift Decline', color: 'text-red-400' },
@@ -172,6 +249,13 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
       'application_step_completed',
       'application_status_link',
       'application_going_inactive',
+      'application_follow_up_form',
+      'application_contact_changed',
+      'application_follow_up_reminder',
+      'application_follow_up_submitted',
+      'application_assigned',
+      'application_needs_attention',
+      'application_interview_requested',
     ],
   },
   {
@@ -199,7 +283,16 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
       'external_course_match',
       'training_record_voided',
       'training_record_changed',
+      'shift_evaluation_preceptor_link',
+      'session_waiver_requested',
+      'session_waiver_decided',
+      'session_waiver_withdrawn',
     ],
+  },
+  {
+    id: 'meetings',
+    label: 'Business Meetings',
+    types: ['meeting_waiver_requested', 'meeting_waiver_decided', 'meeting_waiver_withdrawn'],
   },
   {
     id: 'elections',
@@ -216,6 +309,11 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
     id: 'inventory',
     label: 'Inventory & Property',
     types: ['inventory_change', 'property_return_reminder', 'equipment_request_update'],
+  },
+  {
+    id: 'evaluations',
+    label: 'Performance Evaluations',
+    types: ['evaluation_step_waiting', 'evaluation_deadline_reminder', 'evaluation_overdue', 'evaluation_finalized'],
   },
   {
     id: 'suggestions',

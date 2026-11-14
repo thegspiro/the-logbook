@@ -15,6 +15,7 @@ const mockGetMyHoursHistory = vi.fn();
 const mockGetExchangeCandidates = vi.fn();
 const mockCreateSwapRequest = vi.fn();
 const mockGetShifts = vi.fn();
+const mockGetMyAttendanceHistory = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
@@ -27,7 +28,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     getMyHoursHistory: (...args: unknown[]) => mockGetMyHoursHistory(...args) as unknown,
     // loadData awaits this alongside getMyAssignments; without it the call
     // throws and the whole load falls into its catch, leaving an empty list.
-    getMyAttendanceHistory: vi.fn().mockResolvedValue([]),
+    getMyAttendanceHistory: (...args: unknown[]) => mockGetMyAttendanceHistory(...args) as unknown,
     getShifts: (...args: unknown[]) => mockGetShifts(...args) as unknown,
     createSwapRequest: (...args: unknown[]) => mockCreateSwapRequest(...args) as unknown,
     getExchangeCandidates: (...args: unknown[]) => mockGetExchangeCandidates(...args) as unknown,
@@ -67,6 +68,8 @@ describe('MyShiftsTab', () => {
     mockGetMyShifts.mockResolvedValue({ shifts: [], total: 0 });
     mockGetShifts.mockReset();
     mockGetShifts.mockResolvedValue({ shifts: [], total: 0 });
+    mockGetMyAttendanceHistory.mockReset();
+    mockGetMyAttendanceHistory.mockResolvedValue([]);
     mockGetMyHoursHistory.mockReset();
     mockGetMyHoursHistory.mockResolvedValue({
       year: 2026,
@@ -443,6 +446,174 @@ describe('MyShiftsTab', () => {
         expect(await screen.findByText(/No upcoming seat you could exchange for/)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Submit Request' })).toBeDisabled();
       });
+    });
+  });
+
+  describe('past shift history', () => {
+    const past = (id: string, date: string, status = 'confirmed') => ({
+      id,
+      user_id: 'user-1',
+      shift_id: `shift-${id}`,
+      position: 'emt',
+      status,
+      assignment_status: status,
+      shift: {
+        id: `shift-${id}`,
+        shift_date: date,
+        start_time: `${date}T11:00:00Z`,
+        end_time: `${date}T23:00:00Z`,
+        apparatus_unit_number: 'A106E',
+      },
+    });
+    const worked = (id: string, date: string, minutes: number) => ({
+      id: `att-${id}`,
+      shift_id: `shift-${id}`,
+      user_id: 'user-1',
+      created_at: `${date}T23:00:00Z`,
+      checked_in_at: `${date}T11:00:00Z`,
+      checked_out_at: `${date}T23:00:00Z`,
+      duration_minutes: minutes,
+      shift_date: date,
+    });
+
+    beforeEach(() => {
+      mockGetMyAssignments.mockReset();
+      mockGetMyAssignments.mockResolvedValue([
+        past('oct-a', '2025-10-24'),
+        past('oct-b', '2025-10-11'),
+        past('aug', '2025-08-28'),
+        past('declined', '2025-08-21', 'declined'),
+        past('cancelled', '2025-08-20', 'cancelled'),
+        past('old', '2024-10-11'),
+      ]);
+      mockGetMyAttendanceHistory.mockReset();
+      mockGetMyAttendanceHistory.mockResolvedValue([
+        worked('oct-a', '2025-10-24', 705),
+        worked('oct-b', '2025-10-11', 720),
+        worked('old', '2024-10-11', 480),
+      ]);
+    });
+
+    const openPast = async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
+      await user.click(await screen.findByRole('button', { name: /^Past/ }));
+      return user;
+    };
+
+    it('leaves declined and cancelled seats out of the history and its count', async () => {
+      await openPast();
+      expect(screen.getByRole('button', { name: 'Past (4)' })).toBeInTheDocument();
+      expect(screen.queryByText(/declined/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/cancelled/i)).not.toBeInTheDocument();
+    });
+
+    it('still lists a declined seat the member worked anyway, from attendance', async () => {
+      mockGetMyAttendanceHistory.mockResolvedValue([worked('declined', '2025-08-21', 525)]);
+      await openPast();
+      const august = screen.getByRole('region', { name: 'August 2025' });
+      const rows = within(august)
+        .getAllByRole('listitem')
+        .filter((li) => within(li).queryByRole('button', { name: /Details for shift on Thu, Aug 21, 2025/ }) !== null);
+      expect(rows).toHaveLength(1);
+      rows.forEach((row) => {
+        expect(within(row).getByText(/8\.75h worked/)).toBeInTheDocument();
+        expect(within(row).getAllByText('completed').length).toBeGreaterThan(0);
+      });
+    });
+
+    it('opens on the newest year, with that year in the tiles and its months listed', async () => {
+      await openPast();
+      expect(screen.getByLabelText('Year')).toHaveValue('2025');
+      expect(within(screen.getByRole('group', { name: 'Hours worked, 2025' })).getByText('23.75')).toBeInTheDocument();
+      expect(within(screen.getByRole('group', { name: 'Shifts, 2025' })).getByText('3')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'October 2025' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'August 2025' })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'October 2024' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'October: 23.75 hrs, 2 shifts' })).toBeInTheDocument();
+      // A month with no shifts has nothing to jump to.
+      expect(screen.getByRole('button', { name: 'March: 0 hrs, 0 shifts' })).toBeDisabled();
+    });
+
+    it('offers All time, which lists every year and charts hours by year', async () => {
+      const user = await openPast();
+      await user.selectOptions(screen.getByLabelText('Year'), 'All time (4 shifts)');
+
+      expect(
+        within(screen.getByRole('group', { name: 'Hours worked, All time' })).getByText('31.75')
+      ).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'October 2025' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'October 2024' })).toBeInTheDocument();
+
+      // A tap on a year's bar opens that year.
+      await user.click(screen.getByRole('button', { name: '2024: 8 hrs, 1 shift' }));
+      expect(screen.getByLabelText('Year')).toHaveValue('2024');
+      expect(screen.queryByRole('heading', { name: 'October 2025' })).not.toBeInTheDocument();
+    });
+
+    it('jumps to a month when its bar is tapped', async () => {
+      const user = await openPast();
+      const scroll = vi.mocked(Element.prototype.scrollIntoView);
+      scroll.mockClear();
+      await user.click(screen.getByRole('button', { name: 'August: 0 hrs, 1 shift' }));
+      expect(scroll).toHaveBeenCalledWith({ behavior: 'smooth' });
+      expect(scroll.mock.contexts[0]).toBe(screen.getByRole('region', { name: 'August 2025' }));
+    });
+  });
+
+  describe('upcoming shifts by month', () => {
+    // Far enough ahead to stay upcoming whenever the suite runs.
+    const upcoming = (id: string, date: string, hour: string, status = 'confirmed') => ({
+      id,
+      user_id: 'user-1',
+      shift_id: `shift-${id}`,
+      position: 'emt',
+      status,
+      assignment_status: status,
+      shift: {
+        id: `shift-${id}`,
+        shift_date: date,
+        start_time: `${date}T${hour}:00:00Z`,
+        end_time: `${date}T23:00:00Z`,
+      },
+    });
+
+    beforeEach(() => {
+      mockGetMyAssignments.mockReset();
+      // Out of order on purpose: the list must sort them, not trust the API.
+      mockGetMyAssignments.mockResolvedValue([
+        upcoming('jan', '2100-01-03', '11'),
+        upcoming('dec-late', '2099-12-20', '11'),
+        upcoming('dec-early-pm', '2099-12-05', '20'),
+        upcoming('dec-early-am', '2099-12-05', '11'),
+        upcoming('declined', '2099-12-10', '11', 'declined'),
+      ]);
+      mockGetMyAttendanceHistory.mockReset();
+      mockGetMyAttendanceHistory.mockResolvedValue([]);
+    });
+
+    it('groups shifts under month headers, soonest month and shift first, across the new year', async () => {
+      renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
+
+      const december = await screen.findByRole('region', { name: 'December 2099' });
+      const january = screen.getByRole('region', { name: 'January 2100' });
+      expect(within(december).getByText('3 shifts')).toBeInTheDocument();
+      expect(within(january).getByText('1 shift')).toBeInTheDocument();
+
+      const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+      expect(headings).toEqual(['December 2099', 'January 2100']);
+
+      const decemberDetails = within(december)
+        .getAllByRole('button', { name: /^Details for shift on/ })
+        .map((b) => b.getAttribute('aria-label'));
+      expect(decemberDetails).toEqual([
+        expect.stringContaining('Dec 5'),
+        expect.stringContaining('Dec 5'),
+        expect.stringContaining('Dec 20'),
+      ]);
+      // Two shifts on Dec 5: the morning one comes first.
+      expect(decemberDetails[0]).toMatch(/AM/);
+      expect(decemberDetails[1]).toMatch(/PM/);
     });
   });
 });

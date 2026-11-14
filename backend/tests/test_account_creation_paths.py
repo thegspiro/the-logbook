@@ -24,7 +24,11 @@ shift spreadsheet names. They are written ``archived`` with no password hash,
 so password sign-in and OAuth refuse them (``User.is_active``), and a reset
 request finds no local password to reset. One becomes a login only when an
 administrator changes its status through the member screens, which answer to
-their own permissions.
+their own permissions. The historical data import's administrative-hours commit
+(``POST /integrations/historical-imports/{id}/admin/commit``, gated on
+``integrations.historical_import``, which only the IT Manager holds by default)
+reaches the same construction for members its administrative rows name, so
+both routes share one site and one shape of record.
 
 None of this is a hole. The transfer paths enforce the same rank and role grant
 ceilings as ``POST /users`` (``tests/test_privilege_ceiling_wiring.py``) and
@@ -47,6 +51,7 @@ import pathlib
 import pytest
 
 from app.api.v1.endpoints.auth import router as auth_router
+from app.api.v1.endpoints.historical_import import router as historical_router
 from app.api.v1.endpoints.membership_pipeline import router as pipeline_router
 from app.api.v1.endpoints.shift_history_import import router as history_router
 from app.api.v1.endpoints.users import router as users_router
@@ -61,7 +66,7 @@ KNOWN_CONSTRUCTION_SITES = {
     "api/v1/endpoints/users.py:create_member",
     "services/auth_service.py:register_user",
     "services/membership_pipeline_service.py:_do_transfer",
-    "services/shift_history_import_service.py:_create_members",
+    "services/shift_history_import_service.py:create_former_members",
 }
 
 
@@ -198,4 +203,15 @@ def test_history_import_commit_requires_scheduling_manage() -> None:
     """
     assert _permissions(history_router, "/{import_id}/commit", "POST") == [
         ["scheduling.manage"]
+    ]
+
+
+def test_historical_admin_commit_requires_the_import_permission() -> None:
+    """The administrative-hours commit creates the same archived records.
+
+    Pinned to ``integrations.historical_import`` — granted to no default role —
+    so the route cannot be opened to a wider permission without this failing.
+    """
+    assert _permissions(historical_router, "/{import_id}/admin/commit", "POST") == [
+        ["integrations.historical_import"]
     ]

@@ -11,10 +11,13 @@ stored shape, settled on every write path:
      "status": <ATTENDANCE_STATUSES>, "present": bool, "note": str | None}
 
 ``status`` is the record; ``present`` is derived from it and kept only because
-quorum and older readers consume it. ``present`` is true exactly when the
-member counted toward a quorum: present, late, or left early. A guest is not a
-member and never counts. The migration that settled the existing rows inlines
-its own copy of this mapping, so this module is free to change.
+older readers consume it. ``present`` is true exactly when the member was in
+the room: present, late, or left early. Until 2026-11-05 that was also the
+quorum rule; who counts toward quorum is now the department's choice
+(``app.utils.minutes_settings.quorum_counting_in``), so ``present`` no longer
+answers that question and quorum reads ``status``. A guest is not a member and
+never counts. The migration that settled the existing rows inlines its own copy
+of this mapping, so this module is free to change.
 """
 
 from typing import Any, Mapping, Optional, Sequence
@@ -26,13 +29,40 @@ ATTENDANCE_STATUSES = (
     "excused",
     "absent",
     "guest",
+    # A member who was not in the room but was represented by a proxy holder.
+    # Only offered on the roll call when the department uses proxies; stored
+    # JSON, so adding it needed no migration.
+    "proxy",
 )
 
-# Members who were in the room for the meeting. Quorum is a head-count of
-# members, so ``guest`` is deliberately absent; whether a department's bylaws
-# count a member who left early is not something this code decides — it counts
-# them, as the roll call recorded them present.
-COUNTS_TOWARD_QUORUM = frozenset({"present", "late", "left_early"})
+# Members who were in the room for the meeting: the stored ``present`` flag,
+# who may vote in a roll call, and the "majority of members present" threshold.
+IN_THE_ROOM = frozenset({"present", "late", "left_early"})
+
+# Who counts toward quorum when the department has not chosen: everyone in the
+# room, as before the setting existed. Quorum is a head-count of members, so
+# ``guest`` never counts; ``proxy`` counts only where the department uses them.
+COUNTS_TOWARD_QUORUM = IN_THE_ROOM
+
+# What a department created from now on lists on its minutes (owner decision
+# 2026-11-01). Written into the new department's settings at creation rather
+# than made the reading of an absent value, so an existing department that
+# never chose keeps ``DEFAULT_ATTENDANCE_LISTING`` across an upgrade.
+NEW_DEPARTMENT_ATTENDANCE_LISTING = "present"
+
+
+def quorum_statuses(
+    *, late: bool = True, left_early: bool = True, proxies: bool = False
+) -> frozenset[str]:
+    """The statuses counted toward quorum under a department's choices."""
+    counted = {"present"}
+    if late:
+        counted.add("late")
+    if left_early:
+        counted.add("left_early")
+    if proxies:
+        counted.add("proxy")
+    return frozenset(counted)
 
 
 def derive_status(entry: Mapping[str, Any]) -> str:
@@ -51,9 +81,20 @@ def derive_status(entry: Mapping[str, Any]) -> str:
     return "excused" if entry.get("excused") else "absent"
 
 
-def counts_toward_quorum(entry: Mapping[str, Any]) -> bool:
-    """Whether this entry is part of the quorum head-count."""
-    return derive_status(entry) in COUNTS_TOWARD_QUORUM
+def counts_toward_quorum(
+    entry: Mapping[str, Any], counted: frozenset[str] = COUNTS_TOWARD_QUORUM
+) -> bool:
+    """Whether this entry is part of the quorum head-count under *counted*.
+
+    ``QuorumService.calculate_quorum`` passes the department's rule; nothing
+    else computes quorum.
+    """
+    return derive_status(entry) in counted
+
+
+def in_the_room(entry: Mapping[str, Any]) -> bool:
+    """Whether this member was at the meeting in person (not a proxy, not a guest)."""
+    return derive_status(entry) in IN_THE_ROOM
 
 
 def normalize_attendee(entry: Mapping[str, Any]) -> dict[str, Optional[Any]]:
@@ -64,7 +105,7 @@ def normalize_attendee(entry: Mapping[str, Any]) -> dict[str, Optional[Any]]:
         "name": entry.get("name") or "Unknown",
         "role": entry.get("role") or None,
         "status": status,
-        "present": status in COUNTS_TOWARD_QUORUM,
+        "present": status in IN_THE_ROOM,
         "note": entry.get("note") or None,
     }
 
@@ -80,13 +121,16 @@ def normalize_attendees(
 
 # Which statuses the minutes name, as the department chose. Quorum and the
 # attendance reports always read the whole roll; this is only what a reader of
-# the minutes sees. A guest was in the room, so every choice lists guests.
+# the minutes sees. A guest was in the room, so every choice lists guests; a
+# proxy may have made the quorum, so every choice names who was represented.
 ATTENDANCE_LISTINGS = ("all", "present_excused", "present")
 DEFAULT_ATTENDANCE_LISTING = "all"
 
 _LISTED_STATUSES = {
-    "present": frozenset({"present", "late", "left_early", "guest"}),
-    "present_excused": frozenset({"present", "late", "left_early", "guest", "excused"}),
+    "present": frozenset({"present", "late", "left_early", "guest", "proxy"}),
+    "present_excused": frozenset(
+        {"present", "late", "left_early", "guest", "proxy", "excused"}
+    ),
     "all": frozenset(ATTENDANCE_STATUSES),
 }
 

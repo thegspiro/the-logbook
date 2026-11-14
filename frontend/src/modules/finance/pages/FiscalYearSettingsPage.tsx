@@ -57,6 +57,7 @@ import {
 } from '../utils/chargeAccess';
 import { descendantIds, orderCategoryTree } from '../utils/budgetCategoryTree';
 import { FiscalYearLockDialog } from '../components/FiscalYearLockDialog';
+import { BudgetRequestReminderSettingsCard } from '../components/BudgetRequestReminderSettingsCard';
 import { PLANNING_STAGE_LABELS } from '../utils/budgetRequests';
 import { blankToNull } from '@/utils/formValues';
 import { getErrorMessage } from '@/utils/errorHandling';
@@ -67,7 +68,7 @@ import { formatCalendarDate, formatDate } from '@/utils/dateFormatting';
 import { useConfirm } from '@/contexts/ConfirmContext';
 import { useTimezone } from '@/hooks/useTimezone';
 import { DialogPanel } from '@/components/ux/DialogPanel';
-import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 
 // =============================================================================
 // Status Badge
@@ -76,10 +77,10 @@ import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 // A closed year that is not locked is in its year-end close: it is "Closing"
 // here, and only a locked year is "Closed".
 const STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
-  active: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  closing: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
-  closed: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  draft: 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300',
+  active: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  closing: 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300',
+  closed: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -574,7 +575,7 @@ const NextYearPlanning: React.FC<NextYearPlanningProps> = ({ fy, sources, onChan
               type="button"
               onClick={() => void handleStartFrom()}
               disabled={copying || !sourceId}
-              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
             >
               <Copy className="h-3.5 w-3.5" />
               {copying ? 'Copying...' : 'Copy lines'}
@@ -590,11 +591,14 @@ const NextYearPlanning: React.FC<NextYearPlanningProps> = ({ fy, sources, onChan
         <label htmlFor={deadlineInputId} className={labelClass}>
           Request deadline
         </label>
-        <div className="flex flex-col gap-2 sm:flex-row">
+        {/* Wraps rather than pushing "Clear deadline" off the screen: a date input
+            does not shrink below its own content width, and beside the sidebar
+            the row is narrower than the screen breakpoint assumed. */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <input
             id={deadlineInputId}
             type="date"
-            className={inputClass}
+            className={`${inputClass} sm:w-auto sm:min-w-40 sm:flex-1`}
             value={deadline}
             onChange={(e) => setDeadline(e.target.value)}
             aria-describedby={`${deadlineInputId}-hint`}
@@ -603,7 +607,7 @@ const NextYearPlanning: React.FC<NextYearPlanningProps> = ({ fy, sources, onChan
             type="button"
             onClick={() => void saveDeadline(deadline)}
             disabled={savingDeadline || deadline === (fy.requestDeadline ?? '')}
-            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
           >
             Save deadline
           </button>
@@ -612,7 +616,7 @@ const NextYearPlanning: React.FC<NextYearPlanningProps> = ({ fy, sources, onChan
               type="button"
               onClick={() => void saveDeadline('')}
               disabled={savingDeadline}
-              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
             >
               Clear deadline
             </button>
@@ -640,15 +644,15 @@ const RequestWindow: React.FC<{ fy: FiscalYear }> = ({ fy }) => (
     <span
       className={`inline-flex rounded-full px-2 py-0.5 font-medium ${
         fy.requestsOpen
-          ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-          : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
+          ? 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300'
+          : 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300'
       }`}
     >
       {fy.requestsOpen ? 'Requests open' : 'Requests closed'}
     </span>
     <Link
       to="/finance/budget-requests/review"
-      className="font-medium text-red-700 underline-offset-2 hover:underline dark:text-red-400"
+      className="touch:inline-flex touch:min-h-11 touch:items-center font-medium text-red-800 underline-offset-2 hover:underline dark:text-red-300"
     >
       Review requests
     </Link>
@@ -660,7 +664,7 @@ const RequestWindow: React.FC<{ fy: FiscalYear }> = ({ fy }) => (
 // =============================================================================
 
 const STAGE_BUTTON =
-  'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50';
+  'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs touch:min-h-11 font-medium disabled:opacity-50';
 
 /** The stages a planning move reaches; `adopted` is reached only by recording the vote. */
 type MovableStage = Exclude<BudgetPlanningStage, 'adopted'>;
@@ -693,7 +697,7 @@ const NEXT_STAGES: Record<BudgetPlanningStage, { back?: MovableStage; forward?: 
 };
 
 const START_BUTTON =
-  'inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-100 disabled:opacity-50 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-500/20';
+  'inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs touch:min-h-11 font-medium text-green-800 hover:bg-green-100 disabled:opacity-50 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-300 dark:hover:bg-green-500/20';
 
 interface PlanningStageControlsProps {
   fy: FiscalYear;
@@ -972,11 +976,7 @@ const FiscalYearSettingsPage: React.FC = () => {
   if (isLoading && fiscalYears.length === 0) {
     return (
       <div className="space-y-6">
-        <Breadcrumbs />
-        <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Finance Settings</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">Manage fiscal years and budget categories</p>
-        </div>
+        <AdminPageHeader title="Finance Settings" description="Manage fiscal years and budget categories" />
         <SkeletonPage rows={4} showStats={false} />
       </div>
     );
@@ -984,17 +984,11 @@ const FiscalYearSettingsPage: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <Breadcrumbs />
-
-      {/* Header */}
-      <div>
-        <h1 className="text-theme-text-primary text-2xl font-bold">Finance Settings</h1>
-        <p className="text-theme-text-secondary mt-1 text-sm">Manage fiscal years and budget categories</p>
-      </div>
+      <AdminPageHeader title="Finance Settings" description="Manage fiscal years and budget categories" />
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
@@ -1004,15 +998,15 @@ const FiscalYearSettingsPage: React.FC = () => {
       {/* Fiscal Years Section                                               */}
       {/* ================================================================== */}
       <div className="card p-6">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
+        <div className="split-row mb-4 gap-3 sm:items-center">
+          <div className="split-row-main flex items-center gap-2">
             <Calendar className="text-theme-text-secondary h-5 w-5 shrink-0" />
             <h2 className="text-theme-text-primary text-lg font-semibold">Fiscal Years</h2>
           </div>
           <button
             type="button"
             onClick={() => setShowCreateFY(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-3 py-2 text-sm font-medium text-white hover:bg-red-900"
+            className="split-row-aside touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-3 py-2 text-sm font-medium text-white hover:bg-red-900"
           >
             <Plus className="h-4 w-4" />
             New Fiscal Year
@@ -1033,6 +1027,7 @@ const FiscalYearSettingsPage: React.FC = () => {
 
         {fiscalYears.length === 0 ? (
           <EmptyState
+            compact
             headingLevel={3}
             icon={Calendar}
             title="No fiscal years"
@@ -1049,8 +1044,8 @@ const FiscalYearSettingsPage: React.FC = () => {
           <div className="divide-theme-surface-border divide-y">
             {fiscalYears.map((fy) => (
               <div key={fy.id} className="py-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
+                <div className="split-row gap-3 sm:items-center">
+                  <div className="split-row-main">
                     <div className="flex items-center gap-2">
                       <span className="text-theme-text-primary text-sm font-medium">{fy.name}</span>
                       <span
@@ -1067,7 +1062,7 @@ const FiscalYearSettingsPage: React.FC = () => {
                     <AdoptionRecord fy={fy} />
                     <CloseRecord fy={fy} />
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="split-row-aside flex flex-wrap items-center gap-2">
                     {fy.status === 'draft' && (
                       <PlanningStageControls fy={fy} onChanged={() => void fetchFiscalYears()} />
                     )}
@@ -1092,15 +1087,15 @@ const FiscalYearSettingsPage: React.FC = () => {
       {/* Budget Categories Section                                          */}
       {/* ================================================================== */}
       <div className="card p-6">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
+        <div className="split-row mb-4 gap-3 sm:items-center">
+          <div className="split-row-main flex items-center gap-2">
             <Tag className="text-theme-text-secondary h-5 w-5 shrink-0" />
             <h2 className="text-theme-text-primary text-lg font-semibold">Budget Categories</h2>
           </div>
           <button
             type="button"
             onClick={() => setShowCreateCategory(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-3 py-2 text-sm font-medium text-white hover:bg-red-900"
+            className="split-row-aside touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-3 py-2 text-sm font-medium text-white hover:bg-red-900"
           >
             <Plus className="h-4 w-4" />
             New Category
@@ -1109,6 +1104,7 @@ const FiscalYearSettingsPage: React.FC = () => {
 
         {budgetCategories.length === 0 ? (
           <EmptyState
+            compact
             headingLevel={3}
             icon={Tag}
             title="No budget categories"
@@ -1156,7 +1152,7 @@ const FiscalYearSettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => setEditingCategory(cat)}
                     aria-label={`Edit ${cat.name}`}
-                    className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg p-1.5"
+                    className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary touch-target-phone rounded-lg p-1.5"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
@@ -1164,7 +1160,7 @@ const FiscalYearSettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => setDeletingCategoryId(cat.id)}
                     aria-label={`Delete ${cat.name}`}
-                    className="text-theme-text-secondary rounded-lg p-1.5 hover:bg-red-50 hover:text-red-600"
+                    className="text-theme-text-secondary touch-target-phone rounded-lg p-1.5 hover:bg-red-50 hover:text-red-600"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -1174,6 +1170,8 @@ const FiscalYearSettingsPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      <BudgetRequestReminderSettingsCard />
 
       {/* Modals */}
       <CreateFYModal open={showCreateFY} onClose={() => setShowCreateFY(false)} />

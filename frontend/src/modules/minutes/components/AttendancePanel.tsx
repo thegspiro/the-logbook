@@ -3,12 +3,13 @@
  *
  * Read-only for everyone who can open the minutes; editable by a minutes
  * manager while the minutes are a draft. Each line carries a status (present,
- * late, left early, excused, absent, guest) and an optional note. The server
- * derives "counted toward quorum" from the status, so this screen never sets
- * `present` itself — it would only be one more place to disagree.
+ * late, left early, represented by proxy, excused, absent, guest) and an
+ * optional note. The server derives `present` from the status and decides who
+ * counts toward quorum under the department's setting, so this screen sets
+ * neither — it would only be one more place to disagree.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Trash2, UserPlus, Users } from 'lucide-react';
 import { minutesService } from '../services/api';
@@ -21,6 +22,7 @@ import {
   ATTENDANCE_STATUSES,
   ATTENDANCE_STATUS_LABELS,
   isListed,
+  rollStatusesFor,
   statusOf,
 } from '../utils/attendance';
 
@@ -28,6 +30,7 @@ const STATUS_CHIP: Record<AttendanceStatus, string> = {
   present: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
   late: 'bg-lime-100 text-lime-800 dark:bg-lime-500/20 dark:text-lime-400',
   left_early: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400',
+  proxy: 'bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-300',
   excused: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
   absent: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
   guest: 'bg-theme-surface-secondary text-theme-text-primary',
@@ -58,6 +61,28 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({
   const [guestName, setGuestName] = useState('');
   const [saving, setSaving] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
+  // Whether the department uses proxies, read when the roll is opened for
+  // editing (the settings read needs minutes.manage, which editing needs too).
+  // Unknown reads as no: the status is then offered only on a line that
+  // already holds it.
+  const [proxyAttendance, setProxyAttendance] = useState(false);
+
+  useEffect(() => {
+    if (!editing) return undefined;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const settings = await minutesService.getReminderSettings();
+        if (!cancelled) setProxyAttendance(settings.proxy_attendance);
+      } catch {
+        if (!cancelled) setProxyAttendance(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [editing]);
 
   // The roll is recorded in full and edited in full; the listing only decides
   // what a reader of the minutes is shown.
@@ -277,7 +302,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({
                     onChange={(e) => setRow(index, { status: e.target.value as AttendanceStatus })}
                     className="form-input"
                   >
-                    {ATTENDANCE_STATUSES.map((status) => (
+                    {rollStatusesFor(proxyAttendance, statusOf(row)).map((status) => (
                       <option key={status} value={status}>
                         {ATTENDANCE_STATUS_LABELS[status]}
                       </option>

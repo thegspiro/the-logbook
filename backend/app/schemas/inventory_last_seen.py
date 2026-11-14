@@ -18,6 +18,8 @@ LastSeenSource = Literal[
     "check_in",
     "issuance",
     "issuance_return",
+    "barcode_put_away",
+    "created",
 ]
 
 

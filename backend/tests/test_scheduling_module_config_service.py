@@ -122,8 +122,15 @@ class TestUpdate:
             "driver",
             "firefighter",
         ]
+        # drivesApparatus (2026-10-31) is stored explicitly, off unless sent,
+        # and so is the certification mapping (2026-11-04), empty unless sent.
         assert settings["custom_positions"] == [
-            {"value": "rescue_tech", "label": "Rescue Technician"}
+            {
+                "value": "rescue_tech",
+                "label": "Rescue Technician",
+                "drivesApparatus": False,
+                "qualifications": [],
+            }
         ]
         # JSON columns keep the camelCase wire shape
         assert settings["apparatus_type_defaults"] == {

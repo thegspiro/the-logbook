@@ -43,8 +43,7 @@ const BudgetLineCard: React.FC<{ line: MyBudget }> = ({ line }) => {
     <li>
       <Link
         to={`/finance/budgets/${line.id}`}
-        className="card group block p-4 transition-all hover:border-red-200 hover:shadow-md"
-        aria-label={`${title}, ${line.fiscalYearName ?? ''}`}
+        className="card group @container block p-4 transition-all hover:border-red-200 hover:shadow-md"
       >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -54,7 +53,7 @@ const BudgetLineCard: React.FC<{ line: MyBudget }> = ({ line }) => {
           <ChevronRight className="text-theme-text-secondary h-5 w-5 shrink-0" aria-hidden="true" />
         </div>
 
-        <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <dl className="mt-3 grid grid-cols-2 gap-3 text-sm @[28rem]:grid-cols-4">
           <div>
             <dt className="text-theme-text-secondary">Budget</dt>
             <dd className="text-theme-text-primary font-medium">

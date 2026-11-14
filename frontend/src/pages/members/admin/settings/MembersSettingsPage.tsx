@@ -132,13 +132,18 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
       activeSection={visibleSection}
       onSectionChange={handleSectionChange}
       navLabel="Members settings sections"
+      eyebrow="Administration"
       title="Members Settings"
       subtitle="Contact visibility, membership numbers, ranks, tiers and EVOC levels"
       saveState={saveState}
       onRetrySave={retry}
-      onBack={() => void navigate(backPath)}
-      backLabel={backLabel}
       showBreadcrumbs
+      // The URL's trail leads back through Members Administration, which an
+      // officer holding only settings.manage cannot open; they reached this
+      // screen from Organization Settings, so their trail leads back there.
+      breadcrumbs={
+        canOpenHub ? undefined : [{ label: 'Organization Settings', path: '/settings' }, { label: 'Members Settings' }]
+      }
     >
       {renderSection()}
     </SettingsLayout>

@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.training_service import TrainingService
+from app.utils.training_match_key import training_match_key
 
 pytestmark = [pytest.mark.integration]
 
@@ -183,15 +184,19 @@ async def _insert_training_record(
     status: str = "completed",
     expiration_date: date | None = None,
 ) -> str:
-    """Insert a training record and return its id."""
+    """Insert a training record and return its id.
+
+    Raw SQL skips the model's listener, so the match key the ORM would store
+    is written here explicitly.
+    """
     rec_id = _uid()
     await db_session.execute(
         text(
             "INSERT INTO training_records "
-            "(id, organization_id, user_id, course_name, training_type, "
+            "(id, organization_id, user_id, course_name, match_key, training_type, "
             "completion_date, expiration_date, hours_completed, status, "
             "created_at, updated_at) "
-            "VALUES (:id, :org_id, :user_id, :name, :type, "
+            "VALUES (:id, :org_id, :user_id, :name, :match_key, :type, "
             ":comp_date, :exp_date, :hours, :status, "
             ":now, :now)"
         ),
@@ -200,6 +205,7 @@ async def _insert_training_record(
             "org_id": org_id,
             "user_id": user_id,
             "name": course_name,
+            "match_key": training_match_key(course_name),
             "type": training_type,
             "comp_date": completion_date,
             "exp_date": expiration_date,

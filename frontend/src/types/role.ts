@@ -3,7 +3,7 @@
  */
 
 import type { NotificationPreferences, ProfileVisibility } from './user';
-import type { UserStatus } from '../constants/enums';
+import type { PositionKind, UserStatus } from '../constants/enums';
 
 export interface Role {
   id: string;
@@ -25,6 +25,14 @@ export interface Role {
    * pickers and roster chips leave these out — see `utils/positions.ts`.
    */
   mirrors_rank?: boolean | undefined;
+  /**
+   * office | committee | system. An office is a permission-bearing job; a
+   * committee is a group a member serves on, shown apart from the offices;
+   * system is the platform's own (member, the owner, the rank mirrors).
+   * Optional only so a fixture built by hand stays valid; the server always
+   * sends it.
+   */
+  kind?: PositionKind | undefined;
 }
 
 export interface Permission {
@@ -36,6 +44,16 @@ export interface Permission {
 export interface PermissionCategory {
   category: string;
   permissions: Permission[];
+}
+
+/** One closed term in a position, from `member_position_terms`. */
+export interface PastPosition {
+  /** Null once the position itself has been deleted; `name` is then the name it had. */
+  position_id: string | null;
+  name: string;
+  kind: string | null;
+  started_at: string;
+  ended_at: string;
 }
 
 export interface UserWithRoles {
@@ -61,7 +79,24 @@ export interface UserWithRoles {
   /** Set while a sign-in lockout is in force; sent to members.manage holders only. */
   locked_until?: string | null | undefined;
   membership_type?: string | undefined;
+  /** The pair `membership_type` fuses: operational/administrative/social, and the ladder standing. */
+  member_class?: string | null | undefined;
+  member_status?: string | null | undefined;
   hire_date?: string | undefined;
+  /**
+   * "Member since": the date credited service runs from — the hire date for a
+   * member who never left, later for one who came back after a break. Sent by
+   * GET /users/{id}/with-roles only; the profile's write endpoints omit it, so
+   * a page replacing its record with their response keeps the value it had.
+   */
+  service_since?: string | null | undefined;
+  /**
+   * Offices and committee seats held earlier, newest first. Sent by
+   * GET /users/{id}/with-roles only, like `service_since`, and to everyone who
+   * sees the current positions; the baseline Member position and the rank
+   * mirrors are already left out by the server.
+   */
+  past_positions?: PastPosition[] | undefined;
   date_of_birth?: string | undefined;
   rank?: string | undefined;
   station?: string | undefined;

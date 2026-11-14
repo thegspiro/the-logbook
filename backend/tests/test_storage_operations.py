@@ -41,10 +41,13 @@ ALLOWED = {
     "services/upload_encryption.py",
     "services/upload_relocation.py",
     "services/remote_migration.py",
-    # Not uploads: the log file, and a temporary PDF an election email is
-    # built from and removes again.
+    # Not uploads: the log file, a temporary PDF an election email is
+    # built from and removes again, and ffmpeg's scratch files.
     "core/logging.py",
     "services/election_service.py",
+    # ffmpeg's input and outputs in a private temporary directory; the stored
+    # copies are written through file_storage_service afterwards.
+    "services/history_media_files.py",
 }
 
 

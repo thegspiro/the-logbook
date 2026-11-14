@@ -9,10 +9,17 @@ from datetime import date, datetime
 from typing import Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    ValidationInfo,
+    field_validator,
+)
 
 from app.schemas.base import RefusesNull, UTCResponseBase
-from app.utils.membership import MemberClass, MemberStatus
+from app.utils.membership import MemberClass, MemberStatus, canonical_member_status
 from app.utils.phone_numbers import validate_member_phone
 
 _response_config = ConfigDict(from_attributes=True)
@@ -229,6 +236,11 @@ class UserCreate(UserBase):
         return validate_member_phone(v)
 
 
+#: What a ``member_status`` may look like before the organization's tier list
+#: is consulted: the shape ``MembershipTier.id`` is validated to, lowercased.
+MEMBER_STATUS_SLUG = re.compile(r"[a-z0-9][a-z0-9_-]{0,49}")
+
+
 class MembershipClassificationFields(BaseModel):
     """The two independent facts ``membership_type`` used to fuse.
 
@@ -277,13 +289,24 @@ class MembershipClassificationFields(BaseModel):
     @field_validator("member_status")
     @classmethod
     def _known_member_status(cls, value: Optional[str]) -> Optional[str]:
+        """Shape only. The full check is the organization's.
+
+        ``member_status`` holds a built-in status *or* one of the department's
+        own membership tier ids (``senior``), and the schema cannot see the
+        organization. It settles the spelling and refuses anything that is
+        not a slug; the endpoint checks the value against
+        ``accepted_member_statuses`` for the caller's organization.
+        """
         if value is None:
             return None
-        normalised = value.strip().lower()
-        if normalised not in MemberStatus.ALL:
+        normalised = canonical_member_status(value)
+        if normalised is None:
+            return None
+        if not MEMBER_STATUS_SLUG.fullmatch(normalised):
             raise ValueError(
-                f"Unknown member_status '{value}'. "
-                f"Expected one of: {', '.join(MemberStatus.ALL)}."
+                f"Unknown member_status '{value}'. Expected one of "
+                f"{', '.join(MemberStatus.ALL)} or one of the organization's "
+                "membership tier ids."
             )
         return normalised
 
@@ -455,14 +478,29 @@ class UserUpdate(MembershipClassificationFields, RefusesNull):
     # Emergency contacts
     emergency_contacts: Optional[List[EmergencyContact]] = None
 
-    # The profile handler skips a null here (an empty list is how contacts are
-    # removed), so a null would answer 200 and change nothing.
-    null_refused = frozenset({"emergency_contacts"})
+    # The profile handler skips a null on emergency_contacts (an empty list is
+    # how contacts are removed), so a null would answer 200 and change nothing.
+    # A null name would clear the member's legal name, which AdminUserCreate
+    # never allows to be absent.
+    null_refused = frozenset({"emergency_contacts", "first_name", "last_name"})
 
     @field_validator("preferred_name")
     @classmethod
     def _clean_preferred_name(cls, v: Optional[str]) -> Optional[str]:
         return _clean_preferred_name(v)
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def _require_name(cls, v: Optional[str], info: ValidationInfo) -> Optional[str]:
+        # Reports and legal records print first_name and last_name, so an
+        # emptied box must be refused, not stored as "" behind a success toast.
+        if v is None:
+            return v
+        cleaned = v.strip()
+        if not cleaned:
+            label = "First name" if info.field_name == "first_name" else "Last name"
+            raise ValueError(f"{label} cannot be blank.")
+        return cleaned
 
 
 class _UserResponseFields(_UserBaseFields, UTCResponseBase):
@@ -478,7 +516,11 @@ class _UserResponseFields(_UserBaseFields, UTCResponseBase):
     organization_id: UUID
     # Optional because it is withheld from a caller the contact-visibility
     # rules exclude (see `_clear_hidden_contact_fields` in the users endpoint).
-    email: Optional[EmailStr] = None
+    # A plain str, not EmailStr: the app itself stores reserved `.invalid`
+    # placeholders (the shift history import's former members, anonymized
+    # members), which EmailStr refuses, and one such row failed the whole
+    # roster with a 500. Addresses are validated where they are written.
+    email: Optional[str] = None
     photo_url: Optional[str] = None
     personal_email: Optional[str] = None
     status: str
@@ -621,6 +663,13 @@ class RoleResponse(BaseModel):
     # is where a rank is set. Defaults False so a dict built without it is
     # still a valid response.
     mirrors_rank: bool = False
+    # office | committee | system; the profile groups a member's positions by it.
+    kind: str = "office"
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _coerce_null_kind(cls, v: object) -> object:
+        return v if v else "office"
 
     @field_validator("permissions", mode="before")
     @classmethod
@@ -761,6 +810,38 @@ class UserProfileResponse(_UserResponseFields):
         return normalize_profile_visibility(v)
 
     model_config = _response_config
+
+
+class PastPositionResponse(UTCResponseBase):
+    """An office or committee seat the member held and has since given up.
+
+    ``name`` is the position's current name, or the name it had when held if
+    the position has since been deleted (then ``position_id`` is null).
+    """
+
+    position_id: Optional[str] = None
+    name: str
+    kind: Optional[str] = None
+    started_at: datetime
+    ended_at: datetime
+
+
+class MemberProfileResponse(UserProfileResponse):
+    """``GET /users/{id}/with-roles``: the profile and digital ID card's read.
+
+    Carries figures computed for display that the profile's write endpoints,
+    which return ``UserProfileResponse``, do not recompute.
+    """
+
+    # The date credited service runs from, for "Member since": the hire date
+    # for a member who never left, later for one who returned after a break.
+    # See ``member_service_history_service.service_since``.
+    service_since: Optional[date] = None
+    # Offices and committee seats held earlier, newest first (owner decision
+    # 2026-11-06). Shown wherever the profile shows the positions held now, so
+    # it carries the same audience; the baseline Member position and the rank
+    # mirrors are left out, as they are from the current list.
+    past_positions: list[PastPositionResponse] = Field(default_factory=list)
 
 
 class AdminPasswordReset(BaseModel):

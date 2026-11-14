@@ -58,7 +58,7 @@ names it the way the **Role Management** screen lists it — for example
 20. [Governance: Legal Documents](#governance-legal-documents)
 21. [Governance: Organizational Chart](#governance-organizational-chart)
 22. [Testing Checklist Module](#testing-checklist-module)
-23. [Compliance Requirements Configuration](#compliance-requirements-configuration)
+23. [Compliance Settings](#compliance-settings)
 24. [Medical Screening and Equipment Checks](#medical-screening-and-equipment-checks)
 25. [Realistic Example: Generating the Annual Training Summary Report](#realistic-example-generating-the-annual-training-summary-report)
 26. [Realistic Example: First-Time Department Setup](#realistic-example-first-time-department-setup)
@@ -262,6 +262,10 @@ and **Authentication** (Sign-in, MFA Policy). MFA Policy also holds the
 **Allow passkeys** switch _(2026-10-26)_; see
 [Using a passkey](./00-getting-started.md#using-a-passkey-for-two-step-sign-in-2026-10-26).
 
+![Settings → Authentication → MFA Policy: the Require two-factor authentication switch, off, and the Allow passkeys switch, on by default, each with its explanation](./images/08-118-mfa-policy-passkeys.png)
+
+![The Reset MFA dialog for a member who has a passkey: Passkeys, with Lost one phone? Remove just that passkey, My phone listed with its Remove link, then what Reset MFA removes, and Cancel / Reset MFA](./images/08-119-reset-mfa-passkeys.png)
+
 > **MFA Policy is a floor, not the whole rule.** Members holding administration
 > or health-record permissions must use two-step sign-in even when the policy is
 > off for everyone else, with a 14-day grace period that starts the first time
@@ -455,7 +459,10 @@ through and what each one gives:
 - whether they can vote;
 - whether they may hold elected office;
 - whether a meeting-attendance threshold applies before they may vote;
-- whether they are excused from training.
+- whether they are excused from training;
+- for a tier your department added, which built-in status it **Counts as**
+  _(2026-10-29)_. It is unset after an upgrade; see
+  [Member class and member status](./01-membership.md#member-class-and-member-status).
 
 Automatic advancement is **on by default**, and a monthly job acts on it. Turn
 it off if your department promotes by vote, by application, or on its own
@@ -1015,8 +1022,13 @@ depend on administrator permissions.
 ### Department pulse
 
 The dashboard's **My Department** view has a **Department pulse** section —
-"Summaries for the areas you can access, over the period you choose." Its
-period picker is the **Reporting period**.
+"Summaries for the areas you can access", followed by the period it covers.
+Its period picker is the **Reporting period**. _(2026-11-04)_ The period is
+named once, under the section title, rather than on every card. A member whose
+positions reach the pulse but who has no **My Department** tab (for example a
+treasurer holding only **finance.manage**) sees the section on the
+**Personal** view instead; it used to sit there for everyone, above their own
+shifts and training.
 
 **Each part of Department pulse checks its own permission**, so what you see
 depends on your positions. A section you cannot see is not broken; your
@@ -1075,7 +1087,13 @@ tiles: Today's Staffing, Future Coverage Gaps, Open Slots, Pending Changes,
 Incomplete Closeouts, Workload Balance and Special Operations.
 
 Each tile opens the schedule **already filtered to what it counted**. Each keeps
-its own time range and filters, saved per person.
+its own time range and filters, saved per person: pick the tile under
+**Widget**, set its filters, and select **Save defaults**. _(2026-11-04)_ The
+**Station** and **Platoon** filters are lists of the values your shifts
+actually carry, with **All stations** and **All platoons** first; a filter
+with no values to offer is not shown, which is usually the case for
+**Station**. **Today’s Staffing** counts today alone, so its tile reads
+**Today** whatever its **Days** setting.
 
 ### My Hours and the Next 30 Days list
 
@@ -1155,6 +1173,12 @@ tabs:
 - **Data Control** — which fields the portal shares. Every field is listed and
   off until you turn it on. Fields holding personal information carry a **PII**
   badge.
+  The three statistics that used to come back empty now carry figures
+  _(2026-10-28)_: stations counts the Fire Station facilities that are not
+  archived, calls counts calls in call tracking since 1 January, and volunteer
+  hours totals this calendar year's approved admin hours, completed training and
+  shift and event attendance, each hour counted once. Both yearly figures follow
+  the department's time zone.
 
 **Nothing is shared until all three are done:** the portal enabled, a key
 created, and the fields turned on under Data Control.
@@ -1287,13 +1311,13 @@ a check on the very people who review admin hours.
 
 > **What if a clock-in or entry is refused?**
 >
-> | Message or problem                       | What it means / what to do                                                                                                  |
-> | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-> | "Already clocked in"                     | You have an open session in this category. Clock out first                                                                  |
-> | Clock-in refused for an "active session" | You have an open session in another category. Only one clock-in at a time is allowed. Clock out of it first                 |
-> | Category "no longer active"              | An administrator turned the category off. You cannot clock in to it. Ask your administrator                                 |
-> | Manual entry refused                     | The clock-out must be after the clock-in, the clock-in cannot be in the future, and the session must be at least one minute |
-> | Rejecting an entry                       | A reason is required                                                                                                        |
+> | Message or problem                       | What it means / what to do                                                                                                                                                                                                                                                                 |
+> | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+> | "Already clocked in"                     | You have an open session in this category. Clock out first                                                                                                                                                                                                                                 |
+> | Clock-in refused for an "active session" | You have an open session in another category. Only one clock-in at a time is allowed. _(2026-11-06)_ The clock-in page names the running session (category, start time, elapsed) and offers **Clock out of _category_**; use it, then **Clock In**. A scan never switches sessions for you |
+> | Category "no longer active"              | An administrator turned the category off. You cannot clock in to it. Ask your administrator                                                                                                                                                                                                |
+> | Manual entry refused                     | The clock-out must be after the clock-in, the clock-in cannot be in the future, and the session must be at least one minute                                                                                                                                                                |
+> | Rejecting an entry                       | A reason is required                                                                                                                                                                                                                                                                       |
 
 ---
 
@@ -1342,7 +1366,7 @@ in the dashboard's **Needs you** panel with an **Acknowledge** button.
 ### Department Messages
 
 Officers who manage notification rules (**notifications.manage**) post
-department announcements from **Administration > Forms & Comms > Messages**.
+department announcements from **Administration > Forms & Comms > Department Messages**.
 Messages can be escalated by email or text message according to priority, can
 require acknowledgement with a report of who has not acknowledged, can be
 scheduled, and can be edited after posting.
@@ -1515,6 +1539,8 @@ changing. The form lists them too:
   records. Without them, Gmail, Outlook and Yahoo may send department mail to
   spam or reject it.
 
+![Settings → Email with Gmail chosen and App Password selected: the From address and app password fields, and the notes on a dedicated sending account, a password change revoking app passwords, and DKIM on your own domain](./images/08-122-gmail-app-password.png)
+
 **Gmail** on Google Workspace also offers **Service account**, which a
 password change does not affect. Choosing it needs **admin.access** (the Fire
 Chief, President and IT Manager positions hold it by default); anyone else sees
@@ -1531,6 +1557,8 @@ the option disabled. It sends through the Gmail API instead of signing in to
 4. Use an active user in your Workspace domain as the account email address,
    save, and select **Test Connection**. It checks that Google will let the key
    send as that address, and sends nothing.
+
+![Settings → Email with Gmail and Service account chosen and a key file picked: Key chosen for client ID 104857392018475629301, the three setup steps naming that client ID and the gmail.send scope, and the warning that the key can send as anyone in the domain. The key is made up for the picture](./images/08-123-gmail-service-account.png)
 
 The key can send as anyone in the domain; Google cannot limit it to one
 mailbox. Keep it in a Google Cloud project used only for this. Changing the
@@ -1683,8 +1711,12 @@ switch between them.
   you are editing stays open.
 - **Prospective Members** holds the emails applicants receive — **Application
   Step Completed**, **Application Status Link**, **Application Going
-  Inactive**, **Application Withdrawn** and **Duplicate Application Notice** —
-  and the coordinators' **Prospect Inactivity Warning**. _(2026-10-26)_ When
+  Inactive**, **Application Withdrawn**, **Duplicate Application Notice**,
+  **Application Follow-up Form**, **Application Contact Details Changed** and
+  **Application Follow-up Form Reminder** _(2026-10-29)_ — and the
+  coordinators' **Prospect Inactivity Warning** and **Application Follow-up
+  Form Submitted** _(2026-10-29)_.
+  _(2026-10-26)_ When
   each is sent, and its variables, is in
   [Prospective Members → Emails to Applicants](./15-prospective-members.md#emails-to-applicants).
 - Each entry says whether your department has changed it and how much it is
@@ -1693,19 +1725,24 @@ switch between them.
 - **All**, **Active**, **Off** and **Edited** filter the list. **Edited** shows
   only templates you have changed.
 
+![Email Templates on the Off filter: the list holds one template, Event Reminder, under Events & Scheduling, its subtitle reading Off and its dot grey](./images/08-120-email-templates-off-filter.png)
+
 ![Email template categories in the editor sidebar](./images/08-34-email-templates.png)
 
 ![Email template sidebar filtered to templates matching welcome](./images/08-36-template-search.png)
 
 **Off means off** _(2026-10-27)_. Switching a template **Off** stops that email
 from being sent at all; before this release it only fell back to the built-in
-wording and the email kept going out. The editor says what Off does. Five
+wording and the email kept going out. The editor says what Off does. Seven
 emails cannot be switched off, because their recipient could not get the
 content any other way: **Password Reset**, **IT Password Notification**,
-**Welcome**, **Ballot Notification** and **Application Status Link** (their
-switch is disabled). A department that never opened Email Templates keeps every
+**Welcome**, **Ballot Notification**, **Application Status Link**, and
+_(2026-10-29)_ **Application Follow-up Form** and **Application Contact
+Details Changed** (their switch is disabled). A department that never opened Email Templates keeps every
 email. Operators: check the **Off** filter before upgrading
 ([`UPGRADING.md`](../UPGRADING.md)).
+
+![The Password Reset template open in the editor: its header reads Always sent and the switch beside it is on and dimmed, because this email cannot be switched off](./images/08-121-template-always-sent.png)
 
 Five templates that used to be stored but never used are now sent, in your
 wording: **Cert Expiration** (it now says "expires today" or "tomorrow" rather
@@ -2021,6 +2058,11 @@ The log records significant actions, including:
 The columns are **When** (in your timezone), **Severity** (Info, Warning or
 Critical), **Event** (the technical name of the event, such as
 "shift_report_reviewed"), **Category**, **User** and **IP**.
+
+_(2026-11-08)_ Connecting, changing or disconnecting an integration records
+the **IP** of the person who did it, and their browser in the expanded row, as
+other security events do. Before, those three rows showed who but not from
+where.
 
 ![Audit Log page with summary stat cards and the filter bar](./images/08-19-audit-log.png)
 
@@ -2531,15 +2573,21 @@ blocked), and `n` jumps to the next page with no mark.
 
 ---
 
-## Compliance Requirements Configuration
+## Compliance Settings
 
 **Who can open it:** officers with **settings.manage** or **compliance.manage**
 ("Manage compliance records"), with the Training module turned on. Generating a
 report on demand also needs permission to manage training.
 
-Open **Training Admin → Compliance Reporting** and select **Configure**. The page
-has four tabs: **Thresholds**, **Profiles**, **Auto Reports** and **Report
-History**. For how compliance is worked out and shown to members, see
+_(2026-11-04)_ Open **Training Admin → Settings & Data → Compliance Settings**
+and select **Open compliance settings**. **Compliance Settings** is listed only
+for officers who hold **settings.manage** or **compliance.manage**; a training
+officer without either does not see it. The **Configure** button at the top of
+each **Compliance Reporting** page opens the same screen, and an officer who
+holds **compliance.manage** but not training management goes straight to
+`/training/compliance-config`. The page has four tabs: **Thresholds**,
+**Profiles**, **Auto Reports** and **Report History**. For how compliance is
+worked out and shown to members, see
 [Training → Compliance Matrix](./02-training.md#compliance-matrix).
 
 ### Configuring Thresholds
@@ -2589,11 +2637,13 @@ Profiles let different groups be held to different standards.
 
 1. Select **Add Profile**.
 2. Fill in:
-   - **Name** — for example "Line Officers" or "Probationary Members";
+   - **Profile Name** — for example "Line Officers" or "Probationary Members";
    - **Priority** — when a member matches more than one profile, the highest
      priority applies;
    - **Description**;
    - **Applies to Membership Types**;
+   - **Applies to Members Holding a Position** _(2026-10-29)_ — see
+     [Scoping a Compliance Profile by Position](./02-training.md#scoping-a-compliance-profile-by-position-2026-10-29);
    - optional **threshold overrides** for this group;
    - **Required Training Requirements** — what must be met;
    - **Optional/Tracked Requirements** — tracked, but not needed for
@@ -2675,7 +2725,11 @@ fitness assessments and psychological evaluations for members and applicants.
 Turn it on in **Settings → Modules → Additional Modules**. It appears under
 **Administration > Members > Medical Screening** for officers with
 **medical_screening.view** ("View member medical screenings"); recording and
-setting requirements needs **medical_screening.manage**.
+setting requirements needs **medical_screening.manage**. _(2026-11-04)_ A
+record's provider, result summary and notes are shown only with
+**medical_screening.view_details** ("View the clinical detail of medical
+screenings (provider, results, notes)") or **medical_screening.manage**; the
+upgrade gave it to every position that already held the view permission.
 
 ![Medical Screening page showing the configured requirements](./images/08-21-medical-screening.png)
 
@@ -2683,11 +2737,12 @@ setting requirements needs **medical_screening.manage**.
 
 ![The medical-screening Compliance tab: the 60-day list, soonest first, under the 30-day count](./images/08-68-compliance-dashboard.png)
 
-> **Important: two requirement settings are not enforced yet.** On a screening
-> requirement, **Applies to Roles** and the **grace period** are saved but not
-> used. The form says so under each field. Every requirement applies to every
-> active member and applicant, and a screening is non-compliant the day after it
-> expires.
+> **Who is graded, and until when.** _(2026-11-04)_ A requirement's **Applies
+> to Positions** limits it to members who hold one of the positions listed, and
+> its **Grace Period** keeps a member compliant that many days after a
+> screening falls due. A screening record counts only toward the requirement it
+> is linked to. See
+> [Medical Screening → Grace Period](./13-medical-screening.md#grace-period).
 
 Full instructions:
 
@@ -2784,7 +2839,7 @@ county's submission. **Print / PDF** gives her a copy for the board packet.
 ### Step 4: Following Up
 
 1. **Foster and Harris** — she sends a department message (**Administration >
-   Forms & Comms > Messages**) reminding them of the minimum and asking them to
+   Forms & Comms > Department Messages**) reminding them of the minimum and asking them to
    plan make-up training in the first quarter.
 2. **Brooks** — she notes to follow up in February about CPR renewal.
 3. She saves the Annual Training Report as a **saved report** with the period

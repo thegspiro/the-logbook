@@ -81,7 +81,7 @@ electorates.
 
 import enum
 from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Mapping, Optional
 
 from sqlalchemy import (
     JSON,
@@ -118,8 +118,11 @@ from app.utils.member_names import format_display_name, format_legal_name
 from app.utils.membership import (
     DEFAULT_CLASS,
     DEFAULT_STATUS,
+    MemberStatus,
+    canonical_member_status,
     derive_membership_type,
     split_membership_type,
+    status_for_tier,
 )
 
 if TYPE_CHECKING:
@@ -481,8 +484,40 @@ class User(Base):
     # not plain operational regulars. NULL means "nobody has set this", and a
     # reader derives from `membership_type` when it sees one. ORM writes never
     # leave it NULL — `_reconcile_membership` below fills both.
-    member_class: Mapped[Optional[str]] = mapped_column(String(20), index=True)
-    member_status: Mapped[Optional[str]] = mapped_column(String(20), index=True)
+    # active_history: the previous value is loaded on assignment, so
+    # `_reconcile_membership` can tell a real change from a re-save of the
+    # same value when it stamps the `*_since` columns below.
+    member_class: Mapped[Optional[str]] = mapped_column(
+        String(20), index=True, active_history=True
+    )
+    # Fifty, not twenty: this column also holds a department's own membership
+    # tier ids (``senior``), which ``MembershipTier.id`` allows up to 50
+    # characters. See ``canonical_member_status`` for the spelling rule.
+    member_status: Mapped[Optional[str]] = mapped_column(
+        String(50), index=True, active_history=True
+    )
+    # When the member's class / status became what it is now. Stamped by
+    # `_reconcile_membership` on every write path, and read as the start of a
+    # voting waiting period ("administrative members may vote a year after
+    # becoming administrative"). Rows that predate the columns hold a backfilled
+    # best guess; a secretary corrects one with `voting_wait_from`.
+    member_class_since: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    member_status_since: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # A secretary's per-member override of the voting waiting period: the
+    # date the wait counts from instead of the `*_since` stamp, and/or a
+    # waiver of the wait. Neither lifts a "never eligible" type or an
+    # attendance requirement. The reason is required whenever either is set.
+    voting_wait_from: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    voting_wait_waived: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    voting_wait_override_reason: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )
     membership_type_changed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True)
     )  # When membership tier last changed
@@ -736,14 +771,24 @@ def _reconcile_membership(_mapper, _connection, target: "User") -> None:
     legacy_written = _was_set("membership_type")
 
     if class_written:
-        target.member_class = target.member_class or DEFAULT_CLASS
-        target.member_status = target.member_status or DEFAULT_STATUS
+        # The class defaults on insert, and on an update that names it (an
+        # explicit null is a request to clear it, which lands on the default).
+        # An update that writes only the status leaves the class exactly as
+        # stored -- including NULL. A member whose class was never recorded
+        # (one backfilled onto a department tier before the class existed)
+        # must not become operational because the tier job moved them a rung:
+        # the roster flags the missing class and an officer sets it.
+        if _was_set("member_class") or not state.persistent:
+            target.member_class = target.member_class or DEFAULT_CLASS
+        target.member_status = (
+            canonical_member_status(target.member_status) or DEFAULT_STATUS
+        )
         target.membership_type = derive_membership_type(
             target.member_class, target.member_status
         )
     elif legacy_written or target.member_class is None or target.member_status is None:
         member_class, member_status = split_membership_type(target.membership_type)
-        # Keep what is already recorded when the split cannot answer.
+        # Keep the class already recorded when the split cannot answer.
         #
         # An unrecognised value is a membership *tier* — org-configurable, and
         # the shipped defaults include `senior`. `split_membership_type`
@@ -757,8 +802,15 @@ def _reconcile_membership(_mapper, _connection, target: "User") -> None:
         # shift came to waive rank, training and qualification checks for any
         # custom tier, including one a department created for members who do
         # not ride.
+        #
+        # The status is different: a tier id *is* a status, in the spelling
+        # `canonical_member_status` fixes, so a legacy write of `senior` puts
+        # `senior` on the ladder column rather than leaving the rung the
+        # member stood on before.
         target.member_class = member_class or target.member_class
-        target.member_status = member_status or target.member_status
+        target.member_status = member_status or canonical_member_status(
+            target.membership_type
+        )
 
     # Only a membership write moves the account status. Gating on the write,
     # not on the pair disagreeing, is what lets an officer's by-hand
@@ -767,11 +819,45 @@ def _reconcile_membership(_mapper, _connection, target: "User") -> None:
     if class_written or legacy_written:
         sync_account_status_with_membership(target)
 
+    _stamp_membership_since(state, target)
 
-#: The one membership type with an account status of its own. Compared on the
-#: legacy column after reconciliation, so a class/status write, a legacy write
-#: and a tier id all answer the same way.
-PROBATIONARY_MEMBERSHIP_TYPE = "probationary"
+
+def _stamp_membership_since(state: Any, target: "User") -> None:
+    """Record when the member's class / status became what it now is.
+
+    Runs after reconciliation, so whichever field a caller wrote, the stamp
+    follows the reconciled value. A re-save of the same value is not a change:
+    ``active_history`` on both columns puts the previous value in the history,
+    so a profile save that sends the member's unchanged status leaves the date
+    alone.
+
+    A real change also clears ``voting_wait_from``: that date was a
+    secretary's correction of when the member became their *previous* type,
+    and carried over it would start the new type's wait in the past.
+    """
+    now = datetime.now(timezone.utc)
+    inserting = not state.has_identity
+    changed = False
+    for field, stamp in (
+        ("member_class", "member_class_since"),
+        ("member_status", "member_status_since"),
+    ):
+        value = getattr(target, field)
+        if value is None:
+            continue
+        if inserting:
+            if getattr(target, stamp) is None:
+                setattr(target, stamp, now)
+            continue
+        history = state.attrs[field].history
+        if history.added and value not in (history.deleted or ()):
+            setattr(target, stamp, now)
+            changed = True
+    if changed and target.voting_wait_from is not None:
+        target.voting_wait_from = None
+        if not target.voting_wait_waived:
+            target.voting_wait_override_reason = None
+
 
 #: Prefix of the status-change reason the sync records, so the profile's
 #: status history says where an automatic move came from.
@@ -779,28 +865,31 @@ STATUS_FOLLOWS_MEMBERSHIP_REASON = "Follows membership type"
 
 
 def account_status_for_membership(
-    membership_type: Optional[str], status: "UserStatus | str | None"
+    member_status: Optional[str],
+    status: "UserStatus | str | None",
+    ranks_as_by_tier: Optional[Mapping[str, str]] = None,
 ) -> Optional["UserStatus"]:
-    """The account status a membership-type write implies, or None to leave it.
+    """The account status a membership write implies, or None to leave it.
 
-    Membership type drives account status one way, and only between the two
-    statuses that say nothing about leave or separation (owner decision
+    Membership standing drives account status one way, and only between the
+    two statuses that say nothing about leave or separation (owner decision
     2026-10-20):
 
-    * type ``probationary`` and status ``active`` (or unset, on insert) ->
+    * standing ``probationary`` and status ``active`` (or unset, on insert) ->
       ``probationary``;
-    * any other type and status ``probationary`` -> ``active``;
+    * any other standing and status ``probationary`` -> ``active``;
     * every other status is left alone — a member on leave who is promoted
       off probation stays on leave, and comes back as active.
 
-    Judged on the legacy ``membership_type`` *after* reconciliation rather than
-    on ``member_status``: a custom tier id (``senior``) leaves ``member_status``
-    where it was, and a member advanced onto one has left probation whatever
-    the stale column says.
+    Judged on ``member_status``, not on the legacy ``membership_type``: the
+    legacy word collapses an administrative probationer to plain
+    ``administrative``, which kept every probationary member outside the
+    operational class off probation. A legacy word passed here still answers
+    (``canonical_member_status`` spells it as the status it splits to), and a
+    department tier that counts as probationary (``ranks_as``) does too.
     """
-    probationary = (
-        membership_type or ""
-    ).strip().lower() == PROBATIONARY_MEMBERSHIP_TYPE
+    standing = status_for_tier(member_status, ranks_as_by_tier)
+    probationary = standing == MemberStatus.PROBATIONARY
     current = status.value if isinstance(status, UserStatus) else status
     if probationary and current in (None, UserStatus.ACTIVE.value):
         return UserStatus.PROBATIONARY
@@ -810,15 +899,26 @@ def account_status_for_membership(
 
 
 def sync_account_status_with_membership(
-    target: "User", now: Optional[datetime] = None
+    target: "User",
+    now: Optional[datetime] = None,
+    member_status: Optional[str] = None,
+    ranks_as_by_tier: Optional[Mapping[str, str]] = None,
 ) -> Optional[tuple[Optional[str], str]]:
     """Apply ``account_status_for_membership`` to ``target``.
 
     Returns ``(previous, new)`` status values when the status moved, else
     None. Idempotent, so the flush listener and an endpoint that wants the
     outcome for its audit entry can both call it on the same change.
+
+    ``member_status`` is the standing to judge, for a caller that has written
+    the legacy column and not yet flushed: the reconciler fills the ladder
+    column at flush, so before it the stored one is stale. Omitted, the
+    stored column is used, which is right after reconciliation.
     """
-    new_status = account_status_for_membership(target.membership_type, target.status)
+    standing = member_status if member_status is not None else target.member_status
+    new_status = account_status_for_membership(
+        standing, target.status, ranks_as_by_tier
+    )
     if new_status is None:
         return None
     previous = target.status
@@ -835,6 +935,14 @@ def sync_account_status_with_membership(
 
 event.listen(User, "before_insert", _reconcile_membership)
 event.listen(User, "before_update", _reconcile_membership)
+
+
+class PositionKind(str, Enum):
+    """What a position is; mirrors ``POSITION_KINDS`` in core/permissions."""
+
+    OFFICE = "office"
+    COMMITTEE = "committee"
+    SYSTEM = "system"
 
 
 class Position(Base):
@@ -866,6 +974,16 @@ class Position(Base):
     priority: Mapped[Optional[int]] = mapped_column(
         Integer, default=0
     )  # Higher priority = more powerful
+    # office | committee | system -- see ``PositionKind``. Decides how the
+    # member screens group a held position ("Offices" beside "Committees")
+    # and nothing about permissions, which stay on ``permissions``.
+    kind: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="office",
+        server_default="office",
+        index=True,
+    )
 
     # Per-position UI preferences (e.g. the inventory label printer/size this
     # role uses). Nullable JSON; mutate via copy.deepcopy + reassign.

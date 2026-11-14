@@ -239,6 +239,9 @@ class ShiftResponse(UTCResponseBase):
     # Open Shifts is offered "Tour Guide" instead of "Firefighter".
     is_outreach: bool = False
     outreach_roles: List[OutreachRoleSlot] = Field(default_factory=list)
+    # ``in_station`` or ``on_call`` (a recall shift, the crew at home). Every
+    # shift but an imported recall shift is ``in_station``.
+    duty_type: str = "in_station"
     attendee_count: Optional[int] = 0
     roster: List[ShiftRosterSeat] = Field(default_factory=list)
     call_count: int = 0
@@ -285,6 +288,17 @@ class ManualHoursEntry(BaseModel):
     hours: float = Field(..., gt=0, le=48)
 
 
+# Close-out payload ceilings (SCH-19, owner decision 2026-11-01). Each entry
+# costs the server a per-member or per-type lookup, so an unbounded list is a
+# cost multiplier on one authenticated request. 100 matches
+# ``responding_members``; 200 matches the attach/detach id lists beside the
+# tally, and sits well above the 50 types a department may configure
+# (``MAX_CALL_TYPES``). Request-side only: no stored row is re-read through
+# these schemas, so a close-out saved before the cap still loads.
+MAX_MEMBER_CALL_CREDITS = 100
+MAX_REPORTED_CALL_TYPES = 200
+
+
 class MemberCallCredit(BaseModel):
     """One member's personal call credit for a shift.
 
@@ -305,6 +319,10 @@ class ShiftFinalizeRequest(BaseModel):
     # The reason is recorded in the audit log.
     override_incomplete_checks: bool = False
     override_reason: Optional[str] = None
+    # Finalize without the trainee reports the department requires. Only a
+    # scheduling admin may, and the reason is recorded in the audit log.
+    override_missing_reports: bool = False
+    report_override_reason: Optional[str] = Field(default=None, max_length=500)
     # Crew-to-crew handoff captured at finalize.
     pass_down_notes: Optional[str] = None
 
@@ -320,9 +338,11 @@ class ShiftFinalizeRequest(BaseModel):
     # reported_call_count; the remainder is recorded as unclassified.
     reported_call_types: Optional[
         dict[str, Annotated[int, Field(ge=0, le=INT32_MAX)]]
-    ] = None
+    ] = Field(default=None, max_length=MAX_REPORTED_CALL_TYPES)
     # Per-member credit. Omitted members default to the shift's count.
-    member_call_counts: Optional[List[MemberCallCredit]] = None
+    member_call_counts: Optional[List[MemberCallCredit]] = Field(
+        default=None, max_length=MAX_MEMBER_CALL_CREDITS
+    )
     # Calls another unit already logged that this shift's apparatus was also
     # on. Attaching instead of re-reporting is what keeps one incident counted
     # once for the department when two units roll. Bounded to match the
@@ -352,6 +372,17 @@ class ShiftFinalizeRequest(BaseModel):
                         "A member cannot be credited with more calls than the "
                         "apparatus ran"
                     )
+        return self
+
+    @model_validator(mode="after")
+    def _report_override_needs_a_reason(self) -> "ShiftFinalizeRequest":
+        if (
+            self.override_missing_reports
+            and not (self.report_override_reason or "").strip()
+        ):
+            raise ValueError(
+                "Give a reason for closing out without the trainee reports"
+            )
         return self
 
 
@@ -471,7 +502,7 @@ class CloseoutCallsRequest(BaseModel):
     )
     reported_call_types: Optional[
         dict[str, Annotated[int, Field(ge=0, le=INT32_MAX)]]
-    ] = None
+    ] = Field(default=None, max_length=MAX_REPORTED_CALL_TYPES)
     # Bounded to match the picker's own ceiling
     # (CallTrackingService.MAX_ATTACHABLE_CALLS) — each id costs the server a
     # lookup, so an unbounded list is a free multiplier on a single
@@ -526,6 +557,24 @@ class CloseoutAttachableCall(UTCResponseBase):
     unit_labels: List[str] = Field(default_factory=list)
     # This shift already claims the call; unticking it in the picker detaches.
     attached: bool = False
+
+
+class MissingTraineeReport(BaseModel):
+    user_id: str
+    name: str
+
+
+class TraineeReportRequirementResponse(BaseModel):
+    """What close-out still needs in trainee reports, for the close-out screens."""
+
+    required: bool
+    missing: List[MissingTraineeReport]
+    # Shift evaluations still to be submitted. Listed whatever ``required``
+    # says: an evaluation is required by the form attached to a program, not
+    # by the report setting. ``name`` carries the program(s) in brackets.
+    missing_evaluations: List[MissingTraineeReport] = []
+    # Whether the caller may close out without them (scheduling.manage).
+    can_override: bool
 
 
 class CloseoutStateResponse(UTCResponseBase):
@@ -802,6 +851,12 @@ class MemberHoursMonth(BaseModel):
     # silently mixed with time the member reported themselves.
     external_shifts: int = 0
     external_hours: float = 0.0
+    # Calls credited on outside units (recorded only by a historical import).
+    external_calls: int = 0
+    # How much of ``shifts`` / ``hours`` was on recall shifts — a part of
+    # them, never added to them.
+    on_call_shifts: int = 0
+    on_call_hours: float = 0.0
 
 
 class MemberHoursTotals(BaseModel):
@@ -817,6 +872,12 @@ class MemberHoursTotals(BaseModel):
     # silently mixed with time the member reported themselves.
     external_shifts: int = 0
     external_hours: float = 0.0
+    # Calls credited on outside units (recorded only by a historical import).
+    external_calls: int = 0
+    # How much of ``shifts`` / ``hours`` was on recall shifts — a part of
+    # them, never added to them.
+    on_call_shifts: int = 0
+    on_call_hours: float = 0.0
 
 
 class MemberHoursHistoryResponse(BaseModel):
@@ -854,6 +915,18 @@ class SchedulingWidgetFilters(BaseModel):
 
 class SchedulingWidgetPreferences(BaseModel):
     widgets: dict[str, SchedulingWidgetFilters] = Field(default_factory=dict)
+
+
+class SchedulingWidgetPreferencesResponse(SchedulingWidgetPreferences):
+    """Saved defaults plus the filter values a save would accept.
+
+    The station and platoon filters only accept values some shift in the
+    department carries, so the dashboard offers these as choices rather than
+    asking an officer to type an id.
+    """
+
+    available_station_ids: list[str] = Field(default_factory=list)
+    available_platoons: list[str] = Field(default_factory=list)
 
 
 class SchedulingWidgetSummary(BaseModel):
@@ -1177,6 +1250,12 @@ class ShiftAssignmentCreate(BaseModel):
     is_training: bool = False
     training_program_id: Optional[str] = None
     training_evaluator_id: Optional[str] = None
+    # Seat the member in a custom seat no rank, certification, program or open
+    # position grants (SCHED-CUSTOM-SEAT owner decision, 2026-11-01). Requires
+    # scheduling.manage; waives only the eligibility check for that seat, is
+    # noted on the assignment and audited with ``override_reason``.
+    override_seat_eligibility: bool = False
+    override_reason: Optional[str] = Field(None, max_length=500)
 
 
 class ShiftAssignmentUpdate(BaseModel):
@@ -1188,6 +1267,9 @@ class ShiftAssignmentUpdate(BaseModel):
     is_training: Optional[bool] = None
     training_program_id: Optional[str] = None
     training_evaluator_id: Optional[str] = None
+    # As on ShiftAssignmentCreate, for an edit that moves the member's seat.
+    override_seat_eligibility: bool = False
+    override_reason: Optional[str] = Field(None, max_length=500)
 
 
 class EmbeddedShiftInfo(BaseModel):
@@ -1493,6 +1575,10 @@ class ShiftTimeOffResponse(UTCResponseBase):
     approved_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    # True when the caller may approve or deny this pending request as the
+    # requester's supervisor today (owner decision 2026-11-01). Scheduling
+    # officers review every request regardless; this flags the extra path.
+    reviewable_as_supervisor: bool = False
 
     model_config = _response_config
 
@@ -1657,6 +1743,10 @@ class SchedulingFeatureSettings(BaseModel):
     # sets required_evoc_level_id on an apparatus, so switching it on for
     # existing orgs changes nothing until they opt into the requirement.
     enforce_evoc: bool = True
+    # Outside-department shifts a member logs wait for an officer's approval
+    # before their hours count. Defaults off: an absent setting keeps today's
+    # behaviour, where an entry counts as soon as it is logged (pitfall #19).
+    external_shifts_require_approval: bool = False
     # Call-volume tracking mode and the department's own call-type list.
     call_tracking: Optional[CallTrackingSettings] = None
     # Calls on record per type slug, all dates. Server-computed and ignored on

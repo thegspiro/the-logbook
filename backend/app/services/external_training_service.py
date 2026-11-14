@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import install_httpx_url_redaction, redact_url_secrets
 from app.core.security import decrypt_data, email_fingerprints
+from app.core.utils import safe_error_detail
 from app.models.training import (
     ExternalCategoryMapping,
     ExternalProviderType,
@@ -40,6 +41,7 @@ from app.models.user import User
 from app.services.external_course_mapping import (
     course_category_id,
     find_or_create_course_mapping,
+    mapped_course_hours,
     mapped_course_id,
     notify_new_course_matches,
 )
@@ -119,7 +121,8 @@ def credited_hours(import_record: ExternalTrainingImport) -> float:
     report's "Duration (hours)", the hours the course is accredited for, and
     never "Time Spent In Course", which counts however long the member had it
     open. Minutes are the fallback for providers that report only a duration.
-    Every import path uses this, so a manual import credits what the
+    A completion this reports as zero takes its mapped library course's hours
+    instead (``import_single_record``). Every import path uses this, so a manual import credits what the
     automatic one would.
     """
     credit = import_record.credit_hours
@@ -2033,6 +2036,18 @@ class ExternalTrainingSyncService:
         import_notes = ". ".join(notes_parts)
 
         computed_hours = credited_hours(import_record)
+        record_credit_hours = import_record.credit_hours
+        if computed_hours <= 0:
+            # The provider reported no hours (Target Solutions sends 0 for a
+            # policy acknowledgment), so the mapped library course says what
+            # the completion is worth. Hours the provider did report always
+            # win: they are what the course was accredited for.
+            course_hours_credit = await mapped_course_hours(
+                self.db, target_course_id, import_record.organization_id
+            )
+            if course_hours_credit is not None:
+                computed_hours = course_hours_credit
+                record_credit_hours = course_hours_credit
 
         # Determine training type from external data when available
         training_type = self._map_training_type(import_record.raw_data)
@@ -2057,7 +2072,7 @@ class ExternalTrainingSyncService:
             course_code=import_record.course_code,
             training_type=training_type,
             hours_completed=computed_hours,
-            credit_hours=import_record.credit_hours,
+            credit_hours=record_credit_hours,
             completion_date=(
                 import_record.completion_date.date()
                 if import_record.completion_date
@@ -2242,7 +2257,7 @@ class ExternalTrainingSyncService:
                     f"Import of pending record {import_record.id} failed: {exc}"
                 )
                 import_record.import_status = "failed"
-                import_record.import_error = str(exc)
+                import_record.import_error = safe_error_detail(exc)
                 failed += 1
                 continue
             if import_record.import_status == "imported":

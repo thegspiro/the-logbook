@@ -26,13 +26,16 @@ import { locationsService } from '../services/api';
 import { nfcActivityService } from '../services/nfcActivityService';
 import { formatDateTime, formatNumber } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
+import { buildingNotInName } from '../utils/locationLabel';
 import { CardTapTable } from '../modules/membership/components/CardTapTable';
 import type { NfcCardTap, NfcReaderList, NfcReaderRoom } from '../modules/membership/types/idCard';
 
 const ROOM_TAPS_PAGE = 25;
 
 const roomLabel = (room: NfcReaderRoom): string =>
-  [room.name, room.building, room.roomNumber ? `Room ${room.roomNumber}` : null].filter(Boolean).join(' · ');
+  [room.name, buildingNotInName(room.name, room.building), room.roomNumber ? `Room ${room.roomNumber}` : null]
+    .filter(Boolean)
+    .join(' · ');
 
 interface RoomTapsProps {
   room: NfcReaderRoom;
@@ -215,6 +218,7 @@ const CardReadersPage: React.FC = () => {
       {!loading && data && rooms.length === 0 && (
         <div className="card p-4">
           <EmptyState
+            compact
             headingLevel={2}
             icon={Nfc}
             title={data.items.length === 0 ? 'No rooms yet' : 'No room has a reader turned on'}
@@ -238,7 +242,8 @@ const CardReadersPage: React.FC = () => {
                   <div className="min-w-0">
                     <h2 className="text-theme-text-primary font-semibold">{roomLabel(room)}</h2>
                     <p className="text-theme-text-secondary text-sm">
-                      {formatNumber(room.taps)} taps · {formatNumber(room.refusals)} refused
+                      {formatNumber(room.taps)} {room.taps === 1 ? 'tap' : 'taps'} · {formatNumber(room.refusals)}{' '}
+                      refused
                       {' · '}
                       {room.lastTapAt ? `last tap ${formatDateTime(room.lastTapAt, tz)}` : 'never tapped'}
                     </p>

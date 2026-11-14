@@ -203,11 +203,32 @@ describe('AdminHoursPage — member entry actions', () => {
 
     fireEvent.click(within(rowFor('Pending filing')).getByRole('button', { name: /^Edit / }));
     const form = screen.getByRole('form', { name: 'Edit entry' });
-    fireEvent.change(within(form).getByLabelText('Category'), { target: { value: 'category-2' } });
+    fireEvent.change(within(form).getByLabelText(/^Category/), { target: { value: 'category-2' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(editMine).toHaveBeenCalled());
     expect(editMine.mock.calls[0]?.[1]?.category_id).toBe('category-2');
+  });
+
+  it("puts the server's refusal of the description under the description and keeps the form open", async () => {
+    editMine.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'description', message: 'Description must be plain text.' }] },
+      },
+    });
+    renderWithRouter(<AdminHoursPage />);
+
+    fireEvent.click(within(rowFor('Pending filing')).getByRole('button', { name: /^Edit / }));
+    const form = screen.getByRole('form', { name: 'Edit entry' });
+    fireEvent.change(within(form).getByLabelText('Description'), { target: { value: 'Filing <b>' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Save changes' }));
+
+    const description = within(form).getByLabelText('Description');
+    await waitFor(() => expect(description).toHaveAttribute('aria-invalid', 'true'));
+    expect(description).toHaveAccessibleDescription('Description must be plain text.');
+    expect(description).toHaveFocus();
+    expect(screen.getByRole('form', { name: 'Edit entry' })).toBeInTheDocument();
   });
 });
 

@@ -11,6 +11,8 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { ConfirmProvider } from '../../contexts/ConfirmContext';
 import type { TrainingApprovalData } from '../../services/api';
+import type { CurrentUser } from '../../types/auth';
+import { useAuthStore } from '../../stores/authStore';
 
 const mockGetApprovalData = vi.fn();
 const mockSubmitApproval = vi.fn();
@@ -267,6 +269,61 @@ describe('TrainingApprovalPage', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(mockSubmitApproval).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Approved minutes for Alex Rivera')).toBeInTheDocument();
+  });
+
+  // Workflow review, training events: 1200 approved for a two-hour drill (a
+  // typo for 120) recorded 20 hours with nothing on the page to stop the eye.
+  it('warns, without blocking, when approved minutes exceed the scheduled session', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const alex = await screen.findByLabelText('Approved minutes for Alex Rivera');
+    expect(screen.queryByText(/More than the/)).not.toBeInTheDocument();
+    await user.clear(alex);
+    await user.type(alex, '1200');
+
+    expect(screen.getByText('More than the 180-minute session')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Approve and record' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByText(/Alex Rivera is approved for more than the 180 minutes this session was scheduled for\./)
+    ).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Approve and record' }));
+
+    await waitFor(() => expect(mockSubmitApproval).toHaveBeenCalledTimes(1));
+    expect(submittedAttendees()['u-1']?.override_duration_minutes).toBe(1200);
+  });
+
+  // Workflow review, training events: an instructor checked into their own
+  // session approved their own credit. The server refuses it; the page says so
+  // before the officer fills anything in.
+  it('tells an approver on the roster that someone else must approve it', async () => {
+    const onRoster: CurrentUser = {
+      id: 'u-2',
+      username: 'schen',
+      email: 'sam@example.org',
+      organization_id: 'org-1',
+      timezone: 'UTC',
+      roles: [],
+      positions: [],
+      rank: null,
+      membership_type: null,
+      permissions: ['training.manage'],
+      is_active: true,
+      email_verified: true,
+      mfa_enabled: false,
+      password_expired: false,
+      must_change_password: false,
+    };
+    useAuthStore.setState({ user: onRoster });
+    try {
+      renderPage();
+
+      expect(await screen.findByText(/You are on this roster, so you cannot approve it/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Approve and record' })).toBeDisabled();
+    } finally {
+      useAuthStore.setState({ user: null });
+    }
   });
 
   it('shows the failure and keeps the edits when recording fails', async () => {

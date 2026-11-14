@@ -107,6 +107,24 @@ class TestReminderMail(TestElectionSetup):
             )
         assert {m.subject for m in built} == {"Corrected ballot link"}
 
+    async def test_reminder_text_part_opens_with_its_own_subject(
+        self, db_session: AsyncSession, setup_election
+    ):
+        """W50-81: the subject said Reminder, but the plain-text part still
+        opened with the template's "Ballot Available: <title>" heading."""
+        built = await _remind(db_session, setup_election)
+        for message in built:
+            first_line = (message.text_body or "").splitlines()[0]
+            assert first_line == "Reminder: vote in Officer Election 2026", first_line
+
+    async def test_a_first_ballot_keeps_the_ballot_available_heading(
+        self, db_session: AsyncSession, setup_election
+    ):
+        built = await _send_ballots(db_session, setup_election)
+        for message in built:
+            first_line = (message.text_body or "").splitlines()[0]
+            assert first_line == "Ballot Available: Officer Election 2026", first_line
+
     async def test_reminder_does_not_restamp_email_sent_at(
         self, db_session: AsyncSession, setup_election
     ):

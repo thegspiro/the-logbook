@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { ConfirmProvider } from '@/contexts/ConfirmContext';
 import type { PublicPortalAccessLog, PublicPortalAPIKey, PublicPortalDataWhitelist } from './types';
 
@@ -164,9 +165,11 @@ describe('API keys and access logs (W76)', () => {
 describe('Portal switch (W76)', () => {
   const renderPage = () =>
     render(
-      <ConfirmProvider>
-        <PublicPortalAdmin />
-      </ConfirmProvider>
+      <MemoryRouter>
+        <ConfirmProvider>
+          <PublicPortalAdmin />
+        </ConfirmProvider>
+      </MemoryRouter>
     );
 
   it('asks before disabling and leaves the portal on when kept', async () => {

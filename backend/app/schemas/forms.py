@@ -12,6 +12,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from app.models.forms import (
+    APPLICANT_FIELDS,
     FieldType,
     FormCategory,
     FormStatus,
@@ -34,6 +35,7 @@ _FORM_STATUSES = {e.value for e in FormStatus}
 _FIELD_TYPES = {e.value for e in FieldType}
 _INTEGRATION_TARGETS = {e.value for e in IntegrationTarget}
 _INTEGRATION_TYPES = {e.value for e in IntegrationType}
+_APPLICANT_FIELDS = set(APPLICANT_FIELDS)
 
 
 def _enum_check(valid: set, field: str):
@@ -107,6 +109,8 @@ class FormFieldBase(BaseModel):
     sort_order: int = Field(default=0, ge=0, le=INT32_MAX)
     width: str = Field(default="full", pattern="^(full|half|third)$")
     is_sensitive: bool = False
+    # Follow-up forms: the applicant-record field this one pre-fills from.
+    applicant_field: Optional[str] = None
 
 
 class FormFieldCreate(FormFieldBase):
@@ -116,6 +120,9 @@ class FormFieldCreate(FormFieldBase):
     # ORM enum) is untouched.
     _check_field_type = field_validator("field_type")(
         _enum_check(_FIELD_TYPES, "field_type")
+    )
+    _check_applicant_field = field_validator("applicant_field")(
+        _enum_check(_APPLICANT_FIELDS, "applicant_field")
     )
 
 
@@ -147,6 +154,12 @@ class FormFieldUpdate(BaseModel):
     sort_order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     width: Optional[str] = None
     is_sensitive: Optional[bool] = None
+    # Nullable on purpose: an explicit null stops pre-filling the field.
+    applicant_field: Optional[str] = None
+
+    _check_applicant_field = field_validator("applicant_field")(
+        _enum_check(_APPLICANT_FIELDS, "applicant_field")
+    )
 
     _check_required = field_validator("required")(_reject_null)
     _check_width = field_validator("width")(_reject_null)

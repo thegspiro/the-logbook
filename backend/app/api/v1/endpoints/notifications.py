@@ -212,6 +212,7 @@ async def list_logs(
         ),
     ),
     pagination: PaginationParams = Depends(),
+    failed: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -220,6 +221,10 @@ async def list_logs(
     Authentication alone is enough for the default ``mine`` scope — it is the
     caller's own delivery history, the same standing as ``GET
     /notifications/my``.
+
+    ``failed=true`` keeps only deliveries that recorded an error, within
+    whichever scope was asked for — the operations dashboard's Notification
+    failures tile links to the org-wide view of exactly that set.
     """
     recipient_id = _resolve_log_scope(scope, current_user)
     service = NotificationsService(db)
@@ -231,6 +236,7 @@ async def list_logs(
             skip=pagination.skip,
             limit=pagination.limit,
             cursor=cursor,
+            failed_only=failed,
         )
     except InvalidCursor as exc:
         # The cursor is client-supplied, so a bad one is a bad request. Falling

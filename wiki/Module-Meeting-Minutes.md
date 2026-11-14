@@ -107,14 +107,18 @@ reopening keeps them on file and the corrected version starts unsigned.
 ## Roll call and quorum
 
 Each person on the roll is **present**, **late**, **left early**, **excused**,
-**absent** or a **guest**. Present, late and left early count toward quorum;
-the others do not. The roll can start from a suggestion: the linked event's
+**absent** or a **guest**, and, where the department uses proxies,
+**represented by proxy**. Who counts toward quorum is the department's choice
+under **Minutes → Settings → Quorum**: present always counts, late arrivals and
+members who left early count unless switched off, proxies count when proxies
+are switched on, and excused, absent and guests never do. The roll can start from a suggestion: the linked event's
 check-ins (guests included), or the active member list with everyone absent.
 
 What the minutes **print** can be narrower than what they record — all statuses,
 present and excused, or present only — set under **Minutes → Settings →
 Attendance** and overridable per set of minutes. The roll is always recorded in
-full.
+full. A department set up from 2026-11-05 starts at present only; one that
+existed before keeps naming everyone until it changes the setting.
 
 ## Motions and votes
 
@@ -145,6 +149,12 @@ to the election do not change it. A result filed after the minutes were
 circulated or adopted is a permanent, labelled **addendum** outside the sealed
 version. See [Elections](Module-Elections).
 
+If the election is then rolled back, a result in circulated or adopted minutes
+is not edited or removed: it is marked **Superseded** under a dated correction
+that gives the rollback's reason, and the re-run's result, once filed, is shown
+as replacing it. A draft's own result is simply removed. Standing published
+copies are re-rendered to show the correction.
+
 ## Agendas and outlines
 
 - An **outline** is the department's standard order of business per meeting
@@ -166,8 +176,18 @@ version. See [Elections](Module-Elections).
 
 - Each item has an assignee (an active member), a due date and a status. When
   minutes are adopted, every assignee is emailed their items.
-- **Action Items** (`/action-items`) lists items from meetings and minutes;
-  assignees update their own there.
+- **Action Items** (`/action-items`) lists items from meetings and minutes, a
+  page at a time, soonest due first. Filter by status, source, meeting,
+  assignee or "Assigned to me". Reach it from the Minutes page's **Open Action
+  Items** tile, a meeting card's "N action items", the Governance menu, or the
+  dashboard's Action Items tile.
+  - **Meeting items** are managed there by whoever holds `meetings.manage`:
+    **Mark complete**, **Edit** (description, assignee, due date, priority,
+    status, notes) and **Delete**.
+  - **Minutes items:** the assignee, or anyone with `minutes.manage`, can
+    **Mark complete** or **Update status** (status and notes). Everything else
+    is edited on the minutes. An item carried into later minutes shows
+    **Carried forward** and is worked there.
 - **Carry forward open items** copies open items from earlier adopted minutes of
   the same type into a draft, so each item is open in exactly one place.
 - **Reminders** (**Minutes → Settings → Reminders**): an email to the assignee
@@ -175,6 +195,10 @@ version. See [Elections](Module-Elections).
   (each configurable); items more than 90 days overdue are no longer emailed.
   Members who manage minutes get a weekly list of every open item. Both are on
   by default and run daily from the `minutes_action_item_reminders` task.
+- **Meeting-record items** _(2026-11-05)_: the bell reminder 3 days and 1 day
+  before, on the due date and the day after now comes with an email too. It
+  follows the member's "Action items from meetings and minutes" email setting,
+  and running the task twice in a day sends one email.
 
 ## Publishing
 
@@ -203,20 +227,30 @@ default**:
 - **Closed sessions** — reason, legal basis, start and end, who was in the
   room (with when they joined and left), and a summary.
 - **Attachments** — reports, handouts, agendas, correspondence and the scanned
-  **signed copy**, up to 25 MB each, malware-scanned and encrypted at rest. They
-  are not filed in the shared library, so an executive session's files stay with
-  its minutes. A signed copy can be filed on adopted minutes and never removed.
+  **signed copy**, up to 25 MB each, malware-scanned and encrypted at rest. A
+  signed copy can be filed on adopted minutes and never removed.
+  - **In the published copy** _(2026-11-05)_: publishing lists them in the
+    library copy, and anyone who can open that document in **Documents** can
+    open them from its paperclip — under the document's folder rules, so an
+    executive session's files stay with leadership. A file filed after
+    publishing appears once the minutes are published again. The public copy
+    still has none.
+  - **In the PDF** _(2026-11-05)_: images are printed after the signatures, PDFs
+    are added after the minutes, and Word, Excel and text files are listed by
+    name. A very large set is capped (40 MB of files, 300 added pages); a file
+    left out is listed with the reason.
 - **Rich text** — sections can use bold, italic, underline, headings, lists,
   quotes and links; nothing else is kept.
 - **Download PDF** — the printable minutes, with signature lines and, once
-  adopted, the version and its hash.
+  adopted, the version and its hash, followed by the attachments.
 - **Search** — the Minutes page's search box also finds words inside the minutes
   (sections, motions, action items), across the newest 500 sets the viewer may
   see; a quoted phrase must match as typed.
 
 ## Minutes settings
 
-**Minutes → Settings** (`/minutes/settings`) has five sections: **Attendance**,
+**Minutes → Settings** (`/minutes/settings`) has six sections: **Attendance**,
+**Quorum** (who counts toward quorum, and whether proxies are used),
 **Signatures** (up to six signers, each optionally tied to a position; by
 default a Recording Secretary and a Presiding Officer), **Reminders**,
 **Publishing** and **Elections**. Anyone with `minutes.manage` can read them;
@@ -239,7 +273,7 @@ only `settings.manage` can change them.
   `minutes_pdf.py`, `minutes_public.py`, `motion_votes.py`, `rich_text.py`.
 - **Frontend:** `frontend/src/modules/minutes/`.
 - **Scheduled tasks:** `minutes_action_item_reminders` (email, daily) beside the
-  older `action_item_reminders` (in-app).
+  older `action_item_reminders` (bell, and email for meeting-record items).
 - **Notable migrations:** `8efc77d4c0c3` (record keeping), `f2c5e55e7dda`
   (adoption, suggestions, closed sessions), `48f403b2631f` (tracked changes),
   `9ce470b513ae` (vote detail), `bb60bd43bede` and `751a14709cc4` (motions on

@@ -69,6 +69,20 @@ export const positionLabel = (position: string | null | undefined): string => {
 };
 
 /**
+ * Whether a seat drives the apparatus: the built-in driver seat, or a custom
+ * seat the department marked "Drives apparatus". The server applies the EVOC
+ * check to the same set (`_driver_seat_values`), so this only decides what a
+ * screen shows about it.
+ */
+export const isDrivingSeat = (position: string | null | undefined): boolean => {
+  const token = (position ?? '').trim().toLowerCase();
+  if (!token) return false;
+  if (token === 'driver') return true;
+  void ensureShiftSettingsLoaded();
+  return getCachedShiftSettings().customPositions.some((p) => p.value === token && p.drivesApparatus === true);
+};
+
+/**
  * Seats a rank — or the department's open-positions list — may grant.
  *
  * The built-in seats, derived from the canonical vocabulary rather than typed

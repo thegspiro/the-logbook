@@ -377,6 +377,8 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
 
 29a. **[MEDICAL_SUPPLIES_MODULE.md](./MEDICAL_SUPPLIES_MODULE.md)** - EMS consumables as dated lots, on their own page rather than in the gear catalog - Domain-scoped permissions, the EMS Supply Officer role, and the domain boundary that keeps the two supply lines apart
 
+29c. **[EVALUATIONS_MODULE.md](./EVALUATIONS_MODULE.md)** - Member performance evaluations: templates, figures, the workflow, signatures, frozen PDFs, notices - Amendments, deletion records, the member's written response and calibration flags
+
 29b. **[changelog/](./changelog/)** - Monthly archives of the project changelog through 2026-09-08, when the ledger was closed - Historical reference only; neither these archives nor `CHANGELOG.md` take new entries
 
 30. **[PUBLIC_PORTAL_MODULE.md](./PUBLIC_PORTAL_MODULE.md)**
@@ -448,7 +450,7 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
 
 12. **[DEPLOYMENT.md](./DEPLOYMENT.md)**
     - Step-by-step deployment guide for all supported methods
-    - See also the platform-specific guides in [deployment/](./deployment/) (AWS, Proxmox, Synology, Unraid)
+    - See also the platform-specific guides in [deployment/](./deployment/) (AWS, Azure, Google Cloud, DigitalOcean, Proxmox, Synology, Unraid)
 
 13. **[UPGRADING.md](./UPGRADING.md)**
     - Read before pulling a new version into a running deployment
@@ -638,6 +640,7 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Email templates / customization               | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md#email-template-management)                                                                               |
 | Personal email / post-separation              | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md#personal-email)                                                                                          |
 | Prospective members pipeline                  | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md)                                                                                         |
+| Member performance evaluations                | [EVALUATIONS_MODULE.md](./EVALUATIONS_MODULE.md)                                                                                                         |
 | Inactivity timeouts / purging                 | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md#inactivity-timeout-system)                                                               |
 | Meeting minutes / templates                   | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md)                                                                                                 |
 | Document management / folders                 | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#documents-module)                                                                                |
@@ -967,7 +970,7 @@ docker-compose ps
 
 - **Secretary Attendance Dashboard**: `GET /api/v1/meetings/attendance/dashboard` shows per-member meeting attendance %, waiver counts, voting eligibility, and tier info
 - **Meeting Attendance Waivers**: Secretary/president/chief can excuse members from meetings — attendance % not penalized, but member can't vote in that meeting
-- **Auto-Enrollment on Conversion**: Prospective members automatically enrolled in probationary training program when converted; training officer can enroll anyone via `POST /api/v1/training/enrollments`
+- **Auto-Enrollment on Conversion**: Prospective members automatically enrolled in probationary training program when converted; training officer can enroll anyone via `POST /api/v1/training/programs/enrollments`
 - **Incident-Based Tracking**: Shift completion reports now match call types against `required_call_types` on requirements; tracks per-type running totals in `progress_notes`
 - **Scheduled Tasks/Cron**: `GET/POST /api/v1/scheduled/tasks` for listing and triggering cron tasks (daily cert alerts, weekly struggling member checks, monthly tier advance)
 - **Struggling Member Detection**: Flags members behind pace, approaching deadlines, or with stalled requirements; sends training officer notifications

@@ -107,14 +107,18 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electi
           </div>
         </div>
 
-        {/* Email report (only when closed) */}
+        {/* Email report (only when closed). Closing already mails it to the
+            creator and leadership (_election_report_recipients); this sends
+            the officer another copy (W50-82, owner decision 2026-11-13). */}
         {isClosed && (
           <div className="bg-theme-surface-secondary flex flex-wrap items-center justify-between gap-3 rounded-lg p-4">
             <div className="flex items-center gap-3">
               <Mail className="text-theme-text-muted h-5 w-5" />
               <div>
-                <p className="text-theme-text-primary text-sm font-medium">Email Results Report</p>
-                <p className="text-theme-text-muted text-xs">Email the results report to yourself</p>
+                <p className="text-theme-text-primary text-sm font-medium">Results Report</p>
+                <p className="text-theme-text-muted text-xs">
+                  Emailed to the election&apos;s creator and leadership when it closed. Send yourself another copy.
+                </p>
               </div>
             </div>
             <button
@@ -127,7 +131,7 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electi
               ) : (
                 <span className="flex items-center gap-1.5">
                   <Send className="h-3.5 w-3.5" />
-                  Send Report
+                  Send Me a Copy
                 </span>
               )}
             </button>

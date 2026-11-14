@@ -126,6 +126,7 @@ async def generate_report(
         end_date=request.end_date,
         filters=request.filters,
         hidden_prospect_ids=hidden_prospect_ids,
+        current_user=current_user,
     )
 
     if "error" in report:
@@ -362,6 +363,7 @@ async def run_saved_report(
         end_date=end_date,
         filters=filters,
         hidden_prospect_ids=hidden_prospect_ids,
+        current_user=current_user,
     )
 
     if "error" in report_data:

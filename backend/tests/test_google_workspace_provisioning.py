@@ -45,6 +45,7 @@ from app.services.integration_services.google_workspace_service import (
     to_directory_account,
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
+from tests.fake_request import fake_request
 
 SERVICE = "app.services.directory_account_service"
 DOMAIN = "firedept.org"
@@ -1109,7 +1110,11 @@ class TestSuspension:
             patch("app.api.v1.endpoints.users.log_audit_event", AsyncMock()),
         ):
             await delete_user(
-                uuid.UUID(user_id), hard=False, db=db_session, current_user=caller
+                uuid.UUID(user_id),
+                hard=False,
+                db=db_session,
+                current_user=caller,
+                request=fake_request(),
             )
             await _settle(db_session)
         assert fake.suspend_calls == [True]
@@ -1130,7 +1135,11 @@ class TestSuspension:
             ),
         ):
             await delete_user(
-                uuid.UUID(user_id), hard=True, db=db_session, current_user=caller
+                uuid.UUID(user_id),
+                hard=True,
+                db=db_session,
+                current_user=caller,
+                request=fake_request(),
             )
             await _settle(db_session)
         assert fake.suspend_calls == [True]

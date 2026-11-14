@@ -1,0 +1,194 @@
+"""
+The data an evaluation template can pull from the rest of the application.
+
+A template's data block names one of these keys. The catalog is the single
+list both sides read: the template schema validates a block's ``source``
+against it, and the builder offers exactly these entries
+(``GET /evaluations/data-sources``). A source is measured over the member's
+coverage within the review period — from the first full month after joining,
+without separations or approved leaves of absence — not over the nominal
+period.
+
+``unit`` decides what a department may do with a source: anything numeric can
+carry a scoring rule that suggests a rating, a ``list`` is shown to the
+evaluator and member but never scored. A numeric source may also be marked
+``scored=False`` when its number is a record rather than a grade, as the
+waiver counts are: asking to be excused is the member's right under the
+department's policy, so the count must not be able to suggest a rating.
+"""
+
+from dataclasses import dataclass
+from typing import Literal
+
+DataSourceUnit = Literal["percent", "hours", "count", "rating", "list"]
+
+#: Units a scoring rule can band. A list of certifications has no number to
+#: compare against a threshold.
+SCOREABLE_UNITS: frozenset[str] = frozenset({"percent", "hours", "count", "rating"})
+
+
+@dataclass(frozen=True)
+class DataSource:
+    key: str
+    label: str
+    unit: DataSourceUnit
+    module: str
+    description: str
+    scored: bool = True
+
+    @property
+    def scoreable(self) -> bool:
+        return self.scored and self.unit in SCOREABLE_UNITS
+
+
+DATA_SOURCES: tuple[DataSource, ...] = (
+    DataSource(
+        "training.hours",
+        "Training hours",
+        "hours",
+        "training",
+        "Hours of completed training records in the period.",
+    ),
+    DataSource(
+        "training.requirements_met_pct",
+        "Training requirements met",
+        "percent",
+        "training",
+        "Share of the member's applicable training requirements met, using the "
+        "same compliance rules as the training dashboard.",
+    ),
+    DataSource(
+        "training.session_attendance_pct",
+        "Training session attendance",
+        "percent",
+        "training",
+        "Sessions attended out of those held that count toward the member's "
+        "session-attendance requirement, graded by that requirement's rule; "
+        "a session the member was excused from is left out unless they "
+        "attended it anyway.",
+    ),
+    DataSource(
+        "events.meeting_attendance_pct",
+        "Business meeting attendance",
+        "percent",
+        "meetings",
+        "Business meetings attended out of those held.",
+    ),
+    DataSource(
+        "events.attended_count",
+        "Events attended",
+        "count",
+        "events",
+        "Department events the member checked in to.",
+    ),
+    DataSource(
+        "shifts.hours",
+        "Shift hours",
+        "hours",
+        "scheduling",
+        "Hours on shifts the member worked.",
+    ),
+    DataSource(
+        "shifts.count",
+        "Shifts worked",
+        "count",
+        "scheduling",
+        "Number of shifts the member worked.",
+    ),
+    DataSource(
+        "shifts.performance_rating_avg",
+        "Shift performance rating",
+        "rating",
+        "scheduling",
+        "Average of the 1–5 performance ratings on the member's shift "
+        "completion reports.",
+    ),
+    DataSource(
+        "calls.responses",
+        "Calls responded to",
+        "count",
+        "calls",
+        "Department calls the member responded to.",
+    ),
+    DataSource(
+        "calls.response_pct",
+        "Call response rate",
+        "percent",
+        "calls",
+        "Calls responded to out of all department calls in the period.",
+    ),
+    DataSource(
+        "admin_hours.hours",
+        "Administrative hours",
+        "hours",
+        "admin_hours",
+        "Approved administrative hours.",
+    ),
+    DataSource(
+        "skills.tests_passed",
+        "Skills tests passed",
+        "count",
+        "training",
+        "Skills tests the member passed.",
+    ),
+    DataSource(
+        "certifications.current",
+        "Certifications",
+        "list",
+        "training",
+        "Qualifications held at the end of the period, with expiration dates.",
+    ),
+    DataSource(
+        "positions.held",
+        "Positions held",
+        "list",
+        "members",
+        "Offices and committee positions the member held during the period.",
+    ),
+    DataSource(
+        "training.session_waivers_summary",
+        "Training session waiver requests",
+        "count",
+        "training",
+        "Requests to be excused from a training session held in the period: "
+        "how many were made, and how many were approved (including denials "
+        "the Chief overrode), denied, withdrawn, still pending or voided. "
+        "Never scored, and never shows the member's reason.",
+        scored=False,
+    ),
+    DataSource(
+        "training.session_waiver_history",
+        "Training session waiver history",
+        "list",
+        "training",
+        "One line per request to be excused from a training session held in "
+        "the period: the session, what happened to the request and who "
+        "decided it, and its category. The member's reason and any "
+        "attachment are never shown; whether an attachment is on file is "
+        "not yet recorded and always reads no.",
+    ),
+    DataSource(
+        "meetings.waivers_summary",
+        "Business meeting waiver requests",
+        "count",
+        "meetings",
+        "Requests to be excused from a business meeting held in the period: "
+        "how many were made, and how many were approved (including denials "
+        "the Chief overrode), denied, withdrawn, still pending or voided. "
+        "Never scored, and never shows the member's reason.",
+        scored=False,
+    ),
+    DataSource(
+        "meetings.waiver_history",
+        "Business meeting waiver history",
+        "list",
+        "meetings",
+        "One line per request to be excused from a business meeting held in "
+        "the period: the meeting, what happened to the request and who "
+        "decided it, and its category. The member's reason and any "
+        "attachment are never shown; whether an attachment is on file is "
+        "not yet recorded and always reads no.",
+    ),
+)
+
+DATA_SOURCES_BY_KEY: dict[str, DataSource] = {s.key: s for s in DATA_SOURCES}

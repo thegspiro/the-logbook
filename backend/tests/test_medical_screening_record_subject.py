@@ -134,7 +134,15 @@ class TestSubjectPicker:
         org_id, admin_id = setup_org_and_admin
         prospect_id = await _add_prospect(db_session, org_id, "Al", "Applicant")
         await db_session.flush()
-        officer = SimpleNamespace(id=admin_id, organization_id=org_id, username="a")
+        # The endpoint reads the caller's grants to decide whether the record's
+        # narrative comes back (MS-14); creating a record is .manage.
+        officer = SimpleNamespace(
+            id=admin_id,
+            organization_id=org_id,
+            username="a",
+            positions=[SimpleNamespace(permissions=["medical_screening.manage"])],
+            rank=None,
+        )
 
         record = await ep.create_record(
             data=ScreeningRecordCreate(

@@ -216,3 +216,43 @@ describe('pipelineService final-stage flag', () => {
     expect(payload).not.toHaveProperty('is_final_step');
   });
 });
+
+// Both mappers fall back to manual approval for a type they do not name, so a
+// Follow-up Form stage missing from either was saved — or read back — as a
+// Manual Approval stage, with no error anywhere.
+describe('pipelineService follow-up form stage mapping', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('creates a follow-up stage as follow_up_form, with its form under its own key', async () => {
+    mockPost.mockResolvedValue({
+      data: backendStep({ step_type: 'follow_up_form', config: { follow_up_form_id: 'form-9' } }),
+    });
+
+    await pipelineService.addStage(
+      'pipeline-1',
+      stageCreate({
+        name: 'Background Questionnaire',
+        stage_type: 'follow_up_form',
+        config: { follow_up_form_id: 'form-9', custom_message: '', auto_advance: true },
+      })
+    );
+
+    const payload = mockPost.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).toHaveProperty('step_type', 'follow_up_form');
+    expect(payload.config).toEqual(expect.objectContaining({ follow_up_form_id: 'form-9' }));
+    expect(payload.config).not.toHaveProperty('form_id');
+  });
+
+  it('reads a follow_up_form step back as a Follow-up Form stage', async () => {
+    mockPut.mockResolvedValue({
+      data: backendStep({ step_type: 'follow_up_form', config: { follow_up_form_id: 'form-9' } }),
+    });
+
+    const stage = await pipelineService.updateStage('pipeline-1', 'step-1', stageUpdate());
+
+    expect(stage.stage_type).toBe('follow_up_form');
+    expect(stage.config).toEqual(expect.objectContaining({ follow_up_form_id: 'form-9', auto_advance: true }));
+  });
+});

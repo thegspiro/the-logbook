@@ -36,6 +36,7 @@ const status = (overrides: Partial<FileStorageStatus> = {}): FileStorageStatus =
   problem: null,
   s3_problem: null,
   private_endpoints_allowed: false,
+  allowed_s3_endpoints: [],
   ...overrides,
 });
 

@@ -708,7 +708,7 @@ class TestMeetingAutoAdvanceOnFinalize:
         db_session.add(event)
         await db_session.flush()
 
-        attendee, error, _ = await self._check_in(
+        attendee, error, _, _already_checked_in = await self._check_in(
             db_session, event, org, prospect.email
         )
 
@@ -805,7 +805,7 @@ class TestMeetingAutoAdvanceOnFinalize:
         db_session.add(event)
         await db_session.flush()
 
-        attendee, error, _ = await self._check_in(
+        attendee, error, _, _already_checked_in = await self._check_in(
             db_session, event, org, prospect.email
         )
         await _finalize(db_session, event)
@@ -974,7 +974,7 @@ class TestMeetingStageWithNoLinkedEvent:
         db_session.add(fundraiser)
         await db_session.flush()
 
-        attendee, error, _ = await self._check_in(
+        attendee, error, _, _already_checked_in = await self._check_in(
             db_session, fundraiser, org, prospect.email
         )
 
@@ -993,7 +993,9 @@ class TestMeetingStageWithNoLinkedEvent:
         db_session.add(meeting)
         await db_session.flush()
 
-        _, error, _ = await self._check_in(db_session, meeting, org, prospect.email)
+        _, error, _, _already_checked_in = await self._check_in(
+            db_session, meeting, org, prospect.email
+        )
 
         assert error is None
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
@@ -1044,7 +1046,9 @@ class TestMeetingStageWithNoLinkedEvent:
         db_session.add(meeting)
         await db_session.flush()
 
-        _, error, _ = await self._check_in(db_session, meeting, org, prospect.email)
+        _, error, _, _already_checked_in = await self._check_in(
+            db_session, meeting, org, prospect.email
+        )
         await _finalize(db_session, meeting)
 
         assert error is None
@@ -1217,7 +1221,9 @@ class TestMeetingStageNeedsRealAttendance:
         db_session.add(starting_soon)
         await db_session.flush()
 
-        attendee, error, _ = await GuestCheckInService(db_session).check_in_guest(
+        attendee, error, _, _already_checked_in = await GuestCheckInService(
+            db_session
+        ).check_in_guest(
             event=starting_soon,
             organization_id=org,
             first_name="Dana",
@@ -1781,7 +1787,9 @@ class TestLegacyActionStagesKeepTheirBehaviour:
         db_session.add(event)
         await db_session.flush()
 
-        _, error, _ = await GuestCheckInService(db_session).check_in_guest(
+        _, error, _, _already_checked_in = await GuestCheckInService(
+            db_session
+        ).check_in_guest(
             event=event,
             organization_id=org,
             first_name="Dana",

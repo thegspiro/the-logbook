@@ -694,7 +694,10 @@ The **Room QR Codes** page (`/locations/qr-codes`) now opens when Facilities is
 off. It used to land on a "module disabled" screen even though the Locations
 page linked to it.
 
-> **Screenshot to create:** Card Readers, and Events → Card Check-ins.
+![Card Readers: each room with its taps, refusals and last tap over the last 7 days and its Badge check-in switch, with the Volunteer Office's reader on and its recent taps opened](./images/06-36-card-readers.png)
+
+Events → Card Check-ins is pictured in
+[Events & Meetings](./04-events-meetings.md#seeing-who-tapped-a-card-2026-10-24).
 
 ---
 

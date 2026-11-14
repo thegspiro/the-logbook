@@ -179,7 +179,7 @@ PATCH  /attendance/{id}                 # Edit attendance (scheduling.manage)
 DELETE /attendance/{id}                 # Remove attendance (scheduling.manage)
 POST   /shifts/{id}/check-in            # Member check-in
 POST   /shifts/{id}/check-out           # Member check-out
-GET    /shifts/{id}/my-attendance       # Caller's attendance on a shift
+GET    /shifts/{id}/my-attendance       # Caller's attendance on a shift, or null
 GET    /my-attendance-history           # Caller's attendance (optional start_date/end_date; embeds shift date/times)
 GET    /pre-shift-work/eligible-shifts  # Upcoming shifts the caller may log prep work against
 GET    /pre-shift-work/active           # Caller's running session, or null

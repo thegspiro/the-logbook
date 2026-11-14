@@ -82,6 +82,7 @@ docker compose up -d
 - **[Training Compliance Calculations](Training-Compliance-Calculations)** - How a member's compliance figure is worked out
 - **[Skills Testing](Module-Skills-Testing)** - Skill evaluations, scorecards and officer sign-off
 - **[Medical Screening](Module-Medical-Screening)** - Physicals, fit tests and other screenings (PHI)
+- **[Performance Evaluations](Module-Evaluations)** - Yearly evaluations and check-ins: forms, figures, signing, PDFs, responses
 - **[Prospective Members](Module-Prospective-Members)** - Applicant pipeline from inquiry to membership
 - **[Meeting Minutes](Module-Meeting-Minutes)** - Agendas, minutes, circulation and adoption
 - **[Finance](Module-Finance)** - Budgets, purchase requests, approvals, dues

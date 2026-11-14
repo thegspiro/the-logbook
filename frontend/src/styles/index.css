@@ -13,6 +13,18 @@
   }
 }
 
+/* A phone held sideways: the phone layout (under 768px wide) on a screen
+   under 480px tall. An iPhone SE on its side is 568x320, and the fixed top bar
+   (64px) and bottom bar (56px) together left it ~200px of page. Both bars
+   shrink here, to 48px each, which keeps every label and the 44px touch
+   minimum. `--mobile-header-height` and `--bottom-nav-height` follow it, so
+   everything offset by the bars moves with them. */
+@custom-variant short-screen {
+  @media (max-width: 767px) and (max-height: 480px) {
+    @slot;
+  }
+}
+
 @theme {
   --color-primary-50: #fef2f2;
   --color-primary-100: #fee2e2;
@@ -373,6 +385,16 @@
   }
 }
 
+/* After the width rules so it wins: a phone held sideways is wide enough for
+   the 2rem gutter but has ~270px of page between its bars. See the
+   `short-screen` variant. */
+@media (max-width: 767px) and (max-height: 480px) {
+  :root {
+    --page-gutter-block: 1rem;
+    --page-section-gap: 1rem;
+  }
+}
+
 [data-page-layout='application'] {
   box-sizing: border-box;
   min-width: 0;
@@ -661,7 +683,7 @@
   /* A list of record cards — one card per event, document, course, etc.
 
      Columns follow the width the grid itself has, never the viewport. The
-     sidebar is expanded from lg up, so a viewport rule like
+     sidebar is expanded from md up, so a viewport rule like
      `sm:grid-cols-2 lg:grid-cols-3` packed three ~200px cards into a 1024px
      tablet and pushed their footer buttons off the card edge.
 
@@ -687,6 +709,118 @@
     auto-fill,
     minmax(min(100%, max(var(--card-grid-min, 20rem), calc(100% / 3 - 1rem))), 1fr)
   );
+}
+
+@utility thumb-grid {
+  /* A grid of photo thumbnails. Unlike `card-grid` it is not capped at three
+     columns: a thumbnail carries no text or buttons to fit, so as many 9rem
+     tiles as the grid's own width allows, one column on the narrowest phone. */
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr));
+}
+
+/* --- Page header ---
+   A page's title on the left and its actions on the right, stacked on a phone.
+
+   The usual way to write this — `flex-col sm:flex-row sm:justify-between` with
+   an action group that cannot shrink — switches to a row at a fixed width and
+   then never wraps. Whether the row fits is decided by how many actions the
+   viewer is allowed and how long the title is, not by the viewport, and the
+   sidebar takes 256px of it from md up. It broke both ways: on /locations at
+   768px the buttons ran 14px off the screen, and on /inventory at 1280px the
+   buttons squeezed the title column to 169px and "Inventory Items" spilled out
+   of it.
+
+   So from `sm` up the row wraps on its content: the title keeps at least 16rem
+   and grows, and the actions sit beside it only while they fit, otherwise
+   dropping to their own line, still at the right. Display, wrapping, gap,
+   vertical alignment and margins stay with the call site, so a group reads the
+   same in the markup as any other flex row. */
+@utility page-header {
+  display: flex;
+  flex-direction: column;
+  @media (min-width: 640px) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+}
+
+@utility page-header-title {
+  min-width: 0;
+  @media (min-width: 640px) {
+    flex: 1 0 16rem;
+  }
+}
+
+/* On a phone the header's text buttons and links share each row equally: two
+   that fit split it in half, and one that would not fit wraps to a row of its
+   own and fills it. Left at their own widths they stacked ragged — "New
+   review period" shorter than "New template" under it.
+
+   Every button starts at half the row (less half the widest gap a call site
+   uses, 1rem, so two still fit) and `min-width: fit-content` keeps it at least
+   as wide as its label, never wider than the row. Two whose labels fit in half
+   share a row, start equal and grow equally, so they end equal — a basis of 0
+   would not: border-box sizes it up to its padding and border first, and the
+   bordered secondary button came out 2px wider than the primary beside it.
+   A label longer than half pushes its button past half, the pair no longer
+   fits, and each wraps to a row it fills. So two buttons on one row are always
+   the same width, and a row never holds more than two.
+
+   Only text buttons and links grow. An icon-only button keeps its square, and
+   anything else a page puts here — a status line, a menu's wrapper, a select,
+   a scrolling strip — keeps its own size. A hand-styled icon-only button
+   without btn-icon / btn-icon-sm would stretch; give it one of those. */
+@utility page-header-actions {
+  min-width: 0;
+  @media (width < 640px) {
+    & > :is(button, a):not(.btn-icon, .btn-icon-sm) {
+      flex: 1 1 calc(50% - 0.5rem);
+      min-width: fit-content;
+      justify-content: center;
+      text-align: center;
+    }
+  }
+  @media (min-width: 640px) {
+    margin-left: auto;
+  }
+}
+
+/* --- Split row ---
+   The same wrapping rule as page-header, for a row inside a card or a list:
+   content on the left, an aside (actions, a badge, a status) on the right,
+   stacked on a phone. The main column keeps 12rem rather than 16rem because
+   these rows sit in cards and list items, not across the page.
+
+   `flex-col sm:flex-row sm:justify-between` with an aside that could not
+   shrink was written ~90 times. From `sm` it is a row that never wraps, so in
+   a card beside the 256px sidebar the aside squeezed the content column — the
+   same failure as the page headers, one level down. Display, wrapping, gap,
+   alignment and margins stay with the call site. */
+@utility split-row {
+  display: flex;
+  flex-direction: column;
+  @media (min-width: 640px) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+}
+
+@utility split-row-main {
+  min-width: 0;
+  @media (min-width: 640px) {
+    flex: 1 0 12rem;
+  }
+}
+
+@utility split-row-aside {
+  min-width: 0;
+  @media (min-width: 640px) {
+    margin-left: auto;
+  }
 }
 
 /* --- Buttons --- (#4 press effect, #5 shadow elevation, #6 smooth multi-property transitions) */
@@ -778,9 +912,11 @@
      block, so in a block button an icon stacked above its label from 768px
      up — the store catalog's Edit and Archive drew that way on every tablet.
      Grow to the 44px touch minimum on phones and touch screens only, so
-     mouse-driven desktop button density is untouched. */
+     mouse-driven desktop button density is untouched. The width floor is
+     for a one-word label: "Edit" in a stacked inventory card measured 43px. */
   @media (max-width: 767px), (pointer: coarse) {
     min-height: 44px;
+    min-width: 44px;
   }
 }
 
@@ -882,6 +1018,17 @@
 @utility toggle-knob {
   /* Standard toggle-switch knob: always a visible light circle */
   @apply pointer-events-none inline-block transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out dark:bg-slate-200;
+
+  /* High contrast paints --surface-border pure white, and that is the off
+     track at most call sites, so the light knob sat on it at ~1.2:1 and an
+     off switch read as a blank white pill. The shared SettingsToggle's off
+     track is --surface-hover (#222), where a plain black knob would vanish
+     instead. A black knob with a white ring is visible on all three tracks
+     it can land on: white (off), #222 (off) and the accent red (on). */
+  .high-contrast & {
+    background-color: #000000;
+    box-shadow: 0 0 0 2px #ffffff;
+  }
 }
 
 @utility toggle-knob-sm {
@@ -909,9 +1056,14 @@
      Height comes from a transparent vertical border rather than from h-11 or
      padding, because `background-clip: padding-box` then keeps the paint off it:
      the border box is 44px for hit-testing and layout, the painted padding box
-     is the same 24px pill as before. `rounded-full` on a 44px border box leaves
-     the padding box a 12px radius — exactly half of 24 — so it stays a pill
-     rather than a rounded rectangle.
+     is the same 24px pill as before.
+     The radius is elliptical on purpose and must not go back to `rounded-full`.
+     An inner (padding-box) radius is the outer radius minus the border on each
+     axis separately. `rounded-full` on the 44x44 border box resolves to 22px on
+     both axes, so the padding box got 22px across but only 12px down — on a
+     44x24 box that is a full ellipse, which is how every switch on a phone or
+     iPad rendered as an oval. 12px across / 22px down leaves 12px / 12px inside:
+     a true 24px pill.
      Not a negative margin to claw the 20px of layout back. form-checkbox above
      carries the scar: `padding: 14px; margin: -14px` grew no hit area on a
      replaced element while the negative margin stayed in force, turning a gap-3
@@ -925,6 +1077,7 @@
   @media (max-width: 767px), (pointer: coarse) {
     height: 44px;
     border-block: 10px solid transparent;
+    border-radius: 12px / 22px;
   }
 }
 
@@ -1044,6 +1197,23 @@
   }
 }
 
+@utility field-grid {
+  /* Form fields in columns that follow the grid's own width, never the
+     viewport. The sidebar is open from md up, so `sm:grid-cols-2
+     md:grid-cols-3` put three ~140px inputs in a 768px tablet's content area,
+     too narrow for a typed name or an amount to stay readable.
+
+     The same formula as card-grid, with an 11rem floor: two fields side by
+     side inside a padded form card at that width, about 24rem, the same
+     ~185px columns its two-column neighbours draw there. Capped at three columns, as card-grid is. Field order is
+     preserved, so a grid holding first, middle and last name still reads in
+     that order as it reflows. A field that spans columns does not belong in
+     it: with one track, a col-span-2 child forces an implicit second column. */
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, max(11rem, calc(100% / 3 - 1rem))), 1fr));
+}
+
 @utility form-grid-2 {
   /* Responsive form grids: 1-col on mobile, multi-col on sm+ */
   @apply grid grid-cols-1 gap-3;
@@ -1098,6 +1268,16 @@
  * <td> must carry a `data-label` providing the field name shown on mobile;
  * cells with no data-label (e.g. selection checkboxes, row chevrons) are
  * hidden in the stacked view.
+ *
+ * Screen readers: in card mode each cell's `::before` label is part of its
+ * accessible name ("Amount $248,750.00"), and the table, row and cell roles
+ * stay, so the column context the hidden <thead> carried is still announced.
+ * The <thead> is `display: none` rather than visually hidden on purpose:
+ * headers hold sort buttons and select-all checkboxes, and a visually hidden
+ * header row would leave those focusable but invisible. Do not give the label
+ * empty alt text (`content: attr(data-label) / ""`) — with the header row
+ * gone it is the only thing naming the column. `table-card-a11y.spec.ts`
+ * holds this in Chromium and, in CI, Mobile Safari.
  */
 @media (max-width: 767px) {
   .rwd-table thead {
@@ -1157,6 +1337,215 @@
   }
   .rwd-table tbody td.rwd-table-lead::before {
     content: none;
+  }
+}
+
+/*
+ * Opt-in: reflow when the table's own box is too narrow, not the viewport.
+ *
+ * The 767px media query above guesses the table's room from the screen, and a
+ * tablet is where that guess fails: the side navigation stays open, so a
+ * 1024px iPad Pro leaves the page body ~690px — far narrower than a wide
+ * table needs — while every viewport breakpoint believes it has a laptop. A
+ * wide table (the member roster's seven columns) then scrolls sideways with
+ * its scrollbar at the foot of the list, out of sight.
+ *
+ * Put `rwd-table-container` on the table's scroll wrapper (or on the card that
+ * clips it) and one tier class on the table. It reflows to cards whenever the
+ * wrapper is narrower than that tier, whatever the screen or sidebar state:
+ *
+ *   rwd-table-narrow  under 32rem
+ *   rwd-table-wide    under 64rem
+ *   rwd-table-xwide   under 78rem
+ *   rwd-table-2xwide  under 96rem
+ *
+ * xwide stops at 78rem, not 80rem, because the app's page column caps a card
+ * at about 1278px on any screen. At 80rem (1280px) the tier never let go,
+ * and an xwide table showed as cards even on a 1920px desktop.
+ *
+ * Pick the tier from a measurement, not from the column count: render the
+ * table with long data, read its min-content width, add ~4% for WebKit (whose
+ * text runs wider than Chromium's) and take the smallest tier above that. A
+ * tier that is too small leaves a band of widths where the table is shown and
+ * still overflows. The member roster is why: it stops fitting at ~57rem in
+ * Chromium with a mouse, ~60rem with touch (the 44px targets widen the Actions
+ * column) and ~62rem in WebKit with touch, and a 60rem first attempt left a
+ * 1280px touch screen — card exactly 60rem — on a table 33px too wide.
+ *
+ * The four blocks below must stay identical apart from the tier class and the
+ * width; `rwdTableTiers.test.ts` holds them to that. They repeat the base
+ * reflow rather than changing it, so every other reflow table keeps its 767px
+ * switch, with two differences:
+ *
+ * - A totals row in <tfoot> reflows too. The base rules only reach <tbody>, so
+ *   once the body became cards a footer kept its table layout and set the
+ *   table's width on its own — wider than the card, which is the overflow the
+ *   tier exists to remove. Footer cells need a data-label like body cells; a
+ *   row-header <th> there is laid out the same, and `rwd-table-lead` on it
+ *   makes it the card's title.
+ * - Screen only. A container query also answers on paper, where a printed page
+ *   is ~700px wide, so without the guard every opted-in table — the finance
+ *   reports first among them — would print as stacked cards.
+ */
+.rwd-table-container {
+  container: rwd-table / inline-size;
+}
+
+@media screen {
+  @container rwd-table (width < 32rem) {
+    .rwd-table.rwd-table-narrow thead {
+      display: none;
+    }
+    .rwd-table.rwd-table-narrow :is(tbody, tfoot) tr {
+      display: block;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid var(--color-theme-surface-border);
+    }
+    .rwd-table.rwd-table-narrow :is(tbody, tfoot) tr:last-child {
+      border-bottom: 0;
+    }
+    .rwd-table.rwd-table-narrow :is(tbody td, tfoot td, tfoot th) {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.375rem 0.75rem;
+      text-align: right;
+    }
+    .rwd-table.rwd-table-narrow :is(tbody td, tfoot td, tfoot th)[data-label]::before {
+      content: attr(data-label);
+      font-weight: 600;
+      text-align: left;
+      color: var(--color-theme-text-muted);
+    }
+    .rwd-table.rwd-table-narrow :is(tbody td, tfoot td, tfoot th):not([data-label]) {
+      display: none;
+    }
+    .rwd-table.rwd-table-narrow :is(tbody td, tfoot td, tfoot th).rwd-table-lead {
+      display: block;
+      text-align: left;
+      padding-bottom: 0.125rem;
+    }
+    .rwd-table.rwd-table-narrow :is(tbody td, tfoot td, tfoot th).rwd-table-lead::before {
+      content: none;
+    }
+  }
+
+  @container rwd-table (width < 64rem) {
+    .rwd-table.rwd-table-wide thead {
+      display: none;
+    }
+    .rwd-table.rwd-table-wide :is(tbody, tfoot) tr {
+      display: block;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid var(--color-theme-surface-border);
+    }
+    .rwd-table.rwd-table-wide :is(tbody, tfoot) tr:last-child {
+      border-bottom: 0;
+    }
+    .rwd-table.rwd-table-wide :is(tbody td, tfoot td, tfoot th) {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.375rem 0.75rem;
+      text-align: right;
+    }
+    .rwd-table.rwd-table-wide :is(tbody td, tfoot td, tfoot th)[data-label]::before {
+      content: attr(data-label);
+      font-weight: 600;
+      text-align: left;
+      color: var(--color-theme-text-muted);
+    }
+    .rwd-table.rwd-table-wide :is(tbody td, tfoot td, tfoot th):not([data-label]) {
+      display: none;
+    }
+    .rwd-table.rwd-table-wide :is(tbody td, tfoot td, tfoot th).rwd-table-lead {
+      display: block;
+      text-align: left;
+      padding-bottom: 0.125rem;
+    }
+    .rwd-table.rwd-table-wide :is(tbody td, tfoot td, tfoot th).rwd-table-lead::before {
+      content: none;
+    }
+  }
+
+  @container rwd-table (width < 78rem) {
+    .rwd-table.rwd-table-xwide thead {
+      display: none;
+    }
+    .rwd-table.rwd-table-xwide :is(tbody, tfoot) tr {
+      display: block;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid var(--color-theme-surface-border);
+    }
+    .rwd-table.rwd-table-xwide :is(tbody, tfoot) tr:last-child {
+      border-bottom: 0;
+    }
+    .rwd-table.rwd-table-xwide :is(tbody td, tfoot td, tfoot th) {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.375rem 0.75rem;
+      text-align: right;
+    }
+    .rwd-table.rwd-table-xwide :is(tbody td, tfoot td, tfoot th)[data-label]::before {
+      content: attr(data-label);
+      font-weight: 600;
+      text-align: left;
+      color: var(--color-theme-text-muted);
+    }
+    .rwd-table.rwd-table-xwide :is(tbody td, tfoot td, tfoot th):not([data-label]) {
+      display: none;
+    }
+    .rwd-table.rwd-table-xwide :is(tbody td, tfoot td, tfoot th).rwd-table-lead {
+      display: block;
+      text-align: left;
+      padding-bottom: 0.125rem;
+    }
+    .rwd-table.rwd-table-xwide :is(tbody td, tfoot td, tfoot th).rwd-table-lead::before {
+      content: none;
+    }
+  }
+
+  @container rwd-table (width < 96rem) {
+    .rwd-table.rwd-table-2xwide thead {
+      display: none;
+    }
+    .rwd-table.rwd-table-2xwide :is(tbody, tfoot) tr {
+      display: block;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid var(--color-theme-surface-border);
+    }
+    .rwd-table.rwd-table-2xwide :is(tbody, tfoot) tr:last-child {
+      border-bottom: 0;
+    }
+    .rwd-table.rwd-table-2xwide :is(tbody td, tfoot td, tfoot th) {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.375rem 0.75rem;
+      text-align: right;
+    }
+    .rwd-table.rwd-table-2xwide :is(tbody td, tfoot td, tfoot th)[data-label]::before {
+      content: attr(data-label);
+      font-weight: 600;
+      text-align: left;
+      color: var(--color-theme-text-muted);
+    }
+    .rwd-table.rwd-table-2xwide :is(tbody td, tfoot td, tfoot th):not([data-label]) {
+      display: none;
+    }
+    .rwd-table.rwd-table-2xwide :is(tbody td, tfoot td, tfoot th).rwd-table-lead {
+      display: block;
+      text-align: left;
+      padding-bottom: 0.125rem;
+    }
+    .rwd-table.rwd-table-2xwide :is(tbody td, tfoot td, tfoot th).rwd-table-lead::before {
+      content: none;
+    }
   }
 }
 
@@ -1662,9 +2051,14 @@
  * bars then lift clear of it automatically instead of each one hard-coding the
  * bar's height. Public pages (login, onboarding, legal) never see the bar and
  * so never inherit the offset. Must stay in step with BottomNavigation's own
- * min-h-[56px] rows. */
+ * min-h-[56px] rows, and their 48px `short-screen` size. */
 .has-bottom-nav {
   --bottom-nav-height: 3.5rem;
+}
+@media (max-width: 767px) and (max-height: 480px) {
+  .has-bottom-nav {
+    --bottom-nav-height: 3rem;
+  }
 }
 @media (min-width: 768px) {
   .has-bottom-nav {
@@ -1672,20 +2066,35 @@
   }
 }
 
-/* Set on the AppLayout root in the LEFT-navigation layout only, so a page-level
- * fixed element can start where the content column starts instead of spanning
- * the side navigation. That layout offsets its content with a matching
- * `md:ml-64` while the nav is `fixed left-0 z-40`, so a viewport-anchored bar
- * at the same z-index paints over the nav's bottom. The top-navigation layout
- * renders content full width and never sets this, so the same element stays
- * edge to edge there. Must stay in step with SideNavigation's own `w-64` and
- * AppLayout's `md:ml-64`. */
+/* Set on the AppLayout root in the LEFT-navigation layout only: the width the
+ * side navigation occupies, which everything beside it reads. AppLayout offsets
+ * its content column by it, paints the nav's background down the full page at
+ * it, and a page-level fixed element starts there instead of spanning the nav
+ * (the nav is `fixed left-0 z-40`, so a viewport-anchored bar at the same
+ * z-index paints over the nav's bottom). The top-navigation layout renders
+ * content full width and never sets this, so the same element stays edge to
+ * edge there. Must stay in step with SideNavigation's `w-64` and its collapsed
+ * `w-20`. */
 .has-side-nav {
   --side-nav-width: 0px;
 }
 @media (min-width: 768px) {
   .has-side-nav {
     --side-nav-width: 16rem;
+  }
+}
+
+/* The collapsed icon rail. The content column used to keep its 16rem offset
+ * when the nav shrank to `w-20`, leaving an empty 11rem stripe between the
+ * rail and the page. AppLayout mirrors SideNavigation's state onto its root as
+ * `data-nav-collapsed` — an attribute on the element that owns the variable,
+ * not a `:has()` match on a descendant, so collapsing restyles the root once
+ * rather than asking the engine to watch the nav. This lives in its own 768px
+ * block because below it the nav is an off-canvas drawer and the width must
+ * stay 0px. */
+@media (min-width: 768px) {
+  .has-side-nav[data-nav-collapsed='true'] {
+    --side-nav-width: 5rem;
   }
 }
 
@@ -1777,6 +2186,11 @@
 :root:has(.has-bottom-nav) {
   --bottom-nav-height: 3.5rem;
 }
+@media (max-width: 767px) and (max-height: 480px) {
+  :root:has(.has-bottom-nav) {
+    --bottom-nav-height: 3rem;
+  }
+}
 @media (min-width: 768px) {
   :root:has(.has-bottom-nav) {
     --bottom-nav-height: 0px;
@@ -1813,12 +2227,24 @@
   padding-top: max(2rem, env(safe-area-inset-top));
 }
 
+/* The fixed mobile header's height. 3rem on a short screen (see the
+ * `short-screen` variant); read by the header itself and by everything that
+ * clears or pins beneath it, so the five stay in step. */
+:root {
+  --mobile-header-height: 4rem;
+}
+@media (max-width: 767px) and (max-height: 480px) {
+  :root {
+    --mobile-header-height: 3rem;
+  }
+}
+
 @utility mobile-header-offset {
-  /* Top padding for content sitting below the 4rem fixed mobile header,
+  /* Top padding for content sitting below the fixed mobile header,
      grown by the status-bar inset so it clears the header in standalone mode.
      Pairs with `safe-top` on the header itself. Desktop (>=768px) has no fixed
      mobile header, so the offset collapses to 0. */
-  padding-top: calc(4rem + env(safe-area-inset-top));
+  padding-top: calc(var(--mobile-header-height) + env(safe-area-inset-top));
   @media (min-width: 768px) {
     padding-top: 0;
   }
@@ -1830,7 +2256,7 @@
      `--sticky-stack` is the height of anything an ancestor has already
      pinned under that header — a tab bar — so a heading inside it sticks
      below the bar instead of sliding under it. Unset, it is nothing. */
-  top: calc(4rem + env(safe-area-inset-top) + var(--sticky-stack, 0px));
+  top: calc(var(--mobile-header-height) + env(safe-area-inset-top) + var(--sticky-stack, 0px));
 }
 
 @utility mobile-navigation-drawer {
@@ -3063,7 +3489,7 @@ tbody tr:last-child {
 
 @media (max-width: 767px) {
   .app-toaster {
-    top: calc(4rem + env(safe-area-inset-top)) !important;
+    top: calc(var(--mobile-header-height) + env(safe-area-inset-top)) !important;
     right: 1rem !important;
     left: 1rem !important;
   }

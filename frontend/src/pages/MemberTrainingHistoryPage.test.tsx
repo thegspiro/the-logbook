@@ -8,6 +8,7 @@ const mockGetRecords = vi.fn();
 const mockVoidRecord = vi.fn();
 const mockUpdateRecord = vi.fn();
 const mockGetUser = vi.fn();
+const mockExportReport = vi.fn();
 let mockPermissions: string[] = [];
 
 vi.mock('react-router', async (importOriginal) => ({
@@ -24,10 +25,23 @@ vi.mock('../services/api', () => ({
   userService: {
     getUserWithRoles: (...args: unknown[]) => mockGetUser(...args) as unknown,
   },
+  // The officer's requirements section loads on its own; these tests are
+  // about the records below it.
+  trainingModuleConfigService: {
+    getMemberRequirements: () =>
+      Promise.resolve({
+        user_id: 'member-1',
+        as_of: '2026-10-21',
+        leave_month_rule: 'full_month',
+        requirements_summary: { total_requirements: 0, met_requirements: 0, avg_compliance: null },
+        requirements_detail: [],
+        leaves_of_absence: [],
+      }),
+  },
 }));
 
 vi.mock('../services/trainingServices', () => ({
-  reportExportService: { exportReport: vi.fn() },
+  reportExportService: { exportReport: (...args: unknown[]) => mockExportReport(...args) as unknown },
   documentService: {
     getRecordAttachments: vi.fn(),
     uploadAttachment: vi.fn(),
@@ -38,6 +52,13 @@ vi.mock('../services/trainingServices', () => ({
 vi.mock('../stores/authStore', () => ({
   useAuthStore: (selector: (s: { checkPermission: (p: string) => boolean }) => unknown) =>
     selector({ checkPermission: (p: string) => mockPermissions.includes(p) }),
+}));
+
+// The page's period windows are measured from "today"; pin it so a record
+// dated 2026-09-01 stays inside "This Year" whenever the suite runs.
+vi.mock('../utils/dateFormatting', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/dateFormatting')>()),
+  getTodayLocalDate: () => '2026-11-06',
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -115,7 +136,7 @@ describe('MemberTrainingHistoryPage officer corrections', () => {
 
     expect(await screen.findByText('HIPAA Awareness')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Void HIPAA Awareness' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('columnheader', { name: 'Actions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit HIPAA Awareness' })).not.toBeInTheDocument();
   });
 
   it('saves every field the form owns, clearing a blanked one, with the note to the member', async () => {
@@ -146,5 +167,172 @@ describe('MemberTrainingHistoryPage officer corrections', () => {
         'Provider credits half an hour'
       );
     });
+  });
+});
+
+// A scheduled record has no completion date; the key is removed rather than
+// set to undefined, which exactOptionalPropertyTypes rejects.
+const undated = (r: TrainingRecord): TrainingRecord => {
+  const copy = { ...r };
+  delete copy.completion_date;
+  return copy;
+};
+
+const statValue = (label: string): string | null | undefined =>
+  screen.getByText(label, { selector: 'p' }).nextElementSibling?.textContent;
+
+describe('MemberTrainingHistoryPage training period', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetUser.mockReset();
+    mockGetUser.mockResolvedValue({ id: 'member-1', full_name: 'Pat Member', username: 'pat' });
+    mockExportReport.mockReset();
+    mockExportReport.mockResolvedValue(new Blob(['x']));
+    mockGetRecords.mockReset();
+    mockGetRecords.mockResolvedValue([
+      record({ id: 'r-2026', course_name: 'Pump Ops 2026', completion_date: '2026-01-10', hours_completed: 6 }),
+      record({ id: 'r-dec', course_name: 'Ladders Dec 2025', completion_date: '2025-12-05', hours_completed: 6.5 }),
+      record({ id: 'r-old', course_name: 'Hazmat 2019', completion_date: '2019-04-02', hours_completed: 92 }),
+      undated(
+        record({
+          id: 'r-next',
+          course_name: 'Driver Course',
+          status: 'scheduled',
+          scheduled_date: '2026-12-02',
+          hours_completed: 0,
+        })
+      ),
+    ]);
+    mockPermissions = [];
+  });
+
+  it('scopes the record list and hour totals to this year by default', async () => {
+    renderWithRouter(<MemberTrainingHistoryPage />);
+
+    expect(await screen.findByText('Pump Ops 2026')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Training period' })).toHaveValue('year');
+    expect(screen.queryByText('Ladders Dec 2025')).not.toBeInTheDocument();
+    expect(screen.queryByText('Hazmat 2019')).not.toBeInTheDocument();
+    // An upcoming class stays on the page even though it is after today.
+    expect(screen.getByText('Driver Course')).toBeInTheDocument();
+    expect(statValue('Total Hours')).toBe('6');
+    expect(statValue('Completed')).toBe('1');
+    expect(statValue('Total Records')).toBe('2');
+  });
+
+  it('matches the rolling requirement window with Last 12 Months', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MemberTrainingHistoryPage />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Training period' }), 'last_12_months');
+
+    expect(screen.getByText('Ladders Dec 2025')).toBeInTheDocument();
+    expect(screen.queryByText('Hazmat 2019')).not.toBeInTheDocument();
+    expect(statValue('Total Hours')).toBe('12.5');
+  });
+
+  it('shows the lifetime total only under All Time', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MemberTrainingHistoryPage />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Training period' }), 'lifetime');
+
+    expect(screen.getByText('Hazmat 2019')).toBeInTheDocument();
+    expect(statValue('Total Hours')).toBe('104.5');
+    expect(statValue('Total Records')).toBe('4');
+  });
+
+  it('finds an expired certificate from an earlier year under the Expired filter', async () => {
+    const user = userEvent.setup();
+    mockGetRecords.mockResolvedValue([
+      record({ id: 'r-cpr', course_name: 'CPR 2022', completion_date: '2022-06-01', expiration_date: '2024-06-01' }),
+    ]);
+    renderWithRouter(<MemberTrainingHistoryPage />);
+
+    expect(await screen.findByText('No training records found')).toBeInTheDocument();
+    expect(statValue('Expired')).toBe('1');
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /Filter training records by status/ }), 'expired');
+
+    expect(screen.getByText('CPR 2022')).toBeInTheDocument();
+  });
+
+  it('exports the period the page is showing', async () => {
+    const user = userEvent.setup();
+    // jsdom cannot follow the download link the export clicks.
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    renderWithRouter(<MemberTrainingHistoryPage />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Training period' }), 'last_12_months');
+    await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+
+    await waitFor(() => {
+      expect(mockExportReport).toHaveBeenCalledWith({
+        report_type: 'individual',
+        format: 'csv',
+        user_id: 'member-1',
+        start_date: '2025-12-01',
+        end_date: '2026-11-06',
+      });
+    });
+    click.mockRestore();
+  });
+});
+
+describe('MemberTrainingHistoryPage record list', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetUser.mockReset();
+    mockGetUser.mockResolvedValue({ id: 'member-1', full_name: 'Pat Member', username: 'pat' });
+    mockGetRecords.mockReset();
+    mockPermissions = [];
+  });
+
+  it('summarises each record on one line instead of a label per field', async () => {
+    const noExpiry = record({ course_code: 'HIPAA-1' });
+    delete noExpiry.expiration_date;
+    mockGetRecords.mockResolvedValue([noExpiry]);
+    renderWithRouter(<MemberTrainingHistoryPage />);
+
+    const list = await screen.findByRole('list', { name: 'Training records' });
+    const item = within(list).getByRole('listitem');
+    expect(item).toHaveTextContent('Continuing Education · 9/1/2026 · 1 hr');
+    expect(within(item).getByText('HIPAA-1')).toBeInTheDocument();
+    expect(within(item).queryByText(/Expires/)).not.toBeInTheDocument();
+  });
+
+  it('says where each record came from', async () => {
+    mockGetRecords.mockResolvedValue([
+      record({ id: 'ts', course_name: 'Synced class', source: 'provider', source_label: 'Target Solutions' }),
+      record({ id: 'imp', course_name: 'Imported class', source: 'imported', source_label: 'Imported' }),
+    ]);
+    renderWithRouter(<MemberTrainingHistoryPage />);
+
+    const list = await screen.findByRole('list', { name: 'Training records' });
+    const [synced, imported] = within(list).getAllByRole('listitem');
+    expect(synced).toHaveTextContent('Continuing Education · 9/1/2026 · 1 hr · Target Solutions');
+    expect(imported).toHaveTextContent('Continuing Education · 9/1/2026 · 1 hr · Imported');
+  });
+
+  it('does not repeat a course code the imported name already carries', async () => {
+    mockGetRecords.mockResolvedValue([
+      record({ course_name: 'CAPCE HIPAA Awareness (3088740)', course_code: '3088740' }),
+    ]);
+    renderWithRouter(<MemberTrainingHistoryPage />);
+
+    expect(await screen.findByText('CAPCE HIPAA Awareness (3088740)')).toBeInTheDocument();
+    expect(screen.queryByText('3088740')).not.toBeInTheDocument();
+  });
+
+  it('names the expiry date with the verb that matches it', async () => {
+    mockGetRecords.mockResolvedValue([
+      record({ id: 'a', course_name: 'Old Cert', expiration_date: '2025-01-01' }),
+      record({ id: 'b', course_name: 'New Cert', expiration_date: '2028-06-30', hours_completed: 0.5 }),
+    ]);
+    renderWithRouter(<MemberTrainingHistoryPage />);
+
+    expect(await screen.findByText('Expired 1/1/2025')).toBeInTheDocument();
+    expect(screen.getByText('Expires 6/30/2028')).toBeInTheDocument();
+    expect(screen.getByText(/0\.5 hrs/)).toBeInTheDocument();
   });
 });

@@ -43,7 +43,7 @@
 | Navigation Layout, a department-wide setting                             | [08 — Admin & Reports](./08-admin-reports.md) (General Settings) and [00 — Getting Started](./00-getting-started.md) |
 | Treasurer approval permissions                                           | [11 — Finance](./11-finance.md)                                                                                      |
 | Property-return reports in the leadership-only Member Separations folder | [01 — Membership](./01-membership.md) and [07 — Documents & Forms](./07-documents-forms.md)                          |
-| Accept Public Requests and the event request form                        | [04 — Events & Meetings](./04-events-meetings.md) (Setting Up the Pipeline)                                          |
+| Accept Public Requests and the event request form                        | [04 — Events & Meetings](./04-events-meetings.md) (Setting Up Public Requests)                                       |
 | The setup wizard's prerequisites and eleven steps                        | [08 — Admin & Reports](./08-admin-reports.md) (The setup steps)                                                      |
 | Members Administration → Settings                                        | [08 — Admin & Reports](./08-admin-reports.md)                                                                        |
 | Pinning, grouping and exporting the items list; garment styles           | [05 — Inventory](./05-inventory.md)                                                                                  |

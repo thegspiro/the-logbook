@@ -3,7 +3,7 @@
 from datetime import date, datetime, time, timedelta, timezone, tzinfo
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event, EventExternalAttendee, EventRSVP, EventType
@@ -40,6 +40,27 @@ PUBLIC_EVENT_TYPES = [
     EventType.CEREMONY.value,
     EventType.SOCIAL.value,
 ]
+
+
+def outreach_event_clause(organization_id: str) -> ColumnElement[bool]:
+    """The events that count as community outreach, for every screen that counts them.
+
+    A public-facing event type, or any event a public request was scheduled
+    onto — a coordinator can link a request to an existing event of any type,
+    and that event is still the department answering the public. Cancelled
+    events are out. The dashboard pulse card and the Community Engagement tab
+    it links to both read this, so the two cannot count different events
+    (pitfall #29).
+    """
+    linked = select(EventRequest.event_id).where(
+        EventRequest.organization_id == organization_id,
+        EventRequest.event_id.is_not(None),
+    )
+    return and_(
+        Event.organization_id == organization_id,
+        Event.is_cancelled.is_(False),
+        or_(Event.event_type.in_(PUBLIC_EVENT_TYPES), Event.id.in_(linked)),
+    )
 
 
 def period_dates(period: str, today: date) -> tuple[date, date]:
@@ -213,11 +234,9 @@ class DashboardWidgetService:
     async def community(self, organization_id: str, period: str) -> dict:
         _, start, end = await self._period(organization_id, period)
         public_ids = select(Event.id).where(
-            Event.organization_id == organization_id,
-            Event.event_type.in_(PUBLIC_EVENT_TYPES),
+            outreach_event_clause(organization_id),
             Event.start_datetime >= start,
             Event.start_datetime < end,
-            Event.is_cancelled.is_(False),
         )
         events = await self.db.scalar(
             select(func.count()).select_from(public_ids.subquery())

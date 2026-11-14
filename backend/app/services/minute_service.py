@@ -9,6 +9,7 @@ from datetime import datetime, time, timezone
 from typing import List, Optional, Tuple
 from uuid import UUID
 
+from fastapi import HTTPException
 from loguru import logger
 from sqlalchemy import func
 from sqlalchemy import inspect as sa_inspect
@@ -21,6 +22,7 @@ from app.core.utils import generate_uuid, list_within_detail_limit
 from app.models.document import Document
 from app.models.election import Election
 from app.models.event import Event
+from app.models.meeting import Meeting, MeetingStatus
 from app.models.minute import (
     DEFAULT_ANNUAL_SECTIONS,
     DEFAULT_BUSINESS_SECTIONS,
@@ -1159,6 +1161,23 @@ class MinuteService:
             raise ValueError("Can only edit minutes in draft or rejected status")
 
         update_data = data.model_dump(exclude_unset=True)
+        expected_version = update_data.pop("expected_version", None)
+        # A locking read: under REPEATABLE READ a plain one answers from this
+        # transaction's first snapshot, which predates a save that committed
+        # while this request waited (CLAUDE.md pitfall #27).
+        current_version = await self.db.scalar(
+            select(MeetingMinutes.edit_version)
+            .where(MeetingMinutes.id == str(minutes.id))
+            .with_for_update()
+        )
+        if expected_version is not None and expected_version != current_version:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Someone else saved these minutes after you opened them. "
+                    "Reload to see their changes, then make yours again."
+                ),
+            )
 
         # Clear event_id if empty string
         if "event_id" in update_data and not update_data["event_id"]:
@@ -1225,6 +1244,7 @@ class MinuteService:
         apply_updates(
             minutes, update_data, skip={"id", "organization_id", "created_by"}
         )
+        minutes.edit_version = (current_version or 0) + 1
 
         # Reset to draft if was rejected
         if minutes.status == MinutesStatus.REJECTED.value:
@@ -1490,12 +1510,52 @@ class MinuteService:
         )
 
         await records.record_approval(minutes, approved_by, approved_at)
+        await self._approve_linked_meeting(
+            minutes, organization_id, approved_by, approved_at
+        )
         await self.db.commit()
 
         approved = await self.get_minutes(minutes_id, organization_id, refresh=True)
         if approved is not None:
             await self._notify_assignees(approved, approved.action_items or [])
         return approved
+
+    async def _approve_linked_meeting(
+        self,
+        minutes: MeetingMinutes,
+        organization_id: UUID | str,
+        approved_by: UUID | str,
+        approved_at: datetime,
+    ) -> None:
+        """Mark the meeting these minutes record as approved (W51-9).
+
+        Nothing else moves a meeting record's status, so every meeting read
+        "Draft" beside approved, published minutes, and stayed deletable after
+        its attendance became the settled record that membership tiers count.
+        Approving the minutes is the approval of that meeting: the same person,
+        the same moment, and the separation-of-duties check above has already
+        run. A meeting already approved keeps its original stamp.
+
+        Reopening the minutes for correction leaves the meeting approved on
+        purpose: the correction is to the record of the meeting, and lifting
+        the delete guard while it is under way would let the attendance the
+        approval settled be deleted with it.
+        """
+        if not minutes.meeting_id:
+            return
+        meeting = (
+            await self.db.execute(
+                select(Meeting)
+                .where(Meeting.id == str(minutes.meeting_id))
+                .where(Meeting.organization_id == str(organization_id))
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if meeting is None or meeting.status == MeetingStatus.APPROVED:
+            return
+        meeting.status = MeetingStatus.APPROVED
+        meeting.approved_by = str(approved_by)
+        meeting.approved_at = approved_at
 
     async def _notify_assignees(self, minutes: MeetingMinutes, items) -> None:
         """Email assignees about items in approved minutes; never raises.

@@ -493,13 +493,18 @@ the rest, newest first, as `{ items, total, offset, limit }` (default `limit`
 - Only drafts are editable or deletable — a published revision is what the
   department is on record as having published on a date. A proposer may
   modify only their own draft (`403` otherwise); a publisher may modify
-  anyone's.
+  anyone's. A revision edited by someone other than its proposer carries
+  `editedBy`, `editedByName` and `editedAt` (the latest such edit); they are
+  set from the caller, never from the request body.
 - Publishing archives the previously published revision, writes the body and
   its effective date into the organization's settings, and audits as
   `legal.document_published`. Reverting archives the published revision and
   removes the custom text so the built-in default renders again
-  (`legal.document_reverted_to_default`). Archived revisions are never
-  deleted. Proposing, editing and discarding audit as
+  (`legal.document_reverted_to_default`). A revert that changed what members
+  saw also adds a history entry with `revertsToDefault: true`, an empty
+  `body`, and `publishedByName` / `publishedAt` naming who restored the
+  built-in text and when. History is ordered by `publishedAt`, newest first.
+  Archived revisions are never deleted. Proposing, editing and discarding audit as
   `legal.revision_proposed`, `legal.revision_updated` and
   `legal.revision_discarded`.
 - `legal.propose` is granted to every position holding `settings.view` (or
@@ -540,8 +545,10 @@ fields are `null` — with no org context, no tenant's text is served.
 `settings["legal"]` is unvalidated JSON, so values are read defensively: a
 non-string value, a non-dict `legal` key, or blank/whitespace text all return
 `null` (the defaults render) rather than erroring on a page anonymous visitors
-reach. Returned text is plain text (rendered as paragraphs, never HTML) and
-capped at 100,000 characters; dates at 64.
+reach. Returned text is returned as stored — never HTML — and capped at
+100,000 characters; dates at 64. The page applies a small formatting subset to
+it (`## ` / `### ` headings, `- ` or `* ` bullets, `1. ` numbered items) and
+renders everything else, including any HTML, as the characters typed.
 
 ---
 
@@ -725,7 +732,8 @@ a tile whose only action is Access Denied. For `inventory` the destination gate
 | -------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------- |
 | `GET /dashboard/stats`                       | Authenticated                                                | Member, document and event counts, setup percentage                             |
 | `GET /dashboard/admin-summary`               | `settings.manage`                                            | Department-wide summary; module-owned figures are `null` when the module is off |
-| `GET /dashboard/action-items`                | Authenticated; each half gated as its owning module gates it | Unified meeting and minutes action items                                        |
+| `GET /dashboard/action-items`                | Authenticated; each half gated as its owning module gates it | Meeting and minutes action items as a list, at most 200 (`limit`, `offset`)     |
+| `GET /dashboard/action-items/page`           | As above                                                     | One page of the same items (`limit` ≤ 200, default 50; `offset`) with totals    |
 | `GET /dashboard/community-engagement`        | `events.manage`                                              | Public-outreach event and attendee counts                                       |
 | `GET/PUT/DELETE /dashboard/pulse-layout`     | Authenticated                                                | The caller's own dashboard layout                                               |
 | `PUT/DELETE /dashboard/pulse-layout/default` | `settings.manage` or `organization.update_settings`          | The department's default layout                                                 |
@@ -1064,8 +1072,8 @@ camelCase (`alias_generator=to_camel`).
 
 ```
 GET    /api/v1/finance/approval-chains/approver-coverage   # Every approval step, who can act on it, any problem, requests waiting (finance.configure_approvals)
-POST   /api/v1/finance/approvals/{step_record_id}/approve  # Approve the step a request is waiting on (finance.approve)
-POST   /api/v1/finance/approvals/{step_record_id}/deny     # Deny it (finance.approve)
+POST   /api/v1/finance/approvals/{step_record_id}/approve  # Approve the step a request is waiting on (finance.approve, or named on the step)
+POST   /api/v1/finance/approvals/{step_record_id}/deny     # Deny it (finance.approve, or named on the step)
 ```
 
 **Approve and deny are limited to the step's named approver.** Body
@@ -1075,8 +1083,11 @@ at most 2000 characters, blank treated as absent) and
 an expense report with lines submitted after the department's substantiation
 deadline).
 
-- An approvals administrator (`finance.configure_approvals`) who is not the
-  named approver may act by giving `overrideReason`; the override is recorded
+- Being named is the grant: a member the step names may act without
+  `finance.approve`, on that step only. A caller without `finance.approve`
+  whom the step does not name gets 403 before the step's state is read.
+- An approvals administrator (`finance.configure_approvals` and
+  `finance.approve`) who is not the named approver may act by giving `overrideReason`; the override is recorded
   in the audit log (`finance.approval_step_approved` /
   `finance.approval_step_denied`).
 - The requester can never approve their own request; a requester may deny
@@ -1092,14 +1103,31 @@ deadline).
 chains, so an administrator can find steps nobody can act on before requests
 pile up behind them:
 
-| Field                                            | Notes                                                                                            |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `chainId`, `chainName`, `chainIsActive`          | The chain the step belongs to                                                                    |
-| `stepId`, `stepName`, `stepOrder`                | The step                                                                                         |
-| `approverType`, `approverValue`, `assigneeLabel` | Who the step names                                                                               |
-| `eligibleActiveCount`                            | Active members who match the step and may approve (`finance.approve`, except on an email step)   |
-| `problem`                                        | `null`, `no_value`, `not_found`, `no_active_members`, `no_approve_permission` or `invalid_email` |
-| `pendingRequestCount`                            | Requests waiting on this step now                                                                |
+| Field                                            | Notes                                                                   |
+| ------------------------------------------------ | ----------------------------------------------------------------------- |
+| `chainId`, `chainName`, `chainIsActive`          | The chain the step belongs to                                           |
+| `stepId`, `stepName`, `stepOrder`                | The step                                                                |
+| `approverType`, `approverValue`, `assigneeLabel` | Who the step names                                                      |
+| `eligibleActiveCount`                            | Active members who match the step (being named is enough to act on it)  |
+| `problem`                                        | `null`, `no_value`, `not_found`, `no_active_members` or `invalid_email` |
+| `pendingRequestCount`                            | Requests waiting on this step now                                       |
+
+---
+
+## Finance — Budget Amendments Awaiting Confirmation
+
+```
+GET    /api/v1/finance/budget-amendments/pending                              # Every pending amendment and reversal across the department's lines, oldest first (finance.budget_review or finance.manage)
+POST   /api/v1/finance/budgets/{budget_id}/amendments/{amendment_id}/reverse  # Reverse a confirmed amendment; optional `amount` reverses part of it (finance.manage)
+```
+
+Each pending row is an amendment row plus `categoryName`, `stationName`,
+`fiscalYearId`, `fiscalYearName`, `yearLocked`, and on a reversal
+`reversedAmendmentAmount` and `reversedAmendmentApprovedOn`. Amendment rows
+carry `reversesAmendmentRef` (the amendment a reversal was entered against,
+kept after a rejection) and, on a reversed amendment, `reversedAmount`. The
+reverse body's `amount` is optional: left out, the whole amendment is
+reversed; more than the amendment is 400. See `docs/FINANCE_MODULE.md`.
 
 ---
 
@@ -1112,10 +1140,17 @@ project the newest payment. Write payments, not totals.
 
 ```
 PUT    /api/v1/finance/dues/{dues_id}            # Record a payment (finance.manage)
-GET    /api/v1/finance/dues/{dues_id}/payments   # Payment ledger, oldest first (finance.view or finance.manage)
+GET    /api/v1/finance/dues/{dues_id}/payments   # Payment ledger, oldest first, each with recordedByName (finance.view or finance.manage)
 POST   /api/v1/finance/dues/{dues_id}/waive      # Waive dues; reason required (finance.manage)
 POST   /api/v1/finance/dues/{dues_id}/unwaive    # Reverse a waiver; reason required (finance.manage)
+GET    /api/v1/finance/my-dues                   # The caller's own dues, balances, late fees and payments (any member)
+GET    /api/v1/finance/dues-schedules/membership-type-options  # Tiers a schedule may target (finance.manage)
 ```
+
+_(2026-11-06)_ A schedule's `gracePeriodDays`, `lateFeeAmount`, `fiscalYearId`
+and `appliesToMembershipTypes` apply once its `termsEffectiveAt` is set (on
+create, or the first save of a schedule from before then); a daily task adds
+the late fee to `amountDue` once and records it in `lateFeeApplied`.
 
 | Route         | Body                                                                                           |
 | ------------- | ---------------------------------------------------------------------------------------------- |

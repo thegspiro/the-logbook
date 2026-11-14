@@ -12,6 +12,22 @@ export interface FolderRoleOption {
   name: string;
 }
 
+/**
+ * A file listed by a published minutes document (owner decision 2026-11-01).
+ * The backend serves it under the document's own folder rules.
+ */
+export interface PublishedMinutesAttachment {
+  id: string;
+  title: string;
+  category: string;
+  description?: string | null;
+  original_name: string;
+  mime_type: string;
+  file_size: number;
+  sha256: string;
+  uploaded_at: string;
+}
+
 export const documentsService = {
   async getFolders(params?: {
     parent_id?: string;
@@ -112,6 +128,18 @@ export const documentsService = {
 
   async downloadDocument(documentId: string): Promise<Blob> {
     const response = await api.get<Blob>(`/documents/${documentId}/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  async getPublishedMinutesAttachments(documentId: string): Promise<PublishedMinutesAttachment[]> {
+    const response = await api.get<PublishedMinutesAttachment[]>(`/documents/${documentId}/minutes-attachments`);
+    return response.data;
+  },
+
+  async downloadPublishedMinutesAttachment(documentId: string, attachmentId: string): Promise<Blob> {
+    const response = await api.get<Blob>(`/documents/${documentId}/minutes-attachments/${attachmentId}/file`, {
       responseType: 'blob',
     });
     return response.data;

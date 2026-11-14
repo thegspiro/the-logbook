@@ -186,13 +186,17 @@ single shift (`POST /scheduling/shifts/{id}/late-signup`).
    membership type and rank, but not account status).
 3. An excluded membership type gets nothing.
 4. Otherwise the union of: the rank's `eligible_positions`, positions the
-   member is qualified for as of the shift date, positions unlocked by
-   completed training, and org-wide open positions.
+   member is qualified for as of the shift date (`QUALIFICATIONS` in
+   `app/services/qualification_service.py`; `officer_in_charge` clears the
+   three `OFFICER_SEATS`), positions unlocked by completed training, and
+   org-wide open positions. A held RBAC position confers nothing.
 5. With a shift given, the result is intersected with the seats that shift
    actually has.
 
-The ranks × positions matrix is edited under **Settings → Eligibility**;
-**Who Can Fill What** (`/scheduling/admin/positions`) shows the resulting roster.
+The ranks × positions matrix is edited under **Members Administration →
+Settings → Operational Ranks**; **Who Can Fill What**
+(`/scheduling/admin/positions`) shows the resulting roster with the source of
+each clearance (rank, qualification, training or open).
 
 Driver/operator seats are also checked against the apparatus's required **EVOC
 level** (organization-configurable levels, `evoc_levels`; an apparatus names its
@@ -262,7 +266,9 @@ Rules:
 An **Open Swap** is offered to every member cleared for the seat: they see it on
 the Requests tab under **Open shifts you can pick up**, and the first to pick it
 up takes the seat (`POST /scheduling/swap-requests/{id}/pick-up`). Officers do
-not approve open swaps, but can deny one.
+not approve open swaps, but can deny one. When it is posted, each of those
+members gets a bell entry, **Open shift you can pick up** — in-app only, no
+email, text or push — once per seat, however many times the seat is posted.
 
 ### Trades a member can complete
 
@@ -554,6 +560,15 @@ with a type breakdown and average response time.
 
 ## Shifts With Other Departments
 
+_Since 2026-11-04:_ the setting `external_shifts_require_approval` holds an
+outside shift as pending until an officer approves it, with an officer notice.
+`GET /scheduling/members/{user_id}/hours-history` returns the my-hours shape for
+one member (403 without `scheduling.report` unless it is the caller) and feeds
+the profile's Shift & Call History; it reports on-call hours and outside calls as
+parts of the totals, not additions. An open swap a member could pick up posts one
+bell entry per seat and recipient (`open_swap_notices`), a deliberate departure
+from email-first.
+
 A member who rides a neighbouring jurisdiction's apparatus gets credit for it
 from **My Shifts → Hours → Shifts with other departments**, with **Log outside
 shift**:
@@ -565,10 +580,14 @@ shift**:
   **Settings → Outside Apparatus** (`/scheduling/admin/settings/outside-apparatus`).
   A unit with shifts logged on it cannot be deleted, only turned off; each entry
   keeps the names it was logged under.
-- **Counts as soon as it is saved.** An officer rejects one with a reason ("Not
-  counted", locked to the member) and can restore it, from **Scheduling Reports
-  → Member Hours**, which also has an **Outside Hours** column and an **Outside
-  apparatus staffed** per-unit summary.
+- **Counts as soon as it is saved**, unless the department has switched on
+  **Settings → Require approval for outside-department shifts**: then it is
+  **Awaiting approval** and counts toward nothing until a scheduling officer
+  approves it (officers are emailed and get a bell entry; the **Awaiting
+  approval** filter lists every one). An officer rejects one with a reason
+  ("Not counted", locked to the member) and can restore it, from **Scheduling
+  Reports → Member Hours**, which also has an **Outside Hours** column and an
+  **Outside apparatus staffed** per-unit summary.
 - Reported **beside** worked hours (`external_*`), but **added into** each
   member's totals on the Shift Compliance report.
 

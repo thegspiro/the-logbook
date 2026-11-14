@@ -501,10 +501,20 @@ class CohortAdHocClassCreate(BaseModel):
         return self
 
 
+# Department rule: a shift longer than two weeks is a rescheduled course, not a
+# weather or illness delay, and is done by editing the classes.
+MAX_COHORT_SHIFT_DAYS = 14
+
+
 class CohortShiftRequest(BaseModel):
     """Shift upcoming classes by N days (weather, instructor illness, …)"""
 
-    days: int = Field(..., description="Positive to delay, negative to pull forward")
+    days: int = Field(
+        ...,
+        ge=-MAX_COHORT_SHIFT_DAYS,
+        le=MAX_COHORT_SHIFT_DAYS,
+        description="Positive to delay, negative to pull forward",
+    )
     from_sequence: Optional[int] = Field(
         None,
         ge=1,
@@ -520,8 +530,6 @@ class CohortShiftRequest(BaseModel):
     def _check_days(cls, v: int) -> int:
         if v == 0:
             raise ValueError("days must not be zero")
-        if abs(v) > 365:
-            raise ValueError("days must be within one year")
         return v
 
 

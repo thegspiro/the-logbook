@@ -9,6 +9,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import type { PlatformAnalytics } from '../types/platformAnalytics';
 
 const getAnalytics = vi.fn<() => Promise<PlatformAnalytics>>();
@@ -55,7 +56,11 @@ describe('PlatformAnalyticsPage charts (W78)', () => {
   });
 
   it('names each chart by what it counts, with the busy days read out', async () => {
-    render(<PlatformAnalyticsPage />);
+    render(
+      <MemoryRouter>
+        <PlatformAnalyticsPage />
+      </MemoryRouter>
+    );
 
     expect(await screen.findByText('Latest Sign-In by Day (30 Days)')).toBeInTheDocument();
     expect(
@@ -67,7 +72,11 @@ describe('PlatformAnalyticsPage charts (W78)', () => {
   it('prints the count over a bar instead of leaving it to a tooltip', async () => {
     // jsdom does no layout, so the 0px bars themselves were measured in the
     // browser (findings W78-3); this pins the printed count.
-    render(<PlatformAnalyticsPage />);
+    render(
+      <MemoryRouter>
+        <PlatformAnalyticsPage />
+      </MemoryRouter>
+    );
 
     const chart = await screen.findByRole('img', { name: /^Errors per day/ });
     expect(chart).toHaveTextContent('4');

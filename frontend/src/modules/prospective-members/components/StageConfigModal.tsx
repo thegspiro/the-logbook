@@ -27,6 +27,7 @@ import {
   MessageSquare,
   Users,
   Stethoscope,
+  ClipboardPen,
 } from 'lucide-react';
 import { StageType as StageTypeConst, VotingMethod } from '../../../constants/enums';
 import type {
@@ -47,6 +48,7 @@ import type {
   InterviewRequirementConfig,
   MultiApprovalConfig,
   MedicalScreeningStageConfig,
+  FollowUpFormStageConfig,
   StageConfig,
 } from '../types';
 import { DEFAULT_EMAIL_SECTION_ORDER, DEFAULT_ELECTION_PACKAGE_FIELDS, defaultStageConfig } from '../types';
@@ -65,6 +67,8 @@ import ElectionVoteConfig from './stage-config/ElectionVoteConfig';
 import MeetingConfig from './stage-config/MeetingConfig';
 import AutomatedEmailConfig from './stage-config/AutomatedEmailConfig';
 import ReferenceCheckStageConfig from './stage-config/ReferenceCheckConfig';
+import FollowUpFormConfig from './stage-config/FollowUpFormConfig';
+import InterviewerPositionsConfig from './stage-config/InterviewerPositionsConfig';
 
 interface StageConfigModalProps {
   isOpen: boolean;
@@ -145,6 +149,12 @@ const STAGE_TYPE_OPTIONS: { value: StageType; label: string; icon: React.Element
     label: 'Medical Screening',
     icon: Stethoscope,
     description: 'Require physical exam or medical clearance before advancing.',
+  },
+  {
+    value: 'follow_up_form',
+    label: 'Follow-up Form',
+    icon: ClipboardPen,
+    description: 'Email the applicant a form, pre-filled with what is on file, to confirm and add to.',
   },
 ];
 
@@ -654,6 +664,11 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
       } else if (new Set(roles).size !== roles.length) {
         newErrors.required_approvers = 'Approver roles must be unique';
       }
+    }
+
+    if (stageType === StageTypeConst.FOLLOW_UP_FORM) {
+      const c = config as FollowUpFormStageConfig;
+      if (!c.follow_up_form_id) newErrors.follow_up_form_id = 'Select a form';
     }
 
     if (stageType === StageTypeConst.MEDICAL_SCREENING) {
@@ -1278,9 +1293,15 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
                       If set, at least one interview must have this recommendation (or better) to advance.
                     </p>
                   </div>
+                  <InterviewerPositionsConfig
+                    value={interviewReqConfig.required_interviewer_positions ?? []}
+                    onChange={(positions) =>
+                      setConfig({ ...interviewReqConfig, required_interviewer_positions: positions })
+                    }
+                  />
                   <p className="text-theme-text-muted text-xs">
                     Interviews are recorded on the applicant&apos;s Interview page. The applicant cannot advance past
-                    this stage until the required number is recorded.
+                    this stage until the required number is recorded, and an interview from each required position.
                   </p>
                   <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                     <input
@@ -1380,6 +1401,19 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
                     Require notes with each approval
                   </label>
                 </div>
+              )}
+
+              {stageType === StageTypeConst.FOLLOW_UP_FORM && (
+                <FollowUpFormConfig
+                  config={config}
+                  setConfig={setConfig}
+                  errors={errors}
+                  setErrors={setErrors}
+                  availableForms={availableForms}
+                  formsLoading={formsLoading}
+                  formsError={formsError}
+                  retryLoadForms={retryLoadForms}
+                />
               )}
 
               {/* Medical Screening Config */}

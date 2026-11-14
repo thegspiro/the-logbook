@@ -49,9 +49,11 @@ class PermissionCategory(str, Enum):
     NOTIFICATIONS = "notifications"
     SUGGESTIONS = "suggestions"
     REPORTS = "reports"
+    EVALUATIONS = "evaluations"
     PROSPECTIVE_MEMBERS = "prospective_members"
     ADMIN_HOURS = "admin_hours"
     FINANCE = "finance"
+    HISTORY = "history"
 
 
 class Permission:
@@ -125,6 +127,14 @@ PROSPECTIVE_MEMBERS_VIEW = Permission(
 PROSPECTIVE_MEMBERS_MANAGE = Permission(
     "prospective_members.manage",
     "Manage prospective members and pipeline",
+    PermissionCategory.PROSPECTIVE_MEMBERS,
+)
+# Without it, a holder of view or manage sees only the applicants they are
+# assigned to as case manager or interviewer (prospect_assignments). Unassigned
+# applicants, pipeline statistics and reports are visible to this alone.
+PROSPECTIVE_MEMBERS_VIEW_ALL = Permission(
+    "prospective_members.view_all",
+    "View every prospective member, assigned or not",
     PermissionCategory.PROSPECTIVE_MEMBERS,
 )
 
@@ -284,6 +294,16 @@ MEDICAL_SCREENING_VIEW = Permission(
 MEDICAL_SCREENING_MANAGE = Permission(
     "medical_screening.manage",
     "Manage member medical screenings",
+    PermissionCategory.COMPLIANCE,
+)
+# MS-14 (owner decision 2026-11-01): ``.view`` shows compliance status — who is
+# due, dates, requirement names, results as passed/failed/waived — and this
+# reads the clinical narrative a record carries (provider, result summary,
+# structured results, notes). ``.manage`` reads it too, because the edit form
+# that writes those fields has to show them.
+MEDICAL_SCREENING_VIEW_DETAILS = Permission(
+    "medical_screening.view_details",
+    "View the clinical detail of medical screenings (provider, results, notes)",
     PermissionCategory.COMPLIANCE,
 )
 
@@ -632,6 +652,17 @@ INTEGRATIONS_MCP_KEYS = Permission(
     "Issue and revoke Claude MCP service keys",
     PermissionCategory.INTEGRATIONS,
 )
+# Bringing a previous system's history in writes years of shifts, attendance
+# and calls across every member in one pass, and creates archived member
+# records for people the department no longer has. Granted to no default role:
+# only the wildcard-holding ``it_manager`` System Owner has it, because the
+# owner decided the IT administrator runs an import (2026-11-04). A chief who
+# wants to delegate it grants it to a position explicitly.
+INTEGRATIONS_HISTORICAL_IMPORT = Permission(
+    "integrations.historical_import",
+    "Import historical hours from a previous system",
+    PermissionCategory.INTEGRATIONS,
+)
 
 # Notifications
 NOTIFICATIONS_VIEW = Permission(
@@ -663,6 +694,44 @@ REPORTS_MANAGE = Permission(
     "reports.manage",
     "Create, edit, and delete saved reports",
     PermissionCategory.REPORTS,
+)
+
+# Member performance evaluations
+#
+# Only the grants something reads are registered (CLAUDE.md pitfall #19).
+#
+# There is no ``view_own``. A member reaches their own evaluations on
+# authentication alone, as with their own notifications: the member signs or
+# refuses the acknowledgement and may file a written response, so a grant a
+# department could withdraw would let it withhold a record the member is
+# entitled to see.
+EVALUATIONS_CONFIGURE = Permission(
+    "evaluations.configure",
+    "Build evaluation templates and their workflows",
+    PermissionCategory.EVALUATIONS,
+)
+EVALUATIONS_MANAGE = Permission(
+    "evaluations.manage",
+    "Open and close evaluation review periods",
+    PermissionCategory.EVALUATIONS,
+)
+EVALUATIONS_CONDUCT = Permission(
+    "evaluations.conduct",
+    "Evaluate members as their assigned evaluator",
+    PermissionCategory.EVALUATIONS,
+)
+EVALUATIONS_VIEW_ALL = Permission(
+    "evaluations.view_all",
+    "View every member's evaluations and record that calibration is complete",
+    PermissionCategory.EVALUATIONS,
+)
+# Removing a personnel record. Kept apart from ``manage`` so running the
+# review process does not carry the power to erase its results; a deletion
+# always leaves a record with its reason on the member's history.
+EVALUATIONS_DELETE = Permission(
+    "evaluations.delete",
+    "Delete an evaluation, with a reason kept on the member's history",
+    PermissionCategory.EVALUATIONS,
 )
 
 # Members (additional)
@@ -755,6 +824,30 @@ FINANCE_REQUEST = Permission(
 )
 
 # ============================================
+# History Permissions
+# ============================================
+
+# Published history needs no permission at all: any signed-in member of a
+# department with the module on reads what is published to members. These
+# gate the archive behind publication — the drafts, the research, and the act
+# of putting something in front of the department or the public.
+HISTORY_VIEW = Permission(
+    "history.view",
+    "View unpublished history records, research and change history",
+    PermissionCategory.HISTORY,
+)
+HISTORY_MANAGE = Permission(
+    "history.manage",
+    "Create and edit history records, the title list and the clearance list",
+    PermissionCategory.HISTORY,
+)
+HISTORY_PUBLISH = Permission(
+    "history.publish",
+    "Publish history records to the department and the public",
+    PermissionCategory.HISTORY,
+)
+
+# ============================================
 # All Permissions Registry
 # ============================================
 
@@ -802,6 +895,7 @@ ALL_PERMISSIONS: list[Permission] = [
     COMPLIANCE_VIEW,
     COMPLIANCE_MANAGE,
     MEDICAL_SCREENING_VIEW,
+    MEDICAL_SCREENING_VIEW_DETAILS,
     MEDICAL_SCREENING_MANAGE,
     SCHEDULING_VIEW,
     SCHEDULING_MANAGE,
@@ -878,6 +972,7 @@ ALL_PERMISSIONS: list[Permission] = [
     # Integrations
     INTEGRATIONS_MANAGE,
     INTEGRATIONS_MCP_KEYS,
+    INTEGRATIONS_HISTORICAL_IMPORT,
     # Notifications
     NOTIFICATIONS_VIEW,
     NOTIFICATIONS_MANAGE,
@@ -886,6 +981,12 @@ ALL_PERMISSIONS: list[Permission] = [
     # Reports
     REPORTS_VIEW,
     REPORTS_MANAGE,
+    # Member performance evaluations
+    EVALUATIONS_CONFIGURE,
+    EVALUATIONS_MANAGE,
+    EVALUATIONS_CONDUCT,
+    EVALUATIONS_VIEW_ALL,
+    EVALUATIONS_DELETE,
     # Members (additional)
     MEMBERS_CREATE,
     # Training (additional)
@@ -902,9 +1003,14 @@ ALL_PERMISSIONS: list[Permission] = [
     FINANCE_CONFIGURE_APPROVALS,
     FINANCE_REQUEST,
     FINANCE_BUDGET_REVIEW,
+    # History
+    HISTORY_VIEW,
+    HISTORY_MANAGE,
+    HISTORY_PUBLISH,
     # Prospective Members
     PROSPECTIVE_MEMBERS_VIEW,
     PROSPECTIVE_MEMBERS_MANAGE,
+    PROSPECTIVE_MEMBERS_VIEW_ALL,
 ]
 
 
@@ -972,6 +1078,11 @@ _MODULE_CHECKBOX_GRANTS: dict[str, dict[str, ModuleCheckboxTier]] = {
         ),
     },
     "mobile": {"view": _NO_TIER, "manage": _NO_TIER},
+    # Public Information is offered during setup (owner decision 2026-11-01,
+    # W01-24) but has no permissions of its own: its admin screens require
+    # settings.manage and its pages are public. A row would write grants
+    # nothing reads, so it has none.
+    "public_info": {"view": _NO_TIER, "manage": _NO_TIER},
     "integrations": {
         "view": _NO_TIER,
         "manage": ModuleCheckboxTier(("integrations.manage",), "integrations.manage"),
@@ -1393,6 +1504,7 @@ _LEADERSHIP_VIEW_PERMISSIONS = [
     NOTIFICATIONS_VIEW.name,
     REPORTS_VIEW.name,
     PROSPECTIVE_MEMBERS_VIEW.name,
+    PROSPECTIVE_MEMBERS_VIEW_ALL.name,
 ]
 
 # What a rank-and-file member of the department can see, whatever their
@@ -1531,6 +1643,13 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             INTEGRATIONS_MANAGE.name,
             NOTIFICATIONS_MANAGE.name,
             SUGGESTIONS_MANAGE.name,
+            # Evaluations are personnel records; setting up the forms and
+            # periods starts with the Chief, who delegates by position.
+            EVALUATIONS_CONFIGURE.name,
+            EVALUATIONS_MANAGE.name,
+            EVALUATIONS_CONDUCT.name,
+            EVALUATIONS_VIEW_ALL.name,
+            EVALUATIONS_DELETE.name,
             ADMIN_ACCESS.name,
             APPARATUS_MANAGE_NFC_TAGS.name,
             LOCATIONS_MANAGE_NFC_TAGS.name,
@@ -1960,6 +2079,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_MANAGE_ID_CARDS.name,
             MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_VIEW_ALL.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
             POSITIONS_VIEW.name,
@@ -2063,6 +2183,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_MANAGE_ID_CARDS.name,
             MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_VIEW_ALL.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
@@ -2161,6 +2282,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_MANAGE_ID_CARDS.name,
             MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_VIEW_ALL.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
@@ -2357,6 +2479,9 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             EVENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             USERS_VIEW_CONSENTS.name,
+            HISTORY_VIEW.name,
+            HISTORY_MANAGE.name,
+            HISTORY_PUBLISH.name,
         ],
     },
     "apparatus_officer": {
@@ -2420,6 +2545,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_MANAGE_ID_CARDS.name,
             MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_VIEW_ALL.name,
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
             POSITIONS_VIEW.name,
@@ -2455,6 +2581,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             USERS_VIEW.name,
             MEMBERS_VIEW.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
+            PROSPECTIVE_MEMBERS_VIEW_ALL.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
             STOREFRONT_VIEW.name,
@@ -2708,6 +2835,54 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             LOCATIONS_MANAGE_NFC_TAGS.name,
         ],
     },
+    # Committees and teams. A committee is a position so membership of it is
+    # recorded, shown on the profile and the roster, and assignable from the
+    # same Manage Positions dialog as an office -- but it is not an office: it
+    # grants nothing beyond the baseline every member holds. Its permission
+    # list is a *copy* of the `member` position's, settled below the dict
+    # (the baseline is defined last), so a member whose only position is a
+    # committee still reaches the store and the rest of the member screens
+    # (`tests/test_corporate_storefront_grants.py`), and
+    # `tests/test_baseline_member_grants.py` holds it to the baseline. The
+    # existing officer positions these sit beside -- `public_outreach`,
+    # `historian`, `fundraising_chair`, `membership_coordinator` -- are the
+    # chairs, with the permissions the chair's work needs.
+    "community_outreach_team": {
+        "name": "Community Education / Outreach Team",
+        "slug": "community_outreach_team",
+        "description": "Members who deliver community education and public outreach events",
+        "is_system": True,
+        "priority": 10,
+        "kind": "committee",
+        "permissions": [],
+    },
+    "history_committee": {
+        "name": "History Committee",
+        "slug": "history_committee",
+        "description": "Members who keep the department's history, archives and memorials",
+        "is_system": True,
+        "priority": 10,
+        "kind": "committee",
+        "permissions": [],
+    },
+    "fundraising_committee": {
+        "name": "Fundraising Committee",
+        "slug": "fundraising_committee",
+        "description": "Members who plan and run the department's fundraising",
+        "is_system": True,
+        "priority": 10,
+        "kind": "committee",
+        "permissions": [],
+    },
+    "membership_committee": {
+        "name": "Membership Committee",
+        "slug": "membership_committee",
+        "description": "Members who review applications and interview prospective members",
+        "is_system": True,
+        "priority": 10,
+        "kind": "committee",
+        "permissions": [],
+    },
     "member": {
         "name": "Member",
         "slug": "member",
@@ -2778,6 +2953,67 @@ DEFAULT_POSITIONS: dict[str, dict] = {
 #: field, never by assigning a position named after it. The positions screen
 #: still lists them, because that is where their stored grants are edited.
 RANK_MIRRORING_POSITION_SLUGS: frozenset[str] = frozenset(OPERATIONAL_RANKS)
+
+#: What a position is. An **office** is a permission-bearing job (Treasurer,
+#: Quartermaster, Training Officer); a **committee** is a group a member
+#: serves on (History Committee), recorded like an office but granting
+#: nothing; a **system** position is the platform's own -- the baseline
+#: `member`, the `it_manager` owner, and the mirrors of the operational
+#: ranks -- and is never offered as either on the member screens.
+POSITION_KIND_OFFICE = "office"
+POSITION_KIND_COMMITTEE = "committee"
+POSITION_KIND_SYSTEM = "system"
+POSITION_KINDS: tuple[str, ...] = (
+    POSITION_KIND_OFFICE,
+    POSITION_KIND_COMMITTEE,
+    POSITION_KIND_SYSTEM,
+)
+
+#: The seeded slugs that are the platform's own rather than a department's
+#: office: the rank mirrors, the baseline member position and the owner.
+SYSTEM_POSITION_SLUGS: frozenset[str] = RANK_MIRRORING_POSITION_SLUGS | frozenset(
+    {"member", "it_manager"}
+)
+
+#: The seeded committee slugs, by name so a migration and a test can list them.
+COMMITTEE_POSITION_SLUGS: frozenset[str] = frozenset(
+    slug
+    for slug, definition in DEFAULT_POSITIONS.items()
+    if definition.get("kind") == POSITION_KIND_COMMITTEE
+)
+
+
+def position_kind_for(slug: str | None) -> str:
+    """The kind a seeded slug carries; an unknown slug is an office."""
+    if not slug:
+        return POSITION_KIND_OFFICE
+    definition = DEFAULT_POSITIONS.get(slug)
+    if definition and definition.get("kind") in POSITION_KINDS:
+        return str(definition["kind"])
+    if slug in SYSTEM_POSITION_SLUGS:
+        return POSITION_KIND_SYSTEM
+    return POSITION_KIND_OFFICE
+
+
+# Every seeded definition states its kind. The committees state theirs
+# inline; the rest are settled here so a new office cannot be added without
+# being one, and the system set stays one list.
+for _slug, _definition in DEFAULT_POSITIONS.items():
+    _definition.setdefault(
+        "kind",
+        (
+            POSITION_KIND_SYSTEM
+            if _slug in SYSTEM_POSITION_SLUGS
+            else POSITION_KIND_OFFICE
+        ),
+    )
+
+# A committee carries the baseline, as a copy (never the `member` list object:
+# pitfall #23 is what sharing it would reintroduce).
+for _slug in COMMITTEE_POSITION_SLUGS:
+    DEFAULT_POSITIONS[_slug]["permissions"] = list(
+        DEFAULT_POSITIONS["member"]["permissions"]
+    )
 
 
 def position_mirrors_rank(slug: str | None, is_system: bool | None) -> bool:

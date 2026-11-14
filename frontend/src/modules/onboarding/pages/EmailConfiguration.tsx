@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { Mail, Check, AlertCircle, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -19,6 +19,7 @@ import { MicrosoftAuthMethod } from '@/constants/enums';
 import { GMAIL_SENDING_NOTES } from '@/constants/gmailSendingGuidance';
 import { SMTP_PROVIDER_PRESETS, findSmtpProviderPreset } from '@/constants/smtpProviders';
 import { nextStepPath, stepPath } from '../config/steps';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 
 interface EmailConfig {
   // Cloudflare Email Service
@@ -95,6 +96,10 @@ const EmailConfiguration: React.FC = () => {
   const departmentName = useOnboardingStore((state) => state.departmentName);
   const logoPreview = useOnboardingStore((state) => state.logoData);
   const emailPlatform = useOnboardingStore((state) => state.emailPlatform);
+  const setEmailPlatform = useOnboardingStore((state) => state.setEmailPlatform);
+  // Set while Skip for Now records "set up later": the guard below sends a
+  // stored 'other' back to the start, and this page is already leaving.
+  const skipping = useRef(false);
   const lastSaved = useOnboardingStore((state) => state.lastSaved);
 
   // Local state for email configuration
@@ -105,6 +110,12 @@ const EmailConfiguration: React.FC = () => {
   });
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionTested, setConnectionTested] = useState(false);
+  // Why the last connection test failed, kept on the page until the settings
+  // change. Owner decision 2026-11-01 (W01-27): warn when the test fails, but
+  // let the settings be saved — the mail server may simply not be reachable
+  // from here yet. The result used to live only in a toast that vanished.
+  const [testFailure, setTestFailure] = useState<string | null>(null);
+  const { confirm } = useConfirm();
   // The provider whose guidance is on screen. A hint about the choice just
   // made, not configuration — only the host, port and encryption it filled in
   // are saved, and those stay editable.
@@ -122,6 +133,7 @@ const EmailConfiguration: React.FC = () => {
 
   useEffect(() => {
     // Redirect if missing data or they chose to skip
+    if (skipping.current) return;
     if (!departmentName || !emailPlatform || emailPlatform === 'other') {
       void navigate('/onboarding/start');
       return;
@@ -139,6 +151,7 @@ const EmailConfiguration: React.FC = () => {
   const handleInputChange = (field: keyof EmailConfig, value: string) => {
     setConfig((prev) => ({ ...prev, [field]: value }));
     setConnectionTested(false); // Reset test status when config changes
+    setTestFailure(null);
   };
 
   // Onboarding is always a new setup, so Microsoft starts on the app
@@ -195,6 +208,7 @@ const EmailConfiguration: React.FC = () => {
 
     setTestingConnection(true);
     setConnectionTested(false);
+    setTestFailure(null);
 
     try {
       // Test email connection with real API call
@@ -206,6 +220,7 @@ const EmailConfiguration: React.FC = () => {
       setTestingConnection(false);
 
       if (response.error) {
+        setTestFailure(response.error);
         toast.error(`Connection test failed: ${response.error}`);
         return;
       }
@@ -214,11 +229,14 @@ const EmailConfiguration: React.FC = () => {
         setConnectionTested(true);
         toast.success(response.data.message || 'Connection test passed');
       } else {
-        toast.error(response.data?.message || 'Connection test failed');
+        const message = response.data?.message || 'Connection test failed';
+        setTestFailure(message);
+        toast.error(message);
       }
     } catch (err: unknown) {
       setTestingConnection(false);
       const errorMessage = getErrorMessage(err, 'Could not test the email connection');
+      setTestFailure(errorMessage);
       toast.error(errorMessage);
     }
   };
@@ -266,6 +284,24 @@ const EmailConfiguration: React.FC = () => {
       }
     }
 
+    if (
+      testFailure &&
+      !(await confirm({
+        title: 'Save settings that failed the test?',
+        message: (
+          <>
+            These settings failed their connection test: {testFailure} You can save them and fix them later in Settings
+            → Email, but no email will be sent until the connection works.
+          </>
+        ),
+        confirmLabel: 'Save anyway',
+        cancelLabel: 'Fix the settings',
+        variant: 'warning',
+      }))
+    ) {
+      return;
+    }
+
     const { data, error: _apiError } = await executeSave(
       async () => {
         // SECURITY CRITICAL: Send email config to server (NOT sessionStorage!)
@@ -302,7 +338,21 @@ const EmailConfiguration: React.FC = () => {
     }
   };
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
+    // Record "set up later", as the platform page's own Skip card does. This
+    // used to navigate only, leaving the provider just chosen as the wizard's
+    // answer, so the send-off reported "SMTP" for email nobody had set up.
+    const { data } = await executeSave(
+      async () => {
+        const response = await apiClient.saveEmailConfig({ platform: 'other', config: {} });
+        if (response.error) throw new Error(response.error);
+        return response;
+      },
+      { step: 'Email Configuration', action: 'Skip email configuration' }
+    );
+    if (!data) return;
+    skipping.current = true;
+    setEmailPlatform('other');
     toast.success('Email skipped. You can set it up later in Settings.');
     void navigate(nextStepPath('email'));
   };
@@ -329,10 +379,14 @@ const EmailConfiguration: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+              <label
+                htmlFor="email-google-app-password"
+                className="text-theme-text-secondary mb-2 block text-sm font-semibold"
+              >
                 Google App Password <span className="text-theme-accent-red">*</span>
               </label>
               <input
+                id="email-google-app-password"
                 type="password"
                 autoComplete="off"
                 value={config.googleAppPassword || ''}
@@ -389,8 +443,14 @@ const EmailConfiguration: React.FC = () => {
             </div>
 
             <div className="mb-6">
-              <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">Authentication</label>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <p id="email-microsoft-auth-label" className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                Authentication
+              </p>
+              <div
+                role="group"
+                aria-labelledby="email-microsoft-auth-label"
+                className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+              >
                 {(
                   [
                     {
@@ -427,10 +487,14 @@ const EmailConfiguration: React.FC = () => {
               <>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                    <label
+                      htmlFor="email-microsoft-tenant-id"
+                      className="text-theme-text-secondary mb-2 block text-sm font-semibold"
+                    >
                       Directory (tenant) ID <span className="text-theme-accent-red">*</span>
                     </label>
                     <input
+                      id="email-microsoft-tenant-id"
                       type="text"
                       autoComplete="off"
                       value={config.microsoftTenantId || ''}
@@ -440,10 +504,14 @@ const EmailConfiguration: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                    <label
+                      htmlFor="email-microsoft-client-id"
+                      className="text-theme-text-secondary mb-2 block text-sm font-semibold"
+                    >
                       Application (client) ID <span className="text-theme-accent-red">*</span>
                     </label>
                     <input
+                      id="email-microsoft-client-id"
                       type="text"
                       autoComplete="off"
                       value={config.microsoftClientId || ''}
@@ -455,10 +523,14 @@ const EmailConfiguration: React.FC = () => {
                 </div>
 
                 <div className="mt-4">
-                  <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                  <label
+                    htmlFor="email-microsoft-client-secret"
+                    className="text-theme-text-secondary mb-2 block text-sm font-semibold"
+                  >
                     Client secret <span className="text-theme-accent-red">*</span>
                   </label>
                   <input
+                    id="email-microsoft-client-secret"
                     type="password"
                     autoComplete="off"
                     value={config.microsoftClientSecret || ''}
@@ -495,10 +567,14 @@ const EmailConfiguration: React.FC = () => {
             ) : (
               <>
                 <div>
-                  <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                  <label
+                    htmlFor="email-microsoft-app-password"
+                    className="text-theme-text-secondary mb-2 block text-sm font-semibold"
+                  >
                     Microsoft 365 App Password <span className="text-theme-accent-red">*</span>
                   </label>
                   <input
+                    id="email-microsoft-app-password"
                     type="password"
                     autoComplete="off"
                     value={config.microsoftAppPassword || ''}
@@ -549,10 +625,18 @@ const EmailConfiguration: React.FC = () => {
                 </label>
                 <select
                   id="onboarding-smtp-quick-fill"
-                  value=""
+                  // Shows the provider whose settings were filled in. It was
+                  // pinned to "", so after choosing iCloud the box read "My own
+                  // mail server" above iCloud's host and iCloud's hint.
+                  value={quickFillPreset}
                   onChange={(e) => {
                     const preset = findSmtpProviderPreset(e.target.value);
-                    if (!preset) return;
+                    if (!preset) {
+                      // Back to "my own server": drop the provider's hint, and
+                      // leave the typed server details for the operator to edit.
+                      setQuickFillPreset('');
+                      return;
+                    }
                     setQuickFillPreset(preset.id);
                     // Server details only — the credentials below are the
                     // department's own and are never filled in for them.
@@ -563,6 +647,7 @@ const EmailConfiguration: React.FC = () => {
                       smtpEncryption: preset.encryption,
                     }));
                     setConnectionTested(false);
+                    setTestFailure(null);
                   }}
                   className="form-input py-3"
                 >
@@ -593,10 +678,11 @@ const EmailConfiguration: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                <label htmlFor="email-smtp-host" className="text-theme-text-secondary mb-2 block text-sm font-semibold">
                   SMTP Host <span className="text-theme-accent-red">*</span>
                 </label>
                 <input
+                  id="email-smtp-host"
                   type="text"
                   value={config.smtpHost || ''}
                   onChange={(e) => handleInputChange('smtpHost', e.target.value)}
@@ -607,10 +693,14 @@ const EmailConfiguration: React.FC = () => {
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                  <label
+                    htmlFor="email-smtp-port"
+                    className="text-theme-text-secondary mb-2 block text-sm font-semibold"
+                  >
                     Port <span className="text-theme-accent-red">*</span>
                   </label>
                   <input
+                    id="email-smtp-port"
                     type="number"
                     value={config.smtpPort || ''}
                     onChange={(e) => handleInputChange('smtpPort', e.target.value)}
@@ -620,10 +710,14 @@ const EmailConfiguration: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                  <label
+                    htmlFor="email-smtp-encryption"
+                    className="text-theme-text-secondary mb-2 block text-sm font-semibold"
+                  >
                     Encryption <span className="text-theme-accent-red">*</span>
                   </label>
                   <select
+                    id="email-smtp-encryption"
                     value={config.smtpEncryption || 'tls'}
                     onChange={(e) => handleInputChange('smtpEncryption', e.target.value)}
                     className="form-input py-3"
@@ -636,13 +730,17 @@ const EmailConfiguration: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                <label
+                  htmlFor="email-smtp-username"
+                  className="text-theme-text-secondary mb-2 block text-sm font-semibold"
+                >
                   Username{' '}
                   <span className="text-theme-text-muted font-normal">
                     (leave blank if the server needs no sign-in)
                   </span>
                 </label>
                 <input
+                  id="email-smtp-username"
                   type="text"
                   value={config.smtpUsername || ''}
                   onChange={(e) => handleInputChange('smtpUsername', e.target.value)}
@@ -652,11 +750,15 @@ const EmailConfiguration: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                <label
+                  htmlFor="email-smtp-password"
+                  className="text-theme-text-secondary mb-2 block text-sm font-semibold"
+                >
                   Password{' '}
                   <span className="text-theme-text-muted font-normal">(required when a username is entered)</span>
                 </label>
                 <input
+                  id="email-smtp-password"
                   type="password"
                   value={config.smtpPassword || ''}
                   onChange={(e) => handleInputChange('smtpPassword', e.target.value)}
@@ -701,10 +803,14 @@ const EmailConfiguration: React.FC = () => {
 
             <div className="space-y-4">
               <div>
-                <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                <label
+                  htmlFor="email-cloudflare-account-id"
+                  className="text-theme-text-secondary mb-2 block text-sm font-semibold"
+                >
                   Account ID <span className="text-theme-accent-red">*</span>
                 </label>
                 <input
+                  id="email-cloudflare-account-id"
                   type="text"
                   value={config.cloudflareAccountId || ''}
                   onChange={(e) => handleInputChange('cloudflareAccountId', e.target.value)}
@@ -714,10 +820,14 @@ const EmailConfiguration: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                <label
+                  htmlFor="email-cloudflare-api-token"
+                  className="text-theme-text-secondary mb-2 block text-sm font-semibold"
+                >
                   API Token <span className="text-theme-accent-red">*</span>
                 </label>
                 <input
+                  id="email-cloudflare-api-token"
                   type="password"
                   value={config.cloudflareApiToken || ''}
                   onChange={(e) => handleInputChange('cloudflareApiToken', e.target.value)}
@@ -785,10 +895,11 @@ const EmailConfiguration: React.FC = () => {
           <div className="card space-y-6 p-8">
             {/* Common Fields */}
             <div>
-              <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+              <label htmlFor="email-from-email" className="text-theme-text-secondary mb-2 block text-sm font-semibold">
                 From Email Address <span className="text-theme-accent-red">*</span>
               </label>
               <input
+                id="email-from-email"
                 type="email"
                 value={config.fromEmail || ''}
                 onChange={(e) => handleInputChange('fromEmail', e.target.value)}
@@ -799,8 +910,11 @@ const EmailConfiguration: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">From Name</label>
+              <label htmlFor="email-from-name" className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                From Name
+              </label>
               <input
+                id="email-from-name"
                 type="text"
                 value={config.fromName || ''}
                 onChange={(e) => handleInputChange('fromName', e.target.value)}
@@ -845,6 +959,16 @@ const EmailConfiguration: React.FC = () => {
               <p className="text-theme-text-muted mt-2 text-center text-sm">
                 Checks that The Logbook can connect and sign in. No email is sent.
               </p>
+              {testFailure && (
+                <div role="alert" className="alert-warning mt-3 text-sm">
+                  <p className="font-semibold">The connection test failed</p>
+                  <p className="mt-1">{testFailure}</p>
+                  <p className="mt-1">
+                    You can still save these settings and fix them later in Settings → Email, but no email will be sent
+                    until the connection works.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -863,7 +987,7 @@ const EmailConfiguration: React.FC = () => {
           {/* Action Buttons */}
           <div className="mt-8 flex gap-4">
             <button
-              onClick={handleSkip}
+              onClick={() => void handleSkip()}
               disabled={isSaving}
               className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary flex-1 rounded-lg px-6 py-3 font-semibold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50"
             >

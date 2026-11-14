@@ -120,6 +120,9 @@ class TestEndpointsStreamTheServiceIterator:
         service = MagicMock()
         setattr(service, method, AsyncMock(return_value=_chunks("H\r\n", "r\r\n")))
         monkeypatch.setattr(endpoint, "ReportExportService", lambda _db: service)
+        # Auditing is asserted against a real session in
+        # test_pdf_export_audit.py; this stub session cannot hold the row.
+        monkeypatch.setattr(endpoint, "_audit_training_export", AsyncMock())
 
         response = await endpoint.export_report(
             ReportExportRequest(report_type=report_type, format="csv"),

@@ -244,8 +244,8 @@ export const NfcTagsCard: React.FC<NfcTagsCardProps> = ({ targetKind, targetId, 
           {tags.map((tag) => {
             const lost = tag.status === InventoryNfcTagStatus.LOST;
             return (
-              <li key={tag.id} className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
+              <li key={tag.id} className="split-row gap-2 py-2 sm:items-center">
+                <div className="split-row-main">
                   <p className="text-theme-text-primary text-sm font-medium">
                     {tag.label || 'Unlabelled tag'}{' '}
                     <span className="text-theme-text-muted font-mono text-xs">…{tag.uid_preview}</span>
@@ -260,7 +260,7 @@ export const NfcTagsCard: React.FC<NfcTagsCardProps> = ({ targetKind, targetId, 
                     {tag.linked_by_name ? ` by ${tag.linked_by_name}` : ''}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-2">
+                <div className="split-row-aside flex flex-wrap gap-2">
                   <button
                     type="button"
                     className="btn-secondary btn-sm"

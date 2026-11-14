@@ -13,6 +13,7 @@ import type {
   FiscalYearOption,
   MonetaryAmount,
 } from '../types';
+import { formatCurrency } from '@/utils/currencyFormatting';
 import { formatCalendarDate } from '@/utils/dateFormatting';
 
 export const BUDGET_REQUEST_STATUS_LABELS: Record<BudgetRequestStatus, string> = {
@@ -24,11 +25,11 @@ export const BUDGET_REQUEST_STATUS_LABELS: Record<BudgetRequestStatus, string> =
 };
 
 export const BUDGET_REQUEST_STATUS_BADGES: Record<BudgetRequestStatus, string> = {
-  draft: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
-  submitted: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300',
-  approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300',
-  adjusted: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
-  declined: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300',
+  draft: 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300',
+  submitted: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  approved: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  adjusted: 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300',
+  declined: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
 };
 
 /** The order the review screen lists the status filter in. */
@@ -80,3 +81,26 @@ export function sumAmounts(values: (MonetaryAmount | null | undefined)[]): numbe
   }, 0);
   return cents / 100;
 }
+
+/** The two fields a request needs before the Treasurer can read it. */
+export type RequestContentField = 'amount' | 'justification';
+
+/**
+ * What a draft lacks before it can be submitted (owner decision, 2026-11-11:
+ * a draft saves without either, submitting needs both). Worded as the backend
+ * words its own refusal, so the same field reads the same either way.
+ */
+export function missingBeforeSubmit(
+  request: Pick<BudgetRequest, 'requestedAmount' | 'justification'>
+): Partial<Record<RequestContentField, string>> {
+  const missing: Partial<Record<RequestContentField, string>> = {};
+  if (request.requestedAmount === null || request.requestedAmount === '') {
+    missing.amount = 'Enter the amount you are requesting before you submit.';
+  }
+  if (!request.justification?.trim()) missing.justification = 'Say what the money is for before you submit.';
+  return missing;
+}
+
+/** A request's amount as the screens show it; a blank draft has none yet. */
+export const requestedAmountText = (amount: MonetaryAmount | null): string =>
+  amount === null || amount === '' ? 'Not entered yet' : formatCurrency(amount);

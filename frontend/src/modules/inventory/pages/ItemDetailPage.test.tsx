@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router';
 import type { InventoryItem } from '../types';
@@ -13,6 +14,7 @@ const mockGetNFPACompliance = vi.fn();
 const mockGetExposureRecords = vi.fn();
 const mockGetLocations = vi.fn();
 const mockCheckPermission = vi.fn();
+const mockUnassignItem = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   // Read by the Operations section strip in the page header.
@@ -28,7 +30,7 @@ vi.mock('../../../services/api', () => ({
     getNFPACompliance: (...a: unknown[]) => mockGetNFPACompliance(...a) as unknown,
     getExposureRecords: (...a: unknown[]) => mockGetExposureRecords(...a) as unknown,
     assignItem: vi.fn(),
-    unassignItem: vi.fn(),
+    unassignItem: (...a: unknown[]) => mockUnassignItem(...a) as unknown,
   },
 }));
 
@@ -87,13 +89,16 @@ const makeItem = (overrides: Partial<InventoryItem> = {}): InventoryItem => ({
   ...overrides,
 });
 
+// The app shell mounts ConfirmProvider; the assign and unassign dialogs need it to ask before discarding.
 const renderPage = (entry = '/inventory/items/it-1') =>
   render(
-    <MemoryRouter initialEntries={[entry]}>
-      <Routes>
-        <Route path="/inventory/items/:id" element={<ItemDetailPage />} />
-      </Routes>
-    </MemoryRouter>
+    <ConfirmProvider>
+      <MemoryRouter initialEntries={[entry]}>
+        <Routes>
+          <Route path="/inventory/items/:id" element={<ItemDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    </ConfirmProvider>
   );
 
 describe('ItemDetailPage', () => {
@@ -377,5 +382,114 @@ describe('ItemDetailPage', () => {
     await screen.findAllByText('Thermal Camera');
 
     expect(screen.queryByRole('button', { name: /Edit/ })).not.toBeInTheDocument();
+  });
+});
+
+// Owner decision 2026-11-01: unassigning from the item page asks first, and
+// records the condition the gear came back in, as the Returns screen does.
+describe('ItemDetailPage unassign', () => {
+  const assigned = () => makeItem({ status: 'assigned', assigned_to_user_id: 'u-1', assigned_to_name: 'Pat Smith' });
+
+  beforeEach(() => {
+    mockGetItem.mockReset();
+    mockGetCategories.mockReset();
+    mockGetStorageAreas.mockReset();
+    mockGetLocations.mockReset();
+    mockGetItemHistory.mockReset();
+    mockUnassignItem.mockReset();
+    mockCheckPermission.mockReset();
+    mockGetItem.mockResolvedValue(assigned());
+    mockGetCategories.mockResolvedValue([]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([]);
+    mockGetItemHistory.mockResolvedValue({ events: [] });
+    mockUnassignItem.mockResolvedValue({ message: 'Item unassigned successfully' });
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  it('asks before unassigning, and does nothing when kept', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Unassign' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Pat Smith');
+    await user.click(within(dialog).getByRole('button', { name: 'Keep it assigned' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockUnassignItem).not.toHaveBeenCalled();
+  });
+
+  it('requires a return condition and sends it with the notes', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Unassign' }));
+    const dialog = await screen.findByRole('dialog');
+
+    // Nothing chosen: the condition is flagged on its question, and nothing is sent.
+    const confirm = within(dialog).getByRole('button', { name: 'Unassign and record return' });
+    await user.click(confirm);
+    expect(within(dialog).getByRole('group', { name: /What condition/ })).toHaveAccessibleDescription(
+      'Choose the condition it came back in.'
+    );
+    expect(mockUnassignItem).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole('radio', { name: 'Damaged' }));
+    await user.type(within(dialog).getByLabelText(/Return notes/), 'Torn sleeve');
+    await user.click(confirm);
+
+    await waitFor(() =>
+      expect(mockUnassignItem).toHaveBeenCalledWith('it-1', {
+        return_condition: 'damaged',
+        return_notes: 'Torn sleeve',
+      })
+    );
+    expect(toast.success).toHaveBeenCalledWith('Item unassigned');
+  });
+
+  it('omits blank notes rather than sending an empty string', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Unassign' }));
+    const dialog = await screen.findByRole('dialog');
+
+    await user.click(within(dialog).getByRole('radio', { name: 'Good' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Unassign and record return' }));
+
+    await waitFor(() =>
+      expect(mockUnassignItem).toHaveBeenCalledWith('it-1', { return_condition: 'good', return_notes: undefined })
+    );
+  });
+
+  it('puts a refused return note on its field, announced, and stays open', async () => {
+    const user = userEvent.setup();
+    mockUnassignItem.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'return_notes', message: 'Value is too long.' }] } },
+    });
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Unassign' }));
+    const dialog = await screen.findByRole('dialog');
+
+    await user.click(within(dialog).getByRole('radio', { name: 'Good' }));
+    await user.type(within(dialog).getByLabelText(/Return notes/), 'Scuffed');
+    await user.click(within(dialog).getByRole('button', { name: 'Unassign and record return' }));
+
+    const notes = within(dialog).getByLabelText(/Return notes/);
+    await waitFor(() =>
+      expect(notes).toHaveAccessibleDescription('Return notes is too long — keep it to 2000 characters.')
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('asks before discarding a condition already chosen', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Unassign' }));
+    const dialog = await screen.findByRole('dialog');
+
+    await user.click(within(dialog).getByRole('radio', { name: 'Good' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Keep it assigned' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(within(dialog).getByRole('radio', { name: 'Good' })).toBeChecked();
   });
 });

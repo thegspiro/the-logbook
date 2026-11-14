@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import toast from 'react-hot-toast';
 import userEvent from '@testing-library/user-event';
@@ -59,6 +59,7 @@ vi.mock('../../../hooks/useEnabledModules', () => ({
 }));
 
 import StoreAdminPage from './StoreAdminPage';
+import { useAuthStore } from '../../../stores/authStore';
 
 const dashboard = {
   isEnabled: true,
@@ -178,35 +179,60 @@ describe('StoreAdminPage overview', () => {
     expect(await screen.findByText(/open: yes/)).toBeInTheDocument();
   });
 
-  it('offers the way back to Inventory when that module is on', async () => {
-    render(<StoreAdminPage />, { wrapper: MemoryRouter });
+  // The way back is the header's trail, as on every admin page -- the store
+  // used to carry a separate "Inventory" link beside its actions as well. The
+  // crumbs link only for a viewer whose grants open them, so these tests grant
+  // everything and render at the page's real URL, from which the trail is built.
+  describe('the trail back to Inventory Administration', () => {
+    const grantedCheck = useAuthStore.getState().checkPermission;
+    beforeEach(() => {
+      useAuthStore.setState({ checkPermission: () => true });
+    });
+    afterEach(() => {
+      useAuthStore.setState({ checkPermission: grantedCheck });
+    });
 
-    expect(await screen.findByRole('link', { name: /Inventory/ })).toHaveAttribute('href', '/inventory/admin');
-  });
+    const renderAtStore = () =>
+      render(
+        <MemoryRouter initialEntries={['/inventory/admin/store']}>
+          <StoreAdminPage />
+        </MemoryRouter>
+      );
 
-  it('offers no way back while the module answer is still in flight', async () => {
-    // `isModuleOn` reports every module on until the lookup settles, so
-    // trusting it alone renders the link for the width of that request -- and
-    // a click inside that window reaches the refusal this hides.
-    mockModulesLoading.mockReturnValue(true);
+    it('links back to Inventory Administration when that module is on', async () => {
+      renderAtStore();
+      const trail = await screen.findByRole('navigation', { name: 'Breadcrumb' });
 
-    render(<StoreAdminPage />, { wrapper: MemoryRouter });
-    await screen.findByText('Department Store');
+      expect(within(trail).getByRole('link', { name: 'Inventory Administration' })).toHaveAttribute(
+        'href',
+        '/inventory/admin'
+      );
+    });
 
-    expect(screen.queryByRole('link', { name: /Inventory/ })).not.toBeInTheDocument();
-  });
+    it('draws no trail while the module answer is still in flight', async () => {
+      // `isModuleOn` reports every module on until the lookup settles, so
+      // trusting it alone would draw crumbs for the width of that request -- and
+      // a click inside that window reaches the refusal this hides.
+      mockModulesLoading.mockReturnValue(true);
 
-  it('offers no way back when the department runs no Inventory', async () => {
-    // This route is gated on the storefront module, not on inventory, so the
-    // store can run with Inventory off -- and the hub then refuses with
-    // "Inventory is not enabled". Offering a link the app knows will be turned
-    // away reads to the manager as their own permissions being wrong.
-    mockIsModuleOn.mockImplementation((module: string) => module !== 'inventory');
+      renderAtStore();
+      await screen.findByText('Department Store');
 
-    render(<StoreAdminPage />, { wrapper: MemoryRouter });
-    await screen.findByText('Department Store');
+      expect(screen.queryByRole('link', { name: /Inventory/ })).not.toBeInTheDocument();
+    });
 
-    expect(screen.queryByRole('link', { name: /Inventory/ })).not.toBeInTheDocument();
+    it('draws no trail when the department runs no Inventory', async () => {
+      // This route is gated on the storefront module, not on inventory, so the
+      // store can run with Inventory off -- and the hub then refuses with
+      // "Inventory is not enabled". Offering a link the app knows will be turned
+      // away reads to the manager as their own permissions being wrong.
+      mockIsModuleOn.mockImplementation((module: string) => module !== 'inventory');
+
+      renderAtStore();
+      await screen.findByText('Department Store');
+
+      expect(screen.queryByRole('link', { name: /Inventory/ })).not.toBeInTheDocument();
+    });
   });
 
   // Order counts and money collected are figures an officer acts on, so a 200

@@ -109,6 +109,35 @@ describe('FormsPage — one submission per person (FORM-10)', () => {
     expect(mockCreateForm).toHaveBeenCalledWith(expect.objectContaining({ allow_multiple_submissions: true }));
   });
 
+  // Forms review F-3: Create Form stayed greyed out until a name was typed,
+  // and a failed create set a banner on the page behind the dialog.
+  it('names a missing form name on an empty save and focuses it', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<FormsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Create Form' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create Form' });
+    await user.click(within(dialog).getByRole('button', { name: 'Create Form' }));
+
+    const name = within(dialog).getByLabelText(/Form Name/);
+    expect(name).toHaveAccessibleDescription('Enter a name for the form.');
+    expect(name).toHaveFocus();
+    expect(mockCreateForm).not.toHaveBeenCalled();
+  });
+
+  it('says a failed create in the dialog, which stays open', async () => {
+    mockCreateForm.mockRejectedValueOnce({ response: { status: 500, data: { detail: 'Database unavailable' } } });
+    const user = userEvent.setup();
+    renderWithRouter(<FormsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Create Form' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create Form' });
+    await user.type(within(dialog).getByLabelText(/Form Name/), 'Shift Report');
+    await user.click(within(dialog).getByRole('button', { name: 'Create Form' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Database unavailable');
+  });
+
   it('turns it on from the form editor', async () => {
     const user = userEvent.setup();
     renderWithRouter(<FormsPage />);

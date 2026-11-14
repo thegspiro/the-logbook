@@ -201,6 +201,36 @@ missing or over 366 days.]**
 > the skills-testing deep dive. If you've been running skills testing since before
 > August 2026, watch that one."
 
+### MEMBER PERFORMANCE EVALUATIONS (about 0:50)
+
+**[SCREEN: Reports → Evaluations → Templates & periods; open the Annual Member
+Evaluation starter in the builder. The Graded by section switch, a weight on
+each section, the live preview.]**
+
+> "Skills tests check a skill. A probationary or annual review checks the
+> person, and it lives under **Reports, Evaluations**. You build the form once,
+> draft a review for each member in a period, and each person fills in their part
+> in turn: self-evaluation, evaluator, calibration, signatures, then a PDF. The
+> member can write a response afterwards."
+
+> "Turn on **Graded by section** and the form stops giving you one muddy
+> percentage. Each rating sits on a one-to-five scale, each section gets a score,
+> and the sections are weighted to a hundred. **Grade ranges** turn the score into
+> a grade — Outstanding, Exceeds, Meets, Needs improvement. A member rated Meets
+> on every item now reads as Meets, not as failing."
+
+> "The evaluator can give a section, or the whole evaluation, a different grade.
+> A reason is required, and both grades are reported."
+
+**[CALLOUT: "Graded by section · grade ranges · the evaluator can regrade, with a reason"]**
+
+**[PRODUCTION NOTE — 2026-11-05. New beat, about 50 seconds; re-time Chapter 2.
+Member performance evaluations (2026-11-02) and grading by section (2026-11-04)
+are in docs/training/02-training.md under "Member Performance Evaluations". The
+old weighted total counted "Meets expectations" as 50%, so a department's
+earlier evaluation percentages are not comparable to the new grades. Do not
+film a pre-2026-11-04 form.]**
+
 **[TRANSITION: Compliance and reporting]**
 
 ---
@@ -225,8 +255,8 @@ missing or over 366 days.]**
 
 ### COMPLIANCE REQUIREMENTS CONFIGURATION (6:15 – 7:15)
 
-**[SCREEN: Navigate to Compliance Requirements Config
-(ComplianceRequirementsConfigPage)]**
+**[SCREEN: Training Admin → Settings & Data → Compliance Settings, then the
+Configure page it opens (ComplianceRequirementsConfigPage)]**
 
 > "This is where you define what 'compliance' means for your department. Which
 > certifications are mandatory? Which are optional? What are the recurrence
@@ -250,6 +280,41 @@ missing or over 366 days.]**
 > can override it from its own Evaluation Period dropdown."
 
 **[SCREENSHOT NEEDED]:** _The Compliance Requirements Thresholds tab with the "Evaluation Period" checkbox and its helper text._
+
+> "You'll find all of this in two places: **Compliance Reporting, Configure**, or
+> **Settings and Data, Compliance Settings**. The second is the same page —
+> it's there so you can find it with the rest of your settings. You need the
+> manage-settings or manage-compliance permission to save; manage-training alone
+> opens the hub but doesn't show Configure."
+
+**[SCREEN: Thresholds tab, the Months on leave choice: Full month (default),
+15-day rule: proportional, 15-day rule: half.]**
+
+> "Right below it, **Months on leave**. When a member's leave covers only part of
+> a month, does that month still count? **Full month**, the default, excuses the
+> whole month if leave touches any day of it. The two 15-day rules excuse it by
+> the share of days, or by half at fifteen days. A month leave covers entirely is
+> always excused. It applies to leave and training waivers alike, on every
+> screen — the matrix, My Training and the shift compliance report — so a month
+> reads the same everywhere."
+
+**[CALLOUT: "Months on leave: Full month by default"]**
+
+**[SCREEN: Profiles tab → Edit on a profile; the "Applies to Members Holding a
+Position" ticks.]**
+
+> "One more tab: **Profiles**. A compliance profile used to apply by membership
+> type. It can now also apply to the members holding a position — handy when two
+> groups share a class and status but owe different training, say life members
+> who still ride and life members who've stopped. Tick the positions and leave
+> them all unticked to apply it regardless of position."
+
+**[PRODUCTION NOTE — 2026-11-05. Three new beats, about 1:15 together; re-time
+Chapter 3 and the clip table. Compliance Settings under Settings & Data is
+2026-11-05; Months on leave is 2026-11-02 (before it, a month was excused only at
+15 or more days, and that rule is no longer the default, so some members' hours,
+shift and call targets drop on upgrade); profiles by position is 2026-10-29.
+Say nothing about a specific percentage.]**
 
 > "One thing this never touches: certifications that are expiring soon are
 > always flagged against the real calendar date, no matter how you set this."
@@ -346,6 +411,22 @@ toast naming the records written, and the Requirements & Programs card.]**
 
 **[CALLOUT: "Event attendance → automatic training credit"]**
 
+**[SCREEN: Create Training Session → Connect to Requirements & Programs, a
+Session Attendance requirement ticked. Then the event card with the "Counts
+toward attendance" badge.]**
+
+> "If you run a Session Attendance requirement — 'attend sixty percent of the
+> drills' — a drill only counts if it's linked. So when you create the session,
+> tick the requirement under **Connect to Requirements and Programs**, for a single
+> session or a recurring series. Forgot? Change it from the **Counts toward
+> attendance** editor on the event page, even after attendance is finalized.
+> Members see a **Counts toward attendance** badge on the event."
+
+**[PRODUCTION NOTE — 2026-11-05. New beat, about 25 seconds; re-time Chapter 4.
+Only a finalized, uncancelled session is "held". Past drills can arrive through
+the department's historical import, which creates held sessions from company
+drills enough members logged. See the Session Attendance beat in Script 05.]**
+
 **[PRODUCTION: Rewritten 2026-09-30 because finalizing a Training event now
 writes the training records. The beat now runs about 1:30 rather than 1:00 —
 re-time Chapter 4 and the clip table when it is re-recorded.]**
@@ -393,12 +474,14 @@ the course, set a start date, click Next]**
 > the middle of your course, so it's offered to you as a day to skip."
 
 **[SCREEN: The Preview step, scrolling the computed class list, pointing at an
-amber warning and the suggested holiday chips]**
+amber warning, a per-class room picker and the suggested holiday chips]**
 
 **[CALLOUT: "Preview shows every date — before a single event exists"]**
 
-> "You can move any individual class, or skip one entirely. Then pick your
-> recruits, and generate."
+> "You can move any individual class, or skip one entirely. If the cohort meets
+> in one room, set it once on the Schedule step; a single class can go to a
+> different room here, and the preview checks it's free straight away. Then pick
+> your recruits, and generate."
 
 **[SCREEN: Cohort Detail → Roster tab: the "Add member" button; a member row
 reading "N classes held before they joined — decide"]**
@@ -438,7 +521,8 @@ Shift remaining control]**
 > "Reschedule one class and its calendar event moves with it — nobody loses
 > their spot. Cancel one and everybody signed up sees a cancellation, not a
 > class that quietly vanished. Or push everything that hasn't happened yet back
-> a week, in one click. A make-up night that was never on the syllabus goes on
+> a week, in one click — **Shift remaining** goes up to fourteen days either way.
+> For a bigger move, reschedule the classes instead. A make-up night that was never on the syllabus goes on
 > the calendar as an ordinary Training event, and a late joiner can't be added
 > to a running cohort's roster from the app yet — settle the roster before you
 > generate."
@@ -472,6 +556,18 @@ Queue]**
 > often it re-reads the last thirty days so a late correction on their side
 > isn't missed."
 
+**[SCREEN: Mappings window, matching an external user to a member; then the
+provider's Import Queue with the **Import matching pending records** button]**
+
+> "Matching is what credits the history. When you map an outside user to a member,
+> that member's waiting records come in at once, so older training outside the
+> sync window isn't left stranded in the queue. And **Import matching pending
+> records**, on the provider's Import Queue, brings in every waiting record whose
+> member you've already matched."
+
+**[PRODUCTION NOTE — 2026-11-05. New, about 25 seconds (2026-10-22 row). The
+provider needs a resolvable API host to capture the Import Queue screen.]**
+
 **[PRODUCTION NOTE — 2026-10-04. Rewritten. The previous take described
 **External Training Integrations** (ExternalTrainingPage) as the member
 submission queue — it is the provider sync screen; member submissions are
@@ -491,8 +587,24 @@ the list.]**
 > "Reports start from the shift, not the trainee. Go to Scheduling, open
 > **Shift Reports**, click **New report**, and pick the shift — hours and calls
 > auto-populate from attendance records for the whole crew. Then, for each
-> trainee, you rate their performance 1-5, note strengths and areas for
-> improvement, and write a narrative."
+> trainee, note strengths and areas for improvement, and write a narrative."
+
+**[SCREEN: The crew list. Under each intern a status line — Not started, In
+progress, Submitted — linking to their evaluation page.]**
+
+> "And the rating? If your department has a **shift evaluation form** and the
+> trainee is in a program that uses it, they get that form instead of a single
+> rating box. Each trainee who needs one has a status line under their name —
+> not started, in progress, submitted — that opens their evaluation. You build the
+> forms under **Training Admin, Settings and Data, Shift Evaluations**, link one to a
+> program, and you can never fill one out for yourself. A trainee with no form
+> still gets the 1-to-5 performance rating."
+
+**[PRODUCTION NOTE — 2026-11-05. Re-record this cue. A member evaluated on a
+department form is not offered the generic rating panel too (2026-10-31 / 11-01).
+About 35 seconds; re-time Chapter 4. A submitted evaluation can still be
+corrected (button reads Save changes). Evaluated shifts, Transports and Refusals
+program requirements are credited from submitted evaluations.]**
 
 **[PRODUCTION NOTE — 2026-10-04. Re-record this cue. The previous take filmed
 "Training Admin > Shift Reports > Create"; there is no Create there. Training

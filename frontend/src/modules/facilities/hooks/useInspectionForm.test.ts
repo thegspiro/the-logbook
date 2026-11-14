@@ -153,6 +153,47 @@ describe('useInspectionForm payload contract', () => {
   });
 });
 
+describe('useInspectionForm refusals (forms review, batch 19)', () => {
+  beforeEach(() => {
+    createInspection.mockReset();
+    updateInspection.mockReset();
+  });
+
+  it('names a missing title on its field and creates nothing', async () => {
+    const { result } = renderHook(() => useInspectionForm({ facilityId: 'fac-1' }));
+    await act(async () => {
+      result.current.openCreate('fac-1');
+    });
+    await act(async () => {
+      await result.current.handleSave();
+    });
+
+    expect(createInspection).not.toHaveBeenCalled();
+    expect(result.current.errors.title).toBe('Enter a title for the inspection.');
+  });
+
+  it('saves the rest of an edit when the server refuses one field, and keeps that field flagged', async () => {
+    updateInspection
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'inspector_name', message: 'Value is too long.' }] } },
+      })
+      .mockResolvedValueOnce(existing);
+    const { result } = renderHook(() => useInspectionForm({ facilityId: 'fac-1' }));
+    await act(async () => {
+      result.current.openEdit(existing);
+    });
+    await act(async () => {
+      await result.current.handleSave();
+    });
+
+    expect(updateInspection).toHaveBeenCalledTimes(2);
+    expect(updateInspection.mock.calls[1]?.[1]).not.toHaveProperty('inspector_name');
+    expect(result.current.errors.inspector_name).toBe('Value is too long.');
+    expect(result.current.formError).toBe('Inspection saved, except inspector name. Fix it and save again.');
+    expect(result.current.showModal).toBe(true);
+  });
+});
+
 describe('useInspectionForm paging (FAC2-5)', () => {
   beforeEach(() => {
     getInspectionsPage.mockReset();
@@ -184,5 +225,26 @@ describe('useInspectionForm paging (FAC2-5)', () => {
         limit: 50,
       })
     );
+  });
+
+  // The dashboard's "Upcoming inspections" tile counts a window the server
+  // computes on the department's calendar, so the window goes to the server
+  // rather than being re-derived from the rows on the page.
+  it('asks the server for the due window and lists what it returns', async () => {
+    const due = { ...existing, id: 'insp-due', nextInspectionDate: '2026-11-15', passed: null };
+    getInspectionsPage.mockResolvedValue({ items: [due], total: 1, skip: 0, limit: 50 });
+
+    const { result } = renderHook(() => useInspectionForm({ dueWithinDays: 30 }));
+
+    await waitFor(() => expect(result.current.inspections).toEqual([due]));
+    expect(getInspectionsPage).toHaveBeenLastCalledWith({ due_within_days: 30, skip: 0, limit: 50 });
+    expect(result.current.total).toBe(1);
+  });
+
+  it('sends no due window when none is asked for', async () => {
+    renderHook(() => useInspectionForm());
+
+    await waitFor(() => expect(getInspectionsPage).toHaveBeenCalled());
+    expect(getInspectionsPage).toHaveBeenLastCalledWith({ skip: 0, limit: 50 });
   });
 });

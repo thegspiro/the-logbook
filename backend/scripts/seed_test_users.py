@@ -29,6 +29,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.security import email_fingerprint, encrypt_data
 from app.core.utils import generate_uuid
+from app.models.member_position_term import sync_position_terms
 from app.services.suggestion_service import SuggestionService
 
 _hasher = PasswordHasher(
@@ -337,6 +338,7 @@ async def seed_users(session: AsyncSession, org_id: str) -> None:
                     ),
                     {"uid": user_id, "pid": pid},
                 )
+                await sync_position_terms(session, [(user_id, pid)])
 
         created += 1
 

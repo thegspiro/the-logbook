@@ -513,7 +513,12 @@ describe('EventEditPage', () => {
       const user = userEvent.setup();
       renderWithRouter(<EventEditPage />);
 
-      const stale = await screen.findByLabelText(/administrative \(not a current member type\)/i);
+      // The box appears only once the event and the department's types have
+      // both loaded; under a loaded runner that took 1,075ms, past the 1s
+      // default, so the wait is lengthened rather than the run retried.
+      const stale = await screen.findByLabelText(/administrative \(not a current member type\)/i, undefined, {
+        timeout: 5000,
+      });
       expect(stale).toBeChecked();
       // A 16px box: the 44px target comes from the label wrapping it, as on
       // every listed type.

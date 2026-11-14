@@ -1,7 +1,7 @@
 # Integrations
 
 Integrations connect The Logbook to services outside it: chat apps, Salesforce,
-PayPal, e-signature and booking tools, training providers and Claude. Each one
+PayPal, Zeffy, e-signature and booking tools, training providers and Claude. Each one
 is switched on and managed from one page.
 
 ## Lesson at a Glance
@@ -31,20 +31,22 @@ Most members never open this page. The parts a member may meet are the
 5. [Documenso — Document E-Signatures](#documenso--document-e-signatures)
 6. [Cal.com — Interview Scheduling](#calcom--interview-scheduling)
 7. [PayPal — Store Payment Reconciliation](#paypal--store-payment-reconciliation)
-8. [Google Workspace — Member Accounts](#google-workspace--member-accounts)
+8. [Zeffy — Fundraising Payments](#zeffy--fundraising-payments)
+9. [Google Workspace — Member Accounts](#google-workspace--member-accounts)
    - [Microsoft 365 — Member Accounts](#microsoft-365--member-accounts)
-9. [Calendar Integrations](#calendar-integrations)
-10. [Messaging Integrations](#messaging-integrations)
-11. [Weather Alerts](#weather-alerts)
-12. [EMS & Fire Reporting](#ems--fire-reporting)
-13. [Generic Webhooks](#generic-webhooks)
-14. [NFC ID Cards](#nfc-id-cards--tap-in-attendance)
-15. [Training Provider Integrations](#training-provider-integrations)
-16. [Claude (MCP)](#claude-mcp--asking-questions-of-your-logbook)
-17. [Monitoring Integration Health](#monitoring-integration-health)
-18. [Troubleshooting](#troubleshooting)
-19. [Realistic Example](#realistic-example-connecting-slack-and-the-shift-feed)
-20. [If You Learned an Older Version](#if-you-learned-an-older-version)
+10. [Calendar Integrations](#calendar-integrations)
+11. [Messaging Integrations](#messaging-integrations)
+12. [Historical Data Import](#historical-data-import)
+13. [Weather Alerts](#weather-alerts)
+14. [EMS & Fire Reporting](#ems--fire-reporting)
+15. [Generic Webhooks](#generic-webhooks)
+16. [NFC ID Cards](#nfc-id-cards--tap-in-attendance)
+17. [Training Provider Integrations](#training-provider-integrations)
+18. [Claude (MCP)](#claude-mcp--asking-questions-of-your-logbook)
+19. [Monitoring Integration Health](#monitoring-integration-health)
+20. [Troubleshooting](#troubleshooting)
+21. [Realistic Example](#realistic-example-connecting-slack-and-the-shift-feed)
+22. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
@@ -90,8 +92,9 @@ The page shows:
 | **Documents**      | Documenso          | Sends documents for e-signature (an open-source DocuSign alternative)                            |
 | **Scheduling**     | Cal.com            | Shows bookings and moves applicants on after a meeting                                           |
 | **Payments**       | PayPal             | Matches incoming store payments to Department Store orders                                       |
-| **Automation**     | Generic Webhooks   | Sends a signed test message to a web address — nothing else yet                                  |
-| **Safety**         | NWS Weather Alerts | Checks your weather zone code — alerts are not shown yet                                         |
+| **Payments**       | Zeffy              | Reads donations, event tickets and memberships sold through Zeffy into fundraising and dues      |
+| **Automation**     | Generic Webhooks   | Sends a signed message to a web address when an event, shift or training record is created       |
+| **Safety**         | NWS Weather Alerts | Shows severe weather alerts for your zone on the dashboard, in the bell or by email              |
 | **Access Control** | NFC ID Cards       | ID cards with a tap-in chip, and a check-in station that reads them                              |
 | **Access Control** | Google Workspace   | Creates a Google account for each applicant converted to a member; suspends it when they leave   |
 | **Access Control** | Microsoft 365      | Creates and licenses a Microsoft 365 account for each new member; blocks sign-in when they leave |
@@ -149,6 +152,12 @@ secret again.
 that leads to a private network, such as a station computer or a home router.
 This applies to every address you give an integration: Slack, Discord, Teams,
 webhooks, Cal.com and Documenso. Use the service's public web address.
+
+**Keys are needed before it connects** _(2026-10-28)_. PayPal, Documenso,
+Cal.com and Salesforce refuse to connect until their keys are filled in, with a
+message naming what is missing, such as "PayPal needs: client_id,
+client_secret". Before, they connected with blank keys and showed as connected
+until a test failed.
 
 > **What if a test fails with a general message?** When something unexpected
 > goes wrong, the message reads "An unexpected error occurred. Please try
@@ -511,6 +520,83 @@ For the whole store walkthrough, see [Department Store](./18-storefront.md).
 
 ---
 
+## Zeffy — Fundraising Payments
+
+**Zeffy** is a zero-fee fundraising platform for nonprofits: donation forms,
+event ticketing and membership sales. Connecting it lets The Logbook read what
+the department's Zeffy account received and record each payment where the
+department keeps its own books — a donation on a fundraising campaign, revenue
+and attendance on a fundraising event, or a payment on a member's dues.
+
+**The connection only reads.** Nothing is ever changed in Zeffy, no card details
+reach The Logbook, and Zeffy keeps issuing the tax receipts.
+
+> **Can your department use Zeffy?** Zeffy decides that, not The Logbook. It
+> serves registered nonprofits in the US and Canada. A volunteer fire company
+> organised as a nonprofit usually qualifies; a municipal department may not.
+
+This section covers connecting. Deciding where each Zeffy campaign's payments
+go, and reading what happened to each payment, is done by fundraising officers
+under **Grants & Fundraising → Zeffy** — see
+[Zeffy in the Grants & Fundraising guide](./12-grants-fundraising.md#zeffy--online-donations-tickets-and-memberships).
+
+### Configuration
+
+| Field                                 | What to enter                                                                                                                                            |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **API Key**                           | **Required.** The owner of the department's Zeffy account generates it in Zeffy under **Settings → Integrations**. Stored securely and never shown again |
+| **Webhook Signing Secret** (optional) | The secret Zeffy shows when you add the webhook (below). It starts with `whsec_`. Without it, payments still arrive, but only on the hourly sync         |
+
+![Zeffy connect dialog: the read-only note linking to Grants & Fundraising, the API Key and Webhook Signing Secret (optional) fields, and the webhook address to add in Zeffy](./images/16-24-zeffy-connect.png)
+
+**To change the key or the signing secret later**, select **Settings** on the
+connected Zeffy card. Fill in only what changed: a box left blank keeps what is
+saved. The new key or secret is used from the next sync or webhook message, and
+the linked campaigns and the webhook address do not change. Zeffy stays
+connected throughout, so nothing is missed.
+
+![Zeffy settings on a connected card: the API Key box reading Leave blank to keep the current key, the Webhook Signing Secret box with its note that a blank box keeps the saved secret, the webhook address, and the notice that a new key or signing secret is used from the next sync or webhook message while linked campaigns and the webhook address do not change](./images/16-25-zeffy-settings.png)
+
+**Test** reads one campaign from Zeffy to prove the key works. It adds a note if
+no signing secret is set, because payments will then arrive only once an hour.
+
+### Adding the Zeffy Webhook
+
+The webhook is optional but recommended. With it, payments arrive within
+seconds, and so does a refund made weeks after the sale.
+
+1. Copy the address shown in the Zeffy connect window. It looks like:
+
+   ```
+   https://your-logbook-host/api/public/v1/webhooks/zeffy/{integration_id}
+   ```
+
+2. In Zeffy, open **Settings → Integrations → Webhook**, add that address, and
+   subscribe it to the payment events: `payment.created`, `payment.completed`,
+   `payment.updated` and `payment.deleted`. Contact events are accepted and
+   ignored, so ticking them only adds noise.
+3. Copy the signing secret Zeffy shows into **Webhook Signing Secret** and save.
+
+> **Important.** Every message must carry Zeffy's signature, made with that
+> secret within the last five minutes; anything else is refused. The Logbook
+> then reads the payment again from Zeffy with your API key rather than trusting
+> the message itself. If you regenerate the secret in Zeffy, enter the new one
+> straight away under **Settings** on the Zeffy card. Zeffy's old secret stops
+> working immediately, and messages are refused until The Logbook has the new
+> one.
+
+### The Hourly Sync
+
+Every hour, The Logbook reads the payments of each **linked** Zeffy campaign
+from where it last got to. This is what records payments when there is no
+webhook, or while The Logbook was unreachable. A payment is never recorded
+twice, however it arrives. **Sync now** on the Zeffy page runs it at once.
+
+The sync reads payments by the day they were made and looks back seven days
+each time. A refund made more than seven days after the sale is therefore seen
+only through the webhook.
+---
+
 ## Google Workspace — Member Accounts
 
 **Google Workspace** gives each applicant the department converts to a member a Google account at their department email address. Only an organization administrator (`admin.access`) can connect, change or disconnect it.
@@ -556,6 +642,8 @@ day, listed under **N need attention** as "Left, but still in a group".
 
 When an account is waiting on something The Logbook could not finish — a departed member's suspension, an account never created, a password that never arrived — the Google Workspace card shows **N need attention**. It lists each member with the reason and a link to their profile. Anything waiting over a day is also emailed each morning to administrators (`admin.access`).
 
+![Microsoft 365 accounts needing attention: three members, one who left but whose account is not suspended (Over a day), one whose account was not created, and one suspended over 90 days and still in the directory, each with their department address and since when](./images/16-21-directory-attention-list.png)
+
 ### Members Who Joined Earlier
 
 Only accounts The Logbook created or linked are suspended. To cover members who were on the roster before the integration, an administrator clicks **Link existing members** on the Google Workspace card. It shows how many members have an account at exactly their Logbook email and why the others are skipped, then links them once confirmed. Members who have already left are not linked. Nothing changes in Google.
@@ -578,7 +666,11 @@ See [Google Workspace Integration](../../wiki/Integration-Google-Workspace.md) f
 
 The app registration needs the Microsoft Graph application permissions `User.ReadWrite.All`, `User-PasswordProfile.ReadWrite.All`, `User.RevokeSessions.All`, `GroupMember.ReadWrite.All` and, with a license, `LicenseAssignment.ReadWrite.All`, with admin consent, and the **User Administrator** role.
 
+![The Microsoft 365 connect form with demo values: Directory (tenant) ID, Application (client) ID, the client secret, Client secret expires on, Domain, Usage location US, a License SKU ID, two groups, and Block sign-in when a member retires ticked, above the Graph permissions it needs](./images/16-19-microsoft-365-connect.png)
+
 Enter the secret's **Expires** date as **Client secret expires on**. From 30 days before it, the card shows the days left and administrators get a morning email at 30 days, 7 days and on the day. A new secret needs its new date entered with it. The Microsoft setting is **Block sign-in when a member retires**, and a group that assigns licenses is never edited, because removing the member would remove the license. Accounts still in the directory 90 days after suspension are listed under **N need attention** for information only; The Logbook never deletes an account.
+
+![The Microsoft 365 card connected, with Client secret expires in 12 days, 3 need attention, Link existing members, Settings and Details](./images/16-20-microsoft-365-card.png)
 
 Conversion, the member's profile, **N need attention** and **Link existing members** work as for Google Workspace. Two differences: an account whose license could not be assigned is kept and its profile offers **Retry**; and an account synced from on-premises Active Directory is never blocked from here — the profile says to disable it in Active Directory.
 
@@ -615,6 +707,8 @@ its client ID and secret on the integration.
 3. You come back to the Integrations page. The card shows the account, the
    new calendar's name and **Last published**.
 
+![The Google Calendar card connected: the Google account, the calendar Oakville Fire Department Events, Last published a few minutes ago, Sync event descriptions switched off, and Disconnect](./images/16-22-google-calendar-connected.png)
+
 The sign-in must be finished within ten minutes, in the same browser, by the
 person who started it.
 
@@ -623,6 +717,13 @@ ahead: its title, start and end, location, event type and a link back to the
 event in The Logbook. Drafts are never sent, and a cancelled or deleted event
 is removed from the calendar. Who is going, RSVP answers, custom fields and
 attachments are never sent. Publishing runs every five minutes.
+
+To change that, use **What is published** on the connected card: **Days
+ahead** takes a whole number from 1 to 730, and ticking **Event types** limits
+the calendar to those types (leave them all unticked for every type). Select
+**Save publishing settings**. The next run adds what now falls inside and
+removes what no longer does; events that have aged past 30 days ago stay in
+the calendar either way.
 
 **Sync event descriptions** is off by default, because a description can hold
 notes meant only for members. Turn it on from the card to publish
@@ -670,6 +771,8 @@ its client ID, client secret and tenant ID on the integration.
 3. You come back to the Integrations page. The card shows the account, the
    new calendar's name and **Last published**.
 
+![The Microsoft Outlook card connected: the Microsoft 365 account, the calendar Oakville Fire Department Events, Last published a few minutes ago, Sync event descriptions switched off, and Disconnect](./images/16-23-outlook-connected.png)
+
 The sign-in must be finished within ten minutes, in the same browser, by the
 person who started it. **What is published**, **Sync event descriptions** and
 **Reconnect required** work exactly as for
@@ -710,6 +813,19 @@ Only people who can manage integrations see the link or can reset it. Each
 reset is recorded in the audit log.
 
 ![The connected iCalendar (ICS) card: the note that anyone with the link can see the department's published events, the feed link with its copy button, and Reset link](./images/16-16-ical-department-feed.png)
+
+**Choosing what the feed publishes** _(2026-11-01)_. On the connected
+iCalendar card, select **Settings**.
+
+- Tick the event types to publish, or leave them all unticked to publish every
+  type. Drafts and cancelled events are never published.
+- Tick **Include duty shifts** to add each scheduled shift's date, times and
+  platoon. Who is assigned and shift notes are never published.
+
+Saved settings apply the next time a subscribed calendar refreshes; the feed
+link does not change. The feed covers 30 days back to a year ahead, on the
+department's calendar. Members' own shifts are still in their personal feed
+whether or not this integration is connected.
 
 **A member's shift feed** is private to each member, and it is not set up on
 the Integrations page. Each member opens **Subscribe to my shifts** at the top
@@ -773,6 +889,102 @@ delivery and whether it worked.
 
 ---
 
+## Historical Data Import
+
+**Integrations → Historical Data Import** brings in the hours members logged in
+the system the department used before The Logbook: shifts on a unit, on-call
+(recall) time, training and administrative hours, from one CSV export (up to
+200,000 rows or 40 MB). Only the **IT Manager** can open it by default
+(`integrations.historical_import`).
+
+1. **Upload** the export and name the source system. Use the same name every
+   time; rows already brought in are then recognised and skipped.
+2. **1. How to read the file**: confirm the detected columns, then mark each
+   hours column as shift, on-call, training or administrative.
+3. **2. How the rows sorted.** Recorded hours win over the clock; times such
+   as `2445` roll to the next day. The **Imported by** column says which step
+   below takes each kind of row.
+4. **3. Shifts and on-call time.** **Send to shift review** turns shift and
+   on-call rows into monthly review batches in the shift history import,
+   where you match members, units and crews and commit.
+5. **4. Administrative hours.** **Set up administrative hours**, choose each
+   row's category, and import. Entries arrive approved and marked _Imported_.
+6. **5. Training** _(2026-11-04)_. See [Importing training](#importing-training)
+   below.
+7. **Download log**: one line per row saying what became of it.
+
+**Training rows** _(2026-11-04)_ become completed training records in one commit.
+Set up the subject, instructor and "taught the class" columns; map each subject
+to a library course (or let it import as continuing education); and choose, for
+rows naming Target Solutions or Vector Solutions, whether to import ones no
+synced record matches. Rows a synced record already covers are left out.
+
+**Company drills** _(2026-11-05)_. A `CompanyDrill` date counts as a held drill
+when enough members logged it (three by default, 1 to 50). Each held drill
+becomes one past, finalized training session linked to the session attendance
+requirements you choose, with each member's imported record attached, so
+[session attendance](./02-training.md#session-attendance--attend-a-share-of-the-linked-drills-2026-11-04) grades
+correctly. A date fewer members logged stays an ordinary record. The step runs
+after the training commit and is safe to run again. Its confirmation is a plain
+confirmation, not a red delete warning, because it only creates sessions.
+
+_Added 2026-11-10._ On the administrative-hours, training and staffing steps,
+the members list shows a person to be created by the name they will get (for
+example "James Fortner"), not "Former member 1005". Members already set to be
+created as archived former members sit in a collapsed section, so the few still
+to decide stay in view; open it to change any of them.
+
+Running the same file twice is safe. Full detail is in the wiki page
+[Historical Data Import](../../wiki/Integration-Historical-Data-Import.md).
+
+### Importing training
+
+_(2026-11-04)_ Training rows become **completed** training records in one
+step, credited with their recorded hours. Select **Set up training** (it is
+greyed out until a column is marked as training hours), then:
+
+- **Subject**, **Instructor** and **Taught the class** name the columns that
+  hold them. They are detected from the header row; change any that were
+  guessed wrong, or choose **Not in this file**.
+- **Subjects.** Each distinct subject is listed once, with its record count
+  and hours. Subjects that differ only in capitals and punctuation count as
+  one. Pick a library course for a subject and its records take that course's
+  name, type and category, exactly as a Target Solutions record mapped to the
+  course would. **Accept all suggestions** maps every subject whose name
+  closely matches a course; **Use** _course_ beside one subject accepts just
+  that suggestion. A subject left on **Import as written** keeps its own name,
+  as continuing education.
+- **Instructor.** The instructor is kept as the file names them. On a row
+  where **Taught the class** is set, an instructor written as "me" (or left
+  blank) becomes the member's own name, and the record notes that they taught
+  the class.
+- **Training provider rows.** A row whose instructor names Target Solutions or
+  Vector Solutions may already be in The Logbook through the provider sync
+  (see [Training Provider Integrations](#training-provider-integrations)). A
+  synced record for the same member within a day means the row is left out
+  automatically, so nothing is counted twice. For rows nothing synced matches,
+  choose once: **Import them as ordinary training records**, or **Leave them
+  out — the sync is the record**. **Import training records** stays greyed out
+  until you choose.
+- **Members** lists everyone in the file The Logbook could not match. Map each
+  to an existing member, or choose **Create as an archived former member**
+  (**Create all unmatched as archived** does every one at once).
+
+**Import training records** asks first, saying how many records it will write.
+There is no batch undo: a wrong record is corrected on its own. Rows already
+imported are counted and skipped, so running it again adds only what is new.
+
+### Where the imported hours show up
+
+_(2026-11-04)_ Committed shift and on-call rows count in each member's
+**My Hours** and in the **Shift & Call History** section of their profile:
+hours by month and year, how many of them were on call, calls, and hours and
+calls with other departments. The member sees their own; officers who can see
+scheduling reports see anyone's. See
+[Member Profiles](./01-membership.md#member-profiles). Imported training
+appears in the member's training records, and administrative hours in their
+**Administrative Hours**.
+
 ## Weather Alerts
 
 The **NWS Weather Alerts** integration talks to the National Weather Service
@@ -780,9 +992,10 @@ The **NWS Weather Alerts** integration talks to the National Weather Service
 
 ### Configuration
 
-| Field           | What to enter                                                                   |
-| --------------- | ------------------------------------------------------------------------------- |
-| **NWS Zone ID** | Your area's zone code: state, then C or Z, then three digits. Example: `VAZ053` |
+| Field                                 | What to enter                                                                                                           |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **NWS Zone ID**                       | Your area's zone code: state, then C or Z, then three digits. Example: `VAZ053`                                         |
+| **Tell members about severe weather** | How members hear: a dashboard banner, a bell notice, an email, or any mix. Banner and bell start ticked, email unticked |
 
 > **Tip.** Find your zone at
 > [weather.gov/pdd/gis](https://www.weather.gov/pdd/gis). Search by county or
@@ -790,17 +1003,31 @@ The **NWS Weather Alerts** integration talks to the National Weather Service
 
 ### How It Works
 
-> **Important. Only the test works today.** Select **Test** and The Logbook asks
-> the weather service for your zone's current alerts. It tells you whether the
-> zone is valid and how many alerts are active, for example "Zone VAZ053 is
-> valid. 2 active alert(s)."
->
-> Nothing happens after that. The Logbook does not check for alerts on its own,
-> and alerts do not appear anywhere in the app. Do not rely on it to warn
-> members about severe weather. Keep your current alerting.
+The Logbook checks your zone every 15 minutes. Only **Severe** and
+**Extreme** alerts count, which is warnings such as Tornado Warning, Severe
+Thunderstorm Warning and Flash Flood Warning. Advisories, statements and most
+watches are left out, so the banner is not always showing something. Test
+messages and exercises are ignored.
 
-The alerts it can read are the ones the weather service publishes for your
-zone, such as Tornado Warning, Flood Warning and Fire Weather Watch.
+What members see depends on what you ticked:
+
+| Channel              | What happens                                                                                                                                                                 |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dashboard banner** | Every member's dashboard shows the alert while it is in effect: what it is, until when, and **What to do**. It goes when the alert expires or the weather service cancels it |
+| **Bell notice**      | Every current member gets one bell notice when the alert is first issued                                                                                                     |
+| **Email**            | Every current member gets one email when the alert is first issued. A member can turn these off under **Severe weather alerts** in their own email settings                  |
+
+Each alert is announced once, however often the zone is checked. An alert the
+weather service cancels and then reissues under the same name is not announced
+twice.
+
+**Test** asks the weather service for your zone's current alerts and tells you
+whether the zone is valid and how many alerts are active, for example "Zone
+VAZ053 is valid. 2 active alert(s)."
+
+> **Important.** This is a convenience, not an alerting system. If the weather
+> service or the connection to it is down, nothing is shown and nobody is told.
+> Keep your department's own warning arrangements.
 
 ---
 
@@ -829,15 +1056,24 @@ A generic webhook sends signed messages to a web address that you choose.
 
 ### Configuration
 
-| Field           | What to enter                                                  |
-| --------------- | -------------------------------------------------------------- |
-| **Webhook URL** | The address of the system that will receive the messages       |
-| **Secret**      | Optional. Lets the receiving system check a message is genuine |
+| Field                 | What to enter                                                  |
+| --------------------- | -------------------------------------------------------------- |
+| **Webhook URL**       | The address of the system that will receive the messages       |
+| **Secret**            | Optional. Lets the receiving system check a message is genuine |
+| **Send these events** | Which events to send. Leave all unticked to send every one     |
 
-> **Important. Only the test message is sent today.** **Test** sends one test
-> message to your address, so you can check your system receives it. The
-> Logbook does not yet send anything when something happens in the app. There
-> is nothing to subscribe to.
+The Logbook sends a message when one of these happens. They are the same
+events Slack, Discord and Teams are told about:
+
+| Event                      | Event name          | Sent when                        |
+| -------------------------- | ------------------- | -------------------------------- |
+| An event is created        | `event.created`     | Someone creates a calendar event |
+| A shift is created         | `shift.created`     | Someone creates a shift          |
+| A training record is added | `training.recorded` | A training record is added       |
+
+**Test** sends one `test.ping` message, so you can check your system receives
+it before anything real happens. A webhook connected before 2026-10-29 has no
+events ticked, so it is sent all of them.
 
 ### When delivery fails
 
@@ -859,12 +1095,12 @@ Pass this part to whoever writes the system that receives the messages.
 **What your system receives.** An HTTP `POST` with a JSON body and these
 headers:
 
-| Header                | Value                                             |
-| --------------------- | ------------------------------------------------- |
-| `Content-Type`        | `application/json`                                |
-| `X-Webhook-Event`     | The event name — `test.ping` for the test message |
-| `User-Agent`          | `TheLogbook-Webhook/1.0`                          |
-| `X-Webhook-Signature` | Only when a **Secret** is set — see below         |
+| Header                | Value                                     |
+| --------------------- | ----------------------------------------- |
+| `Content-Type`        | `application/json`                        |
+| `X-Webhook-Event`     | The event name, such as `shift.created`   |
+| `User-Agent`          | `TheLogbook-Webhook/1.0`                  |
+| `X-Webhook-Signature` | Only when a **Secret** is set — see below |
 
 The body of the test message:
 
@@ -879,6 +1115,14 @@ The body of the test message:
 ```
 
 `timestamp` is the sending time in whole seconds since 1 January 1970 (UTC).
+
+The other events carry the same three keys, with these fields in `data`:
+
+| Event name          | `data` fields                                              |
+| ------------------- | ---------------------------------------------------------- |
+| `event.created`     | `title`, `event_type`, `start_time` (ISO 8601), `location` |
+| `shift.created`     | `type`, `start_time`, `end_time` (ISO 8601), `crew`        |
+| `training.recorded` | `member_name`, `course_name`, `hours`                      |
 
 Answer with any 2xx status, such as 200 or 204.
 
@@ -1502,20 +1746,23 @@ key or email address.
 
 ## Troubleshooting
 
-| Problem                                                    | What to do                                                                                                                                                                 |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Test** reports a failure                                 | Check the details you entered have not expired or changed, then select **Test** again. Open **Details** for the last error                                                 |
-| Google Calendar or Outlook reads Coming Soon               | Calendar publishing is turned off on the server (`CALENDAR_SYNC_ENABLED`); Outlook cannot be connected yet either way. See [Calendar Integrations](#calendar-integrations) |
-| Google Calendar reads Reconnect required                   | Select **Reconnect with Google** on the card. See [Google Calendar](#google-calendar)                                                                                      |
-| Salesforce sync reports missing fields                     | Run **Check readiness**. Create the missing fields in Salesforce, or tick **Skip custom fields my Salesforce org hasn't created yet**                                      |
-| Webhook test never arrives                                 | Check the address is public and starts with `https://`. Ask whoever runs the receiving system to check it answers                                                          |
-| Weather alerts not showing                                 | Expected: alerts are not shown anywhere yet. **Test** only checks the zone code                                                                                            |
-| Shift feed or department feed not updating                 | Calendar apps check every so often, up to about an hour. Check the link is the current one, not one from before a **Reset link**                                           |
-| Slack, Discord or Teams posts not appearing                | Check the webhook address is still valid in the chat app. Open **Details** to see whether deliveries failed                                                                |
-| Documenso test fails                                       | Check the API token under **Settings > API** in Documenso, and the base URL if you run your own Documenso                                                                  |
-| Cal.com test fails                                         | Check the API key under **Settings > Developer > API keys** in Cal.com                                                                                                     |
-| A signed document or booking did not move the applicant on | Check the Webhook Secret matches on both sides, the callback URL is right, the email matches the applicant, and the applicant's **current** stage uses that integration    |
-| A sign-in keeps expiring                                   | Most integrations renew it by themselves. If it keeps failing, disconnect and connect again                                                                                |
+| Problem                                                    | What to do                                                                                                                                                                                 |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Test** reports a failure                                 | Check the details you entered have not expired or changed, then select **Test** again. Open **Details** for the last error                                                                 |
+| Google Calendar or Outlook reads Coming Soon               | Calendar publishing is turned off on the server (`CALENDAR_SYNC_ENABLED`); Outlook cannot be connected yet either way. See [Calendar Integrations](#calendar-integrations)                 |
+| Google Calendar reads Reconnect required                   | Select **Reconnect with Google** on the card. See [Google Calendar](#google-calendar)                                                                                                      |
+| Salesforce sync reports missing fields                     | Run **Check readiness**. Create the missing fields in Salesforce, or tick **Skip custom fields my Salesforce org hasn't created yet**                                                      |
+| Webhook test never arrives                                 | Check the address is public and starts with `https://`. Ask whoever runs the receiving system to check it answers                                                                          |
+| Weather alerts not showing                                 | Only Severe and Extreme alerts are shown, and only on the channels ticked in the integration's settings. Check the zone with **Test**                                                      |
+| Shift feed or department feed not updating                 | Calendar apps check every so often, up to about an hour. Check the link is the current one, not one from before a **Reset link**                                                           |
+| Slack, Discord or Teams posts not appearing                | Check the webhook address is still valid in the chat app. Open **Details** to see whether deliveries failed                                                                                |
+| Documenso test fails                                       | Check the API token under **Settings > API** in Documenso, and the base URL if you run your own Documenso                                                                                  |
+| Cal.com test fails                                         | Check the API key under **Settings > Developer > API keys** in Cal.com                                                                                                                     |
+| Zeffy test fails                                           | Generate a new API key in Zeffy under **Settings → Integrations** (only the account owner can), then enter it under **Settings** on the Zeffy card                                         |
+| Zeffy payments arrive only once an hour                    | No webhook signing secret is set. Add the webhook in Zeffy, then enter its `whsec_` secret under **Settings** on the Zeffy card. See [Adding the Zeffy Webhook](#adding-the-zeffy-webhook) |
+| Zeffy webhook deliveries are refused                       | The signing secret in The Logbook does not match Zeffy's current one, often after it was regenerated. Enter the new secret under **Settings** on the Zeffy card                            |
+| A signed document or booking did not move the applicant on | Check the Webhook Secret matches on both sides, the callback URL is right, the email matches the applicant, and the applicant's **current** stage uses that integration                    |
+| A sign-in keeps expiring                                   | Most integrations renew it by themselves. If it keeps failing, disconnect and connect again                                                                                                |
 
 ---
 

@@ -68,6 +68,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 import EquipmentCheckForm from './EquipmentCheckForm';
+import { BACKGROUND_SYNC_MESSAGE, OFFLINE_DRAIN_LOCK } from '../../../sw/backgroundSyncProtocol';
 import { useAnyOverlaySurface } from '../../../hooks/useOverlaySurface';
 
 const OverlayProbe = () => <span data-testid="overlay-open">{String(useAnyOverlaySurface())}</span>;
@@ -362,6 +363,75 @@ describe('EquipmentCheckForm quantity seeding', () => {
     );
     expect(mockSubmitCheck).not.toHaveBeenCalled();
     expect(mockMarkPhotosUploaded).toHaveBeenCalledWith('queued-check-1', 'ti-1');
+  });
+
+  it('uploads a just-submitted check’s photos under the lock the background sync takes', async () => {
+    // The photos are queued before they upload, so a sync can be asked for;
+    // without the lock the worker could upload them a second time alongside.
+    const request = vi.fn(<T,>(_name: string, fn: () => Promise<T>) => fn());
+    Object.defineProperty(navigator, 'locks', { value: { request }, configurable: true });
+    mockSubmitCheck.mockResolvedValue({
+      id: 'check-1',
+      items: [{ id: 'check-item-77', templateItemId: 'ti-1', itemName: '4x4 Gauze' }],
+    });
+    try {
+      render({ quantityOnTruck: 4 });
+      await completeWithPhoto();
+      await waitFor(() => expect(mockMarkPhotosUploaded).toHaveBeenCalledWith('queued-check-1', 'ti-1'));
+    } finally {
+      Reflect.deleteProperty(navigator, 'locks');
+    }
+
+    expect(request).toHaveBeenCalledWith(OFFLINE_DRAIN_LOCK, expect.any(Function));
+  });
+
+  it('drains queued checks under the lock the background sync takes', async () => {
+    const request = vi.fn(<T,>(_name: string, fn: () => Promise<T>) => fn());
+    Object.defineProperty(navigator, 'locks', { value: { request }, configurable: true });
+    try {
+      render();
+      await waitFor(() => expect(mockListPendingChecks).toHaveBeenCalled());
+    } finally {
+      Reflect.deleteProperty(navigator, 'locks');
+    }
+
+    expect(request).toHaveBeenCalledWith(OFFLINE_DRAIN_LOCK, expect.any(Function));
+  });
+
+  it('shows retained evidence as sent once a background sync has sent it', async () => {
+    const container = new EventTarget();
+    Object.defineProperty(navigator, 'serviceWorker', { value: container, configurable: true });
+    mockSubmitCheck.mockResolvedValue({
+      id: 'check-1',
+      items: [{ id: 'check-item-77', templateItemId: 'ti-1', itemName: '4x4 Gauze' }],
+    });
+    mockUploadCheckItemPhotos.mockRejectedValueOnce(new Error('upload interrupted'));
+    try {
+      render({ quantityOnTruck: 4 });
+      await completeWithPhoto();
+      await screen.findByText('1 photo saved for retry');
+
+      container.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: BACKGROUND_SYNC_MESSAGE,
+            genericSynced: 0,
+            genericDiscarded: 0,
+            shiftReportsSynced: 0,
+            shiftReportsRefused: [],
+            equipmentChecksSynced: ['queued-check-1'],
+            equipmentChecksDiscarded: [],
+            skillsSynced: [],
+            skillsFailed: [],
+          },
+        })
+      );
+
+      expect(await screen.findByText('1 photo attached')).toBeInTheDocument();
+      expect(screen.queryByText(/saved for retry/)).not.toBeInTheDocument();
+    } finally {
+      Reflect.deleteProperty(navigator, 'serviceWorker');
+    }
   });
 
   it('uploads a queued photo against the returned check-item ID', async () => {

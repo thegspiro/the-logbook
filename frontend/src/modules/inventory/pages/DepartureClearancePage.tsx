@@ -262,8 +262,8 @@ const DepartureClearancePage: React.FC = () => {
           Back to Admin
         </Link>
 
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
+        <div className="page-header mb-6 gap-3 sm:items-center">
+          <div className="page-header-title flex items-center gap-3">
             <div className="shrink-0 rounded-lg bg-blue-800 p-2">
               <ClipboardCheck className="h-5 w-5 text-white" aria-hidden="true" />
             </div>

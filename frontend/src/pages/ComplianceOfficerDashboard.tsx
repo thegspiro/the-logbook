@@ -14,6 +14,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
+import { useAuthStore } from '../stores/authStore';
+import { COMPLIANCE_CONFIG_HREF, COMPLIANCE_CONFIG_PERMISSIONS } from '../components/training/trainingAdminAreas';
 import {
   Shield,
   FileText,
@@ -94,22 +96,27 @@ const KNOWN_SECTIONS: ActiveSection[] = [
 
 const ComplianceOfficerDashboard: React.FC<ComplianceOfficerDashboardProps> = ({ activeTab }) => {
   const navigate = useNavigate();
+  // The hub admits `training.manage`; the configuration page does not, so a
+  // training officer without either of these is not shown a way into it.
+  const canConfigure = useAuthStore((s) => COMPLIANCE_CONFIG_PERMISSIONS.some((p) => s.checkPermission(p)));
   const activeSection: ActiveSection =
     activeTab && (KNOWN_SECTIONS as string[]).includes(activeTab) ? (activeTab as ActiveSection) : 'annual-report';
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Configure action — section selection is handled by the admin hub tabs */}
-      <div className="mb-6 flex justify-end">
-        <button
-          onClick={() => void navigate('/training/compliance-config')}
-          className="bg-theme-input-bg text-theme-text-secondary hover:bg-theme-surface-hover flex min-h-11 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-          title="Compliance Requirements Configuration"
-        >
-          <Settings className="h-4 w-4" />
-          Configure
-        </button>
-      </div>
+      {canConfigure && (
+        <div className="mb-6 flex justify-end">
+          <button
+            onClick={() => void navigate(COMPLIANCE_CONFIG_HREF)}
+            className="bg-theme-input-bg text-theme-text-secondary hover:bg-theme-surface-hover flex min-h-11 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+            title="Compliance Settings"
+          >
+            <Settings className="h-4 w-4" />
+            Configure
+          </button>
+        </div>
+      )}
 
       {/* Section Content */}
       {activeSection === 'annual-report' && <AnnualReportSection />}
@@ -183,15 +190,15 @@ const AnnualReportSection: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
             <FileText className="h-5 w-5 shrink-0 text-red-500" />
             Annual Compliance Report — {year}
           </h2>
           <p className="text-theme-text-muted mt-1 text-sm">Generated {formatDate(report.generated_at, tz)}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="split-row-aside flex flex-wrap items-center gap-3">
           <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="form-input-sm">
             {[0, 1, 2].map((offset) => {
               const y = new Date().getFullYear() - offset;
@@ -491,8 +498,8 @@ const AnnualReportSection: React.FC = () => {
           <div className="border-theme-surface-border border-b px-4 py-3">
             <h3 className="text-theme-text-secondary text-sm font-medium">Member Compliance Status</h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+          <div className="rwd-table-container overflow-x-auto">
+            <table className="rwd-table rwd-table-wide min-w-full text-sm">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th
@@ -545,20 +552,22 @@ const AnnualReportSection: React.FC = () => {
                     key={member.user_id}
                     className="border-theme-surface-border hover:bg-theme-surface-hover border-b"
                   >
-                    <td className="text-theme-text-primary px-4 py-2 font-medium">{member.name}</td>
-                    <td className="text-theme-text-secondary px-4 py-2 text-center">
+                    <td data-label="Member" className="text-theme-text-primary px-4 py-2 font-medium">
+                      {member.name}
+                    </td>
+                    <td data-label="Training Hrs" className="text-theme-text-secondary px-4 py-2 text-center">
                       {formatHours(member.hours_completed)}
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-2 text-center">
+                    <td data-label="Admin Hrs" className="text-theme-text-secondary px-4 py-2 text-center">
                       {formatHours(member.admin_hours_approved)}
                     </td>
-                    <td className="px-4 py-2 text-center font-semibold text-green-500">
+                    <td data-label="Total Hrs" className="px-4 py-2 text-center font-semibold text-green-500">
                       {formatHours(sumHoursToQuarter([member.hours_completed, member.admin_hours_approved]))}
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-2 text-center">
+                    <td data-label="Requirements" className="text-theme-text-secondary px-4 py-2 text-center">
                       {member.requirements_met}/{member.requirements_total}
                     </td>
-                    <td className="px-4 py-2 text-center">
+                    <td data-label="Expired Certs" className="px-4 py-2 text-center">
                       <span
                         className={
                           member.expired_certifications > 0 ? 'font-semibold text-red-500' : 'text-theme-text-muted'
@@ -567,7 +576,7 @@ const AnnualReportSection: React.FC = () => {
                         {member.expired_certifications}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-center">
+                    <td data-label="Status" className="px-4 py-2 text-center">
                       <StatusBadge status={member.status} />
                     </td>
                   </tr>
@@ -627,12 +636,12 @@ const ISOReadinessSection: React.FC = () => {
       </div>
 
       {/* Overall Score */}
-      <div className="card flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row card gap-4 p-6 sm:items-center">
+        <div className="split-row-main">
           <p className="text-theme-text-muted text-sm">Overall ISO Readiness</p>
           <p className="text-theme-text-primary text-4xl font-bold">{data.overall_readiness_pct}%</p>
         </div>
-        <div className="sm:text-right">
+        <div className="split-row-aside sm:text-right">
           <p className="text-theme-text-muted text-sm">Est. FSRS training credit</p>
           <p
             className={`text-4xl font-bold ${
@@ -843,15 +852,15 @@ const AttestationsSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
             <Shield className="h-5 w-5 shrink-0 text-green-500" />
             Compliance Attestations
           </h2>
           <p className="text-theme-text-muted mt-1 text-sm">Formal sign-off records certifying department compliance</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary shrink-0 text-sm">
+        <button onClick={() => setShowForm(!showForm)} className="split-row-aside btn-primary shrink-0 text-sm">
           {showForm ? 'Cancel' : 'New Attestation'}
         </button>
       </div>
@@ -1101,8 +1110,8 @@ const ForecastSection: React.FC = () => {
         <div className="border-theme-surface-border border-b px-4 py-3">
           <h3 className="text-theme-text-secondary text-sm font-medium">Member Compliance Projections</h3>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+        <div className="rwd-table-container overflow-x-auto">
+          <table className="rwd-table rwd-table-wide min-w-full text-sm">
             <thead>
               <tr className="border-theme-surface-border border-b">
                 <th scope="col" className="text-theme-text-secondary px-4 py-2 text-left text-xs font-medium uppercase">
@@ -1143,20 +1152,22 @@ const ForecastSection: React.FC = () => {
             <tbody>
               {forecasts.map((f) => (
                 <tr key={f.user_id} className="border-theme-surface-border hover:bg-theme-surface-hover border-b">
-                  <td className="text-theme-text-primary px-4 py-2 font-medium">{f.user_name}</td>
-                  <td className="px-4 py-2 text-center">
+                  <td data-label="Member" className="text-theme-text-primary px-4 py-2 font-medium">
+                    {f.user_name}
+                  </td>
+                  <td data-label="Current" className="px-4 py-2 text-center">
                     <PctBadge pct={f.current_compliance_percentage} />
                   </td>
-                  <td className="px-4 py-2 text-center">
+                  <td data-label="30 Days" className="px-4 py-2 text-center">
                     <PctBadge pct={f.forecast_30_days} />
                   </td>
-                  <td className="px-4 py-2 text-center">
+                  <td data-label="60 Days" className="px-4 py-2 text-center">
                     <PctBadge pct={f.forecast_60_days} />
                   </td>
-                  <td className="px-4 py-2 text-center">
+                  <td data-label="90 Days" className="px-4 py-2 text-center">
                     <PctBadge pct={f.forecast_90_days} />
                   </td>
-                  <td className="px-4 py-2 text-center">
+                  <td data-label="Expiring Certs" className="px-4 py-2 text-center">
                     <span
                       className={
                         f.expiring_certifications.length > 0 ? 'font-semibold text-red-500' : 'text-theme-text-muted'

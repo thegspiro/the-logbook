@@ -153,6 +153,33 @@ describe('EventForm', () => {
       expect(screen.queryByText(/can't be attached/i)).not.toBeInTheDocument();
     });
 
+    it("names an attachment's type rather than printing its MIME type (W53-6)", () => {
+      renderWithRouter(
+        <EventForm
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          editingEventId="evt-1"
+          initialData={{
+            title: 'Hose drill',
+            attachments: [
+              {
+                id: 'att-1',
+                file_name: 'drill-plan.pdf',
+                file_path: 'events/evt-1/drill-plan.pdf',
+                file_size: 2048,
+                file_type: 'application/pdf',
+                uploaded_by: 'user-1',
+                uploaded_at: '2026-10-01T12:00:00Z',
+              },
+            ],
+          }}
+        />
+      );
+
+      expect(screen.getByText(/· PDF$/)).toBeInTheDocument();
+      expect(screen.queryByText(/application\/pdf/)).not.toBeInTheDocument();
+    });
+
     it('should render submit and cancel buttons', () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} submitLabel="Create Event" />);
 
@@ -469,6 +496,39 @@ describe('EventForm', () => {
       const locationSelect = await screen.findByLabelText(/location/i);
       expect(locationSelect).toHaveTextContent('Storage — Office — Station 1');
       expect(locationSelect).toHaveTextContent('Storage — Office — Station 2');
+    });
+
+    // A facility room's location is named "Room — Facility" by the backend and
+    // carries that facility as its building, so the label must not add it again.
+    it("does not repeat a facility room's building when rooms span facilities", async () => {
+      vi.mocked(apiModule.locationsService.getLocations).mockResolvedValue([
+        {
+          id: 'room-1',
+          name: 'Volunteer Office — Station 1 - Headquarters',
+          facility_id: 'facility-1',
+          facility_room_id: 'room-1',
+          building: 'Station 1 - Headquarters',
+          is_active: true,
+        },
+        {
+          id: 'room-2',
+          name: 'Day Room — Station 3 - Eastside',
+          facility_id: 'facility-2',
+          facility_room_id: 'room-2',
+          building: 'Station 3 - Eastside',
+          is_active: true,
+        },
+        { id: 'loc-3', name: 'Training Room', building: 'Annex', is_active: true },
+      ] as unknown as Location[]);
+
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      const locationSelect = await screen.findByLabelText(/location/i);
+      await waitFor(() => expect((locationSelect as HTMLSelectElement).options.length).toBeGreaterThan(3));
+      const labels = Array.from((locationSelect as HTMLSelectElement).options).map((option) => option.text);
+      expect(labels).toContain('Volunteer Office — Station 1 - Headquarters');
+      expect(labels).toContain('Day Room — Station 3 - Eastside');
+      expect(labels).toContain('Training Room (Annex)');
     });
 
     it('should toggle between select and manual location modes', async () => {
@@ -978,9 +1038,12 @@ describe('EventForm', () => {
       const submitButton = screen.getByRole('button', { name: /create event/i });
       await user.click(submitButton);
 
+      // On the field it is about, tied to it, as well as in the summary (forms review F-4).
       await waitFor(() => {
-        expect(screen.getByText('End date must be after start date')).toBeInTheDocument();
+        expect(endInput).toHaveAccessibleDescription('End must be after the start.');
       });
+      expect(endInput).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getByRole('alert')).toHaveTextContent('End must be after the start.');
 
       expect(mockOnSubmit).not.toHaveBeenCalled();
     });

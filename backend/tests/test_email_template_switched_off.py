@@ -307,6 +307,8 @@ class TestTheAlwaysSentSet:
             EmailTemplateType.WELCOME,
             EmailTemplateType.BALLOT_NOTIFICATION,
             EmailTemplateType.APPLICATION_STATUS_LINK,
+            EmailTemplateType.APPLICATION_FOLLOW_UP_FORM,
+            EmailTemplateType.APPLICATION_CONTACT_CHANGED,
         }
 
     async def test_an_always_sent_type_answers_without_reading_the_database(self):

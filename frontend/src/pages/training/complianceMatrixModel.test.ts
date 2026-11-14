@@ -158,18 +158,40 @@ describe('evaluateCell', () => {
     expect(result.waiverNote).toBe('Target reduced 24 → 20 hours for 2 waived months');
   });
 
+  it('says "on leave" only for the months a leave of absence covered', () => {
+    const reduced = {
+      status: 'in_progress',
+      progress_current: 3,
+      progress_required: 6,
+      base_required: 72,
+      progress_unit: 'hours',
+      waived_months: 11,
+    } as const;
+    expect(evaluateCell(cell({ ...reduced, leave_months: 11 }), requirement(), AS_OF).waiverNote).toBe(
+      'Target reduced 72 → 6 hours for 11 months on leave'
+    );
+    expect(evaluateCell(cell({ ...reduced, waiver_months: 11 }), requirement(), AS_OF).waiverNote).toBe(
+      'Target reduced 72 → 6 hours for 11 waived months'
+    );
+    expect(evaluateCell(cell({ ...reduced, leave_months: 9, waiver_months: 2 }), requirement(), AS_OF).waiverNote).toBe(
+      'Target reduced 72 → 6 hours for 9 months on leave and 2 waived months'
+    );
+  });
+
   it('adds no waiver note when no months were waived', () => {
     expect(evaluateCell(cell(), requirement(), AS_OF).waiverNote).toBeNull();
   });
 
   it('labels the row with the date that decides it', () => {
-    // A fixed as-of before the expiry: measured from today, this cell turned
-    // lapsed once 2026-11-12 passed and the label with it.
-    const expiring = evaluateCell(cell({ expiry_date: '2026-11-12' }), requirement(), '2026-10-01');
+    // A fixed cutoff, not AS_OF: whether the date reads "Expires" or "Lapsed"
+    // turns on the cutoff, so measured from today this case flipped to
+    // "Lapsed" the day after its expiry date passed.
+    const asOf = '2026-11-01';
+    const expiring = evaluateCell(cell({ expiry_date: '2026-11-12' }), requirement(), asOf);
     const windowed = evaluateCell(
       cell({ status: 'not_started', window_start: '2026-01-01', window_end: '2026-12-31' }),
       requirement(),
-      AS_OF
+      asOf
     );
     expect(expiring.dateLabel).toBe('Expires Nov 12, 2026');
     // The year prints once when both ends share it.
@@ -645,8 +667,33 @@ describe('requirementMeta', () => {
     );
   });
 
+  it('states an attendance share as a percentage of sessions', () => {
+    expect(
+      requirementMeta(
+        requirement({ requirement_type: 'session_attendance', target: 60, target_unit: 'percent_of_sessions' })
+      )
+    ).toBe('annual · 60% of sessions');
+  });
+
   it('is empty for an unknown requirement', () => {
     expect(requirementMeta(undefined)).toBe('');
+  });
+});
+
+describe('attendance progress', () => {
+  it('counts sessions, singular for one', () => {
+    const one = evaluateCell(
+      cell({ status: 'completed', progress_current: 1, progress_required: 1, progress_unit: 'sessions' }),
+      requirement({ requirement_type: 'session_attendance', target: 60, target_unit: 'percent_of_sessions' }),
+      AS_OF
+    );
+    const several = evaluateCell(
+      cell({ status: 'in_progress', progress_current: 2, progress_required: 3, progress_unit: 'sessions' }),
+      requirement({ requirement_type: 'session_attendance', target: 60, target_unit: 'percent_of_sessions' }),
+      AS_OF
+    );
+    expect(one.progressLabel).toBe('1 of 1 session');
+    expect(several.progressLabel).toBe('2 of 3 sessions');
   });
 });
 
@@ -688,5 +735,57 @@ describe('an existing member inside a catch-up period', () => {
     const [rollup] = rollUpRequirements([veteran, recruit], [requirement({ id: 'r2' })]);
     expect(rollup?.total).toBe(1);
     expect(rollup?.behind.map((m) => m.member.user_id)).toEqual(['u2']);
+  });
+});
+
+// Workflow review W80-9: the backend reports "not_applicable" for a
+// session-attendance requirement no session of which has been held yet.
+describe('a session-attendance requirement with no session held yet', () => {
+  const reqs = new Map([['r1', requirement()]]);
+  const notYetHeld = cell({
+    requirement_id: 'r2',
+    status: 'not_applicable',
+    progress_current: 0,
+    progress_required: 0,
+    progress_unit: 'sessions',
+  });
+
+  it('says no session has been held, not met and not missing', () => {
+    const evaluated = evaluateCell(notYetHeld, undefined, AS_OF);
+    expect(evaluated.tone).toBe(CellTone.NOT_YET_HELD);
+    expect(evaluated.progressLabel).toBe('No sessions held yet');
+    expect(isMetTone(evaluated.tone)).toBe(false);
+    expect(isGradedTone(evaluated.tone)).toBe(false);
+  });
+
+  it('counts neither met nor open, matching the backend tally', () => {
+    const result = evaluateMember(
+      member({ requirements: [cell({ requirement_id: 'r1', status: 'completed' }), notYetHeld] }),
+      reqs,
+      AS_OF
+    );
+    expect(result.met).toBe(1);
+    expect(result.total).toBe(1);
+    expect(result.open).toBe(0);
+  });
+});
+
+describe('a Chief override', () => {
+  it('says the override, not the count, met the requirement', () => {
+    const overridden = evaluateCell(
+      cell({
+        status: 'completed',
+        overridden: true,
+        progress_current: 1,
+        progress_required: 3,
+        progress_unit: 'sessions',
+      }),
+      requirement({ requirement_type: 'session_attendance', target: 60, target_unit: 'percent_of_sessions' }),
+      AS_OF
+    );
+    const counted = evaluateCell(cell({ status: 'completed' }), requirement(), AS_OF);
+    expect(overridden.overrideNote).toBe("Met by the Chief's override");
+    expect(overridden.progressLabel).toBe('1 of 3 sessions');
+    expect(counted.overrideNote).toBeNull();
   });
 });

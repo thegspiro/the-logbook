@@ -369,7 +369,7 @@ Public Access** — **and** allows multiple submissions. Otherwise the request
 must carry a signed-in member session (the app's cookies) for the form's own
 organization, or it is refused with **401** "Authentication is required to
 submit this form." Forms require sign-in by default; the event-request form
-generated from **Manage Events → Settings → Public Form** is the one created
+generated from **Manage Events → Settings → Public Requests → Request form** is the one created
 open. A session from a different organization gets **404**. When
 `CAPTCHA_ENABLED` is on, the submission also needs a CAPTCHA token.
 

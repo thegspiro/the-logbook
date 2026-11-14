@@ -3,12 +3,14 @@ import { useLocation } from 'react-router';
 import type { LucideIcon } from 'lucide-react';
 import { adminHubService } from '../../services/adminHubService';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { useFirstLoadHold } from '../../hooks/useFirstLoadHold';
 import type { AdminHubSummary } from '../../types/adminHub';
 import { attentionCountsForTabs } from './attentionCounts';
 import AdminAttentionQueue from './AdminAttentionQueue';
 import AdminMetricsRow from './AdminMetricsRow';
 import AdminHubCardTabs from './AdminHubCardTabs';
-import { Breadcrumbs, type BreadcrumbItem } from '../ux/Breadcrumbs';
+import type { BreadcrumbItem } from '../ux/Breadcrumbs';
+import AdminPageHeader from './AdminPageHeader';
 
 /**
  * The shared administration-page frame.
@@ -95,6 +97,12 @@ interface AdminHubFrameProps<K extends string> {
   onTabChange?: ((tab: K) => void) | undefined;
   /** Replaces the standard tab bar for a module with its own navigation. */
   nav?: React.ReactNode;
+  /**
+   * The caller's `nav` cannot be drawn yet — Inventory and Scheduling build
+   * theirs from the enabled modules — so what sits under it waits with it, as
+   * it does for the summary.
+   */
+  navPending?: boolean | undefined;
 
   /**
    * Change this to make the frame refetch — a page that resolves an exception
@@ -127,6 +135,7 @@ export function AdminHubFrame<K extends string>({
   activeTab,
   onTabChange,
   nav,
+  navPending = false,
   refreshToken,
   showAttentionQueue = true,
   onSummaryChange,
@@ -135,6 +144,17 @@ export function AdminHubFrame<K extends string>({
   const [summary, setSummary] = useState<AdminHubSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // The attention queue exists only when the summary carries items, so until
+  // the first summary settles nothing can know whether it will take ~290px
+  // above the tabs and the body, and drawn in the meantime they were pushed
+  // down when it arrived, on every hub route. A nav the caller cannot build
+  // yet is the same. The body is a card row that scrolls its selected card into
+  // view on mount, which is why this hides with `visibility`: see
+  // useFirstLoadHold. The wrappers are ordinary boxes, not `display: contents`:
+  // a hub card in a box-less wrapper stopped taking clicks in WebKit (the
+  // Mobile Safari job), with or without the hold.
+  const [summaryPending, setSummaryPending] = useState(wantsSummary && showAttentionQueue);
+  const held = useFirstLoadHold(summaryPending || navPending);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   // Held in a ref so a caller passing an inline callback does not re-run the
   // fetch on every render.
@@ -148,6 +168,7 @@ export function AdminHubFrame<K extends string>({
       setSummary(null);
       setError(null);
       setLoading(false);
+      setSummaryPending(false);
       onSummaryChangeRef.current?.(null);
       return;
     }
@@ -165,6 +186,7 @@ export function AdminHubFrame<K extends string>({
       setError(getErrorMessage(err, 'Could not load this page’s summary.'));
     } finally {
       setLoading(false);
+      setSummaryPending(false);
     }
   }, [moduleKey, wantsSummary]);
 
@@ -228,60 +250,47 @@ export function AdminHubFrame<K extends string>({
           where ordinary pages sit at 16px and 32px. The hubs' own bodies and
           the Events tabs carried the same duplicate and lost it with this. */}
       <div className="mx-auto flex max-w-7xl flex-col gap-5 pt-6 sm:pt-8">
-        {/* 0 — Trail. Above the eyebrow, because it says where the page sits
-            rather than what kind of page it is. Rendered by the frame so all
-            six hubs carry one without each remembering to; `mb-0` because the
-            frame's own flex gap already spaces it.
-
-            It ends at the PARENT. This header already names the page twice —
-            eyebrow "Administration", then an <h1> of "Inventory
-            Administration" — and a crumb repeating the <h1> verbatim
-            immediately above it is a third near-identical line to a reader and
-            a name announced twice to a screen reader. What the trail is here
-            for is the step up, which nothing else on a hub offers. */}
-        <Breadcrumbs items={breadcrumbs} className="mb-0" omitCurrentPage />
-
-        {/* 1 — Header. Icon actions and a single red primary; never two reds.
-            The title's 16rem basis is what makes this row wrap. With `flex-1`
-            (basis 0) the title claimed no width of its own, so the row never
-            wrapped and the non-shrinking actions crushed it — at 390px the
-            <h1> was 53px wide and the actions sat over the eyebrow. Now the
-            actions drop beneath the title as soon as both cannot fit. */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 grow basis-64">
-            <p className="text-theme-text-muted text-[11px] font-bold tracking-[0.16em] uppercase">{eyebrow}</p>
-            <h1 className="text-theme-text-primary mt-0.5 text-2xl font-bold">{title}</h1>
-            <p className="text-theme-text-muted mt-1 text-sm">{description}</p>
-          </div>
-
-          {(actions.length > 0 || primaryAction || headerAside) && (
-            <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">
-              {actions.map((action) => (
-                <button
-                  key={action.key}
-                  type="button"
-                  onClick={action.onClick}
-                  aria-label={action.label}
-                  title={action.label}
-                  className="btn-icon border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring border transition-colors focus:ring-2 focus:outline-hidden"
-                >
-                  <action.icon className={`h-4.5 w-4.5 ${action.busy ? 'animate-spin' : ''}`} aria-hidden="true" />
-                </button>
-              ))}
-              {primaryAction && (
-                <button
-                  type="button"
-                  onClick={primaryAction.onClick}
-                  className="btn-primary flex items-center gap-2 text-sm font-semibold"
-                >
-                  <primaryAction.icon className="h-4 w-4" aria-hidden="true" />
-                  <span>{primaryAction.label}</span>
-                </button>
-              )}
-              {headerAside}
-            </div>
-          )}
-        </div>
+        {/* 0 & 1 — Trail and header, shared with every non-hub admin page
+            through AdminPageHeader so the two cannot drift. The trail ends at
+            the PARENT: the eyebrow and the <h1> already name this page, and a
+            crumb repeating the <h1> immediately above it is a name announced
+            twice to a screen reader. Icon actions and a single red primary;
+            never two reds. */}
+        <AdminPageHeader
+          title={title}
+          description={description}
+          eyebrow={eyebrow}
+          breadcrumbs={breadcrumbs}
+          actions={
+            actions.length > 0 || primaryAction || headerAside ? (
+              <>
+                {actions.map((action) => (
+                  <button
+                    key={action.key}
+                    type="button"
+                    onClick={action.onClick}
+                    aria-label={action.label}
+                    title={action.label}
+                    className="btn-icon border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring border transition-colors focus:ring-2 focus:outline-hidden"
+                  >
+                    <action.icon className={`h-4.5 w-4.5 ${action.busy ? 'animate-spin' : ''}`} aria-hidden="true" />
+                  </button>
+                ))}
+                {primaryAction && (
+                  <button
+                    type="button"
+                    onClick={primaryAction.onClick}
+                    className="btn-primary flex items-center gap-2 text-sm font-semibold"
+                  >
+                    <primaryAction.icon className="h-4 w-4" aria-hidden="true" />
+                    <span>{primaryAction.label}</span>
+                  </button>
+                )}
+                {headerAside}
+              </>
+            ) : undefined
+          }
+        />
 
         {/* 2 & 3 — Metrics and queue. Source order is the desktop order; the
             phone swaps them, because the queue is the only thing worth a phone
@@ -290,7 +299,8 @@ export function AdminHubFrame<K extends string>({
           <AdminMetricsRow
             metrics={summary?.metrics ?? []}
             loading={loading && summary === null}
-            className="order-2 sm:order-1"
+            // On a phone the queue is drawn above the metrics, so they wait too.
+            className={`order-2 sm:order-1 ${held ? 'max-sm:invisible' : ''}`}
             queueShown={Boolean(summary) && showAttentionQueue}
           />
           {summary && showAttentionQueue && (
@@ -322,67 +332,73 @@ export function AdminHubFrame<K extends string>({
             declares that scroll as intentional to the mobile overflow check; no
             tabIndex, because a tablist stays out of the tab order (its tabs use
             roving tabindex) and the tabs themselves reach the hidden end. */}
-        {cardTabs && activeTab && onTabChange && (
-          <AdminHubCardTabs<K>
-            tabs={cardTabs}
-            activeTab={activeTab}
-            onTabChange={onTabChange}
-            label={`${title} sections`}
-            idPrefix={idPrefix}
-          />
-        )}
-        {tabs && !cardTabs && !singleDescribedTab && activeTab && onTabChange && (
-          <div className="border-theme-surface-border border-b">
-            <div
-              className="tab-scroll border-b-0"
-              role="tablist"
-              aria-label={`${title} tabs`}
-              data-mobile-scroll-region
-            >
-              {tabs.map((tab) => {
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    ref={(node) => {
-                      tabRefs.current[tab.id] = node;
-                    }}
-                    role="tab"
-                    type="button"
-                    aria-selected={isActive}
-                    tabIndex={isActive ? 0 : -1}
-                    onClick={() => onTabChange(tab.id)}
-                    onKeyDown={handleTabKeyDown}
-                    className={`focus:ring-theme-focus-ring touch:py-3 border-b-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
-                      isActive
-                        ? 'text-theme-text-primary border-red-500'
-                        : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
+        {/* The column's own gap, so the tabs and nav sit as they would without
+            it; `empty:hidden` keeps a nav that renders nothing from adding one. */}
+        <div data-held={held || undefined} className={`flex flex-col gap-5 empty:hidden ${held ? 'invisible' : ''}`}>
+          {cardTabs && activeTab && onTabChange && (
+            <AdminHubCardTabs<K>
+              tabs={cardTabs}
+              activeTab={activeTab}
+              onTabChange={onTabChange}
+              label={`${title} sections`}
+              idPrefix={idPrefix}
+            />
+          )}
+          {tabs && !cardTabs && !singleDescribedTab && activeTab && onTabChange && (
+            <div className="border-theme-surface-border border-b">
+              <div
+                className="tab-scroll border-b-0"
+                role="tablist"
+                aria-label={`${title} tabs`}
+                data-mobile-scroll-region
+              >
+                {tabs.map((tab) => {
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      ref={(node) => {
+                        tabRefs.current[tab.id] = node;
+                      }}
+                      role="tab"
+                      type="button"
+                      aria-selected={isActive}
+                      tabIndex={isActive ? 0 : -1}
+                      onClick={() => onTabChange(tab.id)}
+                      onKeyDown={handleTabKeyDown}
+                      className={`focus:ring-theme-focus-ring touch:py-3 border-b-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
+                        isActive
+                          ? 'text-theme-text-primary border-red-500'
+                          : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
-        {nav}
+          )}
+          {nav}
+        </div>
       </div>
 
       {/* 5 — Body. Free: table, form, calendar, card grid — the module's own.
           Under card tabs it is their tabpanel, so the selected card's
           aria-controls resolves to it. */}
-      {cardTabs && activeTab ? (
-        <div
-          id={`${idPrefix}-panel-${activeTab}`}
-          role="tabpanel"
-          aria-labelledby={`${idPrefix}-tab-${activeTab}-label`}
-        >
-          {children}
-        </div>
-      ) : (
-        children
-      )}
+      <div data-testid="admin-hub-body" data-held={held || undefined} className={held ? 'invisible' : undefined}>
+        {cardTabs && activeTab ? (
+          <div
+            id={`${idPrefix}-panel-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`${idPrefix}-tab-${activeTab}-label`}
+          >
+            {children}
+          </div>
+        ) : (
+          children
+        )}
+      </div>
     </div>
   );
 }

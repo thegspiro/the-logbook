@@ -6,6 +6,7 @@ tests pin how that row is validated, stored, redacted, tested and routed, and
 that only an organization administrator can set it up.
 """
 
+import copy
 import json
 import uuid
 from types import SimpleNamespace
@@ -14,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from fastapi import HTTPException
 
 import app.api.v1.email_test_helper as email_test_helper
 from app.api.v1.endpoints.organizations import _resolve_redacted_secrets
@@ -226,8 +228,12 @@ def _service(org):
     return OrganizationService(db)
 
 
-async def _save(org, update, *, admin: bool):
+async def _save(org, update, *, admin: bool, confirm=None):
+    """Save as the endpoints do: an administrator's save carries the step-up
+    hook (USR-12), which a test may replace to watch or refuse it."""
     service = _service(org)
+    if confirm is None and admin:
+        confirm = AsyncMock()
     with (
         patch.object(service, "get_organization", AsyncMock(return_value=org)),
         patch.object(
@@ -235,7 +241,10 @@ async def _save(org, update, *, admin: bool):
         ),
     ):
         await service.update_organization_settings(
-            "org-id", update, may_configure_delegated_email=admin
+            "org-id",
+            update,
+            may_configure_delegated_email=admin,
+            confirm_delegated_email_change=confirm,
         )
 
 
@@ -349,6 +358,106 @@ class TestOnlyAnAdministratorConfiguresTheServiceAccount:
 
 
 @pytest.mark.unit
+class TestTheServiceAccountChangeReVerifies:
+    """Owner decision 2026-11-01 (USR-12): re-verify only for this change."""
+
+    async def test_setting_it_up_asks(self):
+        confirm = AsyncMock()
+
+        await _save(
+            _app_password_org(),
+            {"email_service": sa_section()},
+            admin=True,
+            confirm=confirm,
+        )
+
+        confirm.assert_awaited_once()
+
+    async def test_changing_whom_it_sends_as_asks(self):
+        confirm = AsyncMock()
+
+        await _save(
+            _service_account_org(),
+            {"email_service": sa_section(from_email="chief@example.org")},
+            admin=True,
+            confirm=confirm,
+        )
+
+        confirm.assert_awaited_once()
+
+    async def test_an_unchanged_form_does_not_ask(self):
+        confirm = AsyncMock()
+
+        await _save(
+            _service_account_org(),
+            {
+                "email_service": sa_section(
+                    from_name="Renamed FD",
+                    google_service_account_key=REDACTED_SECRET,
+                )
+            },
+            admin=True,
+            confirm=confirm,
+        )
+
+        confirm.assert_not_awaited()
+
+    async def test_an_app_password_save_does_not_ask(self):
+        confirm = AsyncMock()
+
+        await _save(
+            _app_password_org(),
+            {
+                "email_service": {
+                    "enabled": True,
+                    "platform": "gmail",
+                    "google_auth_method": "app_password",
+                    "google_app_password": "abcdefghijklmnop",
+                    "from_email": "other@example.org",
+                }
+            },
+            admin=True,
+            confirm=confirm,
+        )
+
+        confirm.assert_not_awaited()
+
+    async def test_a_refused_step_up_writes_nothing(self):
+        org = _app_password_org()
+        before = copy.deepcopy(org.settings)
+
+        with pytest.raises(HTTPException) as exc:
+            await _save(
+                org,
+                {"email_service": sa_section()},
+                admin=True,
+                confirm=AsyncMock(side_effect=HTTPException(status_code=403)),
+            )
+
+        assert exc.value.status_code == 403
+        assert org.settings == before
+
+    async def test_without_the_hook_an_administrator_is_refused(self):
+        org = _app_password_org()
+        service = _service(org)
+
+        with (
+            patch.object(service, "get_organization", AsyncMock(return_value=org)),
+            patch.object(
+                service, "get_organization_settings", AsyncMock(return_value=None)
+            ),
+            pytest.raises(PermissionError, match="confirm your identity"),
+        ):
+            await service.update_organization_settings(
+                "org-id",
+                {"email_service": sa_section()},
+                may_configure_delegated_email=True,
+            )
+
+        assert "google_service_account_key" not in org.settings["email_service"]
+
+
+@pytest.mark.unit
 class TestEndpointsPassTheAdministratorFlag:
     async def _call_email_patch(self, permissions: set):
         from app.api.v1.endpoints import organizations as endpoint
@@ -374,6 +483,8 @@ class TestEndpointsPassTheAdministratorFlag:
                 current_user=SimpleNamespace(
                     id="u1", username="chief", organization_id="org-1"
                 ),
+                authorization=None,
+                access_token="session-token",
             )
         return org_service.update_organization_settings, audit
 
@@ -390,6 +501,16 @@ class TestEndpointsPassTheAdministratorFlag:
         assert audit.call_args.kwargs["event_data"]["email_auth_method"] == (
             "service_account"
         )
+
+    async def test_the_hook_is_the_step_up_check(self):
+        from app.api.v1.endpoints import organizations as endpoint
+
+        update, _ = await self._call_email_patch({"admin.access"})
+        confirm = update.call_args.kwargs["confirm_delegated_email_change"]
+        with patch.object(endpoint, "ensure_stepup", AsyncMock()) as stepup:
+            await confirm()
+        stepup.assert_awaited_once()
+        assert stepup.call_args.args[1] == "session-token"
 
 
 @pytest.mark.unit
@@ -577,7 +698,10 @@ class TestServiceAccountWriteEndToEnd:
             )
 
         updated = await service.update_organization_settings(
-            org.id, {"email_service": sa_section()}, may_configure_delegated_email=True
+            org.id,
+            {"email_service": sa_section()},
+            may_configure_delegated_email=True,
+            confirm_delegated_email_change=AsyncMock(),
         )
 
         assert updated.email_service.google_auth_method == "service_account"

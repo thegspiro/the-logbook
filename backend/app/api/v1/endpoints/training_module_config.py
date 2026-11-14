@@ -5,6 +5,7 @@ GET  /config          - Any authenticated member can read the visibility setting
 PUT  /config          - training.configure (or training.manage) to update them
 GET  /my-training     - Member's aggregated training data (respects visibility config)
 GET  /my-training/records - Member's full training history, paginated and grouped by year
+GET  /members/{user_id}/requirements - training.manage: one member's requirements
 """
 
 from datetime import date
@@ -22,6 +23,7 @@ from app.api.dependencies import (
     require_permission,
     user_has_permission,
 )
+from app.core.audit import log_audit_event
 from app.core.constants import TRAINING_OFFICER_ROLE_SLUGS
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -40,18 +42,21 @@ from app.models.training import (
     TrainingSubmission,
     TrainingType,
 )
-from app.models.user import User
+from app.models.user import MemberLeaveOfAbsence, User
 from app.schemas.training_module_config import (
     MEMBER_DISCLOSURE_FIELDS,
     MemberVisibilityResponse,
     TrainingModuleConfigResponse,
     TrainingModuleConfigUpdate,
 )
+from app.services.shift_evaluation_service import ShiftEvaluationService
 from app.services.skills_testing_service import member_skill_expirations
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
+    NOT_YET_HELD_STATUS,
     get_org_include_current_month,
     load_credited_shift_dates,
+    load_held_sessions,
     member_join_date,
     requirement_applies_to_member,
     tally_standing,
@@ -62,8 +67,15 @@ from app.services.training_course_names import (
 )
 from app.services.training_module_config_service import TrainingModuleConfigService
 from app.services.training_program_service import TrainingProgramService
+from app.services.training_record_source import record_sources
+from app.services.training_requirement_courses import (
+    load_required_course_catalog,
+)
 from app.services.training_service import TrainingService
-from app.services.training_waiver_service import fetch_user_waivers
+from app.services.training_waiver_service import (
+    fetch_user_waivers,
+    get_leave_month_rule,
+)
 from app.utils.org_timezone import resolve_org_today
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -226,6 +238,162 @@ async def _resolve_caller_visibility(
     return visibility, is_officer, user_with_roles
 
 
+async def _member_leaves(db: AsyncSession, org_id: str, user_id: str) -> list:
+    """A member's active leaves of absence: dates, type, and whether they excuse training.
+
+    The reason is free text and stays with the leave record; the dates and type
+    are what explain a reduced target. ``excuses_training`` is false for a leave
+    an officer marked exempt, which keeps the member's training requirements
+    in force (``training_waiver_service._leave_and_waiver_periods``).
+    """
+    leaves = (
+        (
+            await db.execute(
+                select(MemberLeaveOfAbsence)
+                .where(
+                    MemberLeaveOfAbsence.organization_id == org_id,
+                    MemberLeaveOfAbsence.user_id == user_id,
+                    MemberLeaveOfAbsence.active.is_(True),
+                )
+                .order_by(MemberLeaveOfAbsence.start_date.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        {
+            "id": str(leave.id),
+            "leave_type": getattr(leave.leave_type, "value", leave.leave_type),
+            "start_date": str(leave.start_date),
+            "end_date": str(leave.end_date) if leave.end_date else None,
+            "excuses_training": not leave.exempt_from_training_waiver,
+        }
+        for leave in leaves
+    ]
+
+
+async def _evaluate_member_requirements(
+    db: AsyncSession,
+    member: User,
+    member_with_roles: User | None,
+    org_id: str,
+    today: date,
+    include_course_checklist: bool = True,
+) -> tuple[list[dict[str, Any]], list[str], float]:
+    """Every active requirement that applies to ``member``, evaluated.
+
+    ``include_course_checklist`` loads the course names a COURSES
+    requirement's ``course_checklist`` lists. A caller that will not return
+    the per-requirement breakdown passes False and skips that query; the
+    checklist is then null, and no figure depends on it.
+
+    One definition for the member's own page and the officer's view of that
+    member (CLAUDE.md pitfall 29), so the two cannot disagree about a target,
+    a waived month or a status. ``member_with_roles`` is the same member with
+    positions eagerly loaded. Returns ``(details, statuses, progress_sum)``.
+    """
+    user_id = str(member.id)
+    req_result = await db.execute(
+        select(TrainingRequirement).where(
+            TrainingRequirement.organization_id == org_id,
+            TrainingRequirement.active == True,  # noqa: E712
+        )
+    )
+    all_requirements = req_result.scalars().all()
+
+    user_position_slugs: list[str] = []
+    try:
+        if member_with_roles and member_with_roles.roles:
+            user_position_slugs = [
+                str(r.slug) for r in member_with_roles.roles if r.slug
+            ]
+    except Exception as e:
+        logger.warning("Failed to load position slugs for user {}: {}", user_id, e)
+
+    user_membership_type = getattr(member, "membership_type", None) or "active"
+    join_date = member_join_date(member)
+    applicable: list[Any] = [
+        req
+        for req in all_requirements
+        if requirement_applies_to_member(
+            req,
+            user_membership_type,
+            getattr(member, "rank", None),
+            join_date=join_date,
+            position_slugs=user_position_slugs,
+        )
+    ]
+
+    # --- Fetch active waivers + leaves of absence for this user ---
+    user_waivers = await fetch_user_waivers(db, org_id, user_id)
+
+    # --- Pre-fetch all training records for this user (no date filter —
+    # the shared evaluator handles date windowing per requirement) ---
+    all_records_result = await db.execute(
+        select(TrainingRecord).where(
+            TrainingRecord.organization_id == org_id,
+            TrainingRecord.user_id == user_id,
+        )
+    )
+    member_records = list(all_records_result.scalars().all())
+    org_include_current = await get_org_include_current_month(db, str(org_id))
+    # Shifts worked, for a requirement counted from attendance; full history,
+    # as a rolling one anchors its due date on the latest shift.
+    shift_dates = (
+        await load_credited_shift_dates(
+            db,
+            str(org_id),
+            [user_id],
+            applicable,
+            today,
+            org_include_current,
+            full_history=True,
+        )
+    ).get(user_id, [])
+    held_sessions = await load_held_sessions(db, str(org_id), applicable)
+    course_catalog = (
+        await load_required_course_catalog(db, str(org_id), applicable)
+        if include_course_checklist
+        else None
+    )
+
+    # Evaluate every applicable requirement using the shared helper which
+    # handles all requirement types (hours, courses, certification,
+    # shifts, calls, fallback) and rolling period windows.
+    total_progress_pct = 0.0
+    requirements_detail: list[dict[str, Any]] = []
+    statuses: list[str] = []
+
+    for req in applicable:
+        detail = TrainingService.evaluate_requirement_detail(
+            req,
+            member_records,
+            today,
+            waivers=user_waivers,
+            org_include_current_month=org_include_current,
+            join_date=join_date,
+            shift_dates=shift_dates,
+            held_sessions=held_sessions,
+            course_catalog=course_catalog,
+        )
+        requirements_detail.append(detail)
+        # Listed with its deadline, but left out of the summary until the
+        # catch-up period ends — the same rule every compliance screen uses.
+        if detail["catch_up_deadline"]:
+            statuses.append(CATCH_UP_STATUS)
+            continue
+        # No linked session held yet: listed, graded neither way (W80-9).
+        if detail["not_applicable"]:
+            statuses.append(NOT_YET_HELD_STATUS)
+            continue
+        total_progress_pct += detail["progress_percentage"]
+        statuses.append(
+            TrainingStatus.COMPLETED.value if detail["is_met"] else "not_met"
+        )
+    return requirements_detail, statuses, total_progress_pct
+
+
 @router.get("/my-training")
 async def get_my_training_summary(
     db: AsyncSession = Depends(get_db),
@@ -366,91 +534,19 @@ async def get_my_training_summary(
     result["hours_summary"] = hours_summary
 
     # --- Requirements Summary (always returned for core stats) ---
-    # Include ALL active requirements, not just annual
-    req_result = await db.execute(
-        select(TrainingRequirement).where(
-            TrainingRequirement.organization_id == org_id,
-            TrainingRequirement.active == True,  # noqa: E712
-        )
+    shows_requirement_details = is_officer or visibility.get(
+        "show_requirement_details", True
     )
-    all_requirements = req_result.scalars().all()
-
-    # Filter to requirements applicable to this user (use eagerly-loaded roles)
-    user_position_slugs: list[str] = []
-    try:
-        if user_with_roles and user_with_roles.roles:
-            user_position_slugs = [str(r.slug) for r in user_with_roles.roles if r.slug]
-    except Exception as e:
-        logger.warning(f"Failed to load user role IDs for user {current_user.id}: {e}")
-
-    user_membership_type = getattr(current_user, "membership_type", None) or "active"
-    join_date = member_join_date(current_user)
-    applicable: list[Any] = [
-        req
-        for req in all_requirements
-        if requirement_applies_to_member(
-            req,
-            user_membership_type,
-            getattr(current_user, "rank", None),
-            join_date=join_date,
-            position_slugs=user_position_slugs,
-        )
-    ]
-
-    # --- Fetch active waivers + leaves of absence for this user ---
-    user_waivers = await fetch_user_waivers(db, org_id, user_id)
-
-    # --- Pre-fetch all training records for this user (no date filter —
-    # the shared evaluator handles date windowing per requirement) ---
-    all_records_result = await db.execute(
-        select(TrainingRecord).where(
-            TrainingRecord.organization_id == org_id,
-            TrainingRecord.user_id == user_id,
-        )
-    )
-    member_records = list(all_records_result.scalars().all())
-    org_include_current = await get_org_include_current_month(db, str(org_id))
-    # Shifts worked, for a requirement counted from attendance; full history,
-    # as a rolling one anchors its due date on the latest shift.
-    shift_dates = (
-        await load_credited_shift_dates(
+    requirements_detail, statuses, total_progress_pct = (
+        await _evaluate_member_requirements(
             db,
-            str(org_id),
-            [str(user_id)],
-            applicable,
+            current_user,
+            user_with_roles,
+            org_id,
             today,
-            org_include_current,
-            full_history=True,
+            include_course_checklist=shows_requirement_details,
         )
-    ).get(str(user_id), [])
-
-    # Evaluate every applicable requirement using the shared helper which
-    # handles all requirement types (hours, courses, certification,
-    # shifts, calls, fallback) and rolling period windows.
-    total_progress_pct = 0.0
-    requirements_detail: list[dict[str, Any]] = []
-    statuses: list[str] = []
-
-    for req in applicable:
-        detail = TrainingService.evaluate_requirement_detail(
-            req,
-            member_records,
-            today,
-            waivers=user_waivers,
-            org_include_current_month=org_include_current,
-            join_date=join_date,
-            shift_dates=shift_dates,
-        )
-        requirements_detail.append(detail)
-        # Listed with its deadline, but left out of the summary until the
-        # catch-up period ends — the same rule every compliance screen uses.
-        if detail["catch_up_deadline"]:
-            statuses.append(CATCH_UP_STATUS)
-            continue
-        total_progress_pct += detail["progress_percentage"]
-        statuses.append(
-            TrainingStatus.COMPLETED.value if detail["is_met"] else "not_met"
-        )
+    )
 
     met_count, total_reqs = tally_standing(statuses)
     avg_compliance = (
@@ -479,8 +575,12 @@ async def get_my_training_summary(
     # ``show_requirement_details`` names, and until now only the copy nested
     # inside Pipeline Progress honoured it while this one — hours, due dates,
     # overdue-by-N-days — was returned to everybody.
-    if is_officer or visibility.get("show_requirement_details", True):
+    if shows_requirement_details:
         result["requirements_detail"] = requirements_detail
+        # The leave behind a reduced target, so a member reading "11 months
+        # on leave" can see which leave it was without asking an officer.
+        result["leaves_of_absence"] = await _member_leaves(db, org_id, user_id)
+        result["leave_month_rule"] = await get_leave_month_rule(db, org_id)
 
     # --- Certification Status ---
     if is_officer or visibility.get("show_certification_status", True):
@@ -591,7 +691,7 @@ async def get_my_training_summary(
             }
 
             # Requirement details (if allowed)
-            if is_officer or visibility.get("show_requirement_details", True):
+            if shows_requirement_details:
                 rp_result = await db.execute(
                     select(RequirementProgress).where(
                         RequirementProgress.enrollment_id == str(enrollment.id)
@@ -715,6 +815,10 @@ async def get_my_training_summary(
             "hours_reported": float(srow[1]),
             "total_calls": int(srow[2]),
             "avg_rating": round(float(srow[3]), 1) if srow[3] else None,
+            # Per form, never pooled with avg_rating's 1-5 report scale.
+            "evaluation_averages": await ShiftEvaluationService(db).averages_by_form(
+                user_id, org_id, member_view=not is_officer
+            ),
         }
 
     # --- Submission History ---
@@ -771,6 +875,54 @@ def _record_year_filter(year: str | None) -> list[Any]:
     if not year.isdigit() or len(year) != 4:
         raise HTTPException(status_code=400, detail="Invalid year")
     return [func.extract("year", TrainingRecord.completion_date) == int(year)]
+
+
+@router.get("/members/{user_id}/requirements")
+async def get_member_requirements(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """One member's requirements, as the member sees them on My Training.
+
+    For the training officer's view of a member. Gated on ``training.manage``,
+    the permission behind the compliance matrix and a member's training
+    records (``GET /training/records``); a member reads their own through
+    ``/my-training``, which applies the department's visibility settings.
+    The officer exemption from those settings is the same one ``/my-training``
+    grants an officer reading their own record.
+    """
+    org_id = str(current_user.organization_id)
+    member = (
+        await db.execute(
+            select(User)
+            .where(User.id == user_id, User.organization_id == org_id)
+            .options(selectinload(User.roles))
+        )
+    ).scalar_one_or_none()
+    if member is None:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    today = await resolve_org_today(db, org_id)
+    requirements_detail, statuses, total_progress_pct = (
+        await _evaluate_member_requirements(db, member, member, org_id, today)
+    )
+    met_count, total_reqs = tally_standing(statuses)
+
+    return {
+        "user_id": str(member.id),
+        "as_of": str(today),
+        "leave_month_rule": await get_leave_month_rule(db, org_id),
+        "requirements_summary": {
+            "total_requirements": total_reqs,
+            "met_requirements": met_count,
+            "avg_compliance": (
+                round(total_progress_pct / total_reqs, 1) if total_reqs > 0 else None
+            ),
+        },
+        "requirements_detail": requirements_detail,
+        "leaves_of_absence": await _member_leaves(db, org_id, str(member.id)),
+    }
 
 
 @router.get("/my-training/records")
@@ -831,19 +983,14 @@ async def get_my_training_records(
         TrainingRecord.status == TrainingStatus.COMPLETED,
         TrainingRecord.voided_at.is_(None),
     )
+    # Hours come only from completed, unvoided records; every record counts.
+    counted_hours = func.coalesce(
+        func.sum(case((and_(*counted), TrainingRecord.hours_completed), else_=0)),
+        0,
+    )
     aggregate_columns: list[Any] = [year_col, func.count(TrainingRecord.id)]
     if show_hours:
-        aggregate_columns.append(
-            func.coalesce(
-                func.sum(
-                    case(
-                        (and_(*counted), TrainingRecord.hours_completed),
-                        else_=0,
-                    )
-                ),
-                0,
-            )
-        )
+        aggregate_columns.append(counted_hours)
     aggregate_result = await db.execute(
         select(*aggregate_columns).where(*filters).group_by(year_col)
     )
@@ -852,10 +999,44 @@ async def get_my_training_records(
         entry: dict[str, Any] = {
             "year": str(int(row[0])) if row[0] is not None else UNDATED_YEAR,
             "records": row[1],
+            "months": [],
         }
         if show_hours:
             entry["hours"] = float(row[2])
         years.append(entry)
+
+    # The same totals per calendar month, so the history can head each month
+    # with its whole total even while only one page of its rows is loaded.
+    # A separate query rather than summing these into the year figures: the
+    # year totals stay exactly what they were. Only months with a record
+    # appear; undated records have no month and keep an empty list.
+    month_col = func.extract("month", TrainingRecord.completion_date)
+    month_columns: list[Any] = [
+        year_col.label("year"),
+        month_col.label("month"),
+        func.count(TrainingRecord.id).label("records"),
+    ]
+    if show_hours:
+        month_columns.append(counted_hours.label("hours"))
+    month_result = await db.execute(
+        select(*month_columns)
+        .where(*filters, TrainingRecord.completion_date.is_not(None))
+        .group_by(year_col, month_col)
+    )
+    by_year = {y["year"]: y for y in years}
+    for month_row in month_result.mappings():
+        year_entry = by_year.get(str(int(month_row["year"])))
+        if year_entry is None:
+            continue
+        month_entry: dict[str, Any] = {
+            "month": f"{int(month_row['year']):04d}-{int(month_row['month']):02d}",
+            "records": month_row["records"],
+        }
+        if show_hours:
+            month_entry["hours"] = float(month_row["hours"])
+        year_entry["months"].append(month_entry)
+    for year_entry in years:
+        year_entry["months"].sort(key=lambda m: m["month"], reverse=True)
     # Newest year first, undated records (no year) ahead of all of them.
     years.sort(key=lambda y: (y["year"] == UNDATED_YEAR, y["year"]), reverse=True)
 
@@ -879,8 +1060,12 @@ async def get_my_training_records(
     page_course_names = await library_course_names(
         db, str(current_user.organization_id), (r.course_id for r in page_records)
     )
+    page_sources = await record_sources(
+        db, str(current_user.organization_id), page_records
+    )
     items: list[dict[str, Any]] = []
     for r in page_records:
+        source = page_sources[str(r.id)]
         item: dict[str, Any] = {
             "id": str(r.id),
             "course_name": member_course_name(
@@ -898,6 +1083,8 @@ async def get_my_training_records(
             "instructor": r.instructor,
             "voided_at": r.voided_at.isoformat() if r.voided_at else None,
             "void_reason": r.void_reason,
+            "source": source.kind,
+            "source_label": source.label,
         }
         if show_hours:
             item["hours_completed"] = (
@@ -956,6 +1143,20 @@ async def export_my_training(
     user_id = str(current_user.id)
     include_certifications = bool(config.show_certification_status)
 
+    await log_audit_event(
+        db=db,
+        event_type="my_training_record_exported",
+        event_category="training",
+        severity="info",
+        event_data={
+            "format": format,
+            "start_date": start_date.isoformat() if start_date else None,
+            "end_date": end_date.isoformat() if end_date else None,
+        },
+        user_id=user_id,
+        organization_id=str(current_user.organization_id),
+    )
+
     try:
         if format == "pdf":
             pdf_buf = await export_service.generate_individual_pdf(
@@ -964,13 +1165,14 @@ async def export_my_training(
                 start_date=start_date,
                 end_date=end_date,
                 include_certifications=include_certifications,
+                generated_by=current_user.full_name,
             )
             return StreamingResponse(
                 pdf_buf,
                 media_type="application/pdf",
                 headers={
                     "Content-Disposition": (
-                        "attachment; filename=my_training_record.pdf"
+                        'attachment; filename="my_training_record.pdf"'
                     )
                 },
             )
@@ -986,7 +1188,7 @@ async def export_my_training(
             content=csv_content,
             media_type="text/csv",
             headers={
-                "Content-Disposition": ("attachment; filename=my_training_record.csv")
+                "Content-Disposition": ('attachment; filename="my_training_record.csv"')
             },
         )
     except ValueError as e:

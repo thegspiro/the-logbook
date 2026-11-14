@@ -213,3 +213,20 @@ class ConsentService:
             )
         )
         return {str(row) for row in result.scalars().all()}
+
+    async def answers(
+        self, user_ids: Sequence[str], consent_type: ConsentType
+    ) -> dict[str, bool]:
+        """Each answer recorded for *user_ids*: True granted, False declined.
+        An id with no row is absent — never asked, which a caller treats as
+        not consented (the same fail-closed reading as ``has_consent``) but
+        may word differently."""
+        if not user_ids:
+            return {}
+        result = await self.db.execute(
+            select(UserConsent.user_id, UserConsent.granted).where(
+                UserConsent.user_id.in_([str(uid) for uid in user_ids]),
+                UserConsent.consent_type == consent_type,
+            )
+        )
+        return {str(uid): bool(granted) for uid, granted in result.all()}

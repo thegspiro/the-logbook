@@ -170,3 +170,17 @@ describe('a range reaching back past a tracking-mode change (SCHED-14)', () => {
     expect(screen.queryByText(/Part of this range is missing/)).not.toBeInTheDocument();
   });
 });
+
+describe('CallVolumeRenderer dates (W72-4)', () => {
+  it('shows dates as the rest of the app does, not as ISO strings', () => {
+    render(<CallVolumeRenderer data={report()} />);
+    // The busiest-day card and the row's Date cell.
+    expect(screen.getAllByText('Aug 4, 2026')).toHaveLength(2);
+    expect(screen.queryByText('2026-08-04')).not.toBeInTheDocument();
+  });
+
+  it('keeps the export ISO, so a spreadsheet can sort it', () => {
+    const { rows } = getCallVolumeExportData(report());
+    expect(rows[0]?.['date']).toBe('2026-08-04');
+  });
+});

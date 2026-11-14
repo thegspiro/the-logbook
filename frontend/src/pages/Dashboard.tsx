@@ -16,6 +16,7 @@ import type { AssetWidgetData } from '../components/dashboard/AssetWidgetRegistr
 import ChiefOperationsDashboard from '../components/dashboard/ChiefOperationsDashboard';
 import { canViewChiefDashboard } from '../components/dashboard/chiefWidgetRegistry';
 import OrganizationSetupWidget from '../components/dashboard/OrganizationSetupWidget';
+import WeatherAlertBanner from '../components/dashboard/WeatherAlertBanner';
 import { READINESS_WINDOW_DAYS, currentCredentials } from '../utils/readiness';
 import type { ReadinessCert } from '../utils/readiness';
 import { LinkifiedText } from '../components/ux';
@@ -76,6 +77,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { useEnabledModules } from '../hooks/useEnabledModules';
 import {
   addCalendarDays,
+  calendarDaysBetween,
   formatCalendarDate,
   formatDate,
   formatDateCustom,
@@ -94,7 +96,12 @@ import type { EventListItem } from '../types/event';
 import { dashboardService } from '../services/api';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { useNotificationCountStore } from '../hooks/useNotificationCount';
-import { describeStack, groupNotificationsIntoStacks, stackUnreadCount } from '../utils/notificationStacks';
+import {
+  describeStack,
+  groupNotificationsIntoStacks,
+  stackPreview,
+  stackUnreadCount,
+} from '../utils/notificationStacks';
 
 /**
  * Main Dashboard Component — "station board"
@@ -215,7 +222,7 @@ interface SectionErrorProps {
 
 const SectionError: React.FC<SectionErrorProps> = ({ message, source, busy, onRetry }) => {
   return (
-    <div role="alert" className="flex items-center gap-3 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+    <div role="alert" className="flex items-center gap-3 px-4 py-3 text-sm text-red-900 dark:text-red-300">
       <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span className="min-w-0 flex-1">{message}</span>
       {/* mobile-touch-target, not a hand-set height: at min-h-9 this rendered
@@ -1235,10 +1242,35 @@ const Dashboard: React.FC = () => {
     const formatShiftTime = (value: string | null | undefined) =>
       value && value.includes('T') ? formatTime(value, tz) : formatTimeOfDay(value);
 
+    // Days from a shift's start to its end. A bare "HH:MM" end at or before
+    // the start wraps past midnight -- equal times are a full 24, as
+    // hoursBetweenTimesOfDay reads them -- and a datetime end is compared by
+    // its calendar date in the department's zone.
+    const shiftEndDayOffset = (shift: ShiftRecord): number => {
+      const { start_time: start, end_time: end } = shift;
+      if (!start || !end) return 0;
+      if (start.includes('T') && end.includes('T')) {
+        return calendarDaysBetween(toLocalISODate(end, tz), toLocalISODate(start, tz)) ?? 0;
+      }
+      if (!start.includes('T') && !end.includes('T')) {
+        // "Midnight" already says where the day ends; "Midnight next day" does not help.
+        if (end.startsWith('00:00')) return 0;
+        return end.slice(0, 5) <= start.slice(0, 5) ? 1 : 0;
+      }
+      return 0;
+    };
+
+    // A start-to-start 24 otherwise reads "7:00 AM–7:00 AM", which looks like a
+    // shift of no length; the fire service's commonest shift is exactly that.
     const shiftTimeRange = (shift: ShiftRecord) => {
       const start = formatShiftTime(shift.start_time);
       const end = formatShiftTime(shift.end_time);
-      return end ? `${start}–${end}` : start;
+      if (!end) return start;
+      const days = shiftEndDayOffset(shift);
+      // An exact start-to-start 24 gets the shortest form, so it fits a phone row.
+      if (days === 1 && start === end) return `${start} · 24 hr`;
+      const suffix = days === 1 ? ' next day' : days > 1 ? ` (+${days} days)` : '';
+      return `${start}–${end}${suffix}`;
     };
 
     const shiftSortAt = (shift: ShiftRecord) =>
@@ -1414,7 +1446,7 @@ const Dashboard: React.FC = () => {
         entries.push({
           key: `notif-stack-${entry.category}`,
           title: describeStack(entry.category, count),
-          body: newest ? `Latest: ${newest.subject || 'Notification'}` : '',
+          body: newest ? `Latest: ${stackPreview(entry.notifications)}` : '',
           meta: newest ? formatRelativeTime(newest.sent_at || newest.created_at) : '',
           sortAt: newest?.sent_at ? new Date(newest.sent_at).getTime() : 0,
           unread: true,
@@ -1672,7 +1704,11 @@ const Dashboard: React.FC = () => {
           <div className={`w-1 self-stretch rounded-full ${TIMELINE_ACCENT[entry.kind]}`} aria-hidden="true" />
           <div className="min-w-0 flex-1">
             <p className="text-theme-text-primary truncate text-[15px] font-semibold sm:text-base">{entry.title}</p>
-            <p className="text-theme-text-muted truncate text-xs sm:text-sm">{entry.detail}</p>
+            {/* Two lines on a phone, so an overnight time and a staffing count
+                are not cut off mid-word; one line once there is room. */}
+            <p className="text-theme-text-muted line-clamp-2 text-xs sm:line-clamp-none sm:truncate sm:text-sm">
+              {entry.detail}
+            </p>
           </div>
 
           {entry.kind === 'my-shift' && (
@@ -1819,14 +1855,15 @@ const Dashboard: React.FC = () => {
           : 'Dashboard content loaded.'}
       </div>
       <div data-page-main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 sm:px-6 sm:py-8 lg:px-8">
+        <WeatherAlertBanner />
         {/* Header — who and when. The month's hours are stated once, by the
             hours card, which carries the same total plus the split behind it
             and its own failure state; a second copy up here restated the
             figure with no way to see what it was made of. */}
         <div className="mb-5 sm:mb-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">{greeting}</h1>
+            <div className="page-header-title">
+              <h1 className="text-theme-text-primary text-2xl font-bold break-words sm:text-3xl">{greeting}</h1>
               <p className="text-theme-text-muted mt-0.5 text-sm sm:text-base">
                 {formatDateCustom(new Date(), { weekday: 'long', month: 'long', day: 'numeric' }, tz)}
                 <span className="hidden sm:inline">{' · ' + departmentName}</span>
@@ -1879,7 +1916,11 @@ const Dashboard: React.FC = () => {
               {/* First thing a new member sees, because the dashboard is where
                   they land and nothing here pointed at the lessons before. */}
               <DashboardOrientation />
-              <DashboardOrganizationWidgets />
+              {/* Department-wide money, grant and outreach totals. A leader has
+                  a My Department tab for exactly this, and here it pushed their
+                  own shifts and training below the fold; a member whose grants
+                  feed the pulse but open no such tab still sees it here. */}
+              {!canViewOrganization && <DashboardOrganizationWidgets />}
               {/* Both carry the default flex order, so source order puts the
                   verdict above the panel it summarises — on phones too, where
                   the actions and timeline swap around them. */}
@@ -1935,62 +1976,71 @@ const Dashboard: React.FC = () => {
                   shift and clocking in are as common as logging training.
                   On a phone they sit *below* the week: at 2am the thumb
                   reaches the bottom third, and the week is what you read. */}
-              <div
-                className={`order-3 grid grid-cols-2 gap-3 sm:order-1 ${showTakeShift ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}
-              >
-                <button
-                  onClick={() => void navigate('/training/submit')}
-                  className={`focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-3.5 rounded-lg bg-red-800 px-4 py-4 text-left text-white shadow-sm transition-colors hover:bg-red-900 focus:ring-2 focus:ring-offset-2 focus:outline-hidden active:bg-red-900 sm:col-span-1 sm:min-h-[88px] ${showTakeShift ? 'col-span-2' : 'col-span-1'}`}
-                >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/20">
-                    <Plus className="h-6 w-6" strokeWidth={2.5} aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-base font-bold">Log Training</span>
-                    <span className="mt-0.5 block truncate text-[13px] text-red-100">Record a course or hours</span>
-                  </span>
-                </button>
-
-                {showTakeShift && (
+              <div className="@container order-3 sm:order-1">
+                <div className={`grid grid-cols-2 gap-3 ${showTakeShift ? '@[32rem]:grid-cols-3' : ''}`}>
                   <button
-                    onClick={() => void navigate('/scheduling')}
-                    className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
+                    onClick={() => void navigate('/training/submit')}
+                    className={`focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-3.5 rounded-lg bg-red-800 px-4 py-4 text-left text-white shadow-sm transition-colors hover:bg-red-900 focus:ring-2 focus:ring-offset-2 focus:outline-hidden active:bg-red-900 sm:min-h-[88px] @[32rem]:col-span-1 ${showTakeShift ? 'col-span-2' : 'col-span-1'}`}
                   >
-                    <span className="bg-theme-accent-green-muted text-theme-accent-green flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
-                      <CalendarPlus className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/20">
+                      <Plus className="h-6 w-6" strokeWidth={2.5} aria-hidden="true" />
                     </span>
                     <span className="min-w-0">
-                      <span className="text-theme-text-primary block text-[15px] font-bold sm:text-base">
-                        Take a Shift
+                      <span className="block text-base font-bold">Log Training</span>
+                      <span className="mt-0.5 block truncate text-[13px] text-red-50">Record a course or hours</span>
+                    </span>
+                  </button>
+
+                  {showTakeShift && (
+                    <button
+                      onClick={() => void navigate('/scheduling')}
+                      className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
+                    >
+                      <span className="bg-theme-accent-green-muted text-theme-accent-green flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
+                        <CalendarPlus className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
                       </span>
+                      <span className="min-w-0">
+                        <span className="text-theme-text-primary block text-[15px] font-bold sm:text-base">
+                          Take a Shift
+                        </span>
+                        {/* Shown at every width: on a phone, where a member most often
+                            grabs a seat, the count is what says one needs filling. It
+                            may wrap there; from sm up there is room for one line. */}
+                        <span className="text-theme-text-muted mt-0.5 block text-[13px] sm:truncate">
+                          {openShiftsError ? (
+                            'Open shifts unavailable'
+                          ) : (
+                            <>
+                              <span className="font-bold tabular-nums">{openShiftsInWindow.length}</span> open
+                              {/* Its own line on a phone rather than wrapping mid-phrase. */}
+                              {shortStaffedOpenShifts > 0 && (
+                                <span className="block sm:inline">
+                                  <span className="hidden sm:inline"> · </span>
+                                  {shortStaffedOpenShifts} short-staffed
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </span>
+                      </span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => void navigate('/admin-hours')}
+                    className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
+                  >
+                    <span className="bg-theme-accent-purple-muted text-theme-accent-purple flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
+                      <ClipboardCheck className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="text-theme-text-primary block text-[15px] font-bold sm:text-base">Clock In</span>
                       <span className="text-theme-text-muted mt-0.5 hidden truncate text-[13px] sm:block">
-                        {openShiftsError ? (
-                          'Open shifts unavailable'
-                        ) : (
-                          <>
-                            <span className="font-bold tabular-nums">{openShiftsInWindow.length}</span> open
-                            {shortStaffedOpenShifts > 0 && ` · ${shortStaffedOpenShifts} short-staffed`}
-                          </>
-                        )}
+                        Administrative hours
                       </span>
                     </span>
                   </button>
-                )}
-
-                <button
-                  onClick={() => void navigate('/admin-hours')}
-                  className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
-                >
-                  <span className="bg-theme-accent-purple-muted text-theme-accent-purple flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
-                    <ClipboardCheck className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="text-theme-text-primary block text-[15px] font-bold sm:text-base">Clock In</span>
-                    <span className="text-theme-text-muted mt-0.5 hidden truncate text-[13px] sm:block">
-                      Administrative hours
-                    </span>
-                  </span>
-                </button>
+                </div>
               </div>
 
               {/* One time list: my shifts, open slots and events, merged */}
@@ -2102,8 +2152,8 @@ const Dashboard: React.FC = () => {
                   `beforeinstallprompt` get a one-tap Install button; iOS Safari
                   has no such event, so it gets Share-sheet instructions. */}
               {(canInstall || needsManualInstall) && !dismissedInstall && (
-                <div className="order-4 flex flex-col gap-3 rounded-lg border border-blue-500/20 bg-blue-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-start gap-3">
+                <div className="split-row order-4 gap-3 rounded-lg border border-blue-500/20 bg-blue-500/10 p-4 sm:items-center">
+                  <div className="split-row-main flex items-start gap-3">
                     <Smartphone className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" aria-hidden="true" />
                     <div>
                       <p className="text-theme-text-primary text-sm font-medium">Install The Logbook</p>
@@ -2117,7 +2167,7 @@ const Dashboard: React.FC = () => {
                       )}
                     </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="split-row-aside flex flex-wrap items-center gap-2">
                     <button
                       onClick={dismissInstallBanner}
                       className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target rounded px-3 text-sm"
@@ -2505,12 +2555,13 @@ const Dashboard: React.FC = () => {
                   Department-wide staffing, compliance, events, action items, and operations.
                 </p>
               </div>
+              <DashboardOrganizationWidgets />
               {operations && <ChiefOperationsDashboard data={operations} />}
               {canViewLegacyAdmin &&
                 (adminError ? (
                   <div className="card border-red-500/30 p-5" role="alert">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
+                    <div className="split-row gap-3 sm:items-center">
+                      <div className="split-row-main">
                         <p className="text-theme-text-primary font-semibold">Department summary is unavailable</p>
                         <p className="text-theme-text-muted mt-1 text-sm">
                           We could not load the department-wide metrics. Your personal dashboard is unaffected.
@@ -2519,7 +2570,7 @@ const Dashboard: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => void loadAdminSummary()}
-                        className="btn-primary min-h-[44px] px-4"
+                        className="split-row-aside btn-primary min-h-[44px] px-4"
                       >
                         Try again
                       </button>
@@ -2582,7 +2633,10 @@ const Dashboard: React.FC = () => {
                             : 'All on track'
                         }
                         loading={loadingAdmin}
-                        onClick={() => void navigate('/action-items')}
+                        // The tile counts open items, so it opens the list on
+                        // exactly those: `?status=open` asks the feed for
+                        // the same open rule the count uses (DASH-40).
+                        onClick={() => void navigate('/action-items?status=open')}
                         ariaLabel={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ''}`}
                       />
                     )}

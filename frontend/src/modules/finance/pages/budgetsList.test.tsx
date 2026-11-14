@@ -114,6 +114,6 @@ describe('BudgetsPage list (W61)', () => {
   it('shows an overdrawn total in red', () => {
     renderList();
     const totals = screen.getByRole('row', { name: /^Total/ });
-    expect(within(totals).getByText('-$300')).toHaveClass('text-red-600');
+    expect(within(totals).getByText('-$300')).toHaveClass('text-red-800');
   });
 });

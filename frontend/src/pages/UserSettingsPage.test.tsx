@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Link } from 'react-router';
 import { renderWithRouter } from '../test/utils';
 import { UserSettingsPage } from './UserSettingsPage';
 import * as apiModule from '../services/api';
 import type { MemberEmailChoices } from '../types/user';
+import toast from 'react-hot-toast';
 
 // Mock the API module
 vi.mock('../services/api', () => ({
@@ -177,6 +178,18 @@ describe('UserSettingsPage', () => {
       expect(screen.getByText('No runs like 123 or abc')).toBeInTheDocument();
     });
 
+    it('says which rules are met in text, not only by icon', async () => {
+      // W03-10: the state was an aria-hidden icon, silent to a screen reader.
+      const user = userEvent.setup();
+      await openPasswordTab(user);
+
+      await user.type(screen.getByLabelText(/^new password/i), 'Abcdef123!xyz');
+
+      const rule = (name: string) => screen.getAllByRole('listitem').find((li) => li.textContent?.endsWith(name));
+      expect(rule('One number')).toHaveTextContent('Met: One number');
+      expect(rule('No runs like 123 or abc')).toHaveTextContent('Not met: No runs like 123 or abc');
+    });
+
     it('signs out and says why after a successful change', async () => {
       // W04-1: the change ends every session, so reloading the user hit a 401
       // and the member reached sign-in with no word that it had worked.
@@ -343,6 +356,32 @@ describe('UserSettingsPage', () => {
     expect(screen.getByText('Notifications')).toBeInTheDocument();
   });
 
+  // W04-11: the member's own name, phone and address fields carried no
+  // autocomplete hint, so a browser or assistive tool could not fill them
+  // (WCAG 2.2 SC 1.3.5, Identify Input Purpose).
+  describe('Account Tab input purpose', () => {
+    it("names the purpose of each of the member's own fields", async () => {
+      renderWithRouter(<UserSettingsPage />);
+      // By label, as a user finds them; each label is the field's own.
+      const expected: [RegExp, string][] = [
+        [/^first name/i, 'given-name'],
+        [/^middle name/i, 'additional-name'],
+        [/^last name/i, 'family-name'],
+        [/^preferred name/i, 'nickname'],
+        [/^phone/i, 'tel'],
+        [/^mobile/i, 'mobile tel'],
+        [/^street address/i, 'street-address'],
+        [/^city/i, 'address-level2'],
+        [/^state/i, 'address-level1'],
+        [/^zip code/i, 'postal-code'],
+      ];
+      await screen.findByLabelText(/first name/i);
+      for (const [label, token] of expected) {
+        expect(screen.getByLabelText(label), String(label)).toHaveAttribute('autocomplete', token);
+      }
+    });
+  });
+
   describe('preferred name', () => {
     beforeEach(() => {
       mockLoadUser.mockReset();
@@ -387,6 +426,235 @@ describe('UserSettingsPage', () => {
       expect(vi.mocked(userService.updateUserProfile).mock.calls[0]?.[1]).toEqual(
         expect.objectContaining({ preferred_name: null })
       );
+    });
+  });
+
+  // Forms review F-2/F-7/F-9: a value the server refuses lands on its field;
+  // under the owner's rule (2026-11-05) the rest of the profile still saves.
+  describe('server refusals and form behaviour', () => {
+    const phoneMessage = 'Enter a phone number using digits, spaces, dashes or parentheses.';
+
+    beforeEach(() => {
+      vi.mocked(userService.updateUserProfile).mockReset();
+    });
+
+    it('saves everything but the refused field, which stays flagged with the reason', async () => {
+      vi.mocked(userService.updateUserProfile)
+        .mockRejectedValueOnce({
+          response: { status: 422, data: { detail: [{ field: 'mobile', message: phoneMessage }] } },
+        })
+        .mockImplementation((_id, data) => Promise.resolve({ ...defaultProfile, ...data } as never));
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const mobile = await screen.findByLabelText('Mobile');
+      await user.clear(mobile);
+      await user.type(mobile, 'call me maybe');
+      await user.type(screen.getByLabelText('Middle Name'), 'Quinn');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() => expect(userService.updateUserProfile).toHaveBeenCalledTimes(2));
+      const retried = vi.mocked(userService.updateUserProfile).mock.calls[1]?.[1] ?? {};
+      expect(retried).not.toHaveProperty('mobile');
+      expect(retried).toEqual(expect.objectContaining({ middle_name: 'Quinn' }));
+      await waitFor(() => expect(mobile).toHaveAccessibleDescription(phoneMessage));
+      expect(mobile).toHaveAttribute('aria-invalid', 'true');
+      expect(mobile).toHaveValue('call me maybe');
+      await waitFor(() => expect(mobile).toHaveFocus());
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Profile saved, except mobile'));
+
+      await user.type(mobile, '1');
+      expect(mobile).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('saves on Enter in a field, and offers autofill hints and the schema limits', async () => {
+      vi.mocked(userService.updateUserProfile).mockImplementation((_id, data) =>
+        Promise.resolve({ ...defaultProfile, ...data } as never)
+      );
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const middle = await screen.findByLabelText('Middle Name');
+      expect(screen.getByLabelText(/^First Name/)).toHaveAttribute('autocomplete', 'given-name');
+      expect(screen.getByLabelText(/^First Name/)).toHaveAttribute('maxlength', '100');
+      expect(screen.getByLabelText('Street Address')).toHaveAttribute('autocomplete', 'street-address');
+      expect(screen.getByLabelText('ZIP Code')).toHaveAttribute('autocomplete', 'postal-code');
+      expect(screen.getByLabelText('Mobile')).toHaveAttribute('maxlength', '20');
+
+      await user.type(middle, 'Quinn{Enter}');
+      await waitFor(() => expect(userService.updateUserProfile).toHaveBeenCalledTimes(1));
+    });
+  });
+
+  // An emptied First Name was saved as "" behind "Profile saved", leaving the
+  // member with no name on the roster or on legal records (forms review F-1).
+  // Owner rule (2026-11-05): the form still saves with an error; the error is
+  // flagged until it is resolved.
+  describe('legal name is required', () => {
+    beforeEach(() => {
+      vi.mocked(userService.updateUserProfile).mockReset();
+      // The server keeps a name the request leaves out, as UserUpdate does.
+      vi.mocked(userService.updateUserProfile).mockImplementation((_id, data) =>
+        Promise.resolve({ ...defaultProfile, ...data } as never)
+      );
+    });
+
+    it('marks first and last name as required', async () => {
+      renderWithRouter(<UserSettingsPage />);
+
+      expect(await screen.findByLabelText(/^First Name/)).toBeRequired();
+      expect(screen.getByLabelText(/^Last Name/)).toBeRequired();
+    });
+
+    it.each([
+      ['First Name', 'first_name', '', 'John'],
+      ['Last Name', 'last_name', '   ', 'Doe'],
+    ])('saves the rest and keeps the stored name when %s is blanked', async (label, key, typed, stored) => {
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const input = await screen.findByLabelText(new RegExp(`^${label}`));
+      await waitFor(() => expect(input).toHaveValue(stored));
+      fireEvent.change(input, { target: { value: typed } });
+      await user.type(screen.getByLabelText('Middle Name'), 'Quinn');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() => expect(userService.updateUserProfile).toHaveBeenCalledTimes(1));
+      const sent = vi.mocked(userService.updateUserProfile).mock.calls[0]?.[1] ?? {};
+      expect(sent).not.toHaveProperty(key);
+      expect(sent).toEqual(expect.objectContaining({ middle_name: 'Quinn' }));
+      await waitFor(() => expect(input).toHaveValue(stored));
+      expect(input).not.toHaveAttribute('aria-invalid');
+      expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('was kept'));
+    });
+
+    it('flags a name that was never recorded, saves anyway, and keeps it flagged', async () => {
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue({ ...defaultProfile, first_name: '' } as never);
+      vi.mocked(userService.updateUserProfile).mockImplementation((_id, data) =>
+        Promise.resolve({ ...defaultProfile, first_name: '', ...data } as never)
+      );
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const input = await screen.findByLabelText(/^First Name/);
+      await waitFor(() => expect(input).toHaveAttribute('aria-invalid', 'true'));
+      expect(input).toHaveAccessibleDescription('Enter your first name.');
+
+      await user.type(screen.getByLabelText('Middle Name'), 'Quinn');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() => expect(userService.updateUserProfile).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(userService.updateUserProfile).mock.calls[0]?.[1]).not.toHaveProperty('first_name');
+      expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('first name is still missing'));
+      expect(input).toHaveAttribute('aria-invalid', 'true');
+      expect(input).toHaveFocus();
+
+      await user.type(input, 'Jordan');
+      expect(input).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('sends the trimmed name when it is filled in', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const input = await screen.findByLabelText(/^First Name/);
+      await waitFor(() => expect(input).toHaveValue('John'));
+      await user.clear(input);
+      await user.type(input, '  Johnny ');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() => expect(userService.updateUserProfile).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(userService.updateUserProfile).mock.calls[0]?.[1]).toEqual(
+        expect.objectContaining({ first_name: 'Johnny', last_name: 'Doe' })
+      );
+      expect(toast.success).toHaveBeenCalledWith('Profile saved');
+    });
+  });
+
+  // Forms review F-2 / F-4: a refused value came back as a toast reading
+  // "Mobile: Enter a phone number…", with nothing marked on the field.
+  describe('server refusals land on their field', () => {
+    beforeEach(() => {
+      vi.mocked(userService.updateUserProfile).mockReset();
+    });
+
+    it('shows a refused mobile number under Mobile and moves focus there', async () => {
+      vi.mocked(userService.updateUserProfile).mockRejectedValue({
+        response: {
+          status: 422,
+          data: {
+            detail: [{ field: 'mobile', message: 'Enter a phone number using digits, spaces or dashes.' }],
+            code: 'LB-VAL-001',
+          },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const mobile = await screen.findByLabelText('Mobile');
+      await user.type(mobile, 'call me maybe');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() =>
+        expect(mobile).toHaveAccessibleDescription('Enter a phone number using digits, spaces or dashes.')
+      );
+      expect(mobile).toHaveAttribute('aria-invalid', 'true');
+      await waitFor(() => expect(mobile).toHaveFocus());
+      expect(toast.error).toHaveBeenCalledWith('Check the highlighted fields and save again.');
+
+      await user.type(mobile, 'x');
+      expect(mobile).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('keeps a blank name flagged when the save fails for another reason', async () => {
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue({ ...defaultProfile, first_name: '' } as never);
+      vi.mocked(userService.updateUserProfile).mockRejectedValue({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'mobile', message: 'Enter a phone number.' }], code: 'LB-VAL-001' },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const first = await screen.findByLabelText(/^First Name/);
+      await waitFor(() => expect(first).toHaveAttribute('aria-invalid', 'true'));
+      await user.type(screen.getByLabelText('Mobile'), 'call me');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() => expect(screen.getByLabelText('Mobile')).toHaveAttribute('aria-invalid', 'true'));
+      expect(first).toHaveAccessibleDescription('Enter your first name.');
+    });
+
+    it('shows a refusal the server could not pin on a field, beside the ones it could', async () => {
+      vi.mocked(userService.updateUserProfile).mockRejectedValue({
+        response: {
+          status: 422,
+          data: {
+            detail: [
+              { field: 'mobile', message: 'Enter a phone number.' },
+              { field: 'request', message: 'Your profile is locked while an officer edits it.' },
+            ],
+            code: 'LB-VAL-001',
+          },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      await user.type(await screen.findByLabelText('Mobile'), 'call me');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      expect(await screen.findByText('Your profile is locked while an officer edits it.')).toBeInTheDocument();
+    });
+
+    it('limits each field to the length the server stores', async () => {
+      renderWithRouter(<UserSettingsPage />);
+
+      expect(await screen.findByLabelText(/^First Name/)).toHaveAttribute('maxLength', '100');
+      expect(screen.getByLabelText('Mobile')).toHaveAttribute('maxLength', '20');
+      expect(screen.getByLabelText('Street Address')).toHaveAttribute('maxLength', '255');
+      expect(screen.getByLabelText('State')).toHaveAttribute('maxLength', '50');
     });
   });
 

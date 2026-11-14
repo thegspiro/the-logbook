@@ -12,6 +12,8 @@ import { useAdminHoursStore } from '../store/adminHoursStore';
 import { adminHoursEntryService, adminHoursSeedService } from '../services/api';
 import type { AdminHoursCategory, AdminHoursCategoryCreate, AdminHoursCategoryUpdate } from '../types';
 import CategoryForm from './CategoryForm';
+import { CATEGORY_FIELD_IDS, CATEGORY_SERVER_FIELDS, type CategoryField } from './categoryFields';
+import { mapServerFieldErrors } from '@/utils/serverFieldErrors';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 
@@ -29,6 +31,8 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
   const createCategory = useAdminHoursStore((s) => s.createCategory);
   const updateCategory = useAdminHoursStore((s) => s.updateCategory);
   const deleteCategory = useAdminHoursStore((s) => s.deleteCategory);
+  const clearStoreError = useAdminHoursStore((s) => s.clearError);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<CategoryField, string>>>({});
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const { busy, run } = useSubmitGuard();
@@ -55,17 +59,56 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
     });
     setShowCreateForm(false);
     setEditingCategory(null);
+    setFieldErrors({});
   }, [categories.length]);
+
+  /** Changes the form, dropping the error of any field that changed. */
+  const changeForm = (next: AdminHoursCategoryCreate) => {
+    setFieldErrors((prev) => {
+      const kept = { ...prev };
+      for (const key of Object.keys(prev) as CategoryField[]) {
+        if (next[key] !== formData[key]) delete kept[key];
+      }
+      return kept;
+    });
+    setFormData(next);
+  };
+
+  /**
+   * Puts a 422's refusals on their fields. The store has already raised its
+   * own error, which the page shows as a toast naming the API field, so that
+   * one is withdrawn when every refusal found a field.
+   */
+  const showFieldErrors = (err: unknown): Partial<Record<CategoryField, string>> | null => {
+    const mapped = mapServerFieldErrors(err, CATEGORY_SERVER_FIELDS);
+    const keys = Object.keys(mapped?.fieldErrors ?? {}) as CategoryField[];
+    if (!mapped || !keys[0] || mapped.unmatched.length > 0) return null;
+    clearStoreError();
+    setFieldErrors(mapped.fieldErrors);
+    document.getElementById(CATEGORY_FIELD_IDS[keys[0]])?.focus();
+    return mapped.fieldErrors;
+  };
+
+  /** A name is the one thing a category cannot be saved without. */
+  const blankName = (): boolean => {
+    if (formData.name.trim()) return false;
+    setFieldErrors({ name: 'Give the category a name.' });
+    document.getElementById(CATEGORY_FIELD_IDS.name)?.focus();
+    return true;
+  };
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
+    if (blankName()) return;
     return run(async () => {
       try {
         await createCategory(formData);
         toast.success('Category created');
         resetForm();
-      } catch {
-        // error handled by store
+      } catch (err: unknown) {
+        // A new category is created only once nothing is refused: each
+        // refusal goes on its field. Anything else the store reports.
+        showFieldErrors(err);
       }
     });
   };
@@ -73,6 +116,7 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCategory) return;
+    if (blankName()) return;
     const updateData: AdminHoursCategoryUpdate = {
       name: formData.name,
       description: formData.description || null,
@@ -86,8 +130,25 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
       await updateCategory(editingCategory.id, updateData);
       toast.success('Category updated');
       resetForm();
-    } catch {
-      // error handled by store
+    } catch (err: unknown) {
+      // Owner rule (2026-11-05) for a single-save form: a value the category
+      // cannot hold is not written, the rest saves, and the field keeps what
+      // was typed, flagged, until it is fixed.
+      const refused = showFieldErrors(err);
+      if (!refused) return;
+      const rest: AdminHoursCategoryUpdate = { ...updateData };
+      for (const key of Object.keys(refused) as CategoryField[]) delete rest[key];
+      try {
+        await updateCategory(editingCategory.id, rest);
+        const [first] = Object.keys(refused) as CategoryField[];
+        if (first) {
+          toast.error(
+            `Category saved, except ${CATEGORY_SERVER_FIELDS[first].label.toLowerCase()}: ${refused[first] ?? ''} Fix it and save again.`
+          );
+        }
+      } catch {
+        // The store reports a failure of the rest.
+      }
     }
   };
 
@@ -186,7 +247,8 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
       {showCreateForm && (
         <CategoryForm
           formData={formData}
-          onChange={setFormData}
+          onChange={changeForm}
+          errors={fieldErrors}
           onSubmit={
             editingCategory
               ? (e) => {

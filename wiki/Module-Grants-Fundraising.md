@@ -19,7 +19,10 @@ organization as well as on the permissions below.
   required documents, federal program code), filterable by category and
   active/inactive. A program is edited from its card and retired (set
   inactive, never deleted) when it closes, so applications started from it
-  keep their program; **Show retired** lists retired ones to reinstate.
+  keep their program; **Show retired** lists retired ones to reinstate. Every
+  department starts with AFG, SAFER, FP&S and the Firehouse Subs Public
+  Safety Foundation as opportunities of its own (seeded at creation, and by
+  migration for existing departments), startable and editable like any other.
 - **Application pipeline** — each application moves through a fixed lifecycle
   (see [Application lifecycle](#application-lifecycle)); the applications page
   has a pipeline (one column per status) and a server-paged, server-sorted
@@ -47,10 +50,17 @@ organization as well as on the permissions below.
   donations are recorded), tags and communication preferences.
 - **Donations and pledges** — donations with payment method and status,
   recurring flag, dedications (in honor / in memory), receipt and thank-you
-  tracking; pledges with fulfilled amount, due date and status.
+  tracking; pledges with fulfilled amount, due date and status. A donation
+  can pay toward an open pledge of the same donor (`pledgeId`); a completed
+  one moves the pledge's fulfilled amount and status, and editing or
+  refunding it moves them back by the difference.
 - **Fundraising events** — dinners, galas, auctions, raffles, golf outings and
   walkathons, with ticketing, attendance, revenue goal, actual revenue and
   expenses; optionally linked to a calendar event.
+- **Zeffy** _(2026-11-01)_ — donations, event tickets and memberships sold
+  through [Zeffy](Integration-Zeffy) are read in and recorded on a linked
+  fundraising campaign, fundraising event or dues schedule. Read-only: nothing
+  is written to Zeffy.
 - **Dashboard and reports** — the dashboard combines grant and fundraising
   figures; the reports page has **Grants** and **Fundraising** tabs over a date
   range.
@@ -98,6 +108,7 @@ Every page requires the `grants` module to be enabled.
 | `/grants/donations/new`          | Record a donation                   | `fundraising.manage` |
 | `/grants/pledges`                | Pledges                             | `fundraising.view`   |
 | `/grants/events`                 | Fundraising events                  | `fundraising.view`   |
+| `/grants/zeffy`                  | Zeffy campaigns and payments        | `fundraising.view`   |
 | `/grants/reports`                | Reports (Grants / Fundraising tabs) | `fundraising.view`   |
 
 Campaigns, donors, pledges and fundraising events have no separate detail
@@ -345,6 +356,7 @@ environment flag.
 
 ---
 
-**See also:** [Original design research](https://github.com/thegspiro/the-logbook/blob/main/docs/GRANTS_FUNDRAISING_MODULE.md) ·
+**See also:** [Zeffy Integration](Integration-Zeffy) ·
+[Original design research](https://github.com/thegspiro/the-logbook/blob/main/docs/GRANTS_FUNDRAISING_MODULE.md) ·
 [Security review GF-22](https://github.com/thegspiro/the-logbook/blob/main/docs/security-review/GF-22-grants-fundraising.md) ·
 [Troubleshooting](https://github.com/thegspiro/the-logbook/blob/main/docs/TROUBLESHOOTING.md#grants-module-serialization-issues)

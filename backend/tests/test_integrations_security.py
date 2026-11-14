@@ -178,16 +178,18 @@ class TestValidateConfig:
         with pytest.raises(HTTPException):
             _validate_config("nws-weather", config)
 
-    def test_ical_takes_event_types_only(self):
-        # include_shifts was accepted and stored but nothing read it, so a
-        # department could switch on shifts in its feed and get none. The
-        # department feed carries published events; each member's shifts come
-        # from their own feed. The key is now refused rather than kept inert.
-        assert _validate_config("ical", {"included_event_types": ["training"]}) == {
-            "included_event_types": ["training"]
-        }
+    def test_ical_takes_event_types_and_include_shifts(self):
+        # include_shifts was once refused because nothing read it. Since the
+        # 2026-11-01 owner decision the department feed reads it and publishes
+        # scheduled shifts (test_department_ical_feed.py proves the reader), so
+        # it is accepted; anything else, and an unknown event type, is not.
+        assert _validate_config(
+            "ical", {"included_event_types": ["training"], "include_shifts": True}
+        ) == {"included_event_types": ["training"], "include_shifts": True}
         with pytest.raises(HTTPException):
-            _validate_config("ical", {"include_shifts": True})
+            _validate_config("ical", {"include_shift_notes": True})
+        with pytest.raises(HTTPException):
+            _validate_config("ical", {"included_event_types": ["not_a_type"]})
 
     def test_unknown_type_passes_through(self):
         config = {"any_key": "any_value"}

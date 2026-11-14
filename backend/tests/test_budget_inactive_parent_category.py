@@ -17,6 +17,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.document import Document
 from app.models.finance import (
     ApprovalEntityType,
     Budget,
@@ -167,6 +168,18 @@ async def _set_parent_active(dept, active: bool) -> None:
     await dept["db"].flush()
 
 
+async def _attach_receipt(db, record) -> None:
+    """Paying a request or issuing a check needs a receipt on file (owner
+    decision 2026-11-01)."""
+    receipt = Document(
+        organization_id=record.organization_id, name="Receipt", file_name="r.pdf"
+    )
+    db.add(receipt)
+    await db.flush()
+    record.receipt_document_id = receipt.id
+    await db.flush()
+
+
 def _pr_fields(dept, budget_id) -> dict:
     return {
         "fiscal_year_id": dept["year"].id,
@@ -232,6 +245,7 @@ class TestARequestInFlightFinishes:
 
         await service.manual_approve(PR, pr.id, dept["treasurer"].id, org_id=org_id)
         assert pr.status == PurchaseRequestStatus.APPROVED
+        await _attach_receipt(db, pr)
         await service.mark_pr_paid(pr.id, org_id, acted_by=dept["treasurer"].id)
         assert pr.status == PurchaseRequestStatus.PAID
         line = dept["impeller_line"]

@@ -28,6 +28,9 @@ const emptyPurge = { drafts: 0, queuedChecks: 0, queuedReports: 0, queuedGeneric
 const mockPurgeLocalMemberData = vi.fn(() => Promise.resolve({ ...emptyPurge }));
 vi.mock('../utils/purgeLocalMemberData', () => ({
   purgeLocalMemberData: () => mockPurgeLocalMemberData(),
+  // Sign-in hands held skills evaluations back to their examiner; nothing is
+  // held in these tests.
+  releaseHeldWorkFor: () => Promise.resolve(),
 }));
 
 vi.mock('../services/apiClient', () => ({

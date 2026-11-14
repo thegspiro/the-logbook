@@ -69,6 +69,7 @@ from app.services.email_policy import (
 from app.services.email_theme import ACCENT_AMBER, ACCENT_RED, action, fact, facts
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
+    UNGRADED_STATUSES,
     MemberCompliance,
     RequirementEvaluation,
     grade_org_members,
@@ -465,12 +466,13 @@ async def send_member_compliance_notices(db: AsyncSession, org: Organization) ->
                 sent += 1
 
         if notify_non_compliant and graded.standing == "non_compliant":
-            # Catch-up requirements count neither way (tally_standing), so
-            # they are not listed as unmet either.
+            # Catch-up and not-yet-held requirements count neither way
+            # (tally_standing), so they are not listed as unmet either.
             unmet = [
                 (req, ev)
                 for req, ev in graded.evaluations
-                if ev.status not in (TrainingStatus.COMPLETED.value, CATCH_UP_STATUS)
+                if ev.status != TrainingStatus.COMPLETED.value
+                and ev.status not in UNGRADED_STATUSES
             ]
             new_keys = {_unmet_key(req, ev) for req, ev in unmet} - _noticed(
                 member_logs

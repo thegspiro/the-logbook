@@ -13,21 +13,29 @@
  * own page instead (`GET /finance/approvals/unrouted`): ones no approval chain
  * applies to, and ones the dual-approval threshold holds for a second approver
  * (`awaitingSecondApproval`, the backend's reading).
+ *
+ * A step that emails an outside approver says what became of the link
+ * (`emailDelivery`, the backend's reading: sent, failed, expired), and an
+ * approvals admin (`canResendEmail`) can re-send it. The link itself never
+ * reaches this page — it is a bearer token for someone else's approval.
  */
 
 import React, { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import { approvalService } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { Link } from 'react-router';
-import { AlertTriangle, CheckCircle, ClipboardCheck, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, ClipboardCheck, Mail, XCircle } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useFinanceStore } from '../store/financeStore';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
-import { formatDate } from '@/utils/dateFormatting';
+import { formatDate, formatDateCustom } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
+import { useConfirm } from '@/contexts/ConfirmContext';
+import { ApprovalEmailDelivery } from '../types';
 import type { PendingApproval, UnroutedApproval } from '../types';
 import { ApprovalDecisionDialog } from '../components/ApprovalDecisionDialog';
 import { LateLinesBadge } from '../components/LateLinesBadge';
@@ -63,7 +71,10 @@ interface RowActionsProps {
 const RowActions: React.FC<RowActionsProps> = ({ row, onOpen }) => {
   if (row.canAct) {
     return (
-      <div className="flex justify-end gap-2">
+      // Wraps, as the override pair below does: at 320px a card row lays the
+      // "Decision" label beside these two buttons, and unwrapped they held the
+      // card ~50px wider than the screen.
+      <div className="flex flex-wrap justify-end gap-2">
         <button
           type="button"
           onClick={() => onOpen(row, 'approve')}
@@ -77,7 +88,7 @@ const RowActions: React.FC<RowActionsProps> = ({ row, onOpen }) => {
           type="button"
           onClick={() => onOpen(row, 'deny')}
           aria-label={`Deny ${row.entityTitle}`}
-          className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-400"
+          className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-800 dark:text-red-300"
         >
           <XCircle className="h-4 w-4" />
           Deny
@@ -93,7 +104,7 @@ const RowActions: React.FC<RowActionsProps> = ({ row, onOpen }) => {
       <button
         type="button"
         onClick={() => onOpen(row, 'approve')}
-        aria-label={`Approve ${row.entityTitle} as approvals admin`}
+        aria-label={`Approve as admin: ${row.entityTitle}`}
         className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium"
       >
         <CheckCircle className="h-4 w-4" />
@@ -102,12 +113,100 @@ const RowActions: React.FC<RowActionsProps> = ({ row, onOpen }) => {
       <button
         type="button"
         onClick={() => onOpen(row, 'deny')}
-        aria-label={`Deny ${row.entityTitle} as approvals admin`}
-        className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-400"
+        aria-label={`Deny as admin: ${row.entityTitle}`}
+        className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-800 dark:text-red-300"
       >
         <XCircle className="h-4 w-4" />
         Deny as admin
       </button>
+    </div>
+  );
+};
+
+const EMAIL_BADGE: Record<string, string> = {
+  [ApprovalEmailDelivery.FAILED]: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
+  [ApprovalEmailDelivery.EXPIRED]: 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300',
+  [ApprovalEmailDelivery.NOT_SENT]: 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300',
+};
+
+const emailDeliveryText = (row: PendingApproval, tz: string): string | null => {
+  switch (row.emailDelivery) {
+    case ApprovalEmailDelivery.SENT:
+      return row.emailStatusAt
+        ? `Email sent ${formatDateCustom(row.emailStatusAt, { month: 'short', day: 'numeric' }, tz)}`
+        : 'Email sent';
+    case ApprovalEmailDelivery.FAILED:
+      return 'Email could not be sent';
+    case ApprovalEmailDelivery.EXPIRED:
+      return 'Link expired';
+    case ApprovalEmailDelivery.NOT_SENT:
+      return 'No link has been emailed';
+    case ApprovalEmailDelivery.UNKNOWN:
+      return 'Link emailed (sending not recorded)';
+    default:
+      return null;
+  }
+};
+
+interface EmailLinkStatusProps {
+  row: PendingApproval;
+  onResent: () => void;
+}
+
+const EmailLinkStatus: React.FC<EmailLinkStatusProps> = ({ row, onResent }) => {
+  const tz = useTimezone();
+  const { confirm } = useConfirm();
+  const [sending, setSending] = useState(false);
+  const text = emailDeliveryText(row, tz);
+  if (!text) return null;
+
+  const resend = async () => {
+    const confirmed = await confirm({
+      title: 'Re-send the approval link?',
+      message: `A new link will be emailed to ${row.assigneeLabel}. The link already sent will stop working.`,
+      confirmLabel: 'Re-send link',
+      cancelLabel: 'Keep the current link',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
+    setSending(true);
+    try {
+      const result = await approvalService.resendEmail(row.stepRecordId, row.emailLinkVersion ?? 0);
+      if (!result.resent) {
+        toast.success('A new link had already been sent.');
+      } else if (result.emailDelivery === ApprovalEmailDelivery.FAILED) {
+        toast.error('The new link could not be emailed.');
+      } else {
+        toast.success('A new link was emailed.');
+      }
+      onResent();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not re-send the link'));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const badge = row.emailDelivery ? EMAIL_BADGE[row.emailDelivery] : undefined;
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-2">
+      {badge ? (
+        <span className={`badge ${badge}`}>{text}</span>
+      ) : (
+        <span className="text-theme-text-secondary text-xs">{text}</span>
+      )}
+      {row.canResendEmail && (
+        <button
+          type="button"
+          onClick={() => void resend()}
+          disabled={sending}
+          aria-label={`Re-send the approval link for ${row.entityTitle}`}
+          className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium"
+        >
+          <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+          {sending ? 'Sending…' : 'Re-send link'}
+        </button>
+      )}
     </div>
   );
 };
@@ -133,7 +232,7 @@ const ManualDecisions: React.FC = () => {
   }, []);
 
   if (error) {
-    return <p className="text-sm text-red-700 dark:text-red-400">{error}</p>;
+    return <p className="text-sm text-red-800 dark:text-red-300">{error}</p>;
   }
   if (!rows || rows.length === 0) return null;
 
@@ -148,8 +247,8 @@ const ManualDecisions: React.FC = () => {
           Open one to approve or deny it.
         </p>
       </div>
-      <div className="overflow-x-auto">
-        <table className="rwd-table w-full">
+      <div className="rwd-table-container overflow-x-auto">
+        <table className="rwd-table rwd-table-wide w-full">
           <thead>
             <tr className="border-theme-surface-border border-y">
               <th scope="col" className={HEADER_CELL}>
@@ -178,7 +277,7 @@ const ManualDecisions: React.FC = () => {
                 <td data-label="Request" className="rwd-table-lead px-4 py-3 text-sm font-medium">
                   <Link
                     to={approvalEntityPath(row.entityType, row.entityId)}
-                    className="touch:inline-flex touch:min-h-11 touch:items-center text-red-700 hover:underline dark:text-red-400"
+                    className="touch:inline-flex touch:min-h-11 touch:items-center text-red-800 hover:underline dark:text-red-300"
                   >
                     {row.entityTitle}
                   </Link>
@@ -263,7 +362,7 @@ const ApprovalsPage: React.FC = () => {
       <PageHeader />
 
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
@@ -281,8 +380,8 @@ const ApprovalsPage: React.FC = () => {
         )
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="rwd-table w-full">
+          <div className="rwd-table-container overflow-x-auto">
+            <table className="rwd-table rwd-table-xwide w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th scope="col" className={HEADER_CELL}>
@@ -317,7 +416,7 @@ const ApprovalsPage: React.FC = () => {
                     <td data-label="Request" className="rwd-table-lead px-4 py-3 text-sm font-medium">
                       <Link
                         to={approvalEntityPath(row.entityType, row.entityId)}
-                        className="touch:inline-flex touch:min-h-11 touch:items-center text-red-700 hover:underline dark:text-red-400"
+                        className="touch:inline-flex touch:min-h-11 touch:items-center text-red-800 hover:underline dark:text-red-300"
                       >
                         {row.entityTitle}
                       </Link>
@@ -351,11 +450,12 @@ const ApprovalsPage: React.FC = () => {
                       <div className="flex flex-wrap items-center gap-2">
                         <span>{row.assigneeLabel}</span>
                         {!row.canAct && row.requiresOverride && (
-                          <span className="badge bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                          <span className="badge bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300">
                             Not assigned to you
                           </span>
                         )}
                       </div>
+                      <EmailLinkStatus row={row} onResent={() => void fetchPendingApprovals()} />
                     </td>
                     <td
                       data-label="Submitted"

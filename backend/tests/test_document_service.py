@@ -145,7 +145,7 @@ class TestGenerateMinutesHtml:
         html = _svc()._generate_minutes_html(_minutes(), None, [filed])
         assert "Election result" in html
         assert "Eligible voters: 12" in html
-        assert "Ballots cast: 9" in html
+        assert "Votes cast: 9" in html
         assert "Winner" in html
         assert "Officer <i>election</i>" not in html
         assert "Alex <b>Adams</b>" not in html

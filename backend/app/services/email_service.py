@@ -1553,6 +1553,7 @@ class EmailService:
         reply_to: Optional[str] = None,
         list_unsubscribe: Optional[str] = None,
         results_out: Optional[List[bool]] = None,
+        apply_template_copies: bool = True,
     ) -> tuple[int, int]:
         """
         Send an email to one or more recipients
@@ -1568,6 +1569,10 @@ class EmailService:
             db: Optional async database session (for logging to message_history)
             template_type: Optional template type string (for message_history)
             sent_by: Optional user ID who triggered the send (for message_history)
+            apply_template_copies: Add the stored template's default CC, CC
+                positions and BCC (see ``_with_template_copies``). False for a
+                send that is not the template's real notice — a test send —
+                or one that copies people itself.
 
         Returns:
             Tuple of (success_count, failure_count)
@@ -1579,6 +1584,11 @@ class EmailService:
                 subject,
             )
             return 0, len(to_emails)
+
+        if apply_template_copies and db is not None and template_type:
+            cc_emails, bcc_emails = await self._with_template_copies(
+                db, template_type, to_emails, cc_emails, bcc_emails
+            )
 
         # Inline CSS: convert <style> class rules to inline style=""
         # attributes so they survive Gmail's <style> stripping.
@@ -1765,6 +1775,57 @@ class EmailService:
                 logger.warning("Failed to log message history: {}", e)
 
         return success_count, failure_count
+
+    async def _with_template_copies(
+        self,
+        db: Any,
+        template_type: Any,
+        to_emails: List[str],
+        cc_emails: Optional[List[str]],
+        bcc_emails: Optional[List[str]],
+    ) -> Tuple[Optional[List[str]], Optional[List[str]]]:
+        """The caller's CC and BCC plus the template's own (defect D1).
+
+        The Email Templates editor promises its CC addresses are copied on
+        every email sent with the template; until 2026-11 only scheduled
+        emails honoured it. The credential templates are never copied
+        (``NO_TEMPLATE_COPY_TYPES``). An address already among the
+        recipients is not added again, so a Secretary who is also a recipient
+        gets one message, not two.
+
+        Fails open to the caller's own lists: a lookup error must not stop
+        the email to its real recipient.
+        """
+        org_id = str(self.organization.id) if self.organization else None
+        if not org_id:
+            return cc_emails, bcc_emails
+        try:
+            extra_cc, extra_bcc = await EmailTemplateService(
+                db
+            ).template_copy_recipients(org_id, template_type)
+        except Exception as e:
+            logger.warning(
+                "Could not read the default copies of {}; sending without " "them: {}",
+                getattr(template_type, "value", template_type),
+                e,
+            )
+            return cc_emails, bcc_emails
+        if not extra_cc and not extra_bcc:
+            return cc_emails, bcc_emails
+
+        taken = {str(a).strip().casefold() for a in to_emails}
+
+        def merged(own: Optional[List[str]], extra: List[str]) -> Optional[List[str]]:
+            out: List[str] = []
+            for address in list(own or []) + extra:
+                key = str(address).strip().casefold()
+                if key and key not in taken:
+                    taken.add(key)
+                    out.append(str(address).strip())
+            return out or None
+
+        cc = merged(cc_emails, extra_cc)
+        return cc, merged(bcc_emails, extra_bcc)
 
     async def _log_message_history(
         self,
@@ -2684,6 +2745,480 @@ class EmailService:
             template_type=EmailTemplateType.APPLICATION_STATUS_LINK.value,
         )
 
+        return success_count > 0
+
+    async def send_follow_up_form_email(
+        self,
+        to_email: str,
+        first_name: str,
+        applicant_name: str,
+        form_name: str,
+        form_url: str,
+        custom_message: str = "",
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Send an applicant the personal link to a follow-up form."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_FOLLOW_UP_FORM_HTML,
+            DEFAULT_APPLICATION_FOLLOW_UP_FORM_SUBJECT,
+            DEFAULT_APPLICATION_FOLLOW_UP_FORM_TEXT,
+        )
+
+        custom_message = custom_message.strip()
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.APPLICATION_FOLLOW_UP_FORM,
+            context={
+                "first_name": first_name,
+                "applicant_name": applicant_name,
+                "form_name": form_name,
+                "form_url": form_url,
+                "custom_message": custom_message,
+                "custom_message_html": (
+                    f"<p>{_html.escape(custom_message)}</p>" if custom_message else ""
+                ),
+                "custom_message_text": (
+                    f"{custom_message}\n\n" if custom_message else ""
+                ),
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_FOLLOW_UP_FORM_SUBJECT,
+            default_html=DEFAULT_APPLICATION_FOLLOW_UP_FORM_HTML,
+            default_text=DEFAULT_APPLICATION_FOLLOW_UP_FORM_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_FOLLOW_UP_FORM.value,
+        )
+        return success_count > 0
+
+    async def send_shift_evaluation_preceptor_link_email(
+        self,
+        to_email: str,
+        member_name: str,
+        shift_date: str,
+        unit_label: str,
+        evaluation_url: str,
+        expires_on: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Send an outside preceptor the link to a member's shift evaluation."""
+        from app.services.email_template_service import (
+            DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_HTML,
+            DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_SUBJECT,
+            DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_TEXT,
+        )
+
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.SHIFT_EVALUATION_PRECEPTOR_LINK,
+            context={
+                "member_name": member_name,
+                "shift_date": shift_date,
+                "unit_label": unit_label,
+                "evaluation_url": evaluation_url,
+                "expires_on": expires_on,
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_SUBJECT,
+            default_html=DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_HTML,
+            default_text=DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.SHIFT_EVALUATION_PRECEPTOR_LINK.value,
+        )
+        return success_count > 0
+
+    async def send_contact_changed_email(
+        self,
+        to_email: str,
+        first_name: str,
+        applicant_name: str,
+        changed_details: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell an applicant's previous address that their contact details
+        changed. Names what changed, never the new values."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_CONTACT_CHANGED_HTML,
+            DEFAULT_APPLICATION_CONTACT_CHANGED_SUBJECT,
+            DEFAULT_APPLICATION_CONTACT_CHANGED_TEXT,
+        )
+
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.APPLICATION_CONTACT_CHANGED,
+            context={
+                "first_name": first_name,
+                "applicant_name": applicant_name,
+                "changed_details": changed_details,
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_CONTACT_CHANGED_SUBJECT,
+            default_html=DEFAULT_APPLICATION_CONTACT_CHANGED_HTML,
+            default_text=DEFAULT_APPLICATION_CONTACT_CHANGED_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_CONTACT_CHANGED.value,
+        )
+        return success_count > 0
+
+    async def send_follow_up_reminder_email(
+        self,
+        to_email: str,
+        first_name: str,
+        applicant_name: str,
+        form_name: str,
+        form_url: str,
+        reminder_number: int,
+        has_draft: bool,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Remind an applicant that a follow-up form is still unsubmitted."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_HTML,
+            DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_SUBJECT,
+            DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_TEXT,
+        )
+
+        draft_note = "The answers you have saved so far are still there."
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.APPLICATION_FOLLOW_UP_REMINDER,
+            context={
+                "first_name": first_name,
+                "applicant_name": applicant_name,
+                "form_name": form_name,
+                "form_url": form_url,
+                "reminder_number": str(reminder_number),
+                "draft_note_html": f"<p>{draft_note}</p>" if has_draft else "",
+                "draft_note_text": f"{draft_note}\n\n" if has_draft else "",
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_SUBJECT,
+            default_html=DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_HTML,
+            default_text=DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_FOLLOW_UP_REMINDER.value,
+        )
+        return success_count > 0
+
+    async def send_follow_up_submitted_email(
+        self,
+        to_email: str,
+        recipient_name: str,
+        applicant_name: str,
+        form_name: str,
+        stage_name: str,
+        applicant_url: str,
+        contact_changed: bool,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell a membership coordinator an applicant submitted a follow-up
+        form. A link only, never the answers."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_HTML,
+            DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_SUBJECT,
+            DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_TEXT,
+        )
+
+        contact_note = (
+            "The applicant changed their contact details. Check them on the "
+            "applicant's page."
+        )
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.APPLICATION_FOLLOW_UP_SUBMITTED,
+            context={
+                "recipient_name": recipient_name,
+                "applicant_name": applicant_name,
+                "form_name": form_name,
+                "stage_name": stage_name,
+                "applicant_url": applicant_url,
+                "contact_note_html": (
+                    f"<p><strong>{contact_note}</strong></p>" if contact_changed else ""
+                ),
+                "contact_note_text": (f"{contact_note}\n\n" if contact_changed else ""),
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_SUBJECT,
+            default_html=DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_HTML,
+            default_text=DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_FOLLOW_UP_SUBMITTED.value,
+        )
+        return success_count > 0
+
+    async def send_applicant_assigned_email(
+        self,
+        to_email: str,
+        recipient_name: str,
+        applicant_name: str,
+        role_label: str,
+        assigned_by_name: str,
+        applicant_url: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell a member they were assigned to an applicant."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_ASSIGNED_HTML,
+            DEFAULT_APPLICATION_ASSIGNED_SUBJECT,
+            DEFAULT_APPLICATION_ASSIGNED_TEXT,
+        )
+
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.APPLICATION_ASSIGNED,
+            context={
+                "recipient_name": recipient_name,
+                "applicant_name": applicant_name,
+                "role_label": role_label,
+                "assigned_by_name": assigned_by_name,
+                "applicant_url": applicant_url,
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_ASSIGNED_SUBJECT,
+            default_html=DEFAULT_APPLICATION_ASSIGNED_HTML,
+            default_text=DEFAULT_APPLICATION_ASSIGNED_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_ASSIGNED.value,
+        )
+        return success_count > 0
+
+    async def send_evaluation_notice(
+        self,
+        template_type: EmailTemplateType,
+        to_email: str,
+        context: Dict[str, Any],
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """One of the four performance-evaluation notices to one recipient.
+
+        ``context`` is built by EvaluationNoticeService, which decides who is
+        told and in what words; this only renders the department's template
+        (or the built-in default) and sends it.
+        """
+        from app.services.email_templates_evaluations import DEFAULT_TEMPLATE_DEFS
+
+        default = next(d for d in DEFAULT_TEMPLATE_DEFS if d["type"] == template_type)
+        rendered = await self._render_unless_switched_off(
+            template_type=template_type,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=default["subject"],
+            default_html=default["html"],
+            default_text=default["text"],
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=template_type.value,
+        )
+        return success_count > 0
+
+    async def send_attendance_waiver_notice(
+        self,
+        template_type: EmailTemplateType,
+        to_email: str,
+        context: Dict[str, Any],
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """One attendance-waiver notice, or one CC copy of it, to one address.
+
+        ``context`` is built by ``AttendanceWaiverEmails``, which decides who
+        is told, fills a copy without the buttons, and stamps each send. The
+        template's default copies are not added here: the sender mails each
+        copy separately, so an approver's buttons never reach a CC.
+        """
+        from app.services.email_templates_attendance_waivers import (
+            DEFAULT_TEMPLATE_DEFS,
+        )
+
+        default = next(d for d in DEFAULT_TEMPLATE_DEFS if d["type"] == template_type)
+        rendered = await self._render_unless_switched_off(
+            template_type=template_type,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=default["subject"],
+            default_html=default["html"],
+            default_text=default["text"],
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=template_type.value,
+            apply_template_copies=False,
+        )
+        return success_count > 0
+
+    async def send_interview_requested_email(
+        self,
+        to_email: str,
+        recipient_name: str,
+        applicant_name: str,
+        stage_name: str,
+        interview_url: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Ask an assigned interviewer to interview their applicant."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_INTERVIEW_REQUESTED_HTML,
+            DEFAULT_APPLICATION_INTERVIEW_REQUESTED_SUBJECT,
+            DEFAULT_APPLICATION_INTERVIEW_REQUESTED_TEXT,
+        )
+
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.APPLICATION_INTERVIEW_REQUESTED,
+            context={
+                "recipient_name": recipient_name,
+                "applicant_name": applicant_name,
+                "stage_name": stage_name,
+                "interview_url": interview_url,
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_INTERVIEW_REQUESTED_SUBJECT,
+            default_html=DEFAULT_APPLICATION_INTERVIEW_REQUESTED_HTML,
+            default_text=DEFAULT_APPLICATION_INTERVIEW_REQUESTED_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_INTERVIEW_REQUESTED.value,
+        )
+        return success_count > 0
+
+    async def send_applicant_needs_attention_email(
+        self,
+        to_email: str,
+        recipient_name: str,
+        applicant_name: str,
+        event_summary: str,
+        applicant_url: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell a case manager their applicant needs them."""
+        from app.services.email_template_service import (
+            DEFAULT_APPLICATION_NEEDS_ATTENTION_HTML,
+            DEFAULT_APPLICATION_NEEDS_ATTENTION_SUBJECT,
+            DEFAULT_APPLICATION_NEEDS_ATTENTION_TEXT,
+        )
+
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.APPLICATION_NEEDS_ATTENTION,
+            context={
+                "recipient_name": recipient_name,
+                "applicant_name": applicant_name,
+                "event_summary": event_summary,
+                "applicant_url": applicant_url,
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_APPLICATION_NEEDS_ATTENTION_SUBJECT,
+            default_html=DEFAULT_APPLICATION_NEEDS_ATTENTION_HTML,
+            default_text=DEFAULT_APPLICATION_NEEDS_ATTENTION_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.APPLICATION_NEEDS_ATTENTION.value,
+        )
         return success_count > 0
 
     async def send_inactivity_warning_email(

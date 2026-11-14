@@ -100,6 +100,7 @@ class TestEnforcedTriggers:
             "training_expiry",
             "suggestion_submitted",
             "equipment_request_update",
+            "medical_screening_expiry",
         }
 
     @pytest.mark.parametrize(

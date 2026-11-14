@@ -119,6 +119,8 @@ the **Store is offline** badge is a button to the same place. Use it mid-season,
 You can still work the orders already placed. When it is off, members see
 nothing, and you keep everything.
 
+![The Department Store console's Overview with the store switched off: the amber Store is offline · turn on in Settings button beside the header, and the Fall 2026 Order Window card saying members can't order yet, because the store is switched off they see The store is closed, with Turn it on in Settings](./images/18-05-store-offline-overview.png)
+
 ---
 
 ## Store Settings
@@ -381,7 +383,7 @@ Everything the store sends is logged in **Communications → Message History**,
 with a type beginning **storefront_**. So "did she ever get the reminder?" has
 an answer.
 
-![Store administration settings with the payment method options](./images/18-02-store-admin.png)
+![The Department Store console on Store Settings: the activity counts, the four area cards with Store Settings chosen, and the Settings page with Store is live for members, the storefront details, the payment method checkboxes and the three choices under What happens to an unpaid order?](./images/18-02-store-admin.png)
 
 ---
 
@@ -408,6 +410,8 @@ _options_. This guide does too.
 
 Use **Draft** while you build. Add the item, add the photo, set up options,
 then switch it to **Active (for sale)**.
+
+![The New item form: Name, SKU, Description, Category, Price and Department cost, Status on Draft with the note that draft items aren't shown to members and to choose Active to sell it, then the stock, tax, option and personalization settings](./images/18-06-catalog-item-form.png)
 
 ---
 
@@ -502,7 +506,7 @@ reminder (hours before close)** before closing, if that notice is switched on.
 
 Closing times in these emails use your department's time zone.
 
-![Store order windows tab with the open window and its order totals](./images/18-03-order-windows.png)
+![The Department Store console on Order Windows, under the Selling area card: New order window, and the open Fall 2026 Order Window with its dates, order totals and Record vendor order, Close ordering, Tally and Edit](./images/18-03-order-windows.png)
 
 ---
 

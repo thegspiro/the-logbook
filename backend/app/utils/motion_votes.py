@@ -26,7 +26,7 @@ secretary's and this only says what the numbers support.
 
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-from app.utils.minutes_attendance import counts_toward_quorum
+from app.utils.minutes_attendance import in_the_room
 
 THRESHOLDS = ("majority_cast", "majority_present", "two_thirds")
 DEFAULT_THRESHOLD = "majority_cast"
@@ -76,7 +76,7 @@ def suggested_status(
 
 def members_present(attendees: Optional[Iterable[Mapping[str, Any]]]) -> int:
     """How many members were in the room, by the roll call of the minutes."""
-    return sum(1 for a in attendees or [] if counts_toward_quorum(a))
+    return sum(1 for a in attendees or [] if in_the_room(a))
 
 
 def settle_roll_call(
@@ -92,7 +92,7 @@ def settle_roll_call(
     """
     here: Dict[str, Optional[str]] = {}
     for attendee in attendees or []:
-        if counts_toward_quorum(attendee):
+        if in_the_room(attendee):
             name = str(attendee.get("name") or "").strip()
             if name:
                 here.setdefault(name, attendee.get("user_id") or None)

@@ -3,7 +3,8 @@
 The Grants & Fundraising module follows a fire department grant from start to
 finish: finding the program, applying, the award, tracking spending, and the
 reports the grantor asks for. It also handles fundraising: campaigns, donors,
-donations, pledges and fundraising events.
+donations, pledges and fundraising events, and it can read in the donations,
+tickets and memberships a department sells through Zeffy.
 
 ---
 
@@ -22,10 +23,11 @@ donations, pledges and fundraising events.
 11. [Recording Donations](#recording-donations)
 12. [Pledges](#pledges)
 13. [Fundraising Events](#fundraising-events)
-14. [Reports & Analytics](#reports--analytics)
-15. [Realistic Example: Applying for an AFG Grant](#realistic-example-applying-for-an-afg-grant)
-16. [Troubleshooting](#troubleshooting)
-17. [If You Learned an Older Version](#if-you-learned-an-older-version)
+14. [Zeffy — Online Donations, Tickets and Memberships](#zeffy--online-donations-tickets-and-memberships)
+15. [Reports & Analytics](#reports--analytics)
+16. [Realistic Example: Applying for an AFG Grant](#realistic-example-applying-for-an-afg-grant)
+17. [Troubleshooting](#troubleshooting)
+18. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
@@ -34,8 +36,10 @@ donations, pledges and fundraising events.
 Select **Grants & Fundraising** in the menu (the sidebar, or the top bar). Your
 administrator must first turn the module on in the department's module
 settings. Beneath it are **Dashboard**, **Opportunities**, **Applications**,
-**Campaigns**, **Donors**, **Donations**, **Pledges**, **Events** and
+**Campaigns**, **Donors**, **Donations**, **Pledges**, **Events**, **Zeffy** and
 **Reports**.
+
+![The sidebar with Grants & Fundraising expanded: Dashboard, Opportunities, Applications, Campaigns, Donors, Donations, Pledges, Events, Zeffy and Reports, with Zeffy selected](./images/12-18-grants-menu-zeffy.png)
 
 ### Permissions
 
@@ -86,21 +90,20 @@ opens the application list filtered to the same applications the card counted.
 
 ## Grant Opportunities Library
 
-**Opportunities** — "Browse grant programs and start an application" — has two
-parts:
+**Opportunities** — "Browse grant programs and start an application" — lists
+your department's grant programs, with their award range, deadline and match
+requirement. Every department starts with four well-known programs already in
+the list, as ordinary opportunities you can start an application from, edit
+(add this year's award range, match and dates) or retire:
 
-- **Federal Programs:** reference cards for four well-known programs, with a
-  short description of each:
+| Program                                                       | Agency                    | Category   |
+| ------------------------------------------------------------- | ------------------------- | ---------- |
+| Assistance to Firefighters Grant (**AFG**)                    | FEMA                      | Equipment  |
+| Staffing for Adequate Fire and Emergency Response (**SAFER**) | FEMA                      | Staffing   |
+| Fire Prevention & Safety (**FP&S**)                           | FEMA                      | Prevention |
+| Firehouse Subs Public Safety Foundation                       | Firehouse Subs Foundation | Equipment  |
 
-  | Program                                                       | Agency                    | Category   |
-  | ------------------------------------------------------------- | ------------------------- | ---------- |
-  | Assistance to Firefighters Grant (**AFG**)                    | FEMA                      | Equipment  |
-  | Staffing for Adequate Fire and Emergency Response (**SAFER**) | FEMA                      | Staffing   |
-  | Fire Prevention & Safety (**FP&S**)                           | FEMA                      | Prevention |
-  | Firehouse Subs Public Safety Foundation                       | Firehouse Subs Foundation | Equipment  |
-
-- **All Opportunities:** the programs your department has added, with their
-  award range, deadline and match requirement.
+Retiring one keeps it under **Show retired**; it is not added back.
 
 ### Browsing Opportunities
 
@@ -110,7 +113,8 @@ parts:
 3. Search by name or agency.
 4. Check the deadline. Within 14 days it shows in red as "_n_d left"; within 30
    days, in amber. A past deadline reads **Expired**, and a program with no date
-   reads **Rolling deadline**.
+   reads **Recurring deadline** (an application cycle that repeats, such as
+   the four programs above) or **Rolling deadline**.
 5. Select **Details** to see eligible uses, eligibility, match details and the
    application link.
 6. Select **Start Application** to open a new application already linked to the
@@ -145,6 +149,8 @@ To correct a program, such as a mistyped deadline, select the pencil (**Edit**)
 on its card. The same form opens as **Edit Grant Opportunity**. Change what you
 need and select **Save changes**. A field you clear is saved empty.
 
+![Edit Grant Opportunity for the Assistance to Firefighters Grant: its program name, agency, category and description, the award range and local match, the deadline and links, with Save changes](./images/12-16-edit-opportunity.png)
+
 When a program closes, select **Retire** on its card and confirm. A retired
 program:
 
@@ -155,7 +161,7 @@ To see retired programs, tick **Show retired**. They are marked **Retired** and
 have no **Start Application** button. Select **Reinstate** on one to bring it
 back.
 
-![Grant opportunities library showing available grant programs](./images/12-03-opportunities.png)
+![The opportunities library with Show retired ticked: the department's programs, each card with its edit (pencil) and Retire buttons and Start Application, and the Volunteer Fire Assistance Grant marked Retired with Reinstate and no Start Application](./images/12-03-opportunities.png)
 
 ---
 
@@ -277,6 +283,10 @@ The tab shows **Total Budgeted**, **Total Spent** and **Remaining**, overall and
 for each line. Spending on a line is added up from the expenditures linked to
 it.
 
+_(2026-11-06)_ Each line has **Edit** and **Delete** buttons for people with
+**Manage fundraising**, so a wrong category or amount no longer needs a new line.
+Deleting a line asks you to confirm.
+
 ### Expenditures
 
 On the **Expenditures** tab, record spending against the budget:
@@ -288,6 +298,10 @@ On the **Expenditures** tab, record spending against the budget:
 3. Optionally choose a line under **Budget Item (optional)**. **None** leaves it
    unlinked.
 4. Save with **Record Expenditure**.
+
+_(2026-11-06)_ A recorded expenditure has **Edit** and **Delete** buttons too.
+Deleting one asks you to confirm with **Delete expenditure**, and the totals
+fall by that amount.
 
 ![Grant application budget tab with budgeted, spent, and remaining columns](./images/12-06-application-budget-tab.png)
 
@@ -377,6 +391,9 @@ the grant dates **before** you move the application to Awarded.
 2. To add a task, select **Add Task** and enter the **Task Type**, **Title**,
    **Description (optional)**, **Due Date**, **Priority** and **Report Template
    (optional)**.
+   _(2026-11-06)_ The form has an **Assign to** choice, so a task can name its
+   member when it is created, not only afterwards. Only members of your
+   department can be chosen.
 3. Change a task's status as the work moves along, and select **Mark Complete**
    when it is done.
 
@@ -498,6 +515,20 @@ business and organization that supports the department.
    there is no contact.
 4. Save.
 
+![The New Donor form with Donor Type Business: Organization Name Oakville Lumber & Supply filled in, Contact First Name and Contact Last Name left empty because a contact is optional, and the email and address fields](./images/12-17-donor-business.png)
+
+**Editing a donor or campaign** _(2026-11-05)_. Each donor and campaign row has an
+**Edit** button for people with **Manage fundraising**. It opens the same form,
+filled in. An emptied box clears the stored value (an email or end date removed
+here is removed, not kept). A campaign's status and restriction keep the
+controls already on its card.
+
+**Editing a donation** _(2026-11-06)_. People with **Manage fundraising** see a
+pencil in the **Donations** list's last column. It opens **Edit Donation**, the
+same form as **Record Donation**, filled in, with **Save changes** at the foot.
+Use it to fix an amount, a date, a donor or a campaign typed wrongly. A donation
+cannot be deleted from the page.
+
 ### What the donor list shows
 
 For each donor: their contact details, **total donated**, how many donations,
@@ -534,6 +565,10 @@ gift is dated the day it was given.
    - **Campaign** — optional
    - **Donor** — choose from the donor directory, or leave it as "Not in the
      donor directory" and enter a name and email for a one-time gift
+   - **Pays toward a pledge** — shown once you choose a donor who has an open
+     pledge (Pending, Partial or Overdue). Pick the pledge this gift pays; a
+     completed gift is added to the pledge's amount received, and the pledge
+     becomes Fulfilled once it is paid in full
    - **Anonymous** — hides who gave from members with view access only. The
      Donations list and the dashboard's recent donations show **Anonymous**.
      Officers who can manage fundraising still see the donor, so receipts and
@@ -594,10 +629,17 @@ status.
 
 ### Recording What Came In
 
-Select the pencil on a pledge to edit it. Enter the **Amount received so far**
-and set the **Status** yourself. Recording a donation does not update a pledge,
-so you keep the two in step by hand. Clearing the due date or notes and saving
-removes them.
+Record each payment as a donation and choose the pledge under **Pays toward a
+pledge**: the pledge's **Amount received** and **Status** then follow on their
+own — Partial while money is still owed, Fulfilled once paid in full. If that
+donation is later refunded or its amount corrected, the pledge moves back by
+the difference. A Cancelled pledge stays Cancelled, and an Overdue one stays
+Overdue until it is paid in full.
+
+For money that arrived some other way, select the pencil on a pledge and enter
+the **Amount received so far** and the **Status** yourself; donations
+recorded against it afterwards add to what you entered. Clearing the due date
+or notes and saving removes them.
 
 ### Pledge Reminders
 
@@ -664,6 +706,170 @@ Select **Edit** on the event. The **Results** section sets:
 - **Expenses**
 
 The form has no place for sponsors or a link to a calendar event.
+
+If the event's tickets are sold through Zeffy and its Zeffy campaign is linked
+to this event, **Money raised** and **Attendance** go up by themselves as
+tickets sell, and back down if a sale is refunded. Zeffy adds to the figures
+rather than replacing them, so you can still enter money raised another way —
+cash at the door, say — and it is kept. See [Zeffy](#zeffy--online-donations-tickets-and-memberships).
+
+---
+
+## Zeffy — Online Donations, Tickets and Memberships
+
+[Zeffy](https://www.zeffy.com) is a zero-fee fundraising platform: donation
+forms, event ticketing and membership sales. A department that sells through
+Zeffy keeps doing so, and Zeffy keeps issuing the tax receipts. The Logbook
+reads what Zeffy received and records each payment here, so campaign totals,
+donor history, event results and member dues stay in one place.
+
+Nothing is ever changed in Zeffy, and no card details reach The Logbook.
+
+### Before You Start
+
+An administrator connects Zeffy first, on the Integrations page — see
+[Zeffy in the Integrations guide](./16-integrations.md#zeffy--fundraising-payments).
+Until then, the Zeffy page says Zeffy is not connected.
+
+Open **Grants & Fundraising → Zeffy**.
+
+| To                                                                       | You need                                                                                                           |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| See which campaigns are linked, and every payment Zeffy reported         | **View fundraising data**                                                                                          |
+| See Zeffy's own list of campaigns, link or unlink them, run **Sync now** | **Manage fundraising** as well                                                                                     |
+| Link a campaign to **member dues**, or change or remove such a link      | **Manage budgets, fiscal years, categories, and process payments** and **View financial data and budgets** as well |
+
+A dues link credits members' dues, which is a finance action, so it needs the
+finance permissions too. A fundraising manager without them sees a dues link
+with the note _Changing a member dues link needs finance access._ in place of
+its buttons.
+
+### The Connection Panel
+
+At the top of the page:
+
+- **Instant updates** — _On_ when the Zeffy webhook is set up, so payments
+  arrive within seconds. _Off_ means payments arrive on the hourly sync.
+- **Last sync** — when The Logbook last read from Zeffy.
+- **Needs attention** — how many payments are **No member match** or **Needs
+  review** (see below).
+
+**Sync now** reads Zeffy at once instead of waiting for the hour.
+
+![The Zeffy page: the Connection panel with Instant updates on, the last sync and one payment needing attention; four Zeffy campaigns, two linked (Fill the Boot to the Fill the Boot campaign, Annual Membership to the year's Annual Member Dues) and two Not linked; and the Payments list with its status filter and payments that are Applied, Campaign not linked, No member match, Processing and Reversed](./images/12-19-zeffy-page.png)
+
+### Linking a Campaign
+
+**Required Permission:** Manage fundraising
+
+**Campaigns** lists the campaigns in your Zeffy account, read live from Zeffy,
+with what each has raised. A campaign shows **Not linked — payments are
+recorded only** until you link it.
+
+1. Select **Link** on the campaign.
+2. Under **Record payments as**, choose what its payments become:
+
+   | Record payments as       | Each payment becomes                                                                                                                                                              |
+   | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | **Fundraising campaign** | A **donation** on that campaign, from a donor matched to the payer by email, or a new donor if there is none. The campaign's total and the donor's giving history update as usual |
+   | **Fundraising event**    | An addition to the event's **Money raised**, and one to **Attendance** for each ticket                                                                                            |
+   | **Member dues**          | A payment on the paying member's oldest open dues on that schedule, matched by email. Anything over the balance is recorded as a donation from the member                         |
+
+   A ticketed campaign is offered as **Fundraising event** first, and a
+   membership campaign as **Member dues** if you have the finance permissions;
+   you can change either.
+
+3. Choose the campaign, event or dues schedule.
+4. Decide **Apply payments made on or after** (see below).
+5. Select **Save link**.
+
+![Link Zeffy campaign for the Equipment Fund Appeal: Record payments as Fundraising campaign, with the note that each payment becomes a donation from a donor matched by email; the year's Equipment Fund chosen; and Apply payments made on or after left blank, with its warning that an earlier date can count hand-entered gifts twice](./images/12-20-zeffy-link-dialog.png)
+
+Payments Zeffy already reported for that campaign are applied straight away, if
+they fall on or after the start date.
+
+#### Choosing the start date
+
+The start date is what stops a gift being counted twice.
+
+- **Leave it blank** to apply only payments from now on. Use this if anyone has
+  been typing Zeffy gifts in by hand — those are already in The Logbook.
+- **Choose an earlier date** to bring in that campaign's history from that date.
+  Do this only for payments nobody has entered by hand.
+
+Payments made before the start date are still listed, as **Before link start**,
+and applied if you later move the date back.
+
+#### Changing or removing a link
+
+**Change** lets you point the campaign somewhere else or move its start date.
+Clearing the date on an existing link means "from now on" again. **Unlink**
+asks you first, then stops applying the campaign's new payments; they are
+recorded only.
+
+Either way, **payments already applied stay where they were applied**. Moving
+money from one record to another is a decision for the treasurer, made by hand,
+not something a link change does.
+
+### The Payments List
+
+**Payments** lists every payment Zeffy reported, newest first, with its date,
+payer, Zeffy campaign (and ticket count), amount (and anything refunded) and
+status. An amount in Canadian dollars is marked **CAD**; nothing is converted.
+The payer's email address is never shown here. Filter by status with the
+buttons above the list.
+
+| Status                  | Meaning                                                                                                    | What to do                                                                                                 |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Applied**             | Recorded on the linked record; the line under it says which kind                                           | Nothing                                                                                                    |
+| **Processing**          | Zeffy has not finished the payment                                                                         | Nothing — it is applied once Zeffy reports it succeeded                                                    |
+| **Campaign not linked** | Its Zeffy campaign has no link, or the record it was linked to was deleted                                 | Link the campaign. Waiting payments are applied at once                                                    |
+| **Before link start**   | Made before the link's start date                                                                          | Nothing, unless it should count — then move the start date back                                            |
+| **No member match**     | A dues payment whose payer's email belongs to no member, or whose member has no open dues on that schedule | Correct the member's email or generate their dues; it is retried every hour. Or record the payment by hand |
+| **Not counted**         | Failed, deleted, or refunded before anything was applied                                                   | Nothing                                                                                                    |
+| **Reversed**            | Applied, then refunded, deleted in Zeffy, or lost to a dispute — and taken back                            | Nothing                                                                                                    |
+| **Needs review**        | Changed in Zeffy after it was applied, in a way The Logbook will not undo by itself                        | The line under the status says what changed. Decide with the treasurer how to put the record right         |
+
+### Refunds and Disputes
+
+A refund in Zeffy is followed here:
+
+- **Donations** — a partial refund lowers the donation; a full refund marks it
+  **Refunded**, which takes it out of the campaign's total and the donor's
+  history.
+- **Fundraising events** — exactly what Zeffy added to **Money raised** and
+  **Attendance** is taken back. Anything you entered by hand is untouched.
+- **Member dues** — **not** reversed. The payment shows **Needs review** with
+  the amounts. The dues ledger has no reversal entry, and undoing a payment a
+  member has been told was received is the treasurer's decision.
+
+A dispute the department loses is treated like a full refund. A refund made
+more than seven days after the sale reaches The Logbook only if the Zeffy
+webhook is set up; ask your administrator if **Instant updates** reads _Off_.
+
+### What a Zeffy Payment Looks Like Elsewhere
+
+- **A donation** carries the note _Received through Zeffy._ followed by the web
+  address of the Zeffy tax receipt. Its payment method is read from Zeffy (a card payment shows
+  **Credit Card**). A Zeffy in-honour or in-memory tribute becomes the
+  donation's **Dedication**, and a recurring gift is marked as recurring.
+- **A donor** is matched by email. A payer with no email match is added as a
+  new donor; one who gave a business name is added as a business. A payer with
+  no usable name stays on the donation as a name only, not a donor record.
+- **A dues payment** appears in the member's **Payment history** with the
+  method **zeffy** and a reference starting `zeffy:`. No officer is shown as
+  having entered it.
+
+### Edge Cases
+
+| Situation                                                               | What happens                                                                                                                                                         |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The same payment arrives twice, from the webhook and the hourly sync    | Recorded once. A payment is never applied twice                                                                                                                      |
+| A member paid dues with a different email than the one on their profile | **No member match**. Correct their email, or record the payment by hand                                                                                              |
+| A member has two open dues on the schedule                              | Each Zeffy payment settles the oldest one still open                                                                                                                 |
+| A dues payment is more than the member owes                             | The balance is settled and the rest is recorded as a donation from the member, as when an officer records an overpayment                                             |
+| A payment was also entered by hand in Zeffy (a cash sale, an import)    | It is read like any other. Leave the start date after it, or it is counted twice                                                                                     |
+| A peer-to-peer team or participant page                                 | Counts toward the main campaign's link when the webhook reports it. The hourly sync may not see these pages, so set up the webhook if you run peer-to-peer campaigns |
 
 ---
 
@@ -791,18 +997,20 @@ Lt. Walsh files the final closeout report:
 
 ## Troubleshooting
 
-| Problem                                               | What to do                                                                                                                                                    |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| An opportunity shows no deadline                      | Check its **Deadline** setting. A Rolling deadline has no date, and a Recurring one shows a date only when the next deadline was entered.                     |
-| You cannot create an application                      | You need the **Manage fundraising** permission, and the module must be turned on.                                                                             |
-| Budget lines do not match the expenditures            | Link each expenditure to its budget item. Unlinked expenditures count toward the grant's total, but not toward any line.                                      |
-| No compliance tasks were created at the award         | They need a **Reporting Frequency** and grant dates, set **before** the move to Awarded. Tasks are created only once; add any missing ones with **Add Task**. |
-| A campaign's progress does not change                 | Link the donation to the campaign, and make sure its **Payment status** is Completed. Unlinked or pending donations do not count.                             |
-| A donor appears twice                                 | The Logbook does not catch duplicates and cannot merge them. Search before adding a donor.                                                                    |
-| A pledge's status is wrong                            | Pledge statuses are set by hand. Edit the pledge, enter the amount received, and set the status.                                                              |
-| A report shows $0 for a period                        | Check the start and end dates include the donations or applications you expect.                                                                               |
-| **Total Awarded** or **Total Grant Funding** reads $0 | Edit each awarded grant and fill in **Amount Awarded**. Only grants in Awarded, Active, Reporting or Closed count. See [Expenditures](#expenditures).         |
-| Nobody was reminded about a deadline                  | Only tasks and pledges are reminded. See [Task Reminders](#task-reminders) and [Pledge Reminders](#pledge-reminders) for who gets them.                       |
+| Problem                                               | What to do                                                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| An opportunity shows no deadline                      | Check its **Deadline** setting. A Rolling deadline has no date, and a Recurring one shows a date only when the next deadline was entered.                                                                                                                                                  |
+| You cannot create an application                      | You need the **Manage fundraising** permission, and the module must be turned on.                                                                                                                                                                                                          |
+| Budget lines do not match the expenditures            | Link each expenditure to its budget item. Unlinked expenditures count toward the grant's total, but not toward any line.                                                                                                                                                                   |
+| No compliance tasks were created at the award         | They need a **Reporting Frequency** and grant dates, set **before** the move to Awarded. Tasks are created only once; add any missing ones with **Add Task**.                                                                                                                              |
+| A campaign's progress does not change                 | Link the donation to the campaign, and make sure its **Payment status** is Completed. Unlinked or pending donations do not count.                                                                                                                                                          |
+| A donor appears twice                                 | The Logbook does not catch duplicates and cannot merge them. Search before adding a donor.                                                                                                                                                                                                 |
+| A pledge's status is wrong                            | Pledge statuses are set by hand. Edit the pledge, enter the amount received, and set the status.                                                                                                                                                                                           |
+| A report shows $0 for a period                        | Check the start and end dates include the donations or applications you expect.                                                                                                                                                                                                            |
+| **Total Awarded** or **Total Grant Funding** reads $0 | Edit each awarded grant and fill in **Amount Awarded**. Only grants in Awarded, Active, Reporting or Closed count. See [Expenditures](#expenditures).                                                                                                                                      |
+| A Zeffy payment is not on its campaign                | Open **Grants & Fundraising → Zeffy** and find the payment's status. Usually its campaign is not linked, or it was made before the link's start date.                                                                                                                                      |
+| A Zeffy gift was counted twice                        | It was also entered by hand. Open the duplicate's pencil on the Donations list to correct it; a donation cannot be removed from the page, so ask your administrator to delete the extra one. Prevent it by leaving the start date blank when linking a campaign whose gifts were typed in. |
+| Nobody was reminded about a deadline                  | Only tasks and pledges are reminded. See [Task Reminders](#task-reminders) and [Pledge Reminders](#pledge-reminders) for who gets them.                                                                                                                                                    |
 
 ---
 

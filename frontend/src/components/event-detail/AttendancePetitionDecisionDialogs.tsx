@@ -12,13 +12,14 @@ import { PromptDialog } from '../ux';
 import DateTimeQuarterHour from '../ux/DateTimeQuarterHour';
 import { eventService } from '../../services/api';
 import type { AttendancePetition } from '../../types/event';
-import { formatForDateTimeInput, localToUTC } from '../../utils/dateFormatting';
+import { formatForDateTimeInput, formatTime, localToUTC } from '../../utils/dateFormatting';
 import { getErrorDetail } from '../../utils/errorHandling';
 
 interface ApproveDialogProps {
   eventId: string;
   petition: AttendancePetition;
-  /** Where the form starts when the member gave no times. */
+  /** The event's span (actual, else scheduled): where the form starts when the
+   * member gave no times, and what confirmed times are compared against. */
   defaultCheckIn: string;
   defaultCheckOut: string;
   timezone: string;
@@ -46,6 +47,17 @@ export const AttendancePetitionApproveDialog: React.FC<ApproveDialogProps> = ({
   const [note, setNote] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // The member's own times prefill the form, and nothing flagged a claim of
+  // 6:00-11:45 PM for a 7-9 PM drill, so approving it as shown credited almost
+  // six hours (workflow review, training events). Warned, not refused: the
+  // officer may know the member really was setting up early or staying late.
+  const confirmedIn = localToUTC(checkIn, timezone);
+  const confirmedOut = localToUTC(checkOut, timezone);
+  const runsOutsideEvent =
+    !!confirmedIn &&
+    !!confirmedOut &&
+    (new Date(confirmedIn) < new Date(defaultCheckIn) || new Date(confirmedOut) > new Date(defaultCheckOut));
 
   const handleApprove = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,6 +121,12 @@ export const AttendancePetitionApproveDialog: React.FC<ApproveDialogProps> = ({
       {formError && (
         <div className="alert-danger mb-4 text-sm" role="alert">
           {formError}
+        </div>
+      )}
+      {runsOutsideEvent && (
+        <div className="alert-warning mb-4 text-sm" role="status">
+          These times run outside the event, which ran {formatTime(defaultCheckIn, timezone)} to{' '}
+          {formatTime(defaultCheckOut, timezone)}. The member is credited for every minute you confirm.
         </div>
       )}
       <div className="space-y-4">

@@ -96,7 +96,12 @@ class LegalRevisionUpdate(BaseModel):
 
 
 class LegalRevisionResponse(UTCResponseBase):
-    """One revision, with the display name of who proposed and published it."""
+    """One revision, with the display names of who proposed, edited and published it.
+
+    A history row with ``reverts_to_default`` is not wording: it records that
+    the built-in text was restored, by ``published_by`` at ``published_at``,
+    and its body is empty.
+    """
 
     model_config = _RESPONSE_CONFIG
 
@@ -111,6 +116,11 @@ class LegalRevisionResponse(UTCResponseBase):
     published_by: Optional[str] = None
     published_by_name: Optional[str] = None
     published_at: Optional[datetime] = None
+    reverts_to_default: bool = False
+    # Set only when someone other than the proposer edited the draft.
+    edited_by: Optional[str] = None
+    edited_by_name: Optional[str] = None
+    edited_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

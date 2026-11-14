@@ -28,6 +28,7 @@ from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.shift_history_import import (
+    ProbableMatchesDecision,
     ShiftHistoryImportDetail,
     ShiftHistoryImportListResponse,
     ShiftHistoryImportMappingsUpdate,
@@ -238,6 +239,29 @@ async def update_import_row(
             ),
             keep_separate=payload.keep_separate,
         )
+        return await _detail_after(service, org, str(import_id))
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.post(
+    "/{import_id}/probable-matches",
+    response_model=ShiftHistoryImportDetail,
+    response_model_by_alias=True,
+)
+async def decide_probable_matches(
+    import_id: UUID,
+    payload: ProbableMatchesDecision,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Answer every probable crew match still waiting: all the same shift, or
+    all kept separate. Answers already given are left alone."""
+    org = str(current_user.organization_id)
+    service = ShiftHistoryImportService(db)
+    try:
+        draft = await service.get_draft(org, str(import_id))
+        await service.decide_probable_matches(draft, payload.decision)
         return await _detail_after(service, org, str(import_id))
     except Exception as exc:
         raise _http_error(exc)

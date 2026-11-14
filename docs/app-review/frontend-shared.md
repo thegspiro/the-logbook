@@ -1,7 +1,63 @@
 # Application Review — Frontend Shared (Tier B)
 
 **Prefix:** `FE` · **Iteration:** B27 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4) · **(final Tier B item)**
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-31 (pass 5) · **(final Tier B item)**
+
+---
+
+## Pass 5 (2026-10-31) — the cache exclusion list, measured against the API (FE2-1)
+
+Lens: the one HIPAA control the shared layer owns — `UNCACHEABLE_PREFIXES` in
+`utils/apiCache.ts` — checked against what the backend actually returns, rather
+than against the previous passes' reading of it. The list is hand-maintained, so
+the only way to know it is complete is to compare it with the routes.
+
+**Method.** Build the app's OpenAPI document; for every GET route not excluded by
+the list or its substrings (94 prefixes and 18 substrings are parsed out of the
+TypeScript file), resolve the 200 response schema, and collect the routes whose
+fields look like personal data (`email`, `phone`, `first_name`, `last_name`,
+`display_name`, `address`, `*_name`, and so on). 94 routes matched. Almost all are
+an object's own `name` (an apparatus, a role, a course) or a business contact (a
+vendor, a facility), which are not member data. Reading the rest turned up three
+that are.
+
+### FE2-1 — LOW/MED — Saved-report recipients and the portal access log were cacheable — ✅ FIXED
+
+- **`GET /reports/saved`** returns each saved report's `email_recipients`, a list
+  of email addresses. The same class as `/message-history` and
+  `/email-templates/scheduled`, both already excluded as recipient PII.
+- **`GET /public-portal/access-logs`** returns external callers' `ip_address`,
+  `user_agent` and `referer`, and its point is to show newly flagged requests, so a
+  stale page hides the entry the viewer opened it to see. The `/security/` and
+  `/ip-security/` logs are excluded for the same reason.
+
+Both are added to `UNCACHEABLE_PREFIXES`; `/public-portal/api-keys` (key names
+only) stays cacheable. **Tests:** two cases in `apiCache.test.ts`, seen to fail
+before the entries and pass after.
+
+### FE2-2 — LOW — An inventory item's detail names the holder and is cacheable — 🚩 FLAGGED (owner decision)
+
+`GET /inventory/items/{id}` sets `assigned_to_name` (`endpoints/inventory.py:2068`),
+and the response is redacted per viewer. It is the same disclosure class as the
+excluded `/inventory/checkout/`, but an earlier decision (FE9-34, with its own
+test) deliberately keeps the item list and detail cacheable. Reversing that also
+uncaches the item's other sub-routes. Not changed; recorded in
+`KNOWN_LIMITATIONS.md` for a decision.
+
+### Not changed
+
+- `GET /training/skills-testing/candidates` returns id + display name only, as a
+  capped name search; the cache holds one entry per search string and is cleared on
+  logout. Left as is.
+- A permanent guard — a backend test that fails when a GET route with strongly
+  member-identifying fields is not covered by the list — is the real fix for a
+  hand-maintained list. It needs an allowlist for the business-contact false
+  positives above and was not built here; see Future development.
+
+**Completion gate (pass 5):** `npm run typecheck`, `npm run lint`, prettier on the
+touched files; `apiCache.test.ts` 95 passed; `flake8`/`black` n/a (no backend
+change).
 
 ---
 
@@ -169,6 +225,10 @@ The shared utilities are unusually well-commented (rationale on the cache list,
 XSS-safety notes on the render helpers). No doc inaccuracies found.
 
 ## Future development
+
+0. **A cache-exclusion guard (FE2-1)** — a backend test that parses `UNCACHEABLE_PREFIXES` and
+   fails when a GET route with strongly member-identifying response fields is not
+   covered, with an allowlist for business contacts (vendors, facilities).
 
 1. **`toAppError`** — consider surfacing `detail.warning_type` as `AppError.code`
    for structured 409s (would let callers branch without the `extractPhaseGateWarning`

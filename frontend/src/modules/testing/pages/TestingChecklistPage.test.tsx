@@ -122,7 +122,7 @@ describe('TestingChecklistPage', () => {
   it('opens on the group headings rather than two hundred boxes', () => {
     renderWithRouter(<TestingChecklistPage />);
 
-    expect(screen.getByRole('heading', { name: 'Testing home' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Testing Home' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /^Events/ })).toBeInTheDocument();
     expect(screen.queryByText('Event detail')).not.toBeInTheDocument();
   });

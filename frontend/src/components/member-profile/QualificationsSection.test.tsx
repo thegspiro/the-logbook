@@ -88,6 +88,26 @@ describe('QualificationsSection', () => {
     });
   });
 
+  it('offers the officer-in-charge card and saves it with its expiry', async () => {
+    // David: cleared to be the officer on a shift without holding a rank.
+    mockList.mockResolvedValue([]);
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(await screen.findByRole('button', { name: /Add/ }));
+    await user.selectOptions(screen.getByLabelText('Qualification'), 'officer_in_charge');
+    await user.type(screen.getByLabelText(/Granted/), '2026-01-10');
+    await user.type(screen.getByLabelText(/Expires/), '2028-01-10');
+    await user.click(screen.getByRole('button', { name: 'Save qualification' }));
+
+    await waitFor(() => expect(mockSave).toHaveBeenCalledTimes(1));
+    expect(mockSave).toHaveBeenCalledWith('u1', 'officer_in_charge', {
+      granted_on: '2026-01-10',
+      expires_on: '2028-01-10',
+      notes: null,
+    });
+  });
+
   it('refuses an expiry before the grant date without calling the server', async () => {
     mockList.mockResolvedValue([]);
     const user = userEvent.setup();

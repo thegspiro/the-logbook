@@ -136,7 +136,7 @@ class TestRecalculateEnrollmentProgress:
                 _required("r1", "r2"),
                 _scalars([_prog(40.0, "r1"), _prog(60.0, "r2")]),
                 MagicMock(),  # update percentage
-                _scalars([]),  # milestone lookup
+                _scalars([]),  # milestone check: enrollment reload
             ]
         )
         await TrainingProgramService(db)._recalculate_enrollment_progress("enr-1")
@@ -154,7 +154,7 @@ class TestRecalculateEnrollmentProgress:
                 _scalars([_prog(100.0, "r1"), _prog(0.0, "r1"), _prog(100.0, "r2")]),
                 MagicMock(),  # update percentage
                 MagicMock(spec=CursorResult, rowcount=1),  # claim: status=completed
-                _scalars([]),  # milestone lookup
+                _scalars([]),  # milestone check: enrollment reload
                 _one(None),  # program fetch (notification path)
             ]
         )
@@ -173,7 +173,7 @@ class TestRecalculateEnrollmentProgress:
                     _scalars([_prog(100.0, "r1"), _prog(100.0, "r2")]),
                     MagicMock(),  # update percentage
                     MagicMock(spec=CursorResult, rowcount=1),  # claim: status=completed
-                    _scalars([]),  # milestone lookup
+                    _scalars([]),  # milestone check: enrollment reload
                     _one(program),  # program fetch
                     _one(SimpleNamespace(id="u1")),  # user fetch
                 ]
@@ -208,17 +208,18 @@ class TestRecalculateEnrollmentProgress:
 
 
 class TestMilestoneNotifications:
-    """Crossing a milestone threshold notifies the member — the wizard promises
-    it, and nothing evaluated milestones before."""
+    """The rollup hands the enrollment to the milestone evaluator
+    (app/services/program_milestones.py, covered by
+    test_program_milestones.py) whenever the enrollment was running.
 
-    def _milestone(self, name="Halfway", threshold=50.0, message=None):
-        return SimpleNamespace(
-            name=name,
-            completion_percentage_threshold=threshold,
-            notification_message=message,
-        )
+    It used to compare the old and new percentage itself; milestones can now
+    wait on courses and tests, which reach a member without the percentage
+    moving, so the evaluator decides and the rollup only says when to ask.
+    """
 
-    async def test_crossed_milestone_notifies_once(self, monkeypatch):
+    async def test_active_enrollment_is_evaluated_including_completion(
+        self, monkeypatch
+    ):
         svc = TrainingProgramService(
             RecordingSession(
                 [
@@ -226,22 +227,17 @@ class TestMilestoneNotifications:
                     _required("r1", "r2"),
                     _scalars([_prog(100.0, "r1"), _prog(20.0, "r2")]),
                     MagicMock(),  # update percentage -> 60
-                    _scalars([self._milestone(threshold=50.0)]),
                 ]
             )
         )
-        logged = AsyncMock()
+        evaluate = AsyncMock(return_value=1)
         monkeypatch.setattr(
-            "app.services.training_program_service.NotificationsService",
-            lambda db: SimpleNamespace(log_notification=logged),
+            "app.services.program_milestones.process_enrollments", evaluate
         )
         await svc._recalculate_enrollment_progress("enr-1")
-        logged.assert_awaited_once()
-        payload = logged.await_args.kwargs["log_data"]
-        assert payload["recipient_id"] == "u1"
-        assert payload["action_url"] == "/training/my-progress/enr-1"
+        evaluate.assert_awaited_once_with(svc.db, ["enr-1"], any_status=True)
 
-    async def test_progress_that_does_not_advance_notifies_nothing(self, monkeypatch):
+    async def test_progress_that_does_not_advance_is_still_evaluated(self, monkeypatch):
         svc = TrainingProgramService(
             RecordingSession(
                 [
@@ -252,13 +248,49 @@ class TestMilestoneNotifications:
                 ]
             )
         )
-        logged = AsyncMock()
+        evaluate = AsyncMock(return_value=0)
         monkeypatch.setattr(
-            "app.services.training_program_service.NotificationsService",
-            lambda db: SimpleNamespace(log_notification=logged),
+            "app.services.program_milestones.process_enrollments", evaluate
         )
         await svc._recalculate_enrollment_progress("enr-1")
-        logged.assert_not_awaited()
+        evaluate.assert_awaited_once_with(svc.db, ["enr-1"], any_status=True)
+
+    async def test_enrollment_that_was_not_running_is_not_evaluated(self, monkeypatch):
+        svc = TrainingProgramService(
+            RecordingSession(
+                [
+                    _one(_enrollment(status=EnrollmentStatus.WITHDRAWN)),
+                    _required("r1", "r2"),
+                    _scalars([_prog(100.0, "r1"), _prog(20.0, "r2")]),
+                    MagicMock(),
+                ]
+            )
+        )
+        evaluate = AsyncMock(return_value=0)
+        monkeypatch.setattr(
+            "app.services.program_milestones.process_enrollments", evaluate
+        )
+        await svc._recalculate_enrollment_progress("enr-1")
+        evaluate.assert_not_awaited()
+
+    async def test_evaluator_failure_does_not_undo_progress(self, monkeypatch):
+        db = RecordingSession(
+            [
+                _one(_enrollment(percentage=20.0)),
+                _required("r1", "r2"),
+                _scalars([_prog(100.0, "r1"), _prog(20.0, "r2")]),
+                MagicMock(),
+            ]
+        )
+        db.rollback = AsyncMock()
+        svc = TrainingProgramService(db)
+        monkeypatch.setattr(
+            "app.services.program_milestones.process_enrollments",
+            AsyncMock(side_effect=RuntimeError("mail down")),
+        )
+        await svc._recalculate_enrollment_progress("enr-1")
+        db.commit.assert_awaited()
+        assert db.update_count() == 1
 
 
 class TestUpdateRequirementProgressAuth:

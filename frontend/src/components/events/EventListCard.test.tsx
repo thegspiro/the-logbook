@@ -49,6 +49,23 @@ const renderCard = (event: EventListItem, overrides: Partial<React.ComponentProp
   );
 
 describe('EventListCard', () => {
+  // W80-11 follow-up: a postponed event says so on the list, with the date it
+  // was originally scheduled for.
+  describe('postponed', () => {
+    it('marks a postponed event, naming its original date', () => {
+      renderCard(makeEvent({ postponed_from_start: '2026-11-08T23:15:00Z' }));
+      const badge = screen.getByText('Postponed');
+      expect(badge).toHaveAccessibleName(/^Postponed from /);
+      expect(badge.getAttribute('title')).toMatch(/Nov(ember)? 8/);
+    });
+
+    it('says nothing for an event never postponed, or one since cancelled', () => {
+      renderCard(makeEvent({ is_cancelled: true, postponed_from_start: '2026-11-08T23:15:00Z' }));
+      expect(screen.queryByText('Postponed')).not.toBeInTheDocument();
+      expect(screen.getByText('Cancelled')).toBeInTheDocument();
+    });
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -96,6 +113,20 @@ describe('EventListCard', () => {
     it('does not repeat a status the strip already states', () => {
       renderCard(makeEvent({ user_rsvp_status: 'going' }));
       expect(screen.queryByText('Going')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('attendance flag', () => {
+    it('says when a session-attendance requirement counts the event', () => {
+      renderCard(makeEvent({ counts_toward_attendance: true }));
+      expect(screen.getByText('Counts toward attendance')).toBeInTheDocument();
+    });
+
+    it('says nothing for an optional event or an older backend', () => {
+      renderCard(makeEvent({ counts_toward_attendance: false }));
+      expect(screen.queryByText('Counts toward attendance')).not.toBeInTheDocument();
+      renderCard(makeEvent());
+      expect(screen.queryByText('Counts toward attendance')).not.toBeInTheDocument();
     });
   });
 

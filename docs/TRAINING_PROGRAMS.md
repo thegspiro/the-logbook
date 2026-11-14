@@ -67,7 +67,11 @@ behaviour. Field-level detail is in `backend/app/docs/TRAINING_MODULE.md`
   completed on or before the requirement's `name_match_until` date, which the
   upgrade set to the day it ran on every requirement that existed; a requirement
   created afterwards needs a linked course, the training type or the registry
-  code.
+  code. Since 2026-11-04 the legacy name match compares stored match keys (the
+  name with case, spacing and punctuation removed), so a course name that only
+  contains the requirement's no longer counts; a registry code must begin the
+  certification number; and skills-evaluation, checklist and knowledge-test
+  requirements follow the same legacy-only rule (see `docs/UPGRADING.md`).
 - **`required_roles` holds rank slugs and is matched against the member's rank.**
   It previously never matched anybody. It is not the compliance profile's
   `role_ids` (position ids).
@@ -495,9 +499,58 @@ every confusion below comes from that one distinction.
 
 #### Milestone System
 
-- Define completion milestones (e.g., 25%, 50%, 75%)
-- Milestone notifications
-- Officer verification requirements
+A milestone is reached when **every trigger it has** is met — the two kinds are
+always joined by AND:
+
+- **A percentage** of the program complete (e.g., 25%, 50%, 75%), read from the
+  enrollment's overall progress. Optional.
+- **Courses, skills tests and knowledge tests** from the library, combined by the
+  milestone's choice of _all of these_ (the default) or _any one of these_.
+  Optional. A department wanting "A or B" as two separate notices adds two
+  milestones.
+
+A milestone needs at least one of the two. What counts as complete:
+
+| Item           | Counts when                                                                                                                  |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Course         | A training record for that course is completed, not voided and not failed. A self-report counts once an officer approves it. |
+| Skills test    | An official (non-practice) test of that skill passed and was validated by an officer — the rule that credits a requirement.  |
+| Knowledge test | An attempt is submitted and passed. These grade automatically, so there is nothing to wait for.                              |
+
+By default only completions **since the member's current enrollment or cycle**
+count, so a re-enrolled or reset member earns the milestone again. A milestone
+can opt in to counting earlier completions instead.
+
+**Once per enrollment.** Each enrollment reaches a milestone at most once
+(`program_milestone_achievements`, unique per milestone and enrollment). A
+cycle reset clears the enrollment's record so the new cycle earns its
+milestones again; a new enrollment starts with none.
+
+**Not news is not announced.** When a milestone is created, or an edit changes
+its percentage, items, all/any choice or the earlier-completions setting,
+members who already meet it are recorded as reached and **nobody is told**.
+The editor warns about this before an edit is saved.
+
+**Who is told**, chosen per milestone:
+
+- **The member** (on by default) — a congratulatory message: the milestone's
+  own message, or a default. Emailed under _Training and certification
+  reminders_, and always put in the bell (and pushed), as milestones always were.
+- **Everyone holding chosen positions** (Chief, Training Officer,
+  Quartermaster, …), resolved when the milestone is reached, and **chosen
+  members**. They get an informative notice — "[member] has reached
+  [milestone] in [program]" followed by the milestone's optional note for
+  officers — by email under _Training officer duties_, or in the bell
+  instead when they have turned that email off. Never SMS.
+
+**When it is checked**: right after any change to the member's program
+progress, right after a skills test is validated or a knowledge test graded,
+and every 30 minutes by the `program_milestones` scheduled task, which picks
+up course records however they arrived (officer entry, approved self-report,
+event attendance, provider import).
+
+Members see every milestone on their progress page: which they have reached
+and when, and for the rest which courses and tests are done.
 
 #### Deadline Reminders
 
@@ -1362,13 +1415,32 @@ const programRequirement = {
 const milestone = {
   program_id: programId,
   phase_id: null, // Program-level milestone
-  name: "Halfway Point",
-  description: "Completed 50% of requirements",
-  completion_percentage_threshold: 50,
-  notification_message: "Great progress! You're halfway through the program.",
-  requires_verification: false,
+  name: "Engine Company Ready",
+  description: "Halfway through, with pump operations done",
+  completion_percentage_threshold: 50, // optional; AND-ed with the items
+  items: [
+    { item_type: "course", item_id: pumpOpsCourseId },
+    { item_type: "skill_test", item_id: pumpSkillTemplateId },
+  ],
+  item_match_mode: "all", // or "any"
+  counts_prior_completions: false,
+  notify_member: true,
+  notification_message: "Great progress! You're ready for engine company work.",
+  notify_position_ids: [quartermasterPositionId],
+  notify_user_ids: [],
+  officer_message: "Uniform and gear issue may be due.",
 };
 ```
+
+The editor's choices come from `GET /api/v1/training/programs/milestone-options`
+(active courses, skills tests and knowledge tests, positions and current
+members; `training.manage`). On an update, `items` and each recipient list
+replace the stored set when sent.
+
+A duplicated program keeps every milestone's items and recipients. An export
+carries items by type and name and positions by slug, never chosen members; an
+import matches them by name and slug in the importing department and lists any
+item it could not match in `unmatched_milestone_items`.
 
 ---
 
@@ -2043,9 +2115,22 @@ regeneration possible.
 
 - id, program_id, phase_id
 - name, description
-- completion_percentage_threshold
-- notification_message
+- completion_percentage_threshold (nullable — a milestone may wait on items only)
+- item_match_mode (all, any), counts_prior_completions
+- notification_message (to the member), notify_member
+- notify_position_ids, notify_user_ids, officer_message
 - requires_verification
+
+#### `program_milestone_items`
+
+- id, milestone_id, item_type (course, skill_test, knowledge_test)
+- course_id / skill_template_id / knowledge_test_id — exactly one, by type
+- sort_order
+
+#### `program_milestone_achievements`
+
+- id, milestone_id, enrollment_id (unique together)
+- outcome (notified, skipped), reached_at
 
 #### `program_enrollments`
 
@@ -2570,7 +2655,7 @@ When a member has an active Leave of Absence with an auto-linked training waiver
 - The member's program enrollment remains in `active` status during the leave
 - Progress percentages reflect the adjusted targets
 
-> **Edge Case:** If a waiver covers exactly 15 days of a month, that month IS waived. If it covers 14 days, it is NOT waived. A single day can change the adjusted requirement significantly. See [Training Compliance Calculations](./training-compliance-calculations.md#edge-case-near-the-15-day-threshold) for a detailed example.
+> **Edge Case:** How a partly covered month counts is the department's **Months on leave** setting. Under the default, any day of leave excuses the whole month; the two 15-day rules excuse it proportionally or by half. See [Training Compliance Calculations](./training-compliance-calculations.md#edge-case-a-partly-covered-month) for a worked example.
 
 ### Skills Testing Module
 

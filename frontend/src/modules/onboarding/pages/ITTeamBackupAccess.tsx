@@ -140,6 +140,10 @@ const ITTeamBackupAccess: React.FC = () => {
       newErrors.backupEmail = 'Backup recovery email is required';
     } else if (!isValidEmail(backupEmail)) {
       newErrors.backupEmail = 'Enter a valid email address';
+    } else if (systemOwnerEmail.trim() && backupEmail.trim().toLowerCase() === systemOwnerEmail.trim().toLowerCase()) {
+      // A recovery address is for when the administrator's own mailbox is
+      // lost; the same mailbox recovers nothing (workflow review W01-12).
+      newErrors.backupEmail = 'Use a different email than the administrator account';
     }
 
     // Validate backup phone
@@ -294,15 +298,15 @@ const ITTeamBackupAccess: React.FC = () => {
           >
             {/* IT Team Section */}
             <div className="card p-6">
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center space-x-3">
+              <div className="split-row mb-4 gap-3 sm:items-center">
+                <div className="split-row-main flex items-center space-x-3">
                   <Users aria-hidden="true" className="text-theme-accent-cyan h-6 w-6 shrink-0" />
                   <h3 className="text-theme-text-primary text-xl font-bold">IT Team Contacts</h3>
                 </div>
                 <button
                   type="button"
                   onClick={addITMember}
-                  className="flex shrink-0 items-center space-x-2 self-start rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-800 sm:self-auto"
+                  className="split-row-aside touch-target-phone flex shrink-0 items-center space-x-2 self-start rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-800 sm:self-auto"
                 >
                   <Plus aria-hidden="true" className="h-4 w-4" />
                   <span>Add Member</span>
@@ -310,8 +314,10 @@ const ITTeamBackupAccess: React.FC = () => {
               </div>
 
               <p className="text-theme-text-muted mb-6 text-sm">
-                The first person listed is the primary contact. Anyone without an account gets one when setup finishes,
-                and every contact is emailed whenever a member asks to reset their password.
+                The first person listed is the primary contact, and every contact is emailed whenever a member asks to
+                reset their password. Anyone without an account gets a member account when setup finishes — no password
+                is sent, so they sign in by choosing <strong>Forgot your password?</strong> once email is set up. Give
+                them a position from Members afterwards if they need administrative access.
               </p>
 
               {itTeam.map((member, index) => (

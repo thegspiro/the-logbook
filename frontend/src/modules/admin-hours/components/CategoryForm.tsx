@@ -6,7 +6,9 @@
  */
 
 import React from 'react';
+import { FormField } from '@/components/ux/FormField';
 import type { AdminHoursCategoryCreate } from '../types';
+import { CATEGORY_FIELD_IDS, CATEGORY_NAME_MAX_LENGTH, type CategoryField } from './categoryFields';
 
 const DEFAULT_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
 
@@ -30,6 +32,8 @@ interface CategoryFormProps {
   /** True while a submit is in flight — blocks the double-click duplicate. */
   submitting?: boolean;
   onCancel: () => void;
+  /** Each field's open error, from the form's own check or the server's 422. */
+  errors?: Partial<Record<CategoryField, string>>;
 }
 
 const CategoryForm: React.FC<CategoryFormProps> = ({
@@ -39,6 +43,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
   isEditing,
   submitting = false,
   onCancel,
+  errors = {},
 }) => {
   return (
     <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-md">
@@ -47,25 +52,38 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
       </h3>
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label htmlFor="category-name" className="form-label">
-              Name *
-            </label>
-            <input
-              id="category-name"
-              type="text"
-              value={formData.name}
-              onChange={(e) => onChange({ ...formData, name: e.target.value })}
-              className="form-input"
-              required
-              placeholder="e.g., Building Maintenance"
-            />
-          </div>
+          <FormField
+            id={CATEGORY_FIELD_IDS.name}
+            label="Name"
+            required
+            error={errors.name}
+            maxLength={CATEGORY_NAME_MAX_LENGTH}
+            count={formData.name.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                autoComplete="off"
+                value={formData.name}
+                onChange={(e) => onChange({ ...formData, name: e.target.value })}
+                className="form-input"
+                placeholder="e.g., Building Maintenance"
+              />
+            )}
+          </FormField>
           <div>
             <span id="category-color-label" className="form-label">
               Color
             </span>
-            <div role="group" aria-labelledby="category-color-label" className="flex flex-wrap items-center gap-2">
+            <div
+              id={CATEGORY_FIELD_IDS.color}
+              tabIndex={-1}
+              role="group"
+              aria-labelledby="category-color-label"
+              aria-describedby={errors.color ? 'category-color-error' : undefined}
+              className="flex flex-wrap items-center gap-2"
+            >
               {DEFAULT_COLORS.map((c) => (
                 <button
                   key={c}
@@ -78,71 +96,95 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                 />
               ))}
             </div>
+            {errors.color && (
+              <p id="category-color-error" className="mt-1 text-sm text-red-800 dark:text-red-300">
+                {errors.color}
+              </p>
+            )}
           </div>
         </div>
 
-        <div>
-          <label htmlFor="category-description" className="form-label">
-            Description
-          </label>
-          <textarea
-            id="category-description"
-            value={formData.description ?? ''}
-            onChange={(e) => onChange({ ...formData, description: e.target.value })}
-            rows={2}
-            className="form-input"
-            placeholder="Brief description of this type of admin work"
-          />
-        </div>
+        <FormField id={CATEGORY_FIELD_IDS.description} label="Description" error={errors.description}>
+          {(field) => (
+            <textarea
+              {...field}
+              value={formData.description ?? ''}
+              onChange={(e) => onChange({ ...formData, description: e.target.value })}
+              rows={2}
+              className="form-input"
+              placeholder="Brief description of this type of admin work"
+            />
+          )}
+        </FormField>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <label className="touch:min-h-11 flex cursor-pointer items-center gap-2">
             <input
+              id={CATEGORY_FIELD_IDS.require_approval}
               type="checkbox"
               checked={formData.require_approval ?? true}
               onChange={(e) => onChange({ ...formData, require_approval: e.target.checked })}
               className="form-checkbox"
-              aria-describedby="category-approval-scope"
+              aria-invalid={errors.require_approval ? true : undefined}
+              aria-describedby={
+                errors.require_approval ? 'category-approval-error category-approval-scope' : 'category-approval-scope'
+              }
             />
             <span className="text-theme-text-secondary text-sm">Require approval</span>
           </label>
 
-          <div>
-            <label htmlFor="category-auto-approve" className="form-label">
-              Auto-approve under (hours)
-            </label>
-            <input
-              id="category-auto-approve"
-              type="number"
-              step="0.5"
-              min="0"
-              value={formData.auto_approve_under_hours ?? ''}
-              onChange={(e) =>
-                onChange({ ...formData, auto_approve_under_hours: e.target.value ? parseFloat(e.target.value) : null })
-              }
-              className="form-input"
-              placeholder="e.g., 4"
-            />
-          </div>
+          <FormField
+            id={CATEGORY_FIELD_IDS.auto_approve_under_hours}
+            label="Auto-approve under (hours)"
+            error={errors.auto_approve_under_hours}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="number"
+                inputMode="decimal"
+                step="0.5"
+                min="0"
+                value={formData.auto_approve_under_hours ?? ''}
+                onChange={(e) =>
+                  onChange({
+                    ...formData,
+                    auto_approve_under_hours: e.target.value ? parseFloat(e.target.value) : null,
+                  })
+                }
+                className="form-input"
+                placeholder="e.g., 4"
+              />
+            )}
+          </FormField>
 
-          <div>
-            <label htmlFor="category-max-hours" className="form-label">
-              Max hours per session
-            </label>
-            <input
-              id="category-max-hours"
-              type="number"
-              step="0.5"
-              min="0.5"
-              value={formData.max_hours_per_session ?? ''}
-              onChange={(e) =>
-                onChange({ ...formData, max_hours_per_session: e.target.value ? parseFloat(e.target.value) : null })
-              }
-              className="form-input"
-              placeholder="e.g., 12"
-            />
-          </div>
+          <FormField
+            id={CATEGORY_FIELD_IDS.max_hours_per_session}
+            label="Max hours per session"
+            error={errors.max_hours_per_session}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="number"
+                inputMode="decimal"
+                step="0.5"
+                min="0.5"
+                value={formData.max_hours_per_session ?? ''}
+                onChange={(e) =>
+                  onChange({ ...formData, max_hours_per_session: e.target.value ? parseFloat(e.target.value) : null })
+                }
+                className="form-input"
+                placeholder="e.g., 12"
+              />
+            )}
+          </FormField>
         </div>
+        {errors.require_approval && (
+          <p id="category-approval-error" className="text-sm text-red-800 dark:text-red-300">
+            {errors.require_approval}
+          </p>
+        )}
         {/* Manual entries are pinned to PENDING server-side (audit finding AH-1:
             both times are member-supplied, so auto-approving them would let a
             member self-credit backdated hours). Say so here, or an officer who

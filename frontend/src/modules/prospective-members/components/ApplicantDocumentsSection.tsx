@@ -28,6 +28,7 @@ import { formatDate } from '../../../utils/dateFormatting';
 import { enumLabel } from '../../../utils/displayValue';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { useApplicantAccess } from './ApplicantAccessContext';
 
 interface ApplicantDocumentsSectionProps {
   applicant: Applicant;
@@ -56,6 +57,10 @@ const normalizeType = (value: string): string => value.normalize('NFKC').trim().
 const FALLBACK_DOCUMENT_TYPE = 'application';
 
 const ApplicantDocumentsSection: React.FC<ApplicantDocumentsSectionProps> = ({ applicant, tz }) => {
+  // Changes are for the applicant's managers and case managers, and only while
+  // the application is open; anyone else assigned sees the list only.
+  const access = useApplicantAccess();
+  const canEdit = applicant.status === ApplicantStatus.ACTIVE && access.can_work;
   const { confirm } = useConfirm();
   const [documents, setDocuments] = useState<ApplicantDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -157,7 +162,7 @@ const ApplicantDocumentsSection: React.FC<ApplicantDocumentsSectionProps> = ({ a
           <FileText className="h-3.5 w-3.5" />
           Documents
         </h3>
-        {applicant.status === ApplicantStatus.ACTIVE && (
+        {canEdit && (
           <>
             {requiredTypes.length === 0 && (
               <button
@@ -189,7 +194,7 @@ const ApplicantDocumentsSection: React.FC<ApplicantDocumentsSectionProps> = ({ a
         would put an applicant one typo away from a requirement that can never
         be met and gives no clue why.
       */}
-      {applicant.status === ApplicantStatus.ACTIVE && requiredTypes.length > 0 && (
+      {canEdit && requiredTypes.length > 0 && (
         <div className="mb-3">
           <p className="text-theme-text-muted mb-2 text-xs">This step needs each of these before it can advance:</p>
           <div className="flex flex-wrap gap-2">
@@ -253,7 +258,7 @@ const ApplicantDocumentsSection: React.FC<ApplicantDocumentsSectionProps> = ({ a
                   {document.uploaded_at ? ` · ${formatDate(document.uploaded_at, tz)}` : ''}
                 </p>
               </div>
-              {applicant.status === ApplicantStatus.ACTIVE && (
+              {canEdit && (
                 <button
                   onClick={() => {
                     void handleDelete(document);

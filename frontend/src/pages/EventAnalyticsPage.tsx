@@ -361,8 +361,13 @@ export const EventAnalyticsPage: React.FC = () => {
           {data.topEvents.length === 0 ? (
             <p className="text-theme-text-muted text-sm">No attendance data available.</p>
           ) : (
-            <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Top events by attendance">
-              <table className="w-full text-sm">
+            <div
+              className="rwd-table-container overflow-x-auto"
+              tabIndex={0}
+              role="region"
+              aria-label="Top events by attendance"
+            >
+              <table className="rwd-table rwd-table-narrow w-full text-sm">
                 <thead>
                   <tr className="border-theme-surface-border text-theme-text-secondary border-b text-left">
                     <th scope="col" className="pr-4 pb-2">
@@ -388,7 +393,7 @@ export const EventAnalyticsPage: React.FC = () => {
                 <tbody>
                   {data.topEvents.map((e) => (
                     <tr key={e.eventId} className="border-theme-surface-border/50 border-b last:border-0">
-                      <td className="py-2 pr-4">
+                      <td data-label="Event" className="py-2 pr-4">
                         <Link
                           to={`/events/${e.eventId}`}
                           className="text-theme-text-primary font-medium hover:underline"
@@ -396,11 +401,19 @@ export const EventAnalyticsPage: React.FC = () => {
                           {e.title}
                         </Link>
                       </td>
-                      <td className="text-theme-text-secondary py-2 pr-4">{getEventTypeLabel(e.eventType)}</td>
-                      <td className="text-theme-text-secondary py-2 pr-4">{formatDate(e.startDatetime, tz)}</td>
-                      <td className="text-theme-text-primary py-2 pr-4 text-right">{e.goingCount}</td>
-                      <td className="text-theme-text-primary py-2 pr-4 text-right">{e.checkedInCount}</td>
-                      <td className="py-2 text-right">
+                      <td data-label="Type" className="text-theme-text-secondary py-2 pr-4">
+                        {getEventTypeLabel(e.eventType)}
+                      </td>
+                      <td data-label="Date" className="text-theme-text-secondary py-2 pr-4">
+                        {formatDate(e.startDatetime, tz)}
+                      </td>
+                      <td data-label="RSVPs" className="text-theme-text-primary py-2 pr-4 text-right">
+                        {e.goingCount}
+                      </td>
+                      <td data-label="Checked In" className="text-theme-text-primary py-2 pr-4 text-right">
+                        {e.checkedInCount}
+                      </td>
+                      <td data-label="Rate" className="py-2 text-right">
                         <span
                           className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
                             e.attendanceRate >= 0.8

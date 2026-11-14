@@ -84,3 +84,14 @@ export const CONDITION_COLORS: Record<string, string> = {
   poor: 'text-orange-700 dark:text-orange-400',
   critical: 'text-red-600 dark:text-red-400',
 };
+
+export const MAINTENANCE_STATUS_FILTERS = ['all', 'pending', 'due', 'completed', 'overdue'] as const;
+export type MaintenanceStatusFilter = (typeof MAINTENANCE_STATUS_FILTERS)[number];
+
+/**
+ * The window the `due` filter asks for. It is the dashboard's facility
+ * "Maintenance due" tile's window, `FACILITY_MAINTENANCE_DUE_DAYS` in
+ * backend/app/services/facilities_service.py; the server applies that tile's
+ * own conditions, so the list and the tile's number agree (DASH-39).
+ */
+export const MAINTENANCE_DUE_WINDOW_DAYS = 30;

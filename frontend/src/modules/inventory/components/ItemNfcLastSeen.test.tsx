@@ -73,4 +73,44 @@ describe('ItemNfcLastSeen', () => {
     render(<ItemNfcLastSeen itemId="item-1" />);
     expect(await screen.findByText('Found on Cabinet C during a shelf audit')).toBeInTheDocument();
   });
+
+  it('describes the creation and barcode put-aways the trail also carries', async () => {
+    getItemNfcScans.mockResolvedValue({
+      total: 4,
+      items: [
+        scan({
+          id: 's-4',
+          action: 'barcode_put_away',
+          tag_uid_preview: null,
+          storage_area_id: 'b',
+          storage_area_name: 'Shelf B',
+          from_storage_area_id: 'a',
+          from_storage_area_name: 'Shelf A',
+        }),
+        scan({
+          id: 's-3',
+          action: 'barcode_put_away',
+          tag_uid_preview: null,
+          storage_area_id: 'a',
+          storage_area_name: 'Shelf A',
+          from_storage_area_id: 'a',
+          from_storage_area_name: 'Shelf A',
+        }),
+        scan({
+          id: 's-2',
+          action: 'created',
+          tag_uid_preview: null,
+          storage_area_id: 'a',
+          storage_area_name: 'Shelf A',
+        }),
+        scan({ id: 's-1', action: 'created', tag_uid_preview: null }),
+      ],
+    });
+    render(<ItemNfcLastSeen itemId="item-1" />);
+    expect(await screen.findByText('Moved from Shelf A to Shelf B by barcode scan')).toBeInTheDocument();
+    expect(screen.getByText('Seen on Shelf A (barcode scan)')).toBeInTheDocument();
+    expect(screen.getByText('Added to inventory on Shelf A')).toBeInTheDocument();
+    expect(screen.getByText('Added to inventory')).toBeInTheDocument();
+    expect(screen.queryByText('Tag tapped')).not.toBeInTheDocument();
+  });
 });

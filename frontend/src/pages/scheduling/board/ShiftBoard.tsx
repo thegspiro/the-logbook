@@ -22,15 +22,19 @@ import {
   shiftPeriodLetter,
   shiftEndInstant,
   shiftStatusInfo,
+  memberUnavailableReason,
   toDateKey,
   weekDates,
   type BoardFilter,
+  type LeaveSpan,
+  type TimeOffSpan,
 } from '../../../modules/scheduling/utils/shiftBoard';
 import {
   schedulingClockInstant,
   useSchedulingClock,
   useSignupWindow,
 } from '../../../modules/scheduling/hooks/useSignupWindow';
+import { memberStatusService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCalendarDate, toLocalDateString } from '../../../utils/dateFormatting';
@@ -125,6 +129,8 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   const [confirmedShift, setConfirmedShift] = useState<ShiftRecord | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const [myOffers, setMyOffers] = useState<SwapRequest[]>([]);
+  const [myTimeOff, setMyTimeOff] = useState<TimeOffSpan[]>([]);
+  const [myLeaves, setMyLeaves] = useState<LeaveSpan[]>([]);
   const [nextScheduled, setNextScheduled] = useState<ShiftRecord | null>(null);
 
   // "Today" is the department's calendar day, re-read on every clock tick.
@@ -184,6 +190,18 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
     }
     return map;
   }, [myOffers, currentUserId]);
+
+  // Shifts the member is on leave for or asked to have off, keyed by shift, so
+  // a seat on one is shown as unavailable rather than offered and then refused
+  // by the server.
+  const unavailableByShift = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const shift of shifts) {
+      const reason = memberUnavailableReason(shift, myLeaves, myTimeOff);
+      if (reason) map[shift.id] = reason;
+    }
+    return map;
+  }, [shifts, myLeaves, myTimeOff]);
 
   const openSeatsThisMonth = useMemo(
     () =>
@@ -248,19 +266,28 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
       // Only the timer's own poll says it is in the background. A handler that
       // passes this function an event object reads as "not background".
       const config = options?.background === true ? BACKGROUND_REQUEST_CONFIG : undefined;
-      const [data, offers] = await Promise.all([
+      const [data, offers, timeOff, leaves] = await Promise.all([
         view === 'week'
           ? schedulingService.getWeekCalendar(weekStartKey(visibleDate), config)
           : schedulingService.getMonthCalendar(visibleDate.getFullYear(), visibleDate.getMonth() + 1, config),
         // Non-critical: without it the offer banners simply do not appear, and
         // the roster below them is still correct.
         schedulingService.getMySwapRequests('pending', config).catch(() => [] as SwapRequest[]),
+        // Non-critical for the same reason, both of them: without either a
+        // seat on a day off or on leave is offered as before, and the server
+        // still refuses the signup.
+        currentUserId
+          ? schedulingService.getApprovedTimeOffFor(String(currentUserId), config).catch(() => [] as TimeOffSpan[])
+          : Promise.resolve([] as TimeOffSpan[]),
+        memberStatusService.getMyLeaves(config).catch(() => [] as LeaveSpan[]),
       ]);
       setShifts(data);
       setMyOffers(offers);
+      setMyTimeOff(timeOff);
+      setMyLeaves(leaves);
       return data;
     },
-    [view, visibleDate]
+    [view, visibleDate, currentUserId]
   );
 
   const fetchShifts = useCallback(async () => {
@@ -411,6 +438,11 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
       toast.error(`${closed} Ask a duty officer to add you.`);
       return;
     }
+    const unavailable = unavailableByShift[shift.id];
+    if (unavailable) {
+      toast.error(unavailable);
+      return;
+    }
 
     const eligible = eligibleByShift[shift.id] ?? [];
     const seat = position ?? eligible[0];
@@ -473,6 +505,12 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   };
 
   const handleAnswerOffer = async (offer: SwapRequest, accept: boolean) => {
+    // Accepting seats the member, so the server refuses it on a day off too.
+    const unavailable = accept ? unavailableByShift[offer.offering_shift_id] : undefined;
+    if (unavailable) {
+      toast.error(unavailable);
+      return;
+    }
     setPendingShiftId(offer.offering_shift_id);
     try {
       await schedulingService.respondToSwapOffer(offer.id, accept);
@@ -702,6 +740,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
                   currentUserId={currentUserId}
                   timezone={timezone}
                   eligibleByShift={eligibleByShift}
+                  unavailableByShift={unavailableByShift}
                   pendingShiftId={pendingShiftId}
                   confirmedShift={confirmedShift}
                   onClose={() => setSheetOpen(false)}
@@ -752,6 +791,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
               currentUserId={currentUserId}
               timezone={timezone}
               eligibleByShift={eligibleByShift}
+              unavailableByShift={unavailableByShift}
               pendingShiftId={pendingShiftId}
               onClaim={(shift, position) => void handleClaim(shift, position)}
               onRelease={openGiveUp}

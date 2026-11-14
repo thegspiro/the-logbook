@@ -44,6 +44,9 @@ vi.mock('../services/api', () => ({
     uploadLineItemReceipt: (...args: unknown[]) => uploadLineItemReceipt(...args) as unknown,
     downloadLineItemReceipt: (...args: unknown[]) => downloadLineItemReceipt(...args) as unknown,
   },
+  // A draft's route preview asks for its chain after a debounce; a test that
+  // outlives it would otherwise call an export this mock never defined.
+  approvalChainService: { routePreview: () => Promise.reject(new Error('not needed')) },
 }));
 
 import ExpenseReportDetailPage from './ExpenseReportDetailPage';

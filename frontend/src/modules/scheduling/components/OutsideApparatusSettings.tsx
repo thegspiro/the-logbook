@@ -40,7 +40,7 @@ const ActiveToggle: React.FC<ToggleProps> = ({ checked, label, disabled, onChang
     onClick={onChange}
     className="mobile-touch-target flex items-center justify-center"
   >
-    <span className={`toggle-track-sm ${checked ? 'bg-violet-600' : 'bg-theme-surface-border'}`}>
+    <span className={`toggle-track-sm ${checked ? 'bg-theme-accent-red' : 'bg-theme-surface-border'}`}>
       <span className={`toggle-knob-sm ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
     </span>
   </button>
@@ -256,6 +256,32 @@ export const OutsideApparatusSettings: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              <label className="mt-3 flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  className="form-checkbox mt-0.5"
+                  checked={agency.evaluate_shifts}
+                  disabled={busy}
+                  onChange={() =>
+                    void run(
+                      () =>
+                        schedulingService.updateExternalAgency(agency.id, {
+                          evaluate_shifts: !agency.evaluate_shifts,
+                        }),
+                      agency.evaluate_shifts ? 'Shift evaluations turned off' : 'Shift evaluations turned on',
+                      'Failed to update'
+                    )
+                  }
+                />
+                <span className="text-theme-text-secondary text-sm">
+                  Evaluate shifts on {agency.name}&apos;s units
+                  <span className="text-theme-text-muted block text-xs">
+                    A member in a training program with an evaluation form needs one for each shift they log here. A
+                    training officer enters the {agency.name} preceptor&apos;s evaluation.
+                  </span>
+                </span>
+              </label>
 
               {agency.apparatus.length === 0 ? (
                 <p className="text-theme-text-muted mt-3 text-sm">No apparatus yet.</p>

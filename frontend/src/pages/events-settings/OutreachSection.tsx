@@ -18,8 +18,10 @@ const OutreachSection: React.FC<OutreachSectionProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-theme-text-primary text-lg font-semibold">Outreach Event Types</h2>
-        <p className="text-theme-text-muted mt-1 text-sm">Types of public outreach events shown on the request form.</p>
+        <h2 className="text-theme-text-primary text-lg font-semibold">Request Types</h2>
+        <p className="text-theme-text-muted mt-1 text-sm">
+          The kinds of outreach event a requester can choose from on the request form.
+        </p>
       </div>
 
       <div className="space-y-2">

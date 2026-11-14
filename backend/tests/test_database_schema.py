@@ -528,6 +528,9 @@ class TestColumnConstraints:
             "sent_at",
             "exported_at",
             "generated_at",
+            # training_requirement_overrides: the row is the Chief's grant,
+            # server-stamped when given; a created_at would always equal it.
+            "granted_at",
             # department_message_deliveries records when the send was claimed;
             # the row is the attempt, so "attempted_at" is its creation stamp.
             "attempted_at",
@@ -551,6 +554,15 @@ class TestColumnConstraints:
             # nfc_card_taps: the row is the tap, stamped when it happened and
             # never updated.
             "tapped_at",
+            # evaluation_amendments: the row is the amendment, server-stamped
+            # when it is made and never updated.
+            "amended_at",
+            # evaluation_deletion_records: the row is the deletion, stamped
+            # when it happened and never updated.
+            "deleted_at",
+            # history_clearance_decisions: the row is the decision, stamped
+            # when it is made and never updated.
+            "decided_at",
         }
         missing_timestamp = []
         for table_name, table in _tables.items():

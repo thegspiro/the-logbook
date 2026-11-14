@@ -4,15 +4,16 @@ import axios from 'axios';
 
 import LegalSections from './LegalSections';
 import { PRIVACY_POLICY_SECTIONS, TERMS_OF_SERVICE_SECTIONS } from './legalContent';
-import { bodyText } from './legalStyles';
+import LegalMarkup from './LegalMarkup';
 
 /**
  * Public privacy-policy / terms-of-service page (no auth).
  *
  * Departments can replace the built-in defaults with their own wording via
  * organization settings ("legal.privacy_policy" / "legal.terms_of_service",
- * served by GET /api/public/v1/legal). Custom text is rendered as plain
- * paragraphs — never HTML — so it cannot inject markup into a public page.
+ * served by GET /api/public/v1/legal). Custom text may use headings and lists
+ * (LegalMarkup) and is never interpreted as HTML, so it cannot inject markup
+ * into a public page.
  */
 
 interface LegalTextResponse {
@@ -32,16 +33,6 @@ interface LegalTextResponse {
  * document never misdates the other.
  */
 const DEFAULT_LEGAL_LAST_UPDATED = 'August 17, 2026';
-
-const CustomText: React.FC<{ text: string }> = ({ text }) => (
-  <div className="mt-4">
-    {text.split(/\n{2,}/).map((paragraph, i) => (
-      <p key={i} className={`${bodyText} whitespace-pre-line`}>
-        {paragraph}
-      </p>
-    ))}
-  </div>
-);
 
 const LegalPage: React.FC = () => {
   const location = useLocation();
@@ -99,7 +90,7 @@ const LegalPage: React.FC = () => {
         {lastUpdated ? <p className="text-theme-text-muted mt-2 text-xs">Last updated: {lastUpdated}</p> : null}
 
         {customText ? (
-          <CustomText text={customText} />
+          <LegalMarkup text={customText} className="mt-4" />
         ) : (
           <LegalSections sections={isPrivacy ? PRIVACY_POLICY_SECTIONS : TERMS_OF_SERVICE_SECTIONS} orgName={orgName} />
         )}

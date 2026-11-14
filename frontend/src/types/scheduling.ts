@@ -90,6 +90,11 @@ export interface TimeOffRequest {
   approved_by?: string;
   approved_at?: string;
   created_at: string;
+  /**
+   * The caller may approve or deny this pending request as the requester's
+   * supervisor today. Scheduling officers review every request regardless.
+   */
+  reviewable_as_supervisor?: boolean;
 }
 
 /** A recurring shift pattern for automatic schedule generation. */

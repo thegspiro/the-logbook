@@ -183,6 +183,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
       'read-only admin list of email kinds and text alerts: single-column cards that go two-up at md, no controls, so /messages remains the module representative',
   },
   {
+    path: '/communications/member-emails/opt-outs',
+    source: 'src/modules/communications/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'read-only admin roster beside Member Emails & Texts: one filter select, an rwd-table that stacks to cards under 768px and the shared Pagination, so /messages remains the module representative',
+  },
+  {
     path: '/communications/messages',
     source: 'src/modules/communications/routes.tsx',
     coverage: 'exempt',
@@ -236,6 +243,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   },
   {
     path: '/elections/settings',
+    source: 'src/modules/elections/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/elections/attendance',
     source: 'src/modules/elections/routes.tsx',
     coverage: 'ratchet',
     detail: 'fast route-level mobile presentation ratchet',
@@ -424,8 +437,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/finance/budgets',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/finance/budgets/:id',
@@ -436,50 +449,56 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/finance/my-budgets',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/finance/budget-requests',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/finance/budget-requests/review',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/finance/budget-amendments',
+    source: 'src/modules/finance/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/finance/settings',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/finance/settings/approval-chains',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/finance/reports',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/finance/settings/quickbooks',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/finance/purchase-requests',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/finance/purchase-requests/new',
@@ -502,8 +521,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/finance/expenses',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/finance/expenses/new',
@@ -520,8 +539,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/finance/check-requests',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/finance/check-requests/new',
@@ -536,16 +555,22 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/finance/my-dues',
+    source: 'src/modules/finance/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
     path: '/finance/dues',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/finance/approvals',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/forms',
@@ -586,8 +611,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/grants/opportunities',
     source: 'src/modules/grants-fundraising/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/grants/opportunities/new',
@@ -604,8 +629,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/grants/applications',
     source: 'src/modules/grants-fundraising/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/grants/applications/new',
@@ -628,20 +653,20 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/grants/campaigns',
     source: 'src/modules/grants-fundraising/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/grants/donors',
     source: 'src/modules/grants-fundraising/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/grants/donations',
     source: 'src/modules/grants-fundraising/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/grants/donations/new',
@@ -650,22 +675,34 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
-    path: '/grants/pledges',
+    path: '/grants/donations/:donationId/edit',
     source: 'src/modules/grants-fundraising/routes.tsx',
     coverage: 'exempt',
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/grants/pledges',
+    source: 'src/modules/grants-fundraising/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/grants/events',
     source: 'src/modules/grants-fundraising/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/grants/zeffy',
+    source: 'src/modules/grants-fundraising/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/grants/reports',
     source: 'src/modules/grants-fundraising/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/integrations',
@@ -675,6 +712,18 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   },
   {
     path: '/integrations/:integrationId',
+    source: 'src/modules/integrations/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/integrations/historical-import',
+    source: 'src/modules/integrations/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/integrations/historical-import/:importId',
     source: 'src/modules/integrations/routes.tsx',
     coverage: 'exempt',
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
@@ -822,8 +871,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/inventory/storage-areas',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/storage-areas/print-labels',
@@ -834,14 +883,14 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/inventory/import',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/items',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/items/:id',
@@ -866,6 +915,108 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     source: 'src/modules/ip-security/routes.tsx',
     coverage: 'exempt',
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/history',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — department history home',
+  },
+  {
+    path: '/history/people',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/people/new',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/people/:personId',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/people/:personId/edit',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/people/:personId/merge',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/import',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/import/:importId',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/media',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — history photo and media gallery',
+  },
+  {
+    path: '/history/media/upload',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/media/:mediaId',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/media/:mediaId/edit',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/albums',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/albums/:albumId',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/honor-roll',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/clearance/:requestId',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+  },
+  {
+    path: '/history/settings',
+    source: 'src/modules/history/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
   },
   {
     path: '/medical-screening',
@@ -911,6 +1062,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   },
   {
     path: '/members/:userId',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/members/my-crew',
     source: 'src/modules/membership/routes.tsx',
     coverage: 'exempt',
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
@@ -1029,6 +1186,27 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     coverage: 'exempt',
     detail:
       'secretary report built from the shared rwd-table, card and form-input utilities; /minutes is the representative module route',
+  },
+  {
+    path: '/minutes/attendance/waiver-settings',
+    source: 'src/modules/minutes/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'the session waiver settings panel bound to the meeting workflow; its training twin under /training/admin covers the same form-input, toggle and card utilities',
+  },
+  {
+    path: '/meetings/waiver-requests',
+    source: 'src/modules/minutes/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'the /attendance-waivers approver queue bound to the meeting workflow; it lists only requests routed to the viewer, so it is empty for the e2e member',
+  },
+  {
+    path: '/meetings/waiver-requests/:id',
+    source: 'src/modules/minutes/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'the /attendance-waivers/:id decision page bound to the meeting workflow, reached from the approver email; a request exists only after a member asks to be excused from a business meeting',
   },
   {
     path: '/minutes/outlines',
@@ -1220,6 +1398,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/prospective-members/my-applicants',
+    source: 'src/modules/prospective-members/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/prospective-members/sign-offs',
     source: 'src/modules/prospective-members/routes.tsx',
     coverage: 'exempt',
@@ -1233,6 +1417,18 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   },
   {
     path: '/application-status/:token',
+    source: 'src/modules/prospective-members/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/shift-evaluation/:token',
+    source: 'src/App.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/application-form/:token',
     source: 'src/modules/prospective-members/routes.tsx',
     coverage: 'exempt',
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
@@ -1254,6 +1450,36 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     source: 'src/modules/reports/routes.tsx',
     coverage: 'ratchet',
     detail: 'fast route-level mobile presentation ratchet — saved and scheduled reports',
+  },
+  {
+    path: '/reports/evaluations',
+    source: 'src/modules/reports/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — member evaluation setup',
+  },
+  {
+    path: '/reports/evaluations/templates/:templateId',
+    source: 'src/modules/reports/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/reports/evaluations/conduct',
+    source: 'src/modules/reports/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — evaluations a member conducts',
+  },
+  {
+    path: '/reports/evaluations/mine',
+    source: 'src/modules/reports/routes.tsx',
+    coverage: 'ratchet',
+    detail: "fast route-level mobile presentation ratchet — a member's own evaluations and live figures",
+  },
+  {
+    path: '/reports/evaluations/:evaluationId',
+    source: 'src/modules/reports/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
     path: '/scheduling',
@@ -1373,8 +1599,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/inventory/checklists/my',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/admin/checklists',
@@ -1452,38 +1678,38 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/inventory/admin/checklists/reports',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/admin/checklists/catalog-links',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/admin/checklists/supply',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/checklists/apparatus-inventory',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/checklists',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/checklists/log',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/checklists/apparatus/:apparatusId',
@@ -1505,6 +1731,24 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   },
   {
     path: '/scheduling/shift-reports/print',
+    source: 'src/modules/scheduling/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/scheduling/shift-reports/:shiftId/evaluations/:memberId/:scopeKey',
+    source: 'src/modules/scheduling/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/scheduling/outside-shifts/:entryId/evaluations/:scopeKey',
+    source: 'src/modules/scheduling/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/scheduling/shift-evaluations/print',
     source: 'src/modules/scheduling/routes.tsx',
     coverage: 'exempt',
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
@@ -1644,6 +1888,20 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     coverage: 'exempt',
     detail:
       'token-parameterized officer review reached from an emailed approval link or the event page; a token exists only after a Training event with officer confirmation is finalized, and the roster reflows through the shared rwd-table and 44px form utilities',
+  },
+  {
+    path: '/attendance-waivers',
+    source: 'src/modules/training/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'approver queue that lists only requests routed to the viewer, so it is empty for the e2e member; rows are full-width links and the page uses the shared card, badge and button utilities',
+  },
+  {
+    path: '/attendance-waivers/:id',
+    source: 'src/modules/training/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'parameterized decision page reached from the approver email; a request exists only after a member asks to be excused from a counting training session, and its controls use the shared 44px form utilities',
   },
   {
     path: '/training/cohorts',

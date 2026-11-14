@@ -117,6 +117,7 @@ export const BudgetTransactionList: React.FC<BudgetTransactionListProps> = ({
   } else if (rows.length === 0) {
     body = (
       <EmptyState
+        compact
         headingLevel={4}
         icon={FileText}
         title="No transactions yet"

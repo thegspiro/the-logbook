@@ -21,6 +21,11 @@ from sqlalchemy import Result, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin_hours import AdminHoursEntry
+from app.models.attendance_waiver import (
+    AttendanceWaiverAttachment,
+    AttendanceWaiverRequest,
+    AttendanceWaiverRequestAction,
+)
 from app.models.audit import AuditLog
 from app.models.consent import UserConsent
 from app.models.event import EventRSVP
@@ -75,6 +80,7 @@ _EXPORT_SECTIONS: list[tuple[str, type, str]] = [
     ("program_enrollments", ProgramEnrollment, "user_id"),
     ("training_submissions", TrainingSubmission, "submitted_by"),
     ("training_waivers", TrainingWaiver, "user_id"),
+    ("attendance_waiver_requests", AttendanceWaiverRequest, "user_id"),
     ("competencies", MemberCompetency, "user_id"),
     ("instructor_qualifications", InstructorQualification, "user_id"),
     ("shift_attendance", ShiftAttendance, "user_id"),
@@ -151,6 +157,53 @@ class DataExportService:
                 select(model).where(getattr(model, fk_attr) == user.id)
             )
             export[section] = [_row_to_dict(row) for row in result.scalars().all()]
+
+        # The decision log of the member's own waiver requests, deciders'
+        # notes included: the member already reads them on the request. Joined
+        # through the request, because an action row names its actor, not the
+        # member who asked: a note this member wrote as a decider on someone
+        # else's request is about that person and stays out.
+        actions_result = await self.db.execute(
+            select(AttendanceWaiverRequestAction)
+            .join(
+                AttendanceWaiverRequest,
+                AttendanceWaiverRequest.id == AttendanceWaiverRequestAction.request_id,
+            )
+            .where(
+                AttendanceWaiverRequest.user_id == user.id,
+                AttendanceWaiverRequestAction.organization_id
+                == str(user.organization_id),
+            )
+            .order_by(
+                AttendanceWaiverRequestAction.created_at,
+                AttendanceWaiverRequestAction.id,
+            )
+        )
+        export["attendance_waiver_request_actions"] = [
+            _row_to_dict(row) for row in actions_result.scalars().all()
+        ]
+        # What the member filed with those requests: the record of each
+        # document, not its bytes (the member downloads those from the
+        # request), and not where it is stored on the server.
+        files_result = await self.db.execute(
+            select(AttendanceWaiverAttachment)
+            .join(
+                AttendanceWaiverRequest,
+                AttendanceWaiverRequest.id == AttendanceWaiverAttachment.request_id,
+            )
+            .where(
+                AttendanceWaiverRequest.user_id == user.id,
+                AttendanceWaiverAttachment.organization_id == str(user.organization_id),
+            )
+            .order_by(
+                AttendanceWaiverAttachment.request_id,
+                AttendanceWaiverAttachment.ordinal,
+            )
+        )
+        export["attendance_waiver_attachments"] = [
+            _row_to_dict(row, frozenset({"file_path"}))
+            for row in files_result.scalars().all()
+        ]
 
         # An export must not provide a second path around the trainee-facing
         # report policy. Only officer-released reports are visible, and fields

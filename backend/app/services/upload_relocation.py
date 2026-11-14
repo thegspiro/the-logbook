@@ -39,9 +39,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from app.models.attendance_waiver import AttendanceWaiverAttachment
 from app.models.document import Document
 from app.models.email_template import EmailAttachment, EmailTemplate
+from app.models.evaluation import EvaluationDocument
 from app.models.event import Event
+from app.models.history import HistoryMedia, HistoryMediaFile
 from app.models.membership_pipeline import ProspectDocument, ProspectiveMember
 from app.models.minute import MinutesAttachment
 from app.models.suggestion import SuggestionAttachment
@@ -376,6 +379,81 @@ async def collect_references(
                 row.file_path,
             )
         )
+    # Finalized evaluation PDFs, likewise born org-first; listed so a bucket
+    # migration carries the signed records with it.
+    for row in (
+        await db.execute(
+            scoped(
+                select(
+                    EvaluationDocument.id,
+                    EvaluationDocument.organization_id,
+                    EvaluationDocument.evaluation_id,
+                    EvaluationDocument.file_path,
+                ),
+                EvaluationDocument.organization_id,
+            )
+        )
+    ).all():
+        refs.append(
+            Reference(
+                "evaluation_documents",
+                str(row.id),
+                str(row.organization_id),
+                StorageArea.EVALUATIONS,
+                str(row.evaluation_id),
+                row.file_path,
+            )
+        )
+    # Waiver request documents, born org-first like the two above.
+    for row in (
+        await db.execute(
+            scoped(
+                select(
+                    AttendanceWaiverAttachment.id,
+                    AttendanceWaiverAttachment.organization_id,
+                    AttendanceWaiverAttachment.request_id,
+                    AttendanceWaiverAttachment.file_path,
+                ),
+                AttendanceWaiverAttachment.organization_id,
+            )
+        )
+    ).all():
+        refs.append(
+            Reference(
+                "attendance_waiver_attachments",
+                str(row.id),
+                str(row.organization_id),
+                StorageArea.ATTENDANCE_WAIVERS,
+                str(row.request_id),
+                row.file_path,
+            )
+        )
+    # History photos and media, born org-first: an original, its viewing copy
+    # and its thumbnail, a row each. The row has no organization of its own;
+    # its media item does.
+    for row in (
+        await db.execute(
+            scoped(
+                select(
+                    HistoryMediaFile.id,
+                    HistoryMedia.organization_id,
+                    HistoryMediaFile.media_id,
+                    HistoryMediaFile.file_path,
+                ).join(HistoryMedia, HistoryMedia.id == HistoryMediaFile.media_id),
+                HistoryMedia.organization_id,
+            )
+        )
+    ).all():
+        refs.append(
+            Reference(
+                "history_media_files",
+                str(row.id),
+                str(row.organization_id),
+                StorageArea.HISTORY_MEDIA,
+                str(row.media_id),
+                row.file_path,
+            )
+        )
     return refs
 
 
@@ -463,6 +541,9 @@ _SCALAR_TABLES: dict[str, tuple[type[Any], str]] = {
     "suggestion_attachments": (SuggestionAttachment, "file_path"),
     "email_attachments": (EmailAttachment, "storage_path"),
     "minutes_attachments": (MinutesAttachment, "file_path"),
+    "evaluation_documents": (EvaluationDocument, "file_path"),
+    "attendance_waiver_attachments": (AttendanceWaiverAttachment, "file_path"),
+    "history_media_files": (HistoryMediaFile, "file_path"),
 }
 
 

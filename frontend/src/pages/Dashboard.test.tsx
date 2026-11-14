@@ -15,6 +15,11 @@ vi.mock('../hooks/useRegisterPullToRefresh', () => ({
   },
 }));
 
+// The pulse fetches its own data; a stub shows which panel mounted it.
+vi.mock('../components/dashboard/DashboardOrganizationWidgets', () => ({
+  default: () => <section aria-label="Department pulse" />,
+}));
+
 // Mock react-hot-toast
 vi.mock('react-hot-toast', () => ({
   default: {
@@ -100,6 +105,10 @@ vi.mock('../modules/scheduling/services/api', () => ({
 }));
 
 vi.mock('../services/api', () => ({
+  // The severe-weather banner; no alert unless a test says so.
+  integrationsService: {
+    getActiveWeatherAlerts: vi.fn().mockResolvedValue([]),
+  },
   notificationsService: {
     getMyNotifications: mockGetMyNotifications,
     getMyUnreadCountsByCategory: mockGetMyUnreadCountsByCategory,
@@ -1506,6 +1515,32 @@ describe('Dashboard', () => {
       });
     });
 
+    it('previews what changed when a stack shares one subject', async () => {
+      const assignment = (id: string, day: string) => ({
+        id,
+        category: 'shift_assignment',
+        subject: 'New Shift Assignment',
+        message: `You have been assigned to the Firefighter position on the ${day} shift.`,
+        read: false,
+        pinned: false,
+        sent_at: '2026-09-01T12:00:00Z',
+      });
+      mockGetMyNotifications.mockResolvedValue({
+        logs: [assignment('a1', 'Nov 09'), assignment('a2', 'Nov 05')],
+        total: 2,
+      });
+
+      renderWithRouter(<Dashboard />);
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+
+      expect(
+        await within(updates).findByText(
+          'Latest: You have been assigned to the Firefighter position on the Nov 09 shift.'
+        )
+      ).toBeInTheDocument();
+      expect(within(updates).queryByText('Latest: New Shift Assignment')).not.toBeInTheDocument();
+    });
+
     it('folds same-category notifications into one row that opens the inbox', async () => {
       // A weekend of events leaves one validation prompt per event. Unstacked,
       // they fill every row the card shows and push the rest off it.
@@ -1850,6 +1885,51 @@ describe('Dashboard', () => {
       renderWithRouter(<Dashboard />);
 
       expect(await screen.findByText(/6:00 PM–6:00 AM/)).toBeInTheDocument();
+    });
+
+    // A start-to-start 24 read "7:00 AM–7:00 AM", which looks like a shift of
+    // no length at all.
+    // The count is what tells a member on a phone that a seat needs filling,
+    // and it was hidden below 640px.
+    it('shows the open-shift count on Take a Shift at every width', async () => {
+      mockGetOpenShifts.mockResolvedValue([
+        makeShift({ id: 'open-a', shift_date: inWindow(2) }),
+        makeShift({ id: 'open-b', shift_date: inWindow(3) }),
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      const button = await screen.findByRole('button', { name: /Take a Shift/ });
+      await waitFor(() => expect(button).toHaveTextContent(/2\s*open/));
+      const count = within(button).getByText(/open/);
+      // jsdom applies no stylesheet, so the class is what decides visibility.
+      expect(count).not.toHaveClass('hidden');
+    });
+
+    it('says when a shift ends on a later day', async () => {
+      const startDay = inWindow(2);
+      mockGetMyShifts.mockResolvedValue({
+        shifts: [
+          makeShift({ id: 'my-24-clock', shift_date: inWindow(1), start_time: '07:00', end_time: '07:00' }),
+          makeShift({
+            id: 'my-24-instant',
+            shift_date: startDay,
+            start_time: `${startDay}T12:00:00Z`,
+            end_time: `${addCalendarDays(startDay, 1)}T12:00:00Z`,
+          }),
+          makeShift({ id: 'my-day', shift_date: inWindow(3), start_time: '08:00', end_time: '16:00' }),
+          makeShift({ id: 'my-evening', shift_date: inWindow(4), start_time: '18:00', end_time: '00:00' }),
+          makeShift({ id: 'my-night', shift_date: inWindow(5), start_time: '18:00', end_time: '06:00' }),
+        ],
+        total: 5,
+      });
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findAllByText(/^7:00 AM · 24 hr$/)).toHaveLength(2);
+      expect(screen.getByText(/^8:00 AM–4:00 PM$/)).toBeInTheDocument();
+      expect(screen.getByText(/^6:00 PM–Midnight$/)).toBeInTheDocument();
+      expect(screen.getByText(/^6:00 PM–6:00 AM next day$/)).toBeInTheDocument();
     });
 
     it('says nothing is scheduled when the week is empty', async () => {
@@ -2851,6 +2931,20 @@ describe('Dashboard', () => {
       });
     });
 
+    // DASH-40: the tile counts open items, so it opens the list on the same
+    // open rule rather than on every item the department ever recorded.
+    it('opens the Action Items list on the open items the tile counts', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
+      mockGetAdminSummary.mockResolvedValue({ open_action_items: 4, overdue_action_items: 1 });
+      window.history.replaceState({}, '', '/dashboard?tab=department');
+      const user = userEvent.setup();
+
+      renderWithRouter(<Dashboard />);
+
+      await user.click(await screen.findByRole('button', { name: 'Action Items: 4 open, 1 overdue' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/action-items?status=open');
+    });
+
     it.each(['overview', 'organization'])('keeps legacy %s bookmarks working', async (legacyTab) => {
       mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
       window.history.replaceState({}, '', `/dashboard?tab=${legacyTab}`);
@@ -2894,6 +2988,27 @@ describe('Dashboard', () => {
 
       await user.click(within(alert).getByRole('button', { name: 'Try again' }));
       await waitFor(() => expect(mockGetAdminSummary).toHaveBeenCalledTimes(2));
+    });
+
+    it('shows the department pulse on My Department, not Personal, for a leader', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'settings.manage');
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByRole('tab', { name: 'Personal' });
+      expect(screen.queryByRole('region', { name: 'Department pulse' })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('tab', { name: 'My Department' }));
+      expect(screen.getByRole('region', { name: 'Department pulse' })).toBeInTheDocument();
+    });
+
+    it('keeps the department pulse on the personal view for a member without My Department', async () => {
+      // finance.manage feeds the pulse's money cards but opens no department tab.
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'finance.manage');
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('region', { name: 'Department pulse' })).toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'My Department' })).not.toBeInTheDocument();
     });
   });
 });

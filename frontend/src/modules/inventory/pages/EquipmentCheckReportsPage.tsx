@@ -342,10 +342,10 @@ const ComplianceTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl
 
   const passTone =
     data.passRate >= 90
-      ? 'text-green-700 dark:text-green-400'
+      ? 'text-green-900 dark:text-green-300'
       : data.passRate >= 70
-        ? 'text-amber-700 dark:text-amber-400'
-        : 'text-red-700 dark:text-red-400';
+        ? 'text-amber-900 dark:text-amber-300'
+        : 'text-red-900 dark:text-red-300';
 
   return (
     <div className="space-y-4">
@@ -356,7 +356,7 @@ const ComplianceTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl
       <p className="text-theme-text-secondary text-sm" data-testid="compliance-summary">
         <span className={`font-bold ${passTone}`}>{data.passRate}%</span> pass &middot;{' '}
         <span className="tabular-nums">{data.totalChecks}</span> checks &middot;{' '}
-        <span className={data.overdueCount > 0 ? 'font-medium text-red-700 dark:text-red-400' : ''}>
+        <span className={data.overdueCount > 0 ? 'font-medium text-red-900 dark:text-red-300' : ''}>
           {data.overdueCount} missed
         </span>{' '}
         &middot; {data.avgItemsPerCheck} items avg
@@ -382,7 +382,7 @@ const ComplianceTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl
                     </span>
                   )}
                   {a.hasDeficiency && (
-                    <span className="rounded-full bg-red-500/10 px-1.5 py-0.5 text-xs text-red-700 dark:text-red-400">
+                    <span className="rounded-full bg-red-500/10 px-1.5 py-0.5 text-xs text-red-900 dark:text-red-300">
                       Deficiency
                     </span>
                   )}
@@ -390,8 +390,8 @@ const ComplianceTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl
                     <span
                       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
                         a.lastStatus === 'pass'
-                          ? 'bg-green-500/10 text-green-800 dark:text-green-400'
-                          : 'bg-red-500/10 text-red-700 dark:text-red-400'
+                          ? 'bg-green-500/10 text-green-900 dark:text-green-300'
+                          : 'bg-red-500/10 text-red-900 dark:text-red-300'
                       }`}
                     >
                       {a.lastStatus === 'pass' ? (
@@ -413,11 +413,11 @@ const ComplianceTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl
                       : `${a.checksCompleted} ${a.checksCompleted === 1 ? 'check' : 'checks'}`}
                   </span>
                   {(a.checksMissed ?? 0) > 0 && (
-                    <span className="font-medium text-red-700 dark:text-red-400">&middot; {a.checksMissed} missed</span>
+                    <span className="font-medium text-red-900 dark:text-red-300">&middot; {a.checksMissed} missed</span>
                   )}
                   <span>
-                    &middot; <span className="text-green-800 dark:text-green-400">{a.passCount} pass</span> /{' '}
-                    <span className={a.failCount > 0 ? 'text-red-700 dark:text-red-400' : ''}>{a.failCount} fail</span>
+                    &middot; <span className="text-green-900 dark:text-green-300">{a.passCount} pass</span> /{' '}
+                    <span className={a.failCount > 0 ? 'text-red-900 dark:text-red-300' : ''}>{a.failCount} fail</span>
                   </span>
                 </p>
                 <p className="text-theme-text-muted mt-0.5 text-xs">
@@ -447,8 +447,8 @@ const ComplianceTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl
                     <p className="text-theme-text-primary truncate text-sm font-medium">{m.userName}</p>
                     <p className="text-theme-text-muted text-xs">
                       {m.checksCompleted} {m.checksCompleted === 1 ? 'check' : 'checks'} &middot;{' '}
-                      <span className="text-green-800 dark:text-green-400">{m.passCount} pass</span> &middot;{' '}
-                      <span className={m.failCount > 0 ? 'text-red-700 dark:text-red-400' : ''}>
+                      <span className="text-green-900 dark:text-green-300">{m.passCount} pass</span> &middot;{' '}
+                      <span className={m.failCount > 0 ? 'text-red-900 dark:text-red-300' : ''}>
                         {m.failCount} fail
                       </span>
                     </p>
@@ -869,9 +869,9 @@ const TrendsTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl }) 
                       <span
                         className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
                           h.status === 'pass'
-                            ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                            ? 'bg-green-500/10 text-green-900 dark:text-green-300'
                             : h.status === 'fail' || h.status === 'out_of_service'
-                              ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+                              ? 'bg-red-500/10 text-red-900 dark:text-red-300'
                               : 'bg-theme-surface-hover text-theme-text-muted'
                         }`}
                       >

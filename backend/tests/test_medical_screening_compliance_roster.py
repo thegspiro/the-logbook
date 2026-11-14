@@ -37,28 +37,24 @@ def _department_today(monkeypatch):
     )
 
 
-@pytest.fixture(autouse=True)
-def _no_frequencies(monkeypatch):
-    # Grading also reads every requirement's frequency (W71-1); these mocked
-    # requirements carry none, so the fallback has nothing to derive.
-    monkeypatch.setattr(
-        MedicalScreeningService,
-        "_requirement_frequencies",
-        AsyncMock(return_value={}),
-    )
-
-
 def _requirement(screening_type=ScreeningType.PHYSICAL_EXAM):
     req = MagicMock(spec=ScreeningRequirement)
     req.frequency_months = None
     req.id = str(uuid4())
     req.name = f"{screening_type} requirement"
     req.screening_type = screening_type
+    req.grace_period_days = 0
     return req
+
+
+#: The requirement the module-level records are linked to: a record counts
+#: only toward its own requirement (owner decision 2026-11-01).
+PHYSICAL = _requirement()
 
 
 def _record(*, user_id=None, prospect_id=None, expires_in=None, kind=None):
     rec = MagicMock(spec=ScreeningRecord)
+    rec.requirement_id = PHYSICAL.id
     rec.screening_type = kind or ScreeningType.PHYSICAL_EXAM
     rec.status = ScreeningStatus.PASSED.value
     rec.completed_date = TODAY - timedelta(days=100)
@@ -94,7 +90,7 @@ async def _roster(standing=None, requirements=None):
         patch.object(
             service,
             "list_requirements",
-            return_value=[_requirement()] if requirements is None else requirements,
+            return_value=[PHYSICAL] if requirements is None else requirements,
         ),
         patch.object(service, "list_subjects", return_value=SUBJECTS),
         patch.object(service, "list_records", return_value=RECORDS),
@@ -144,7 +140,7 @@ async def test_no_active_requirement_grades_nobody():
 async def test_a_row_matches_the_per_subject_summary():
     """The roster's counts for a subject equal get_compliance_status's."""
     service = MedicalScreeningService(AsyncMock())
-    requirements = [_requirement(), _requirement(ScreeningType.DRUG_SCREENING)]
+    requirements = [PHYSICAL, _requirement(ScreeningType.DRUG_SCREENING)]
     with (
         patch.object(service, "list_requirements", return_value=requirements),
         patch.object(service, "list_subjects", return_value=SUBJECTS),

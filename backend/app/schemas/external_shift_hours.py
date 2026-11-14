@@ -138,6 +138,11 @@ class ExternalShiftHoursResponse(UTCResponseBase):
     reviewer_name: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     rejection_reason: Optional[str] = None
+    # Whether a shift evaluation is called for: "needed" until one is
+    # submitted, then "submitted"; "draft" while one is started. None when the
+    # entry asks for none (the agency is not evaluated, or the member is in
+    # no program with a form).
+    evaluation_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -164,6 +169,7 @@ def _required_name(value: Optional[str]) -> Optional[str]:
 class ExternalAgencyCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     is_active: bool = True
+    evaluate_shifts: bool = False
 
     @field_validator("name")
     @classmethod
@@ -174,6 +180,7 @@ class ExternalAgencyCreate(BaseModel):
 class ExternalAgencyUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     is_active: Optional[bool] = None
+    evaluate_shifts: Optional[bool] = None
 
     @field_validator("name")
     @classmethod
@@ -225,6 +232,7 @@ class ExternalAgencyResponse(BaseModel):
     id: str
     name: str
     is_active: bool
+    evaluate_shifts: bool = False
     apparatus: List[ExternalApparatusResponse] = []
 
 

@@ -182,9 +182,56 @@ describe('WriteOffsPage', () => {
     expect(screen.getByText(/close 1 active assignment/)).toBeInTheDocument();
     const approve = screen.getByRole('button', { name: 'Approve and mark lost' });
     await user.type(screen.getByPlaceholderText('Document the reason for this decision...'), 'Confirmed loss');
-    expect(approve).toBeDisabled();
+    // Pressing it names what is missing rather than the button sitting greyed out (forms review F-3).
+    await user.click(approve);
+    expect(screen.getByRole('checkbox')).toHaveAccessibleDescription(
+      'Tick the acknowledgement before approving this write-off.'
+    );
+    expect(mockReviewWriteOff).not.toHaveBeenCalled();
     await user.click(screen.getByRole('checkbox'));
-    expect(approve).toBeEnabled();
+    mockReviewWriteOff.mockResolvedValue({});
+    await user.click(approve);
+    await waitFor(() => expect(mockReviewWriteOff).toHaveBeenCalled());
+  });
+
+  it('names a missing review note on its field and decides nothing', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<WriteOffsPage />);
+    await user.click(await screen.findByText('Review'));
+    await user.click(screen.getByRole('button', { name: 'Deny' }));
+
+    expect(screen.getByRole('textbox', { name: 'Review note' })).toHaveAccessibleDescription(
+      'Write a review note saying why you decided this.'
+    );
+    expect(mockReviewWriteOff).not.toHaveBeenCalled();
+  });
+
+  it('puts a refused review note on its field, announced', async () => {
+    const user = userEvent.setup();
+    mockReviewWriteOff.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'review_notes', message: 'Value is too long.' }] } },
+    });
+    renderWithRouter(<WriteOffsPage />);
+    await user.click(await screen.findByText('Review'));
+    await user.type(screen.getByRole('textbox', { name: 'Review note' }), 'Noted');
+    await user.click(screen.getByRole('button', { name: 'Deny' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Review note' })).toHaveAccessibleDescription(
+        'Review note is too long — keep it to 2000 characters.'
+      )
+    );
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('asks before closing over a typed note', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<WriteOffsPage />);
+    await user.click(await screen.findByText('Review'));
+    await user.type(screen.getByRole('textbox', { name: 'Review note' }), 'Half a thought');
+    await user.click(screen.getByRole('button', { name: 'Close modal' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByRole('textbox', { name: 'Review note' })).toHaveValue('Half a thought');
   });
 
   it('labels stolen approval according to the resulting status', async () => {

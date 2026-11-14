@@ -19,17 +19,28 @@ minutes already exist) and been committed; a problem filing its result is
 logged and left for a manager to import by hand, never raised into the close or
 the creation that triggered it. A department can switch the behaviour off
 (``auto_file_election_results``).
+
+A rollback undoes a filing (:func:`supersede_filed_results`): a result in
+circulated or adopted minutes is superseded by a dated correction, never edited
+or removed, and a draft simply drops it. Whether the result was filed by hand or
+automatically, and whether filing is switched on, makes no difference: a
+result on file that no longer stands has to say so.
 """
 
-from typing import Optional
+from datetime import datetime
+from typing import List, Optional
 
 from loguru import logger
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.election import Election, ElectionStatus
-from app.models.minute import MeetingMinutes
+from app.models.minute import MeetingMinutes, MinutesElectionResult, MinutesStatus
 from app.utils.minutes_settings import load_auto_file_election_results
+
+# Mirrors minutes_record_service.EDITABLE_STATUSES, which cannot be imported
+# here (that module imports this one by way of MinuteService).
+_EDITABLE_STATUSES = (MinutesStatus.DRAFT.value, MinutesStatus.REJECTED.value)
 
 
 async def _file(
@@ -157,3 +168,87 @@ async def file_waiting_elections(
             f"Waiting election results could not be filed | minutes={minutes_id}"
         )
         await db.rollback()
+
+
+async def supersede_filed_results(
+    db: AsyncSession,
+    election: Election,
+    superseded_by: Optional[str],
+    reason: Optional[str],
+    at: datetime,
+) -> List[str]:
+    """Undo the filing of a result that a rollback has just withdrawn.
+
+    Runs inside the rollback's transaction, which holds the election row
+    locked, and does not commit: the correction and the reopening land
+    together or not at all. Returns the minutes that took a correction, for
+    the caller to refresh their published copies once it has committed.
+
+    * Circulated or adopted minutes, or a result filed as an addendum: the row
+      stays word for word and gains the dated correction (owner decision
+      2026-11-01, ELEC-49). It gives up its standing slot, so the re-run's
+      result can be filed beside it when the election closes again.
+    * A draft's own result is content the secretary can still edit, so it is
+      removed, and the re-run's result is filed in its place.
+
+    Safe to run twice: only a standing result is touched, and a superseded one
+    is no longer standing, so a second pass finds nothing and the correction
+    keeps its first date.
+    """
+    election_id = str(election.id)
+    organization_id = str(election.organization_id)
+    # A locking read, not a plain one (pitfall #27): the transaction's snapshot
+    # predates the election lock, and a filing committed while this waited for
+    # that lock must be seen.
+    rows = (
+        (
+            await db.execute(
+                select(MinutesElectionResult)
+                .where(
+                    MinutesElectionResult.organization_id == organization_id,
+                    MinutesElectionResult.current_election_id == election_id,
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not rows:
+        return []
+    statuses = dict(
+        (
+            await db.execute(
+                select(MeetingMinutes.id, MeetingMinutes.status).where(
+                    MeetingMinutes.organization_id == organization_id,
+                    MeetingMinutes.id.in_({r.minutes_id for r in rows}),
+                )
+            )
+        ).all()
+    )
+    corrected: List[str] = []
+    for row in rows:
+        status = statuses.get(row.minutes_id)
+        status = getattr(status, "value", status)
+        if not row.is_addendum and status in _EDITABLE_STATUSES:
+            await db.delete(row)
+            logger.info(
+                "Withdrawn election result removed from draft minutes | "
+                "election={} minutes={}",
+                election_id,
+                row.minutes_id,
+            )
+            continue
+        row.superseded_at = at
+        row.superseded_reason = reason
+        row.superseded_by = superseded_by
+        row.current_election_id = None
+        corrected.append(row.minutes_id)
+        logger.info(
+            "Election result superseded by a dated correction | "
+            "election={} minutes={}",
+            election_id,
+            row.minutes_id,
+        )
+    return corrected

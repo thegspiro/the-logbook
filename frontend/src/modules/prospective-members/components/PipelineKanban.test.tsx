@@ -261,3 +261,33 @@ describe('PipelineKanban applicants from another pipeline', () => {
     expect(screen.queryByRole('button', { name: /Devon Marsh/ })).toBeNull();
   });
 });
+
+// The selection box is drawn over the card's top-left corner, where the
+// avatar or a banner's warning icon sits. jsdom does no layout, so the test
+// asserts the inset that keeps the card's content clear of the box.
+describe('PipelineKanban selection checkbox', () => {
+  it('insets the card content when a selection box sits over its corner', () => {
+    renderWithRouter(
+      <PipelineKanban
+        pipelineId="pipe-1"
+        stages={stages}
+        applicants={[applicant]}
+        onApplicantClick={vi.fn()}
+        selectedApplicants={new Set()}
+        onToggleSelect={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('checkbox', { name: 'Select Riley Bishop' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Riley Bishop/ })).toHaveClass('pl-11');
+  });
+
+  it('keeps the usual padding when the board offers no selection', () => {
+    renderWithRouter(
+      <PipelineKanban pipelineId="pipe-1" stages={stages} applicants={[applicant]} onApplicantClick={vi.fn()} />
+    );
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Riley Bishop/ })).not.toHaveClass('pl-11');
+  });
+});

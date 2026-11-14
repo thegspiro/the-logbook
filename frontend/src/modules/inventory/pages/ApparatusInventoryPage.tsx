@@ -26,8 +26,10 @@ import {
   ChevronRight,
   Clock,
   Loader2,
+  Minus,
   PackageCheck,
   PackageX,
+  Plus,
   Repeat,
   Boxes,
   Undo2,
@@ -310,29 +312,29 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
       <li key={item.templateItemId} className="border-theme-surface-border border-t px-3 py-3 first:border-t-0">
         {/* Stacked on a phone: side by side, the controls took a fixed width
             and squeezed the name and its details into a column one word wide. */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 flex-1">
+        <div className="split-row gap-2 sm:items-start">
+          <div className="split-row-main">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-theme-text-primary text-sm font-medium">{item.itemName}</span>
               {item.isExpired && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-900 dark:bg-red-900/30 dark:text-red-300">
                   <AlertTriangle className="h-3 w-3" /> EXPIRED
                 </span>
               )}
               {expiringSoon && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-[11px] font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+                <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-[11px] font-medium text-yellow-900 dark:bg-yellow-900/30 dark:text-yellow-300">
                   <Clock className="h-3 w-3" /> Expiring
                 </span>
               )}
               {item.restockNeeded && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-900 dark:bg-orange-900/30 dark:text-orange-300">
                   <PackageX className="h-3 w-3" /> Needs restock
                 </span>
               )}
               {/* Shown without a report behind it too: a check that counted two
                   of four is the same shortfall as a crew reporting one. */}
               {item.isShort && !item.restockNeeded && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-900 dark:bg-orange-900/30 dark:text-orange-300">
                   <PackageX className="h-3 w-3" /> Short
                 </span>
               )}
@@ -349,20 +351,20 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                 </span>
               )}
               {item.targetQuantity != null && (
-                <span className={item.isShort ? 'font-medium text-orange-700 dark:text-orange-400' : ''}>
+                <span className={item.isShort ? 'font-medium text-orange-900 dark:text-orange-300' : ''}>
                   {item.quantityOnTruck ?? item.targetQuantity} of {item.targetQuantity}
                   {item.unitOfMeasure ? ` ${item.unitOfMeasure}` : ''} aboard
                 </span>
               )}
               {item.inventoryItemId && (
-                <span className={item.readyStock > 0 ? 'text-green-700 dark:text-green-400' : ''}>
+                <span className={item.readyStock > 0 ? 'text-green-900 dark:text-green-300' : ''}>
                   {item.readyStock} ready in stock
                 </span>
               )}
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
+          <div className="split-row-aside flex flex-wrap items-center gap-x-3 gap-y-1">
             {busy && <Loader2 className="text-theme-text-muted h-4 w-4 animate-spin" />}
             {item.deployedLots.length > 0 ? (
               <button
@@ -384,7 +386,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                   className="btn-icon disabled:opacity-40"
                   aria-label={`Record one ${item.itemName} used`}
                 >
-                  &minus;
+                  <Minus className="h-4 w-4" aria-hidden="true" />
                 </button>
                 <span className="text-theme-text-primary w-6 text-center text-sm font-semibold tabular-nums">
                   {item.quantityOnTruck ?? item.targetQuantity}
@@ -396,7 +398,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                   className="btn-icon disabled:opacity-40"
                   aria-label={`Add one ${item.itemName} to the truck`}
                 >
-                  +
+                  <Plus className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             )}
@@ -420,7 +422,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                 type="button"
                 disabled={busy}
                 onClick={() => setUsedTarget(item)}
-                className="mobile-touch-target flex items-center gap-1 text-xs font-medium text-orange-700 hover:text-orange-700 disabled:opacity-50 dark:text-orange-600"
+                className="mobile-touch-target flex items-center gap-1 text-xs font-medium text-orange-900 hover:text-orange-950 disabled:opacity-50 dark:text-orange-300 dark:hover:text-orange-200"
               >
                 {/* On a counted position the minus button is what records use,
                     so this is the place to say *why* — damaged, contaminated,
@@ -444,7 +446,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                   setSwapQuantity(Math.max(1, short));
                 }}
                 title={canManageStock ? undefined : 'Swaps from stock are recorded by an officer or the quartermaster'}
-                className="mobile-touch-target flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className="mobile-touch-target flex items-center gap-1 text-xs font-medium text-blue-900 hover:text-blue-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-blue-300 dark:hover:text-blue-200"
               >
                 <Repeat className="h-3.5 w-3.5" aria-hidden="true" /> Swap
               </button>
@@ -474,8 +476,8 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
         saving
           ? 'text-theme-text-muted'
           : lastChangeFailed
-            ? 'text-red-700 dark:text-red-400'
-            : 'text-green-700 dark:text-green-400'
+            ? 'text-red-900 dark:text-red-300'
+            : 'text-green-900 dark:text-green-300'
       }`}
     >
       {saving ? (
@@ -560,21 +562,21 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                   count: expired,
                   label: 'expired',
                   Icon: AlertTriangle,
-                  tone: 'text-red-700 dark:text-red-400',
+                  tone: 'text-red-900 dark:text-red-300',
                 },
                 {
                   key: 'restock',
                   count: needingRestock,
                   label: 'need restock',
                   Icon: PackageX,
-                  tone: 'text-orange-700 dark:text-orange-400',
+                  tone: 'text-orange-900 dark:text-orange-300',
                 },
                 {
                   key: 'expiring',
                   count: expiring,
                   label: 'expiring',
                   Icon: Clock,
-                  tone: 'text-yellow-700 dark:text-yellow-400',
+                  tone: 'text-yellow-900 dark:text-yellow-300',
                 },
               ] as const
             )

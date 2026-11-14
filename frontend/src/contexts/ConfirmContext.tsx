@@ -17,24 +17,18 @@
  * exists to eliminate. Nothing to render is nothing to forget.
  */
 
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
+import {
+  ConfirmContext,
+  missingProviderMessage,
+  useConfirmRequest,
+  type ConfirmFn,
+  type ConfirmOptions,
+  type RequestConfirmFn,
+} from './confirmRequest';
 
-export interface ConfirmOptions {
-  /** Accepts a node so a decision that turns on a list can be shown as one. */
-  message: React.ReactNode;
-  title?: string;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  variant?: 'danger' | 'warning' | 'info';
-}
-
-type ConfirmFn = (options: ConfirmOptions) => Promise<boolean>;
-type RequestConfirmFn = (options: ConfirmOptions, signal: AbortSignal) => Promise<boolean>;
-
-const ConfirmContext = createContext<RequestConfirmFn | null>(null);
-const missingProviderMessage =
-  'useConfirm must be used within a ConfirmProvider (mounted at the app root, and in test render helpers)';
+export type { ConfirmOptions } from './confirmRequest';
 
 interface PendingConfirm {
   options: ConfirmOptions;
@@ -123,24 +117,8 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
  */
 // eslint-disable-next-line react-refresh/only-export-components
 export function useConfirm(): { confirm: ConfirmFn } {
-  const requestConfirm = useContext(ConfirmContext);
-  const controllerRef = useRef(new AbortController());
-
-  useEffect(() => {
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    return () => controller.abort();
-  }, []);
-
-  const confirm = useCallback<ConfirmFn>(
-    (options) => {
-      if (!requestConfirm) throw new Error(missingProviderMessage);
-      return requestConfirm(options, controllerRef.current.signal);
-    },
-    [requestConfirm]
-  );
-
-  if (!requestConfirm) {
+  const { confirm, available } = useConfirmRequest();
+  if (!available) {
     throw new Error(missingProviderMessage);
   }
   return { confirm };

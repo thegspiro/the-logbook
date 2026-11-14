@@ -72,6 +72,39 @@ class MeetingAttendeeCreate(BaseModel):
     excused: bool = False
 
 
+class MeetingAttendanceWaiverGrant(BaseModel):
+    """The Secretary's waiver for one member at one meeting.
+
+    A JSON body, never query parameters: the reason may say why in medical
+    terms, and a query string is written to access logs and URL history.
+    """
+
+    user_id: UUID
+    reason: str = Field(..., min_length=5, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def _trimmed(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 5:
+            raise ValueError("The reason must be at least 5 characters")
+        return value
+
+
+def _unique_attendees(
+    value: Optional[List[MeetingAttendeeCreate]],
+) -> Optional[List[MeetingAttendeeCreate]]:
+    """One entry per member: ``meeting_attendees`` holds one row per member
+    per meeting, so a repeated member would fail the insert."""
+    if value:
+        seen = set()
+        for attendee in value:
+            if attendee.user_id in seen:
+                raise ValueError("A member is listed as an attendee more than once")
+            seen.add(attendee.user_id)
+    return value
+
+
 class MeetingAttendeeResponse(UTCResponseBase):
     """Schema for meeting attendee response"""
 
@@ -211,6 +244,7 @@ class MeetingCreate(BaseModel):
 
     _check_meeting_type = field_validator("meeting_type")(_validate_meeting_type)
     _check_agenda_items = field_validator("agenda_items")(_validate_agenda_items)
+    _check_attendees = field_validator("attendees")(_unique_attendees)
 
 
 class MeetingUpdate(BaseModel):

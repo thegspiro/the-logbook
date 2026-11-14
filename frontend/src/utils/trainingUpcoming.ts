@@ -9,6 +9,7 @@
 
 import type { MyTrainingSummary, RequirementDetail } from '../types/training';
 import { countingWindowLabel } from './requirementMonths';
+import { requirementUnitSuffix } from './requirementUnits';
 
 /** How far ahead the list looks, in days. */
 export const UPCOMING_WINDOW_DAYS = 183;
@@ -53,6 +54,8 @@ const urgencyFor = (days: number): UpcomingUrgency => {
 
 const requirementItems = (details: RequirementDetail[], today: string): UpcomingItem[] =>
   details.flatMap((req): UpcomingItem[] => {
+    // No session held yet: nothing is owed, so nothing is due (W80-9).
+    if (req.not_applicable) return [];
     if (req.is_met) {
       // Met for this cycle: the only thing left to do is take it early for the
       // next one, once its window opens.
@@ -97,7 +100,7 @@ const requirementItems = (details: RequirementDetail[], today: string): Upcoming
         key: `req-${req.id}`,
         kind: 'requirement',
         title: req.name,
-        detail: `${req.completed_hours}/${req.required_hours} hrs complete`,
+        detail: `${req.completed_hours}/${req.required_hours}${requirementUnitSuffix(req.requirement_type, req.required_hours)} complete`,
         date,
         days,
         urgency: urgencyFor(days),

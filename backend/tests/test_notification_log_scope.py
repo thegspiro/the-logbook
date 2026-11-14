@@ -59,7 +59,9 @@ async def _make_user(db, org, label: str):
     return user
 
 
-async def _log(db, org, recipient, *, channel="in_app", subject="Drill", read=False):
+async def _log(
+    db, org, recipient, *, channel="in_app", subject="Drill", read=False, error=None
+):
     entry = NotificationLog(
         organization_id=org.id,
         recipient_id=recipient.id,
@@ -68,6 +70,8 @@ async def _log(db, org, recipient, *, channel="in_app", subject="Drill", read=Fa
         subject=subject,
         message="Bring turnout gear.",
         read=read,
+        error=error,
+        delivered=error is None,
     )
     db.add(entry)
     await db.flush()
@@ -146,6 +150,78 @@ class TestGetLogsRecipientFilter:
         _, total, _next = await service.get_logs(other_org.id, recipient_id=me.id)
 
         assert total == 0
+
+
+class TestGetLogsFailedFilter:
+    """``failed_only`` is the operations dashboard's Notification failures link.
+
+    The tile counts ``error IS NOT NULL`` org-wide; the list it opens must hold
+    the same rows, so the predicate is proved against rows rather than by
+    asserting the argument was passed along.
+    """
+
+    async def test_keeps_only_the_rows_carrying_an_error(self, db_session):
+        org = await _make_org(db_session)
+        me = await _make_user(db_session, org, "me")
+        colleague = await _make_user(db_session, org, "colleague")
+        await _log(db_session, org, me, subject="Bounced", error="550 mailbox full")
+        await _log(db_session, org, colleague, subject="Refused", error="timeout")
+        await _log(db_session, org, me, subject="Delivered")
+
+        service = NotificationsService(db_session)
+        logs, total, _next = await service.get_logs(org.id, failed_only=True)
+
+        assert total == 2
+        assert {entry.subject for entry in logs} == {"Bounced", "Refused"}
+
+    async def test_combines_with_the_recipient_scope(self, db_session):
+        org = await _make_org(db_session)
+        me = await _make_user(db_session, org, "me")
+        colleague = await _make_user(db_session, org, "colleague")
+        await _log(db_session, org, me, subject="Mine", error="550 mailbox full")
+        await _log(db_session, org, colleague, subject="Theirs", error="timeout")
+
+        service = NotificationsService(db_session)
+        logs, total, _next = await service.get_logs(
+            org.id, recipient_id=me.id, failed_only=True
+        )
+
+        assert total == 1
+        assert [entry.subject for entry in logs] == ["Mine"]
+
+    async def test_another_organization_s_failures_are_not_listed(self, db_session):
+        org = await _make_org(db_session)
+        other_org = await _make_org(db_session)
+        outsider = await _make_user(db_session, other_org, "outsider")
+        await _log(db_session, other_org, outsider, error="timeout")
+
+        service = NotificationsService(db_session)
+        _, total, _next = await service.get_logs(org.id, failed_only=True)
+
+        assert total == 0
+
+    async def test_the_endpoint_passes_the_flag_through(self, db_session):
+        org = await _make_org(db_session)
+        me = await _make_user(db_session, org, "me")
+        colleague = await _make_user(db_session, org, "colleague")
+        await _log(db_session, org, me, subject="Delivered")
+        await _log(db_session, org, colleague, subject="Bounced", error="550")
+        caller = _user_with(
+            "notifications.manage", user_id=me.id, organization_id=org.id
+        )
+
+        result = await list_logs(
+            channel=None,
+            scope=NotificationLogScope.ORGANIZATION,
+            cursor=None,
+            pagination=_Pagination(),
+            failed=True,
+            db=db_session,
+            current_user=caller,
+        )
+
+        assert result["total"] == 1
+        assert [entry.subject for entry in result["logs"]] == ["Bounced"]
 
 
 class TestMarkAllLogsRead:

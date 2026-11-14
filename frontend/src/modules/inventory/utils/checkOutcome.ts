@@ -27,19 +27,19 @@ export const OUTCOME_SWATCH: Record<CheckOutcome, string> = {
 
 /** Pill styling (text + background + border) for an outcome. */
 export const OUTCOME_PILL: Record<CheckOutcome, string> = {
-  passed: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/25',
-  failed: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25',
-  partial: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/25',
-  missed: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25',
-  due: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/25',
+  passed: 'bg-green-500/10 text-green-900 dark:text-green-300 border-green-500/25',
+  failed: 'bg-red-500/10 text-red-900 dark:text-red-300 border-red-500/25',
+  partial: 'bg-amber-500/10 text-amber-900 dark:text-amber-300 border-amber-500/25',
+  missed: 'bg-red-500/10 text-red-900 dark:text-red-300 border-red-500/25',
+  due: 'bg-blue-500/10 text-blue-900 dark:text-blue-300 border-blue-500/25',
   scheduled: 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border',
   out_of_service: 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/25',
 };
 
 export const READINESS_PILL: Record<Readiness, string> = {
-  in_service: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/25',
-  attention: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/25',
-  out_of_service: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25',
+  in_service: 'bg-green-500/10 text-green-900 dark:text-green-300 border-green-500/25',
+  attention: 'bg-amber-500/10 text-amber-900 dark:text-amber-300 border-amber-500/25',
+  out_of_service: 'bg-red-500/10 text-red-900 dark:text-red-300 border-red-500/25',
   no_checks: 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border',
 };
 

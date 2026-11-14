@@ -4,29 +4,20 @@
  * Allows event administrators to configure event module settings:
  * - Event type visibility (primary tabs vs. grouped under "Other")
  * - Custom event categories (organization-defined)
- * - Outreach event types (configurable per department)
- * - Request pipeline settings (lead time, default assignee, task reorder, visibility)
- * - Email trigger configuration + template management
- * - Public event request form generation
+ * - Public event requests, as one section whose pages follow the request's
+ *   flow: overview (intake switch, lead time), request form, request types &
+ *   outreach roles, handling (coordinator, checklist), emails
  *
- * Sections are organized into a sidebar + content panel layout matching
- * the Organization Settings page.
+ * Everything under Public Requests configures the community-request feature
+ * only. It used to be four top-level tabs ("Outreach Types", "Pipeline",
+ * "Email", "Public Form") sitting beside the module's general settings, which
+ * read as though they governed every event; grouping them under one section
+ * with a landing page is what says what they are for.
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import {
-  Settings,
-  Loader2,
-  FileText,
-  ExternalLink,
-  ClipboardList,
-  Clock,
-  Mail,
-  Tag,
-  LayoutGrid,
-  Users,
-} from 'lucide-react';
+import { Settings, Loader2, Globe, Clock, Tag, LayoutGrid, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { eventService, eventRequestService, userService } from '../services/api';
 import type {
@@ -45,10 +36,11 @@ import {
   PipelineSection,
   EmailSection,
   FormSection,
+  PublicRequestsOverview,
   MIN_TEMPLATE_DAYS_BEFORE,
   MAX_TEMPLATE_DAYS_BEFORE,
 } from './events-settings';
-import type { OrgMember, EventRequestFormSummary } from './events-settings';
+import type { OrgMember, EventRequestFormSummary, PublicRequestsPage } from './events-settings';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
 import { AdminMetricsSettings } from '../components/admin';
@@ -68,18 +60,26 @@ const DEFAULT_CATEGORY_COLOR = 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 da
 
 // ─── Section Definitions ───────────────────────────────────────────────────────
 
-type SectionKey =
-  'visibility' | 'categories' | 'attendance' | 'outreach' | 'hour_tracking' | 'pipeline' | 'email' | 'form' | 'metrics';
+type SectionKey = 'visibility' | 'categories' | 'attendance' | 'hour_tracking' | 'public_requests' | 'metrics';
 
-const SECTIONS: SettingsSection<SectionKey>[] = [
+const SECTIONS: SettingsSection<SectionKey, PublicRequestsPage>[] = [
   { key: 'visibility', label: 'Visibility', icon: Settings, description: 'Primary filter categories' },
   { key: 'categories', label: 'Categories', icon: Tag, description: 'Custom event categories' },
   { key: 'attendance', label: 'Attendance', icon: Users, description: "Who sees who's going; who takes requests" },
-  { key: 'outreach', label: 'Outreach Types', icon: FileText, description: 'Public outreach event types' },
   { key: 'hour_tracking', label: 'Hour Tracking', icon: Clock, description: 'Map events to admin hours' },
-  { key: 'pipeline', label: 'Pipeline', icon: ClipboardList, description: 'How requests are handled' },
-  { key: 'email', label: 'Email', icon: Mail, description: 'Triggers and email templates' },
-  { key: 'form', label: 'Public Form', icon: ExternalLink, description: 'Public event request form' },
+  {
+    key: 'public_requests',
+    label: 'Public Requests',
+    icon: Globe,
+    description: 'Outreach events the community asks your department for',
+    subPages: [
+      { key: 'overview', label: 'Overview', hint: 'Turn requests on; how it works' },
+      { key: 'form', label: 'Request form', hint: 'The page the public fills in' },
+      { key: 'types', label: 'Types & roles', hint: 'What can be requested; who staffs it' },
+      { key: 'handling', label: 'Handling', hint: 'Coordinator and checklist' },
+      { key: 'emails', label: 'Emails', hint: 'What the requester is told' },
+    ],
+  },
   { key: 'metrics', label: 'Headline Metrics', icon: LayoutGrid, description: 'The four cards above this page' },
 ];
 
@@ -94,6 +94,7 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
   const navigate = useNavigate();
   const { confirm } = useConfirm();
   const [activeSection, setActiveSection] = useState<SectionKey>('visibility');
+  const [requestsPage, setRequestsPage] = useState<PublicRequestsPage>('overview');
   const [settings, setSettings] = useState<EventModuleSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -591,6 +592,91 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
 
   // ─── Section Content ──────────────────────────────────────────────────────
 
+  const renderRequestsPage = () => {
+    switch (requestsPage) {
+      case 'overview':
+        return (
+          <PublicRequestsOverview
+            settings={settings}
+            saving={saving}
+            members={members}
+            emailTemplates={emailTemplates}
+            eventRequestForms={eventRequestForms}
+            loadingForms={loadingForms}
+            onToggleAcceptPublicRequests={() => void toggleAcceptPublicRequests()}
+            onUpdateLeadTime={(d) => void updateLeadTime(d)}
+            onGoToPage={setRequestsPage}
+            onOpenRequests={() => void navigate('/events/admin?tab=requests')}
+          />
+        );
+      case 'form':
+        return (
+          <FormSection
+            generatingForm={generatingForm}
+            onGenerateForm={() => void handleGenerateForm()}
+            onNavigateToForms={() => void navigate('/forms')}
+            eventRequestForms={eventRequestForms}
+            loadingForms={loadingForms}
+          />
+        );
+      case 'types':
+        return (
+          <OutreachSection
+            settings={settings}
+            saving={saving}
+            onAddType={() => void addOutreachType()}
+            onRemoveType={(v) => void removeOutreachType(v)}
+            newTypeLabel={newTypeLabel}
+            onNewTypeLabelChange={setNewTypeLabel}
+            onAddRole={() => void addOutreachRole()}
+            onRemoveRole={(v) => void removeOutreachRole(v)}
+            newRoleLabel={newRoleLabel}
+            onNewRoleLabelChange={setNewRoleLabel}
+          />
+        );
+      case 'handling':
+        return (
+          <PipelineSection
+            settings={settings}
+            saving={saving}
+            members={members}
+            onUpdateDefaultAssignee={(u) => void updateDefaultAssignee(u)}
+            onTogglePublicVisibility={() => void togglePublicVisibility()}
+            onAddTask={() => void addPipelineTask()}
+            onRemoveTask={(id) => void removePipelineTask(id)}
+            onReorderTask={(i, d) => void reorderTask(i, d)}
+            newTaskLabel={newTaskLabel}
+            onNewTaskLabelChange={setNewTaskLabel}
+            newTaskDesc={newTaskDesc}
+            onNewTaskDescChange={setNewTaskDesc}
+          />
+        );
+      case 'emails':
+        return (
+          <EmailSection
+            settings={settings}
+            saving={saving}
+            emailTemplates={emailTemplates}
+            showTemplateForm={showTemplateForm}
+            onToggleTemplateForm={setShowTemplateForm}
+            onToggleEmailTrigger={(k) => void toggleEmailTrigger(k)}
+            onCreateTemplate={() => void handleCreateTemplate()}
+            onDeleteTemplate={(id) => void handleDeleteTemplate(id)}
+            newTemplateName={newTemplateName}
+            onNewTemplateNameChange={setNewTemplateName}
+            newTemplateSubject={newTemplateSubject}
+            onNewTemplateSubjectChange={setNewTemplateSubject}
+            newTemplateBody={newTemplateBody}
+            onNewTemplateBodyChange={setNewTemplateBody}
+            newTemplateTrigger={newTemplateTrigger}
+            onNewTemplateTriggerChange={setNewTemplateTrigger}
+            newTemplateDaysBefore={newTemplateDaysBefore}
+            onNewTemplateDaysBeforeChange={setNewTemplateDaysBefore}
+          />
+        );
+    }
+  };
+
   const renderContent = () => {
     switch (activeSection) {
       case 'visibility':
@@ -615,21 +701,6 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
             onNewCategoryColorChange={setNewCategoryColor}
           />
         );
-      case 'outreach':
-        return (
-          <OutreachSection
-            settings={settings}
-            saving={saving}
-            onAddType={() => void addOutreachType()}
-            onRemoveType={(v) => void removeOutreachType(v)}
-            newTypeLabel={newTypeLabel}
-            onNewTypeLabelChange={setNewTypeLabel}
-            onAddRole={() => void addOutreachRole()}
-            onRemoveRole={(v) => void removeOutreachRole(v)}
-            newRoleLabel={newRoleLabel}
-            onNewRoleLabelChange={setNewRoleLabel}
-          />
-        );
       case 'attendance':
         return (
           <AttendanceSection
@@ -642,48 +713,6 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
         );
       case 'hour_tracking':
         return <HourTrackingSection settings={settings} />;
-      case 'pipeline':
-        return (
-          <PipelineSection
-            settings={settings}
-            saving={saving}
-            members={members}
-            onUpdateLeadTime={(d) => void updateLeadTime(d)}
-            onUpdateDefaultAssignee={(u) => void updateDefaultAssignee(u)}
-            onTogglePublicVisibility={() => void togglePublicVisibility()}
-            onToggleAcceptPublicRequests={() => void toggleAcceptPublicRequests()}
-            onAddTask={() => void addPipelineTask()}
-            onRemoveTask={(id) => void removePipelineTask(id)}
-            onReorderTask={(i, d) => void reorderTask(i, d)}
-            newTaskLabel={newTaskLabel}
-            onNewTaskLabelChange={setNewTaskLabel}
-            newTaskDesc={newTaskDesc}
-            onNewTaskDescChange={setNewTaskDesc}
-          />
-        );
-      case 'email':
-        return (
-          <EmailSection
-            settings={settings}
-            saving={saving}
-            emailTemplates={emailTemplates}
-            showTemplateForm={showTemplateForm}
-            onToggleTemplateForm={setShowTemplateForm}
-            onToggleEmailTrigger={(k) => void toggleEmailTrigger(k)}
-            onCreateTemplate={() => void handleCreateTemplate()}
-            onDeleteTemplate={(id) => void handleDeleteTemplate(id)}
-            newTemplateName={newTemplateName}
-            onNewTemplateNameChange={setNewTemplateName}
-            newTemplateSubject={newTemplateSubject}
-            onNewTemplateSubjectChange={setNewTemplateSubject}
-            newTemplateBody={newTemplateBody}
-            onNewTemplateBodyChange={setNewTemplateBody}
-            newTemplateTrigger={newTemplateTrigger}
-            onNewTemplateTriggerChange={setNewTemplateTrigger}
-            newTemplateDaysBefore={newTemplateDaysBefore}
-            onNewTemplateDaysBeforeChange={setNewTemplateDaysBefore}
-          />
-        );
       case 'metrics':
         return (
           <AdminMetricsSettings
@@ -693,26 +722,23 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
             onSaved={onMetricsSaved}
           />
         );
-      case 'form':
-        return (
-          <FormSection
-            generatingForm={generatingForm}
-            onGenerateForm={() => void handleGenerateForm()}
-            onNavigateToForms={() => void navigate('/forms')}
-            eventRequestForms={eventRequestForms}
-            loadingForms={loadingForms}
-          />
-        );
+      case 'public_requests':
+        return renderRequestsPage();
     }
   };
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <SettingsLayout<SectionKey>
+    <SettingsLayout<SectionKey, PublicRequestsPage>
       sections={SECTIONS}
       activeSection={activeSection}
-      onSectionChange={setActiveSection}
+      onSectionChange={(key) => {
+        setActiveSection(key);
+        setRequestsPage('overview');
+      }}
+      activeSubPage={activeSection === 'public_requests' ? requestsPage : null}
+      onSubPageChange={setRequestsPage}
       inHub
       navLabel="Event settings sections"
       title="Event Settings"

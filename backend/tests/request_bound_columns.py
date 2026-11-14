@@ -375,6 +375,7 @@ COLUMN_BACKED = [
     "app.schemas.membership_pipeline:PipelineStepUpdate.sort_order=MembershipPipelineStep.sort_order",
     # app.schemas.minute
     "app.schemas.minute:MinutesBase.quorum_count=MeetingMinutes.quorum_count",
+    "app.schemas.minute:MinutesUpdate.expected_version=MeetingMinutes.edit_version",
     "app.schemas.minute:MinutesUpdate.quorum_count=MeetingMinutes.quorum_count",
     "app.schemas.minute:MotionBase.votes_abstain=Motion.votes_abstain",
     "app.schemas.minute:MotionBase.votes_against=Motion.votes_against",
@@ -477,11 +478,15 @@ COLUMN_BACKED = [
     "app.schemas.training:TrainingRequirementBase.required_calls=TrainingRequirement.required_calls",
     "app.schemas.training:TrainingRequirementBase.required_hours=TrainingRequirement.required_hours",
     "app.schemas.training:TrainingRequirementBase.required_shifts=TrainingRequirement.required_shifts",
+    "app.schemas.training:TrainingRequirementBase.required_refusals=TrainingRequirement.required_refusals",
+    "app.schemas.training:TrainingRequirementBase.required_transports=TrainingRequirement.required_transports",
     "app.schemas.training:TrainingRequirementBase.time_limit_days=TrainingRequirement.time_limit_days",
     "app.schemas.training:TrainingRequirementUpdate.max_attempts=TrainingRequirement.max_attempts",
     "app.schemas.training:TrainingRequirementUpdate.required_calls=TrainingRequirement.required_calls",
     "app.schemas.training:TrainingRequirementUpdate.required_hours=TrainingRequirement.required_hours",
     "app.schemas.training:TrainingRequirementUpdate.required_shifts=TrainingRequirement.required_shifts",
+    "app.schemas.training:TrainingRequirementUpdate.required_refusals=TrainingRequirement.required_refusals",
+    "app.schemas.training:TrainingRequirementUpdate.required_transports=TrainingRequirement.required_transports",
     "app.schemas.training:TrainingRequirementUpdate.time_limit_days=TrainingRequirement.time_limit_days",
     # app.schemas.training_enhancements
     "app.schemas.training_enhancements:MultiAgencyTrainingBase.total_participants=MultiAgencyTraining.total_participants",
@@ -499,6 +504,8 @@ COLUMN_BACKED = [
     "app.schemas.training_program:ProgramBuildRequirementInput.required_calls=TrainingRequirement.required_calls",
     "app.schemas.training_program:ProgramBuildRequirementInput.required_hours=RecertificationPathway.required_hours",
     "app.schemas.training_program:ProgramBuildRequirementInput.required_shifts=TrainingRequirement.required_shifts",
+    "app.schemas.training_program:ProgramBuildRequirementInput.required_refusals=TrainingRequirement.required_refusals",
+    "app.schemas.training_program:ProgramBuildRequirementInput.required_transports=TrainingRequirement.required_transports",
     "app.schemas.training_program:ProgramBuildRequirementInput.sort_order=AdminHoursCategory.sort_order",
     "app.schemas.training_program:ProgramPhaseBase.phase_number=ProgramPhase.phase_number",
     "app.schemas.training_program:ProgramPhaseBase.time_limit_days=ProgramPhase.time_limit_days",
@@ -515,11 +522,15 @@ COLUMN_BACKED = [
     "app.schemas.training_program:TrainingRequirementEnhancedBase.required_calls=TrainingRequirement.required_calls",
     "app.schemas.training_program:TrainingRequirementEnhancedBase.required_hours=RecertificationPathway.required_hours",
     "app.schemas.training_program:TrainingRequirementEnhancedBase.required_shifts=TrainingRequirement.required_shifts",
+    "app.schemas.training_program:TrainingRequirementEnhancedBase.required_refusals=TrainingRequirement.required_refusals",
+    "app.schemas.training_program:TrainingRequirementEnhancedBase.required_transports=TrainingRequirement.required_transports",
     "app.schemas.training_program:TrainingRequirementEnhancedBase.time_limit_days=ProgramPhase.time_limit_days",
     "app.schemas.training_program:TrainingRequirementEnhancedUpdate.max_attempts=TrainingRequirement.max_attempts",
     "app.schemas.training_program:TrainingRequirementEnhancedUpdate.required_calls=TrainingRequirement.required_calls",
     "app.schemas.training_program:TrainingRequirementEnhancedUpdate.required_hours=RecertificationPathway.required_hours",
     "app.schemas.training_program:TrainingRequirementEnhancedUpdate.required_shifts=TrainingRequirement.required_shifts",
+    "app.schemas.training_program:TrainingRequirementEnhancedUpdate.required_refusals=TrainingRequirement.required_refusals",
+    "app.schemas.training_program:TrainingRequirementEnhancedUpdate.required_transports=TrainingRequirement.required_transports",
     "app.schemas.training_program:TrainingRequirementEnhancedUpdate.time_limit_days=ProgramPhase.time_limit_days",
     # app.schemas.training_session
     "app.schemas.training_session:AttendeeApprovalData.override_duration_minutes=EventRSVP.override_duration_minutes",
@@ -550,6 +561,10 @@ _JSON = (
     "stored inside a JSON column or settings document; no numeric column limit",
 )
 NOT_COLUMN_BACKED = {
+    "app.schemas.finance:BudgetRequestReminderSettingsUpdate.offsets_days": (
+        "JSON",
+        "stored in organizations.settings['finance']; the schema's validator keeps each day between 0 and 60 and the list to five",
+    ),
     "app.schemas.organization:MembershipIdSettings.next_number": (
         "SERVICE_VALIDATED",
         "MembershipIdSettings._pattern_is_usable refuses a number whose formatted id overflows the 50-character column",
@@ -557,10 +572,6 @@ NOT_COLUMN_BACKED = {
     "app.schemas.organization:MembershipIdSettings.start_number": (
         "SERVICE_VALIDATED",
         "MembershipIdSettings._pattern_is_usable refuses a number whose formatted id overflows the 50-character column",
-    ),
-    "app.schemas.course_cohort:CohortShiftRequest.days": (
-        "ARITHMETIC",
-        "feeds timedelta(days=...); the right limit is how far a class may be shifted, a business rule",
     ),
 }
 
@@ -597,8 +608,7 @@ POLICY_BOUNDED = [
 # accept at both ends and the ones just past them it must refuse. ``shape`` says how the
 # value sits in the field: alone, as a list element, or as a dict value.
 # The reminder lead times (30 days, i.e. 30 days or 720 hours; app/schemas/reminder_limits.py)
-# are a department rule the owner chose. The other business limits (how many days a class
-# may shift) stay in NOT_COLUMN_BACKED until the owner picks a number.
+# are a department rule the owner chose. A class shift is limited to 14 days either way (MAX_COHORT_SHIFT_DAYS), also an owner's rule.
 MAX32 = 2**31 - 1
 MIN32 = -(2**31)
 FLOAT32 = 3.4e38
@@ -615,6 +625,7 @@ _RANGES = {
     "gift_list": ("list", [Decimal("0.01"), MAX_GIFT], [0, MAX_GIFT + Decimal("0.01")]),
     "lead_days": ("list", [0, 30], [-1, 31]),
     "lead_hours": ("list", [0, 720], [-1, 721]),
+    "shift_days": ("scalar", [-14, 14], [-15, 15]),
     "float_any": ("scalar", [-FLOAT32, FLOAT32], [-2 * FLOAT32, 2 * FLOAT32]),
     "float_nonneg": ("scalar", [0, FLOAT32], [-1, 2 * FLOAT32]),
     "float_pos": ("scalar", [1, FLOAT32], [0, 2 * FLOAT32]),
@@ -622,6 +633,7 @@ _RANGES = {
 }
 
 DOMAIN_BOUNDED = {
+    "app.schemas.course_cohort:CohortShiftRequest.days": _RANGES["shift_days"],
     "app.api.v1.endpoints.elections:ElectionSettingsUpdate.default_quorum_value": _RANGES[
         "pos_i32"
     ],

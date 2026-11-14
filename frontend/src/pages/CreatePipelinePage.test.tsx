@@ -6,7 +6,7 @@
  * build endpoint return an unattributable 422.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMockApiError, renderWithRouter } from '../test/utils';
@@ -15,8 +15,14 @@ const mockBuildProgram = vi.fn();
 const mockGetRequirementsEnhanced = vi.fn();
 const mockGetCourses = vi.fn();
 const mockGetPrograms = vi.fn();
+// The program forms load the department's evaluation forms for their picker;
+// an empty list unless a test says otherwise.
+const mockListShiftEvaluationTemplates = vi.fn();
 
 vi.mock('../services/api', () => ({
+  shiftEvaluationTemplateService: {
+    list: (...a: unknown[]) => mockListShiftEvaluationTemplates(...a) as unknown,
+  },
   trainingProgramService: {
     buildProgram: (...a: unknown[]) => mockBuildProgram(...a) as unknown,
     getPrograms: (...a: unknown[]) => mockGetPrograms(...a) as unknown,
@@ -28,8 +34,12 @@ vi.mock('../services/api', () => ({
 }));
 
 const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
 vi.mock('react-hot-toast', () => ({
-  default: { success: vi.fn(), error: (...a: unknown[]) => mockToastError(...a) as unknown },
+  default: {
+    success: (...a: unknown[]) => mockToastSuccess(...a) as unknown,
+    error: (...a: unknown[]) => mockToastError(...a) as unknown,
+  },
 }));
 
 const mockNavigate = vi.fn();
@@ -39,6 +49,7 @@ vi.mock('react-router', async () => {
 });
 
 import CreatePipelinePage from './CreatePipelinePage';
+import { useAuthStore } from '../stores/authStore';
 
 const cprRequirement = {
   id: 'req-cpr',
@@ -65,6 +76,8 @@ const goToRequirementsWithAPhase = async (user: ReturnType<typeof userEvent.setu
 
 describe('CreatePipelinePage — linking existing requirements', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement]);
     mockGetCourses.mockResolvedValue([]);
@@ -146,6 +159,8 @@ describe('CreatePipelinePage — linking existing requirements', () => {
 
 describe('CreatePipelinePage — a one-list program', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement]);
     mockGetCourses.mockResolvedValue([]);
@@ -205,6 +220,8 @@ describe('CreatePipelinePage — a one-list program', () => {
 
 describe('CreatePipelinePage — a requirement’s settings in this program', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetRequirementsEnhanced.mockReset();
     mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement]);
@@ -292,6 +309,8 @@ describe('CreatePipelinePage — enrollment rules', () => {
   ];
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetRequirementsEnhanced.mockReset();
     mockGetRequirementsEnhanced.mockResolvedValue([]);
@@ -367,5 +386,321 @@ describe('CreatePipelinePage — enrollment rules', () => {
     await createFlexible(user);
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Invalid prerequisite program'));
+  });
+});
+
+describe('CreatePipelinePage — shift evaluation form', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([
+      { id: 'tpl-driver', name: 'Driver Evaluation', is_active: true },
+      { id: 'tpl-old', name: 'Old Evaluation', is_active: false },
+    ]);
+    mockGetRequirementsEnhanced.mockReset();
+    mockGetRequirementsEnhanced.mockResolvedValue([]);
+    mockGetCourses.mockReset();
+    mockGetCourses.mockResolvedValue([]);
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue([]);
+    mockBuildProgram.mockReset();
+    mockBuildProgram.mockResolvedValue({ id: 'prog-4' });
+  });
+
+  const create = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: /Next/ })); // requirements
+    await user.click(screen.getByRole('button', { name: /Next/ })); // milestones
+    await user.click(screen.getByRole('button', { name: /Next/ })); // review
+    await user.click(screen.getByRole('button', { name: /Create Pipeline/ }));
+    await waitFor(() => expect(mockBuildProgram).toHaveBeenCalledTimes(1));
+    return (mockBuildProgram.mock.calls[0]?.[0] as { program: Record<string, unknown> }).program;
+  };
+
+  it('sends the chosen form, offering only active ones', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Driver Candidate');
+    await user.selectOptions(screen.getByLabelText(/Structure Type/), 'flexible');
+    const select = screen.getByRole('combobox', { name: 'Shift evaluation form' });
+    await waitFor(() => expect(select).toBeEnabled());
+    expect(screen.queryByRole('option', { name: /Old Evaluation/ })).not.toBeInTheDocument();
+    await user.selectOptions(select, 'Driver Evaluation');
+
+    const program = await create(user);
+
+    expect(program.shift_evaluation_template_id).toBe('tpl-driver');
+  });
+
+  it('leaves the key out when no form is chosen', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Recruit School');
+    await user.selectOptions(screen.getByLabelText(/Structure Type/), 'flexible');
+
+    const program = await create(user);
+
+    expect(program.shift_evaluation_template_id).toBeUndefined();
+  });
+});
+
+describe('CreatePipelinePage — saving a draft in this browser', () => {
+  const draftKey = 'program-wizard-draft-member-1';
+  const storedDraft = () =>
+    JSON.parse(localStorage.getItem(draftKey) ?? 'null') as {
+      version: number;
+      data: {
+        currentStep: string;
+        info: { name: string };
+        phases: { name: string; requirements: { source: string; requirement_id: string }[] }[];
+      };
+    } | null;
+
+  beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
+    vi.clearAllMocks();
+    mockGetRequirementsEnhanced.mockReset();
+    mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement]);
+    mockGetCourses.mockReset();
+    mockGetCourses.mockResolvedValue([]);
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue([]);
+    mockBuildProgram.mockReset();
+    mockBuildProgram.mockResolvedValue({ id: 'prog-draft' });
+    localStorage.clear();
+    useAuthStore.setState({ user: { id: 'member-1' } as never });
+  });
+
+  afterEach(() => {
+    useAuthStore.setState({ user: null });
+    localStorage.clear();
+  });
+
+  it('keeps a linked requirement when the officer saves, and resumes there on return', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderWithRouter(<CreatePipelinePage />);
+
+    await goToRequirementsWithAPhase(user);
+    await user.click(await screen.findByRole('button', { name: /Link Existing/ }));
+    await user.click(await screen.findByRole('radio', { name: /CPR\/BLS Certification/ }));
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    expect(mockToastSuccess).toHaveBeenCalledWith('Draft saved in this browser');
+    const saved = storedDraft();
+    expect(saved?.data.currentStep).toBe('requirements');
+    expect(saved?.data.phases[0]?.name).toBe('Orientation');
+    expect(saved?.data.phases[0]?.requirements[0]).toMatchObject({ source: 'library', requirement_id: 'req-cpr' });
+
+    unmount();
+    renderWithRouter(<CreatePipelinePage />);
+
+    expect(screen.getByText(/Picked up where you left off/)).toBeInTheDocument();
+    expect(screen.getByText('Phase 1: Orientation')).toBeInTheDocument();
+    expect(await screen.findByRole('radio', { name: /CPR\/BLS Certification/ })).toBeChecked();
+
+    // And the resumed draft still builds the program it describes.
+    await user.click(screen.getByRole('button', { name: /Next/ })); // milestones
+    await user.click(screen.getByRole('button', { name: /Next/ })); // review
+    await user.click(screen.getByRole('button', { name: /Create Pipeline/ }));
+    await waitFor(() => expect(mockBuildProgram).toHaveBeenCalledTimes(1));
+    const payload = mockBuildProgram.mock.calls[0]?.[0] as {
+      program: { name: string };
+      phases: { name: string; requirements: Record<string, unknown>[] }[];
+    };
+    expect(payload.program.name).toBe('Recruit School');
+    expect(payload.phases[0]?.requirements[0]).toEqual({ requirement_id: 'req-cpr', is_required: true, sort_order: 0 });
+  });
+
+  it('saves on its own shortly after the officer stops typing', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Recruit School');
+
+    await waitFor(() => expect(storedDraft()?.data.info.name).toBe('Recruit School'), { timeout: 3000 });
+    expect(screen.getByText(/^Draft saved /)).toBeInTheDocument();
+  });
+
+  it('writes an edit made just before leaving the page', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Engine School');
+    unmount();
+
+    expect(storedDraft()?.data.info.name).toBe('Engine School');
+  });
+
+  it('deletes the draft once the program is created', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Annual CE');
+    await user.selectOptions(screen.getByLabelText(/Structure Type/), 'flexible');
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+    expect(storedDraft()).not.toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /Next/ })); // requirements
+    await user.click(screen.getByRole('button', { name: /Next/ })); // milestones
+    await user.click(screen.getByRole('button', { name: /Next/ })); // review
+    await user.click(screen.getByRole('button', { name: /Create Pipeline/ }));
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/training/programs/prog-draft'));
+    expect(storedDraft()).toBeNull();
+  });
+
+  it('keeps the draft when the build fails, so nothing entered is lost', async () => {
+    mockBuildProgram.mockRejectedValueOnce(createMockApiError('Server unavailable', 503));
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Annual CE');
+    await user.selectOptions(screen.getByLabelText(/Structure Type/), 'flexible');
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await user.click(screen.getByRole('button', { name: /Create Pipeline/ }));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+    expect(storedDraft()?.data.info.name).toBe('Annual CE');
+  });
+
+  it('starts over only after confirming, and clears the saved draft', async () => {
+    const user = userEvent.setup();
+    const { unmount: leave } = renderWithRouter(<CreatePipelinePage />);
+    await user.type(screen.getByLabelText(/Program Name/), 'Recruit School');
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+    leave();
+
+    renderWithRouter(<CreatePipelinePage />);
+    await user.click(screen.getByRole('button', { name: 'Start over' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep it' }));
+    expect(screen.getByLabelText(/Program Name/)).toHaveValue('Recruit School');
+    expect(storedDraft()).not.toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Start over' }));
+    await user.click(await screen.findByRole('button', { name: 'Delete draft' }));
+
+    expect(screen.getByLabelText(/Program Name/)).toHaveValue('');
+    expect(screen.queryByText(/Picked up where you left off/)).not.toBeInTheDocument();
+    expect(storedDraft()).toBeNull();
+  });
+
+  it('gives a phase added after resuming its own identity', async () => {
+    const user = userEvent.setup();
+    const { unmount: leave } = renderWithRouter(<CreatePipelinePage />);
+    await user.type(screen.getByLabelText(/Program Name/), 'Recruit School');
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await user.click(await screen.findByRole('button', { name: /Add Phase/ }));
+    await user.type(await screen.findByPlaceholderText(/Engine Company Operations/), 'Orientation');
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+    leave();
+
+    renderWithRouter(<CreatePipelinePage />);
+    await user.click(await screen.findByRole('button', { name: /Add Phase/ }));
+    const names = screen.getAllByPlaceholderText(/Engine Company Operations/);
+    expect(names).toHaveLength(2);
+    await user.type(names[1] as HTMLElement, 'Classes');
+
+    // Restored ids restart the client counter; a collision would have the
+    // new phase's edits land on the restored one as well.
+    const [restoredName, addedName] = screen.getAllByPlaceholderText(/Engine Company Operations/);
+    expect(restoredName).toHaveValue('Orientation');
+    expect(addedName).toHaveValue('Classes');
+  });
+
+  it('ignores a draft it cannot read rather than failing to open', () => {
+    localStorage.setItem(draftKey, JSON.stringify({ version: 999, savedAt: 1, data: { info: { name: 'Old' } } }));
+    renderWithRouter(<CreatePipelinePage />);
+
+    expect(screen.getByLabelText(/Program Name/)).toHaveValue('');
+    expect(screen.queryByText(/Picked up where you left off/)).not.toBeInTheDocument();
+  });
+
+  it('fills fields an older draft lacks with their empty values', async () => {
+    localStorage.setItem(
+      draftKey,
+      JSON.stringify({
+        version: 1,
+        savedAt: Date.UTC(2026, 10, 1),
+        data: {
+          currentStep: 'requirements',
+          info: { name: 'Legacy Program', structure_type: 'phases' },
+          phases: [{ name: 'Orientation', requirements: [{ source: 'new', name: 'Ride-alongs' }] }],
+        },
+      })
+    );
+    renderWithRouter(<CreatePipelinePage />);
+
+    expect(screen.getByText('Phase 1: Orientation')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Ride-alongs')).toBeInTheDocument();
+    expect(screen.getByLabelText('Required Hours')).toHaveValue(null);
+  });
+
+  it('keeps nothing when nobody is signed in to own it', async () => {
+    useAuthStore.setState({ user: null });
+    const user = userEvent.setup();
+    const { unmount } = renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Recruit School');
+    expect(screen.queryByRole('button', { name: /Save draft/ })).not.toBeInTheDocument();
+    unmount();
+
+    expect(localStorage.length).toBe(0);
+  });
+});
+
+// Forms review F-3: Next stayed greyed out until a name was typed, and the
+// field's native required never fired outside a form, so nothing said why.
+describe('CreatePipelinePage — the required program name', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
+    mockGetRequirementsEnhanced.mockReset();
+    mockGetRequirementsEnhanced.mockResolvedValue([]);
+    mockGetCourses.mockReset();
+    mockGetCourses.mockResolvedValue([]);
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue([]);
+    mockBuildProgram.mockReset();
+    mockBuildProgram.mockResolvedValue({ id: 'prog-5' });
+  });
+
+  it('names a missing program name under the field when Next is pressed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+
+    const name = screen.getByRole('textbox', { name: 'Program Name' });
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('Enter a name for the program.');
+    expect(name).toHaveFocus();
+    expect(screen.queryByRole('button', { name: /Add Phase/ })).not.toBeInTheDocument();
+    expect(mockBuildProgram).not.toHaveBeenCalled();
+  });
+
+  it('returns to the name with a 422 the server put on it', async () => {
+    mockBuildProgram.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'program.name', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Annual CE');
+    await user.selectOptions(screen.getByLabelText(/Structure Type/), 'flexible');
+    await user.click(screen.getByRole('button', { name: /Next/ })); // requirements
+    await user.click(screen.getByRole('button', { name: /Next/ })); // milestones
+    await user.click(screen.getByRole('button', { name: /Next/ })); // review
+    await user.click(screen.getByRole('button', { name: /Create Pipeline/ }));
+
+    const name = await screen.findByRole('textbox', { description: 'Value is too long.' });
+    expect(name).toHaveAccessibleName('Program Name');
+    await waitFor(() => expect(name).toHaveFocus());
+    expect(mockToastError).not.toHaveBeenCalled();
   });
 });

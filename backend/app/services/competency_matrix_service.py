@@ -13,7 +13,7 @@ Gives training officers an at-a-glance department readiness picture.
 
 import calendar
 from datetime import date, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Mapping, Optional, Sequence
 from uuid import UUID
 
 from sqlalchemy import select
@@ -30,14 +30,19 @@ from app.models.training import (
 from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
+    NOT_YET_HELD_STATUS,
+    HeldSession,
     apply_recency,
     biannual_window,
     catch_up_deadline,
     certification_record_matches,
     counts_shift_attendance,
     evaluate_member_requirement_detail,
+    fallback_record_matches,
     get_org_include_current_month,
+    is_session_attendance,
     load_credited_shift_dates,
+    load_held_sessions,
     member_join_date,
     requirement_applies_to_user,
 )
@@ -159,6 +164,9 @@ class CompetencyMatrixService:
             today,
             org_include_current,
         )
+        held_sessions = await load_held_sessions(
+            self.db, str(organization_id), requirements
+        )
 
         # Counters
         current_count = 0
@@ -209,12 +217,14 @@ class CompetencyMatrixService:
                     waivers=member_waivers,
                     org_include_current_month=org_include_current,
                     shift_dates=shifts_by_user.get(uid, []),
+                    held_sessions=held_sessions,
                     join_date=join_date,
                 )
                 deadline = catch_up_deadline(req, join_date, today)
                 if deadline is not None and status_info["status"] not in (
                     "current",
                     "expiring_soon",
+                    "not_applicable",
                 ):
                     status_info = {
                         **status_info,
@@ -225,7 +235,7 @@ class CompetencyMatrixService:
 
                 # Count
                 s = status_info["status"]
-                if s == CATCH_UP_STATUS:
+                if s in (CATCH_UP_STATUS, "not_applicable"):
                     ungraded_count += 1
                 elif s == "current":
                     current_count += 1
@@ -307,34 +317,41 @@ class CompetencyMatrixService:
         waivers: Optional[List[WaiverPeriod]] = None,
         org_include_current_month: bool = True,
         shift_dates: Optional[List[date]] = None,
+        held_sessions: Optional[Mapping[str, Sequence[HeldSession]]] = None,
         join_date: Optional[date] = None,
     ) -> Dict:
         """Evaluate a single requirement for a single member using type-aware matching."""
-        if counts_shift_attendance(requirement):
-            # Counted from shifts worked by the one shared grader, so this
-            # cell reads what the compliance matrix reads for the member
-            # (shifts-three-sources). Partial progress is yellow, as hours is.
+        attendance = is_session_attendance(requirement)
+        if attendance or counts_shift_attendance(requirement):
+            # Counted from shifts worked, or from sessions attended, by the
+            # one shared grader, so this cell reads what the compliance matrix
+            # reads for the member (shifts-three-sources). Partial progress is
+            # yellow, as hours is.
             ev = evaluate_member_requirement_detail(
                 requirement,
-                [],
+                user_records if attendance else [],
                 today,
                 waivers=waivers,
                 org_include_current_month=org_include_current_month,
                 join_date=join_date,
                 shift_dates=shift_dates,
+                held_sessions=held_sessions,
             )
             # A catch-up status lands on "not_started" here; the caller turns
             # an unmet cell inside the catch-up period into its own status.
+            # No session held yet is this matrix's own "not_applicable".
             cell_status = {
                 TrainingStatus.COMPLETED.value: "current",
                 TrainingStatus.IN_PROGRESS.value: "expiring_soon",
+                NOT_YET_HELD_STATUS: "not_applicable",
             }.get(ev.status, "not_started")
             return {
                 "status": cell_status,
                 "expiration_date": None,
                 "completion_date": ev.completion_date,
                 "details": (
-                    f"{ev.progress_current:g}/{ev.progress_required:g} shifts"
+                    f"{ev.progress_current:g}/{ev.progress_required:g} "
+                    f"{ev.progress_unit or 'shifts'}"
                     if cell_status != "not_started"
                     and ev.progress_current is not None
                     and ev.progress_required is not None
@@ -504,17 +521,9 @@ class CompetencyMatrixService:
             }
 
         # ---- Fallback: shifts, calls, skills_evaluation, checklist, knowledge_test ----
-        matching = []
-        if requirement.training_type:
-            matching = [
-                r for r in windowed if r.training_type == requirement.training_type
-            ]
-        if not matching and requirement.name:
-            matching = [
-                r
-                for r in windowed
-                if r.course_name and requirement.name.lower() in r.course_name.lower()
-            ]
+        # By training type, else by name under the legacy cut-off and the
+        # stored key — the compliance grader's own fallback rule.
+        matching = fallback_record_matches(requirement, windowed)
 
         if not matching:
             return not_started

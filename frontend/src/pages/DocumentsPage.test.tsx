@@ -379,11 +379,32 @@ describe('DocumentsPage', () => {
     const dialog = screen.getByRole('dialog');
     await user.type(within(dialog).getByLabelText(/folder name/i), 'Stores');
     await user.click(within(dialog).getByRole('radio', { name: 'Specific positions' }));
-    expect(within(dialog).getByRole('button', { name: /^create folder$/i })).toBeDisabled();
+    // Forms review F-3: the button used to grey out here; pressing it now
+    // says what it is waiting for, and sends nothing.
+    await user.click(within(dialog).getByRole('button', { name: /^create folder$/i }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      'Choose at least one position who can open the folder.'
+    );
+    expect(mockCreateFolder).not.toHaveBeenCalled();
     await user.click(await within(dialog).findByRole('checkbox', { name: 'Quartermaster' }));
     await user.click(within(dialog).getByRole('button', { name: /^create folder$/i }));
 
     await waitFor(() => expect(mockCreateFolder).toHaveBeenCalledWith({ name: 'Stores', allowed_roles: ['pos-qm'] }));
+  });
+
+  it('names a missing folder name on an empty save and focuses it', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /new folder/i }));
+    const dialog = screen.getByRole('dialog');
+
+    await user.click(within(dialog).getByRole('button', { name: /^create folder$/i }));
+
+    const name = within(dialog).getByLabelText(/folder name/i);
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('Enter a name for the folder.');
+    expect(name).toHaveFocus();
+    expect(mockCreateFolder).not.toHaveBeenCalled();
   });
 
   it('confirms a folder only full administrators could open, then creates it', async () => {
@@ -412,6 +433,61 @@ describe('DocumentsPage', () => {
     await user.click(within(dialog).getByRole('button', { name: /^create folder$/i }));
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('shut you out');
+  });
+
+  it('puts a server refusal on the folder name and creates nothing', async () => {
+    const user = userEvent.setup();
+    mockCreateFolder.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
+    });
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /new folder/i }));
+    const dialog = screen.getByRole('dialog');
+    // Enter submits: the dialog is a real form (forms review F-7).
+    await user.type(within(dialog).getByLabelText(/folder name/i), 'Stores{Enter}');
+
+    const name = within(dialog).getByLabelText(/folder name/i);
+    await waitFor(() => expect(name).toHaveAccessibleDescription('Value is too long.'));
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAttribute('maxLength', '255');
+    expect(within(dialog).queryByText(/name: Value/)).not.toBeInTheDocument();
+  });
+
+  it('flags an empty folder name on the field instead of a greyed-out button', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /new folder/i }));
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^create folder$/i }));
+
+    const name = within(dialog).getByLabelText(/folder name/i);
+    expect(name).toHaveAccessibleDescription('Enter a name for the folder.');
+    await waitFor(() => expect(name).toHaveFocus());
+    expect(mockCreateFolder).not.toHaveBeenCalled();
+  });
+
+  it('asks before Escape discards a half-typed folder', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /new folder/i }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/folder name/i), 'Stores');
+    await user.keyboard('{Escape}');
+
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(within(dialog).getByLabelText(/folder name/i)).toHaveValue('Stores');
+  });
+
+  it('asks before Cancel discards an upload with a document name typed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /upload document/i }));
+    const dialog = screen.getByRole('dialog', { name: 'Upload Document' });
+    await user.type(within(dialog).getByLabelText('Document Name'), 'Hose test log');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(within(dialog).getByLabelText('Document Name')).toHaveValue('Hose test log');
   });
 
   it('shows the current folder as the selected upload destination', async () => {
@@ -660,5 +736,40 @@ describe('DocumentsPage folders only administrators can open (decision 30)', () 
 
     await screen.findByRole('button', { name: /sops/i });
     expect(mockGetAdminOnlyFolders).not.toHaveBeenCalled();
+  });
+});
+
+describe('DocumentsPage document type (W53-6)', () => {
+  const word = makeDocument({
+    id: 'd-word',
+    name: 'Bylaws',
+    file_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  });
+
+  beforeEach(() => {
+    mockGetDocuments.mockReset();
+    mockGetDocuments.mockResolvedValue({ documents: [word], total: 1, skip: 0, limit: 20 });
+  });
+
+  it('names the type on the card rather than printing its MIME type', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+
+    const card = await screen.findByTestId('document-card-d-word');
+    expect(within(card).getByText('Word')).toBeInTheDocument();
+    expect(within(card).queryByText(/application\//i)).not.toBeInTheDocument();
+  });
+
+  it('names it in the list view too', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+    await screen.findByText('Bylaws');
+    await user.click(screen.getByRole('button', { name: 'List view' }));
+
+    const table = screen.getByRole('table');
+    expect(within(table).getByText('Word')).toBeInTheDocument();
+    expect(within(table).queryByText(/application\//i)).not.toBeInTheDocument();
   });
 });

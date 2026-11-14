@@ -5,6 +5,7 @@ import { renderWithRouter } from '../../../test/utils';
 
 const mockCheckPermission = vi.fn();
 const mockFetchFleetSummary = vi.fn();
+const mockGetMaintenanceDue = vi.fn();
 let grantedPermissions = new Set<string>();
 
 const store = {
@@ -43,6 +44,12 @@ vi.mock('../../../stores/authStore', () => ({
 
 vi.mock('../store/apparatusStore', () => ({
   useApparatusStore: () => store,
+}));
+
+vi.mock('../services/api', () => ({
+  apparatusMaintenanceService: {
+    getMaintenanceDue: (...args: unknown[]) => mockGetMaintenanceDue(...args) as unknown,
+  },
 }));
 
 // The page header loads the enabled modules through the real service; with a
@@ -195,5 +202,153 @@ describe('ApparatusListPage NFPA department switch', () => {
     grantedPermissions = new Set(['settings.manage']);
     renderWithRouter(<ApparatusListPage />);
     expect(screen.getByRole('switch', { name: 'NFPA Compliance' })).toBeChecked();
+  });
+});
+
+// The dashboard's fleet-readiness tiles link here with a filter in the query
+// string and say "View filtered results"; the list used to ignore it and open
+// the whole fleet.
+describe('ApparatusListPage dashboard tile filters', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    grantedPermissions = new Set(['apparatus.manage']);
+    mockCheckPermission.mockImplementation((permission: string) => grantedPermissions.has(permission));
+    localStorage.setItem('has_session', 'true');
+    store.apparatusList = [
+      { id: 'a-1', unitNumber: 'E-2', name: 'Pumper', minStaffing: 3, isArchived: false, hasDeficiency: true },
+    ];
+  });
+
+  afterEach(() => {
+    store.apparatusList = [];
+    window.history.pushState({}, '', '/');
+  });
+
+  const lastFilters = () => store.setFilters.mock.lastCall?.[0] as Record<string, unknown> | undefined;
+
+  it.each([
+    ['serviceStatus=unavailable', { serviceStatus: 'unavailable' }, 'out of service or in maintenance'],
+    ['hasDeficiency=true', { hasDeficiency: true }, 'unresolved equipment deficiency'],
+    ['inspection=overdue', { inspection: 'overdue' }, 'inspection has expired'],
+  ])('applies ?%s and says so', async (query, expected, banner) => {
+    window.history.pushState({}, '', `/apparatus?${query}`);
+    renderWithRouter(<ApparatusListPage />);
+
+    await waitFor(() => expect(lastFilters()).toMatchObject({ isArchived: false, ...expected }));
+    expect(screen.getByText(new RegExp(banner))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View E-2' })).toBeInTheDocument();
+  });
+
+  it('clears the filter from the URL and the request', async () => {
+    window.history.pushState({}, '', '/apparatus?hasDeficiency=true');
+    renderWithRouter(<ApparatusListPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Clear filter: Unresolved deficiency' }));
+
+    await waitFor(() => expect(lastFilters()).toMatchObject({ hasDeficiency: undefined }));
+    expect(window.location.search).toBe('');
+    expect(screen.queryByText(/unresolved equipment deficiency/)).not.toBeInTheDocument();
+  });
+
+  it('ignores a value no tile sends', async () => {
+    window.history.pushState({}, '', '/apparatus?hasDeficiency=yes&serviceStatus=broken');
+    renderWithRouter(<ApparatusListPage />);
+
+    await waitFor(() => expect(store.setFilters).toHaveBeenCalled());
+    expect(lastFilters()).toEqual({
+      isArchived: false,
+      apparatusTypeId: undefined,
+      statusId: undefined,
+      search: undefined,
+      serviceStatus: undefined,
+      hasDeficiency: undefined,
+      inspection: undefined,
+    });
+    expect(screen.queryByRole('button', { name: /Clear filter:/ })).not.toBeInTheDocument();
+  });
+});
+
+// DASH-38 (owner decision 2026-11-01): no apparatus maintenance page; the fleet
+// board carries the dashboard's "Maintenance due" figure. The tile counts the
+// fleet summary's maintenanceDueSoon, which already includes overdue work, and
+// links here as ?maintenance=due.
+describe('ApparatusListPage maintenance due', () => {
+  const dueRows = [
+    {
+      id: 'm-1',
+      apparatusId: 'a-1',
+      apparatusUnitNumber: 'E-1',
+      maintenanceTypeName: 'Pump test',
+      dueDate: '2026-11-20',
+      dueMileage: null,
+      dueHours: null,
+      isOverdue: false,
+    },
+    {
+      id: 'm-2',
+      apparatusId: 'a-2',
+      apparatusUnitNumber: 'L-3',
+      maintenanceTypeName: 'Aerial inspection',
+      dueDate: '2026-10-01',
+      dueMileage: null,
+      dueHours: null,
+      isOverdue: true,
+    },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetMaintenanceDue.mockReset();
+    mockGetMaintenanceDue.mockResolvedValue(dueRows);
+    grantedPermissions = new Set(['apparatus.manage']);
+    mockCheckPermission.mockImplementation((permission: string) => grantedPermissions.has(permission));
+    localStorage.setItem('has_session', 'true');
+    store.fleetSummary = { ...store.fleetSummary, maintenanceDueSoon: 2, maintenanceOverdue: 1 };
+  });
+
+  afterEach(() => {
+    store.fleetSummary = { ...store.fleetSummary, maintenanceDueSoon: 0, maintenanceOverdue: 0 };
+    window.history.pushState({}, '', '/');
+  });
+
+  it("shows the tile's own figure in the summary, without adding the overdue share twice", () => {
+    renderWithRouter(<ApparatusListPage />);
+
+    // Named by its visible words first, then where it goes, so voice control's
+    // "click Maintenance Due" finds it (WCAG 2.5.3).
+    expect(screen.getByRole('link', { name: /^Maintenance Due\s*2\b.*Show the maintenance due$/ })).toHaveAttribute(
+      'href',
+      '/apparatus?maintenance=due'
+    );
+  });
+
+  it('lists every item the tile counted when opened from the dashboard', async () => {
+    window.history.pushState({}, '', '/apparatus?maintenance=due');
+
+    renderWithRouter(<ApparatusListPage />);
+
+    expect(await screen.findByText('Pump test')).toBeInTheDocument();
+    expect(mockGetMaintenanceDue).toHaveBeenCalledExactlyOnceWith({ daysAhead: 30, includeOverdue: true });
+    expect(screen.getByText(/2 maintenance items due in the next 30 days or overdue/)).toBeInTheDocument();
+    expect(screen.getByText('Aerial inspection')).toBeInTheDocument();
+    expect(screen.getByText('Overdue')).toBeInTheDocument();
+  });
+
+  it('does not load the list without the filter', async () => {
+    renderWithRouter(<ApparatusListPage />);
+
+    await screen.findByText('Total Fleet');
+    expect(mockGetMaintenanceDue).not.toHaveBeenCalled();
+  });
+
+  it('clears the filter', async () => {
+    window.history.pushState({}, '', '/apparatus?maintenance=due');
+    renderWithRouter(<ApparatusListPage />);
+    await screen.findByText('Pump test');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear filter: Maintenance due' }));
+
+    await waitFor(() => expect(window.location.search).toBe(''));
+    expect(screen.queryByText('Pump test')).not.toBeInTheDocument();
   });
 });

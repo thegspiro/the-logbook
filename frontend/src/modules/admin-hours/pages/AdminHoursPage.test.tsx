@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithRouter } from '../../../test/utils';
 import type { AdminHoursComplianceItem, AdminHoursSummary } from '../types';
 import AdminHoursPage from './AdminHoursPage';
+import { adminHoursEntryService } from '../services/api';
 
 interface SummaryParams {
   userId: string;
@@ -31,6 +32,7 @@ const fetchActiveSession = vi.fn();
 const getUserCompliance = vi.fn<() => Promise<AdminHoursComplianceItem[]>>();
 
 let mySummary: AdminHoursSummary | null;
+let activeSessionLoading = false;
 
 const storeState = () => ({
   categories: [
@@ -41,7 +43,7 @@ const storeState = () => ({
   myEntriesTotal: 0,
   entriesLoading: false,
   activeSession: null,
-  activeSessionLoading: false,
+  activeSessionLoading,
   mySummary,
   mySummaryLoading: false,
   error: null,
@@ -96,6 +98,7 @@ const populatedSummary: AdminHoursSummary = {
 describe('AdminHoursPage', () => {
   beforeEach(() => {
     mySummary = populatedSummary;
+    activeSessionLoading = false;
     vi.clearAllMocks();
     getUserCompliance.mockResolvedValue([]);
   });
@@ -332,9 +335,47 @@ describe('AdminHoursPage manual entry times', () => {
     ).toBeInTheDocument();
   });
 
+  it("puts the server's refusal of the description under the description", async () => {
+    vi.mocked(adminHoursEntryService.createManual).mockReset();
+    vi.mocked(adminHoursEntryService.createManual).mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'description', message: 'Description must be plain text.' }] },
+      },
+    });
+    const { start } = await openForm();
+    fireEvent.change(screen.getByLabelText('Category *'), { target: { value: 'category-1' } });
+    fireEvent.change(start, { target: { value: '2026-09-01' } });
+    fireEvent.click(screen.getByRole('button', { name: '2 hours' }));
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Filing <b>' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }));
+
+    const description = screen.getByLabelText('Description');
+    await waitFor(() => expect(description).toHaveAttribute('aria-invalid', 'true'));
+    expect(description).toHaveAccessibleDescription('Description must be plain text.');
+    expect(description).toHaveFocus();
+  });
+
   it('will not offer a duration before there is a start to measure from', async () => {
     await openForm();
 
     expect(screen.getByRole('button', { name: '2 hours' })).toBeDisabled();
+  });
+
+  // The clocked-in card is drawn only while a session is open, above
+  // everything else, so the rest waits for the session check rather than
+  // being pushed down by its answer.
+  it('keeps the page under the header invisible until the session check answers', () => {
+    // jsdom applies no stylesheet, so this reads the class that hides every
+    // child of the page after the header, its first.
+    const HIDES_ALL_BUT_HEADER = '[&>*:not(:first-child)]:invisible';
+    activeSessionLoading = true;
+    const { rerender } = renderWithRouter(<AdminHoursPage />);
+    const page = () => screen.getByTestId('admin-hours-page');
+    expect(page()).toHaveClass(HIDES_ALL_BUT_HEADER);
+
+    activeSessionLoading = false;
+    rerender(<AdminHoursPage />);
+    expect(page()).not.toHaveClass(HIDES_ALL_BUT_HEADER);
   });
 });

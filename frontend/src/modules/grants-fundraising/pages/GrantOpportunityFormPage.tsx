@@ -10,8 +10,10 @@
  *
  * On create, blank optional fields are omitted; on edit every field is sent
  * and a cleared one is null, so the clear is stored (pitfall #1). URLs are
- * checked by the backend (http/https only); its refusal is what the toast
- * shows.
+ * checked by the backend (http/https only); its refusal is shown under the
+ * link it refused. A new opportunity is added only once nothing is refused;
+ * an edit saves the rest and keeps a refused field flagged (owner rule of
+ * 2026-11-05 for a single-save form).
  */
 
 import React, { useEffect, useState } from 'react';
@@ -22,6 +24,8 @@ import { grantsService } from '../services/api';
 import { DeadlineType, GrantCategory } from '../types';
 import type { GrantOpportunity, GrantOpportunityCreatePayload, GrantOpportunityUpdatePayload } from '../types';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { FormField } from '@/components/ux/FormField';
+import { mapServerFieldErrors, type ServerFieldSpec } from '@/utils/serverFieldErrors';
 import { blankToNull } from '@/utils/formValues';
 import { GRANT_CATEGORY_LABELS } from '../utils/labels';
 
@@ -71,10 +75,35 @@ const EMPTY: FormState = {
   notes: '',
 };
 
+type FieldErrors = Partial<Record<keyof FormState, string>>;
+
+/** Labels and the `GrantOpportunityCreate` max_length of each field; each key is also its payload key. */
+const SERVER_FIELDS: Record<keyof FormState, ServerFieldSpec> = {
+  name: { label: 'Program name', maxLength: 255 },
+  agency: { label: 'Agency or funder', maxLength: 255 },
+  category: { label: 'Category' },
+  description: { label: 'Description' },
+  eligibleUses: { label: 'Eligible uses' },
+  eligibilityCriteria: { label: 'Who is eligible' },
+  typicalAwardMin: { label: 'Smallest typical award' },
+  typicalAwardMax: { label: 'Largest typical award' },
+  matchRequired: { label: 'Local match' },
+  matchPercentage: { label: 'Match percentage' },
+  matchDescription: { label: 'About the match', maxLength: 500 },
+  deadlineType: { label: 'Deadline' },
+  deadlineDate: { label: 'Deadline date' },
+  applicationUrl: { label: 'Application link', maxLength: 500 },
+  programUrl: { label: 'Program information link', maxLength: 500 },
+  federalProgramCode: { label: 'Federal program code', maxLength: 50 },
+  notes: { label: 'Notes' },
+};
+
+const fieldId = (key: keyof FormState) => `opportunity-field-${key}`;
+
 const isAmount = (value: string) => value.trim() === '' || (Number.isFinite(Number(value)) && Number(value) >= 0);
 
-function validateOpportunity(form: FormState): Record<string, string> {
-  const errors: Record<string, string> = {};
+function validateOpportunity(form: FormState): FieldErrors {
+  const errors: FieldErrors = {};
   if (!form.name.trim()) errors.name = 'Enter the program name.';
   if (!isAmount(form.typicalAwardMin)) errors.typicalAwardMin = 'Enter an amount of zero or more.';
   if (!isAmount(form.typicalAwardMax)) errors.typicalAwardMax = 'Enter an amount of zero or more.';
@@ -175,7 +204,7 @@ const GrantOpportunityFormPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const isEditing = Boolean(id);
   const [form, setForm] = useState<FormState>(EMPTY);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEditing);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -201,8 +230,18 @@ const GrantOpportunityFormPage: React.FC = () => {
 
   const set =
     <K extends keyof FormState>(key: K) =>
-    (value: FormState[K]) =>
+    (value: FormState[K]) => {
       setForm((prev) => ({ ...prev, [key]: value }));
+      setErrors((prev) => {
+        if (!prev[key]) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    };
+  const focusField = (key: keyof FormState | undefined) => {
+    if (key) document.getElementById(fieldId(key))?.focus();
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,6 +249,7 @@ const GrantOpportunityFormPage: React.FC = () => {
     setErrors(next);
     if (Object.keys(next).length > 0) {
       toast.error('Fix the fields marked below.');
+      focusField((Object.keys(next) as (keyof FormState)[])[0]);
       return;
     }
     void save();
@@ -219,7 +259,33 @@ const GrantOpportunityFormPage: React.FC = () => {
     setSaving(true);
     try {
       if (id) {
-        await grantsService.updateOpportunity(id, toOpportunityUpdatePayload(form));
+        const payload = toOpportunityUpdatePayload(form);
+        let refused: FieldErrors = {};
+        try {
+          await grantsService.updateOpportunity(id, payload);
+        } catch (err: unknown) {
+          // Owner rule (2026-11-05) for a single-save form: a value the
+          // opportunity cannot hold is not written, the rest saves, and the
+          // field keeps what was typed, flagged, until it is fixed. Anything
+          // the form has no field for is a real failure and is reported as one.
+          const mapped = mapServerFieldErrors(err, SERVER_FIELDS);
+          const keys = Object.keys(mapped?.fieldErrors ?? {}) as (keyof FormState)[];
+          if (!mapped || keys.length === 0 || mapped.unmatched.length > 0) throw err;
+          refused = mapped.fieldErrors;
+          const rest: GrantOpportunityUpdatePayload = { ...payload };
+          for (const key of keys) delete rest[key];
+          await grantsService.updateOpportunity(id, rest);
+        }
+        const firstRefused = (Object.keys(refused) as (keyof FormState)[])[0];
+        if (firstRefused) {
+          // Stays on the page, so the refused field can be fixed and saved again.
+          setErrors(refused);
+          toast.error(
+            `Opportunity saved, except ${SERVER_FIELDS[firstRefused].label.toLowerCase()}: ${refused[firstRefused] ?? ''} Fix it and save again.`
+          );
+          focusField(firstRefused);
+          return;
+        }
         toast.success('Opportunity saved');
       } else {
         await grantsService.createOpportunity(toOpportunityPayload(form));
@@ -227,20 +293,69 @@ const GrantOpportunityFormPage: React.FC = () => {
       }
       void navigate('/grants/opportunities');
     } catch (err: unknown) {
+      // A new opportunity is added only once nothing is refused, so each
+      // refusal goes on its field (forms review F-2).
+      const mapped = id ? null : mapServerFieldErrors(err, SERVER_FIELDS);
+      const keys = Object.keys(mapped?.fieldErrors ?? {}) as (keyof FormState)[];
+      if (mapped && keys[0]) {
+        setErrors(mapped.fieldErrors);
+        focusField(keys[0]);
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       toast.error(getErrorMessage(err, id ? 'Could not save the opportunity' : 'Could not add the opportunity'));
     } finally {
       setSaving(false);
     }
   };
 
-  const errorText = (field: keyof FormState) =>
-    errors[field] ? (
-      <p id={`opportunity-${field}-error`} className="mt-1 text-xs text-red-700 dark:text-red-400">
-        {errors[field]}
-      </p>
-    ) : null;
-
-  const describedBy = (field: keyof FormState) => (errors[field] ? `opportunity-${field}-error` : undefined);
+  const optional = <span className="text-theme-text-secondary font-normal">(optional)</span>;
+  type TextKey = {
+    [K in keyof FormState]: FormState[K] extends string ? K : never;
+  }[keyof FormState];
+  /** A text, number, date or URL input bound to one string field. */
+  const input = (
+    key: TextKey,
+    label: React.ReactNode,
+    attrs: React.InputHTMLAttributes<HTMLInputElement> & { required?: boolean } = {}
+  ) => {
+    const { required, ...rest } = attrs;
+    const { maxLength } = SERVER_FIELDS[key];
+    return (
+      <FormField
+        id={fieldId(key)}
+        label={label}
+        required={required}
+        error={errors[key]}
+        maxLength={maxLength}
+        count={maxLength ? form[key].length : undefined}
+      >
+        {(field) => (
+          <input
+            type="text"
+            {...rest}
+            {...field}
+            className="form-input"
+            value={form[key]}
+            onChange={(e) => set(key)(e.target.value)}
+          />
+        )}
+      </FormField>
+    );
+  };
+  const textarea = (key: TextKey, label: React.ReactNode) => (
+    <FormField id={fieldId(key)} label={label} error={errors[key]}>
+      {(field) => (
+        <textarea
+          {...field}
+          rows={3}
+          className="form-input"
+          value={form[key]}
+          onChange={(e) => set(key)(e.target.value)}
+        />
+      )}
+    </FormField>
+  );
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -279,104 +394,33 @@ const GrantOpportunityFormPage: React.FC = () => {
               Program
             </h2>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label htmlFor="opportunity-name" className="form-label">
-                  Program name
-                </label>
-                <input
-                  id="opportunity-name"
-                  type="text"
-                  maxLength={255}
-                  className="form-input"
-                  value={form.name}
-                  onChange={(e) => set('name')(e.target.value)}
-                  aria-invalid={Boolean(errors.name)}
-                  aria-describedby={describedBy('name')}
-                />
-                {errorText('name')}
-              </div>
-              <div>
-                <label htmlFor="opportunity-agency" className="form-label">
-                  Agency or funder <span className="text-theme-text-secondary font-normal">(optional)</span>
-                </label>
-                <input
-                  id="opportunity-agency"
-                  type="text"
-                  maxLength={255}
-                  className="form-input"
-                  value={form.agency}
-                  onChange={(e) => set('agency')(e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="opportunity-category" className="form-label">
-                  Category
-                </label>
-                <select
-                  id="opportunity-category"
-                  className="form-input"
-                  value={form.category}
-                  onChange={(e) => set('category')(e.target.value)}
-                >
-                  {Object.values(GrantCategory).map((value) => (
-                    <option key={value} value={value}>
-                      {GRANT_CATEGORY_LABELS[value]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="opportunity-code" className="form-label">
-                  Federal program code <span className="text-theme-text-secondary font-normal">(optional)</span>
-                </label>
-                <input
-                  id="opportunity-code"
-                  type="text"
-                  maxLength={50}
-                  placeholder="e.g. 97.044"
-                  className="form-input"
-                  value={form.federalProgramCode}
-                  onChange={(e) => set('federalProgramCode')(e.target.value)}
-                />
-              </div>
+              {input('name', 'Program name', { required: true, autoComplete: 'off' })}
+              {input('agency', <>Agency or funder {optional}</>, { autoComplete: 'off' })}
+              <FormField id={fieldId('category')} label="Category" error={errors.category}>
+                {(field) => (
+                  <select
+                    {...field}
+                    className="form-input"
+                    value={form.category}
+                    onChange={(e) => set('category')(e.target.value)}
+                  >
+                    {Object.values(GrantCategory).map((value) => (
+                      <option key={value} value={value}>
+                        {GRANT_CATEGORY_LABELS[value]}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
+              {input('federalProgramCode', <>Federal program code {optional}</>, {
+                placeholder: 'e.g. 97.044',
+                autoComplete: 'off',
+              })}
             </div>
-            <div>
-              <label htmlFor="opportunity-description" className="form-label">
-                Description <span className="text-theme-text-secondary font-normal">(optional)</span>
-              </label>
-              <textarea
-                id="opportunity-description"
-                rows={3}
-                className="form-input"
-                value={form.description}
-                onChange={(e) => set('description')(e.target.value)}
-              />
-            </div>
+            {textarea('description', <>Description {optional}</>)}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label htmlFor="opportunity-uses" className="form-label">
-                  Eligible uses <span className="text-theme-text-secondary font-normal">(optional)</span>
-                </label>
-                <textarea
-                  id="opportunity-uses"
-                  rows={3}
-                  className="form-input"
-                  value={form.eligibleUses}
-                  onChange={(e) => set('eligibleUses')(e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="opportunity-eligibility" className="form-label">
-                  Who is eligible <span className="text-theme-text-secondary font-normal">(optional)</span>
-                </label>
-                <textarea
-                  id="opportunity-eligibility"
-                  rows={3}
-                  className="form-input"
-                  value={form.eligibilityCriteria}
-                  onChange={(e) => set('eligibilityCriteria')(e.target.value)}
-                />
-              </div>
+              {textarea('eligibleUses', <>Eligible uses {optional}</>)}
+              {textarea('eligibilityCriteria', <>Who is eligible {optional}</>)}
             </div>
           </section>
 
@@ -385,86 +429,45 @@ const GrantOpportunityFormPage: React.FC = () => {
               Funding
             </h2>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label htmlFor="opportunity-award-min" className="form-label">
-                  Smallest typical award <span className="text-theme-text-secondary font-normal">(optional)</span>
-                </label>
-                <input
-                  id="opportunity-award-min"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  className="form-input"
-                  value={form.typicalAwardMin}
-                  onChange={(e) => set('typicalAwardMin')(e.target.value)}
-                  aria-invalid={Boolean(errors.typicalAwardMin)}
-                  aria-describedby={describedBy('typicalAwardMin')}
-                />
-                {errorText('typicalAwardMin')}
-              </div>
-              <div>
-                <label htmlFor="opportunity-award-max" className="form-label">
-                  Largest typical award <span className="text-theme-text-secondary font-normal">(optional)</span>
-                </label>
-                <input
-                  id="opportunity-award-max"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  className="form-input"
-                  value={form.typicalAwardMax}
-                  onChange={(e) => set('typicalAwardMax')(e.target.value)}
-                  aria-invalid={Boolean(errors.typicalAwardMax)}
-                  aria-describedby={describedBy('typicalAwardMax')}
-                />
-                {errorText('typicalAwardMax')}
-              </div>
+              {input('typicalAwardMin', <>Smallest typical award {optional}</>, {
+                type: 'number',
+                inputMode: 'decimal',
+                min: '0',
+                step: '0.01',
+              })}
+              {input('typicalAwardMax', <>Largest typical award {optional}</>, {
+                type: 'number',
+                inputMode: 'decimal',
+                min: '0',
+                step: '0.01',
+              })}
             </div>
             <label className="flex items-center gap-2 text-sm">
               <input
+                id={fieldId('matchRequired')}
                 type="checkbox"
                 className="form-checkbox"
                 checked={form.matchRequired}
                 onChange={(e) => set('matchRequired')(e.target.checked)}
+                aria-invalid={errors.matchRequired ? true : undefined}
               />
               <span className="text-theme-text-primary">The department must contribute a local match</span>
             </label>
+            {errors.matchRequired && (
+              <p role="alert" className="text-sm text-red-800 dark:text-red-300">
+                {errors.matchRequired}
+              </p>
+            )}
             {form.matchRequired && (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label htmlFor="opportunity-match-pct" className="form-label">
-                    Match percentage <span className="text-theme-text-secondary font-normal">(optional)</span>
-                  </label>
-                  <input
-                    id="opportunity-match-pct"
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    max="100"
-                    step="0.01"
-                    className="form-input"
-                    value={form.matchPercentage}
-                    onChange={(e) => set('matchPercentage')(e.target.value)}
-                    aria-invalid={Boolean(errors.matchPercentage)}
-                    aria-describedby={describedBy('matchPercentage')}
-                  />
-                  {errorText('matchPercentage')}
-                </div>
-                <div>
-                  <label htmlFor="opportunity-match-description" className="form-label">
-                    About the match <span className="text-theme-text-secondary font-normal">(optional)</span>
-                  </label>
-                  <input
-                    id="opportunity-match-description"
-                    type="text"
-                    maxLength={500}
-                    className="form-input"
-                    value={form.matchDescription}
-                    onChange={(e) => set('matchDescription')(e.target.value)}
-                  />
-                </div>
+                {input('matchPercentage', <>Match percentage {optional}</>, {
+                  type: 'number',
+                  inputMode: 'decimal',
+                  min: '0',
+                  max: '100',
+                  step: '0.01',
+                })}
+                {input('matchDescription', <>About the match {optional}</>, { autoComplete: 'off' })}
               </div>
             )}
           </section>
@@ -474,87 +477,49 @@ const GrantOpportunityFormPage: React.FC = () => {
               Deadline and links
             </h2>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label htmlFor="opportunity-deadline-type" className="form-label">
-                  Deadline
-                </label>
-                <select
-                  id="opportunity-deadline-type"
-                  className="form-input"
-                  value={form.deadlineType}
-                  onChange={(e) => set('deadlineType')(e.target.value)}
-                >
-                  <option value="">Not known</option>
-                  {Object.values(DeadlineType).map((value) => (
-                    <option key={value} value={value}>
-                      {DEADLINE_TYPE_LABELS[value]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {form.deadlineType !== DeadlineType.ROLLING && (
-                <div>
-                  <label htmlFor="opportunity-deadline-date" className="form-label">
-                    {form.deadlineType === DeadlineType.RECURRING ? 'Next deadline' : 'Deadline date'}
-                    {form.deadlineType !== DeadlineType.FIXED && (
-                      <span className="text-theme-text-secondary font-normal"> (optional)</span>
-                    )}
-                  </label>
-                  <input
-                    id="opportunity-deadline-date"
-                    type="date"
+              <FormField id={fieldId('deadlineType')} label="Deadline" error={errors.deadlineType}>
+                {(field) => (
+                  <select
+                    {...field}
                     className="form-input"
-                    value={form.deadlineDate}
-                    onChange={(e) => set('deadlineDate')(e.target.value)}
-                    aria-invalid={Boolean(errors.deadlineDate)}
-                    aria-describedby={describedBy('deadlineDate')}
-                  />
-                  {errorText('deadlineDate')}
-                </div>
-              )}
-              <div>
-                <label htmlFor="opportunity-application-url" className="form-label">
-                  Application link <span className="text-theme-text-secondary font-normal">(optional)</span>
-                </label>
-                <input
-                  id="opportunity-application-url"
-                  type="url"
-                  inputMode="url"
-                  maxLength={500}
-                  placeholder="https://"
-                  className="form-input"
-                  value={form.applicationUrl}
-                  onChange={(e) => set('applicationUrl')(e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="opportunity-program-url" className="form-label">
-                  Program information link <span className="text-theme-text-secondary font-normal">(optional)</span>
-                </label>
-                <input
-                  id="opportunity-program-url"
-                  type="url"
-                  inputMode="url"
-                  maxLength={500}
-                  placeholder="https://"
-                  className="form-input"
-                  value={form.programUrl}
-                  onChange={(e) => set('programUrl')(e.target.value)}
-                />
-              </div>
+                    value={form.deadlineType}
+                    onChange={(e) => set('deadlineType')(e.target.value)}
+                  >
+                    <option value="">Not known</option>
+                    {Object.values(DeadlineType).map((value) => (
+                      <option key={value} value={value}>
+                        {DEADLINE_TYPE_LABELS[value]}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
+              {form.deadlineType !== DeadlineType.ROLLING &&
+                input(
+                  'deadlineDate',
+                  form.deadlineType === DeadlineType.FIXED ? (
+                    'Deadline date'
+                  ) : (
+                    <>
+                      {form.deadlineType === DeadlineType.RECURRING ? 'Next deadline' : 'Deadline date'} {optional}
+                    </>
+                  ),
+                  { type: 'date', required: form.deadlineType === DeadlineType.FIXED }
+                )}
+              {input('applicationUrl', <>Application link {optional}</>, {
+                type: 'url',
+                inputMode: 'url',
+                placeholder: 'https://',
+                autoComplete: 'url',
+              })}
+              {input('programUrl', <>Program information link {optional}</>, {
+                type: 'url',
+                inputMode: 'url',
+                placeholder: 'https://',
+                autoComplete: 'url',
+              })}
             </div>
-            <div>
-              <label htmlFor="opportunity-notes" className="form-label">
-                Notes <span className="text-theme-text-secondary font-normal">(optional)</span>
-              </label>
-              <textarea
-                id="opportunity-notes"
-                rows={3}
-                className="form-input"
-                value={form.notes}
-                onChange={(e) => set('notes')(e.target.value)}
-              />
-            </div>
+            {textarea('notes', <>Notes {optional}</>)}
           </section>
 
           <div className="flex flex-wrap justify-end gap-3">

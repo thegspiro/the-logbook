@@ -5,10 +5,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
-import type { ActionItemSummary } from '../services/api';
+import type { ActionItemPage, ActionItemSummary } from '../services/api';
 
 const ME = 'user-me';
 
@@ -37,6 +37,15 @@ vi.mock('../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 
 import ActionItemsPage from './ActionItemsPage';
 
+const pageOf = (items: ActionItemSummary[]): ActionItemPage => ({
+  items,
+  total: items.length,
+  open_total: items.length,
+  overdue_total: 0,
+  limit: 25,
+  offset: 0,
+});
+
 const item = (overrides: Partial<ActionItemSummary>): ActionItemSummary => ({
   id: 'a1',
   source: 'minutes',
@@ -51,12 +60,14 @@ describe('ActionItemsPage — an assignee updates their own item (W52-7)', () =>
   beforeEach(() => {
     mockGetActionItems.mockReset();
     mockUpdateActionItem.mockReset();
-    mockGetActionItems.mockResolvedValue([
-      item({ id: 'mine', assignee_id: ME, description: 'Order hose' }),
-      item({ id: 'theirs', assignee_id: 'someone-else', description: 'Fix door' }),
-      item({ id: 'by-name', assignee_name: 'Me, typed', description: 'Sweep bay' }),
-      item({ id: 'meeting', source: 'meeting', assignee_id: ME, description: 'Radio check' }),
-    ]);
+    mockGetActionItems.mockResolvedValue(
+      pageOf([
+        item({ id: 'mine', assignee_id: ME, description: 'Order hose' }),
+        item({ id: 'theirs', assignee_id: 'someone-else', description: 'Fix door' }),
+        item({ id: 'by-name', assignee_name: 'Me, typed', description: 'Sweep bay' }),
+        item({ id: 'meeting', source: 'meeting', assignee_id: ME, description: 'Radio check' }),
+      ])
+    );
     mockUpdateActionItem.mockResolvedValue({});
   });
 
@@ -83,9 +94,9 @@ describe('ActionItemsPage — an assignee updates their own item (W52-7)', () =>
   });
 
   it('clears the notes with an explicit null', async () => {
-    mockGetActionItems.mockResolvedValue([
-      item({ id: 'mine', assignee_id: ME, description: 'Order hose', completion_notes: 'old note' }),
-    ]);
+    mockGetActionItems.mockResolvedValue(
+      pageOf([item({ id: 'mine', assignee_id: ME, description: 'Order hose', completion_notes: 'old note' })])
+    );
     const user = userEvent.setup();
     renderWithRouter(<ActionItemsPage />);
 
@@ -97,5 +108,48 @@ describe('ActionItemsPage — an assignee updates their own item (W52-7)', () =>
       status: 'pending',
       completion_notes: null,
     });
+  });
+});
+
+describe('ActionItemsPage — the update dialog (forms review batch 16)', () => {
+  beforeEach(() => {
+    mockGetActionItems.mockReset();
+    mockUpdateActionItem.mockReset();
+    mockGetActionItems.mockResolvedValue(
+      pageOf([item({ id: 'mine', assignee_id: ME, description: 'Order hose', completion_notes: 'old note' })])
+    );
+    mockUpdateActionItem.mockResolvedValue({});
+  });
+
+  it('saves the status and flags the notes the server refused, on the field', async () => {
+    mockUpdateActionItem.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'completion_notes', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<ActionItemsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Update status of Order hose' }));
+    await user.selectOptions(screen.getByLabelText('Status'), 'completed');
+    await user.type(screen.getByLabelText('Completion notes'), ' more');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    const notes = await screen.findByLabelText('Completion notes');
+    await waitFor(() => expect(notes).toHaveAccessibleDescription('Completion notes is too long.'));
+    expect(notes).toHaveAttribute('aria-invalid', 'true');
+    expect(notes).toHaveValue('old note more');
+    expect(mockUpdateActionItem).toHaveBeenLastCalledWith('m1', 'mine', { status: 'completed' });
+    expect(screen.queryByText(/completion_notes/)).not.toBeInTheDocument();
+  });
+
+  it('asks before Cancel discards a changed status', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ActionItemsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Update status of Order hose' }));
+    await user.selectOptions(screen.getByLabelText('Status'), 'completed');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByLabelText('Status')).toHaveValue('completed');
   });
 });

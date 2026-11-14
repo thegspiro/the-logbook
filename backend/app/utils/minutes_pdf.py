@@ -14,22 +14,41 @@ be unit-tested without a database (same convention as
 
 import html
 from io import BytesIO
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import (
     HRFlowable,
+    Image,
     KeepTogether,
+    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
     Table,
-    TableStyle,
 )
 
+from app.utils.minutes_pdf_attachments import (
+    IMAGE,
+    PDF,
+    PreparedAttachment,
+    append_pdfs,
+    prepare,
+)
+from app.utils.pdf_fonts import (
+    BODY_FONT,
+    BOLD_FONT,
+    BOLD_ITALIC_FONT,
+    ITALIC_FONT,
+    body_table_style,
+    document_stylesheet,
+)
+from app.utils.pdfa import to_pdfa
+from app.utils.print_geometry import BINDING_EDGE, SAFE_EDGE
 from app.utils.rich_text import (
     FORMAT_HTML,
     html_to_pdf_blocks,
@@ -49,8 +68,26 @@ _STATUS_LABELS = {
     "excused": "Excused",
     "absent": "Absent",
     "guest": "Guest",
+    "proxy": "Represented by proxy",
 }
-_STATUS_ORDER = ["present", "late", "left_early", "excused", "absent", "guest"]
+_STATUS_ORDER = [
+    "present",
+    "late",
+    "left_early",
+    "proxy",
+    "excused",
+    "absent",
+    "guest",
+]
+
+
+def _fit(text: str, max_width: float, font: str = BODY_FONT, size: float = 7) -> str:
+    """*text* shortened with an ellipsis until it fits *max_width* points."""
+    if stringWidth(text, font, size) <= max_width:
+        return text
+    while text and stringWidth(text + "…", font, size) > max_width:
+        text = text[:-1]
+    return text + "…"
 
 
 def _esc(value: Any) -> str:
@@ -63,11 +100,14 @@ def _text(value: Any) -> str:
 
 
 def _styled_table(data: List[List[Any]], col_widths: List[float]) -> Table:
-    style = TableStyle(
+    """A bordered table. A ``str`` cell prints literally and must NOT be
+    escaped; anything that may hold markup-like user text goes in a
+    ``Paragraph`` built from ``_esc``/``_text`` instead."""
+    style = body_table_style(
         [
             ("BACKGROUND", (0, 0), (-1, 0), _HEADER_BG),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTNAME", (0, 0), (-1, 0), BOLD_FONT),
             ("FONTSIZE", (0, 0), (-1, -1), 8),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("GRID", (0, 0), (-1, -1), 0.5, _GRID),
@@ -79,6 +119,37 @@ def _styled_table(data: List[List[Any]], col_widths: List[float]) -> Table:
         ]
     )
     return Table(data, colWidths=col_widths, repeatRows=1, style=style)
+
+
+def _correction_notes(election: Dict[str, Any], styles: Any) -> List[Any]:
+    """A rollback's dated correction over a result, and the re-run's link to it.
+
+    The superseded result is printed in full beneath its correction: the
+    minutes recorded it, and a record is corrected, never rewritten.
+    """
+    out: List[Any] = []
+    superseded = election.get("superseded_display")
+    if superseded:
+        reason = election.get("superseded_reason")
+        out.append(
+            Paragraph(
+                f"<b>Correction filed {_esc(superseded)}: this result has been "
+                "superseded.</b> The election was rolled back and reopened, so "
+                "the result below no longer stands. It is kept as the minutes "
+                "recorded it." + (f" Reason given: {_text(reason)}" if reason else ""),
+                styles["Normal"],
+            )
+        )
+    replaces = election.get("replaces_display")
+    if replaces:
+        out.append(
+            Paragraph(
+                "<i>Corrected result: replaces the result superseded on "
+                f"{_esc(replaces)}.</i>",
+                styles["Normal"],
+            )
+        )
+    return out
 
 
 def _election_block(
@@ -99,10 +170,11 @@ def _election_block(
                 styles["Normal"],
             )
         )
+    out.extend(_correction_notes(election, styles))
     closed = election.get("closed_display")
     facts = [
         f"Eligible voters: {snapshot.get('total_eligible_voters', '—')}",
-        f"Ballots cast: {snapshot.get('total_votes', '—')}",
+        f"Votes cast: {snapshot.get('total_votes', '—')}",
         f"Turnout: {snapshot.get('voter_turnout_percentage', '—')}%",
     ]
     if snapshot.get("quorum_detail"):
@@ -147,7 +219,40 @@ def _election_block(
     return out
 
 
-def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
+def _image_pages(
+    attachments: List[Dict[str, Any]],
+    prepared: Mapping[str, PreparedAttachment],
+    heading_style: ParagraphStyle,
+) -> List[Any]:
+    """Each image attachment on its own, scaled to fit the page."""
+    max_width = letter[0] - 1.4 * inch
+    max_height = letter[1] - 1.35 * inch - 48
+    flow: List[Any] = []
+    for att in attachments:
+        entry = prepared.get(str(att.get("id")))
+        if entry is None or entry.kind != IMAGE or not entry.image:
+            continue
+        # Drawn no larger than at 96 dpi, so a small photo is not blown up.
+        natural_w = entry.width * 72 / 96
+        natural_h = entry.height * 72 / 96
+        scale = min(max_width / natural_w, max_height / natural_h, 1.0)
+        flow.append(PageBreak())
+        flow.append(Paragraph(f"Attachment: {_esc(att.get('title'))}", heading_style))
+        flow.append(
+            Image(
+                BytesIO(entry.image),
+                width=natural_w * scale,
+                height=natural_h * scale,
+            )
+        )
+    return flow
+
+
+def render_minutes_pdf(
+    data: Dict[str, Any],
+    meta: Dict[str, Any],
+    attachment_contents: Optional[Mapping[str, bytes]] = None,
+) -> BytesIO:
     """Render the minutes, returning a BytesIO at position 0.
 
     *data* — ``title``, ``meeting_type_display``, ``meeting_date_display``,
@@ -160,6 +265,12 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
     ``header`` and ``footer`` configs.
 
     *meta* — ``org_name``, ``generated_at``.
+
+    *attachment_contents* — the bytes of the attachments to embed, keyed by
+    attachment id, read for the ids ``minutes_pdf_attachments.select_for_pdf``
+    chose. Images are drawn after the signatures, PDFs appended after the
+    minutes, and every other file is listed (owner decision 2026-11-01). Left
+    out, the attachments are listed only.
     """
     header: Dict[str, Any] = data.get("header") or {}
     footer: Dict[str, Any] = data.get("footer") or {}
@@ -168,15 +279,17 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
+        # The canvas otherwise declares Helvetica, never embedded, on every page.
+        initialFontName=BODY_FONT,
         pagesize=letter,
         topMargin=0.6 * inch,
-        bottomMargin=0.75 * inch,
+        bottomMargin=0.8 * inch,
         leftMargin=0.7 * inch,
         rightMargin=0.7 * inch,
         title=str(data.get("title") or "Meeting Minutes"),
     )
 
-    styles = getSampleStyleSheet()
+    styles = document_stylesheet()
     title_style = ParagraphStyle(
         "MinTitle", parent=styles["Title"], fontSize=17, spaceAfter=2
     )
@@ -200,7 +313,7 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
         "h2": ParagraphStyle(
             "MinH2",
             parent=body_style,
-            fontName="Helvetica-Bold",
+            fontName=BOLD_FONT,
             fontSize=11,
             spaceBefore=6,
             spaceAfter=2,
@@ -208,7 +321,7 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
         "h3": ParagraphStyle(
             "MinH3",
             parent=body_style,
-            fontName="Helvetica-BoldOblique",
+            fontName=BOLD_ITALIC_FONT,
             fontSize=10,
             spaceBefore=4,
             spaceAfter=2,
@@ -221,7 +334,7 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
             parent=body_style,
             leftIndent=18,
             textColor=_MUTED,
-            fontName="Helvetica-Oblique",
+            fontName=ITALIC_FONT,
         ),
     }
 
@@ -273,7 +386,9 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
                 [
                     Paragraph(_esc(entry.get("name")), styles["Normal"]),
                     Paragraph(_esc(entry.get("role") or ""), styles["Normal"]),
-                    _STATUS_LABELS.get(entry.get("status"), _esc(entry.get("status"))),
+                    _STATUS_LABELS.get(
+                        entry.get("status"), str(entry.get("status") or "")
+                    ),
                     Paragraph(_esc(entry.get("note") or ""), styles["Normal"]),
                 ]
             )
@@ -378,8 +493,8 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
                     Paragraph(_esc(item.get("description")), styles["Normal"]),
                     Paragraph(_esc(item.get("assignee") or "—"), styles["Normal"]),
                     item.get("due") or "—",
-                    _esc(item.get("priority")),
-                    _esc(str(item.get("status") or "").replace("_", " ")),
+                    str(item.get("priority") or ""),
+                    str(item.get("status") or "").replace("_", " "),
                 ]
             )
         story.append(
@@ -394,20 +509,26 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
 
     # ── Attachments ──────────────────────────────────────────────────
     attachments = data.get("attachments") or []
+    prepared = prepare(attachments, attachment_contents or {}) if attachments else {}
     if attachments:
         story.append(Paragraph("Attachments", section_style))
-        rows = [["Title", "Kind", "File", "SHA-256"]]
+        rows = [["Title", "Kind", "File", "SHA-256", "In this PDF"]]
         for att in attachments:
+            entry = prepared.get(str(att.get("id")))
             rows.append(
                 [
                     Paragraph(_esc(att.get("title")), styles["Normal"]),
-                    _esc(str(att.get("category") or "").replace("_", " ")),
+                    str(att.get("category") or "").replace("_", " "),
                     Paragraph(_esc(att.get("name")), styles["Normal"]),
-                    _esc(str(att.get("sha256") or "")[:16] + "…"),
+                    str(att.get("sha256") or "")[:16] + "…",
+                    Paragraph(_esc(entry.note if entry else ""), styles["Normal"]),
                 ]
             )
         story.append(
-            _styled_table(rows, [2.4 * inch, 1.2 * inch, 2.2 * inch, 1.3 * inch])
+            _styled_table(
+                rows,
+                [1.7 * inch, 0.9 * inch, 1.6 * inch, 1.1 * inch, 1.8 * inch],
+            )
         )
 
     # ── Approval and signatures ──────────────────────────────────────
@@ -478,7 +599,7 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
                 ["Date", "Date"],
             ],
             colWidths=[3.4 * inch, 3.4 * inch],
-            style=TableStyle(
+            style=body_table_style(
                 [
                     ("FONTSIZE", (0, 0), (-1, -1), 9),
                     ("TOPPADDING", (0, 0), (-1, -1), 4),
@@ -488,6 +609,9 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
         )
     )
     story.append(KeepTogether(sign))
+
+    # ── Image attachments, after the record they belong to ──────────
+    story.extend(_image_pages(attachments, prepared, section_style))
 
     footer_left = " · ".join(
         part
@@ -509,19 +633,34 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
 
     def _decorate(canvas: Any, document: Any) -> None:
         canvas.saveState()
-        canvas.setFont("Helvetica", 7)
+        canvas.setFont(BODY_FONT, 7)
         canvas.setFillColor(_MUTED)
         width = letter[0]
-        y = 0.5 * inch
+        # Up to three footer lines, the lowest just clear of the print-safe
+        # edge so its descenders are not lost to the printer's border.
+        y = SAFE_EDGE + 2
+        # Drawn on the canvas, outside the frame, so the binding edge is
+        # applied here; lines are clipped by measured width, not characters.
+        left = BINDING_EDGE
+        right = width - BINDING_EDGE
+        page_label = f"Page {document.page}" if show_pages else ""
+        page_room = stringWidth(page_label, BODY_FONT, 7) + 12 if page_label else 0
         if notice:
-            canvas.drawString(0.7 * inch, y + 20, str(notice)[:160])
+            canvas.drawString(left, y + 20, _fit(str(notice), right - left))
         if fingerprint:
-            canvas.drawString(0.7 * inch, y + 10, fingerprint)
-        canvas.drawString(0.7 * inch, y, (footer_left or generated)[:110])
-        if show_pages:
-            canvas.drawRightString(width - 0.7 * inch, y, f"Page {document.page}")
+            canvas.drawString(left, y + 10, _fit(fingerprint, right - left))
+        canvas.drawString(
+            left, y, _fit(footer_left or generated, right - left - page_room)
+        )
+        if page_label:
+            canvas.drawRightString(right, y, page_label)
         canvas.restoreState()
 
     doc.build(story, onFirstPage=_decorate, onLaterPages=_decorate)
-    buf.seek(0)
-    return buf
+    if any(entry.kind == PDF for entry in prepared.values()):
+        # PDF attachments go after the minutes, page for page. They carry no
+        # minutes footer: the version and hash above are the record's own.
+        # Pages from outside cannot be vouched for, so this file makes no
+        # PDF/A claim (owner decision, 2026-11-09).
+        return BytesIO(append_pdfs(buf.getvalue(), attachments, prepared))
+    return BytesIO(to_pdfa(buf.getvalue()))

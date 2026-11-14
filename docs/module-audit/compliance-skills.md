@@ -112,13 +112,26 @@ incoherent status bucketing.
   `assert_different_person` guard so the examiner cannot be the candidate, with
   the anticipated `is_practice` carve-out (practice attempts are not logged, not
   credited, and self-drilling is their point).
-- Attestations: `create_attestation` records a client-supplied
+- Attestations: `create_attestation` recorded a client-supplied
   `compliance_percentage` with nothing recomputed server-side and no second
-  approver (self-attestation). (officer #3) **Still OPEN:**
-  `compliance_officer_service.create_attestation` is unchanged — it validates the
-  period fields but stores whatever percentage the caller supplies, with no
-  server-side recompute and no dual-control. Needs a computed value or a second
-  approver; a behavior change, correctly still deferred.
+  approver (self-attestation). (officer #3) **✅ FIXED 2026-10-05** (this
+  bullet was stale — it said "Still OPEN" for over two months after the fix
+  landed; corrected here during the CMP-20 pass-12 security-review re-read,
+  the header above already said FIXED): `create_attestation` no longer takes
+  a percentage at all. `ComplianceAttestationService.create_attestation`
+  computes `compute_org_compliance_pct` itself, evaluated as of the period's
+  last day (or today, for a period still running), refuses attesting a
+  period that has not started, and stores the date it computed as of
+  (`compliance_as_of`). An older client's `compliance_percentage` is
+  accepted in the payload and silently ignored (the schema no longer
+  declares the field). The owner's choice was a computed value over a
+  second-approver workflow — see CS-9's own bullet below, which already had
+  this right. **Separately, and still open by design:** there is no
+  update/delete route for an attestation (dual control via immutability —
+  the audit log is the only record of a correction), which is a distinct,
+  narrower point the security-review rotation (`docs/security-review/
+CMP-20-compliance.md`, pass 1's original CS-8) tracks and the owner has
+  accepted as-is.
 
 ### CS-9 — LOW — partially FIXED — Reporting correctness / abuse-surface polish
 

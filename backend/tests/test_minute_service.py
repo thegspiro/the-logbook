@@ -143,6 +143,7 @@ def _make_minutes(**overrides) -> MagicMock:
         "motions": [],
         "action_items": [],
         "template_id": None,
+        "meeting_id": None,
         "header_config": None,
         "footer_config": None,
         "submitted_at": None,

@@ -119,13 +119,24 @@ export const choiceToVote = (itemId: string, itemChoice: ItemChoice): BallotItem
   };
 };
 
-/** Converts a selection (choice/multi-select/rankings) to a display label. */
-export const choiceLabel = (itemChoice: ItemChoice | undefined, candidates: Candidate[]): string => {
+/**
+ * Converts a selection (choice/multi-select/rankings) to a display label.
+ *
+ * `form` is the item's `itemForm`: a multi-select with a selection cap is a
+ * multi-seat race the voter picked in, not an approval vote, and reads
+ * "Selected" (W50-76). Without it the label keeps the approval wording.
+ */
+export const choiceLabel = (
+  itemChoice: ItemChoice | undefined,
+  candidates: Candidate[],
+  form?: Pick<ItemForm, 'selectionCap'>
+): string => {
   if (!isAnswered(itemChoice) || !itemChoice) return 'No selection';
   const name = (candidateId: string): string => candidates.find((c) => c.id === candidateId)?.name ?? candidateId;
 
   if (itemChoice.candidate_ids.length > 0) {
-    return `Approved: ${itemChoice.candidate_ids.map(name).join(', ')}`;
+    const verb = form && form.selectionCap !== null ? 'Selected' : 'Approved';
+    return `${verb}: ${itemChoice.candidate_ids.map(name).join(', ')}`;
   }
   const ordered = ranksToOrderedIds(itemChoice.ranks);
   if (ordered.length > 0) {

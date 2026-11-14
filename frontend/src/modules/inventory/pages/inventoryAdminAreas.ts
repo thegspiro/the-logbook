@@ -129,6 +129,8 @@ export const INVENTORY_ADMIN_SHELL_PATHS: ReadonlySet<string> = new Set([
   '/inventory/admin/checklists',
   '/inventory/admin/checklists/reports',
   '/inventory/admin/checklists/supply',
+  '/inventory/admin/checklists/catalog-links',
+  '/inventory/admin/checklists/settings',
 ]);
 
 export interface InventoryAdminDestination {
@@ -216,8 +218,10 @@ export function inventoryAdminAreasFor(
  * PPE supply line) is still All Items. A destination naming a query wins over
  * one that names none, so the more specific match is taken.
  *
- * A path no destination matches resolves to Overview with no destination, so
- * the header still says where the viewer is rather than highlighting nothing.
+ * A path beneath a destination's own path resolves to that destination. A
+ * path no destination matches either way resolves to Overview with no
+ * destination, so the header still says where the viewer is rather than
+ * highlighting nothing.
  */
 export function resolveInventoryAdminLocation(
   pathname: string,
@@ -240,7 +244,23 @@ export function resolveInventoryAdminLocation(
     }
   }
 
-  return best
-    ? { areaId: best.areaId, destinationId: best.destinationId }
+  if (best) return { areaId: best.areaId, destinationId: best.destinationId };
+
+  // A page beneath a destination -- Catalog Links and Checklist Settings sit
+  // under Equipment Checklists and are opened from it, not from the strip --
+  // is shown under that destination. The deepest one wins. The hub root is
+  // excluded, or every unknown path would read as the Dashboard.
+  let parent: { areaId: InventoryAdminAreaId; destinationId: string; depth: number } | null = null;
+  for (const area of areas) {
+    for (const destination of area.destinations) {
+      const { bare } = splitPath(destination.path);
+      if (bare === '/inventory/admin' || !pathname.startsWith(`${bare}/`)) continue;
+      if (!parent || bare.length > parent.depth) {
+        parent = { areaId: area.id, destinationId: destination.id, depth: bare.length };
+      }
+    }
+  }
+  return parent
+    ? { areaId: parent.areaId, destinationId: parent.destinationId }
     : { areaId: 'overview', destinationId: null };
 }

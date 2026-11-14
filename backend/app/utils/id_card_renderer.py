@@ -34,6 +34,7 @@ from app.utils.label_renderer import (
     sanitize_barcode_value,
     validate_symbology,
 )
+from app.utils.print_geometry import print_at_actual_size
 
 logger = logging.getLogger(__name__)
 
@@ -414,6 +415,7 @@ def render_id_cards(
 
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=(page_w, page_h))
+    print_at_actual_size(c)
     c.setTitle("Member ID cards")
     logo = _decode_image(department.logo)
     include_back = sides == SIDES_BOTH

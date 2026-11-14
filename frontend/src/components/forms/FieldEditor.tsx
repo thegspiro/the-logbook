@@ -10,6 +10,7 @@ import { useDialog } from '../../hooks/useDialog';
 import { X, Plus, Trash2, GripVertical, GitBranch } from 'lucide-react';
 import type { FormFieldCreate, FormFieldOption } from '../../services/api';
 import { FieldType } from '../../constants/enums';
+import { APPLICANT_FIELD_OPTIONS } from './applicantFields';
 import {
   CONDITION_OPERATORS_WITH_VALUE,
   NUMERIC_CONDITION_OPERATORS,
@@ -124,6 +125,7 @@ const FieldEditor = ({
   const [options, setOptions] = useState<FormFieldOption[]>(field?.options || [{ value: '', label: '' }]);
   const [width, setWidth] = useState(field?.width || 'full');
   const [isSensitive, setIsSensitive] = useState(field?.is_sensitive ?? false);
+  const [applicantField, setApplicantField] = useState(field?.applicant_field ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Conditional visibility state
@@ -151,6 +153,7 @@ const FieldEditor = ({
       setOptions(field.options || [{ value: '', label: '' }]);
       setWidth(field.width || 'full');
       setIsSensitive(field.is_sensitive ?? false);
+      setApplicantField(field.applicant_field ?? '');
       setConditionFieldId(field.condition_field_id || '');
       setConditionOperator(field.condition_operator || '');
       setConditionValue(field.condition_value || '');
@@ -255,6 +258,7 @@ const FieldEditor = ({
     if (!isSectionHeader) {
       fieldData.required = required;
       fieldData.is_sensitive = isSensitive;
+      if (applicantField && !isSensitive) fieldData.applicant_field = applicantField;
       if (placeholder.trim()) fieldData.placeholder = placeholder.trim();
       if (helpText.trim()) fieldData.help_text = helpText.trim();
       if (defaultValue.trim()) fieldData.default_value = defaultValue.trim();
@@ -449,6 +453,7 @@ const FieldEditor = ({
                     type="checkbox"
                     checked={isSensitive}
                     onChange={(e) => setIsSensitive(e.target.checked)}
+                    disabled={!!applicantField}
                     aria-describedby="field-sensitive-help"
                     className="form-checkbox mt-0.5"
                   />
@@ -458,6 +463,33 @@ const FieldEditor = ({
                   Answers are stored encrypted and shown only to staff allowed to view sensitive answers. They are left
                   out of CSV downloads and are not passed to other modules. Turning this on also encrypts answers
                   already received; once any answer is stored this way it cannot be turned off.
+                  {applicantField && ' Not available while the field pre-fills from the applicant.'}
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="field-applicant-field" className="form-label">
+                  Pre-fill from applicant (follow-up forms)
+                </label>
+                <select
+                  id="field-applicant-field"
+                  value={applicantField}
+                  onChange={(e) => setApplicantField(e.target.value)}
+                  disabled={isSensitive}
+                  aria-describedby="field-applicant-field-help"
+                  className="form-input"
+                >
+                  <option value="">Don&rsquo;t pre-fill</option>
+                  {APPLICANT_FIELD_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p id="field-applicant-field-help" className="text-theme-text-muted mt-1 text-xs">
+                  {isSensitive
+                    ? 'A sensitive answer is never copied onto the applicant record, so a sensitive field cannot pre-fill.'
+                    : 'When this form is sent by a Follow-up Form stage, the field opens with what the applicant record holds, and a changed answer updates the record.'}
                 </p>
               </div>
 

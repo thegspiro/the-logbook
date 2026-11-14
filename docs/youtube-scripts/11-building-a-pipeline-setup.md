@@ -124,6 +124,18 @@ all eight types.]**
 > the count; for a knowledge test, the **passing score** — default seventy
 > percent — and how many attempts are allowed."
 
+> "If your department fills in a shift evaluation form after a shift, three more
+> types draw on it: **Evaluated Shifts**, **Transports** and **Refusals**. A
+> submitted evaluation counts as one evaluated shift and carries the transport and
+> refusal counts from the form. The program also has a **Shift evaluation form**
+> picker on the Program Info step; leave it blank for no form."
+
+**[PRODUCTION NOTE — 2026-11-05. New lines, about 20 seconds; re-time Chapter 4.
+The types are offered in the wizard's type dropdown (2026-10-31 / 11-01). Forms
+are built under Training Admin → Settings & Data → Shift Evaluations; Script 16
+mentions them. Session Attendance is not a pipeline type: it belongs to a
+department requirement, covered in Script 05.]**
+
 ### REQUIRED vs. OPTIONAL (6:00 – 6:30)
 
 **[SCREEN: The Required ↔ Optional toggle on a requirement.]**
@@ -303,6 +315,11 @@ the 'only warn if below N%' field.]**
 ## CHAPTER 8: Publish, Enroll, and You're Live (11:45 – 14:30)
 
 ### SAVING THE BUILD (11:45 – 12:15)
+
+**[PRODUCTION NOTE — 2026-11-05. Deactivating a pipeline later, from its edit
+form, withdraws the members still in it after a confirmation that says how many;
+graduates are kept. Deleting an in-use pipeline now deactivates it, and it can be
+reactivated. One sentence if the take mentions removing a program.]**
 
 **[SCREEN: Click through the final wizard step; the program is created and its
 detail page opens.]**

@@ -500,7 +500,7 @@ const RecordCrewTrainingPage: React.FC = () => {
           </section>
 
           {error && (
-            <div className="alert-error" role="alert">
+            <div className="alert-danger" role="alert">
               {error}
             </div>
           )}

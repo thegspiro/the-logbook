@@ -7,10 +7,11 @@
  * rather than as JSX is what keeps those two from drifting — a department that
  * edits a stale copy of the notice publishes a stale notice.
  *
- * `**bold**` markers are the only markup. They become <strong> on the public
- * page and are stripped from the plain-text export, because department-supplied
- * text is rendered as plain paragraphs (never HTML) and a literal `**` would
- * show up on the published page.
+ * `**bold**` markers are the only inline markup. They become <strong> on the
+ * public page and are stripped from the plain-text export, because
+ * department-supplied text supports headings and lists only (legalMarkup.ts) —
+ * never HTML or inline emphasis — and a literal `**` would show up on the
+ * published page.
  *
  * `{org}` is replaced with the organization's name.
  */
@@ -50,16 +51,18 @@ export const splitEmphasis = (text: string): { text: string; bold: boolean }[] =
 export const stripEmphasis = (text: string): string => text.replace(/\*\*(.+?)\*\*/gs, '$1');
 
 /**
- * Render sections as plain text, for seeding an editable draft.
+ * Render sections as text in the department-text format, for seeding an
+ * editable draft.
  *
- * Paragraph breaks are blank lines because that is exactly what the public page
- * splits department-supplied text on — so what a drafter sees here is what
- * members will see if it is published unchanged.
+ * Headings become `## Heading` and list items `- item`, and blocks are
+ * separated by blank lines — exactly the subset legalMarkup.ts renders — so a
+ * draft published unchanged looks like the built-in page rather than a run of
+ * capitalised paragraphs.
  */
 export const toPlainText = (sections: LegalSection[], orgName: string): string => {
   const chunks: string[] = [];
   for (const section of sections) {
-    if (section.heading) chunks.push(section.heading.toUpperCase());
+    if (section.heading) chunks.push(`## ${section.heading}`);
     for (const block of section.blocks) {
       if (block.kind === 'p') {
         chunks.push(stripEmphasis(block.text));

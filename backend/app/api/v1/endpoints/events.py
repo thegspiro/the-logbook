@@ -8,7 +8,7 @@ import copy
 import uuid as uuid_lib
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 from uuid import UUID
 
 from fastapi import (
@@ -69,6 +69,7 @@ from app.schemas.event import (
     EventListItem,
     EventNotificationRequest,
     EventNotificationResponse,
+    EventPostpone,
     EventResponse,
     EventSettingsUpdate,
     EventStats,
@@ -96,9 +97,13 @@ from app.schemas.event import (
     UserRSVPSummary,
     VisibleEventTypesResponse,
 )
-from app.schemas.organization import MembershipTierSettings
+from app.schemas.organization import mandatory_for_tiers
+from app.schemas.training_session import TrainingSessionAttach
 from app.services import file_storage_service as file_storage
 from app.services.documents_service import DocumentsService
+from app.services.event_attendance_petition_service import (
+    EventAttendancePetitionService,
+)
 from app.services.event_organizer_service import (
     EVENT_MANAGER_PERMISSION,
     FALLBACK_POSITIONS_SETTING,
@@ -132,6 +137,7 @@ from app.services.qr_check_in_analytics import (
     record_check_in_outcome,
     record_qr_scan,
 )
+from app.services.training_session_service import TrainingSessionService
 from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.contact_visibility import load_contact_policy
@@ -353,6 +359,84 @@ def _refuse_type_change_off_training(access: str, update_fields: dict) -> None:
         )
 
 
+def _refuse_training_details_from_training_manager(
+    access: str, event_data: EventUpdate
+) -> None:
+    """Every write to a training session needs events.manage, including
+    which sessions count toward an attendance requirement (TR14-2). A
+    training manager admitted to edit a Training event's own fields does not
+    gain that through this route."""
+    if access == ACCESS_TRAINING_MANAGER and event_data.training_details is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Training details are changed by an event manager.",
+        )
+
+
+async def _audit_training_details_updated(
+    db: AsyncSession,
+    current_user: User,
+    event_id: UUID,
+    event_data: EventUpdate,
+    scope: str,
+) -> None:
+    details = event_data.training_details
+    if details is None:
+        return
+    sent = details.model_dump(exclude_unset=True)
+    entry: Dict[str, Any] = {
+        "event_id": str(event_id),
+        "scope": scope,
+        "fields": sorted(sent),
+    }
+    if "attendance_requirement_ids" in sent:
+        entry["action"] = "attendance_requirements_set"
+        entry["attendance_requirement_ids"] = [
+            str(r) for r in details.attendance_requirement_ids or []
+        ]
+    await log_audit_event(
+        db=db,
+        event_type="training_session_updated",
+        event_category="training",
+        severity="info",
+        event_data=entry,
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
+async def _audit_training_details_created(
+    db: AsyncSession,
+    current_user: User,
+    events: List[Event],
+    details: TrainingSessionAttach,
+) -> None:
+    """Record the training details an event (or series) was created with.
+
+    Which sessions count toward an attendance requirement moves members'
+    attendance percentages, and any events.manage holder may choose it
+    (TR14-2, accepted 2026-11-10), so the choice is kept on the audit trail.
+    """
+    if not events:
+        return
+    await log_audit_event(
+        db=db,
+        event_type="training_session_created",
+        event_category="training",
+        severity="info",
+        event_data={
+            "event_id": str(events[0].id),
+            "occurrences": len(events),
+            "fields": sorted(details.model_dump(exclude_unset=True).keys()),
+            "attendance_requirement_ids": [
+                str(r) for r in details.attendance_requirement_ids or []
+            ],
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
 def _build_event_response(event: Event, **extra_fields) -> EventResponse:
     """Build an EventResponse from an Event model, including location and allowed_rsvp_statuses."""
     location_name = None
@@ -439,6 +523,9 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         is_cancelled=event.is_cancelled,
         cancellation_reason=event.cancellation_reason,
         cancelled_at=event.cancelled_at,
+        postponed_at=event.postponed_at,
+        postponed_from_start=event.postponed_from_start,
+        postponement_reason=event.postponement_reason,
         attendance_finalized_at=event.attendance_finalized_at,
         attendance_finalized_by=event.attendance_finalized_by,
         created_by=event.created_by,
@@ -587,7 +674,16 @@ def _build_rsvp_response(rsvp, user=None, event=None) -> RSVPResponse:
 # ============================================
 
 
-def _to_list_item(row: dict) -> EventListItem:
+async def _list_items(
+    db: AsyncSession, organization_id: str, rows: list[dict]
+) -> list[EventListItem]:
+    counted = await TrainingSessionService(db).events_counting_toward_attendance(
+        [str(row["event"].id) for row in rows], organization_id
+    )
+    return [_to_list_item(row, str(row["event"].id) in counted) for row in rows]
+
+
+def _to_list_item(row: dict, counts_toward_attendance: bool = False) -> EventListItem:
     """Project one ``EventService.list_events`` row onto the list schema."""
     event = row["event"]
     return EventListItem(
@@ -614,6 +710,7 @@ def _to_list_item(row: dict) -> EventListItem:
         mandatory_membership_types=event.mandatory_membership_types,
         is_draft=event.is_draft or False,
         is_cancelled=event.is_cancelled,
+        postponed_from_start=event.postponed_from_start,
         is_recurring=event.is_recurring or False,
         recurrence_parent_id=event.recurrence_parent_id,
         rsvp_count=row["rsvp_count"],
@@ -631,6 +728,7 @@ def _to_list_item(row: dict) -> EventListItem:
         user_attended=row["user_attended"],
         credited_hours=row["credited_hours"],
         hour_category_label=row["hour_category_label"],
+        counts_toward_attendance=counts_toward_attendance,
     )
 
 
@@ -683,13 +781,17 @@ async def list_events(
         end_after=end_after,
         end_before=end_before,
         include_cancelled=include_cancelled,
-        include_drafts=include_drafts,
+        # Drafts are unannounced and for organizers only. The flag is the
+        # client's request, not its authority: the page sends it as
+        # `canManage`, and a member who sends it anyway gets published events.
+        include_drafts=include_drafts
+        and user_has_permission(current_user, "events.manage"),
         mandatory_only=mandatory_only,
         skip=skip,
         limit=limit,
     )
 
-    return [_to_list_item(row) for row in rows]
+    return await _list_items(db, str(current_user.organization_id), rows)
 
 
 @router.get("/missed-mandatory", response_model=list[EventListItem])
@@ -703,11 +805,12 @@ async def list_missed_mandatory_events(
 
     Narrower than `GET /events?mandatory_only=true&end_before=…` on purpose:
     that one would also return events held before the member was hired, events
-    held during an approved leave of absence, and events mandatory only for a
-    membership type the member does not hold. The events list shows these under
-    a heading promising they "clear as you respond", and none of those three can
-    be cleared by responding — so the exclusion belongs on the server, where a
-    forgetful client cannot skip it.
+    held during an approved leave of absence, events a training waiver excuses
+    (blanket, or naming a requirement the event's session counts toward), and
+    events mandatory only for a membership type the member does not hold. The
+    events list shows these under a heading promising they "clear as you
+    respond", and none of them can be cleared by responding — so the exclusion
+    belongs on the server, where a forgetful client cannot skip it.
 
     **Authentication required**
     """
@@ -719,7 +822,7 @@ async def list_missed_mandatory_events(
         since=now - timedelta(days=since_days),
         until=now,
     )
-    return [_to_list_item(row) for row in rows]
+    return await _list_items(db, str(current_user.organization_id), rows)
 
 
 @router.post("", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
@@ -757,6 +860,10 @@ async def create_event(
             user_id=str(current_user.id),
             username=current_user.username,
         )
+        if event_data.training_details is not None:
+            await _audit_training_details_created(
+                db, current_user, [event], event_data.training_details
+            )
 
         # Fan the new event out to the org's chat integrations (Slack/Discord/
         # Teams) after the response — best-effort, runs in its own DB session.
@@ -1216,16 +1323,13 @@ async def get_visible_event_types(
         "visible_custom_categories",
         EVENT_SETTINGS_DEFAULTS["visible_custom_categories"],
     )
-    tier_settings = MembershipTierSettings.model_validate(
-        (org.settings or {}).get("membership_tiers", {})
-    )
     return {
         "visible_event_types": visible,
         "custom_event_categories": custom_categories,
         "visible_custom_categories": visible_custom,
         "membership_types": [
             {"value": tier.id, "label": tier.name}
-            for tier in sorted(tier_settings.tiers, key=lambda tier: tier.sort_order)
+            for tier in mandatory_for_tiers(org.settings)
         ],
     }
 
@@ -1338,7 +1442,11 @@ async def get_event(
         user_id=current_user.id,
     )
 
-    if not event:
+    # A draft answers 404 to a non-organizer, as the attachments route does, so
+    # a guessed id does not confirm an unannounced event exists.
+    if not event or (
+        event.is_draft and not user_has_permission(current_user, "events.manage")
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
         )
@@ -1439,8 +1547,15 @@ async def get_event(
     organization = org_result.scalar_one_or_none()
     access = attendance_access(event, current_user)
 
+    counts_toward_attendance = str(event.id) in (
+        await TrainingSessionService(db).events_counting_toward_attendance(
+            [str(event.id)], current_user.organization_id
+        )
+    )
+
     return _build_event_response(
         event,
+        counts_toward_attendance=counts_toward_attendance,
         rsvp_count=rsvp_count,
         going_count=going_count,
         not_going_count=not_going_count,
@@ -1450,6 +1565,9 @@ async def get_event(
         organizer_name=resolved_names.get("organizer_name"),
         alternate_organizer_name=resolved_names.get("alternate_organizer_name"),
         can_manage_organizers=can_manage_organizers(event, current_user),
+        can_review_attendance_requests=await EventAttendancePetitionService(
+            db
+        ).may_review(event, current_user),
         attendance_access=access,
         can_correct_attendance_times=may_correct_attendance_times(event, access),
         can_edit_event=(
@@ -1513,6 +1631,7 @@ async def update_event(
     )
     update_fields = event_data.model_dump(exclude_unset=True)
     _refuse_type_change_off_training(access, update_fields)
+    _refuse_training_details_from_training_manager(access, event_data)
     service = EventService(db)
 
     try:
@@ -1569,6 +1688,9 @@ async def update_event(
             },
             user_id=str(current_user.id),
             username=current_user.username,
+        )
+        await _audit_training_details_updated(
+            db, current_user, event_id, event_data, scope="this_event"
         )
 
         # Notify RSVP'd members if significant fields changed
@@ -1648,6 +1770,7 @@ async def update_future_events(
         db, event_id, current_user, EVENT_MANAGER_PERMISSION
     )
     _refuse_type_change_off_training(access, event_data.model_dump(exclude_unset=True))
+    _refuse_training_details_from_training_manager(access, event_data)
     service = EventService(db)
 
     try:
@@ -1679,6 +1802,9 @@ async def update_future_events(
             },
             user_id=str(current_user.id),
             username=current_user.username,
+        )
+        await _audit_training_details_updated(
+            db, current_user, event_id, event_data, scope="this_and_future"
         )
 
         return {
@@ -1911,6 +2037,67 @@ async def cancel_event(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=safe_error_detail(e),
         )
+
+
+@router.post("/{event_id}/postpone", response_model=EventResponse)
+async def postpone_event(
+    event_id: UUID,
+    postpone_data: EventPostpone,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Postpone an event to a new time
+
+    Moves the event, clears its check-ins and attendance corrections (and the
+    admin hours and training credit they produced), keeps its RSVPs, records
+    when and from what start it was postponed, and tells members who RSVP'd
+    Going or Maybe. Refused on a cancelled or finalized event, for a new
+    start in the past, and while attendance requests are pending. Sending the
+    same postponement twice changes nothing the second time.
+
+    **Authentication required**
+    **Allowed: events.manage, or training.manage on a Training event**
+    """
+    await _authorize_event_admin(db, event_id, current_user, EVENT_MANAGER_PERMISSION)
+    service = EventService(db)
+    try:
+        event = await service.postpone_event(
+            event_id=event_id,
+            organization_id=current_user.organization_id,
+            new_start=postpone_data.new_start_datetime,
+            new_end=postpone_data.new_end_datetime,
+            reason=postpone_data.reason,
+            send_notifications=postpone_data.send_notifications,
+            postponed_by=current_user.id,
+        )
+    except ValueError as e:
+        raise attendance_lock_http_error(e) or HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    if not event:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="event.postponed",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
+            "postponed_from_start": (
+                event.postponed_from_start.isoformat()
+                if event.postponed_from_start
+                else None
+            ),
+            "new_start": event.start_datetime.isoformat(),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return _build_event_response(event)
 
 
 @router.post("/{event_id}/transfer", response_model=EventTransferResponse)
@@ -3410,6 +3597,11 @@ async def create_recurring_event(
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
+    if recurring_data.training_details is not None:
+        await _audit_training_details_created(
+            db, current_user, events, recurring_data.training_details
+        )
+
     return [_build_event_response(event) for event in events]
 
 
@@ -3667,13 +3859,17 @@ async def delete_event_attachment(
     # references it. Recurring-occurrence generation and event duplication
     # copy attachment metadata (same file_path) across events, so an
     # unconditional remove would break downloads for the parent and every
-    # sibling occurrence.
+    # sibling occurrence. Scoped to this org: duplication/generation never
+    # crosses organizations, and without this filter an unrelated event in a
+    # different org that merely names this exact stored path (EV-30) could
+    # keep the file on disk forever for this org too.
     file_path = attachment["file_path"]
     others = await db.execute(
         select(func.count())
         .select_from(Event)
         .where(
             Event.id != str(event_id),
+            Event.organization_id == str(current_user.organization_id),
             cast(Event.attachments, String).contains(file_path, autoescape=True),
         )
     )

@@ -22,6 +22,7 @@ from app.core.audit import log_audit_event
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.services.malware_scan_service import (
     MalwareScanUnavailable,
+    ScanResult,
     is_malware_scan_enabled,
     scan_bytes,
 )
@@ -72,20 +73,13 @@ async def reject_if_malicious(
         return
 
     if db is not None:
-        await log_audit_event(
-            db=db,
-            event_type="upload_malware_detected",
-            event_category="security",
-            severity="warning",
-            event_data={
-                "upload": upload_kind,
-                "signature": result.signature,
-                "file_type": detected_mime,
-                "file_size": len(content),
-                "sha256": hashlib.sha256(content).hexdigest(),
-            },
-            user_id=str(user.id) if user is not None else None,
-            username=getattr(user, "username", None),
+        await record_malware_detection(
+            db,
+            content,
+            result,
+            upload_kind=upload_kind,
+            detected_mime=detected_mime,
+            user=user,
         )
         await db.commit()
     raise CodedHTTPException(
@@ -96,6 +90,46 @@ async def reject_if_malicious(
             "again."
         ),
         error_code=ErrorCode.UPLD_MALWARE_DETECTED,
+    )
+
+
+async def record_malware_detection(
+    db: AsyncSession,
+    content: bytes,
+    result: ScanResult,
+    *,
+    upload_kind: str,
+    detected_mime: Optional[str],
+    user: Any = None,
+    organization_id: Optional[str] = None,
+    extra: Optional[dict[str, Any]] = None,
+) -> None:
+    """Audit one detection as ``upload_malware_detected``. Does not commit.
+
+    The one record of a detection, whether the file was arriving
+    (:func:`reject_if_malicious`) or already stored and found by the rescan
+    (``app.services.stored_file_rescan``), so an administrator searching the
+    audit log for detections finds both. Nothing from the file is recorded
+    beyond its size, detected type and SHA-256; *extra* carries ids only.
+    """
+    event_data: dict[str, Any] = {
+        "upload": upload_kind,
+        "signature": result.signature,
+        "file_type": detected_mime,
+        "file_size": len(content),
+        "sha256": hashlib.sha256(content).hexdigest(),
+    }
+    if extra:
+        event_data.update(extra)
+    await log_audit_event(
+        db=db,
+        event_type="upload_malware_detected",
+        event_category="security",
+        severity="warning",
+        event_data=event_data,
+        user_id=str(user.id) if user is not None else None,
+        username=getattr(user, "username", None),
+        organization_id=organization_id,
     )
 
 

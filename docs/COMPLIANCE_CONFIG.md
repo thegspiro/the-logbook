@@ -126,6 +126,16 @@ profile see no change.
   positions. A requirement's own `required_roles` are **rank slugs** and are
   matched against the member's rank (CMP4-5) — two different fields; do not put
   one in the other.
+- **Positions are selectable on the profile form** _(2026-10-29)_. Until then
+  `role_ids` could only be set through the API. Membership types and positions
+  are AND'd, which is how a department separates Life members who still ride
+  from Life members who let their certifications lapse without changing either
+  one's member class (election eligibility reads class): give the non-riding
+  members a position with no permissions — e.g. "Life Member – Non-Operational"
+  — and add a profile for membership type `life` holding that position, with a
+  higher priority than any profile a riding Life member matches, listing only
+  the requirements they still owe (or none, which reads "not applicable").
+  Removing the position returns the member to operational grading.
 - **A member nothing grades is "not applicable", not compliant** (TR4-4): none
   applies, a profile selects none, or every one is still in its catch-up period.
   They are out of every percentage and show N/A. The percentage is `null` when
@@ -134,8 +144,10 @@ profile see no change.
 - **The attestation records the server's figure** (CS-8): the department's
   percentage as of the period's last day, not a typed one.
 - See [Training compliance calculations](./training-compliance-calculations.md)
-  for the per-requirement rules, including certification name matching, which
-  after 2026-10-05 applies only to legacy records (`name_match_until`).
+  for the per-requirement rules, including name matching, which after
+  2026-10-05 applies only to legacy records (`name_match_until`), after
+  2026-11-04 compares stored match keys rather than text, and now applies to
+  skills-evaluation, checklist and knowledge-test requirements too.
 
 ---
 
@@ -185,6 +197,7 @@ The daily `compliance_auto_reports` task generates a period's report on its conf
 | `PUT`    | `/api/v1/compliance/config`               | `settings.manage` | Create/update compliance config                                             |
 | `POST`   | `/api/v1/compliance/config/initialize`    | `settings.manage` | First-time setup (errors if already exists)                                 |
 | `GET`    | `/api/v1/compliance/config/requirements`  | `training.manage` | Available training requirements for profile setup                           |
+| `GET`    | `/api/v1/compliance/config/positions`     | `training.manage` | Positions (id and name only) a profile's `role_ids` can select              |
 | `POST`   | `/api/v1/compliance/config/profiles`      | `settings.manage` | Create compliance profile                                                   |
 | `PUT`    | `/api/v1/compliance/config/profiles/{id}` | `settings.manage` | Update compliance profile                                                   |
 | `DELETE` | `/api/v1/compliance/config/profiles/{id}` | `settings.manage` | Delete compliance profile                                                   |

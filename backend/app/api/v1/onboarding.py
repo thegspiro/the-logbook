@@ -45,6 +45,7 @@ from app.core.permissions import (
     module_checkbox_grants,
     module_checkbox_is_held,
     module_for_permission,
+    position_kind_for,
 )
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
@@ -55,12 +56,13 @@ from app.models.onboarding import (
 from app.models.user import User, UserStatus
 from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
 from app.schemas.system_notices import KeyCustodyConfirm, KeyCustodyStatus
-from app.services import key_custody_service
+from app.services import key_custody_service, s3_storage
 from app.services.auth_service import AuthService
 from app.services.onboarding import (
     ONBOARDING_ACCEPTED_MODULE_IDS,
     ONBOARDING_POSITION_EDITOR_MODULE_IDS,
     OnboardingService,
+    modules_from_setup_answers,
 )
 from app.services.upload_scanning import scan_and_validate_logo
 from app.utils.email_providers import (
@@ -1163,16 +1165,11 @@ async def _persist_session_data_to_org(
     # Persist module selections
     modules_data = session_data.get("modules")
     if modules_data and modules_data.get("enabled"):
-        from app.schemas.organization import ModuleSettings
-
-        enabled_list = modules_data["enabled"]
-        # Normalize hyphenated IDs to snake_case so they match the
-        # ModuleSettings field names (e.g. "hr-payroll" -> "hr_payroll").
-        normalized = {mid.replace("-", "_") for mid in enabled_list}
-        # Map the enabled list to every configurable module key defined in
-        # ModuleSettings so the Settings page always has the full picture.
-        configurable_keys = list(ModuleSettings.model_fields.keys())
-        org_settings["modules"] = {k: k in normalized for k in configurable_keys}
+        # Every module key, so Settings has the full picture, but only the
+        # modules setup asked about follow the answer; the rest keep their
+        # declared default. This used to write False for everything not
+        # enabled, which stored Public Information off on every fresh install.
+        org_settings["modules"] = modules_from_setup_answers(modules_data["enabled"])
 
     organization.settings = org_settings
     await db.flush()
@@ -2051,6 +2048,20 @@ async def save_file_storage_config(
             detail=f"Invalid platform. Must be one of: {', '.join(valid_platforms)}",
         )
 
+    # A self-hosted S3 endpoint is the installation operator's choice
+    # (S3_ALLOWED_ENDPOINTS), not something setup may type in; refused here so
+    # the wizard says so, rather than the bucket failing later in Settings.
+    endpoint = data.config.get("s3EndpointUrl")
+    if (
+        isinstance(endpoint, str)
+        and endpoint.strip()
+        and not s3_storage.endpoint_allowed(endpoint)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=s3_storage.ENDPOINT_NOT_ALLOWED,
+        )
+
     # Encrypt sensitive config data (contains API keys, AWS credentials, etc.)
 
     encrypted_config = encrypt_data(json.dumps(data.config))
@@ -2150,6 +2161,28 @@ async def save_it_team(
     )
 
 
+async def _lock_session_for_step(
+    db: AsyncSession, session: OnboardingSessionModel
+) -> None:
+    """Serialize a step that reads its own earlier output out of the session.
+
+    Stations and apparatus replace "the rows this step created last time", and
+    know which those are only because the session recorded their ids. Two
+    submissions of the step at once -- a double-tap, or a retry of a POST that
+    timed out after being processed -- both read the same ids, both insert, and
+    the session keeps only the last writer's, leaving the first writer's rows
+    unreachable by any later pass.
+
+    The lock order is the onboarding status row, then the session row: the
+    order every other step takes (it locks the status row in the service, and
+    reaches the session row when it records its result). The refresh is a
+    locking read so the waiter sees the ids the winner committed; the snapshot
+    ``validate_session`` took before its commit would still show the old ones.
+    """
+    await db.execute(select(OnboardingStatus).limit(1).with_for_update())
+    await db.refresh(session, with_for_update=True)
+
+
 @router.post("/session/stations", response_model=SessionDataResponse)
 async def save_session_stations(
     request: Request, data: StationsRequest, db: AsyncSession = Depends(get_db)
@@ -2173,6 +2206,11 @@ async def save_session_stations(
         )
 
     service = OnboardingService(db)
+
+    # Locked before the completion check as well as the id read: completing
+    # onboarding takes the same status-row lock, so this write cannot land
+    # after completion has committed.
+    await _lock_session_for_step(db, session)
 
     # Reject once onboarding is complete — completion does not delete the
     # session, so a still-valid (or stolen) session must not be replayable to
@@ -2319,6 +2357,9 @@ async def save_session_apparatus(
         )
 
     service = OnboardingService(db)
+
+    # See save_session_stations for why the lock precedes the completion check.
+    await _lock_session_for_step(db, session)
 
     # Reject once onboarding is complete — a still-valid (or stolen) session
     # must not be replayable to write real BasicApparatus rows into the
@@ -2800,6 +2841,7 @@ async def save_session_roles(
     # Backend stores: ["module.view", "module.manage", ...]
     from sqlalchemy import delete
 
+    from app.models.member_position_term import close_terms_for_positions
     from app.models.user import Role, user_positions
 
     # Get existing system roles. Read before the delete below (which only
@@ -2816,6 +2858,15 @@ async def save_session_roles(
     _check_submitted_positions(data.roles, set(existing_system_roles))
 
     # Delete existing non-system roles for this organization (custom roles from previous attempts)
+    # A bulk delete bypasses the flush hook, so anyone's open term in one of
+    # them is closed first; the foreign key would otherwise orphan it.
+    await close_terms_for_positions(
+        db,
+        select(Role.id).where(
+            Role.organization_id == organization_id,
+            Role.is_system.is_(False),
+        ),
+    )
     await db.execute(
         delete(Role).where(
             Role.organization_id == organization_id,
@@ -2902,6 +2953,7 @@ async def save_session_roles(
                 # is stored as an ordinary position instead.
                 is_system=bool(registry_defaults),
                 priority=_stored_priority(role_data, None),
+                kind=position_kind_for(role_data.id),
             )
             db.add(new_role)
             created_roles.append(role_data.name)
@@ -3149,6 +3201,12 @@ async def reset_onboarding(
         #    RESTRICT), so deleting users while a Location references one would
         #    FK-fail and abort the whole reset. These are otherwise only removed
         #    via the organizations CASCADE (step 7), which runs too late.
+        #    Events, training history, meetings, requests and apparatus point
+        #    at locations with ON DELETE RESTRICT, so they are let go first;
+        #    they are deleted with their organization in step 7 regardless.
+        from app.services.location_service import release_location_references
+
+        await release_location_references(db, select(Location.id))
         await db.execute(delete(Location).execution_options(synchronize_session=False))
         await db.execute(delete(Facility).execution_options(synchronize_session=False))
 

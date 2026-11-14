@@ -130,6 +130,20 @@ describe('resolveInventoryAdminLocation', () => {
     expect(resolve('/inventory/admin/nfc/tags')).toEqual({ areaId: 'tools', destinationId: 'nfc-register' });
   });
 
+  it('shows a page beneath a destination under that destination', () => {
+    // Catalog Links and Checklist Settings are reached from Equipment
+    // Checklists, not from the strip; inside the header they must still mark
+    // where they sit rather than reading as the Overview.
+    expect(resolve('/inventory/admin/checklists/catalog-links')).toEqual({
+      areaId: 'readiness',
+      destinationId: 'checklists',
+    });
+    expect(resolve('/inventory/admin/checklists/settings')).toEqual({
+      areaId: 'readiness',
+      destinationId: 'checklists',
+    });
+  });
+
   it('falls back to Overview, with no page, for a path no destination names', () => {
     expect(resolve('/inventory/admin/nowhere')).toEqual({ areaId: 'overview', destinationId: null });
   });

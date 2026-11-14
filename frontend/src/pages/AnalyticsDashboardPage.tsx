@@ -2,10 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router';
 import { analyticsService, type QRCodeMetrics } from '../services/analytics';
 import { useTimezone } from '../hooks/useTimezone';
-import { Breadcrumbs } from '../components/ux';
+import { Breadcrumbs, SkeletonText } from '../components/ux';
 import { QrCode } from 'lucide-react';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
+import { AdminPageHeader } from '../components/admin/AdminPageHeader';
 import { formatTime } from '../utils/dateFormatting';
+import { StatGrid } from '../components/ux/StatGrid';
 
 /**
  * Analytics Dashboard
@@ -70,13 +72,64 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
       ]
     : undefined;
 
-  if (loading) {
+  const scopeLine = eventId ? 'Check-in scans for this event' : 'Check-in scans across all events';
+  const exportButton = (
+    <button
+      onClick={() => {
+        void exportData();
+      }}
+      className="btn-secondary shrink-0 self-start text-sm font-medium text-blue-900 sm:self-auto dark:text-blue-300"
+    >
+      Export Data
+    </button>
+  );
+
+  const header = embedded ? (
+    <div className="page-header mb-6 gap-3 sm:items-start">
+      <div className="page-header-title">
+        {/* Embedded, the Events hub's section nav already names this page,
+            so the title stays for heading navigation only and the hub
+            keeps the page's one <h1>. */}
+        <h2 className="sr-only">QR Code Analytics</h2>
+        <p className="text-theme-text-secondary">{scopeLine}</p>
+      </div>
+      {exportButton}
+    </div>
+  ) : eventId ? (
+    // Scoped to one event, this is one of that event's pages, so it keeps the
+    // Events header and section strip the event's other pages carry.
+    <EventsPageHeader
+      icon={QrCode}
+      title="QR Code Analytics"
+      subtitle={scopeLine}
+      parentCrumbs={[{ label: 'Event', path: `/events/${eventId}` }]}
+      actions={exportButton}
+    />
+  ) : (
+    // Department-wide, it is a row of the Administration menu (/admin/analytics)
+    // and draws the header every administration page shares.
+    <AdminPageHeader title="QR Code Analytics" description={scopeLine} actions={exportButton} className="mb-6" />
+  );
+
+  // Loading draws the page it will become — header and the four metric cards,
+  // placeholders where the figures go — and only until the first figures
+  // arrive. The ten-second refresh sets `loading` too, and returning a bare
+  // "Loading analytics..." for it replaced the whole page every ten seconds.
+  if (loading && !metrics) {
     return (
-      <div className={`mx-auto max-w-7xl ${shellPadding}`}>
-        {trail && <Breadcrumbs items={trail} />}
-        <div className="flex items-center justify-center py-24">
-          <div className="text-theme-text-secondary">Loading analytics...</div>
-        </div>
+      <div className={`mx-auto min-h-screen max-w-7xl ${shellPadding}`}>
+        {header}
+        <StatGrid columns={4} gap={4} className="mb-6">
+          <span className="sr-only">Loading analytics...</span>
+          {['Total Scans', 'Successful Check-Ins', 'Success Rate', 'Avg Time to Check-In'].map((label) => (
+            <div key={label} className="bg-theme-surface rounded-lg p-4 shadow-md backdrop-blur-xs sm:p-6">
+              <div className="text-theme-text-muted mb-1 text-sm font-medium">{label}</div>
+              <div className="text-2xl font-bold sm:text-3xl">
+                <SkeletonText className="w-16" />
+              </div>
+            </div>
+          ))}
+        </StatGrid>
       </div>
     );
   }
@@ -102,63 +155,34 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
     );
   }
 
-  const scopeLine = eventId ? 'Check-in scans for this event' : 'Check-in scans across all events';
-  const exportButton = (
-    <button
-      onClick={() => {
-        void exportData();
-      }}
-      className="btn-secondary shrink-0 self-start text-sm font-medium text-blue-700 sm:self-auto dark:text-blue-400"
-    >
-      Export Data
-    </button>
-  );
-
   return (
     <div className={`mx-auto min-h-screen max-w-7xl ${shellPadding}`}>
-      {embedded ? (
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            {/* Embedded, the Events hub's section nav already names this page,
-                so the title stays for heading navigation only and the hub
-                keeps the page's one <h1>. */}
-            <h2 className="sr-only">QR Code Analytics</h2>
-            <p className="text-theme-text-secondary">{scopeLine}</p>
-          </div>
-          {exportButton}
-        </div>
-      ) : (
-        <EventsPageHeader
-          icon={QrCode}
-          title="QR Code Analytics"
-          subtitle={scopeLine}
-          parentCrumbs={eventId ? [{ label: 'Event', path: `/events/${eventId}` }] : undefined}
-          actions={exportButton}
-        />
-      )}
+      {header}
 
       {/* Key Metrics */}
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+      <StatGrid columns={4} gap={4} className="mb-6">
+        <div className="bg-theme-surface rounded-lg p-4 shadow-md backdrop-blur-xs sm:p-6">
           <div className="text-theme-text-muted mb-1 text-sm font-medium">Total Scans</div>
-          <div className="text-3xl font-bold text-blue-600">{metrics.totalScans}</div>
+          <div className="text-2xl font-bold text-blue-600 sm:text-3xl dark:text-blue-400">{metrics.totalScans}</div>
         </div>
 
-        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+        <div className="bg-theme-surface rounded-lg p-4 shadow-md backdrop-blur-xs sm:p-6">
           <div className="text-theme-text-muted mb-1 text-sm font-medium">Successful Check-Ins</div>
-          <div className="text-3xl font-bold text-green-700 dark:text-green-600">{metrics.successfulCheckIns}</div>
+          <div className="text-2xl font-bold text-green-700 sm:text-3xl dark:text-green-600">
+            {metrics.successfulCheckIns}
+          </div>
         </div>
 
-        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+        <div className="bg-theme-surface rounded-lg p-4 shadow-md backdrop-blur-xs sm:p-6">
           <div className="text-theme-text-muted mb-1 text-sm font-medium">Success Rate</div>
-          <div className="text-theme-text-primary text-3xl font-bold">{metrics.successRate}%</div>
+          <div className="text-theme-text-primary text-2xl font-bold sm:text-3xl">{metrics.successRate}%</div>
         </div>
 
-        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+        <div className="bg-theme-surface rounded-lg p-4 shadow-md backdrop-blur-xs sm:p-6">
           <div className="text-theme-text-muted mb-1 text-sm font-medium">Avg Time to Check-In</div>
-          <div className="text-theme-text-primary text-3xl font-bold">{metrics.avgTimeToCheckIn}s</div>
+          <div className="text-theme-text-primary text-2xl font-bold sm:text-3xl">{metrics.avgTimeToCheckIn}s</div>
         </div>
-      </div>
+      </StatGrid>
 
       <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* Device Breakdown */}
@@ -216,7 +240,7 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                 .map(([errorType, count]) => (
                   <div key={errorType} className="flex items-center justify-between">
                     <span className="text-theme-text-secondary flex-1 truncate text-sm">{errorType}</span>
-                    <span className="ml-2 rounded-sm bg-red-100 px-2 py-1 text-xs font-semibold text-red-800 dark:bg-red-500/20 dark:text-red-400">
+                    <span className="ml-2 rounded-sm bg-red-100 px-2 py-1 text-xs font-semibold text-red-900 dark:bg-red-500/20 dark:text-red-300">
                       {count}
                     </span>
                   </div>

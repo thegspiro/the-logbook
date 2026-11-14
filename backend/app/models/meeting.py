@@ -100,9 +100,11 @@ class Meeting(Base):
         nullable=True,
         index=True,
     )
+    # RESTRICT, so deleting the location deactivates it instead (owner
+    # decision 2026-11-01; LocationService._RESTRICTING_LOCATION_REFERENCES).
     location_id: Mapped[Optional[str]] = mapped_column(
         String(36),
-        ForeignKey("locations.id", ondelete="SET NULL"),
+        ForeignKey("locations.id", ondelete="RESTRICT"),
         nullable=True,
         index=True,
     )
@@ -175,6 +177,18 @@ class Meeting(Base):
         return f"<Meeting(title={self.title}, date={self.meeting_date})>"
 
 
+class AttendanceRecordedVia:
+    """How a meeting attendance record was written (``recorded_via``)."""
+
+    MANUAL = "manual"  # a secretary added the member to the meeting
+    EVENT_CHECK_IN = "event_check_in"  # imported from the member's event check-in
+    EVENT_RSVP = "event_rsvp"  # imported from an event RSVP with no check-in
+    WAIVER = "waiver"  # a secretary granted a waiver for a missed meeting
+    WAIVER_REQUEST = "waiver_request"  # an approved member waiver request
+
+    ALL = (MANUAL, EVENT_CHECK_IN, EVENT_RSVP, WAIVER, WAIVER_REQUEST)
+
+
 class MeetingAttendee(Base):
     """
     Meeting Attendee model
@@ -213,6 +227,27 @@ class MeetingAttendee(Base):
     waiver_granted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True)
     )
+    # The approved member request this waiver came from, when it came from
+    # one; NULL for a waiver the Secretary granted by hand. SET NULL: the
+    # waiver stands if the request row is ever removed.
+    waiver_request_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("attendance_waiver_requests.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Where the record came from, for the secretary reading a member's
+    # meetings back. ``checked_in_at`` is the moment the member checked in,
+    # set only from a real check-in (an event's), never from a secretary's
+    # entry, which carries no such moment. ``recorded_via`` is one of
+    # RECORDED_VIA. All three are NULL on rows written before they existed.
+    checked_in_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    recorded_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    recorded_via: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     # Timestamps
     created_at: Mapped[Optional[datetime]] = mapped_column(
@@ -230,6 +265,15 @@ class MeetingAttendee(Base):
         Index("idx_meeting_attendees_meeting", "meeting_id"),
         Index("idx_meeting_attendees_user", "user_id"),
         Index("idx_meeting_attendees_organization", "organization_id"),
+        # One row per member per meeting: a second row let a member be both
+        # present and waived, or counted twice (owner decision, 2026-11-10).
+        Index(
+            "uq_meeting_attendees_meeting_user",
+            "meeting_id",
+            "user_id",
+            unique=True,
+        ),
+        Index("idx_meeting_attendees_waiver_request", "waiver_request_id"),
     )
 
     def __repr__(self):
@@ -278,6 +322,11 @@ class MeetingActionItem(Base):
     # Completion
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completion_notes: Mapped[Optional[str]] = mapped_column(Text)
+
+    # The department-local day a due-date reminder was last emailed for this
+    # item. It is what makes a second run of the reminder task on the same day
+    # send nothing (CLAUDE.md pitfall #36); the bell entry is not gated on it.
+    reminder_emailed_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Provenance. ``created_by`` is who the item is attributed to and
     # ``source`` names an automated path that created it ("mcp" for the

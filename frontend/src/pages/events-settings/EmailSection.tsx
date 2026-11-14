@@ -38,15 +38,17 @@ const EmailSection: React.FC<EmailSectionProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-theme-text-primary text-lg font-semibold">Email Configuration</h2>
-        <p className="text-theme-text-muted mt-1 text-sm">Notification triggers and reusable email templates.</p>
+        <h2 className="text-theme-text-primary text-lg font-semibold">Request Emails</h2>
+        <p className="text-theme-text-muted mt-1 text-sm">
+          The emails a public event request sends as it moves along — to the requester, and to your coordinators — and
+          reusable messages coordinators can send by hand. These do not apply to events your members create.
+        </p>
       </div>
 
       {/* Email Triggers */}
       <div>
-        <h3 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
-          Notification Triggers
-        </h3>
+        <h3 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">Automatic Emails</h3>
+        <p className="text-theme-text-muted mb-3 text-xs">Sent when a request reaches each stage.</p>
         <div className="space-y-2">
           {Object.entries(TRIGGER_LABELS).map(([key, label]) => {
             const config = settings.request_pipeline.email_triggers[key] || { enabled: false };
@@ -77,12 +79,14 @@ const EmailSection: React.FC<EmailSectionProps> = ({
 
       {/* Email Templates */}
       <div className="border-theme-surface-border border-t pt-4">
-        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="text-theme-text-muted text-xs font-semibold tracking-wider uppercase">Email Templates</h3>
+        <div className="split-row mb-3 gap-3 sm:items-center">
+          <h3 className="split-row-main text-theme-text-muted text-xs font-semibold tracking-wider uppercase">
+            Email Templates
+          </h3>
           <button
             type="button"
             onClick={() => onToggleTemplateForm(!showTemplateForm)}
-            className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium"
+            className="split-row-aside btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium"
           >
             <Plus className="h-4 w-4" />
             New Template

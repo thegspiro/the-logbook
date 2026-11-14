@@ -8,7 +8,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ApparatusOperator, OperatorRestriction } from '../types';
 
@@ -29,7 +29,11 @@ vi.mock('../services/api', () => ({
   evocLevelService: { getLevels: (...args: unknown[]) => mockGetLevels(...args) as unknown },
 }));
 
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 import { OperatorModal } from './OperatorModal';
+
+// The app shell mounts ConfirmProvider; the dialog needs it to ask before discarding.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
 
 const operator = (overrides: Partial<ApparatusOperator> = {}): ApparatusOperator => ({
   id: 'op-1',
@@ -113,6 +117,51 @@ describe('OperatorModal payloads', () => {
       hasRestrictions: false,
       isActive: true,
     });
+  });
+});
+
+describe('OperatorModal errors and discarding', () => {
+  beforeEach(() => {
+    mockGetUsers.mockReset();
+    mockGetUsers.mockResolvedValue([{ id: 'user-1', first_name: 'Marcus', last_name: 'Bell', username: 'mbell' }]);
+    mockGetLevels.mockReset();
+    mockGetLevels.mockResolvedValue([]);
+    mockCreateOperator.mockReset();
+    mockCreateOperator.mockResolvedValue({});
+    mockUpdateOperator.mockReset();
+    mockUpdateOperator.mockResolvedValue({});
+  });
+
+  it('saves the rest of an edit, keeps the stored license type the server refused and flags it', async () => {
+    mockUpdateOperator.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'license_type_required', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderModal(operator());
+
+    await user.type(screen.getByLabelText('License Type Required'), ' plus tanker');
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => expect(mockUpdateOperator).toHaveBeenCalledTimes(2));
+    expect(mockUpdateOperator.mock.calls[1]?.[1]).not.toHaveProperty('licenseTypeRequired');
+    const field = screen.getByLabelText('License Type Required');
+    expect(field).toHaveAccessibleDescription('License type required is too long — keep it to 50 characters.');
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('asks before Escape or Cancel discards what was typed', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<OperatorModal isOpen onClose={onClose} onSaved={vi.fn()} apparatusId="app-1" />);
+    await user.type(screen.getByLabelText('Notes'), 'New driver');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
 

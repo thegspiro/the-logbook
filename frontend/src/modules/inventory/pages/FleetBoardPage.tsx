@@ -213,7 +213,7 @@ export const FleetBoardPage: React.FC = () => {
             </p>
             <div className="text-theme-text-muted mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
               {overdueCount > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-red-500/25 bg-red-500/10 px-1.5 py-0.5 font-semibold text-red-700 dark:text-red-400">
+                <span className="inline-flex items-center gap-1 rounded-full border border-red-500/25 bg-red-500/10 px-1.5 py-0.5 font-semibold text-red-900 dark:text-red-300">
                   {overdueCount} overdue
                 </span>
               )}
@@ -230,7 +230,7 @@ export const FleetBoardPage: React.FC = () => {
               </span>
             </div>
           </div>
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-blue-800 px-3 py-1.5 text-xs font-medium text-white">
             Open mine
             <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
           </span>
@@ -330,9 +330,9 @@ interface BoardChip {
 }
 
 const CHIP_TONES = {
-  ok: 'text-green-700 dark:text-green-400',
-  warn: 'text-amber-700 dark:text-amber-400',
-  crit: 'text-red-700 dark:text-red-400',
+  ok: 'text-green-900 dark:text-green-300',
+  warn: 'text-amber-900 dark:text-amber-300',
+  crit: 'text-red-900 dark:text-red-300',
 };
 
 /** "7:10 AM" for a check made today, "Oct 13, 7:10 AM" otherwise. */
@@ -377,9 +377,9 @@ const ApparatusCard: React.FC<{ unit: FleetApparatusReadiness; tz: string }> = (
           app is making, and an officer who disagrees needs to see what drove it. */}
       <p className="text-theme-text-secondary flex items-start gap-1.5 text-xs">
         {unit.readiness === 'out_of_service' ? (
-          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-red-600 dark:text-red-300" aria-hidden="true" />
         ) : unit.readiness === 'attention' ? (
-          <Wrench className="mt-0.5 h-3 w-3 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
+          <Wrench className="mt-0.5 h-3 w-3 shrink-0 text-amber-900 dark:text-amber-300" aria-hidden="true" />
         ) : (
           <ClipboardCheck className="text-theme-text-muted mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
         )}
@@ -413,8 +413,8 @@ const ApparatusCard: React.FC<{ unit: FleetApparatusReadiness; tz: string }> = (
 };
 
 const METRIC_TONES: Record<string, string> = {
-  warn: 'text-amber-700 dark:text-amber-400',
-  crit: 'text-red-700 dark:text-red-400',
+  warn: 'text-amber-900 dark:text-amber-300',
+  crit: 'text-red-900 dark:text-red-300',
 };
 
 export default FleetBoardPage;

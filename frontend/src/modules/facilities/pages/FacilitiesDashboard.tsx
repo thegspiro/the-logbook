@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import {
   Building2,
   Plus,
@@ -22,10 +22,13 @@ import {
   Calendar,
   Search,
   Settings,
+  ShieldCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
+import { enumLabel } from '../types';
 import type { Facility } from '../types';
+import type { ComplianceChecklist } from '../../../services/facilitiesServices';
 import CreateFacilityModal from '../components/CreateFacilityModal';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
@@ -35,6 +38,16 @@ import { OperationsPageHeader } from '../../../components/operations/OperationsP
 
 const PREVIEW_ITEM_COUNT = 5;
 const FACILITIES_PAGE_SIZE = 24;
+// The dashboard's "Compliance deadlines" tile counts open checklists due from
+// today through this many days ahead, and links here as ?compliance=due.
+const COMPLIANCE_DUE_WINDOW_DAYS = 30;
+// The cap both the checklist and the facility list endpoints put on one request.
+const LIST_REQUEST_MAX = 500;
+
+interface DueCompliance {
+  checklists: ComplianceChecklist[];
+  facilityNames: Map<string, string>;
+}
 
 export default function FacilitiesDashboard() {
   const navigate = useNavigate();
@@ -58,6 +71,56 @@ export default function FacilitiesDashboard() {
   const [gridResults, setGridResults] = useState<Facility[] | null>(null);
   const [gridTotal, setGridTotal] = useState(0);
   const [isGridLoading, setIsGridLoading] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Only the exact value the tile sends turns the list on; anything else is
+  // unrecognized and leaves the page as it was.
+  const complianceDueOnly = searchParams.get('compliance') === 'due';
+  const [dueCompliance, setDueCompliance] = useState<DueCompliance | null>(null);
+  const [dueComplianceFailed, setDueComplianceFailed] = useState(false);
+
+  useEffect(() => {
+    if (!complianceDueOnly) {
+      setDueCompliance(null);
+      setDueComplianceFailed(false);
+      return;
+    }
+    let active = true;
+    setDueCompliance(null);
+    setDueComplianceFailed(false);
+    // The window is the server's, on the department's calendar, and leaves out
+    // archived facilities exactly as the tile does — so it is asked for rather
+    // than re-derived here. Names come from the full active-facility list
+    // because the grid holds one page of it.
+    void Promise.all([
+      facilitiesService.getComplianceChecklists({
+        is_completed: false,
+        due_within_days: COMPLIANCE_DUE_WINDOW_DAYS,
+        limit: LIST_REQUEST_MAX,
+      }),
+      facilitiesService.getFacilities({ is_archived: false, limit: LIST_REQUEST_MAX }),
+    ])
+      .then(([checklists, activeFacilities]) => {
+        if (!active) return;
+        setDueCompliance({
+          checklists: [...checklists].sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '')),
+          facilityNames: new Map(activeFacilities.map((f) => [f.id, f.name])),
+        });
+      })
+      .catch(() => {
+        if (!active) return;
+        setDueComplianceFailed(true);
+        toast.error('Failed to load compliance deadlines');
+      });
+    return () => {
+      active = false;
+    };
+  }, [complianceDueOnly]);
+
+  const clearComplianceFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('compliance');
+    setSearchParams(next, { replace: true });
+  };
 
   useEffect(() => {
     void loadDashboardStats();
@@ -151,6 +214,66 @@ export default function FacilitiesDashboard() {
           </>
         }
       />
+
+      {complianceDueOnly && (
+        <section className="card" aria-labelledby="compliance-due-heading">
+          <div className="border-theme-surface-border flex flex-wrap items-center justify-between gap-2 border-b p-4">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-amber-500" />
+              <h2 id="compliance-due-heading" className="text-theme-text-primary text-sm font-semibold">
+                Compliance deadlines in the next {COMPLIANCE_DUE_WINDOW_DAYS} days
+                {dueCompliance ? ` (${dueCompliance.checklists.length})` : ''}
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={clearComplianceFilter}
+              className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone text-xs font-medium underline"
+            >
+              Hide compliance deadlines
+            </button>
+          </div>
+          <div className="p-4">
+            {dueComplianceFailed ? (
+              <p className="text-theme-text-muted py-4 text-center text-sm">Failed to load compliance deadlines.</p>
+            ) : !dueCompliance ? (
+              <div className="flex justify-center py-4" role="status" aria-label="Loading compliance deadlines">
+                <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" />
+              </div>
+            ) : dueCompliance.checklists.length === 0 ? (
+              <p className="text-theme-text-muted py-4 text-center text-sm">
+                No open compliance checklists are due in the next {COMPLIANCE_DUE_WINDOW_DAYS} days.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {dueCompliance.checklists.map((checklist) => (
+                  <li key={checklist.id}>
+                    <button
+                      type="button"
+                      onClick={() => void navigate(`/facilities/${checklist.facilityId}`)}
+                      className="flex w-full items-start gap-3 rounded-lg border border-amber-500/10 bg-amber-500/5 p-3 text-left"
+                    >
+                      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-theme-text-primary truncate text-sm font-medium">
+                          {checklist.checklistName}
+                        </p>
+                        <div className="text-theme-text-muted mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
+                          <span>{dueCompliance.facilityNames.get(checklist.facilityId) ?? 'Unknown facility'}</span>
+                          <span>{enumLabel(checklist.complianceType)}</span>
+                          {checklist.dueDate && (
+                            <span className="font-medium">Due: {formatDate(checklist.dueDate, tz)}</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Loading */}
       {isLoadingDashboard && !stats ? (

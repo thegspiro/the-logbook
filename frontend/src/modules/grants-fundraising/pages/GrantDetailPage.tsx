@@ -37,6 +37,8 @@ import {
   Loader2,
   X,
   ChevronRight,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import type { ComplianceTaskType, ComplianceTaskStatus, GrantNoteType, GrantPriority } from '../types';
 import {
@@ -51,13 +53,16 @@ import {
 } from '../types';
 import { BUDGET_CATEGORY_ORDER, readBudgetSummary, readKeyContacts } from '../utils/applicationStructuredFields';
 import { useGrantsStore } from '../store/grantsStore';
-import { useMemberNames } from '../hooks/useMemberNames';
+import { memberLabel, useMemberNames } from '../hooks/useMemberNames';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { blankToNull } from '@/utils/formValues';
+import { useConfirm } from '@/contexts/ConfirmContext';
 import { formatDate, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { formatCurrency, formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useAuthStore } from '../../../stores/authStore';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 // =============================================================================
 // Constants
@@ -214,7 +219,8 @@ export const GrantDetailPage: React.FC = () => {
   const { busy: expenditureBusy, run: runExpenditure } = useSubmitGuard();
   const { busy: complianceBusy, run: runCompliance } = useSubmitGuard();
   const tz = useTimezone();
-  const { nameOf } = useMemberNames();
+  const { members, nameOf } = useMemberNames();
+  const { confirm } = useConfirm();
   // Every mutation this page can trigger (edit, budget/expenditure/task
   // creation, task status changes, notes) requires fundraising.manage on the
   // backend — the route itself is gated only at fundraising.view so a viewer
@@ -229,6 +235,10 @@ export const GrantDetailPage: React.FC = () => {
     fetchApplication,
     addBudgetItem,
     addExpenditure,
+    updateBudgetItem,
+    deleteBudgetItem,
+    updateExpenditure,
+    deleteExpenditure,
     addComplianceTask,
     updateComplianceTask,
     addGrantNote,
@@ -240,6 +250,10 @@ export const GrantDetailPage: React.FC = () => {
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [showExpenditureModal, setShowExpenditureModal] = useState(false);
   const [showComplianceModal, setShowComplianceModal] = useState(false);
+
+  // The budget line or expenditure the open modal edits; null when it adds one.
+  const [editingBudgetItemId, setEditingBudgetItemId] = useState<string | null>(null);
+  const [editingExpenditureId, setEditingExpenditureId] = useState<string | null>(null);
 
   // Budget item form
   const [budgetCategory, setBudgetCategory] = useState('');
@@ -261,6 +275,7 @@ export const GrantDetailPage: React.FC = () => {
   const [complianceDueDate, setComplianceDueDate] = useState('');
   const [compliancePriority, setCompliancePriority] = useState<GrantPriority>(GrantPriorityEnum.MEDIUM);
   const [complianceReportTemplate, setComplianceReportTemplate] = useState('');
+  const [complianceAssignee, setComplianceAssignee] = useState('');
 
   // Activity note form
   const [newNoteContent, setNewNoteContent] = useState('');
@@ -301,12 +316,14 @@ export const GrantDetailPage: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const resetBudgetForm = () => {
+    setEditingBudgetItemId(null);
     setBudgetCategory('');
     setBudgetDescription('');
     setBudgetAmount('');
   };
 
   const resetExpenditureForm = () => {
+    setEditingExpenditureId(null);
     setExpenditureDescription('');
     setExpenditureAmount('');
     setExpenditureDate('');
@@ -322,11 +339,86 @@ export const GrantDetailPage: React.FC = () => {
     setComplianceDueDate('');
     setCompliancePriority(GrantPriorityEnum.MEDIUM);
     setComplianceReportTemplate('');
+    setComplianceAssignee('');
+  };
+
+  const openEditBudgetItem = (item: (typeof budgetItems)[number]) => {
+    setEditingBudgetItemId(item.id);
+    setBudgetCategory(item.category);
+    setBudgetDescription(item.description ?? '');
+    setBudgetAmount(String(Number(item.amountBudgeted)));
+    setShowBudgetModal(true);
+  };
+
+  const openEditExpenditure = (exp: (typeof expenditures)[number]) => {
+    setEditingExpenditureId(exp.id);
+    setExpenditureDescription(exp.description);
+    setExpenditureAmount(String(Number(exp.amount)));
+    setExpenditureDate((exp.expenditureDate ?? '').slice(0, 10));
+    setExpenditureVendor(exp.vendor ?? '');
+    setExpenditureInvoice(exp.invoiceNumber ?? '');
+    setExpenditureBudgetItemId(exp.budgetItemId ?? '');
+    setShowExpenditureModal(true);
+  };
+
+  const handleDeleteBudgetItem = async (item: (typeof budgetItems)[number]) => {
+    if (!id) return;
+    // The expenditures charged to a line are kept and left uncharged
+    // (budget_item_id is ON DELETE SET NULL), so the dialog says so.
+    const charged = expenditures.filter((exp) => exp.budgetItemId === item.id).length;
+    const ok = await confirm({
+      title: 'Delete this budget line?',
+      message:
+        charged > 0
+          ? `"${item.description}" will be removed. ${charged === 1 ? '1 expenditure is' : `${charged} expenditures are`} charged to it; ${charged === 1 ? 'it stays' : 'they stay'} on the Expenditures tab with no budget line.`
+          : `"${item.description}" will be removed.`,
+      confirmLabel: 'Delete line',
+      cancelLabel: 'Keep it',
+    });
+    if (!ok) return;
+    try {
+      await deleteBudgetItem(id, item.id);
+      toast.success('Budget line deleted');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete budget line'));
+    }
+  };
+
+  const handleDeleteExpenditure = async (exp: (typeof expenditures)[number]) => {
+    if (!id) return;
+    const ok = await confirm({
+      title: 'Delete this expenditure?',
+      message: `"${exp.description}" (${formatCurrency(exp.amount)}) will be removed, and its budget line's amount spent goes down by that much.`,
+      confirmLabel: 'Delete expenditure',
+      cancelLabel: 'Keep it',
+    });
+    if (!ok) return;
+    try {
+      await deleteExpenditure(id, exp.id);
+      toast.success('Expenditure deleted');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete expenditure'));
+    }
   };
 
   const handleAddBudgetItem = () =>
     runBudget(async () => {
       if (!id || !budgetCategory || !budgetDescription || !budgetAmount) return;
+      if (editingBudgetItemId) {
+        try {
+          await updateBudgetItem(id, editingBudgetItemId, {
+            category: budgetCategory,
+            description: budgetDescription,
+            amountBudgeted: parseFloat(budgetAmount),
+          });
+          toast.success('Budget item updated');
+          resetBudgetForm();
+          setShowBudgetModal(false);
+        } catch (err: unknown) {
+          toast.error(getErrorMessage(err, 'Failed to update budget item'));
+        }
+        return;
+      }
       try {
         await addBudgetItem(id, {
           category: budgetCategory,
@@ -344,6 +436,29 @@ export const GrantDetailPage: React.FC = () => {
   const handleAddExpenditure = () =>
     runExpenditure(async () => {
       if (!id || !expenditureDescription || !expenditureAmount || !expenditureDate) return;
+      if (editingExpenditureId) {
+        try {
+          // An update leaves an omitted key alone, so the optional fields go
+          // as null when emptied, to clear them (pitfall 1).
+          const saved = await updateExpenditure(id, editingExpenditureId, {
+            description: expenditureDescription,
+            amount: parseFloat(expenditureAmount),
+            expenditureDate,
+            vendor: blankToNull(expenditureVendor),
+            invoiceNumber: blankToNull(expenditureInvoice),
+            budgetItemId: blankToNull(expenditureBudgetItemId),
+          });
+          toast.success('Expenditure updated');
+          for (const warning of saved.warnings ?? []) {
+            toast(warning, { icon: '⚠️', duration: 8000 });
+          }
+          resetExpenditureForm();
+          setShowExpenditureModal(false);
+        } catch (err: unknown) {
+          toast.error(getErrorMessage(err, 'Failed to update expenditure'));
+        }
+        return;
+      }
       try {
         const recorded = await addExpenditure(id, {
           description: expenditureDescription,
@@ -376,6 +491,7 @@ export const GrantDetailPage: React.FC = () => {
           dueDate: complianceDueDate,
           priority: compliancePriority,
           reportTemplate: complianceReportTemplate || null,
+          ...(complianceAssignee ? { assignedTo: complianceAssignee } : {}),
         });
         toast.success('Compliance task added');
         resetComplianceForm();
@@ -525,8 +641,8 @@ export const GrantDetailPage: React.FC = () => {
             Back to Applications
           </button>
 
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
+          <div className="page-header gap-4 sm:items-start">
+            <div className="page-header-title">
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-theme-text-primary text-2xl font-bold">{application.grantProgramName}</h1>
                 <span
@@ -556,7 +672,7 @@ export const GrantDetailPage: React.FC = () => {
           </div>
 
           {/* Key stats */}
-          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <StatGrid columns={4} gap={4} className="mt-6">
             <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-4">
               <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <DollarSign className="h-4 w-4" />
@@ -594,7 +710,7 @@ export const GrantDetailPage: React.FC = () => {
                 {application.grantEndDate ? formatDate(application.grantEndDate, tz) : '--'}
               </p>
             </div>
-          </div>
+          </StatGrid>
         </div>
       </div>
 
@@ -822,8 +938,8 @@ export const GrantDetailPage: React.FC = () => {
                   <p className="text-theme-text-secondary">No budget items yet</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div className="rwd-table-container overflow-x-auto">
+                  <table className="rwd-table rwd-table-wide w-full">
                     <thead>
                       <tr className="border-theme-surface-border border-b">
                         <th
@@ -862,6 +978,11 @@ export const GrantDetailPage: React.FC = () => {
                         >
                           Progress
                         </th>
+                        {canManage && (
+                          <th scope="col" className="px-4 py-3">
+                            <span className="sr-only">Actions</span>
+                          </th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-theme-surface-border divide-y">
@@ -874,22 +995,34 @@ export const GrantDetailPage: React.FC = () => {
                         const isOver = spent > budgeted;
                         return (
                           <tr key={item.id}>
-                            <td className="text-theme-text-primary px-4 py-3 text-sm font-medium whitespace-nowrap">
+                            <td
+                              data-label="Category"
+                              className="text-theme-text-primary px-4 py-3 text-sm font-medium whitespace-nowrap"
+                            >
                               {budgetCategoryLabel(item.category)}
                             </td>
-                            <td className="text-theme-text-secondary px-4 py-3 text-sm">{item.description}</td>
-                            <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
+                            <td data-label="Description" className="text-theme-text-secondary px-4 py-3 text-sm">
+                              {item.description}
+                            </td>
+                            <td
+                              data-label="Budgeted"
+                              className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap"
+                            >
                               {formatCurrency(item.amountBudgeted)}
                             </td>
-                            <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
+                            <td
+                              data-label="Spent"
+                              className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap"
+                            >
                               {formatCurrency(item.amountSpent)}
                             </td>
                             <td
+                              data-label="Remaining"
                               className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${isOver ? 'text-red-600' : 'text-green-700 dark:text-green-600'}`}
                             >
                               {formatCurrency(remaining)}
                             </td>
-                            <td className="px-4 py-3">
+                            <td data-label="Progress" className="px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <div className="bg-theme-surface-hover h-2 w-24 overflow-hidden rounded-full">
                                   <div
@@ -900,27 +1033,67 @@ export const GrantDetailPage: React.FC = () => {
                                 <span className="text-theme-text-secondary text-xs">{Math.round(percent)}%</span>
                               </div>
                             </td>
+                            {canManage && (
+                              <td data-label="Actions" className="px-4 py-3 whitespace-nowrap">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditBudgetItem(item)}
+                                    className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary touch-target-phone rounded p-1 transition-colors"
+                                    aria-label={`Edit budget line ${item.description}`}
+                                    title="Edit"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleDeleteBudgetItem(item)}
+                                    className="text-theme-text-secondary touch-target-phone rounded p-1 transition-colors hover:bg-red-500/10 hover:text-red-700"
+                                    aria-label={`Delete budget line ${item.description}`}
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
-                      {/* Total row */}
+                    </tbody>
+                    {/* In the card layout the empty footer cells hide, and the totals keep their labels. */}
+                    <tfoot className="border-theme-surface-border border-t">
                       <tr className="bg-theme-surface-secondary font-semibold">
-                        <td className="text-theme-text-primary px-4 py-3 text-sm">Total</td>
-                        <td className="px-4 py-3" />
-                        <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
+                        <th
+                          scope="row"
+                          data-label="Total"
+                          className="rwd-table-lead text-theme-text-primary px-4 py-3 text-left text-sm"
+                        >
+                          Total
+                        </th>
+                        <td aria-hidden="true" className="px-4 py-3" />
+                        <td
+                          data-label="Budgeted"
+                          className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap"
+                        >
                           {formatCurrency(budgetTotal)}
                         </td>
-                        <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
+                        <td
+                          data-label="Spent"
+                          className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap"
+                        >
                           {formatCurrency(spentTotal)}
                         </td>
                         <td
+                          data-label="Remaining"
                           className={`px-4 py-3 text-right text-sm whitespace-nowrap ${remainingTotal >= 0 ? 'text-green-700 dark:text-green-600' : 'text-red-600'}`}
                         >
                           {formatCurrency(remainingTotal)}
                         </td>
-                        <td className="px-4 py-3" />
+                        <td aria-hidden="true" className="px-4 py-3" />
+                        {canManage && <td aria-hidden="true" className="px-4 py-3" />}
                       </tr>
-                    </tbody>
+                    </tfoot>
                   </table>
                 </div>
               )}
@@ -933,13 +1106,13 @@ export const GrantDetailPage: React.FC = () => {
         {/* ---------------------------------------------------------------- */}
         {activeTab === 'expenditures' && (
           <div className="space-y-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h3 className="text-theme-text-primary text-lg font-semibold">Expenditures</h3>
+            <div className="split-row gap-3 sm:items-center">
+              <h3 className="split-row-main text-theme-text-primary text-lg font-semibold">Expenditures</h3>
               {canManage && (
                 <button
                   type="button"
                   onClick={() => setShowExpenditureModal(true)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+                  className="split-row-aside inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
                 >
                   <Plus className="h-4 w-4" />
                   Record Expenditure
@@ -954,8 +1127,8 @@ export const GrantDetailPage: React.FC = () => {
                   <p className="text-theme-text-secondary">No expenditures recorded</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div className="rwd-table-container overflow-x-auto">
+                  <table className="rwd-table rwd-table-xwide w-full">
                     <thead>
                       <tr className="border-theme-surface-border border-b">
                         <th
@@ -994,6 +1167,11 @@ export const GrantDetailPage: React.FC = () => {
                         >
                           Receipt
                         </th>
+                        {canManage && (
+                          <th scope="col" className="px-4 py-3">
+                            <span className="sr-only">Actions</span>
+                          </th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-theme-surface-border divide-y">
@@ -1001,20 +1179,28 @@ export const GrantDetailPage: React.FC = () => {
                         const linkedBudgetItem = budgetItems.find((b) => b.id === exp.budgetItemId);
                         return (
                           <tr key={exp.id} className="hover:bg-theme-surface-hover transition-colors">
-                            <td className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap">
+                            <td
+                              data-label="Date"
+                              className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap"
+                            >
                               {formatDate(exp.expenditureDate, tz)}
                             </td>
-                            <td className="text-theme-text-primary px-4 py-3 text-sm">{exp.description}</td>
-                            <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                            <td data-label="Description" className="text-theme-text-primary px-4 py-3 text-sm">
+                              {exp.description}
+                            </td>
+                            <td data-label="Vendor" className="text-theme-text-secondary px-4 py-3 text-sm">
                               {exp.vendor ?? '--'}
                             </td>
-                            <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
+                            <td
+                              data-label="Amount"
+                              className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap"
+                            >
                               {formatCurrency(exp.amount)}
                             </td>
-                            <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                            <td data-label="Budget Category" className="text-theme-text-secondary px-4 py-3 text-sm">
                               {linkedBudgetItem ? budgetCategoryLabel(linkedBudgetItem.category) : '--'}
                             </td>
-                            <td className="px-4 py-3 text-sm whitespace-nowrap">
+                            <td data-label="Receipt" className="px-4 py-3 text-sm whitespace-nowrap">
                               {exp.receiptUrl && isSafeExternalUrl(exp.receiptUrl) ? (
                                 <a
                                   href={exp.receiptUrl}
@@ -1029,6 +1215,30 @@ export const GrantDetailPage: React.FC = () => {
                                 <span className="text-theme-text-secondary">--</span>
                               )}
                             </td>
+                            {canManage && (
+                              <td data-label="Actions" className="px-4 py-3 whitespace-nowrap">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditExpenditure(exp)}
+                                    className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary touch-target-phone rounded p-1 transition-colors"
+                                    aria-label={`Edit expenditure ${exp.description}`}
+                                    title="Edit"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleDeleteExpenditure(exp)}
+                                    className="text-theme-text-secondary touch-target-phone rounded p-1 transition-colors hover:bg-red-500/10 hover:text-red-700"
+                                    aria-label={`Delete expenditure ${exp.description}`}
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
@@ -1045,13 +1255,15 @@ export const GrantDetailPage: React.FC = () => {
         {/* ---------------------------------------------------------------- */}
         {activeTab === 'compliance' && (
           <div className="space-y-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h3 className="text-theme-text-primary text-lg font-semibold">Compliance & Follow-Up Tasks</h3>
+            <div className="split-row gap-3 sm:items-center">
+              <h3 className="split-row-main text-theme-text-primary text-lg font-semibold">
+                Compliance & Follow-Up Tasks
+              </h3>
               {canManage && (
                 <button
                   type="button"
                   onClick={() => setShowComplianceModal(true)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+                  className="split-row-aside inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
                 >
                   <Plus className="h-4 w-4" />
                   Add Task
@@ -1232,7 +1444,7 @@ export const GrantDetailPage: React.FC = () => {
           setShowBudgetModal(false);
           resetBudgetForm();
         }}
-        title="Add Budget Item"
+        title={editingBudgetItemId ? 'Edit Budget Item' : 'Add Budget Item'}
       >
         <div className="space-y-4">
           <div>
@@ -1299,7 +1511,7 @@ export const GrantDetailPage: React.FC = () => {
               onClick={() => void handleAddBudgetItem()}
               className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Add Budget Item
+              {editingBudgetItemId ? 'Save Changes' : 'Add Budget Item'}
             </button>
           </div>
         </div>
@@ -1312,7 +1524,7 @@ export const GrantDetailPage: React.FC = () => {
           setShowExpenditureModal(false);
           resetExpenditureForm();
         }}
-        title="Record Expenditure"
+        title={editingExpenditureId ? 'Edit Expenditure' : 'Record Expenditure'}
       >
         <div className="space-y-4">
           <div>
@@ -1418,7 +1630,7 @@ export const GrantDetailPage: React.FC = () => {
               onClick={() => void handleAddExpenditure()}
               className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Record Expenditure
+              {editingExpenditureId ? 'Save Changes' : 'Record Expenditure'}
             </button>
           </div>
         </div>
@@ -1521,6 +1733,29 @@ export const GrantDetailPage: React.FC = () => {
               className={inputClass}
             />
           </div>
+          {/* The member directory needs members.view or users.view, which
+              fundraising.manage does not imply: without it there is no list
+              to pick from, and the task is created unassigned as before. */}
+          {members && (
+            <div>
+              <label htmlFor="comp-assignee" className={labelClass}>
+                Assigned To (optional)
+              </label>
+              <select
+                id="comp-assignee"
+                value={complianceAssignee}
+                onChange={(e) => setComplianceAssignee(e.target.value)}
+                className={selectClass}
+              >
+                <option value="">Unassigned</option>
+                {members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {memberLabel(member)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"

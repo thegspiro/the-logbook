@@ -294,6 +294,9 @@ class StorefrontPreviewService:
             text_body=f"[TEST — sample data]\n\n{message['text_body']}",
             db=self.db,
             template_type=message["template_type"],
+            # A test goes to the admin who asked for it, never to the
+            # template's CC list.
+            apply_template_copies=False,
         )
 
         return {

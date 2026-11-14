@@ -156,7 +156,7 @@ describe('PositionRosterPage', () => {
           rank_display_name: null,
           sources: [
             { type: 'rank', label: 'Lieutenant' },
-            { type: 'position', label: 'Engineer' },
+            { type: 'qualification', label: 'Engineer' },
           ],
         },
       ],
@@ -177,7 +177,7 @@ describe('PositionRosterPage', () => {
           rank_display_name: null,
           sources: [
             { type: 'rank', label: 'Lieutenant' },
-            { type: 'position', label: 'Engineer' },
+            { type: 'qualification', label: 'Officer in Charge' },
             { type: 'training', label: 'Driver Operator Pipeline' },
           ],
         },
@@ -185,10 +185,10 @@ describe('PositionRosterPage', () => {
     });
     renderPage();
 
-    const reasons = await screen.findAllByText(/^By (rank|held position|completed training):/);
+    const reasons = await screen.findAllByText(/^By (rank|qualification|completed training):/);
     expect(reasons.map((reason) => reason.parentElement?.textContent)).toEqual([
       'By rank: Lieutenant',
-      'By held position: Engineer',
+      'By qualification: Officer in Charge',
       'By completed training: Driver Operator Pipeline',
     ]);
   });

@@ -2,10 +2,10 @@
 Tests for the member leave-of-absence service
 (app/services/member_leave_service.py).
 
-The highest-risk logic is ``count_leave_months`` — the pure date math that
-decides which calendar months are excluded from rolling-period training
-compliance. Also covers the auto-linked training-waiver lifecycle on
-create/update/deactivate. The DB session is mocked, so no MySQL is needed.
+Covers the auto-linked training-waiver lifecycle on create/update/deactivate.
+Which months a leave excuses is ``training_waiver_service.month_waivers``,
+tested in ``test_training_waiver_periods.py``. The DB session is mocked, so no
+MySQL is needed.
 """
 
 from datetime import date
@@ -13,60 +13,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from app.services.member_leave_service import MemberLeaveService
-
-
-def _leave(start, end, **kw):
-    return SimpleNamespace(start_date=start, end_date=end, **kw)
-
-
-class TestCountLeaveMonths:
-    P_START = date(2026, 1, 1)
-    P_END = date(2026, 12, 31)
-
-    def count(self, leaves):
-        return MemberLeaveService.count_leave_months(leaves, self.P_START, self.P_END)
-
-    def test_no_leaves(self):
-        assert self.count([]) == 0
-
-    def test_full_single_month(self):
-        assert self.count([_leave(date(2026, 3, 1), date(2026, 3, 31))]) == 1
-
-    def test_partial_month_not_counted(self):
-        # Members partially active in a month keep credit for it.
-        assert self.count([_leave(date(2026, 3, 5), date(2026, 3, 31))]) == 0
-        assert self.count([_leave(date(2026, 3, 1), date(2026, 3, 30))]) == 0
-
-    def test_multi_month_span_counts_only_full_months(self):
-        # Jan 15 – Apr 10: only February and March are fully covered.
-        assert self.count([_leave(date(2026, 1, 15), date(2026, 4, 10))]) == 2
-
-    def test_year_boundary(self):
-        leaves = [_leave(date(2025, 11, 20), date(2026, 2, 15))]
-        # Within the 2026 evaluation window only January is fully covered.
-        assert self.count(leaves) == 1
-
-    def test_permanent_leave_counts_full_months_to_period_end(self):
-        # Permanent leave starting June 1 with the period ending Dec 31:
-        # June through December are all fully covered.
-        assert self.count([_leave(date(2026, 6, 1), None)]) == 7
-
-    def test_permanent_leave_partial_final_month(self):
-        # Period ends mid-month: the in-progress month is not a full month.
-        n = MemberLeaveService.count_leave_months(
-            [_leave(date(2026, 6, 1), None)], date(2026, 1, 1), date(2026, 8, 15)
-        )
-        assert n == 2  # June, July — August is partial
-
-    def test_overlapping_leaves_do_not_double_count(self):
-        leaves = [
-            _leave(date(2026, 3, 1), date(2026, 4, 30)),
-            _leave(date(2026, 4, 1), date(2026, 5, 31)),
-        ]
-        assert self.count(leaves) == 3  # March, April, May
-
-    def test_leave_outside_period(self):
-        assert self.count([_leave(date(2025, 1, 1), date(2025, 12, 31))]) == 0
 
 
 class TestCreateLeave:

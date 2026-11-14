@@ -57,6 +57,7 @@
 - [Meeting Minutes](Module-Meeting-Minutes)
 - [Prospective Members](Module-Prospective-Members)
 - [Medical Screening](Module-Medical-Screening)
+- [Performance Evaluations](Module-Evaluations)
 - [Compliance](Module-Compliance)
 - [Compliance Config](Compliance-Configuration)
 - [Governance — Legal Documents](Module-Governance-Legal)
@@ -66,8 +67,10 @@
 - [Documenso Integration](Integration-Documenso)
 - [Cal.com Integration](Integration-Calcom)
 - [Claude (MCP) Integration](Integration-Claude-MCP)
+- [Historical Data Import](Integration-Historical-Data-Import)
 - [Google Workspace Integration](Integration-Google-Workspace)
 - [Microsoft 365 Integration](Integration-Microsoft-365)
+- [Zeffy Integration](Integration-Zeffy)
 
 ### 🔐 Security
 

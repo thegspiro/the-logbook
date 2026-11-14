@@ -16,6 +16,7 @@ import pytest
 
 from app.models.user import UserStatus
 from app.services.membership_tier_service import MembershipTierService
+from app.utils.membership import split_membership_type
 
 TIERS = [
     {"id": "probationary", "years_required": 0, "sort_order": 0},
@@ -205,12 +206,18 @@ class TestAdvanceAllStaysOnTheLadder:
 
     @staticmethod
     def _member(membership_type, years=12, rank="captain"):
+        # The pair the split migration settled every row onto, so the fake
+        # looks like a row the scan actually meets.
+        member_class, member_status = split_membership_type(membership_type)
+        if member_status is None:
+            member_status = membership_type
         return SimpleNamespace(
             id=f"u-{membership_type}",
             full_name=f"Pat {membership_type.title()}",
             display_name=f"Pat {membership_type.title()}",
             membership_type=membership_type,
-            member_class=None,
+            member_class=member_class,
+            member_status=member_status,
             membership_type_changed_at=None,
             rank=rank,
             # The advance writes the account status too; start every mock
@@ -264,10 +271,8 @@ class TestAdvanceAllStaysOnTheLadder:
         db = self._db(self._org(), members)
         return await MembershipTierService(db).advance_all("org-1", "admin-1")
 
-    @pytest.mark.parametrize(
-        "membership_type", ["administrative", "honorary", "retired", "prospective"]
-    )
-    async def test_a_type_that_is_not_a_tier_is_left_alone(
+    @pytest.mark.parametrize("membership_type", ["honorary", "retired", "prospective"])
+    async def test_a_standing_that_is_not_a_rung_is_left_alone(
         self, membership_type, monkeypatch
     ):
         member = self._member(membership_type)
@@ -275,6 +280,7 @@ class TestAdvanceAllStaysOnTheLadder:
         result = await self._advance([member], monkeypatch)
 
         assert member.membership_type == membership_type
+        assert member.member_status == split_membership_type(membership_type)[1]
         assert member.rank == "captain"
         assert result["advanced"] == 0
         assert result["off_ladder"] == 1
@@ -284,20 +290,75 @@ class TestAdvanceAllStaysOnTheLadder:
 
         result = await self._advance([member], monkeypatch)
 
+        assert member.member_status == "senior"
         assert member.membership_type == "senior"
+        assert member.member_class == "operational"
         assert result["advanced"] == 1
         assert result["off_ladder"] == 0
 
+    async def test_an_administrative_member_climbs_the_ladder_as_themselves(
+        self, monkeypatch
+    ):
+        """The ladder is tenure, so every class is on it (owner decision
+        2026-10-29). An administrative regular with twelve years reaches
+        Senior -- and stays administrative, which is the part the old scan got
+        wrong in the other direction: it rewrote the class to operational."""
+        member = self._member("administrative", years=12, rank=None)
+
+        result = await self._advance([member], monkeypatch)
+
+        assert member.member_status == "senior"
+        assert member.member_class == "administrative"
+        # The legacy word still says what the legacy gates ask: not riding.
+        assert member.membership_type == "administrative"
+        assert (result["advanced"], result["off_ladder"]) == (1, 0)
+
+    async def test_a_member_with_no_class_is_not_given_one(self, monkeypatch):
+        """A tier member whose class was never recorded keeps no class.
+
+        The scan writes the standing only; guessing the class is the
+        migration's refusal, repeated here. The roster flags them instead.
+        """
+        member = self._member("active", years=25)
+        member.member_class = None
+
+        await self._advance([member], monkeypatch)
+
+        assert member.member_status == "life"
+        assert member.member_class is None
+
     async def test_the_skip_does_not_stop_the_scan(self, monkeypatch):
         """One off-ladder member must not shorten the rest of the roster."""
-        administrative = self._member("administrative")
+        honorary = self._member("honorary")
         operational = self._member("active", years=12)
 
-        result = await self._advance([administrative, operational], monkeypatch)
+        result = await self._advance([honorary, operational], monkeypatch)
 
-        assert administrative.membership_type == "administrative"
+        assert honorary.membership_type == "honorary"
         assert operational.membership_type == "senior"
         assert (result["advanced"], result["off_ladder"]) == (1, 1)
+
+    async def test_a_tier_named_for_a_class_still_moves_the_class(self, monkeypatch):
+        """A department whose ladder ends in a rung literally called
+        ``administrative`` is asking for a class change, and gets the one it
+        always got: the legacy column is written, the rank is cleared."""
+        member = self._member("active", years=25)
+        tiers = [
+            {"id": "active", "years_required": 1, "sort_order": 1},
+            {"id": "administrative", "years_required": 20, "sort_order": 2},
+        ]
+        org = SimpleNamespace(
+            id="org-1",
+            settings={"membership_tiers": {"auto_advance": True, "tiers": tiers}},
+        )
+        import app.services.membership_tier_service as module
+
+        monkeypatch.setattr(module, "log_audit_event", AsyncMock())
+        db = self._db(org, [member])
+        await MembershipTierService(db).advance_all("org-1", "admin-1")
+
+        assert member.membership_type == "administrative"
+        assert member.rank is None
 
     async def test_a_member_already_at_their_tier_is_not_counted_off_ladder(
         self, monkeypatch
@@ -307,3 +368,42 @@ class TestAdvanceAllStaysOnTheLadder:
         result = await self._advance([member], monkeypatch)
 
         assert (result["advanced"], result["off_ladder"]) == (0, 0)
+
+
+class TestTierForStatus:
+    def test_matches_in_canonical_spelling(self):
+        tier = MembershipTierService.tier_for_status(TIERS, "regular")
+        assert tier is not None
+        assert tier["id"] == "active"
+        assert MembershipTierService.tier_for_status(TIERS, "active")["id"] == "active"
+        assert MembershipTierService.tier_for_status(TIERS, "senior")["id"] == "senior"
+        assert MembershipTierService.tier_for_status(TIERS, "Life ")["id"] == "life"
+
+    def test_a_standing_off_the_ladder_matches_nothing(self):
+        assert MembershipTierService.tier_for_status(TIERS, "honorary") is None
+        assert MembershipTierService.tier_for_status(TIERS, None) is None
+
+
+class TestRanksAsByTier:
+    def test_only_declared_tiers_appear(self):
+        org = SimpleNamespace(
+            settings={
+                "membership_tiers": {
+                    "tiers": [
+                        {"id": "active", "ranks_as": None},
+                        {"id": "senior", "ranks_as": "regular"},
+                        {"id": "cadet", "ranks_as": " Probationary "},
+                    ]
+                }
+            }
+        )
+        assert MembershipTierService.ranks_as_by_tier(org) == {
+            "senior": "regular",
+            "cadet": "probationary",
+        }
+
+    def test_tolerates_an_organization_without_settings(self):
+        assert (
+            MembershipTierService.ranks_as_by_tier(SimpleNamespace(settings=None)) == {}
+        )
+        assert MembershipTierService.ranks_as_by_tier(None) == {}

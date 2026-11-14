@@ -52,6 +52,7 @@ from app.models.training import (
 from app.models.user import Organization, User
 from app.services.auto_reorder_service import AutoReorderService
 from app.services.inventory_service import InventoryService
+from app.services.position_recipients import current_holder_ids
 from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_ref
 from app.utils.check_types import (
     COUNT,
@@ -6292,24 +6293,12 @@ class EquipmentCheckService:
                 if shift.shift_officer_id:
                     recipient_ids.add(str(shift.shift_officer_id))
 
-            # Users with matching roles
+            # Current members holding a configured position
             notify_roles = cfg.get("notify_roles", [])
-            if notify_roles:
-                from app.models.user import Role, user_positions
-
-                role_result = await self.db.execute(
-                    select(user_positions.c.user_id)
-                    .join(
-                        Role,
-                        Role.id == user_positions.c.position_id,
-                    )
-                    .where(
-                        Role.organization_id == str(organization_id),
-                        Role.slug.in_(notify_roles),
-                    )
+            if isinstance(notify_roles, list):
+                recipient_ids |= await current_holder_ids(
+                    self.db, organization_id, notify_roles
                 )
-                for row in role_result.all():
-                    recipient_ids.add(str(row[0]))
 
             # Don't notify the person who did the check
             recipient_ids.discard(str(checked_by))

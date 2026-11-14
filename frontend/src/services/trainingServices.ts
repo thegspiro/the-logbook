@@ -4,6 +4,7 @@
 
 import api from './apiClient';
 import { enqueueGeneric } from '../utils/genericOfflineQueue';
+import { newRequestId } from '../utils/requestId';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 import { toAppError } from '../utils/errorHandling';
 import { TRAINING_RECORDS_PAGE_SIZE } from '../constants/config';
@@ -72,6 +73,7 @@ import type {
   ProgramEnrollment,
   ProgramEnrollmentCreate,
   ProgramEnrollmentWithUser,
+  MilestoneOptions,
   ProgramMilestone,
   ProgramMilestoneCreate,
   ProgramMilestoneUpdate,
@@ -111,10 +113,13 @@ import type {
   TrainingReport,
   TrainingRequirement,
   TrainingRequirementCreate,
+  TrainingRequirementDeletionImpact,
   TrainingRequirementEnhanced,
   TrainingRequirementEnhancedCreate,
   TrainingRequirementUpdate,
   UserTrainingStats,
+  RequirementOverride,
+  RequirementOverrideCreate,
 } from '../types/training';
 import type { ComplianceMatrix, ExpiringCertification } from './communicationsServices';
 
@@ -335,9 +340,26 @@ export const trainingService = {
   },
 
   /**
-   * Permanently delete a training requirement
+   * What uses a training requirement, so the delete dialog can say what a
+   * delete would do to it
    */
-  async deleteRequirement(requirementId: string): Promise<void> {
+  async getRequirementDeletionImpact(requirementId: string): Promise<TrainingRequirementDeletionImpact> {
+    const response = await api.get<TrainingRequirementDeletionImpact>(
+      `/training/requirements/${requirementId}/deletion-impact`
+    );
+    return response.data;
+  },
+
+  /**
+   * Delete a training requirement. The backend deactivates one that is still
+   * in use, unless `permanent` is set, which deletes it regardless and removes
+   * or unlinks every record that references it.
+   */
+  async deleteRequirement(requirementId: string, options?: { permanent?: boolean }): Promise<void> {
+    if (options?.permanent) {
+      await api.delete(`/training/requirements/${requirementId}`, { params: { permanent: true } });
+      return;
+    }
     await api.delete(`/training/requirements/${requirementId}`);
   },
 
@@ -432,6 +454,29 @@ export const trainingService = {
 
   async getComplianceMatrix(): Promise<ComplianceMatrix> {
     const response = await api.get<ComplianceMatrix>('/training/compliance-matrix');
+    return response.data;
+  },
+
+  /** The Chief's overrides of a session-attendance requirement, revoked ones included. */
+  async listRequirementOverrides(requirementId: string): Promise<RequirementOverride[]> {
+    const response = await api.get<RequirementOverride[]>(`/training/requirements/${requirementId}/overrides`);
+    return response.data;
+  },
+
+  /** Record a Chief's override; refused unless the caller holds a Chief position. */
+  async grantRequirementOverride(
+    requirementId: string,
+    override: RequirementOverrideCreate
+  ): Promise<RequirementOverride> {
+    const response = await api.post<RequirementOverride>(`/training/requirements/${requirementId}/overrides`, override);
+    return response.data;
+  },
+
+  /** Revoke a Chief's override; the record stays, marked revoked. */
+  async revokeRequirementOverride(requirementId: string, overrideId: string): Promise<RequirementOverride> {
+    const response = await api.post<RequirementOverride>(
+      `/training/requirements/${requirementId}/overrides/${overrideId}/revoke`
+    );
     return response.data;
   },
 
@@ -966,6 +1011,12 @@ export const trainingProgramService = {
     return response.data;
   },
 
+  /** Courses, tests, positions and members the milestone editor offers. */
+  async getMilestoneOptions(): Promise<MilestoneOptions> {
+    const response = await api.get<MilestoneOptions>('/training/programs/milestone-options');
+    return response.data;
+  },
+
   /** Delete a milestone. */
   async deleteMilestone(programId: string, milestoneId: string): Promise<void> {
     await api.delete(`/training/programs/programs/${programId}/milestones/${milestoneId}`);
@@ -1264,6 +1315,18 @@ export const trainingSessionService = {
     return response.data;
   },
 
+  /**
+   * Replace the attendance requirements a session counts toward; an empty
+   * list makes it optional. Allowed after attendance is finalized, since it
+   * changes only how the session is graded.
+   */
+  async setAttendanceRequirements(sessionId: string, requirementIds: string[]): Promise<TrainingSessionResponse> {
+    const response = await api.put<TrainingSessionResponse>(`/training/sessions/${sessionId}/attendance-requirements`, {
+      requirement_ids: requirementIds,
+    });
+    return response.data;
+  },
+
   async finalizeSession(sessionId: string): Promise<{ message: string; approval_id: string }> {
     const response = await api.post<{ message: string; approval_id: string }>(
       `/training/sessions/${sessionId}/finalize`
@@ -1354,7 +1417,10 @@ export const trainingSubmissionService = {
   },
 
   // Member submissions
-  async createSubmission(data: TrainingSubmissionCreate): Promise<TrainingSubmission> {
+  async createSubmission(input: TrainingSubmissionCreate): Promise<TrainingSubmission> {
+    // Chosen once, before the first attempt: a queued copy is resent whenever
+    // an answer goes missing, and the server stores a repeat of this key once.
+    const data: TrainingSubmissionCreate = { ...input, client_request_id: input.client_request_id || newRequestId() };
     // If the device is offline, persist the submission to IndexedDB so it
     // syncs when connectivity returns. This is the most-used action in the
     // product and must never silently drop because of weak station wifi.
@@ -1506,6 +1572,208 @@ export const trainingSubmissionService = {
 };
 
 // ============================================
+// Shift Evaluation Templates Service
+// ============================================
+
+export const shiftEvaluationTemplateService = {
+  async list(): Promise<import('../types/training').ShiftEvaluationTemplate[]> {
+    const response = await api.get<import('../types/training').ShiftEvaluationTemplate[]>(
+      '/training/shift-evaluation-templates'
+    );
+    return asArray(response.data);
+  },
+
+  async get(templateId: string): Promise<import('../types/training').ShiftEvaluationTemplate> {
+    const response = await api.get<import('../types/training').ShiftEvaluationTemplate>(
+      `/training/shift-evaluation-templates/${templateId}`
+    );
+    return response.data;
+  },
+
+  /** An unsaved starting point for the editor. */
+  async getExample(): Promise<import('../types/training').ShiftEvaluationTemplateWrite> {
+    const response = await api.get<import('../types/training').ShiftEvaluationTemplateWrite>(
+      '/training/shift-evaluation-templates/example'
+    );
+    return response.data;
+  },
+
+  async create(
+    body: import('../types/training').ShiftEvaluationTemplateWrite
+  ): Promise<import('../types/training').ShiftEvaluationTemplate> {
+    const response = await api.post<import('../types/training').ShiftEvaluationTemplate>(
+      '/training/shift-evaluation-templates',
+      body
+    );
+    return response.data;
+  },
+
+  async update(
+    templateId: string,
+    body: import('../types/training').ShiftEvaluationTemplateWrite
+  ): Promise<import('../types/training').ShiftEvaluationTemplate> {
+    const response = await api.put<import('../types/training').ShiftEvaluationTemplate>(
+      `/training/shift-evaluation-templates/${templateId}`,
+      body
+    );
+    return response.data;
+  },
+
+  async remove(templateId: string): Promise<void> {
+    await api.delete(`/training/shift-evaluation-templates/${templateId}`);
+  },
+
+  async getSettings(): Promise<import('../types/training').ShiftEvaluationSettings> {
+    const response = await api.get<import('../types/training').ShiftEvaluationSettings>(
+      '/training/shift-evaluation-templates/settings'
+    );
+    return response.data;
+  },
+
+  async updateSettings(
+    updates: import('../types/training').ShiftEvaluationSettingsUpdate
+  ): Promise<import('../types/training').ShiftEvaluationSettings> {
+    const response = await api.patch<import('../types/training').ShiftEvaluationSettings>(
+      '/training/shift-evaluation-templates/settings',
+      updates
+    );
+    return response.data;
+  },
+};
+
+// ============================================
+// Shift Evaluations Service
+// ============================================
+
+const evaluationPath = (shiftId: string, memberId: string, scopeKey: string) =>
+  `/training/shift-evaluations/shifts/${encodeURIComponent(shiftId)}/members/${encodeURIComponent(
+    memberId
+  )}/${encodeURIComponent(scopeKey)}`;
+
+export const shiftEvaluationService = {
+  /** Who on a shift needs an evaluation, and where each one stands. */
+  async getRoster(shiftId: string): Promise<import('../types/training').ShiftEvaluationRoster> {
+    const response = await api.get<import('../types/training').ShiftEvaluationRoster>(
+      `/training/shift-evaluations/shifts/${encodeURIComponent(shiftId)}`
+    );
+    return response.data;
+  },
+
+  async getForm(
+    shiftId: string,
+    memberId: string,
+    scopeKey: string,
+    templateId?: string
+  ): Promise<import('../types/training').ShiftEvaluationFormResponse> {
+    const response = await api.get<import('../types/training').ShiftEvaluationFormResponse>(
+      evaluationPath(shiftId, memberId, scopeKey),
+      templateId ? { params: { template_id: templateId } } : undefined
+    );
+    return response.data;
+  },
+
+  async save(
+    shiftId: string,
+    memberId: string,
+    scopeKey: string,
+    body: import('../types/training').ShiftEvaluationSaveBody
+  ): Promise<import('../types/training').ShiftEvaluationDetail> {
+    const response = await api.put<import('../types/training').ShiftEvaluationDetail>(
+      evaluationPath(shiftId, memberId, scopeKey),
+      body
+    );
+    return response.data;
+  },
+
+  async get(evaluationId: string): Promise<import('../types/training').ShiftEvaluationDetail> {
+    const response = await api.get<import('../types/training').ShiftEvaluationDetail>(
+      `/training/shift-evaluations/${encodeURIComponent(evaluationId)}`
+    );
+    return response.data;
+  },
+
+  /** The evaluations a logged outside shift calls for (training.manage). */
+  async getOutsideRoster(entryId: string): Promise<import('../types/training').ShiftEvaluationRoster> {
+    const response = await api.get<import('../types/training').ShiftEvaluationRoster>(
+      `/training/shift-evaluations/external/${encodeURIComponent(entryId)}`
+    );
+    return response.data;
+  },
+
+  async getOutsideForm(
+    entryId: string,
+    scopeKey: string,
+    templateId?: string
+  ): Promise<import('../types/training').ShiftEvaluationFormResponse> {
+    const response = await api.get<import('../types/training').ShiftEvaluationFormResponse>(
+      `/training/shift-evaluations/external/${encodeURIComponent(entryId)}/${encodeURIComponent(scopeKey)}`,
+      templateId ? { params: { template_id: templateId } } : undefined
+    );
+    return response.data;
+  },
+
+  async saveOutside(
+    entryId: string,
+    scopeKey: string,
+    body: import('../types/training').ShiftEvaluationSaveBody
+  ): Promise<import('../types/training').ShiftEvaluationDetail> {
+    const response = await api.put<import('../types/training').ShiftEvaluationDetail>(
+      `/training/shift-evaluations/external/${encodeURIComponent(entryId)}/${encodeURIComponent(scopeKey)}`,
+      body
+    );
+    return response.data;
+  },
+
+  /** The open preceptor link for a logged outside shift, or null. */
+  async getPreceptorLink(entryId: string): Promise<import('../types/training').PreceptorLink | null> {
+    const response = await api.get<import('../types/training').PreceptorLink | null>(
+      `/training/shift-evaluations/preceptor-links/${encodeURIComponent(entryId)}`
+    );
+    return response.data ?? null;
+  },
+
+  /** A new preceptor link, revoking the open one; emailed when an address is given. */
+  async createPreceptorLink(
+    entryId: string,
+    preceptorEmail?: string
+  ): Promise<import('../types/training').PreceptorLink> {
+    const response = await api.post<import('../types/training').PreceptorLink>(
+      `/training/shift-evaluations/preceptor-links/${encodeURIComponent(entryId)}`,
+      preceptorEmail ? { preceptor_email: preceptorEmail } : {}
+    );
+    return response.data;
+  },
+
+  async sendPreceptorLink(entryId: string, preceptorEmail: string): Promise<import('../types/training').PreceptorLink> {
+    const response = await api.post<import('../types/training').PreceptorLink>(
+      `/training/shift-evaluations/preceptor-links/${encodeURIComponent(entryId)}/send`,
+      { preceptor_email: preceptorEmail }
+    );
+    return response.data;
+  },
+
+  async revokePreceptorLink(entryId: string): Promise<void> {
+    await api.delete(`/training/shift-evaluations/preceptor-links/${encodeURIComponent(entryId)}`);
+  },
+
+  /** Logged outside shifts whose evaluation is missing or unfinished. */
+  async listOutsideOutstanding(): Promise<import('../types/training').OutsideShiftAwaitingEvaluation[]> {
+    const response = await api.get<import('../types/training').OutsideShiftAwaitingEvaluation[]>(
+      '/training/shift-evaluations/external/outstanding'
+    );
+    return asArray(response.data);
+  },
+
+  /** The caller's own submitted evaluations they may see yet. */
+  async listMine(): Promise<import('../types/training').ShiftEvaluationDetail[]> {
+    const response = await api.get<import('../types/training').ShiftEvaluationDetail[]>(
+      '/training/shift-evaluations/mine'
+    );
+    return asArray(response.data);
+  },
+};
+
+// ============================================
 // Shift Completion Reports Service
 // ============================================
 
@@ -1533,6 +1801,14 @@ export const trainingModuleConfigService = {
   async getMyTraining(): Promise<import('../types/training').MyTrainingSummary> {
     const response = await api.get<import('../types/training').MyTrainingSummary>(
       '/training/module-config/my-training'
+    );
+    return response.data;
+  },
+
+  /** One member's requirements as the training officer sees them (training.manage). */
+  async getMemberRequirements(userId: string): Promise<import('../types/training').MemberRequirementsResponse> {
+    const response = await api.get<import('../types/training').MemberRequirementsResponse>(
+      `/training/module-config/members/${encodeURIComponent(userId)}/requirements`
     );
     return response.data;
   },
@@ -2161,6 +2437,13 @@ export const complianceConfigService = {
   async getAvailableRequirements(): Promise<{ requirements: import('../types/training').AvailableRequirement[] }> {
     const response = await api.get<{ requirements: import('../types/training').AvailableRequirement[] }>(
       '/compliance/config/requirements'
+    );
+    return response.data;
+  },
+
+  async getAvailablePositions(): Promise<{ positions: import('../types/training').AvailablePosition[] }> {
+    const response = await api.get<{ positions: import('../types/training').AvailablePosition[] }>(
+      '/compliance/config/positions'
     );
     return response.data;
   },

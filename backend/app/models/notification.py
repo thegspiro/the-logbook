@@ -56,6 +56,7 @@ class NotificationTrigger(str, enum.Enum):
     DOCUMENT_UPLOADED = "document_uploaded"
     SUGGESTION_SUBMITTED = "suggestion_submitted"
     EQUIPMENT_REQUEST_UPDATE = "equipment_request_update"
+    MEDICAL_SCREENING_EXPIRY = "medical_screening_expiry"
 
 
 # Triggers whose senders actually consult the rules table. A rule for anything
@@ -70,6 +71,7 @@ ENFORCED_TRIGGERS = frozenset(
         NotificationTrigger.TRAINING_EXPIRY,
         NotificationTrigger.SUGGESTION_SUBMITTED,
         NotificationTrigger.EQUIPMENT_REQUEST_UPDATE,
+        NotificationTrigger.MEDICAL_SCREENING_EXPIRY,
     }
 )
 

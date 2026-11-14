@@ -135,6 +135,8 @@ describe('MinutesDetailPage agenda sections', () => {
         expect.objectContaining({ key: 'agenda-new', not_taken_up: true }),
         expect.objectContaining({ key: 'agenda-old', not_taken_up: true }),
       ]) as unknown,
+      // Every section save names the version it was loaded at (MM5-4).
+      expected_version: 0,
     });
   });
 

@@ -194,11 +194,13 @@ async def _announce_mfa_grace(db: AsyncSession, user: User) -> None:
         message=(
             "Your positions give you access to administration or health "
             f"records, so two-factor authentication is now required. You have "
-            f"{settings.MFA_GRACE_DAYS} days to set it up under Profile > "
+            f"{settings.MFA_GRACE_DAYS} days to set it up under My Account > "
             "Security; after that you will only be able to reach the setup "
             "screens until it is done."
         ),
-        action_url="/account",
+        # The Security tab, where setup is: plain /account opens the profile
+        # tab (W07-2; the grace banner had the same fault, W05-11).
+        action_url="/account?tab=security",
     )
 
 
@@ -480,12 +482,27 @@ async def require_stepup(
     stamp lives on the session row (``POST /auth/step-up`` writes it), so it is
     server-side and never carries to another session of the same member.
     """
-    token = access_token
-    if not token and authorization:
-        scheme, _, bearer = authorization.partition(" ")
-        token = bearer if scheme.lower() == "bearer" and bearer else None
-    await ensure_stepup(db, token)
+    await ensure_stepup(db, access_token_from(authorization, access_token))
     return current_user
+
+
+def access_token_from(
+    authorization: str | None, cookie_token: str | None
+) -> str | None:
+    """The caller's access token: the cookie first, else the bearer header."""
+    if cookie_token:
+        return cookie_token
+    scheme, _, bearer = (authorization or "").partition(" ")
+    return bearer if scheme.lower() == "bearer" and bearer else None
+
+
+def request_access_token(request: Request, cookie_token: str | None) -> str | None:
+    """The caller's access token: the cookie first, else the bearer header.
+
+    For a handler calling ``ensure_stepup`` itself, which has no
+    ``require_stepup`` dependency to read the token for it.
+    """
+    return access_token_from(request.headers.get("authorization"), cookie_token)
 
 
 async def ensure_stepup(db: AsyncSession, token: str | None) -> None:

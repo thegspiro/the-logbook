@@ -18,6 +18,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { ElectionStatus } from '../../../constants/enums';
 import { electionService } from '../../../services/electionService';
 import type { ElectionListItem } from '../../../types/election';
+import { useApplicantAccess } from './ApplicantAccessContext';
 
 interface ElectionPackageSectionProps {
   applicant: Applicant;
@@ -25,6 +26,7 @@ interface ElectionPackageSectionProps {
 }
 
 const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applicant, tz }) => {
+  const access = useApplicantAccess();
   const navigate = useNavigate();
 
   const {
@@ -210,10 +212,25 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
                 </div>
               </div>
             )}
+            {currentElectionPackage.follow_up_forms?.map((form, i) => (
+              <div key={`${form.form_name ?? 'form'}-${i}`} className="pt-1">
+                <span className="text-theme-text-muted">{form.form_name ?? 'Follow-up form'}:</span>
+                <dl className="mt-1 space-y-1">
+                  {form.answers.map((answer, j) => (
+                    <div key={`${answer.label}-${j}`}>
+                      <dt className="text-theme-text-muted">{answer.label}</dt>
+                      <dd className="text-theme-text-secondary wrap-break-word whitespace-pre-line">
+                        {answer.answer || '(no answer)'}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ))}
           </div>
 
-          {/* Editable fields -- only for draft packages */}
-          {currentElectionPackage.status === ElectionStatus.DRAFT && (
+          {/* Editable fields -- only for draft packages, and only for managers */}
+          {currentElectionPackage.status === ElectionStatus.DRAFT && access.can_manage && (
             <>
               <div>
                 <label className="text-theme-text-muted mb-1 block text-xs">Coordinator Notes</label>
@@ -271,7 +288,7 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
               {currentElectionPackage.coordinator_notes && (
                 <p className="text-theme-text-muted text-xs">Notes: {currentElectionPackage.coordinator_notes}</p>
               )}
-              {!showElectionPicker ? (
+              {!access.can_manage ? null : !showElectionPicker ? (
                 <button
                   onClick={() => {
                     void handleOpenElectionPicker();
@@ -387,18 +404,20 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
             This applicant has no election package, so they cannot be put on a ballot or advanced past this stage yet.
             Applicants who reach this stage now get one automatically; create one for an applicant who was already here.
           </p>
-          <button
-            type="button"
-            onClick={() => {
-              void handleCreatePackage();
-            }}
-            disabled={isCreatingPackage}
-            className="flex items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
-          >
-            {isCreatingPackage && <Loader2 className="h-3 w-3 animate-spin" />}
-            <Vote className="h-3 w-3" />
-            Create Package
-          </button>
+          {access.can_manage && (
+            <button
+              type="button"
+              onClick={() => {
+                void handleCreatePackage();
+              }}
+              disabled={isCreatingPackage}
+              className="flex items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
+            >
+              {isCreatingPackage && <Loader2 className="h-3 w-3 animate-spin" />}
+              <Vote className="h-3 w-3" />
+              Create Package
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event, EventRSVP, EventType, RSVPStatus
 from app.models.user import User
+from app.schemas.event import QRCheckInData
 from app.services.event_service import EventService
 
 # ---- Factory helpers to reduce duplication ----
@@ -211,6 +212,41 @@ class TestQRCheckInTimeValidation:
 
         assert error is not None
         assert data is None
+
+
+class TestQRCheckInGuestFlag:
+    """The QR page reads whether guests may sign in from this payload.
+
+    The service once left the key out, so the response schema's default
+    (False) went to every page: the QR page told managers guest check-in was
+    off on an event with it on, and never offered the guest code or its print.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("allowed", [True, False])
+    async def test_reports_the_events_own_guest_setting(self, allowed):
+        org_id = uuid4()
+        event = _make_event(org_id=org_id, allow_guest_check_in=allowed)
+        mock_db = _mock_db_returning(event, _make_org(org_id=org_id))
+
+        data, error = await _make_service(mock_db).get_qr_check_in_data(
+            event.id, org_id
+        )
+
+        assert error is None
+        assert data["allow_guest_check_in"] is allowed
+        # What the endpoint actually serializes, not only the service's dict.
+        assert QRCheckInData(**data).allow_guest_check_in is allowed
+
+    @pytest.mark.asyncio
+    async def test_an_unset_flag_reads_as_off(self):
+        org_id = uuid4()
+        event = _make_event(org_id=org_id, allow_guest_check_in=None)
+        mock_db = _mock_db_returning(event, _make_org(org_id=org_id))
+
+        data, _ = await _make_service(mock_db).get_qr_check_in_data(event.id, org_id)
+
+        assert data["allow_guest_check_in"] is False
 
 
 class TestQRCheckInRecordsTraining:

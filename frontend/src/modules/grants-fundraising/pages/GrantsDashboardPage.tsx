@@ -17,7 +17,6 @@ import {
   Users,
   HandCoins,
   BarChart3,
-  ChevronRight,
   AlertTriangle,
   CalendarClock,
   ClipboardCheck,
@@ -26,10 +25,12 @@ import { useGrantsStore } from '../store/grantsStore';
 import type { GrantOpportunity, GrantComplianceTask, Donation, PipelineSummaryItem } from '../types';
 import { APPLICATION_STATUS_COLORS, COMPLIANCE_STATUS_COLORS } from '../types';
 import { Skeleton, SkeletonRow } from '../../../components/ux/Skeleton';
+import { KpiTile } from '../../../components/ux/KpiTile';
 import { formatDate, calendarDaysFromToday } from '../../../utils/dateFormatting';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useAuthStore } from '../../../stores/authStore';
+import { StatGrid } from '../../../components/ux/StatGrid';
 
 // =============================================================================
 // Payment Method Labels
@@ -99,38 +100,6 @@ const getDeadlineBadgeColor = (deadlineDate: string | null, timezone: string): s
 };
 
 // =============================================================================
-// KPI Card Component
-// =============================================================================
-
-interface KpiCardProps {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  iconBgClass: string;
-  linkTo?: string;
-}
-
-const KpiCard: React.FC<KpiCardProps> = ({ label, value, icon, iconBgClass, linkTo }) => {
-  const content = (
-    <div className="card p-4 transition-shadow hover:shadow-md">
-      <div className="flex items-center gap-3">
-        <div className={`rounded-lg p-2 ${iconBgClass}`}>{icon}</div>
-        <div className="min-w-0 flex-1">
-          <p className="text-theme-text-secondary text-sm leading-snug">{label}</p>
-          <p className="text-theme-text-primary text-xl font-bold">{value}</p>
-        </div>
-        {linkTo && <ChevronRight className="text-theme-text-secondary h-4 w-4 shrink-0" />}
-      </div>
-    </div>
-  );
-
-  if (linkTo) {
-    return <Link to={linkTo}>{content}</Link>;
-  }
-  return content;
-};
-
-// =============================================================================
 // Loading Skeleton for the Dashboard
 // =============================================================================
 
@@ -139,7 +108,7 @@ const DashboardSkeleton: React.FC = () => (
     <span className="sr-only">Loading...</span>
 
     {/* KPI Row 1 */}
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <StatGrid columns={4}>
       {Array.from({ length: 4 }).map((_, i) => (
         <div key={`kpi1-${String(i)}`} className="card p-4">
           <div className="flex items-center gap-3">
@@ -151,10 +120,10 @@ const DashboardSkeleton: React.FC = () => (
           </div>
         </div>
       ))}
-    </div>
+    </StatGrid>
 
     {/* KPI Row 2 */}
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <StatGrid columns={4}>
       {Array.from({ length: 4 }).map((_, i) => (
         <div key={`kpi2-${String(i)}`} className="card p-4">
           <div className="flex items-center gap-3">
@@ -166,7 +135,7 @@ const DashboardSkeleton: React.FC = () => (
           </div>
         </div>
       ))}
-    </div>
+    </StatGrid>
 
     {/* Pipeline Summary */}
     <div className="card p-4">
@@ -547,8 +516,8 @@ const GrantsDashboardPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="page-header gap-4 sm:items-center">
+        <div className="page-header-title">
           <h1 className="text-theme-text-primary text-2xl font-bold">Grants & Fundraising</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">
             Overview of grants, campaigns, and fundraising activity
@@ -576,67 +545,67 @@ const GrantsDashboardPage: React.FC = () => {
       )}
 
       {/* KPI Row 1 */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard
+      <StatGrid columns={4}>
+        <KpiTile
           label="Total Grant Funding"
           value={formatCurrencyWhole(dashboard?.totalGrantFunding ?? 0)}
           icon={<DollarSign className="h-5 w-5 text-green-700 dark:text-green-600" />}
           iconBgClass="bg-green-100 dark:bg-green-500/20"
           linkTo="/grants/applications?group=funded"
         />
-        <KpiCard
+        <KpiTile
           label="Active Grants"
           value={String(dashboard?.activeGrants ?? 0)}
           icon={<FileText className="h-5 w-5 text-blue-600" />}
           iconBgClass="bg-blue-100 dark:bg-blue-500/20"
           linkTo="/grants/applications?group=active"
         />
-        <KpiCard
+        <KpiTile
           label="Pending Applications"
           value={String(dashboard?.pendingApplications ?? 0)}
           icon={<Clock className="h-5 w-5 text-yellow-700 dark:text-yellow-600" />}
           iconBgClass="bg-yellow-100 dark:bg-yellow-500/20"
           linkTo="/grants/applications?group=pending"
         />
-        <KpiCard
+        <KpiTile
           label="Total Raised YTD"
           value={formatCurrencyWhole(dashboard?.totalRaisedYtd ?? 0)}
           icon={<TrendingUp className="h-5 w-5 text-emerald-700 dark:text-emerald-600" />}
           iconBgClass="bg-emerald-100 dark:bg-emerald-500/20"
           linkTo="/grants/campaigns"
         />
-      </div>
+      </StatGrid>
 
       {/* KPI Row 2 */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard
+      <StatGrid columns={4}>
+        <KpiTile
           label="Active Campaigns"
           value={String(dashboard?.activeCampaignsCount ?? 0)}
           icon={<Megaphone className="h-5 w-5 text-purple-600" />}
           iconBgClass="bg-purple-100 dark:bg-purple-500/20"
           linkTo="/grants/campaigns?status=active"
         />
-        <KpiCard
+        <KpiTile
           label="Total Donors"
           value={String(dashboard?.totalDonors ?? 0)}
           icon={<Users className="h-5 w-5 text-indigo-600" />}
           iconBgClass="bg-indigo-100 dark:bg-indigo-500/20"
           linkTo="/grants/donors"
         />
-        <KpiCard
+        <KpiTile
           label="Outstanding Pledges"
           value={formatCurrencyWhole(dashboard?.outstandingPledges ?? 0)}
           icon={<HandCoins className="h-5 w-5 text-orange-700 dark:text-orange-600" />}
           iconBgClass="bg-orange-100 dark:bg-orange-500/20"
           linkTo="/grants/pledges"
         />
-        <KpiCard
+        <KpiTile
           label="Total Raised (12mo)"
           value={formatCurrencyWhole(dashboard?.totalRaised12Mo ?? 0)}
           icon={<BarChart3 className="h-5 w-5 text-teal-700 dark:text-teal-600" />}
           iconBgClass="bg-teal-100 dark:bg-teal-500/20"
         />
-      </div>
+      </StatGrid>
 
       {/* Grant Pipeline Summary */}
       <PipelineSummary items={dashboard?.pipelineSummary ?? []} />

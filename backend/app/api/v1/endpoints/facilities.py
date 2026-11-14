@@ -1600,6 +1600,12 @@ async def get_facility_maintenance_page(
         max_length=200,
         description="Search description, vendor, work order number or performer",
     ),
+    due_within_days: int | None = Query(
+        None,
+        ge=1,
+        le=366,
+        description="Open work due after today and by this many days ahead",
+    ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -1626,6 +1632,7 @@ async def get_facility_maintenance_page(
         occurred_after=occurred_after,
         occurred_before=occurred_before,
         search=search,
+        due_within_days=due_within_days,
         skip=skip,
         limit=limit,
     )
@@ -2022,6 +2029,12 @@ async def get_facility_inspections_page(
         max_length=200,
         description="Search title, inspector or inspecting organization",
     ),
+    due_within_days: int | None = Query(
+        None,
+        ge=0,
+        le=366,
+        description="Next inspection from today through this many days ahead",
+    ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -2044,6 +2057,7 @@ async def get_facility_inspections_page(
         inspection_type=inspection_type,
         result=result,
         search=search,
+        due_within_days=due_within_days,
         skip=skip,
         limit=limit,
     )
@@ -3898,6 +3912,12 @@ async def list_facility_compliance_checklists(
         None, description="Filter by compliance type"
     ),
     is_completed: bool | None = Query(None, description="Filter by completion status"),
+    due_within_days: int | None = Query(
+        None,
+        ge=0,
+        le=366,
+        description="Due from today through this many days ahead",
+    ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
@@ -3917,6 +3937,7 @@ async def list_facility_compliance_checklists(
         facility_id=facility_id,
         compliance_type=compliance_type,
         is_completed=is_completed,
+        due_within_days=due_within_days,
         skip=skip,
         limit=limit,
     )

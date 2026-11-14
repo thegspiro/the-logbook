@@ -235,6 +235,24 @@ describe('InventorySetupPage', () => {
     });
   });
 
+  it("names a facility room's building once in the storage area room picker", async () => {
+    // A facility room's location is named "Room — Facility" by the backend
+    // and carries that facility as its building.
+    mockGetLocations.mockResolvedValue([
+      { ...makeRoom('room-1', 'Volunteer Office — Station 1'), building: 'Station 1' },
+      makeRoom('room-2', 'Supply Closet'),
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<InventorySetupPage />);
+    await screen.findByRole('heading', { name: 'Rooms' });
+
+    await advance(user, 1);
+    await screen.findByRole('heading', { name: 'Storage areas' });
+
+    const labels = Array.from(screen.getByLabelText<HTMLSelectElement>('Room').options).map((o) => o.text);
+    expect(labels).toEqual(['Volunteer Office — Station 1', 'Supply Closet — Station 1']);
+  });
+
   it('applies only the selected category presets and leaves existing ones alone', async () => {
     const user = userEvent.setup();
     renderWithRouter(<InventorySetupPage />);

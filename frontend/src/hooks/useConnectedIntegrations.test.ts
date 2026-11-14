@@ -12,11 +12,26 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+// The module switch, as useEnabledModules reports it. On by default so the
+// other tests exercise the request; the module-off tests turn it off.
+let mockIntegrationsOn = true;
+let mockModulesLoading = false;
+vi.mock('./useEnabledModules', () => ({
+  useEnabledModules: () => ({
+    enabledModules: null,
+    isModuleOn: (key: string) => key !== 'integrations' || mockIntegrationsOn,
+    isLoading: mockModulesLoading,
+  }),
+}));
+
 import { useConnectedIntegrations } from './useConnectedIntegrations';
 
 describe('useConnectedIntegrations', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mockGetConnectedStatus.mockReset();
+    mockGetIntegrations.mockReset();
+    mockIntegrationsOn = true;
+    mockModulesLoading = false;
   });
 
   it('reads the status projection, not the admin-gated full list', async () => {
@@ -60,6 +75,37 @@ describe('useConnectedIntegrations', () => {
     rerender({ enabled: true });
 
     await waitFor(() => expect(result.current.isConnected('zoom')).toBe(true));
+    expect(mockGetConnectedStatus).toHaveBeenCalledTimes(1);
+  });
+
+  // Workflow review W01, 2026-10-31: twelve callers pass no `enabled`, so a
+  // department that left Integrations off at setup got a 403 from
+  // /integrations/connected on Members Administration, a member's profile, Add
+  // Member and the check-in screens. The hook now asks the module switch itself.
+  it('makes no request when the Integrations module is off, whatever the caller passes', async () => {
+    mockIntegrationsOn = false;
+    mockGetConnectedStatus.mockResolvedValue([{ integration_type: 'zoom', status: 'connected', enabled: true }]);
+
+    const { result } = renderHook(() => useConnectedIntegrations());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(mockGetConnectedStatus).not.toHaveBeenCalled();
+    expect(result.current.isConnected('zoom')).toBe(false);
+  });
+
+  it('waits for the module switch before asking, and stays loading meanwhile', async () => {
+    mockModulesLoading = true;
+    mockGetConnectedStatus.mockResolvedValue([]);
+
+    const { result, rerender } = renderHook(() => useConnectedIntegrations());
+
+    expect(result.current.loading).toBe(true);
+    expect(mockGetConnectedStatus).not.toHaveBeenCalled();
+
+    mockModulesLoading = false;
+    rerender();
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
     expect(mockGetConnectedStatus).toHaveBeenCalledTimes(1);
   });
 });

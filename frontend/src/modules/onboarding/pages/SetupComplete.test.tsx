@@ -123,6 +123,14 @@ describe('SetupComplete — what is left', () => {
 
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/members/admin'));
   });
+
+  // Each outstanding step was a 20px line of text at phone width (found driving
+  // workflow review W01-13). jsdom cannot measure, so this pins the utility.
+  it('gives each outstanding step the phone touch minimum', async () => {
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'Add Department Members' })).toHaveClass('touch-target-phone');
+  });
 });
 
 describe('SetupComplete — what was configured', () => {

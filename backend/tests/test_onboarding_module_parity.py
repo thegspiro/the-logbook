@@ -31,6 +31,7 @@ from app.services.onboarding import (
     ONBOARDING_CORE_MODULES,
     ONBOARDING_LEGACY_MODULES,
     ONBOARDING_OFFERED_MODULES,
+    ONBOARDING_RETIRED_MODULES,
     ONBOARDING_SETTINGS_ONLY_MODULES,
 )
 
@@ -88,9 +89,13 @@ def test_every_module_setting_is_either_core_offered_or_settings_only():
     core = set(ONBOARDING_CORE_MODULES)
     offered = set(ONBOARDING_OFFERED_MODULES)
     settings_only = set(ONBOARDING_SETTINGS_ONLY_MODULES)
+    retired = set(ONBOARDING_RETIRED_MODULES)
 
     assert not offered & settings_only
-    unplaced = set(ModuleSettings.model_fields) - core - offered - settings_only
+    assert not retired & (core | offered | settings_only)
+    unplaced = (
+        set(ModuleSettings.model_fields) - core - offered - settings_only - retired
+    )
     assert not unplaced, (
         "These are storable modules that setup never offers and that nothing "
         "marks as Settings-only, so they start off and stay hidden: "
@@ -163,3 +168,20 @@ def test_the_accepted_set_takes_both_spellings():
     assert "prospective-members" in ONBOARDING_ACCEPTED_MODULE_IDS
     assert "prospective_members" in ONBOARDING_ACCEPTED_MODULE_IDS
     assert "hr-payroll" in ONBOARDING_ACCEPTED_MODULE_IDS
+
+
+def test_a_retired_module_is_offered_on_neither_screen():
+    """Owner decision 2026-11-01 (workflow review W01-23).
+
+    Mobile App Access was offered by setup and by Settings → Modules, and
+    nothing read the switch: the app installs and works on a phone either way.
+    It is retired from both screens. The field stays storable so existing
+    settings and the modules API are unchanged, and saved setup sessions that
+    carry it still validate.
+    """
+    retired = set(ONBOARDING_RETIRED_MODULES)
+    assert "mobile" in retired
+    assert not retired & _registry_user_facing_ids()
+    assert not retired & _settings_page_module_keys()
+    assert retired <= set(ModuleSettings.model_fields)
+    assert retired <= ONBOARDING_ACCEPTED_MODULE_IDS

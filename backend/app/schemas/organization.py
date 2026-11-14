@@ -24,6 +24,7 @@ from app.schemas.base import UTCResponseBase
 from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.utils import membership_numbers
 from app.utils.embed_origins import MAX_EMBED_ORIGINS, normalize_embed_origin
+from app.utils.mileage_rate import parse_mileage_rate
 
 
 class OrganizationTypeEnum(str, Enum):
@@ -625,6 +626,14 @@ class FileStorageStatusResponse(BaseModel):
         False,
         description="The operator allows a private or plain-HTTP S3 endpoint",
     )
+    allowed_s3_endpoints: List[str] = Field(
+        default_factory=list,
+        description=(
+            "The self-hosted S3/MinIO endpoints the installation operator "
+            "listed (S3_ALLOWED_ENDPOINTS), the only custom endpoints a "
+            "department may choose; empty means Amazon S3 only"
+        ),
+    )
 
 
 class SchedulingNotificationSettings(BaseModel):
@@ -845,6 +854,39 @@ class MembershipTier(BaseModel):
         default_factory=MembershipTierBenefits,
         description="Benefits granted to members at this tier",
     )
+    # "Counts as". A tier whose id is one of the built-in statuses (the
+    # shipped probationary, active and life rungs) is that status and needs
+    # nothing here. Any other tier (senior) counts as the built-in status
+    # named here wherever a rule is keyed on status -- ballots restricted to
+    # regular members, the probationary account-status mirror -- and as
+    # nothing at all when unset, which is what such a tier matched before
+    # the setting existed. Left unset on the shipped `senior` rung on
+    # purpose: widening a department's electorate is the department's call.
+    ranks_as: Optional[str] = Field(
+        default=None,
+        description=(
+            "The built-in membership status this tier counts as "
+            "(prospective | probationary | regular | life | retired | "
+            "honorary | junior); unset means it counts as none"
+        ),
+    )
+
+    @field_validator("ranks_as")
+    @classmethod
+    def _ranks_as_is_a_builtin_status(cls, value: Optional[str]) -> Optional[str]:
+        from app.utils.membership import MemberStatus
+
+        if value is None:
+            return None
+        normalised = value.strip().lower()
+        if not normalised:
+            return None
+        if normalised not in MemberStatus.ALL:
+            raise ValueError(
+                f"Unknown status '{value}' for ranks_as. "
+                f"Expected one of: {', '.join(MemberStatus.ALL)}."
+            )
+        return normalised
 
 
 class RejoinServiceCredit(str, Enum):
@@ -924,6 +966,23 @@ class MembershipTierSettings(BaseModel):
         ],
         description="Ordered list of membership tiers",
     )
+
+
+def mandatory_for_tiers(org_settings: Any) -> List[MembershipTier]:
+    """The tiers an event's "Mandatory for" offers, in ladder order.
+
+    The ladder the department saved, else the default ladder (unlike
+    ``configured_tiers``, which reads only a saved one): the event forms'
+    chips and the mandatory-tier pre-fill read this one definition, so the
+    pre-fill can only ever pick ids the chips show.
+    """
+    section = (
+        org_settings.get("membership_tiers", {})
+        if isinstance(org_settings, dict)
+        else {}
+    )
+    tier_settings = MembershipTierSettings.model_validate(section)
+    return sorted(tier_settings.tiers, key=lambda tier: tier.sort_order)
 
 
 class MembershipYearBasis(str, Enum):
@@ -1229,7 +1288,10 @@ class ModuleSettings(BaseModel):
     apparatus: bool = Field(default=True, description="Apparatus Management module")
     minutes: bool = Field(default=True, description="Meeting Minutes module")
     reports: bool = Field(default=True, description="Reports & Analytics module")
-    notifications: bool = Field(default=True, description="Email Notifications module")
+    notifications: bool = Field(
+        default=True,
+        description="In-App Notifications module (bell, inbox, push, notification rules)",
+    )
     forms: bool = Field(default=True, description="Custom Forms module")
     integrations: bool = Field(default=True, description="External Integrations module")
     facilities: bool = Field(
@@ -1295,6 +1357,13 @@ class ModuleSettings(BaseModel):
         default=False,
         description="Testing Checklist module (page-by-page QA of the app)",
     )
+    # Off by default: a new module, not one an upgrade could be hiding from a
+    # department already using it. The Historian turns it on under
+    # Settings > Modules when the department is ready to start its archive.
+    history: bool = Field(
+        default=False,
+        description="History module (past members, honor roll, department archive)",
+    )
 
     def get_enabled_modules(self) -> list[str]:
         """Get list of all enabled module IDs including essential modules"""
@@ -1341,6 +1410,7 @@ class ModuleSettingsUpdate(BaseModel):
     finance: Optional[bool] = None
     medical_screening: Optional[bool] = None
     testing: Optional[bool] = None
+    history: Optional[bool] = None
 
 
 class OrganizationSettings(BaseModel):
@@ -1545,6 +1615,26 @@ class MinutesSettingsUpdate(BaseModel):
             "it was held at, without a manager importing it. Absent reads as on."
         ),
     )
+    quorum_counts_late: Optional[bool] = Field(
+        None,
+        description=(
+            "Count a member who arrived late toward quorum. Absent reads as on."
+        ),
+    )
+    quorum_counts_left_early: Optional[bool] = Field(
+        None,
+        description=(
+            "Count a member who left before the end toward quorum. Absent "
+            "reads as on."
+        ),
+    )
+    proxy_attendance: Optional[bool] = Field(
+        None,
+        description=(
+            "Offer a 'represented by proxy' roll-call status, counted toward "
+            "quorum. Absent reads as off."
+        ),
+    )
     executive_library_publishing: Optional[bool] = Field(
         None,
         description=(
@@ -1589,6 +1679,21 @@ class AdminHoursSettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class DualApprovalThresholdsUpdate(BaseModel):
+    """A dual-approval threshold per request type, in whole dollars.
+
+    Null (or leaving the type out of a fresh section) follows the department
+    threshold; 0 turns the rule off for that type alone.
+    """
+
+    purchase_request: Optional[int] = Field(None, ge=0, le=9_999_999_999)
+    check_request: Optional[int] = Field(None, ge=0, le=9_999_999_999)
+    expense_report: Optional[int] = Field(None, ge=0, le=9_999_999_999)
+
+    # A misspelt type would otherwise be stored and read by nothing.
+    model_config = ConfigDict(extra="forbid")
+
+
 class FinanceSettingsUpdate(BaseModel):
     """Finance rules; read by app/utils/finance_settings.py."""
 
@@ -1600,6 +1705,22 @@ class FinanceSettingsUpdate(BaseModel):
             "Whole dollars. A purchase request, check request or expense report "
             "of this amount or more needs two different approvers. Null turns "
             "the rule off, which is also the default."
+        ),
+    )
+    dual_approval_thresholds: Optional[DualApprovalThresholdsUpdate] = Field(
+        None,
+        description=(
+            "A separate threshold per request type. A type left null follows "
+            "dual_approval_threshold; 0 turns the rule off for that type."
+        ),
+    )
+    second_approver_position: Optional[str] = Field(
+        None,
+        max_length=100,
+        description=(
+            "The slug of the position whose holder must be one of the two "
+            "approvers of a request held by the threshold. Null or blank: any "
+            "finance approver other than the first."
         ),
     )
     substantiation_mode: Optional[Literal["off", "warn", "block"]] = Field(
@@ -1627,6 +1748,43 @@ class FinanceSettingsUpdate(BaseModel):
             "approval goes through) or block (it cannot be approved)."
         ),
     )
+    advance_return_method: Optional[Literal["fixed_date", "periodic_statement"]] = (
+        Field(
+            None,
+            description=(
+                "How a cash advance's return deadline is worked out: "
+                "fixed_date (the default; 120 days from the check) or "
+                "periodic_statement (120 days from the first quarterly "
+                "statement after it). An advance keeps the method in force "
+                "when its check was issued."
+            ),
+        )
+    )
+    mileage_rate: Optional[str] = Field(
+        None,
+        max_length=10,
+        description=(
+            "Dollars per mile a mileage line's trip log is priced at, as a "
+            "decimal string of at most three places, 0.001 to 5. Null: no "
+            "rate, and trip logs are refused until one is set "
+            "(app/services/expense_mileage.py)."
+        ),
+    )
+
+    @field_validator("mileage_rate", mode="before")
+    @classmethod
+    def _check_mileage_rate(cls, value: Any) -> Optional[str]:
+        # Stored as a string: the settings JSON cannot hold a Decimal, and a
+        # float would round a rate such as 0.725.
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        rate = parse_mileage_rate(value)
+        if rate is None:
+            raise ValueError(
+                "The mileage rate must be between 0.001 and 5 dollars a mile, "
+                "with at most three decimal places"
+            )
+        return str(rate)
 
     model_config = ConfigDict(extra="allow")
 

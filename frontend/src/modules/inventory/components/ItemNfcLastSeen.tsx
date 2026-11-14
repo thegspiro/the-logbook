@@ -1,5 +1,7 @@
 /**
  * An item's NFC "last seen" trail: the most recent staff taps, newest first.
+ * The trail also carries the item's creation and its barcode put-aways, which
+ * count as seeing it on Items Not Seen (owner decisions of 2026-11-01).
  *
  * Only taps by inventory managers are recorded (a member opening a written tag
  * from their own phone leaves no row), so this is the quartermaster's trail of
@@ -26,6 +28,16 @@ function describeScan(scan: InventoryNfcScan): string {
     const to = scan.storage_area_name ?? 'a storage area that has since been removed';
     if (scan.from_storage_area_id === scan.storage_area_id) return `Seen on ${to}`;
     return scan.from_storage_area_name ? `Moved from ${scan.from_storage_area_name} to ${to}` : `Put away on ${to}`;
+  }
+  if (scan.action === InventoryNfcScanAction.BARCODE_PUT_AWAY) {
+    const to = scan.storage_area_name ?? 'a storage area that has since been removed';
+    if (scan.from_storage_area_id === scan.storage_area_id) return `Seen on ${to} (barcode scan)`;
+    return scan.from_storage_area_name
+      ? `Moved from ${scan.from_storage_area_name} to ${to} by barcode scan`
+      : `Put away on ${to} by barcode scan`;
+  }
+  if (scan.action === InventoryNfcScanAction.CREATED) {
+    return scan.storage_area_name ? `Added to inventory on ${scan.storage_area_name}` : 'Added to inventory';
   }
   if (scan.action === InventoryNfcScanAction.AUDIT) {
     return `Found on ${scan.storage_area_name ?? 'a storage area that has since been removed'} during a shelf audit`;
@@ -75,9 +87,9 @@ export const ItemNfcLastSeen: React.FC<ItemNfcLastSeenProps> = ({ itemId }) => {
       ) : (
         <ol className="divide-theme-surface-border divide-y">
           {scans.map((scan) => (
-            <li key={scan.id} className="flex flex-col gap-0.5 py-2 sm:flex-row sm:justify-between sm:gap-4">
-              <span className="text-theme-text-primary text-sm">{describeScan(scan)}</span>
-              <span className="text-theme-text-secondary text-xs sm:text-right">
+            <li key={scan.id} className="split-row gap-0.5 py-2 sm:gap-4">
+              <span className="split-row-main text-theme-text-primary text-sm">{describeScan(scan)}</span>
+              <span className="split-row-aside text-theme-text-secondary text-xs sm:text-right">
                 {formatDateTime(scan.scanned_at, tz)}
                 {scan.scanned_by_name ? ` · ${scan.scanned_by_name}` : ''}
               </span>

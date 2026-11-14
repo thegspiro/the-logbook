@@ -29,7 +29,9 @@ interface OpenShiftsTabProps {
 export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift, refreshKey = 0 }) => {
   const { user, checkPermission } = useAuthStore();
   const canManage = checkPermission('scheduling.manage');
-  const canAssign = checkPermission('scheduling.assign') || canManage;
+  // scheduling.manage does not imply scheduling.assign: the assignment
+  // fallback below would only earn a manage-only officer a second 403.
+  const canAssign = checkPermission('scheduling.assign');
   // The window is actor-relative, and this screen has a `createAssignment`
   // fallback for anyone who can seat crew — so gating the *action* on the
   // member cutoff would block an officer inside the grace period, and a

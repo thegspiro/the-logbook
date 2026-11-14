@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 const mockUpdate = vi.fn();
 const mockSuggest = vi.fn();
 const mockRecalc = vi.fn();
+const mockSettings = vi.fn();
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
 
@@ -13,6 +14,7 @@ vi.mock('../services/api', () => ({
     updateMinutes: (...a: unknown[]) => mockUpdate(...a) as unknown,
     getAttendanceSuggestions: (...a: unknown[]) => mockSuggest(...a) as unknown,
     recalculateQuorum: (...a: unknown[]) => mockRecalc(...a) as unknown,
+    getReminderSettings: (...a: unknown[]) => mockSettings(...a) as unknown,
   },
 }));
 
@@ -41,7 +43,10 @@ describe('AttendancePanel', () => {
     mockUpdate.mockReset();
     mockSuggest.mockReset();
     mockRecalc.mockReset();
+    mockSettings.mockReset();
     onSaved.mockReset();
+    // A department that does not use proxies, unless a test says otherwise.
+    mockSettings.mockResolvedValue({ proxy_attendance: false });
     mockUpdate.mockResolvedValue({});
     mockRecalc.mockResolvedValue(undefined);
     onSaved.mockResolvedValue(undefined);
@@ -182,6 +187,71 @@ describe('AttendancePanel', () => {
     const list = screen.getByRole('list');
     expect(within(list).queryByText('Visitor')).not.toBeInTheDocument();
     expect(within(list).getByText('Alex Adams')).toBeInTheDocument();
+  });
+
+  describe('proxies', () => {
+    const optionsFor = (name: string) =>
+      Array.from(screen.getByLabelText<HTMLSelectElement>(`Attendance for ${name}`).options).map((o) => o.value);
+
+    it('names a proxy as represented, apart from the members present', () => {
+      renderWithRouter(
+        <AttendancePanel
+          minutesId="m1"
+          attendees={[...roll, { user_id: 'u3', name: 'Pat Proxy', status: 'proxy', present: false }]}
+          canEdit={false}
+          onSaved={onSaved}
+        />
+      );
+
+      expect(screen.getByText('1 present · 1 represented by proxy · 1 excused · 1 guest')).toBeInTheDocument();
+      expect(screen.getByText(/Pat Proxy/)).toBeInTheDocument();
+    });
+
+    it('is not offered when the department does not use proxies', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AttendancePanel minutesId="m1" attendees={roll} canEdit onSaved={onSaved} />);
+
+      await user.click(screen.getByRole('button', { name: 'Edit attendance' }));
+
+      await vi.waitFor(() => expect(mockSettings).toHaveBeenCalled());
+      expect(optionsFor('Alex Adams')).not.toContain('proxy');
+    });
+
+    it('is offered and saved when the department uses proxies', async () => {
+      mockSettings.mockResolvedValue({ proxy_attendance: true });
+      const user = userEvent.setup();
+      renderWithRouter(<AttendancePanel minutesId="m1" attendees={roll} canEdit onSaved={onSaved} />);
+
+      await user.click(screen.getByRole('button', { name: 'Edit attendance' }));
+      await vi.waitFor(() => expect(optionsFor('Blake Brown')).toContain('proxy'));
+      await user.selectOptions(screen.getByLabelText('Attendance for Blake Brown'), 'proxy');
+      await user.click(screen.getByRole('button', { name: 'Save attendance' }));
+
+      expect(mockUpdate).toHaveBeenCalledWith('m1', {
+        attendees: [
+          { user_id: 'u1', name: 'Alex Adams', role: null, status: 'present', note: null },
+          { user_id: 'u2', name: 'Blake Brown', role: null, status: 'proxy', note: 'Away' },
+          { user_id: null, name: 'Visitor', role: null, status: 'guest', note: null },
+        ],
+      });
+    });
+
+    it('keeps a recorded proxy editable after the department stops using them', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(
+        <AttendancePanel
+          minutesId="m1"
+          attendees={[{ user_id: 'u3', name: 'Pat Proxy', status: 'proxy', present: false }]}
+          canEdit
+          onSaved={onSaved}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Edit attendance' }));
+      await vi.waitFor(() => expect(mockSettings).toHaveBeenCalled());
+
+      expect(screen.getByLabelText('Attendance for Pat Proxy')).toHaveValue('proxy');
+    });
   });
 
   it('discards edits on cancel', async () => {

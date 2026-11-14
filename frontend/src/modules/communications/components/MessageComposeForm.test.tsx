@@ -39,8 +39,8 @@ describe('MessageComposeForm', () => {
     const onSaved = vi.fn();
     render(<MessageComposeForm onSaved={onSaved} onCancel={vi.fn()} />);
 
-    await user.type(screen.getByLabelText('Title'), 'Safety bulletin');
-    await user.type(screen.getByLabelText('Message'), 'Please review.');
+    await user.type(screen.getByLabelText(/^Title/), 'Safety bulletin');
+    await user.type(screen.getByLabelText(/^Message/), 'Please review.');
     await user.selectOptions(screen.getByLabelText('Audience'), 'roles');
 
     // Role checkbox (labeled by name) appears once getAvailableRoles resolves.
@@ -60,8 +60,8 @@ describe('MessageComposeForm', () => {
     const user = userEvent.setup();
     render(<MessageComposeForm onSaved={vi.fn()} onCancel={vi.fn()} />);
 
-    await user.type(screen.getByLabelText('Title'), 'All hands');
-    await user.type(screen.getByLabelText('Message'), 'Body');
+    await user.type(screen.getByLabelText(/^Title/), 'All hands');
+    await user.type(screen.getByLabelText(/^Message/), 'Body');
     await user.click(screen.getByRole('button', { name: /post message/i }));
 
     await waitFor(() => expect(mockCreate.mock.calls.length).toBe(1));
@@ -76,21 +76,86 @@ describe('MessageComposeForm', () => {
     const user = userEvent.setup();
     render(<MessageComposeForm onSaved={vi.fn()} onCancel={vi.fn()} />);
 
-    await user.type(screen.getByLabelText('Title'), 'Untargeted');
-    await user.type(screen.getByLabelText('Message'), 'Body');
+    await user.type(screen.getByLabelText(/^Title/), 'Untargeted');
+    await user.type(screen.getByLabelText(/^Message/), 'Body');
     await user.selectOptions(screen.getByLabelText('Audience'), 'roles');
     await user.click(screen.getByRole('button', { name: /post message/i }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/at least one role/i);
+    // The refusal is on the audience list it belongs to (forms review F-3).
+    expect(await screen.findByRole('group', { name: 'Roles' })).toHaveAccessibleDescription(
+      'Select at least one role to target.'
+    );
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('puts a server refusal on the title, not the API key in a banner, and posts nothing', async () => {
+    const user = userEvent.setup();
+    mockCreate.mockReset();
+    mockCreate.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'title', message: 'String should have at most 500 characters' }] },
+      },
+    });
+    render(<MessageComposeForm onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/^Message/), 'Body');
+    await user.type(screen.getByLabelText(/^Title/), 'All hands{Enter}');
+
+    const title = screen.getByLabelText(/^Title/);
+    await waitFor(() => expect(title).toHaveAccessibleDescription('Title is too long — keep it to 500 characters.'));
+    expect(title).toHaveAttribute('aria-invalid', 'true');
+    expect(title).toHaveAttribute('maxLength', '500');
+    expect(screen.queryByText(/\btitle:/)).not.toBeInTheDocument();
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('on edit, saves the rest without a refused field and stays open with it flagged', async () => {
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    mockUpdate.mockReset();
+    mockUpdate
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'expires_at', message: 'Invalid date format.' }] } },
+      })
+      .mockResolvedValue({ id: 'm1' });
+    render(
+      <MessageComposeForm
+        message={{
+          id: 'm1',
+          organization_id: 'org1',
+          title: 'Original',
+          body: 'Original body',
+          priority: 'normal',
+          target_type: 'all',
+          is_pinned: false,
+          is_active: true,
+          is_persistent: false,
+          requires_acknowledgment: false,
+        }}
+        onSaved={onSaved}
+        onCancel={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    const expires = screen.getByLabelText('Expires (optional)');
+    await waitFor(() => expect(expires).toHaveAccessibleDescription('Expiry needs a valid date.'));
+    expect(mockUpdate).toHaveBeenCalledTimes(2);
+    const retried = mockUpdate.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect('expires_at' in retried).toBe(false);
+    expect(retried.title).toBe('Original');
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent(/Saved, except the field flagged below/);
   });
 
   it('sends scheduled_at (as a UTC instant) when a schedule time is set', async () => {
     const user = userEvent.setup();
     render(<MessageComposeForm onSaved={vi.fn()} onCancel={vi.fn()} />);
 
-    await user.type(screen.getByLabelText('Title'), 'Drill reminder');
-    await user.type(screen.getByLabelText('Message'), 'Tower drill tomorrow.');
+    await user.type(screen.getByLabelText(/^Title/), 'Drill reminder');
+    await user.type(screen.getByLabelText(/^Message/), 'Tower drill tomorrow.');
     // datetime-local is set directly; typing char-by-char is unreliable in jsdom.
     fireEvent.change(screen.getByLabelText('Schedule for later (optional)'), {
       target: { value: '2099-01-01T09:00' },
@@ -127,7 +192,7 @@ describe('MessageComposeForm', () => {
     );
 
     // Pre-filled from the message being edited.
-    expect(screen.getByLabelText('Title')).toHaveValue('Original');
+    expect(screen.getByLabelText(/^Title/)).toHaveValue('Original');
     // Switch audience back to everyone.
     await user.selectOptions(screen.getByLabelText('Audience'), 'all');
     await user.click(screen.getByRole('button', { name: /save changes/i }));
@@ -160,8 +225,8 @@ describe('MessageComposeForm when the server refuses', () => {
     const user = userEvent.setup();
     render(<MessageComposeForm onSaved={vi.fn()} onCancel={vi.fn()} />);
 
-    await user.type(screen.getByLabelText('Title'), 'Hose test');
-    await user.type(screen.getByLabelText('Message'), 'Saturday.');
+    await user.type(screen.getByLabelText(/^Title/), 'Hose test');
+    await user.type(screen.getByLabelText(/^Message/), 'Saturday.');
     await user.click(screen.getByRole('button', { name: /post message/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('The expiry time must be in the future');
@@ -214,8 +279,8 @@ describe('MessageComposeForm editing a message whose audience has since gone', (
     );
 
     expect(await screen.findByLabelText('Officer')).toBeChecked();
-    await user.clear(screen.getByLabelText('Title'));
-    await user.type(screen.getByLabelText('Title'), 'Renamed');
+    await user.clear(screen.getByLabelText(/^Title/));
+    await user.type(screen.getByLabelText(/^Title/), 'Renamed');
     await user.click(screen.getByRole('button', { name: /save changes/i }));
 
     await waitFor(() => expect(mockUpdate.mock.calls.length).toBe(1));

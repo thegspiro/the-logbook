@@ -35,10 +35,14 @@ class UserLogin(BaseModel):
     Security:
     - Username restricted to alphanumeric, dots, underscores, hyphens
     - Also accepts email format for login flexibility
+    - Password is bounded, not policy-checked: sign-in verifies a stored
+      password, and a length floor here answered a short attempt with a 422
+      instead of the generic refusal, kept it out of the lockout count, and
+      shut out any password shorter than the floor (W02-7)
     """
 
     username: str = Field(..., min_length=3, max_length=100)
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=1, max_length=128)
 
     @field_validator("username")
     @classmethod
@@ -206,10 +210,24 @@ class MFASetup(BaseModel):
     backup_codes: list[str]
 
 
+def _ungrouped_code(value: Any) -> Any:
+    """Drop the space authenticator apps show inside a code ("123 456").
+
+    Runs before the six-character check, so a correct code typed as the app
+    shows it is read, and every schema that takes one reads it the same way
+    (W04-10; W02-10 had fixed only the sign-in screen).
+    """
+    if isinstance(value, str):
+        return "".join(value.split())
+    return value
+
+
 class MFAVerify(BaseModel):
     """Schema for MFA verification"""
 
     code: str = Field(..., min_length=6, max_length=6)
+
+    _ungroup_code = field_validator("code", mode="before")(_ungrouped_code)
 
 
 # A WebAuthn response is a few kilobytes at most; the bound only stops an
@@ -235,6 +253,8 @@ class StepUpRequest(BaseModel):
     password: str | None = Field(None, max_length=1024)
     passkey_credential: dict[str, Any] | None = None
 
+    _ungroup_code = field_validator("code", mode="before")(_ungrouped_code)
+
     _bound_credential = field_validator("passkey_credential")(_bounded_credential)
 
 
@@ -249,6 +269,8 @@ class MFALogin(BaseModel):
     code: str | None = Field(None, min_length=6, max_length=6)
     recovery_code: str | None = Field(None, max_length=32)
     passkey_credential: dict[str, Any] | None = None
+
+    _ungroup_code = field_validator("code", mode="before")(_ungrouped_code)
 
     _bound_credential = field_validator("passkey_credential")(_bounded_credential)
 

@@ -27,8 +27,8 @@ export const BlockedCountriesTable: React.FC<BlockedCountriesTableProps> = ({ co
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+    <div className="rwd-table-container overflow-x-auto">
+      <table className="rwd-table rwd-table-wide w-full text-sm">
         <thead>
           <tr className="border-theme-surface-border text-theme-text-muted border-b text-left">
             <th scope="col" className="px-4 py-3 font-medium">
@@ -60,9 +60,13 @@ export const BlockedCountriesTable: React.FC<BlockedCountriesTableProps> = ({ co
               key={c.id}
               className="border-theme-surface-border/50 hover:bg-theme-surface-hover border-b transition-colors"
             >
-              <td className="text-theme-text-primary px-4 py-3 font-medium">{c.countryName ?? c.countryCode}</td>
-              <td className="text-theme-text-secondary px-4 py-3 font-mono">{c.countryCode}</td>
-              <td className="px-4 py-3">
+              <td data-label="Country" className="text-theme-text-primary px-4 py-3 font-medium">
+                {c.countryName ?? c.countryCode}
+              </td>
+              <td data-label="Code" className="text-theme-text-secondary px-4 py-3 font-mono">
+                {c.countryCode}
+              </td>
+              <td data-label="Risk Level" className="px-4 py-3">
                 {c.riskLevel && (
                   <span
                     className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${COUNTRY_RISK_LEVEL_COLORS[c.riskLevel] ?? ''}`}
@@ -71,10 +75,16 @@ export const BlockedCountriesTable: React.FC<BlockedCountriesTableProps> = ({ co
                   </span>
                 )}
               </td>
-              <td className="text-theme-text-secondary max-w-xs truncate px-4 py-3">{c.reason}</td>
-              <td className="text-theme-text-muted px-4 py-3">{c.blockedAttemptsCount ?? 0}</td>
-              <td className="text-theme-text-muted px-4 py-3">{c.createdAt ? formatDateTime(c.createdAt, tz) : '—'}</td>
-              <td className="px-4 py-3">
+              <td data-label="Reason" className="text-theme-text-secondary max-w-xs px-4 py-3 break-words">
+                {c.reason}
+              </td>
+              <td data-label="Blocked Attempts" className="text-theme-text-muted px-4 py-3">
+                {c.blockedAttemptsCount ?? 0}
+              </td>
+              <td data-label="Added" className="text-theme-text-muted px-4 py-3">
+                {c.createdAt ? formatDateTime(c.createdAt, tz) : '—'}
+              </td>
+              <td data-label="Actions" className="px-4 py-3">
                 <button
                   onClick={() => onRemove?.(c.countryCode)}
                   className="rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-500/10"

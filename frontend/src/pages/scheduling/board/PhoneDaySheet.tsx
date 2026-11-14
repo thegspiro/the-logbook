@@ -21,6 +21,8 @@ export interface PhoneDaySheetProps {
   currentUserId: string | null | undefined;
   timezone: string;
   eligibleByShift: Record<string, string[]>;
+  /** Why the member cannot take a seat on a shift, keyed by shift; absent when they can. */
+  unavailableByShift?: Record<string, string>;
   pendingShiftId: string | null;
   /** Set once a claim lands, switching the sheet to the confirmation. */
   confirmedShift: ShiftRecord | null;
@@ -45,6 +47,7 @@ export const PhoneDaySheet: React.FC<PhoneDaySheetProps> = ({
   currentUserId,
   timezone,
   eligibleByShift,
+  unavailableByShift = {},
   pendingShiftId,
   confirmedShift,
   onClose,
@@ -188,6 +191,7 @@ export const PhoneDaySheet: React.FC<PhoneDaySheetProps> = ({
                 currentUserId={currentUserId}
                 timezone={timezone}
                 eligiblePositions={eligibleByShift[shift.id] ?? []}
+                unavailableReason={unavailableByShift[shift.id] ?? null}
                 pending={pendingShiftId === shift.id}
                 onClaim={onClaim}
                 onRelease={onRelease}

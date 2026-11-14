@@ -358,6 +358,16 @@ upgrading", not "you did it wrong". Worth one line in Chapter 2.]**
 > if it's embroidered, add to cart. Pickup or shipping. Pick how you're going to
 > pay."
 
+**[SCREEN: Review order with two lines in the cart. Reload the page; the cart
+is still there.]**
+
+> "Reload the page, or let your phone throw the tab away, and the cart is still
+> there. It's kept in this browser, for you and for that order window. Prices
+> come from the current catalog, and a line whose product or size is no longer
+> offered is dropped. It clears when you place the order, when the window
+> closes, and when you sign out — so it won't follow you to a shared
+> computer." _(2026-10-27)_
+
 **[SCREEN: Order confirmation showing ORD-2026-0042.]**
 
 **[CALLOUT: "ORD-2026-0042 — keep this number."]**

@@ -9,6 +9,8 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
+import { FormField } from '../../../components/ux/FormField';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { adminHoursEntryService } from '../services/api';
@@ -16,6 +18,16 @@ import type { AdminHoursCategory, AdminHoursEntry, AdminHoursEntryEdit } from '.
 import { formatDuration } from '../utils/formatDuration';
 import { addHoursExact, syncEndToStartExact, resolveEndUtc, type DerivedEndTime } from '../utils/entryTimes';
 import QuickDurationButtons from './QuickDurationButtons';
+
+type EntryField = 'category_id' | 'clock_in_at' | 'clock_out_at' | 'description';
+
+/** The fields as a 422 names them; admin-hours request schemas are snake_case and set no max_length. */
+const SERVER_FIELDS: Record<EntryField, ServerFieldSpec> = {
+  category_id: { label: 'Category' },
+  clock_in_at: { label: 'Start Time' },
+  clock_out_at: { label: 'End Time' },
+  description: { label: 'Description' },
+};
 
 interface MyEntryEditFormProps {
   entry: AdminHoursEntry;
@@ -36,6 +48,14 @@ const MyEntryEditForm: React.FC<MyEntryEditFormProps> = ({ entry, categories, ti
   // `resolveEndUtc`.
   const [endPin, setEndPin] = useState<DerivedEndTime | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [errors, setErrors] = useState<Partial<Record<EntryField, string>>>({});
+  const clearError = (field: EntryField) =>
+    setErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
 
   // The page lists active categories only. An entry filed under one that has
   // since been retired must still show where it sits, or the select would
@@ -64,6 +84,8 @@ const MyEntryEditForm: React.FC<MyEntryEditFormProps> = ({ entry, categories, ti
     setEndPin(derived);
   };
 
+  const idPrefix = `edit-${entry.id}`;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving || durationMinutes === null) return;
@@ -84,13 +106,28 @@ const MyEntryEditForm: React.FC<MyEntryEditFormProps> = ({ entry, categories, ti
       toast.success(isResubmit ? 'Entry resubmitted for review' : 'Entry updated');
       onSaved();
     } catch (err) {
+      // The times are checked together and saving a correction resubmits it,
+      // so nothing is written until every refusal, shown on its field, is
+      // fixed (forms review F-2).
+      const mapped = mapServerFieldErrors(err, SERVER_FIELDS);
+      const keys = Object.keys(mapped?.fieldErrors ?? {}) as EntryField[];
+      if (mapped && keys[0]) {
+        setErrors(mapped.fieldErrors);
+        const suffix = {
+          category_id: 'category',
+          clock_in_at: 'start',
+          clock_out_at: 'end',
+          description: 'description',
+        };
+        document.getElementById(`${idPrefix}-${suffix[keys[0]]}`)?.focus();
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       toast.error(getErrorMessage(err, 'Failed to update entry'));
     } finally {
       setIsSaving(false);
     }
   };
-
-  const idPrefix = `edit-${entry.id}`;
 
   return (
     <form
@@ -106,55 +143,65 @@ const MyEntryEditForm: React.FC<MyEntryEditFormProps> = ({ entry, categories, ti
         </p>
       )}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div className="md:col-span-2">
-          <label htmlFor={`${idPrefix}-category`} className="form-label">
-            Category
-          </label>
-          <select
-            id={`${idPrefix}-category`}
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="form-input md:max-w-sm"
-          >
-            {!categoryListed && <option value={entry.categoryId}>{entry.categoryName ?? 'Current category'}</option>}
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor={`${idPrefix}-start`} className="form-label">
-            Start Time
-          </label>
-          <DateTimeQuarterHour
-            id={`${idPrefix}-start`}
-            timeLabel="Start time"
-            value={clockIn}
-            onChange={handleStartChange}
-            required
-            className="form-input"
-            timezone={timezone}
-          />
-        </div>
-        <div>
-          <label htmlFor={`${idPrefix}-end`} className="form-label">
-            End Time
-          </label>
-          <DateTimeQuarterHour
-            id={`${idPrefix}-end`}
-            timeLabel="End time"
-            value={clockOut}
-            onChange={(val) => {
-              setClockOut(val);
-              setEndPin(null);
-            }}
-            required
-            className="form-input"
-            timezone={timezone}
-          />
-        </div>
+        <FormField
+          className="md:col-span-2"
+          id={`${idPrefix}-category`}
+          label="Category"
+          required
+          error={errors.category_id}
+        >
+          {(field) => (
+            <select
+              {...field}
+              value={categoryId}
+              onChange={(e) => {
+                setCategoryId(e.target.value);
+                clearError('category_id');
+              }}
+              className="form-input md:max-w-sm"
+            >
+              {!categoryListed && <option value={entry.categoryId}>{entry.categoryName ?? 'Current category'}</option>}
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </FormField>
+        <FormField id={`${idPrefix}-start`} label="Start Time" required error={errors.clock_in_at}>
+          {(field) => (
+            <DateTimeQuarterHour
+              {...field}
+              timeLabel="Start time"
+              value={clockIn}
+              onChange={(value) => {
+                handleStartChange(value);
+                clearError('clock_in_at');
+              }}
+              required
+              className="form-input"
+              timezone={timezone}
+            />
+          )}
+        </FormField>
+        <FormField id={`${idPrefix}-end`} label="End Time" required error={errors.clock_out_at}>
+          {(field) => (
+            <DateTimeQuarterHour
+              {...field}
+              timeLabel="End time"
+              value={clockOut}
+              onChange={(val) => {
+                setClockOut(val);
+                setEndPin(null);
+                clearError('clock_out_at');
+              }}
+              required
+              className="form-input"
+              timezone={timezone}
+            />
+          )}
+        </FormField>
       </div>
 
       <QuickDurationButtons onSelect={handleDuration} disabled={!clockIn} />
@@ -170,19 +217,22 @@ const MyEntryEditForm: React.FC<MyEntryEditFormProps> = ({ entry, categories, ti
         </p>
       )}
 
-      <div>
-        <label htmlFor={`${idPrefix}-description`} className="form-label">
-          Description
-        </label>
-        <input
-          id={`${idPrefix}-description`}
-          type="text"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="form-input"
-          placeholder="What did you work on?"
-        />
-      </div>
+      <FormField id={`${idPrefix}-description`} label="Description" error={errors.description}>
+        {(field) => (
+          <input
+            {...field}
+            type="text"
+            autoComplete="off"
+            value={description}
+            onChange={(e) => {
+              setDescription(e.target.value);
+              clearError('description');
+            }}
+            className="form-input"
+            placeholder="What did you work on?"
+          />
+        )}
+      </FormField>
 
       <div className="flex flex-wrap gap-3">
         <button

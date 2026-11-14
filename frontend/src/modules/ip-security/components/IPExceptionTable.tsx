@@ -48,8 +48,8 @@ export const IPExceptionTable: React.FC<IPExceptionTableProps> = ({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+    <div className="rwd-table-container overflow-x-auto">
+      <table className="rwd-table rwd-table-xwide w-full text-sm">
         <thead>
           <tr className="border-theme-surface-border text-theme-text-muted border-b text-left">
             {showMember && (
@@ -88,14 +88,20 @@ export const IPExceptionTable: React.FC<IPExceptionTableProps> = ({
               key={exc.id}
               className="border-theme-surface-border/50 hover:bg-theme-surface-hover border-b transition-colors"
             >
-              {showMember && <td className="text-theme-text-primary px-4 py-3">{exc.userName ?? '—'}</td>}
-              <td className="text-theme-text-primary px-4 py-3 font-mono">{exc.ipAddress}</td>
-              <td className="text-theme-text-secondary px-4 py-3">
+              {showMember && (
+                <td data-label="Member" className="text-theme-text-primary px-4 py-3">
+                  {exc.userName ?? '—'}
+                </td>
+              )}
+              <td data-label="IP Address" className="text-theme-text-primary px-4 py-3 font-mono">
+                <span className="min-w-0 break-all">{exc.ipAddress}</span>
+              </td>
+              <td data-label="Use Case" className="text-theme-text-secondary px-4 py-3">
                 {IP_EXCEPTION_USE_CASE_LABELS[exc.useCase ?? ''] ?? exc.useCase ?? '—'}
                 {/* The justification is what an approver decides on (W74). */}
                 {exc.reason && <p className="text-theme-text-muted mt-0.5 max-w-xs text-xs">{exc.reason}</p>}
               </td>
-              <td className="px-4 py-3">
+              <td data-label="Status" className="px-4 py-3">
                 <span
                   className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${IP_EXCEPTION_STATUS_COLORS[exc.approvalStatus] ?? ''}`}
                 >
@@ -109,15 +115,17 @@ export const IPExceptionTable: React.FC<IPExceptionTableProps> = ({
                   <p className="text-theme-text-muted mt-0.5 max-w-xs text-xs">{exc.revokeReason}</p>
                 )}
               </td>
-              <td className="text-theme-text-secondary px-4 py-3">
+              <td data-label="Duration" className="text-theme-text-secondary px-4 py-3">
                 {formatDays(exc.approvedDurationDays ?? exc.requestedDurationDays)}
               </td>
-              <td className="text-theme-text-secondary px-4 py-3">{exc.countryName ?? exc.countryCode ?? '—'}</td>
-              <td className="text-theme-text-muted px-4 py-3">
+              <td data-label="Country" className="text-theme-text-secondary px-4 py-3">
+                {exc.countryName ?? exc.countryCode ?? '—'}
+              </td>
+              <td data-label="Requested" className="text-theme-text-muted px-4 py-3">
                 {exc.requestedAt ? formatDateTime(exc.requestedAt, tz) : '—'}
               </td>
               {showActions && (
-                <td className="px-4 py-3">
+                <td data-label="Actions" className="px-4 py-3">
                   <div className="flex items-center gap-1">
                     {exc.approvalStatus === IPExceptionApprovalStatus.PENDING && (
                       <>

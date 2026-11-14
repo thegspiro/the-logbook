@@ -210,14 +210,53 @@ class EventAttendancePetitionService:
             return "You are already recorded as present at this event"
         return None
 
+    async def may_review(self, event: Event, reviewer: User) -> bool:
+        """Whether *reviewer* may see *event*'s attendance requests.
+
+        Anyone who may decide one of its pending requests, and a reviewer who
+        has already decided one, so the card they acted on does not refuse
+        them the moment they finish. Reported to the event page as
+        ``can_review_attendance_requests``, so the page offers the card to
+        exactly those the API serves.
+        """
+        if can_review(event, reviewer):
+            return True
+        rows = (
+            await self.db.execute(
+                select(
+                    EventAttendancePetition.user_id,
+                    EventAttendancePetition.status,
+                    EventAttendancePetition.reviewed_by,
+                ).where(
+                    EventAttendancePetition.event_id == str(event.id),
+                    EventAttendancePetition.organization_id
+                    == str(event.organization_id),
+                )
+            )
+        ).all()
+        if any(str(reviewed_by) == str(reviewer.id) for _, _, reviewed_by in rows):
+            return True
+        organizers = EventOrganizerService(self.db)
+        requesters = {
+            str(user_id)
+            for user_id, status, _ in rows
+            if status == AttendancePetitionStatus.PENDING
+        }
+        for requester_id in requesters:
+            if await organizers.may_decide_attendance_request(
+                event, reviewer, requester_id
+            ):
+                return True
+        return False
+
     async def list_for_event(
         self, event_id: str, reviewer: User
     ) -> List[EventAttendancePetition]:
         event = await self.get_event(event_id, reviewer.organization_id)
-        if not can_review(event, reviewer):
+        if not await self.may_review(event, reviewer):
             raise PermissionError(
-                "Only the event's organizer, its alternate or an event manager "
-                "can review attendance requests"
+                "Only the event's organizer, its alternate, an event manager or "
+                "the member a request was sent to can review attendance requests"
             )
         pending_first = case(
             (EventAttendancePetition.status == AttendancePetitionStatus.PENDING, 0),
@@ -386,7 +425,7 @@ class EventAttendancePetitionService:
         # reviewers deciding the same request at once.
         event = await self.get_event(event_id, organization_id, for_update=True)
         petition = await self._locked_petition(event, petition_id)
-        self._assert_may_decide(event, petition, reviewer)
+        await self._assert_may_decide(event, petition, reviewer)
 
         if attendance_is_finalized(event):
             raise ValueError(attendance_locked_error("approving an attendance request"))
@@ -455,7 +494,7 @@ class EventAttendancePetitionService:
         organization_id = str(reviewer.organization_id)
         event = await self.get_event(event_id, organization_id)
         petition = await self._locked_petition(event, petition_id)
-        self._assert_may_decide(event, petition, reviewer)
+        await self._assert_may_decide(event, petition, reviewer)
 
         petition.status = AttendancePetitionStatus.REJECTED
         petition.reviewed_by = str(reviewer.id)
@@ -535,14 +574,15 @@ class EventAttendancePetitionService:
             raise PetitionNotFound("Attendance request not found")
         return petition
 
-    @staticmethod
-    def _assert_may_decide(
-        event: Event, petition: EventAttendancePetition, reviewer: User
+    async def _assert_may_decide(
+        self, event: Event, petition: EventAttendancePetition, reviewer: User
     ) -> None:
-        if not can_review(event, reviewer):
+        if not await EventOrganizerService(self.db).may_decide_attendance_request(
+            event, reviewer, str(petition.user_id)
+        ):
             raise PermissionError(
-                "Only the event's organizer, its alternate or an event manager "
-                "can review attendance requests"
+                "Only the event's organizer, its alternate, an event manager or "
+                "the member a request was sent to can review attendance requests"
             )
         # The point of a petition is that someone else vouches for you.
         if str(petition.user_id) == str(reviewer.id):

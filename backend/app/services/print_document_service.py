@@ -22,12 +22,13 @@ shift starting at the wrong time.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.scheduling_module_config_service import department_seat_labels
 from app.utils.check_types import COUNT, PRESENCE, normalize_check_type
 from app.utils.member_names import format_display_name
 from app.utils.positions import position_label
@@ -65,7 +66,9 @@ _ROSTER_EXCLUDED_STATUSES = {"declined", "cancelled", "no_show"}
 _SEAT_COLUMN_WIDTH = 12
 
 
-def _seat_column(position: Any) -> Optional[str]:
+def _seat_column(
+    position: Any, custom_labels: Optional[Mapping[str, str]] = None
+) -> Optional[str]:
     """The seat's name for the roster's right-hand column.
 
     The seat is named the way every screen names it — the ``ems`` seat prints
@@ -77,8 +80,11 @@ def _seat_column(position: Any) -> Optional[str]:
     a department named "Assistant Chief" and "Assistant Driver" would both
     print as ASSISTANT that way, and a column that cannot tell two seats apart
     defeats the reason the roster names them at all.
+
+    ``custom_labels`` (``department_seat_labels``) prints a department's own
+    seat under the name it chose in Position Names.
     """
-    label = position_label(position)
+    label = position_label(position, custom_labels)
     if not label:
         return None
     if len(label) > _SEAT_COLUMN_WIDTH:
@@ -210,6 +216,7 @@ async def build_shift_roster(
     if shift.platoon:
         subtitle_parts.append(f"Platoon {shift.platoon}")
 
+    seat_labels = await department_seat_labels(db, organization_id)
     crew_rows: List[DocumentRow] = []
     for assignment, user in assignments:
         position = str(getattr(assignment.position, "value", assignment.position) or "")
@@ -229,7 +236,9 @@ async def build_shift_roster(
             marks.append("unconfirmed")
         if marks:
             name = f"{name} ({', '.join(marks)})"
-        crew_rows.append(DocumentRow(left=name, right=_seat_column(position)))
+        crew_rows.append(
+            DocumentRow(left=name, right=_seat_column(position, seat_labels))
+        )
 
     if not crew_rows:
         crew_rows.append(DocumentRow(left="No one assigned", emphasis=True))

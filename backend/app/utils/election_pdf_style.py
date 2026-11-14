@@ -21,12 +21,20 @@ from typing import Any, Callable, Dict, List, Optional
 from PIL import Image
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import Image as PdfImage
-from reportlab.platypus import KeepTogether, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import KeepTogether, Paragraph, Spacer, Table
 
 from app.utils.app_icons import decode_logo
+from app.utils.pdf_fonts import (
+    BODY_FONT,
+    BOLD_FONT,
+    ITALIC_FONT,
+    body_table_style,
+    document_stylesheet,
+)
+from app.utils.print_geometry import SAFE_EDGE
 
 INK = colors.HexColor("#111827")
 GRID = colors.HexColor("#9ca3af")
@@ -35,8 +43,16 @@ MUTED = colors.HexColor("#4b5563")
 BAND = colors.HexColor("#e5e7eb")
 PANEL = colors.HexColor("#f3f4f6")
 
+# SIDE_MARGIN plus the frame's 6pt padding puts the first ink 0.78" from each
+# side: clear of a three-hole punch on the left and of every printer's
+# unprintable border on the right (app.utils.print_geometry).
 SIDE_MARGIN = 0.7 * inch
 VERTICAL_MARGIN = 0.6 * inch
+# The page footer sits between the print-safe edge and the frame: the footer
+# baseline just above SAFE_EDGE, the "continues" note one line above it.
+FOOTER_BASELINE = SAFE_EDGE + 3
+_CONTINUED_BASELINE = FOOTER_BASELINE + 12
+BOTTOM_MARGIN = _CONTINUED_BASELINE + 14
 # Page width less the side margins and the frame's own 6pt padding each side.
 CONTENT_WIDTH = letter[0] - 2 * SIDE_MARGIN - 12
 LOGO_BOX = 0.9 * inch
@@ -52,7 +68,7 @@ def base_styles(prefix: str) -> Dict[str, ParagraphStyle]:
     *prefix* keeps the style names distinct per document; reportlab does
     not require it, but it keeps a style dump readable.
     """
-    base = getSampleStyleSheet()
+    base = document_stylesheet()
     return {
         "org": ParagraphStyle(
             f"{prefix}Org",
@@ -66,7 +82,7 @@ def base_styles(prefix: str) -> Dict[str, ParagraphStyle]:
         "kicker": ParagraphStyle(
             f"{prefix}Kicker",
             parent=base["Normal"],
-            fontName="Helvetica-Bold",
+            fontName=BOLD_FONT,
             fontSize=11,
             leading=14,
             textColor=INK,
@@ -81,7 +97,7 @@ def base_styles(prefix: str) -> Dict[str, ParagraphStyle]:
         "contest": ParagraphStyle(
             f"{prefix}Contest",
             parent=base["Normal"],
-            fontName="Helvetica-Bold",
+            fontName=BOLD_FONT,
             fontSize=13,
             leading=16,
             textColor=INK,
@@ -89,7 +105,7 @@ def base_styles(prefix: str) -> Dict[str, ParagraphStyle]:
         "note": ParagraphStyle(
             f"{prefix}Note",
             parent=base["Normal"],
-            fontName="Helvetica-Oblique",
+            fontName=ITALIC_FONT,
             fontSize=9,
             leading=12,
             textColor=INK,
@@ -160,7 +176,7 @@ def letterhead(
         return Table(
             [[image, heading_text]],
             colWidths=[LOGO_BOX + 0.2 * inch, CONTENT_WIDTH - LOGO_BOX - 0.2 * inch],
-            style=TableStyle(
+            style=body_table_style(
                 [
                     ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                     ("LEFTPADDING", (0, 0), (-1, -1), 0),
@@ -171,7 +187,7 @@ def letterhead(
     return Table(
         [[heading_text]],
         colWidths=[CONTENT_WIDTH],
-        style=TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0)]),
+        style=body_table_style([("LEFTPADDING", (0, 0), (-1, -1), 0)]),
     )
 
 
@@ -184,7 +200,7 @@ def heading_band(
     return Table(
         cells,
         colWidths=[CONTENT_WIDTH],
-        style=TableStyle(
+        style=body_table_style(
             [
                 ("BACKGROUND", (0, 0), (-1, -1), BAND),
                 ("LINEABOVE", (0, 0), (-1, 0), 1.5, INK),
@@ -203,7 +219,7 @@ def panel(paragraphs: List[Paragraph]) -> Table:
     return Table(
         [[p] for p in paragraphs],
         colWidths=[CONTENT_WIDTH],
-        style=TableStyle(
+        style=body_table_style(
             [
                 ("BACKGROUND", (0, 0), (-1, -1), PANEL),
                 ("BOX", (0, 0), (-1, -1), 0.75, GRID),
@@ -228,7 +244,7 @@ def ruled_table(
     looking for, such as the winners.
     """
     commands: List[Any] = [
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (-1, 0), BOLD_FONT),
         ("FONTSIZE", (0, 0), (-1, -1), 10),
         ("TEXTCOLOR", (0, 0), (-1, -1), INK),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -241,12 +257,12 @@ def ruled_table(
         ("RIGHTPADDING", (0, 0), (-1, -1), 8),
     ]
     for row in bold_rows:
-        commands.append(("FONTNAME", (0, row), (-1, row), "Helvetica-Bold"))
+        commands.append(("FONTNAME", (0, row), (-1, row), BOLD_FONT))
     return Table(
         data,
         colWidths=[CONTENT_WIDTH * f for f in fractions],
         repeatRows=1,
-        style=TableStyle(commands),
+        style=body_table_style(commands),
     )
 
 
@@ -258,11 +274,11 @@ def key_value_table(rows: List[List[Any]], label_fraction: float = 0.35) -> Tabl
             CONTENT_WIDTH * label_fraction,
             CONTENT_WIDTH * (1 - label_fraction),
         ],
-        style=TableStyle(
+        style=body_table_style(
             [
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
                 ("TEXTCOLOR", (0, 0), (-1, -1), INK),
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTNAME", (0, 0), (0, -1), BOLD_FONT),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("LINEBELOW", (0, 0), (-1, -2), 0.5, GRID),
                 ("LINEBELOW", (0, -1), (-1, -1), 1, INK),
@@ -279,7 +295,7 @@ def padded(paragraphs: List[Paragraph]) -> Table:
     return Table(
         [[p] for p in paragraphs],
         colWidths=[CONTENT_WIDTH],
-        style=TableStyle(
+        style=body_table_style(
             [
                 ("LEFTPADDING", (0, 0), (-1, -1), 8),
                 ("TOPPADDING", (0, 0), (-1, 0), 8),
@@ -304,11 +320,11 @@ def page_footer(label: str) -> Callable[[Any, Any], None]:
 
     def draw(canvas: Any, document: Any) -> None:
         canvas.saveState()
-        canvas.setFont("Helvetica", 8)
+        canvas.setFont(BODY_FONT, 8)
         canvas.setFillColor(MUTED)
         canvas.drawCentredString(
             letter[0] / 2,
-            VERTICAL_MARGIN / 2,
+            FOOTER_BASELINE,
             f"{label} · Page {document.page}",
         )
         canvas.restoreState()
@@ -329,19 +345,17 @@ def page_of_footer(
 
     def draw(canvas: Any, document: Any) -> None:
         canvas.saveState()
-        canvas.setFont("Helvetica", 8)
+        canvas.setFont(BODY_FONT, 8)
         canvas.setFillColor(MUTED)
         canvas.drawCentredString(
             letter[0] / 2,
-            VERTICAL_MARGIN / 2,
+            FOOTER_BASELINE,
             f"{label} · Page {document.page} of {total_pages}",
         )
         if document.page < total_pages:
-            canvas.setFont("Helvetica-Bold", 9)
+            canvas.setFont(BOLD_FONT, 9)
             canvas.setFillColor(INK)
-            canvas.drawCentredString(
-                letter[0] / 2, VERTICAL_MARGIN / 2 + 12, continued_note
-            )
+            canvas.drawCentredString(letter[0] / 2, _CONTINUED_BASELINE, continued_note)
         canvas.restoreState()
 
     return draw

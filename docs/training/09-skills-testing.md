@@ -85,6 +85,12 @@ A template is a blank skill sheet, kept for reuse. Each one has:
 
 ![Skill sheet templates list with category and publication status](./images/09-01-skill-templates.png)
 
+On a phone the table becomes one card per template: its name and description,
+category, status, and how many sections and criteria it has, with the action
+buttons along the bottom of the card.
+
+![Skills Test Templates on a phone: each template a card with its name and description, its status badge, and its action buttons along the bottom](./images/09-34-skill-templates-phone.png)
+
 ### Template Statuses
 
 | Status        | What it means                                                                                         |
@@ -396,6 +402,10 @@ don't have to do anything.
   then.
 - Saves made offline are combined. An hour without signal sends one update,
   and the submission is always sent last.
+- **In Chrome or Edge, including on Android, the scoring sends even if The
+  Logbook is closed** when the signal comes back. Safari on an iPhone or iPad
+  sends it only once you open The Logbook with a connection. See
+  [What Happens When You Lose Connection](./10-mobile-pwa.md#what-happens-when-you-lose-connection).
 - **If The Logbook refuses it** — the test was voided or completed elsewhere,
   or someone else changed it — you get a message naming the test and the
   candidate. A red banner on the test gives the reason. The scoring stays on
@@ -405,7 +415,9 @@ don't have to do anything.
   **Sign Out** tries to send them. If it cannot, it warns you and offers **Stay
   signed in**. Signing out anyway deletes them from the device, so the next
   person on a shared station cannot read them. The automatic sign-out after
-  you are idle cannot ask. Do not leave a phone with unsent evaluations alone
+  you are idle cannot ask, but since 2026-11-04 it **keeps** unsent
+  evaluations on the device for 7 days, and only the same examiner signing back
+  in can see and send them. Do not leave a phone with unsent evaluations alone
   until it has signal.
 
 ### The timer records what you measured

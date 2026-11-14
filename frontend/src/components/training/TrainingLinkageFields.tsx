@@ -41,20 +41,32 @@ export const TrainingLinkageFields: React.FC<TrainingLinkageFieldsProps> = ({
   // per-instance rather than hard-coded.
   const fieldId = useId();
 
+  // A session-attendance requirement is graded from the session's "Counts
+  // toward attendance" links, not from the requirement it satisfies, and the
+  // backend refuses one here as a new link. One a session already carries is
+  // still listed, apart, so saving the form does not clear it.
+  const offeredRequirements = useMemo(
+    () => requirements.filter((req) => req.requirement_type !== 'session_attendance'),
+    [requirements]
+  );
+  const legacyRequirement = requirements.find(
+    (req) => req.id === value.requirement_id && req.requirement_type === 'session_attendance'
+  );
+
   // Requirements this session likely satisfies, so the officer can link one in
   // a single tap instead of hunting through the full list: requirements that
   // explicitly list the selected course, plus hour/category requirements that
   // share a category with the course or the chosen session category.
   const suggestedRequirements = useMemo(() => {
-    if (requirements.length === 0) return [];
+    if (offeredRequirements.length === 0) return [];
     const courseCategoryIds = new Set(selectedCourse?.category_ids ?? []);
-    return requirements.filter((req) => {
+    return offeredRequirements.filter((req) => {
       if (selectedCourse && req.required_courses?.includes(selectedCourse.id)) return true;
       if (courseCategoryIds.size > 0 && req.category_ids?.some((id) => courseCategoryIds.has(id))) return true;
       if (value.category_id && req.category_ids?.includes(value.category_id)) return true;
       return false;
     });
-  }, [requirements, selectedCourse, value.category_id]);
+  }, [offeredRequirements, selectedCourse, value.category_id]);
 
   const suggestedRequirementIds = useMemo(
     () => new Set(suggestedRequirements.map((r) => r.id)),
@@ -140,6 +152,11 @@ export const TrainingLinkageFields: React.FC<TrainingLinkageFieldsProps> = ({
             className="form-input py-3"
           >
             <option value="">No specific requirement</option>
+            {legacyRequirement && (
+              <option value={legacyRequirement.id}>
+                {`${requirementLabel(legacyRequirement)} (currently linked, no longer offered)`}
+              </option>
+            )}
             {suggestedRequirements.length > 0 ? (
               <>
                 <optgroup label="Suggested">
@@ -150,7 +167,7 @@ export const TrainingLinkageFields: React.FC<TrainingLinkageFieldsProps> = ({
                   ))}
                 </optgroup>
                 <optgroup label="All requirements">
-                  {requirements
+                  {offeredRequirements
                     .filter((req) => !suggestedRequirementIds.has(req.id))
                     .map((req) => (
                       <option key={req.id} value={req.id}>
@@ -160,14 +177,16 @@ export const TrainingLinkageFields: React.FC<TrainingLinkageFieldsProps> = ({
                 </optgroup>
               </>
             ) : (
-              requirements.map((req) => (
+              offeredRequirements.map((req) => (
                 <option key={req.id} value={req.id}>
                   {requirementLabel(req)}
                 </option>
               ))
             )}
           </select>
-          <p className="text-theme-text-muted mt-1 text-xs">Attendance credits this requirement directly</p>
+          <p className="text-theme-text-muted mt-1 text-xs">
+            Attendance advances this requirement for members enrolled in the training program
+          </p>
         </div>
       </div>
 

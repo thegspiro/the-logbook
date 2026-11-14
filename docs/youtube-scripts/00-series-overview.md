@@ -149,6 +149,16 @@ services.
 > and Script 1 a `FRONTEND_URL` beat, which a production server now refuses to
 > start without.
 
+> **Update (2026-11-05).** Scripts **1, 2, 8, 13 and 15** gained short beats for
+> the 26 October – 5 November releases; nothing was re-recorded. New narration:
+> `REDIS_REQUIRED=true` now refuses to start without Redis, the combined Unraid
+> image and the per-provider cloud guides (container services are not supported
+> platforms) in Script 1; Setup asking about **Public Information** and the
+> **Your setup session has ended** banner in Script 2; the store cart kept in
+> the browser in Script 13; offline scoring and unsent evaluations in Script 15;
+> and passkeys, **Before you print** and the Items Not Seen change in Shorts
+> **8G**, **8AS** and **8BG**.
+
 ### Quick Tips / Shorts (1–3 minutes, extracted from role guides or standalone)
 
 | #   | Title                                                                            | Clip Source   |

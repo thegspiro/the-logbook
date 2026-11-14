@@ -12,8 +12,10 @@ from uuid import UUID
 from fastapi import (
     APIRouter,
     BackgroundTasks,
+    Cookie,
     Depends,
     File,
+    Header,
     HTTPException,
     Query,
     Request,
@@ -30,7 +32,10 @@ from sqlalchemy.orm import selectinload
 from app.api.dependencies import (
     _collect_user_permissions,
     _has_permission,
+    access_token_from,
+    ensure_stepup,
     get_current_user,
+    request_access_token,
     require_permission,
     require_stepup,
 )
@@ -47,6 +52,7 @@ from app.models.audit import AuditLog
 from app.models.directory_account import DirectoryAccountStatus
 from app.models.document import Document
 from app.models.inventory import CheckOutRecord, ItemAssignment, ItemIssuance
+from app.models.member_position_term import note_position_actor, sync_position_terms
 from app.models.passkey import UserPasskey
 from app.models.training import TrainingRecord as TrainingRecordModel
 from app.models.user import Organization, Role, User, UserStatus, user_roles
@@ -65,6 +71,8 @@ from app.schemas.user import (
     MemberDirectoryEntry,
     MemberEmailChoice,
     MemberEmailChoicesResponse,
+    MemberProfileResponse,
+    PastPositionResponse,
     ProfileVisibility,
     UserListResponse,
     UserProfileResponse,
@@ -95,6 +103,7 @@ from app.services.email_policy import (
     member_choice,
 )
 from app.services.email_service import welcome_email_can_send
+from app.services.member_position_term_service import past_positions_for
 from app.services.member_service_history_service import MemberServiceHistoryService
 from app.services.member_shift_release_service import (
     release_future_shift_commitments,
@@ -118,11 +127,27 @@ from app.utils.membership import (
     DEACTIVATED_EMAIL_MESSAGE,
     DEACTIVATED_USERNAME_MESSAGE,
     DEFAULT_CLASS,
+    MemberStatus,
+    accepted_member_statuses,
+    canonical_member_status,
     is_administrative,
     split_membership_type,
 )
 from app.utils.phone_numbers import validate_member_phone
 from app.utils.security_notifications import notify_security_event
+
+
+def _request_origin(request: Request) -> dict[str, Optional[str]]:
+    """Where an audited change came from: the caller's address and browser.
+
+    Spread into ``log_audit_event`` so a row on a member's record says from
+    where an administrator acted, not only who did (W02 second pass).
+    """
+    return {
+        "ip_address": get_client_ip(request),
+        "user_agent": request.headers.get("user-agent"),
+    }
+
 
 router = APIRouter()
 
@@ -326,6 +351,7 @@ async def create_member(
     request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create")),
+    access_token: str | None = Cookie(None),
 ):
     """
     Create a new member (Secretary/Admin only)
@@ -462,6 +488,12 @@ async def create_member(
         current_user, canonical_rank, db, get_client_ip(request)
     )
     _refuse_administrative_rank(user_data.member_class, None, canonical_rank)
+    # A tier id the organization does not have is refused here, not stored:
+    # the column would hold a standing no ladder rung, ballot rule or
+    # advancement scan could place.
+    user_data.member_status = await _accepted_member_status_or_400(
+        db, str(current_user.organization_id), user_data.member_status
+    )
 
     # Auto-generate membership number if not provided and auto-generation is on
     membership_number = user_data.membership_number
@@ -503,6 +535,13 @@ async def create_member(
         await _enforce_role_grant_ceiling(
             current_user, list(roles), db, get_client_ip(request)
         )
+
+    # Owner decision 2026-11-01 (PERM-10): a new member given a rank or roles
+    # is a grant, so it asks for the same re-verification as assigning a role.
+    # Checked here, after both ceilings and before anything is written, and
+    # only for a grant: routine onboarding with neither does not prompt.
+    if user_data.rank or user_data.role_ids:
+        await ensure_stepup(db, request_access_token(request, access_token))
 
     # Create new user
     new_user = User(
@@ -583,6 +622,7 @@ async def create_member(
 
     # Ensure the default "member" role is always assigned for baseline permissions
     assigned_role_slugs = {r.slug for r in roles} if user_data.role_ids else set()
+    member_role: Optional[Role] = None
     if ROLE_MEMBER not in assigned_role_slugs:
         member_result = await db.execute(
             select(Role).where(
@@ -602,6 +642,17 @@ async def create_member(
 
     # Capture assigned role IDs before commit expires the relationship
     assigned_role_ids = [str(r.id) for r in roles] if user_data.role_ids else []
+
+    # The inserts above are Core statements the flush hook cannot see, so the
+    # new member's terms are opened here, in the same transaction.
+    initial_position_ids = [str(r.id) for r in roles] if user_data.role_ids else []
+    if member_role is not None:
+        initial_position_ids.append(str(member_role.id))
+    await sync_position_terms(
+        db,
+        [(new_user.id, pid) for pid in initial_position_ids],
+        actor_id=current_user.id,
+    )
 
     # Staged in this transaction, before the directory is called, so a crash
     # between the commit and the call leaves a record the profile can retry.
@@ -642,9 +693,13 @@ async def create_member(
             "username": new_user.username,
             "email": new_user.email,
             "roles_assigned": assigned_role_ids,
+            # No member_status_changed row records the starting status, so
+            # this row is the only place an "added On Leave" is written down.
+            "status": new_user.status.value,
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     # Built now: the directory work below commits, which expires new_user.
@@ -1249,6 +1304,50 @@ async def _enforce_rank_grant_ceiling(
             )
 
 
+async def _accepted_member_status_or_400(
+    db: AsyncSession,
+    organization_id: str,
+    member_status: str | None,
+) -> str | None:
+    """Settle a ``member_status`` against the organization's own ladder.
+
+    The schema can only check the shape: the column holds the seven built-in
+    statuses *and* the department's membership tier ids, and only the
+    organization knows the latter. A built-in status needs no lookup. A tier
+    id is checked against ``settings["membership_tiers"]`` under the
+    Organization row lock (Pitfall #27), Organization before member, the
+    order ``MembershipTierService.advance_all`` and ``change_membership_type``
+    use -- so a request landing a member on a rung cannot interleave with
+    the tier editor removing that rung between its occupancy count and its
+    commit. Returns the canonical spelling.
+    """
+    canonical = canonical_member_status(member_status)
+    if canonical is None or canonical in MemberStatus.ALL:
+        return canonical
+    org_result = await db.execute(
+        select(Organization)
+        .where(Organization.id == str(organization_id))
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    organization = org_result.scalar_one_or_none()
+    settings = (organization.settings if organization else None) or {}
+    tiers = (settings.get("membership_tiers") or {}).get("tiers") or []
+    tier_ids: list[str] = [
+        str(t["id"]) for t in tiers if isinstance(t, dict) and t.get("id")
+    ]
+    if canonical not in accepted_member_statuses(tier_ids):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Unknown member_status '{member_status}'. Expected one of "
+                f"{', '.join(MemberStatus.ALL)} or one of this organization's "
+                f"membership tiers: {', '.join(sorted(tier_ids)) or 'none'}."
+            ),
+        )
+    return canonical
+
+
 def _refuse_administrative_rank(
     member_class: str | None,
     membership_type: str | None,
@@ -1422,6 +1521,7 @@ async def assign_user_roles(
     # first would both hide the retained positions from that diff (so their
     # rows would never be re-inserted) and leave the loaded collection stale,
     # making the delete of a dropped position raise StaleDataError.
+    note_position_actor(db, current_user.id)
     user.roles = roles
     await db.commit()
 
@@ -1454,6 +1554,7 @@ async def assign_user_roles(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     return {
@@ -1531,6 +1632,7 @@ async def add_role_to_user(
     added_role_name = role.name
 
     # Add role
+    note_position_actor(db, current_user.id)
     user.roles.append(role)
     await db.commit()
 
@@ -1564,6 +1666,7 @@ async def add_role_to_user(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     return {
@@ -1589,6 +1692,8 @@ async def remove_role_from_user(
         )
     ),
     _stepup: User = Depends(require_stepup),
+    *,
+    request: Request,
 ):
     """
     Remove a role from a user
@@ -1644,6 +1749,7 @@ async def remove_role_from_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     role_removed_name = role_to_remove.name
+    note_position_actor(db, current_user.id)
     user.roles.remove(role_to_remove)
     await db.commit()
 
@@ -1677,6 +1783,7 @@ async def remove_role_from_user(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     return {
@@ -1688,11 +1795,13 @@ async def remove_role_from_user(
     }
 
 
-@router.get("/{user_id}/with-roles", response_model=UserProfileResponse)
+@router.get("/{user_id}/with-roles", response_model=MemberProfileResponse)
 async def get_user_with_roles(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    *,
+    request: Request,
 ):
     """
     Get a specific user with their assigned roles and notification preferences
@@ -1767,6 +1876,7 @@ async def get_user_with_roles(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     # SEC (ORU-8): redact on the same terms as the roster. Without this the
@@ -1774,8 +1884,31 @@ async def get_user_with_roles(
     # request to this URL away. The subject is exempt: UserSettingsPage loads
     # its own profile through here and writes the fields back, so redacting for
     # self would blank a member's own address and phone on their next save.
-    payload = UserProfileResponse.model_validate(user)
+    payload = MemberProfileResponse.model_validate(user)
     await _redact_profile_for_viewer(db, payload, user, current_user, is_self)
+    # "Member since" on the profile and the digital ID card is credited
+    # service (owner decision 2026-11-01), not hire_date. It can count time at
+    # another department, so it is shown to the member and to officers who
+    # manage members or their ID cards, not to everyone who can open the
+    # roster (owner decision 2026-11-05).
+    if (
+        is_self
+        or is_admin
+        or _has_permission("members.manage_id_cards", user_permissions)
+    ):
+        payload.service_since = await MemberServiceHistoryService(db).service_since_for(
+            user
+        )
+    else:
+        payload.service_since = None
+    # Earlier offices and committee seats go to everyone who sees the current
+    # ones above: they are the same kind of fact, about the same member.
+    payload.past_positions = [
+        PastPositionResponse.model_validate(term)
+        for term in await past_positions_for(
+            db, str(user.id), str(current_user.organization_id)
+        )
+    ]
 
     return payload
 
@@ -1784,8 +1917,13 @@ async def get_user_with_roles(
 async def update_contact_info(
     user_id: UUID,
     contact_update: ContactInfoUpdate,
+    background_tasks: BackgroundTasks,
+    authorization: str | None = Header(None),
+    access_token: str | None = Cookie(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    *,
+    request: Request,
 ):
     """
     Update user contact information and notification preferences
@@ -1827,6 +1965,31 @@ async def update_contact_info(
     new_phones = _validated_phone_changes(
         user, {k: getattr(contact_update, k) for k in contact_update.model_fields_set}
     )
+
+    is_self = current_user.id == str(user_id)
+    previous_email = user.email
+    email_changing = (
+        contact_update.email is not None and contact_update.email != previous_email
+    )
+
+    # Forgot-password resolves the account by its email address, so whoever
+    # sets a colleague's email can mail themselves that colleague's reset link
+    # and sign in as them. That makes the change a credential reset, and it
+    # takes the same ceiling and re-verification as the password, MFA and
+    # passkey resets below — without them a members.manage holder could take
+    # over the Chief's `*` account in two requests.
+    if email_changing and not is_self:
+        await _enforce_account_reset_ceiling(
+            current_user,
+            user,
+            db,
+            action="email-change",
+            detail=(
+                "You cannot change the email of a user with privileges beyond "
+                "your own."
+            ),
+        )
+        await ensure_stepup(db, access_token_from(authorization, access_token))
 
     # Update fields if provided
     if contact_update.email is not None:
@@ -1910,20 +2073,44 @@ async def update_contact_info(
             detail="User not found after contact update",
         )
 
+    event_data: dict = {
+        "updated_user_id": str(user_id),
+        "fields_updated": list(contact_update.model_dump(exclude_unset=True).keys()),
+    }
+    if email_changing:
+        # Both values, so "who pointed this account's mail somewhere else, and
+        # where" is answerable from the trail even after the address is put
+        # back.
+        event_data["email_changed"] = {"from": previous_email, "to": user.email}
     await log_audit_event(
         db=db,
         event_type="user_updated",
         event_category="user_management",
-        severity="info",
-        event_data={
-            "updated_user_id": str(user_id),
-            "fields_updated": list(
-                contact_update.model_dump(exclude_unset=True).keys()
-            ),
-        },
+        severity="warning" if email_changing and not is_self else "info",
+        event_data=event_data,
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
+
+    if email_changing and previous_email:
+        # Sent to the address being replaced: if the change was not the
+        # member's own doing, the old inbox is the one they still read.
+        await notify_security_event(
+            db,
+            user,
+            subject="The email address on your account was changed",
+            message=(
+                "The email address on your account was changed"
+                + (" by an administrator" if not is_self else "")
+                + ". Password-reset and account emails now go to the new "
+                "address. If you did not expect this, contact your "
+                "administrator right away."
+            ),
+            background_tasks=background_tasks,
+            to_email=previous_email,
+        )
+        await db.commit()
 
     return user
 
@@ -1934,6 +2121,10 @@ async def update_user_profile(
     profile_update: UserUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    authorization: str | None = Header(None),
+    access_token: str | None = Cookie(None),
+    *,
+    request: Request,
 ):
     """
     Update user profile information (name, address, emergency contacts, etc.)
@@ -1983,6 +2174,43 @@ async def update_user_profile(
     # at the SQL level, but `user.member_class`/`user.rank` would still read
     # whatever they were before a concurrent request's commit. Same
     # requirement as quorum_service.py's calculate_quorum.
+    # Before the member lock, because a tier id takes the Organization lock
+    # (see the helper) and Organization-then-member is the order every other
+    # writer of a member's standing uses; the reverse would deadlock against
+    # the advancement scan.
+    if profile_update.member_status is not None:
+        # member_status is also in `restricted_fields` below, which is where
+        # an unauthorized caller is normally refused — but that check runs
+        # after this validation, so without this guard a self-edit from a
+        # member who may not set member_status at all could use this
+        # validator's 400 (it names every unmatched tier id) to enumerate the
+        # organization's membership tiers: the same list
+        # `get_membership_tier_config` already restricts to members.manage.
+        # Checked only on a self-edit; a non-self edit already proved
+        # members.manage above.
+        if is_self:
+            perm_result = await db.execute(
+                select(User)
+                .where(User.id == current_user.id)
+                .options(selectinload(User.positions))
+            )
+            self_edit_actor = perm_result.scalar_one()
+            if not _has_permission(
+                "members.manage", _collect_user_permissions(self_edit_actor)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        "Only leadership, the secretary, or the membership "
+                        "coordinator can update hire date, rank, station, "
+                        "platoon, membership number, or membership class and "
+                        "status"
+                    ),
+                )
+        profile_update.member_status = await _accepted_member_status_or_400(
+            db, str(current_user.organization_id), profile_update.member_status
+        )
+
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
@@ -2159,6 +2387,15 @@ async def update_user_profile(
     # predates the rule, so a member can still save the rest of their profile.
     update_data.update(_validated_phone_changes(user, update_data))
 
+    # Owner decision 2026-11-01 (PERM-10): a rank carries its own permissions,
+    # so giving a member a different one re-verifies like granting a role.
+    # Asked last, once every other check has passed, so a save refused for
+    # another reason does not prompt first. Clearing a rank grants nothing
+    # (including the clear a move to administrative makes), and the rest of
+    # a profile save never asks.
+    if update_data.get("rank") and update_data["rank"] != user.rank:
+        await ensure_stepup(db, access_token_from(authorization, access_token))
+
     # Snapshot for the audit trail before `emergency_contacts` is popped below.
     # Taken from `update_data` rather than the raw payload because a move to the
     # administrative class clears the member's rank without the client having
@@ -2271,6 +2508,7 @@ async def update_user_profile(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     return user
@@ -2285,6 +2523,8 @@ async def delete_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
     _stepup: User = Depends(require_stepup),
+    *,
+    request: Request,
 ):
     """
     Delete a member. By default this is a soft-delete (sets deleted_at).
@@ -2419,6 +2659,7 @@ async def delete_user(
             },
             user_id=str(current_user.id),
             username=current_user.username,
+            **_request_origin(request),
         )
     else:
         # Preserve membership number so it can be restored on reactivation,
@@ -2441,6 +2682,7 @@ async def delete_user(
             },
             user_id=str(current_user.id),
             username=current_user.username,
+            **_request_origin(request),
         )
 
         # A deactivated member cannot work, so their seats on shifts that
@@ -2466,6 +2708,8 @@ async def admin_reset_password(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create", "members.manage")),
     _stepup: User = Depends(require_stepup),
+    *,
+    request: Request,
 ):
     """
     Reset a user's password (IT Lead / Admin only)
@@ -2557,6 +2801,7 @@ async def admin_reset_password(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     await db.commit()
@@ -2575,6 +2820,8 @@ async def admin_reset_mfa(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create", "members.manage")),
     _stepup: User = Depends(require_stepup),
+    *,
+    request: Request,
 ):
     """
     Reset (disable) a user's two-factor authentication (IT Lead / Admin only).
@@ -2650,6 +2897,7 @@ async def admin_reset_mfa(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     await notify_security_event(
@@ -2726,6 +2974,8 @@ async def admin_remove_passkey(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create", "members.manage")),
     _stepup: User = Depends(require_stepup),
+    *,
+    request: Request,
 ):
     """
     Remove one passkey from a member's account — for a lost or stolen device.
@@ -2783,6 +3033,7 @@ async def admin_remove_passkey(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
     await notify_security_event(
         db,
@@ -2809,6 +3060,8 @@ async def admin_unlock_account(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
+    *,
+    request: Request,
 ):
     """
     Lift a sign-in lockout before it expires (workflow review W02-4).
@@ -2862,6 +3115,7 @@ async def admin_unlock_account(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
     await db.commit()
 
@@ -2992,6 +3246,8 @@ async def upload_photo(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    *,
+    request: Request,
 ):
     """
     Upload a profile photo for a member.
@@ -3117,6 +3373,7 @@ async def upload_photo(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     return {"message": "Photo uploaded successfully", "photo_url": photo_data_uri}
@@ -3127,6 +3384,8 @@ async def delete_photo(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    *,
+    request: Request,
 ):
     """
     Remove a member's profile photo.
@@ -3177,6 +3436,7 @@ async def delete_photo(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     return {"message": "Photo removed successfully"}
@@ -3393,8 +3653,8 @@ async def export_my_data(
         severity="info",
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
-        ip_address=get_client_ip(request),
         event_data={"sections": len(export)},
+        **_request_origin(request),
     )
     await db.commit()
 
@@ -3454,8 +3714,8 @@ async def anonymize_member(
         severity="warning",
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
-        ip_address=get_client_ip(request),
         event_data={"anonymized_user_id": str(user_id)},
+        **_request_origin(request),
     )
     await db.commit()
     return summary
@@ -3574,8 +3834,8 @@ async def set_my_profile_visibility(
         severity="info",
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
-        ip_address=get_client_ip(request),
         event_data={"previous": previous, "current": current},
+        **_request_origin(request),
     )
     await db.commit()
 
@@ -3751,8 +4011,8 @@ async def set_my_consent(
         severity="info",
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
-        ip_address=get_client_ip(request),
         event_data={"consent_type": parsed_type.value, "granted": granted},
+        **_request_origin(request),
     )
     await db.commit()
 

@@ -309,6 +309,53 @@ describe('IntegrationsPage', () => {
     expect(screen.getByLabelText('Webhook URL')).toHaveAttribute('type', 'url');
   });
 
+  it('connects a Generic Webhook with the events it should be sent', async () => {
+    const user = userEvent.setup();
+    const webhook = {
+      ...(mockIntegrations[0] ?? {}),
+      id: 'wh-1',
+      integration_type: 'generic-webhook',
+      name: 'Generic Webhooks',
+      category: 'Automation',
+    };
+    mockGetIntegrations.mockResolvedValue([webhook]);
+    mockConnectIntegration.mockResolvedValue({ ...webhook, status: 'connected', enabled: true });
+
+    renderPage();
+    await screen.findByText('Generic Webhooks');
+    await user.click(within(screen.getByTestId('integration-card-generic-webhook')).getByText('Connect'));
+    await user.type(screen.getByLabelText('Webhook URL'), 'https://hooks.example.org/in');
+    await user.click(screen.getByRole('checkbox', { name: /A shift is created/ }));
+    await user.click(screen.getByRole('checkbox', { name: /A training record is added/ }));
+    await user.click(screen.getByTestId('connect-submit'));
+
+    expect(mockConnectIntegration).toHaveBeenCalledWith('wh-1', {
+      url: 'https://hooks.example.org/in',
+      secret: '',
+      event_types: ['shift.created', 'training.recorded'],
+    });
+  });
+
+  it('connects NWS Weather Alerts with the channels the department chose', async () => {
+    const user = userEvent.setup();
+    mockConnectIntegration.mockResolvedValue({ ...mockIntegrations[1], status: 'connected', enabled: true });
+
+    renderPage();
+    await screen.findByText('NWS Weather Alerts');
+    await user.click(within(screen.getByTestId('integration-card-nws-weather')).getByText('Connect'));
+    await user.type(screen.getByLabelText('NWS Zone ID'), 'vaz054');
+    await user.click(screen.getByRole('checkbox', { name: /Bell notice when an alert is issued/ }));
+    await user.click(screen.getByRole('checkbox', { name: /Email when an alert is issued/ }));
+    await user.click(screen.getByTestId('connect-submit'));
+
+    expect(mockConnectIntegration).toHaveBeenCalledWith('int-2', {
+      zone_id: 'VAZ054',
+      notify_banner: true,
+      notify_bell: false,
+      notify_email: true,
+    });
+  });
+
   it('hides manage buttons when user lacks permission', async () => {
     mockCheckPermission.mockReturnValue(false);
     renderPage();
@@ -574,6 +621,102 @@ describe('IntegrationsPage', () => {
     });
   });
 
+  // These forms open only from Connect, on a card that is not connected, and a
+  // stored secret is never sent back. So a placeholder claiming a key is
+  // already stored was false on every first connection.
+  describe('Zeffy and PayPal connect wording', () => {
+    const zeffyAvailable = {
+      id: 'zef-1',
+      organization_id: 'org-1',
+      integration_type: 'zeffy',
+      name: 'Zeffy',
+      description: 'Read donations, event tickets and memberships sold through Zeffy',
+      category: 'Payments',
+      status: 'available' as const,
+      config: {},
+      enabled: false,
+      contains_phi: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    const paypalAvailable = {
+      ...zeffyAvailable,
+      id: 'pp-1',
+      integration_type: 'paypal',
+      name: 'PayPal',
+      description: 'Reconcile store payments',
+    };
+
+    it('does not tell a first Zeffy connection that a key is already stored', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([zeffyAvailable]);
+      mockConnectIntegration.mockResolvedValue({ ...zeffyAvailable, status: 'connected', enabled: true });
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-zeffy');
+      await user.click(within(card).getByText('Connect'));
+
+      const apiKey = screen.getByLabelText('API Key');
+      expect(apiKey).toHaveAttribute('placeholder', 'Paste the key from Zeffy');
+      expect(
+        screen.getByText(/When connecting again after a disconnect, leave it blank to keep the saved key\./)
+      ).toBeInTheDocument();
+
+      // A blank box is left out of the request, which is what keeps the saved
+      // key on a reconnection.
+      await user.click(screen.getByTestId('connect-submit'));
+      expect(mockConnectIntegration).toHaveBeenCalledWith('zef-1', {
+        api_key: undefined,
+        webhook_secret: undefined,
+      });
+    });
+
+    it('opens Settings on a connected Zeffy card and saves only what was typed', async () => {
+      const user = userEvent.setup();
+      const zeffyConnected = { ...zeffyAvailable, status: 'connected' as const, enabled: true };
+      mockGetIntegrations.mockResolvedValue([zeffyConnected]);
+      mockUpdateIntegration.mockResolvedValue(zeffyConnected);
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-zeffy');
+      await user.click(within(card).getByRole('button', { name: 'Zeffy settings' }));
+
+      const dialog = await screen.findByRole('dialog', { name: 'Zeffy settings' });
+      // A connected Zeffy always holds a key: it cannot connect without one.
+      expect(within(dialog).getByLabelText('API Key')).toHaveAttribute(
+        'placeholder',
+        'Leave blank to keep the current key'
+      );
+      expect(dialog).toHaveTextContent('Leave it blank to keep the saved secret, if one was entered.');
+      expect(dialog).toHaveTextContent(
+        'A new key or signing secret is used from the next sync or webhook message. Linked campaigns and the webhook address do not change.'
+      );
+
+      await user.type(within(dialog).getByLabelText('Webhook Signing Secret (optional)'), 'whsec_new');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('zef-1', {
+        api_key: undefined,
+        webhook_secret: 'whsec_new',
+      });
+      expect(mockConnectIntegration).not.toHaveBeenCalled();
+    });
+
+    it('does not tell a first PayPal connection that a secret is already stored', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([paypalAvailable]);
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-paypal');
+      await user.click(within(card).getByText('Connect'));
+
+      expect(screen.getByLabelText('Client Secret')).toHaveAttribute('placeholder', 'From your PayPal REST app');
+      expect(
+        screen.getByText(/When connecting again after a disconnect, leave it blank to keep the saved secret\./)
+      ).toBeInTheDocument();
+    });
+  });
+
   describe('NFC ID Cards (activation, not connection)', () => {
     const nfcAvailable = {
       id: 'nfc-1',
@@ -756,6 +899,70 @@ describe('IntegrationsPage', () => {
           'Generic ePCR Import stops working for the department until it is connected again. Its saved settings are kept.'
         );
         expect(dialog).not.toHaveTextContent('feed link');
+      });
+    });
+
+    describe('iCalendar feed settings', () => {
+      beforeEach(() => {
+        mockUpdateIntegration.mockReset();
+        mockUpdateIntegration.mockImplementation((id: string, config: Record<string, unknown>) =>
+          Promise.resolve({ ...calendarRow('ical', 'iCalendar (ICS)', 'connected'), id, config })
+        );
+        mockConnectIntegration.mockReset();
+        mockConnectIntegration.mockImplementation((id: string, config: Record<string, unknown>) =>
+          Promise.resolve({ ...calendarRow('ical', 'iCalendar (ICS)', 'connected'), id, config })
+        );
+      });
+
+      it('shows the stored filter and saves the event types and shifts chosen', async () => {
+        const user = userEvent.setup();
+        mockGetIntegrations.mockResolvedValue([
+          {
+            ...calendarRow('ical', 'iCalendar (ICS)', 'connected'),
+            config: { included_event_types: ['training'], include_shifts: false, feed_token_hash: '••••' },
+          },
+        ]);
+
+        renderPage();
+        const card = await screen.findByTestId('integration-card-ical');
+        await user.click(within(card).getByRole('button', { name: 'iCalendar (ICS) settings' }));
+
+        const dialog = await screen.findByRole('dialog', { name: 'iCalendar (ICS) settings' });
+        expect(within(dialog).getByRole('checkbox', { name: 'Training' })).toBeChecked();
+        expect(within(dialog).getByRole('checkbox', { name: 'Fundraiser' })).not.toBeChecked();
+        const shifts = within(dialog).getByRole('checkbox', { name: /Include duty shifts/ });
+        expect(shifts).not.toBeChecked();
+        expect(dialog).toHaveTextContent('The feed link does not change.');
+
+        await user.click(within(dialog).getByRole('checkbox', { name: 'Fundraiser' }));
+        await user.click(within(dialog).getByRole('checkbox', { name: 'Training' }));
+        await user.click(shifts);
+        await user.click(within(dialog).getByTestId('settings-submit'));
+
+        await waitFor(() => {
+          expect(mockUpdateIntegration).toHaveBeenCalledWith('ical-1', {
+            included_event_types: ['fundraiser'],
+            include_shifts: true,
+          });
+        });
+      });
+
+      it('connects with every event type and no shifts unless chosen', async () => {
+        const user = userEvent.setup();
+        mockGetIntegrations.mockResolvedValue([calendarRow('ical', 'iCalendar (ICS)', 'available')]);
+
+        renderPage();
+        const card = await screen.findByTestId('integration-card-ical');
+        await user.click(within(card).getByRole('button', { name: 'Connect iCalendar (ICS)' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Connect iCalendar (ICS)' });
+        await user.click(within(dialog).getByTestId('connect-submit'));
+
+        await waitFor(() => {
+          expect(mockConnectIntegration).toHaveBeenCalledWith('ical-1', {
+            included_event_types: [],
+            include_shifts: false,
+          });
+        });
       });
     });
 
@@ -1515,11 +1722,18 @@ describe('IntegrationsPage', () => {
       await user.click(within(card).getByText('Connect'));
 
       expect(screen.getByLabelText('Usage location')).toHaveValue('US');
-      await user.type(screen.getByLabelText('Directory (tenant) ID'), tenant);
-      await user.type(screen.getByLabelText('Application (client) ID'), client);
-      await user.type(screen.getByLabelText('Client secret value'), ' s3cret ');
-      await user.type(screen.getByLabelText('Domain'), 'firedept.org');
-      await user.type(screen.getByLabelText('License SKU ID (optional)'), 'c42b9cae-ea4f-4ab7-9717-81576235ccac');
+      // Pasted rather than typed: key-by-key entry of these ids ran the test
+      // to 3.3s of its 5s budget alone and past it on a loaded runner, and the
+      // keystrokes still queued then landed in the next test's form.
+      const paste = async (label: string, value: string) => {
+        await user.click(screen.getByLabelText(label));
+        await user.paste(value);
+      };
+      await paste('Directory (tenant) ID', tenant);
+      await paste('Application (client) ID', client);
+      await paste('Client secret value', ' s3cret ');
+      await paste('Domain', 'firedept.org');
+      await paste('License SKU ID (optional)', 'c42b9cae-ea4f-4ab7-9717-81576235ccac');
       await user.type(
         screen.getByLabelText('Add new members to these groups (optional)'),
         'members@firedept.org{enter}99999999-8888-7777-6666-555555555555'

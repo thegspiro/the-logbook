@@ -40,6 +40,7 @@ from app.services.auth_service import (
     AuthFailure,
     AuthService,
 )
+from tests.fake_request import fake_request
 
 _PASSWORD = "CorrectHorseBatteryStaple1!"
 
@@ -269,7 +270,10 @@ class TestUnlock:
         )
 
         await users_ep.admin_unlock_account(
-            user_id=uuid.UUID(user_id), db=db_session, current_user=self._admin(org_id)
+            user_id=uuid.UUID(user_id),
+            db=db_session,
+            current_user=self._admin(org_id),
+            request=fake_request(),
         )
 
         member = (
@@ -301,6 +305,7 @@ class TestUnlock:
                 user_id=uuid.UUID(user_id),
                 db=db_session,
                 current_user=self._admin(org_id),
+                request=fake_request(),
             )
         assert exc.value.status_code == 400
 
@@ -313,6 +318,7 @@ class TestUnlock:
                 user_id=uuid.UUID(user_id),
                 db=db_session,
                 current_user=self._admin(str(uuid.uuid4())),
+                request=fake_request(),
             )
         assert exc.value.status_code == 404
 

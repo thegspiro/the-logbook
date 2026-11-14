@@ -34,6 +34,7 @@ from app.api.dependencies import (
     can_view_officer_training_data,
     get_current_user,
     require_permission,
+    user_has_permission,
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
@@ -65,6 +66,8 @@ from app.schemas.training import (
     DuplicateWarning,
     HistoricalImportConfirmRequest,
     RequirementChangeScope,
+    RequirementOverrideCreate,
+    RequirementOverrideResponse,
     RequirementProgress,
     TrainingCategoryCreate,
     TrainingCategoryResponse,
@@ -77,6 +80,8 @@ from app.schemas.training import (
     TrainingRecordUpdate,
     TrainingReport,
     TrainingRequirementCreate,
+    TrainingRequirementDeletionImpact,
+    TrainingRequirementReference,
     TrainingRequirementResponse,
     TrainingRequirementUpdate,
     UserTrainingStats,
@@ -86,10 +91,16 @@ from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
     notify_summary,
 )
+from app.services.member_supervisor_service import MemberSupervisorService
 from app.services.qualification_service import QualificationService
+from app.services.requirement_override_service import (
+    RequirementOverrideService,
+    accepts_override,
+    holds_chief_position,
+)
 from app.services.training_compliance import (
-    CATCH_UP_STATUS,
     STANDING_NOT_APPLICABLE,
+    UNGRADED_STATUSES,
     ComplianceGrading,
     _load_compliance_config,
     classify_standing,
@@ -99,6 +110,7 @@ from app.services.training_compliance import (
     get_requirement_date_window,
     load_credited_shift_dates,
     load_graded_records,
+    load_held_sessions,
     member_join_date,
     requirement_applies_to_user,
     tally_standing,
@@ -114,7 +126,12 @@ from app.services.training_record_notices import (
     send_training_record_notice,
     snapshot,
 )
-from app.services.training_requirement_removal import remove_requirement
+from app.services.training_record_source import record_sources
+from app.services.training_requirement_removal import (
+    purge_requirement,
+    remove_requirement,
+    requirement_references,
+)
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_org_waivers, fetch_user_waivers
 from app.services.upload_scanning import reject_if_malicious
@@ -219,6 +236,7 @@ async def get_training_dashboard_summary(
         today,
         grading.include_current_month,
     )
+    held_sessions = await load_held_sessions(db, str(org_id), requirements)
     waivers = await fetch_org_waivers(db, str(org_id))
 
     compliant = 0
@@ -240,11 +258,13 @@ async def get_training_dashboard_summary(
                 org_include_current_month=grading.include_current_month,
                 join_date=join_date,
                 shift_dates=shifts_by_user.get(str(member.id), []),
+                held_sessions=held_sessions,
             )
             statuses.append(req_status)
-            # Inside an existing member's catch-up period the requirement is
-            # neither unmet nor part of the at-risk denominator.
-            if req_status == CATCH_UP_STATUS:
+            # Inside an existing member's catch-up period, or with no session
+            # held yet, the requirement is neither unmet nor part of the
+            # at-risk denominator.
+            if req_status in UNGRADED_STATUSES:
                 continue
             applicable_counts[str(req.id)] += 1
             if req_status != TrainingStatus.COMPLETED.value:
@@ -470,16 +490,26 @@ async def get_training_dashboard_summary(
     }
 
 
-def _require_self_or_training_officer(current_user: User, user_id: UUID) -> None:
+async def _require_self_or_training_officer(
+    db: AsyncSession, current_user: User, user_id: UUID
+) -> None:
     """Authorize a per-member training-PII read.
 
     Training stats/compliance/reports can expose certifications and scores that
     are not roster-public, so a member may only read their own unless they hold
-    ``training.manage`` (mirrors the gate on GET /records).
+    ``training.manage`` (mirrors the gate on GET /records) or supervise the
+    member today (owner decision 2026-11-01, crew views: a line officer sees
+    their crew's training standing). The supervisor check is made per request
+    against the dated assignments and the caller's department, so an ended
+    assignment or another department's member grants nothing.
     """
     if str(user_id) == str(current_user.id):
         return
     if _has_permission("training.manage", _collect_user_permissions(current_user)):
+        return
+    if await MemberSupervisorService(db).is_current_supervisor(
+        str(current_user.organization_id), str(current_user.id), str(user_id)
+    ):
         return
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -725,11 +755,22 @@ async def list_records(
     is_officer = _has_permission(
         "training.manage", _collect_user_permissions(current_user)
     )
-    if not is_officer:
-        # Non-officers are confined to their own records regardless of filter.
-        query = query.where(TrainingRecord.user_id == str(current_user.id))
-    elif user_id:
+    if is_officer:
+        if user_id:
+            query = query.where(TrainingRecord.user_id == str(user_id))
+    elif (
+        user_id
+        and str(user_id) != str(current_user.id)
+        and await MemberSupervisorService(db).is_current_supervisor(
+            str(current_user.organization_id), str(current_user.id), str(user_id)
+        )
+    ):
+        # A supervisor may list one crew member's records at a time (owner
+        # decision 2026-11-01, crew views).
         query = query.where(TrainingRecord.user_id == str(user_id))
+    else:
+        # Everyone else is confined to their own records regardless of filter.
+        query = query.where(TrainingRecord.user_id == str(current_user.id))
 
     if status:
         query = query.where(TrainingRecord.status == status)
@@ -754,23 +795,30 @@ async def list_records(
 
     result = await db.execute(query)
     records = result.scalars().all()
-    if is_officer:
-        # Officers get the stored name: the record edit form sends it back on
-        # save, so a display name here would overwrite it.
-        return records
-    names = await library_course_names(
-        db, str(current_user.organization_id), (r.course_id for r in records)
+    sources = await record_sources(db, str(current_user.organization_id), records)
+    names = (
+        {}
+        if is_officer
+        else await library_course_names(
+            db, str(current_user.organization_id), (r.course_id for r in records)
+        )
     )
     # Copies, never the ORM rows: assigning to a loaded record would let the
     # session flush the display name into the stored one.
-    return [
-        TrainingRecordResponse.model_validate(r).model_copy(
-            update={
-                "course_name": member_course_name(r.course_id, r.course_name, names)
-            }
+    responses = []
+    for r in records:
+        source = sources[str(r.id)]
+        update: dict[str, Any] = {"source": source.kind, "source_label": source.label}
+        if not is_officer:
+            # Officers get the stored name: the record edit form sends it back
+            # on save, so a display name here would overwrite it.
+            update["course_name"] = member_course_name(
+                r.course_id, r.course_name, names
+            )
+        responses.append(
+            TrainingRecordResponse.model_validate(r).model_copy(update=update)
         )
-        for r in records
-    ]
+    return responses
 
 
 @router.post(
@@ -1915,39 +1963,128 @@ async def _recalculate_pipelines_for_requirement(
     )
 
 
-@router.delete("/requirements/{requirement_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_requirement(
+async def _org_requirement(
+    db: AsyncSession, requirement_id: UUID, organization_id: Any
+) -> TrainingRequirement:
+    result = await db.execute(
+        select(TrainingRequirement)
+        .where(TrainingRequirement.id == str(requirement_id))
+        .where(TrainingRequirement.organization_id == organization_id)
+    )
+    requirement = result.scalar_one_or_none()
+    if not requirement:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found"
+        )
+    return requirement
+
+
+@router.get(
+    "/requirements/{requirement_id}/deletion-impact",
+    response_model=TrainingRequirementDeletionImpact,
+)
+async def get_requirement_deletion_impact(
     requirement_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """
+    List what uses a training requirement, before it is deleted.
+
+    An ordinary delete deactivates a requirement anything here references;
+    a permanent delete removes or unlinks each of them as ``on_delete`` says.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    requirement = await _org_requirement(
+        db, requirement_id, current_user.organization_id
+    )
+    references = await requirement_references(db, requirement)
+    return TrainingRequirementDeletionImpact(
+        requirement_id=requirement.id,
+        name=requirement.name,
+        active=requirement.active is True,
+        total=sum(ref.count for ref in references),
+        references=[
+            TrainingRequirementReference(
+                kind=ref.kind,
+                label=ref.label,
+                count=ref.count,
+                on_delete=ref.on_delete,
+            )
+            for ref in references
+        ],
+    )
+
+
+@router.delete("/requirements/{requirement_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_requirement(
+    requirement_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+    # A plain default rather than Query(False): the tests call this handler
+    # directly, where a Query object would arrive as a truthy FieldInfo and
+    # take the permanent path. FastAPI reads a scalar default as a query
+    # parameter either way.
+    permanent: bool = False,
+):
+    """
     Delete a training requirement.
 
     A requirement that a pipeline, member progress, a skills or knowledge
-    test, a recertification pathway, a course class, a compliance profile or
-    a waiver still references is deactivated rather than deleted, so those
-    records keep it. Only an unreferenced requirement is deleted.
+    test, a recertification pathway, a training session, a course class, a
+    Chief override, a compliance profile or a waiver still references is
+    deactivated rather than deleted, so those records keep it. Only an
+    unreferenced requirement is deleted.
+
+    With ``permanent=true`` it is deleted regardless: records that exist only
+    for this requirement (pipeline links, member progress, recertification
+    pathways, session attendance links, Chief overrides) are deleted with it,
+    and records that merely point at it are kept without the link. This is
+    for a department clearing out requirements it created while setting up;
+    retiring a requirement that members were graded against is what the
+    ordinary delete's deactivation is for.
 
     Requires training officer permissions.
 
     **Authentication required**
     **Requires permission: training.manage**
     """
-    result = await db.execute(
-        select(TrainingRequirement)
-        .where(TrainingRequirement.id == str(requirement_id))
-        .where(TrainingRequirement.organization_id == current_user.organization_id)
+    requirement = await _org_requirement(
+        db, requirement_id, current_user.organization_id
     )
-    requirement = result.scalar_one_or_none()
-
-    if not requirement:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found"
-        )
-
     requirement_name = requirement.name
     was_active = requirement.active is True
+
+    if permanent:
+        from app.services.training_program_service import TrainingProgramService
+
+        program_service = TrainingProgramService(db)
+        # Read before the purge: afterwards no link joins these enrollments to
+        # the requirement, and their progress percentages still count it.
+        enrollment_ids = await program_service.live_enrollment_ids_for_requirement(
+            requirement_id, current_user.organization_id
+        )
+        references = await purge_requirement(db, requirement)
+        await log_audit_event(
+            db=db,
+            event_type="training_requirement_permanently_deleted",
+            event_category="training",
+            severity="warning",
+            event_data={
+                "requirement_id": str(requirement_id),
+                "requirement_name": requirement_name,
+                "action": "permanently_deleted",
+                "references": {ref.kind: ref.count for ref in references},
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        await db.commit()
+        await program_service.recalculate_enrollments(enrollment_ids)
+        return
+
     deleted = await remove_requirement(db, requirement)
     await log_audit_event(
         db=db,
@@ -1973,6 +2110,200 @@ async def delete_requirement(
         )
 
 
+# Chief overrides of session-attendance requirements
+
+
+async def _override_responses(
+    service: RequirementOverrideService, overrides: list
+) -> list[RequirementOverrideResponse]:
+    names = await service.names(
+        [o.user_id for o in overrides]
+        + [o.granted_by for o in overrides]
+        + [o.revoked_by for o in overrides]
+    )
+    return [
+        RequirementOverrideResponse(
+            id=o.id,
+            requirement_id=o.requirement_id,
+            user_id=o.user_id,
+            member_name=names.get(str(o.user_id), "Unknown member"),
+            start_date=o.start_date,
+            end_date=o.end_date,
+            reason=o.reason,
+            granted_by_name=names.get(str(o.granted_by)) if o.granted_by else None,
+            granted_at=o.granted_at,
+            revoked_at=o.revoked_at,
+            revoked_by_name=names.get(str(o.revoked_by)) if o.revoked_by else None,
+        )
+        for o in overrides
+    ]
+
+
+async def _override_requirement(
+    service: RequirementOverrideService, current_user: User, requirement_id: UUID
+) -> TrainingRequirement:
+    requirement = await service.get_requirement(
+        str(current_user.organization_id), str(requirement_id)
+    )
+    if requirement is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found"
+        )
+    return requirement
+
+
+def _require_chief(current_user: User) -> None:
+    # A position, not a permission: see requirement_override_service.
+    if not holds_chief_position(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the Chief can override a requirement",
+        )
+
+
+@router.get(
+    "/requirements/{requirement_id}/overrides",
+    response_model=list[RequirementOverrideResponse],
+)
+async def list_requirement_overrides(
+    requirement_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The Chief's overrides of a session-attendance requirement, revoked ones
+    included, newest first.
+
+    Readable by the Chief and by holders of training.manage, who need to see
+    why a member reads as meeting a requirement they fall short of.
+
+    **Authentication required**
+    """
+    service = RequirementOverrideService(db)
+    await _override_requirement(service, current_user, requirement_id)
+    if not (
+        holds_chief_position(current_user)
+        or user_has_permission(current_user, "training.manage")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view overrides",
+        )
+    overrides = await service.list_overrides(
+        str(current_user.organization_id), str(requirement_id)
+    )
+    return await _override_responses(service, overrides)
+
+
+@router.post(
+    "/requirements/{requirement_id}/overrides",
+    response_model=RequirementOverrideResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def grant_requirement_override(
+    requirement_id: UUID,
+    body: RequirementOverrideCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Record a Chief's override: the member counts as meeting this
+    session-attendance requirement whenever it is graded as of a date from
+    start_date to end_date.
+
+    Only a member holding a Chief position, and only on a requirement that
+    allows overrides. 400 when the rules refuse it (another live override on
+    those dates, a member of another department, dates out of order).
+
+    **Authentication required**
+    """
+    _require_chief(current_user)
+    service = RequirementOverrideService(db)
+    requirement = await _override_requirement(service, current_user, requirement_id)
+    try:
+        override = await service.grant(
+            str(current_user.organization_id),
+            requirement,
+            str(body.user_id),
+            body.start_date,
+            body.end_date,
+            body.reason,
+            str(current_user.id),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    # Ids and dates only: the reason may be medical.
+    await log_audit_event(
+        db=db,
+        event_type="training_requirement_override_granted",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "override_id": str(override.id),
+            "requirement_id": str(requirement_id),
+            "member_id": str(body.user_id),
+            "start_date": body.start_date.isoformat(),
+            "end_date": body.end_date.isoformat(),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+    await db.refresh(override)
+    return (await _override_responses(service, [override]))[0]
+
+
+@router.post(
+    "/requirements/{requirement_id}/overrides/{override_id}/revoke",
+    response_model=RequirementOverrideResponse,
+)
+async def revoke_requirement_override(
+    requirement_id: UUID,
+    override_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Revoke a Chief's override. The record stays, marked revoked; revoking one
+    already revoked changes nothing.
+
+    Only a member holding a Chief position.
+
+    **Authentication required**
+    """
+    _require_chief(current_user)
+    service = RequirementOverrideService(db)
+    await _override_requirement(service, current_user, requirement_id)
+    override = await service.revoke(
+        str(current_user.organization_id),
+        str(requirement_id),
+        str(override_id),
+        str(current_user.id),
+    )
+    if override is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Override not found"
+        )
+    await log_audit_event(
+        db=db,
+        event_type="training_requirement_override_revoked",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "override_id": str(override_id),
+            "requirement_id": str(requirement_id),
+            "member_id": str(override.user_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+    await db.refresh(override)
+    return (await _override_responses(service, [override]))[0]
+
+
 # Statistics and Reports
 
 
@@ -1987,7 +2318,7 @@ async def get_user_stats(
 
     **Authentication required**
     """
-    _require_self_or_training_officer(current_user, user_id)
+    await _require_self_or_training_officer(db, current_user, user_id)
     training_service = TrainingService(db)
     stats = await training_service.get_user_training_stats(
         user_id=user_id, organization_id=current_user.organization_id
@@ -2012,7 +2343,7 @@ async def get_compliance_summary(
     Only requirements applicable to the member (via ``applies_to_all``
     or ``required_roles``) are counted.
     """
-    _require_self_or_training_officer(current_user, user_id)
+    await _require_self_or_training_officer(db, current_user, user_id)
     org_id = current_user.organization_id
     today = await resolve_org_today(db, org_id)
     org_include_current = await get_org_include_current_month(db, str(org_id))
@@ -2083,6 +2414,7 @@ async def get_compliance_summary(
             db, str(org_id), [str(user_id)], requirements, today, org_include_current
         )
     ).get(str(user_id), [])
+    held_sessions = await load_held_sessions(db, str(org_id), requirements)
 
     # Fetch waivers
     waivers = await fetch_user_waivers(db, str(org_id), str(user_id))
@@ -2099,6 +2431,7 @@ async def get_compliance_summary(
             org_include_current_month=org_include_current,
             join_date=join_date,
             shift_dates=shift_dates,
+            held_sessions=held_sessions,
         )[0]
         for req in requirements
     )
@@ -2152,7 +2485,7 @@ async def generate_user_report(
 
     **Authentication required**
     """
-    _require_self_or_training_officer(current_user, user_id)
+    await _require_self_or_training_officer(db, current_user, user_id)
     training_service = TrainingService(db)
     report = await training_service.generate_training_report(
         organization_id=current_user.organization_id,
@@ -2177,7 +2510,7 @@ async def get_requirements_progress(
 
     **Authentication required**
     """
-    _require_self_or_training_officer(current_user, user_id)
+    await _require_self_or_training_officer(db, current_user, user_id)
     training_service = TrainingService(db)
     progress = await training_service.get_all_requirements_progress(
         user_id=user_id, organization_id=current_user.organization_id, year=year
@@ -2363,122 +2696,6 @@ async def process_all_org_certification_alerts(
 
     result = await run_daily_cert_alerts(db)
     return result
-
-
-@router.post("/enrollments")
-async def enroll_member_in_program(
-    user_id: UUID = Query(..., description="Member to enroll"),
-    program_id: UUID = Query(..., description="Training program to enroll into"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
-):
-    """
-    Enroll a member into any training pipeline/program.
-
-    The training officer can enroll anyone into any program. This is used for:
-    - Manually enrolling probationary members who weren't auto-enrolled
-    - Enrolling administrative members converting to operational
-    - Assigning specialty training programs (driver training, AIC, etc.)
-
-    **Requires permission: training.manage**
-    """
-    from app.models.training import EnrollmentStatus, ProgramEnrollment, TrainingProgram
-
-    # Verify user exists in org
-    user_result = await db.execute(
-        select(User)
-        .where(User.id == str(user_id))
-        .where(User.organization_id == str(current_user.organization_id))
-    )
-    member = user_result.scalar_one_or_none()
-    if not member:
-        raise HTTPException(status_code=404, detail="Member not found")
-
-    # Verify program exists
-    program_result = await db.execute(
-        select(TrainingProgram)
-        .where(TrainingProgram.id == str(program_id))
-        .where(TrainingProgram.organization_id == str(current_user.organization_id))
-    )
-    program = program_result.scalar_one_or_none()
-    if not program:
-        raise HTTPException(status_code=404, detail="Training program not found")
-
-    # The prerequisite gate every other manual enrollment path applies
-    # through TrainingProgramService.enroll_member, with the same refusal.
-    # Not routed through enroll_member itself: that also seeds progress rows,
-    # a deadline and a first phase and notifies the member, which this
-    # endpoint has never done, and answers duplicates in different words.
-    from app.services.training_program_service import (
-        TrainingProgramService,
-        prerequisite_refusal,
-    )
-
-    missing = await TrainingProgramService(db).missing_prerequisites(
-        program.prerequisite_program_ids,
-        [user_id],
-        current_user.organization_id,
-    )
-    if missing:
-        raise HTTPException(
-            status_code=400,
-            detail=prerequisite_refusal(next(iter(missing.values()))),
-        )
-
-    # Check for existing active enrollment
-    existing = await db.execute(
-        select(ProgramEnrollment).where(
-            ProgramEnrollment.user_id == str(user_id),
-            ProgramEnrollment.program_id == str(program_id),
-            ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
-        )
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=400,
-            detail=f"{member.display_name} is already enrolled in '{program.name}'",
-        )
-
-    # Capture scalar values before commit expires ORM objects. The audit trail
-    # records the legal name of record; the response is what the screen shows.
-    member_name = member.full_name
-    member_display_name = member.display_name
-    program_name = program.name
-
-    enrollment = ProgramEnrollment(
-        organization_id=str(current_user.organization_id),
-        user_id=str(user_id),
-        program_id=str(program_id),
-        enrolled_by=str(current_user.id),
-        status=EnrollmentStatus.ACTIVE,
-    )
-    db.add(enrollment)
-    await db.commit()
-
-    await log_audit_event(
-        db=db,
-        event_type="training_enrollment_created",
-        event_category="training",
-        severity="info",
-        event_data={
-            "enrollment_id": str(enrollment.id),
-            "user_id": str(user_id),
-            "member_name": member_name,
-            "program_id": str(program_id),
-            "program_name": program_name,
-        },
-        user_id=str(current_user.id),
-        username=current_user.username,
-    )
-
-    return {
-        "enrollment_id": str(enrollment.id),
-        "user_id": str(user_id),
-        "member_name": member_display_name,
-        "program_id": str(program_id),
-        "program_name": program_name,
-        "status": "active",
-    }
 
 
 # ============================================
@@ -3108,8 +3325,10 @@ class RequirementStatusItem(BaseModel):
 
     requirement_id: str
     requirement_name: str
-    # "completed", "in_progress", "expired", "not_started", or "catch_up" for an
-    # existing member's unmet requirement before its catch-up deadline.
+    # "completed", "in_progress", "expired", "not_started", "catch_up" for an
+    # existing member's unmet requirement before its catch-up deadline, or
+    # "not_applicable" for a session-attendance requirement with no session
+    # held yet in the member's window (graded neither way, W80-9).
     status: str
     completion_date: str | None = None
     expiry_date: str | None = None
@@ -3124,6 +3343,10 @@ class RequirementStatusItem(BaseModel):
     # number nobody can account for.
     base_required: float | None = None
     waived_months: int = 0
+    # waived_months split by reason, so the cell can say "on leave" only when
+    # a leave of absence is why; a month both covered counts in both.
+    leave_months: int = 0
+    waiver_months: int = 0
     window_start: str | None = None
     window_end: str | None = None
     # The date THIS cell was judged against. Requirements can each override
@@ -3135,6 +3358,8 @@ class RequirementStatusItem(BaseModel):
     as_of: str | None = None
     # Set with status "catch_up": the date the existing member has until.
     catch_up_deadline: str | None = None
+    # Met by a Chief's override rather than by the count.
+    overridden: bool = False
 
 
 class MemberComplianceRow(BaseModel):
@@ -3166,6 +3391,8 @@ class MatrixRequirementItem(BaseModel):
     frequency: str | None = None
     target: float | None = None
     target_unit: str | None = None
+    # The viewer may record a Chief's override on this requirement.
+    can_override: bool = False
 
 
 def _enum_value(value) -> str | None:
@@ -3182,6 +3409,14 @@ _TARGET_BY_TYPE = {
     RequirementType.HOURS.value: ("required_hours", "hours"),
     RequirementType.SHIFTS.value: ("required_shifts", "shifts"),
     RequirementType.CALLS.value: ("required_calls", "calls"),
+    RequirementType.EVALUATED_SHIFTS.value: ("required_shifts", "evaluated shifts"),
+    RequirementType.TRANSPORTS.value: ("required_transports", "transports"),
+    RequirementType.REFUSALS.value: ("required_refusals", "refusals"),
+    # A share, not a count: the screen renders it "60% of sessions".
+    RequirementType.SESSION_ATTENDANCE.value: (
+        "required_attendance_pct",
+        "percent_of_sessions",
+    ),
 }
 
 
@@ -3224,7 +3459,7 @@ async def get_category_hour_breakdown(
     current biannual cycle, so training officers can verify NCCR topic
     area progress against national/state minimums.
     """
-    _require_self_or_training_officer(current_user, user_id)
+    await _require_self_or_training_officer(db, current_user, user_id)
     from app.models.training import TrainingCategory
 
     org_id = str(current_user.organization_id)
@@ -3405,9 +3640,11 @@ async def get_compliance_matrix(
         today,
         grading.include_current_month,
     )
+    held_sessions = await load_held_sessions(db, str(org_id), requirements)
 
     # Batch-fetch all active waivers / leaves for the org
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
+    viewer_is_chief = holds_chief_position(current_user)
 
     matrix = []
     # The evaluation cut-off can differ per requirement (each may override
@@ -3436,6 +3673,7 @@ async def get_compliance_matrix(
                 org_include_current_month=grading.include_current_month,
                 join_date=join_date,
                 shift_dates=shifts_by_user.get(str(member.id), []),
+                held_sessions=held_sessions,
             )
 
             if ev.as_of and (as_of is None or ev.as_of < as_of):
@@ -3453,10 +3691,13 @@ async def get_compliance_matrix(
                     progress_unit=ev.progress_unit,
                     base_required=ev.base_required,
                     waived_months=ev.waived_months,
+                    leave_months=ev.leave_months,
+                    waiver_months=ev.waiver_months,
                     window_start=ev.window_start,
                     window_end=ev.window_end,
                     as_of=ev.as_of,
                     catch_up_deadline=ev.catch_up_deadline,
+                    overridden=ev.overridden,
                 )
             )
 
@@ -3502,6 +3743,7 @@ async def get_compliance_matrix(
                 frequency=_enum_value(r.frequency),
                 target=_requirement_target(r),
                 target_unit=_requirement_target_unit(r),
+                can_override=viewer_is_chief and accepts_override(r),
             ).model_dump()
             for r in requirements
         ],
@@ -3618,6 +3860,7 @@ async def get_member_period_status(
         today,
         org_include_current,
     )
+    held_sessions = await load_held_sessions(db, str(org_id), requirements)
 
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
@@ -3679,6 +3922,7 @@ async def get_member_period_status(
                 org_include_current_month=org_include_current,
                 join_date=join_date,
                 shift_dates=shifts_by_user.get(str(member.id), []),
+                held_sessions=held_sessions,
             )[0]
             for req in applicable
         )

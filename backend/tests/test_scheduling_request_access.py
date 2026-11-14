@@ -11,6 +11,22 @@ from app.api.dependencies import PaginationParams
 from app.api.v1.endpoints import scheduling as scheduling_ep
 
 
+@pytest.fixture(autouse=True)
+def _supervises_nobody(monkeypatch):
+    """These tests run without a database. The time-off reads now also ask
+    whether the caller supervises the requester (owner decision 2026-11-01),
+    so each test states the answer every case here assumes: nobody."""
+
+    class _NoCrew:
+        def __init__(self, db):
+            pass
+
+        async def current_crew_ids(self, organization_id, supervisor_id):
+            return []
+
+    monkeypatch.setattr(scheduling_ep, "MemberSupervisorService", _NoCrew)
+
+
 def _user(user_id, organization_id):
     return SimpleNamespace(id=user_id, organization_id=organization_id)
 
@@ -25,6 +41,7 @@ def _service():
     )
     service.enrich_swap_requests = AsyncMock(side_effect=lambda records: records)
     service.enrich_time_off_requests = AsyncMock(side_effect=lambda records: records)
+    service.time_off_ids_reviewable_as_supervisor = AsyncMock(return_value=set())
     return service
 
 

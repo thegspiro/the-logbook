@@ -92,6 +92,8 @@ describe('learning path content', () => {
       ['getting-started.account', 'Your access requires two-factor authentication', 'components/MfaGraceBanner.tsx'],
       ['getting-started.account', 'authenticator app', 'pages/UserSettingsPage.tsx'],
       ['getting-started.account', 'passkey', 'pages/UserSettingsPage.tsx'],
+      ['mobile.offline', 'Send as me', 'components/HeldOfflineItemsNotice.tsx'],
+      ['mobile.offline', 'Discard', 'components/HeldOfflineItemsNotice.tsx'],
       ['getting-started.directory', 'Profile visibility', 'pages/UserSettingsPage.tsx'],
       ['mobile.offline', 'Check for updates', 'components/settings/AppVersionSection.tsx'],
       ['mobile.offline', 'pending sync', 'components/layout/TopNavigation.tsx'],

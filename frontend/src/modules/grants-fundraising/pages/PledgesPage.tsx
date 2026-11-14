@@ -5,8 +5,10 @@
  * `fundraising.manage` records and edits pledges. The dashboard's
  * Outstanding Pledges figure links here.
  *
- * Status and the fulfilled amount are what the officer recorded; the page
- * shows them as stored and computes nothing but each row's remaining balance.
+ * Status and the fulfilled amount are the backend's: a donation recorded
+ * against a pledge moves both, and an officer can still correct them by hand.
+ * The page shows them as stored and computes nothing but each row's
+ * remaining balance (pitfall #29).
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -84,8 +86,8 @@ const PledgesPage: React.FC = () => {
   const campaignNames = useMemo(() => new Map(campaigns.map((c) => [c.id, c.name])), [campaigns]);
 
   const header = (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
+    <div className="page-header gap-4 sm:items-center">
+      <div className="page-header-title">
         <h1 className="text-theme-text-primary text-2xl font-bold">Pledges</h1>
         <p className="text-theme-text-secondary mt-1 text-sm">Gifts promised and what has come in against them</p>
       </div>
@@ -149,8 +151,8 @@ const PledgesPage: React.FC = () => {
         />
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="rwd-table w-full">
+          <div className="rwd-table-container overflow-x-auto">
+            <table className="rwd-table rwd-table-wide w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th scope="col" className={HEADER_CELL}>
@@ -220,7 +222,7 @@ const PledgesPage: React.FC = () => {
                         </span>
                       </td>
                       {canManage && (
-                        <td className={`${CELL} text-right`}>
+                        <td data-label="Actions" className={`${CELL} text-right`}>
                           <button
                             type="button"
                             onClick={() => setDialog({ pledge })}

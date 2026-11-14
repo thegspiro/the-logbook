@@ -8,6 +8,11 @@
  * line, and the report cannot be submitted until every line has one (the
  * API refuses; the page says so beside the button). The report's approvers
  * read it here too, receipts included.
+ *
+ * One upload can serve several lines (owner decision 2026-11-01): a line can
+ * use the receipt already on another, and on a draft a receipt comes off one
+ * line without leaving the others. A mileage line with a trip log needs no
+ * receipt; its trips are listed for the approvers instead.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -33,6 +38,7 @@ import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
 import { LateLinesBadge } from '../components/LateLinesBadge';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { ReceiptControl } from '../components/ReceiptControl';
+import { SharedReceiptActions } from '../components/SharedReceiptActions';
 import { PayByCheckDialog } from '../components/PayByCheckDialog';
 import { ExpenseLineDialog } from '../components/ExpenseLineDialog';
 import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
@@ -42,7 +48,7 @@ import { FundShortfallNotice } from '../components/FundShortfallNotice';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
-import { formatDateTime } from '@/utils/dateFormatting';
+import { formatCalendarDate, formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { useConfirm } from '@/contexts/ConfirmContext';
@@ -53,10 +59,12 @@ import {
   ExpenseReportStatus,
   EXPENSE_REPORT_STATUS_COLORS,
   APPROVAL_STEP_STATUS_COLORS,
+  QuickBooksPaymentType,
   EXPENSE_TYPE_LABELS,
   type ExpenseLineItem,
 } from '../types';
 import { ApprovalStepActions } from '../components/ApprovalStepActions';
+import { QuickBooksPostingNote } from '../components/QuickBooksPostingNote';
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
@@ -192,7 +200,9 @@ const ExpenseReportDetailPage: React.FC = () => {
         title: withdrawing ? 'Withdraw this report?' : 'Cancel this report?',
         message: withdrawing
           ? `${er.reportNumber} is closed and nobody is asked to approve it. It cannot be reopened; start a new report to claim these expenses later.`
-          : `${er.reportNumber} is closed for good: any approval still outstanding is withdrawn and emailed approval links stop working. Nothing has been paid on it, so no budget line changes.`,
+          : er.budgetCommittedAt
+            ? `${er.reportNumber} is closed for good. Nothing has been paid on it, and the amounts its approval committed to its budget lines are released.`
+            : `${er.reportNumber} is closed for good: any approval still outstanding is withdrawn and emailed approval links stop working. Nothing has been paid on it, so no budget line changes.`,
         confirmLabel: withdrawing ? 'Withdraw report' : 'Cancel report',
         cancelLabel: 'Keep it',
         variant: 'danger',
@@ -264,7 +274,9 @@ const ExpenseReportDetailPage: React.FC = () => {
   const canSubmit = er.status === ExpenseReportStatus.DRAFT && access.canActAsRequester(er.submittedBy);
   // Every line needs an uploaded receipt before the report is submitted;
   // the API refuses otherwise, and this says why beside the button.
-  const missingReceipts = er.lineItems.filter((item) => !item.receiptDocumentId).length;
+  // A mileage line's trip log stands in for its receipt.
+  const hasTripLog = (item: ExpenseLineItem) => (item.mileageTrips?.length ?? 0) > 0;
+  const missingReceipts = er.lineItems.filter((item) => !item.receiptDocumentId && !hasTripLog(item)).length;
   // Mirrors _ER_RECEIPT_OPEN_TO_REQUESTER / _ER_RECEIPT_CLOSED in
   // backend/app/api/v1/endpoints/finance.py: a requester changes receipts only
   // while the report is editable; the finance office until it is closed out.
@@ -296,8 +308,8 @@ const ExpenseReportDetailPage: React.FC = () => {
       )}
 
       <div className="card p-6">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="page-header mb-4 gap-3 sm:items-center">
+          <div className="page-header-title">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-theme-text-primary text-xl font-bold">{er.title}</h1>
               <span
@@ -308,7 +320,7 @@ const ExpenseReportDetailPage: React.FC = () => {
             </div>
             <p className="text-theme-text-secondary mt-1 text-sm">{er.reportNumber}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="page-header-actions flex flex-wrap items-center gap-2">
             {canSubmit && missingReceipts > 0 && (
               <p id="expense-receipts-needed" className="text-xs text-amber-800 dark:text-amber-300">
                 Attach a receipt to {missingReceipts === 1 ? 'the remaining line' : `${String(missingReceipts)} lines`}{' '}
@@ -321,7 +333,7 @@ const ExpenseReportDetailPage: React.FC = () => {
                 disabled={busy || missingReceipts > 0}
                 aria-describedby={missingReceipts > 0 ? 'expense-receipts-needed' : undefined}
                 onClick={() => void handleSubmit()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-primary inline-flex items-center gap-1.5 text-sm disabled:cursor-not-allowed"
               >
                 <Send className="h-3.5 w-3.5" />
                 Submit for Approval
@@ -332,7 +344,7 @@ const ExpenseReportDetailPage: React.FC = () => {
                 type="button"
                 disabled={busy}
                 onClick={() => setPayingByCheck(true)}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-primary inline-flex items-center gap-1.5 text-sm disabled:cursor-not-allowed"
               >
                 <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                 Pay by Check
@@ -343,7 +355,7 @@ const ExpenseReportDetailPage: React.FC = () => {
                 type="button"
                 disabled={busy}
                 onClick={() => void handleMarkPaid()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-success inline-flex items-center gap-1.5 text-sm disabled:cursor-not-allowed"
               >
                 <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
                 Mark Paid
@@ -354,7 +366,7 @@ const ExpenseReportDetailPage: React.FC = () => {
                 type="button"
                 disabled={busy}
                 onClick={() => void handleCancel()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                className="btn-secondary inline-flex items-center gap-1.5 text-sm disabled:cursor-not-allowed"
               >
                 <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
                 {er.status === ExpenseReportStatus.DRAFT ? 'Withdraw Report' : 'Cancel Report'}
@@ -396,6 +408,7 @@ const ExpenseReportDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(er.qbExportedAt, tz)}</p>
             </div>
           )}
+          <QuickBooksPostingNote paymentType={QuickBooksPaymentType.EXPENSE_REPORT} paymentId={er.id} />
           {er.purchaseRequestId && (
             <div>
               <p className="text-theme-text-secondary text-xs">Claims back purchase</p>
@@ -537,8 +550,21 @@ const ExpenseReportDetailPage: React.FC = () => {
                             <LateLinesBadge />
                           </div>
                         )}
+                        <p className="text-theme-text-secondary mt-1 text-xs">
+                          {item.budgetId ? `Budget line: ${item.budgetLabel ?? 'unnamed'}` : 'No budget line'}
+                        </p>
                         {item.fundName && (
                           <p className="text-theme-text-secondary mt-1 text-xs">Restricted fund: {item.fundName}</p>
+                        )}
+                        {hasTripLog(item) && (
+                          <ul className="text-theme-text-secondary mt-1 space-y-0.5 text-xs" aria-label="Trips">
+                            {(item.mileageTrips ?? []).map((trip, index) => (
+                              <li key={`${item.id}-trip-${String(index)}`}>
+                                {formatCalendarDate(trip.tripDate)}: {trip.fromLocation} to {trip.toLocation},{' '}
+                                {trip.miles} mi ({trip.purpose})
+                              </li>
+                            ))}
+                          </ul>
                         )}
                       </td>
                       <td className="text-theme-text-secondary px-4 py-3 text-sm">
@@ -559,18 +585,38 @@ const ExpenseReportDetailPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        {canAttachReceipt || item.receiptFileUrl || item.receiptUrl ? (
-                          <ReceiptControl
-                            subject={item.description}
-                            receiptFileUrl={item.receiptFileUrl}
-                            receiptUrl={item.receiptUrl}
-                            canAttach={canAttachReceipt}
-                            onUpload={async (file) => {
-                              await expenseReportService.uploadLineItemReceipt(er.id, item.id, file);
-                              await fetchExpenseReport(er.id);
-                            }}
-                            onDownload={() => expenseReportService.downloadLineItemReceipt(er.id, item.id)}
-                          />
+                        {hasTripLog(item) ? (
+                          <span className="text-theme-text-secondary text-xs">
+                            Trip log: {item.totalMiles ?? ''} mi at {formatCurrency(item.mileageRate ?? null)}/mi
+                          </span>
+                        ) : canAttachReceipt || item.receiptFileUrl || item.receiptUrl ? (
+                          <>
+                            <ReceiptControl
+                              subject={item.description}
+                              receiptFileUrl={item.receiptFileUrl}
+                              receiptUrl={item.receiptUrl}
+                              canAttach={canAttachReceipt}
+                              onUpload={async (file) => {
+                                await expenseReportService.uploadLineItemReceipt(er.id, item.id, file);
+                                await fetchExpenseReport(er.id);
+                              }}
+                              onDownload={() => expenseReportService.downloadLineItemReceipt(er.id, item.id)}
+                            />
+                            <SharedReceiptActions
+                              line={item}
+                              lines={er.lineItems}
+                              canShare={canAttachReceipt}
+                              canRemove={canAttachReceipt && er.status === ExpenseReportStatus.DRAFT}
+                              onShare={async (fromItemId) => {
+                                await expenseReportService.shareLineItemReceipt(er.id, item.id, fromItemId);
+                                await fetchExpenseReport(er.id);
+                              }}
+                              onRemove={async () => {
+                                await expenseReportService.detachLineItemReceipt(er.id, item.id);
+                                await fetchExpenseReport(er.id);
+                              }}
+                            />
+                          </>
                         ) : (
                           <span className="text-theme-text-muted">--</span>
                         )}
@@ -702,6 +748,7 @@ const ExpenseReportDetailPage: React.FC = () => {
       {editingLine && (
         <ExpenseLineDialog
           reportId={er.id}
+          fiscalYearId={er.fiscalYearId}
           line={editingLine === 'new' ? undefined : editingLine}
           onClose={() => setEditingLine(null)}
           onSaved={() => {

@@ -22,7 +22,7 @@ export interface CategoriesSectionProps extends SettingsSectionProps {
   onNewCategoryColorChange: (value: string) => void;
 }
 
-/** Props for the Outreach section. */
+/** Props for the request Types & roles page. */
 export interface OutreachSectionProps extends SettingsSectionProps {
   onAddType: () => void;
   onRemoveType: (value: string) => void;
@@ -43,13 +43,11 @@ export interface OrgMember {
   rank?: string;
 }
 
-/** Props for the Pipeline section. */
+/** Props for the request Handling page (the stored `request_pipeline`). */
 export interface PipelineSectionProps extends SettingsSectionProps {
   members: OrgMember[];
-  onUpdateLeadTime: (days: number) => void;
   onUpdateDefaultAssignee: (userId: string | null) => void;
   onTogglePublicVisibility: () => void;
-  onToggleAcceptPublicRequests: () => void;
   onAddTask: () => void;
   onRemoveTask: (taskId: string) => void;
   onReorderTask: (index: number, direction: 'up' | 'down') => void;
@@ -95,11 +93,26 @@ export interface EventRequestFormSummary {
   published_at?: string;
 }
 
-/** Props for the Public Form section. */
+/** Props for the Request form page. */
 export interface FormSectionProps {
   generatingForm: boolean;
   onGenerateForm: () => void;
   onNavigateToForms: () => void;
   eventRequestForms: EventRequestFormSummary[];
   loadingForms: boolean;
+}
+
+/** The pages of the Public Requests settings section, in the order the flow runs. */
+export type PublicRequestsPage = 'overview' | 'form' | 'types' | 'handling' | 'emails';
+
+/** Props for the Public Requests overview page. */
+export interface PublicRequestsOverviewProps extends SettingsSectionProps {
+  members: OrgMember[];
+  emailTemplates: EmailTemplate[];
+  eventRequestForms: EventRequestFormSummary[];
+  loadingForms: boolean;
+  onToggleAcceptPublicRequests: () => void;
+  onUpdateLeadTime: (days: number) => void;
+  onGoToPage: (page: PublicRequestsPage) => void;
+  onOpenRequests: () => void;
 }

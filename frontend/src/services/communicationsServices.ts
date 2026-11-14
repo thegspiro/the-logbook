@@ -87,6 +87,8 @@ export const notificationsService = {
     cursor?: string;
     skip?: number;
     limit?: number;
+    /** Only deliveries that recorded an error, within the requested scope. */
+    failed?: boolean;
   }): Promise<NotificationLogPage> {
     const response = await api.get<NotificationLogPage>('/notifications/logs', { params });
     return response.data;
@@ -214,14 +216,96 @@ export interface ActionItemSummary {
   status: string;
   priority?: string;
   completion_notes?: string | null;
+  /** The meeting's title, for a meeting item; minutes items are not named. */
+  source_title?: string | null;
+  /** A minutes item carried into later minutes — open there, closed here. */
+  carried_forward?: boolean;
   created_at: string;
 }
 
+/**
+ * One page of `GET /dashboard/action-items/page` (DASH-40). The totals cover every
+ * row the filters match, not just this page, and are counted with the same
+ * open and overdue rules as the dashboard's Action Items tile.
+ */
+export interface ActionItemPage {
+  items: ActionItemSummary[];
+  total: number;
+  open_total: number;
+  overdue_total: number;
+  limit: number;
+  offset: number;
+}
+
+export type CommunityPeriod = 'month' | 'quarter' | 'year' | 'rolling_12' | 'all';
+
+/** One period's outreach totals; see community_engagement_service.py for the rules. */
+export interface CommunityReachTotals {
+  events_held: number;
+  /** Signed-in guests, or the requester's expected audience where nobody signed in. */
+  people_reached: number;
+  signed_in: number;
+  estimated: number;
+  member_hours: number;
+  members_involved: number;
+  requests_received: number;
+  requests_completed: number;
+}
+
+/** Events that recorded both an expected audience and sign-ins. */
+export interface CommunityTurnout {
+  events: number;
+  signed_in: number;
+  expected: number;
+}
+
+export interface CommunityReachBucket {
+  /** "YYYY-MM", or "YYYY" when the report's granularity is year. */
+  period: string;
+  events: number;
+  signed_in: number;
+  estimated: number;
+}
+
+export interface CommunityTypeBucket {
+  label: string;
+  events: number;
+  people_reached: number;
+}
+
+export interface CommunityEventReach {
+  event_id: string;
+  title: string;
+  start_datetime: string;
+  type_label: string;
+  organization_name: string | null;
+  request_id: string | null;
+  signed_in: number;
+  expected: number | null;
+  people_reached: number;
+  reach_is_estimate: boolean;
+  crew: number;
+  member_hours: number;
+}
+
 export interface CommunityEngagement {
+  /** The first four are all-time; everything after them follows `period`. */
   total_public_events: number;
   total_member_attendees: number;
   total_external_attendees: number;
   upcoming_public_events: number;
+  period: CommunityPeriod;
+  period_start: string | null;
+  period_end: string;
+  current: CommunityReachTotals;
+  /** The same elapsed span one period earlier; null for all time. */
+  previous: CommunityReachTotals | null;
+  upcoming_events: number;
+  turnout: CommunityTurnout;
+  granularity: 'month' | 'year';
+  by_period: CommunityReachBucket[];
+  by_type: CommunityTypeBucket[];
+  recent_events: CommunityEventReach[];
 }
 
 export type WidgetPeriod = 'month' | 'quarter' | 'year' | 'rolling_30';
@@ -303,12 +387,17 @@ export interface ComplianceMatrixCell {
   /** The target before waiver proration; differs only when waived_months > 0. */
   base_required?: number | null;
   waived_months?: number;
+  /** `waived_months` by reason; a month both a leave and a waiver covered counts in both. */
+  leave_months?: number;
+  waiver_months?: number;
   window_start?: string | null;
   window_end?: string | null;
   /** The date this cell was judged against; overrides the matrix-level as_of. */
   as_of?: string | null;
   /** With status "catch_up": the date an existing member has until. */
   catch_up_deadline?: string | null;
+  /** Met by the Chief's override rather than by the count; absent from an older server. */
+  overridden?: boolean;
 }
 
 export interface ComplianceMatrixMember {
@@ -337,6 +426,8 @@ export interface ComplianceMatrixRequirement {
   frequency?: string | null;
   target?: number | null;
   target_unit?: string | null;
+  /** The viewer may record a Chief's override on this requirement. */
+  can_override?: boolean;
 }
 
 export interface ComplianceMatrix {
@@ -395,6 +486,32 @@ const normalizeMemberEmailPolicy = (data: MemberEmailPolicy): MemberEmailPolicy 
   can_edit: Boolean(data.can_edit),
 });
 
+/** One current member and the optional emails they have turned off. */
+export interface MemberEmailOptOut {
+  user_id: string;
+  name: string;
+  membership_number: string | null;
+  /** Email Notifications is off: every optional email the department has not made required is stopped. */
+  email_notifications_off: boolean;
+  /** Keys of the optional email kinds the member's own setting turns off. */
+  turned_off: string[];
+}
+
+/** A page of the administrators' opt-out view. Snake case, like its module. */
+export interface MemberEmailOptOutPage {
+  members: MemberEmailOptOut[];
+  /** Members matching the filter, across every page. */
+  total: number;
+  skip: number;
+  limit: number;
+  /** Current members of the department, opted out or not. */
+  members_considered: number;
+  /** Per optional kind, how many current members are not emailed it. */
+  not_emailed: Record<string, number>;
+  /** Optional kinds the department has made required. */
+  department_required: string[];
+}
+
 export const emailTemplatesService = {
   /** Every member email and text, and whether members can opt out. Read-only. */
   async getMemberEmailPolicy(): Promise<MemberEmailPolicy> {
@@ -408,6 +525,30 @@ export const emailTemplatesService = {
       required_kinds: requiredKinds,
     });
     return normalizeMemberEmailPolicy(response.data);
+  },
+
+  /**
+   * Which current members have opted out of which optional emails. Read-only:
+   * an opt-out is the member's own choice. Never cached (apiCache).
+   */
+  async getMemberEmailOptOuts(params: {
+    kind?: string | undefined;
+    skip: number;
+    limit: number;
+  }): Promise<MemberEmailOptOutPage> {
+    const response = await api.get<MemberEmailOptOutPage>('/email-templates/member-email-opt-outs', {
+      params: { skip: params.skip, limit: params.limit, ...(params.kind ? { kind: params.kind } : {}) },
+    });
+    const data = response.data;
+    return {
+      members: asArray(data.members),
+      total: Number(data.total) || 0,
+      skip: Number(data.skip) || 0,
+      limit: Number(data.limit) || params.limit,
+      members_considered: Number(data.members_considered) || 0,
+      not_emailed: data.not_emailed ?? {},
+      department_required: asArray(data.department_required),
+    };
   },
 
   async getTemplates(): Promise<EmailTemplate[]> {

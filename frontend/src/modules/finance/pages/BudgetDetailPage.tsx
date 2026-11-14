@@ -47,6 +47,7 @@ import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { BudgetAmendmentStatus } from '../types';
 import type { Budget, BudgetAmendment } from '../types';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 // =============================================================================
 // Budget Info Card
@@ -131,7 +132,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName, actio
       )}
 
       {/* Amounts grid */}
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <StatGrid columns={4} gap={4} className="mb-6">
         <div>
           <p className="text-theme-text-secondary text-sm">{amended ? 'Current budget' : 'Budgeted'}</p>
           <p className="text-theme-text-primary text-xl font-bold">
@@ -154,7 +155,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName, actio
             {formatCurrencyWhole(remaining)}
           </p>
         </div>
-      </div>
+      </StatGrid>
 
       {/* Progress bar */}
       <div>
@@ -237,9 +238,17 @@ const AmendmentList: React.FC<AmendmentListProps> = ({
           const pending = status === BudgetAmendmentStatus.PENDING;
           const rejected = status === BudgetAmendmentStatus.REJECTED;
           const reversalPending = a.reversalStatus === BudgetAmendmentStatus.PENDING;
+          // A reversal may take back only part of the amendment (owner
+          // decision, 2026-11-01); what is left still counts, so it is not
+          // struck through.
+          const partly =
+            a.reversedAmount != null && Number(a.reversedAmount) > 0 && Number(a.reversedAmount) < Number(a.amount);
           // Struck through only once the reversal is confirmed and has moved the budget.
-          const reversed = Boolean(a.reversedByAmendmentId) && !reversalPending;
-          const original = a.reversesAmendmentId ? byId.get(a.reversesAmendmentId) : undefined;
+          const reversed = Boolean(a.reversedByAmendmentId) && !reversalPending && !partly;
+          const reduced = Boolean(a.reversedByAmendmentId) && !reversalPending && partly;
+          // A rejected reversal has lost its link but keeps the display reference.
+          const originalId = a.reversesAmendmentId ?? a.reversesAmendmentRef;
+          const original = originalId ? byId.get(originalId) : undefined;
           const ownEntry = Boolean(currentUserId) && a.createdBy === currentUserId;
           const label = a.isReversal
             ? `reversal of ${formatCurrency(Math.abs(Number(a.amount)))}`
@@ -255,8 +264,8 @@ const AmendmentList: React.FC<AmendmentListProps> = ({
                     <span className="text-theme-text-secondary font-normal">
                       {' · '}
                       {original
-                        ? `Reverses the ${formatDate(original.approvedOn, tz)} amendment of +${formatCurrency(original.amount)}`
-                        : 'Reverses an earlier amendment'}
+                        ? `${rejected ? 'Would have reversed' : 'Reverses'} the ${formatDate(original.approvedOn, tz)} amendment of +${formatCurrency(original.amount)}`
+                        : `${rejected ? 'Would have reversed' : 'Reverses'} an earlier amendment`}
                     </span>
                   </p>
                 ) : (
@@ -283,10 +292,16 @@ const AmendmentList: React.FC<AmendmentListProps> = ({
                   Reversed {formatDate(a.reversedAt, tz)} by {a.reversedByName || 'a former member'}
                 </p>
               )}
+              {reduced && (
+                <p className="text-theme-text-secondary mt-1 text-sm font-medium">
+                  Reduced by {formatCurrency(a.reversedAmount)} on {formatDate(a.reversedAt, tz)} by{' '}
+                  {a.reversedByName || 'a former member'}
+                </p>
+              )}
               {reversalPending && (
                 <p className="text-theme-text-secondary mt-1 text-sm font-medium">
-                  Reversal entered {formatDate(a.reversedAt, tz)} by {a.reversedByName || 'a former member'}, awaiting
-                  confirmation
+                  {partly ? `Reversal of ${formatCurrency(a.reversedAmount)} entered` : 'Reversal entered'}{' '}
+                  {formatDate(a.reversedAt, tz)} by {a.reversedByName || 'a former member'}, awaiting confirmation
                 </p>
               )}
               {status === BudgetAmendmentStatus.CONFIRMED && a.decidedAt && (

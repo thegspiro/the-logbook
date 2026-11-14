@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { History, Inbox, Plus, ScanLine, Settings } from 'lucide-react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +12,7 @@ vi.mock('../../services/adminHubService', () => ({
 
 import { renderWithRouter } from '../../test/utils';
 import { AdminHubFrame } from './AdminHubFrame';
+import { FIRST_LOAD_HOLD_MS } from '../../hooks/useFirstLoadHold';
 import type { AdminHubSummary } from '../../types/adminHub';
 
 const summary: AdminHubSummary = {
@@ -300,5 +301,100 @@ describe('AdminHubFrame', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Events settings' }));
     expect(onSettings).toHaveBeenCalled();
+  });
+
+  // The queue's height is unknown until the summary settles, so what sits under
+  // it is laid out but invisible until then, and appears already in place.
+  describe('first load', () => {
+    const body = () => screen.getByTestId('admin-hub-body');
+
+    beforeEach(() => {
+      mockGetSummary.mockReset();
+      mockGetSummary.mockResolvedValue(summary);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('keeps the body invisible until the summary settles', async () => {
+      let settle: (value: AdminHubSummary) => void = () => {};
+      mockGetSummary.mockReturnValue(new Promise<AdminHubSummary>((resolve) => (settle = resolve)));
+      renderFrame();
+
+      expect(body()).toHaveAttribute('data-held');
+      settle(summary);
+      await screen.findByRole('link', { name: 'Review queue' });
+      expect(body()).not.toHaveAttribute('data-held');
+    });
+
+    it('shows the body once a failed summary settles', async () => {
+      mockGetSummary.mockRejectedValue(new Error('down'));
+      renderFrame();
+
+      await waitFor(() => expect(body()).not.toHaveAttribute('data-held'));
+    });
+
+    it('stops waiting for a slow summary after a moment', async () => {
+      vi.useFakeTimers();
+      mockGetSummary.mockReturnValue(new Promise<AdminHubSummary>(() => {}));
+      renderFrame();
+
+      expect(body()).toHaveAttribute('data-held');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(FIRST_LOAD_HOLD_MS);
+      });
+      expect(body()).not.toHaveAttribute('data-held');
+    });
+
+    it('does not hide anything when there is no queue to wait for', () => {
+      mockGetSummary.mockReturnValue(new Promise<AdminHubSummary>(() => {}));
+      const { unmount } = renderFrame({ showAttentionQueue: false });
+      expect(body()).not.toHaveAttribute('data-held');
+      unmount();
+
+      renderFrame({ summary: false });
+      expect(body()).not.toHaveAttribute('data-held');
+    });
+
+    it('waits for a nav the caller has not built yet', () => {
+      const frame = (navPending: boolean) => (
+        <AdminHubFrame
+          moduleKey="training"
+          title="Training Administration"
+          description="Approve hours, track certifications, run programs"
+          summary={false}
+          navPending={navPending}
+          nav={navPending ? undefined : <nav aria-label="Areas" />}
+        >
+          <p>Tab body</p>
+        </AdminHubFrame>
+      );
+      const { rerender } = renderWithRouter(frame(true));
+      expect(body()).toHaveAttribute('data-held');
+
+      rerender(frame(false));
+      expect(body()).not.toHaveAttribute('data-held');
+    });
+
+    it('keeps the page on screen through a refresh', async () => {
+      const { rerender } = renderFrame({ refreshToken: 0 });
+      await screen.findByRole('link', { name: 'Review queue' });
+
+      mockGetSummary.mockReturnValue(new Promise<AdminHubSummary>(() => {}));
+      rerender(
+        <AdminHubFrame
+          moduleKey="training"
+          title="Training Administration"
+          description="Approve hours, track certifications, run programs"
+          refreshToken={1}
+        >
+          <p>Tab body</p>
+        </AdminHubFrame>
+      );
+
+      await waitFor(() => expect(mockGetSummary).toHaveBeenCalledTimes(2));
+      expect(body()).not.toHaveAttribute('data-held');
+    });
   });
 });

@@ -3,14 +3,16 @@
  *
  * Covers time on a neighbouring jurisdiction's apparatus, which has no shift
  * on this department's schedule to check in to. An entry counts from the
- * moment it is saved. An officer can reject one, which takes it out of the
- * member's totals; the member then sees the reason here, and the entry is
- * locked so the claim that was reviewed stays as it was.
+ * moment it is saved — or, where the department requires approval, once a
+ * scheduling officer approves it, and it is marked here until then. An officer
+ * can reject one, which takes it out of the member's totals; the member then
+ * sees the reason here, and the entry is locked so the claim that was reviewed
+ * stays as it was.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { AlertCircle, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { AlertCircle, Loader2, Pencil, Plus, QrCode, Trash2 } from 'lucide-react';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ExternalShiftEntry } from '../../modules/scheduling/services/api';
 import { useConfirm } from '../../contexts/ConfirmContext';
@@ -18,8 +20,10 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { formatHours } from '../../utils/hoursFormatting';
+import { PreceptorLinkDialog } from '../../components/training/PreceptorLinkDialog';
 import { ExternalShiftFormModal } from './ExternalShiftFormModal';
 import { externalShiftTimeRange } from './externalShiftTimes';
+import { ExternalShiftEvaluationBadge } from './ExternalShiftEvaluationBadge';
 
 interface MyExternalShiftsProps {
   /** Called after any change, so the hours totals beside this list refresh. */
@@ -35,6 +39,7 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ExternalShiftEntry | null>(null);
+  const [linkFor, setLinkFor] = useState<ExternalShiftEntry | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,8 +84,8 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
 
   return (
     <section className="card p-4" aria-labelledby="my-external-shifts-heading">
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+      <div className="split-row mb-3 gap-3 sm:items-start">
+        <div className="split-row-main">
           <h4 id="my-external-shifts-heading" className="text-theme-text-primary font-semibold">
             Shifts with other departments
           </h4>
@@ -90,7 +95,7 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
         </div>
         <button
           type="button"
-          className="btn-primary flex shrink-0 items-center gap-2"
+          className="split-row-aside btn-primary flex shrink-0 items-center gap-2"
           onClick={() => {
             setEditing(null);
             setFormOpen(true);
@@ -106,7 +111,7 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
           <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" aria-hidden="true" />
         </div>
       ) : error ? (
-        <div className="alert-error flex items-start gap-2" role="alert">
+        <div className="alert-danger flex items-start gap-2" role="alert">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <div>
             <p>{error}</p>
@@ -121,11 +126,12 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
         <ul className="divide-theme-surface-border divide-y">
           {entries.map((entry) => {
             const rejected = entry.status === 'rejected';
+            const pending = entry.status === 'pending';
             const detail = [entry.apparatus_name, entry.role].filter(Boolean).join(' · ');
             const times = externalShiftTimeRange(entry, tz);
             return (
-              <li key={entry.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
+              <li key={entry.id} className="split-row gap-2 py-3 sm:items-center">
+                <div className="split-row-main">
                   <p className="text-theme-text-primary font-medium">
                     {entry.agency_name}
                     {rejected && (
@@ -133,12 +139,23 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
                         Not counted
                       </span>
                     )}
+                    {pending && (
+                      <span className="ml-2 rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-400">
+                        Awaiting approval
+                      </span>
+                    )}
+                    <ExternalShiftEvaluationBadge status={entry.evaluation_status} className="ml-2" />
                   </p>
                   <p className="text-theme-text-secondary text-sm">
                     {formatCalendarDate(entry.shift_date)}
                     {times ? ` · ${times}` : ''} · {formatHours(entry.hours)} hrs
                     {detail ? ` · ${detail}` : ''}
                   </p>
+                  {pending && (
+                    <p className="text-theme-text-secondary mt-1 text-sm">
+                      Not in your totals yet: it counts once a scheduling officer approves it.
+                    </p>
+                  )}
                   {rejected && entry.rejection_reason && (
                     <p className="text-theme-text-secondary mt-1 text-sm">
                       <span className="font-medium">Reason:</span> {entry.rejection_reason}
@@ -146,7 +163,16 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
                   )}
                 </div>
                 {!rejected && (
-                  <div className="flex shrink-0 gap-1">
+                  <div className="split-row-aside flex flex-wrap gap-1">
+                    {(entry.evaluation_status === 'needed' || entry.evaluation_status === 'draft') && (
+                      <button
+                        type="button"
+                        className="btn-secondary inline-flex items-center gap-1"
+                        onClick={() => setLinkFor(entry)}
+                      >
+                        <QrCode className="h-4 w-4" aria-hidden="true" /> Preceptor link
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn-icon"
@@ -177,6 +203,17 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
         <p className="text-theme-text-muted mt-2 text-xs">Showing your {entries.length} most recent entries.</p>
       )}
 
+      {linkFor && (
+        <PreceptorLinkDialog
+          isOpen
+          onClose={() => {
+            setLinkFor(null);
+            void load();
+          }}
+          entryId={linkFor.id}
+          shiftLabel={`${linkFor.agency_name} ${linkFor.apparatus_name} · ${formatCalendarDate(linkFor.shift_date)}`}
+        />
+      )}
       <ExternalShiftFormModal
         isOpen={formOpen}
         entry={editing}

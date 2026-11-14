@@ -89,7 +89,9 @@ exact page once you have signed in.
 **If you type the wrong password several times,** the **Sign In** button
 changes to **Wait 2s** and counts down before you can try again. The wait gets
 longer with each wrong try. The message reads, for example: _"Too many failed
-attempts. Try again in 4 seconds."_ When the countdown ends, you can try again.
+attempts. Try again in 4 seconds."_ When the countdown ends, you can try again. _(2026-11-06)_ The wait is counted
+per account name, so on a shared station computer one member's mistakes do not
+hold the next member's sign-in.
 
 > **Didn't get a welcome email?** Ask your department's IT manager or the
 > person who set up The Logbook. They can send it again or reset your
@@ -120,7 +122,7 @@ from your phone, or select **Use your passkey**, after Google or Microsoft lets
 you in. You can use one of your recovery codes instead. You have 5 minutes to
 enter it; after that, start again.
 
-![The login page's two-factor step — the 6-digit code field and the Use a recovery code link](./images/00-23-login-two-factor.png)
+![The login page's second step for a member with both a passkey and an authenticator app: Use your passkey above the 6-digit code field, and the Use a recovery code link](./images/00-23-login-two-factor.png)
 
 **If it doesn't work,** you come back to the sign-in page with a message such
 as _"No account matches that email. Contact your administrator for access."_
@@ -309,7 +311,11 @@ The dashboard is the first page you see after signing in. It has two tabs:
   department. Only officers and administrators have this tab.
 
 The two tabs never mix. Nothing on **Personal** is someone else's, and nothing
-on **My Department** is shown as yours.
+on **My Department** is shown as yours. The one exception is **Department
+pulse** _(2026-11-04)_, the department's money, grant and outreach totals: it
+sits on **My Department**, but a member whose positions reach those totals
+without giving them a **My Department** tab (a treasurer, say) sees it on
+**Personal** instead, so nobody loses it.
 
 ![The dashboard's personal tab: the member's own attention items, shifts and hours, under a tab strip whose other tab is the leadership view](./images/00-24-dashboard-my-department.png)
 
@@ -336,7 +342,10 @@ your department uses.
 - **Next 30 days.** Upcoming shifts, including open ones. If you are allowed
   to take an open shift, it shows **Sign Up**. If you aren't, it shows **Not
   eligible** straight away, so you don't find out only after you tap. See
-  [Scheduling](./03-scheduling.md).
+  [Scheduling](./03-scheduling.md). _(2026-11-05)_ A shift that runs exactly 24
+  hours reads "7:00 AM · 24 hr" rather than "7:00 AM–7:00 AM", and one that
+  ends on a later day says "next day". The **Take a Shift** count (for example
+  "2 open · 2 short-staffed") now shows on a phone too.
 - **Recent activity.** The latest things done across the department.
 - **Needs you.** Anything waiting for you to act. For example, a department
   message that asks you to confirm you have read it has an **Acknowledge**
@@ -348,12 +357,27 @@ your department uses.
   Five show at a time; **Older Items** opens your full inbox. A message you
   have read disappears the next time the page loads, unless it is persistent.
   Every department message is also emailed to you, and urgent ones are texted
-  too. Your full message history is on the **Messages** page.
+  too. Your full message history is on the **Messages** page. _(2026-11-05)_ A
+  stack of notifications of one kind previews the **newest** message instead of
+  repeating the stack's title; where the messages differ, it keeps the subject so
+  you can tell which drill or item it is.
 - **Scheduling Operations** (officers who manage scheduling, on the **My
   Department** tab). Seven tiles: Today's Staffing, Future Coverage Gaps, Open
   Slots, Pending Changes, Incomplete Closeouts, Workload Balance and Special
   Operations. Select a tile to open the schedule already filtered to what it
-  counted.
+  counted. **Today’s Staffing** counts today only, and says **Today**; the
+  others name their window, such as "14-day window".
+- **Operations panels** (on the **My Department** tab, each for the officers
+  whose permissions feed it). _(2026-11-04)_ When every count in **Critical
+  exceptions** or **Pending approvals** is zero, the panel folds to one line,
+  **All clear · _n_ checks**; select it to see each check. A zero elsewhere says
+  what it means for that panel, such as **None scheduled** or **None this
+  period**.
+- **Department pulse.** _(2026-11-05)_ The money, grant and outreach cards sit on
+  **My Department** for leaders instead of crowding the top of **Personal**, and
+  the one period they cover is named once in the section description. The Station
+  and Platoon filters on Scheduling Operations are dropdowns of values your shifts
+  actually carry (a filter with no values is hidden).
 
 ![Dashboard stats cards, notifications, upcoming events, and upcoming shifts](./images/00-07-dashboard-panels.png)
 
@@ -454,6 +478,8 @@ get one email and a banner across the app counting the days down, and you can
 keep working. When the days run out you can reach only the setup screens until
 you enroll. The 14 days start again if you are later promoted into such a role.
 
+![The Dashboard as an assistant chief, whose position needs two-step sign-in: a yellow banner across the top reads Your access requires two-factor authentication, with the date to set it up by and a Set it up now link](./images/00-36-mfa-grace-banner.png)
+
 **Some actions ask you to prove it is you.** Exporting the audit or error log,
 changing roles, positions, security or integration settings, resetting another
 administrator's password or two-factor, and deleting or anonymizing a member
@@ -465,6 +491,10 @@ stays proven for 10 minutes on that browser, so a second sensitive action right
 after does not ask again. If you sign in only through a provider such as Google
 and have no password, authenticator or passkey, the box tells you to set up
 two-step sign-in first.
+
+![The Confirm it's you box over Settings → Authentication → MFA Policy, opened by switching Allow passkeys: This action needs a recent confirmation, the Authenticator code field, and Cancel / Confirm](./images/00-34-step-up-code.png)
+
+![The Confirm it's you box with a Password field over the Reset MFA dialog, shown to an assistant chief who has not set up two-step sign-in yet, after selecting Reset MFA for a member](./images/00-35-step-up-password.png)
 
 ![My Account, Security, right after Verify & enable: the Save your recovery codes panel with its grid of ten codes, Copy codes and Done. The codes are made up for the picture](./images/00-31-mfa-recovery-codes.png)
 
@@ -494,6 +524,8 @@ You can have up to three passkeys. Each one shows whether it **Syncs across
 your devices** or is for **This device only**, when it was added, and when it
 was last used. Adding a passkey when you already have a second step asks you
 to prove it is you first.
+
+![My Account, Security tab, just after adding a passkey: the Passkeys card lists My phone (Syncs across your devices, and the date it was added) with its bin icon, then 10 recovery codes left and Generate new recovery codes, above the Authenticator app card](./images/00-33-passkeys-card.png)
 
 **Signing in with it.** After your password, the sign-in page shows **Use
 your passkey**. Select it and confirm on your device. If you also use an

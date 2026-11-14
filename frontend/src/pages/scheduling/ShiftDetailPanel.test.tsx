@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
-import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
+import { DRIVER_NOT_QUALIFIED_CODE, SEAT_NOT_GRANTED_CODE } from '../../constants/enums';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { ShiftDetailPanel } from './ShiftDetailPanel';
@@ -24,6 +24,7 @@ const shift = {
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getShiftAssignments: vi.fn().mockResolvedValue([]),
+    getTraineeReportRequirement: vi.fn().mockResolvedValue({ required: false, missing: [], can_override: false }),
     getShiftPreShiftWork: vi.fn().mockResolvedValue([]),
     getMyAttendance: vi.fn().mockResolvedValue(null),
     getShiftAttendance: vi.fn().mockResolvedValue([]),
@@ -42,6 +43,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     updateAssignment: vi.fn().mockResolvedValue({}),
     deleteShift: vi.fn().mockResolvedValue(undefined),
     withdrawSignup: vi.fn().mockResolvedValue({}),
+    createAssignment: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -507,6 +509,51 @@ describe('ShiftDetailPanel assign controls past the grace', () => {
 
     await screen.findByText('Signup is closed for this shift');
     expect(screen.queryByRole('button', { name: /Assign someone/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('ShiftDetailPanel "Assign someone" and the assign grant', () => {
+  beforeEach(() => {
+    vi.mocked(schedulingService.getEligiblePositions).mockReset();
+    vi.mocked(schedulingService.getEligiblePositions).mockResolvedValue({
+      positions: ['firefighter'],
+      is_excluded: false,
+    });
+  });
+
+  afterEach(() => {
+    grantedPermissions.current = null;
+  });
+
+  const upcoming = {
+    ...shift,
+    shift_officer_id: 'someone-else',
+    shift_date: '2099-01-01',
+    start_time: '2099-01-01T08:00:00Z',
+    end_time: '2099-01-01T16:00:00Z',
+  };
+
+  it('is offered to a holder of scheduling.assign', async () => {
+    grantedPermissions.current = ['scheduling.assign'];
+    renderWithRouter(<ShiftDetailPanel shift={upcoming as never} onClose={vi.fn()} />);
+    expect(await screen.findByRole('button', { name: /Assign someone/ })).toBeInTheDocument();
+  });
+
+  // Creating an assignment needs scheduling.assign or being the shift's
+  // officer, and scheduling.manage implies neither.
+  it('is not offered to a scheduling.manage holder without it', async () => {
+    grantedPermissions.current = ['scheduling.manage'];
+    renderWithRouter(<ShiftDetailPanel shift={upcoming as never} onClose={vi.fn()} />);
+    await screen.findByText('Crew Roster');
+    expect(screen.queryByRole('button', { name: /Assign someone/ })).not.toBeInTheDocument();
+  });
+
+  it("is offered to the shift's own officer", async () => {
+    grantedPermissions.current = [];
+    renderWithRouter(
+      <ShiftDetailPanel shift={{ ...upcoming, shift_officer_id: 'user-1' } as never} onClose={vi.fn()} />
+    );
+    expect(await screen.findByRole('button', { name: /Assign someone/ })).toBeInTheDocument();
   });
 });
 
@@ -1228,5 +1275,156 @@ describe('ShiftDetailPanel delete and withdraw', () => {
 
       await waitFor(() => expect(mockWithdraw).toHaveBeenCalledWith('shift-1'));
     });
+  });
+});
+
+/**
+ * The Crew card while the roster is still loading.
+ *
+ * The card counted the empty array the panel starts with, so every opening
+ * showed "0 assigned / 4 positions" on an amber short-staffed background for
+ * as long as the roster request took — on a crew that might be full — and then
+ * jumped to the real count.
+ */
+describe('ShiftDetailPanel crew count while loading', () => {
+  const sized = { ...shift, min_staffing: 4 };
+  const member = {
+    id: 'a1',
+    user_id: 'user-9',
+    user_name: 'Jordan Avery',
+    position: 'firefighter',
+    status: 'assigned',
+  };
+
+  beforeEach(() => {
+    vi.mocked(schedulingService.getShiftAssignments).mockReset();
+    vi.mocked(schedulingService.getShiftAssignments).mockResolvedValue([]);
+  });
+
+  it('shows a placeholder, not a count of zero, until the roster arrives', async () => {
+    let resolveRoster: (value: unknown[]) => void = () => {};
+    vi.mocked(schedulingService.getShiftAssignments).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveRoster = resolve)) as never
+    );
+    renderWithRouter(<ShiftDetailPanel shift={sized as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByText('Loading crew…')).toBeInTheDocument();
+    expect(screen.queryByText(/0 assigned/)).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveRoster([member]);
+    });
+
+    expect(await screen.findByText(/1 assigned/)).toBeInTheDocument();
+    expect(screen.queryByText('Loading crew…')).not.toBeInTheDocument();
+  });
+
+  it('holds "Fill All Open" back until it can count the open seats', async () => {
+    const onEngine = {
+      ...sized,
+      shift_officer_id: 'user-1',
+      shift_date: '2099-01-01',
+      start_time: '2099-01-01T08:00:00Z',
+      end_time: '2099-01-01T16:00:00Z',
+      apparatus_positions: [
+        { position: 'officer', required: true },
+        { position: 'driver', required: true },
+        { position: 'firefighter', required: true },
+        { position: 'firefighter', required: true },
+      ],
+    };
+    let resolveRoster: (value: unknown[]) => void = () => {};
+    vi.mocked(schedulingService.getShiftAssignments).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveRoster = resolve)) as never
+    );
+    renderWithRouter(<ShiftDetailPanel shift={onEngine as never} onClose={vi.fn()} />);
+
+    await screen.findByText('Loading crew…');
+    expect(screen.queryByRole('button', { name: /Fill All Open/ })).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveRoster([member, { ...member, id: 'a2', user_id: 'user-8', user_name: 'Casey Morgan' }]);
+    });
+
+    expect(await screen.findByRole('button', { name: /Fill All Open \(2\)/ })).toBeInTheDocument();
+  });
+
+  it('still reports an empty crew as zero once the roster has loaded', async () => {
+    renderWithRouter(<ShiftDetailPanel shift={sized as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByText(/0 assigned/)).toBeInTheDocument();
+    expect(screen.queryByText('Loading crew…')).not.toBeInTheDocument();
+  });
+});
+
+describe('ShiftDetailPanel — officer override for an ungranted custom seat', () => {
+  // SCHED-CUSTOM-SEAT owner decision (2026-11-01): a scheduling manager may
+  // seat a member in a department seat nothing grants, with a reason the
+  // server notes and audits. The offer is keyed off LB-SCHED-004.
+  const ropeShift = {
+    ...shift,
+    shift_date: '2099-03-01',
+    start_time: '2099-03-01T08:00:00Z',
+    end_time: '2099-03-01T16:00:00Z',
+    apparatus_positions: [{ position: 'rope_team', required: true }],
+  };
+  const mockCreate = vi.mocked(schedulingService.createAssignment);
+  const refusal = {
+    response: {
+      status: 400,
+      statusText: 'Bad Request',
+      data: { code: SEAT_NOT_GRANTED_CODE, detail: 'No rank grants the Rope Team seat' },
+    },
+  };
+
+  beforeEach(() => {
+    mockCreate.mockReset();
+    mockCreate.mockResolvedValue({} as never);
+    vi.mocked(toast.error).mockClear();
+    schedulingStoreState.members = [{ id: 'member-9', label: 'Pat Doe' }] as never;
+  });
+
+  afterEach(() => {
+    schedulingStoreState.members = [];
+    grantedPermissions.current = null;
+  });
+
+  const assignPat = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderWithRouter(<ShiftDetailPanel shift={ropeShift as never} onClose={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: /Assign someone/ }));
+    await user.selectOptions(screen.getByRole('listbox', { name: 'Select a member' }), 'member-9');
+    await user.click(screen.getByRole('button', { name: 'Assign' }));
+  };
+
+  it('asks a manager for a reason and retries with the override', async () => {
+    mockCreate.mockRejectedValueOnce(refusal);
+    const user = userEvent.setup();
+    await assignPat(user);
+
+    const reason = await screen.findByRole('textbox', { name: 'Reason' });
+    await user.type(reason, 'Only rope tech on tonight');
+    await user.click(screen.getByRole('button', { name: 'Assign anyway' }));
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(2));
+    expect(mockCreate.mock.calls[1]?.[1]).toMatchObject({
+      user_id: 'member-9',
+      position: 'rope_team',
+      override_seat_eligibility: true,
+      override_reason: 'Only rope tech on tonight',
+    });
+    expect(mockCreate.mock.calls[0]?.[1]).not.toHaveProperty('override_seat_eligibility');
+  });
+
+  it('shows the refusal, not the offer, to an assigner without manage', async () => {
+    grantedPermissions.current = ['scheduling.assign', 'scheduling.view'];
+    mockCreate.mockRejectedValueOnce(refusal);
+    const user = userEvent.setup();
+    await assignPat(user);
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('No rank grants the Rope Team seat'))
+    );
+    expect(screen.queryByRole('button', { name: 'Assign anyway' })).not.toBeInTheDocument();
+    expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 });

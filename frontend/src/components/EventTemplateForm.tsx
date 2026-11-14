@@ -10,6 +10,8 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { EventTemplate, EventTemplateCreate } from '../types/event';
 import { EventType } from '../constants/enums';
 import { getEventTypeLabel } from '../utils/eventHelpers';
+import { FIELD_ERROR_CLASS, FormField } from './ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 
 interface EventTemplateFormProps {
   initialData?: EventTemplate | undefined;
@@ -36,6 +38,18 @@ const CHECK_IN_WINDOW_OPTIONS = [
   { value: 'strict', label: 'Strict' },
   { value: 'window', label: 'Window' },
 ];
+
+type TemplateField = 'name' | 'description' | 'default_title' | 'default_description' | 'default_location';
+
+// EventTemplateCreate has no alias generator, so a 422 names the snake_case
+// request keys, which are these field names.
+const TEMPLATE_FIELDS: FieldSpecs<TemplateField> = {
+  name: { id: 'template-name', label: 'Template Name' },
+  description: { id: 'template-description', label: 'Description' },
+  default_title: { id: 'template-default-title', label: 'Default Title' },
+  default_description: { id: 'template-default-description', label: 'Default Description' },
+  default_location: { id: 'template-default-location', label: 'Default Location' },
+};
 
 const inputClass = 'form-input px-3 text-sm';
 const selectClass = 'form-input px-3 text-sm';
@@ -102,17 +116,21 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
   );
   const [showReminderSection, setShowReminderSection] = useState(!!initialData?.send_reminders);
 
-  const [nameError, setNameError] = useState('');
+  const fieldErrors = useFieldErrors(TEMPLATE_FIELDS);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate
-    if (!name.trim()) {
-      setNameError('Template name is required');
+    // Checked here rather than by the browser's required bubble, which
+    // vanished after a few seconds and was tied to no field (forms review F-3).
+    const problems: FieldErrors<TemplateField> = {};
+    if (!name.trim()) problems.name = 'Enter a name for the template.';
+    fieldErrors.setFormError(null);
+    fieldErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
       return;
     }
-    setNameError('');
 
     // Parse reminder schedule: comma-separated numbers (hours before event)
     const parsedReminders = reminderSchedule
@@ -171,47 +189,69 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
     if (checkInMinutesAfter.trim() && parsedMinsAfter >= 0) data.check_in_minutes_after = parsedMinsAfter;
     else if (isEdit) data.check_in_minutes_after = null;
 
-    void onSubmit(data);
+    // A caller that lets a failed save reject has its 422 shown on the field
+    // it names, and anything else inside the form rather than lost.
+    try {
+      await onSubmit(data);
+    } catch (err: unknown) {
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Could not save the template. Try again.'));
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
+      {fieldErrors.formError && (
+        <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+          {fieldErrors.formError}
+        </p>
+      )}
       {/* Basic Information */}
       <div className="space-y-4">
         <h3 className="text-theme-text-primary text-sm font-semibold tracking-wider uppercase">Basic Information</h3>
 
-        <div>
-          <label htmlFor="template-name" className={labelClass}>
-            Template Name <span className="text-red-700 dark:text-red-500">*</span>
-          </label>
-          <input
-            id="template-name"
-            type="text"
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              setNameError('');
-            }}
-            className={`${inputClass} ${nameError ? 'border-red-500' : ''}`}
-            placeholder="e.g., Monthly Business Meeting"
-            required
-          />
-          {nameError && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{nameError}</p>}
-        </div>
+        <FormField
+          id={TEMPLATE_FIELDS.name.id}
+          label="Template Name"
+          required
+          error={fieldErrors.errors.name}
+          labelClassName={labelClass}
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              maxLength={200}
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                fieldErrors.setError('name', null);
+              }}
+              className={`${inputClass} ${fieldErrors.errors.name ? 'border-red-500' : ''}`}
+              placeholder="e.g., Monthly Business Meeting"
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="template-description" className={labelClass}>
-            Description
-          </label>
-          <textarea
-            id="template-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className={inputClass}
-            rows={2}
-            placeholder="Brief description of what this template is for"
-          />
-        </div>
+        <FormField
+          id={TEMPLATE_FIELDS.description.id}
+          label="Description"
+          error={fieldErrors.errors.description}
+          labelClassName={labelClass}
+        >
+          {(field) => (
+            <textarea
+              {...field}
+              value={description}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                fieldErrors.setError('description', null);
+              }}
+              className={inputClass}
+              rows={2}
+              placeholder="Brief description of what this template is for"
+            />
+          )}
+        </FormField>
 
         <div>
           <label htmlFor="template-event-type" className={labelClass}>
@@ -236,48 +276,71 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
       <div className="space-y-4">
         <h3 className="text-theme-text-primary text-sm font-semibold tracking-wider uppercase">Default Event Values</h3>
 
-        <div>
-          <label htmlFor="template-default-title" className={labelClass}>
-            Default Title
-          </label>
-          <input
-            id="template-default-title"
-            type="text"
-            value={defaultTitle}
-            onChange={(e) => setDefaultTitle(e.target.value)}
-            className={inputClass}
-            placeholder="Pre-filled event title"
-          />
-        </div>
+        <FormField
+          id={TEMPLATE_FIELDS.default_title.id}
+          label="Default Title"
+          error={fieldErrors.errors.default_title}
+          labelClassName={labelClass}
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              maxLength={200}
+              value={defaultTitle}
+              onChange={(e) => {
+                setDefaultTitle(e.target.value);
+                fieldErrors.setError('default_title', null);
+              }}
+              className={inputClass}
+              placeholder="Pre-filled event title"
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="template-default-description" className={labelClass}>
-            Default Description
-          </label>
-          <textarea
-            id="template-default-description"
-            value={defaultDescription}
-            onChange={(e) => setDefaultDescription(e.target.value)}
-            className={inputClass}
-            rows={3}
-            placeholder="Pre-filled event description"
-          />
-        </div>
+        <FormField
+          id={TEMPLATE_FIELDS.default_description.id}
+          label="Default Description"
+          error={fieldErrors.errors.default_description}
+          labelClassName={labelClass}
+        >
+          {(field) => (
+            <textarea
+              {...field}
+              value={defaultDescription}
+              onChange={(e) => {
+                setDefaultDescription(e.target.value);
+                fieldErrors.setError('default_description', null);
+              }}
+              className={inputClass}
+              rows={3}
+              placeholder="Pre-filled event description"
+            />
+          )}
+        </FormField>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="template-default-location" className={labelClass}>
-              Default Location
-            </label>
-            <input
-              id="template-default-location"
-              type="text"
-              value={defaultLocation}
-              onChange={(e) => setDefaultLocation(e.target.value)}
-              className={inputClass}
-              placeholder="e.g., Station 1 Meeting Room"
-            />
-          </div>
+          <FormField
+            id={TEMPLATE_FIELDS.default_location.id}
+            label="Default Location"
+            error={fieldErrors.errors.default_location}
+            labelClassName={labelClass}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                maxLength={300}
+                value={defaultLocation}
+                onChange={(e) => {
+                  setDefaultLocation(e.target.value);
+                  fieldErrors.setError('default_location', null);
+                }}
+                className={inputClass}
+                placeholder="e.g., Station 1 Meeting Room"
+              />
+            )}
+          </FormField>
           <div>
             <label htmlFor="template-default-duration" className={labelClass}>
               Default Duration (minutes)

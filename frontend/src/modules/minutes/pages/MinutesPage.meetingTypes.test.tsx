@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockGetMeetings = vi.fn();
@@ -77,5 +77,43 @@ describe('MinutesPage — meeting types', () => {
     expect(mockCreateMeeting).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Closed session', meeting_type: 'executive' })
     );
+  });
+
+  it('puts a server refusal on the field it names and creates nothing', async () => {
+    const user = userEvent.setup();
+    mockCreateMeeting.mockReset();
+    mockCreateMeeting.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'location', message: 'String should have at most 255 characters' }] },
+      },
+    });
+    renderWithRouter(<MinutesPage />);
+
+    await user.click(await screen.findByRole('button', { name: /Record First Minutes/i }));
+    fireEvent.change(screen.getByLabelText(/Meeting Date/), { target: { value: '2026-10-01' } });
+    // Enter in a field submits: the dialog is a real form (forms review F-7).
+    await user.type(screen.getByLabelText(/Meeting Title/), 'Business meeting{Enter}');
+
+    const location = screen.getByLabelText('Location');
+    await waitFor(() =>
+      expect(location).toHaveAccessibleDescription('Location is too long — keep it to 255 characters.')
+    );
+    expect(location).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.queryByText(/location:/)).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Record Meeting Minutes' })).toBeInTheDocument();
+  });
+
+  it('asks before Escape discards a half-filled meeting', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MinutesPage />);
+
+    await user.click(await screen.findByRole('button', { name: /Record First Minutes/i }));
+    await user.type(screen.getByLabelText(/Meeting Title/), 'Business meeting');
+    await user.keyboard('{Escape}');
+
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByRole('dialog', { name: 'Record Meeting Minutes' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Meeting Title/)).toHaveValue('Business meeting');
   });
 });

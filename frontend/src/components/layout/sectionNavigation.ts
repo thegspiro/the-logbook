@@ -28,6 +28,13 @@ export interface SectionNavItem {
    * never been a step the Back button retraces.
    */
   replace?: boolean;
+  /**
+   * A number badged on the section's link — work waiting there, decided by
+   * the server. Nothing is drawn for 0 or undefined.
+   */
+  count?: number | undefined;
+  /** What the count means, for screen readers ("waiting on you"). */
+  countLabel?: string | undefined;
 }
 
 /** The rows a viewer's grants open. */

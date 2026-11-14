@@ -6,14 +6,17 @@ latest of:
 
 * a tap by an inventory manager (``inventory_nfc_scans`` — lookups, put-aways
   by tap, shelf audits),
+* a barcode put-away (also ``inventory_nfc_scans``),
 * an assignment to a member or its return (``item_assignments``),
 * a checkout or check-in (``checkout_records``),
-* a pool issuance or its return (``item_issuances``).
+* a pool issuance or its return (``item_issuances``),
+* the item's creation or import (``inventory_nfc_scans``, action ``created``).
 
 Each of those is a moment a person handled the item and the system wrote it
-down. Edits to the item record do not count — renaming a helmet at a desk says
-nothing about where it is — and neither does a barcode put-away, which is
-recorded only as an audit-log event with no per-item row to read.
+down. Creation counts by owner decision (W44-2, 2026-11-01) and only for items
+created since: older items were not backfilled, because the decision is that
+*new* items start as seen. Edits to the item record do not count — renaming a
+helmet at a desk says nothing about where it is.
 
 The report does not depend on the NFC switch: custody events alone make it
 useful, and an organization that has never tagged anything still gets a list.
@@ -22,7 +25,7 @@ useful, and an organization that has never tagged anything still gets a list.
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import QueryableAttribute, selectinload
 
@@ -30,21 +33,31 @@ from app.models.inventory import (
     CheckOutRecord,
     InventoryItem,
     InventoryNfcScan,
+    InventoryNfcScanAction,
     ItemAssignment,
     ItemIssuance,
     ItemStatus,
-    StorageArea,
 )
+from app.services.inventory_storage_area_names import active_storage_area_names
 
 # The sources, in the order a tie is reported: when two events share the same
-# instant, the tap is the more specific evidence of where the item was.
+# instant, the tap is the more specific evidence of where the item was, and
+# creation the least.
 SOURCE_NFC_TAP = "nfc_tap"
+SOURCE_BARCODE_PUT_AWAY = "barcode_put_away"
 SOURCE_ASSIGNMENT = "assignment"
 SOURCE_RETURN = "return"
 SOURCE_CHECKOUT = "checkout"
 SOURCE_CHECK_IN = "check_in"
 SOURCE_ISSUANCE = "issuance"
 SOURCE_ISSUANCE_RETURN = "issuance_return"
+SOURCE_CREATED = "created"
+
+_TAP_ACTIONS = (
+    InventoryNfcScanAction.LOOKUP,
+    InventoryNfcScanAction.PUT_AWAY,
+    InventoryNfcScanAction.AUDIT,
+)
 
 MAX_ROWS = 5000
 DEFAULT_DAYS = 180
@@ -125,8 +138,9 @@ class InventoryLastSeenService:
         total = len(rows)
         rows = rows[: max(1, min(limit, MAX_ROWS))]
 
-        areas = await self._area_name_map(
-            org_id, {item.storage_area_id for _, item, _ in rows}
+        # Only an active area is named — the item page's rule, shared (W44-4).
+        areas = await active_storage_area_names(
+            self.db, org_id, {item.storage_area_id for _, item, _ in rows}
         )
         return {
             "cutoff": cutoff,
@@ -163,25 +177,49 @@ class InventoryLastSeenService:
         aggregate over an org-scoped table, and picking the winner in Python
         is what lets the report say *which* event it was.
         """
-        sources: list[tuple[str, _EventModel, QueryableAttribute[Any]]] = [
-            (SOURCE_NFC_TAP, InventoryNfcScan, InventoryNfcScan.scanned_at),
-            (SOURCE_ASSIGNMENT, ItemAssignment, ItemAssignment.assigned_date),
-            (SOURCE_RETURN, ItemAssignment, ItemAssignment.returned_date),
-            (SOURCE_CHECKOUT, CheckOutRecord, CheckOutRecord.checked_out_at),
-            (SOURCE_CHECK_IN, CheckOutRecord, CheckOutRecord.checked_in_at),
-            (SOURCE_ISSUANCE, ItemIssuance, ItemIssuance.issued_at),
-            (SOURCE_ISSUANCE_RETURN, ItemIssuance, ItemIssuance.returned_at),
+        scan_time = InventoryNfcScan.scanned_at
+        sources: list[
+            tuple[
+                str,
+                _EventModel,
+                QueryableAttribute[Any],
+                Optional[ColumnElement[bool]],
+            ]
+        ] = [
+            (
+                SOURCE_NFC_TAP,
+                InventoryNfcScan,
+                scan_time,
+                InventoryNfcScan.action.in_(_TAP_ACTIONS),
+            ),
+            (
+                SOURCE_BARCODE_PUT_AWAY,
+                InventoryNfcScan,
+                scan_time,
+                InventoryNfcScan.action == InventoryNfcScanAction.BARCODE_PUT_AWAY,
+            ),
+            (SOURCE_ASSIGNMENT, ItemAssignment, ItemAssignment.assigned_date, None),
+            (SOURCE_RETURN, ItemAssignment, ItemAssignment.returned_date, None),
+            (SOURCE_CHECKOUT, CheckOutRecord, CheckOutRecord.checked_out_at, None),
+            (SOURCE_CHECK_IN, CheckOutRecord, CheckOutRecord.checked_in_at, None),
+            (SOURCE_ISSUANCE, ItemIssuance, ItemIssuance.issued_at, None),
+            (SOURCE_ISSUANCE_RETURN, ItemIssuance, ItemIssuance.returned_at, None),
+            (
+                SOURCE_CREATED,
+                InventoryNfcScan,
+                scan_time,
+                InventoryNfcScan.action == InventoryNfcScanAction.CREATED,
+            ),
         ]
         latest: Dict[str, Tuple[datetime, str]] = {}
-        for source, model, column in sources:
-            result = await self.db.execute(
-                select(model.item_id, func.max(column))
-                .where(
-                    model.organization_id == organization_id,
-                    column.is_not(None),
-                )
-                .group_by(model.item_id)
+        for source, model, column, condition in sources:
+            query = select(model.item_id, func.max(column)).where(
+                model.organization_id == organization_id,
+                column.is_not(None),
             )
+            if condition is not None:
+                query = query.where(condition)
+            result = await self.db.execute(query.group_by(model.item_id))
             for item_id, raw in result.all():
                 seen_at = _as_utc(raw)
                 if seen_at is None:
@@ -191,17 +229,3 @@ class InventoryLastSeenService:
                 if current is None or seen_at > current[0]:
                     latest[item_id] = (seen_at, source)
         return latest
-
-    async def _area_name_map(
-        self, organization_id: str, area_ids: set
-    ) -> Dict[str, str]:
-        ids = {str(a) for a in area_ids if a}
-        if not ids:
-            return {}
-        result = await self.db.execute(
-            select(StorageArea.id, StorageArea.name).where(
-                StorageArea.id.in_(ids),
-                StorageArea.organization_id == organization_id,
-            )
-        )
-        return {row.id: row.name for row in result}

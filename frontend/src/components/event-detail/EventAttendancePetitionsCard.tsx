@@ -88,8 +88,8 @@ export const EventAttendancePetitionsCard: React.FC<EventAttendancePetitionsCard
         <ul className="divide-theme-surface-border divide-y">
           {pending.map((petition) => (
             <li key={petition.id} className="py-3 first:pt-0">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
+              <div className="split-row gap-3 sm:items-start">
+                <div className="split-row-main">
                   <p className="text-theme-text-primary text-sm font-medium">{petition.user_name || 'A member'}</p>
                   <p className="text-theme-text-secondary text-xs">
                     Asked {formatDateTime(petition.created_at, timezone)}
@@ -108,7 +108,7 @@ export const EventAttendancePetitionsCard: React.FC<EventAttendancePetitionsCard
                     </p>
                   )}
                 </div>
-                <div className="flex shrink-0 gap-2">
+                <div className="split-row-aside flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => setApproving(petition)}

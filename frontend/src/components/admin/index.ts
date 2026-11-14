@@ -7,6 +7,7 @@
  */
 
 export { AdminHubFrame } from './AdminHubFrame';
+export { AdminPageHeader } from './AdminPageHeader';
 export type { AdminHubTab, AdminHubAction } from './AdminHubFrame';
 export { AdminAttentionQueue } from './AdminAttentionQueue';
 export { AdminMetricsRow } from './AdminMetricsRow';

@@ -21,6 +21,7 @@ from app.models.notification import NotificationLog
 from app.models.user import User
 from app.schemas.event import (
     AttendancePetitionCreate,
+    AttendancePetitionReject,
     EventCreate,
     EventSettingsUpdate,
     EventTransferRequest,
@@ -418,6 +419,61 @@ class TestWhoMayDecide:
         with pytest.raises(PermissionError):
             await EventAttendancePetitionService(db_session).list_for_event(
                 event_id, creator
+            )
+
+    async def test_the_fallback_who_was_sent_the_request_may_decide_it(
+        self, db_session, dept
+    ):
+        # The Secretary holds no events.manage. Notifying them of a request
+        # they would then be refused on left it with nobody who could act.
+        secretary_pos = await _position(db_session, dept["org"], "secretary")
+        secretary_id = await _user(
+            db_session, dept["org"], "Sue", position=secretary_pos
+        )
+        gone = await _user(db_session, dept["org"], "Gil", status="retired")
+        event_id = await _event(db_session, dept["org"], organizer=gone)
+        petition = await _ask(db_session, event_id, dept["member"])
+        assert len(await _open_prompts(db_session, secretary_id)) == 1
+        secretary = await _load(db_session, secretary_id)
+        service = EventAttendancePetitionService(db_session)
+
+        assert len(await service.list_for_event(event_id, secretary)) == 1
+        decided = await service.reject(
+            event_id,
+            petition.id,
+            secretary,
+            AttendancePetitionReject(review_note="Not on the roster"),
+        )
+
+        assert decided.reviewed_by == secretary_id
+        assert await service.may_review(
+            await _get_event(db_session, event_id), secretary
+        )
+
+    async def test_a_fallback_holder_not_sent_the_request_may_not_decide_it(
+        self, db_session, dept
+    ):
+        secretary_pos = await _position(db_session, dept["org"], "secretary")
+        secretary_id = await _user(
+            db_session, dept["org"], "Sue", position=secretary_pos
+        )
+        event_id = await _event(db_session, dept["org"], organizer=dept["organizer"])
+        petition = await _ask(db_session, event_id, dept["member"])
+        assert not await _open_prompts(db_session, secretary_id)
+        secretary = await _load(db_session, secretary_id)
+        service = EventAttendancePetitionService(db_session)
+
+        assert not await service.may_review(
+            await _get_event(db_session, event_id), secretary
+        )
+        with pytest.raises(PermissionError):
+            await service.list_for_event(event_id, secretary)
+        with pytest.raises(PermissionError):
+            await service.reject(
+                event_id,
+                petition.id,
+                secretary,
+                AttendancePetitionReject(review_note="Not on the roster"),
             )
 
 

@@ -27,6 +27,7 @@ import {
   BUDGET_REQUEST_STATUS_BADGES,
   BUDGET_REQUEST_STATUS_LABELS,
   BUDGET_REQUEST_STATUS_ORDER,
+  requestedAmountText,
   requestWindowText,
   sumAmounts,
 } from '../utils/budgetRequests';
@@ -197,8 +198,8 @@ const BudgetRequestReviewPage: React.FC = () => {
             <span
               className={`badge ${
                 year.requestsOpen
-                  ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
-                  : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300'
+                  ? 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300'
+                  : 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300'
               }`}
             >
               {year.requestsOpen ? 'Owners can still change requests' : 'Closed to owners'}
@@ -227,8 +228,8 @@ const BudgetRequestReviewPage: React.FC = () => {
 
       {year && shown.length > 0 && (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="rwd-table w-full">
+          <div className="rwd-table-container overflow-x-auto">
+            <table className="rwd-table rwd-table-2xwide w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th scope="col" className={HEADER_CELL}>
@@ -277,10 +278,10 @@ const BudgetRequestReviewPage: React.FC = () => {
                     </td>
                     <td data-label="Submitted" className={`${CELL} text-theme-text-secondary`}>
                       {r.submittedAt ? (
-                        <>
+                        <div className="min-w-0">
                           {r.submittedByName ?? 'Unknown'}
                           <span className="block text-xs">{formatDate(r.submittedAt, tz)}</span>
-                        </>
+                        </div>
                       ) : (
                         'Not submitted'
                       )}
@@ -292,21 +293,21 @@ const BudgetRequestReviewPage: React.FC = () => {
                       {formatCurrency(r.lastYearSpent ?? null)}
                     </td>
                     <td data-label="Requested" className={`${MONEY_CELL} font-semibold`}>
-                      {formatCurrency(r.requestedAmount)}
+                      {requestedAmountText(r.requestedAmount)}
                     </td>
                     <td data-label="Approved" className={MONEY_CELL}>
                       {formatCurrency(r.approvedAmount ?? null)}
                     </td>
                     <td data-label="Leadership" className={MONEY_CELL}>
                       {r.reviewAmount != null ? (
-                        <>
+                        <div className="min-w-0">
                           {formatCurrency(r.reviewAmount)}
                           {r.reviewedByName && (
                             <span className="text-theme-text-secondary block text-xs font-normal">
                               {r.reviewedByName}
                             </span>
                           )}
-                        </>
+                        </div>
                       ) : (
                         <span className="text-theme-text-secondary">No change</span>
                       )}
@@ -349,7 +350,8 @@ const BudgetRequestReviewPage: React.FC = () => {
                   <td data-label="This year budgeted" className={`${MONEY_CELL} font-semibold`}>
                     {formatCurrency(totals.lastYear)}
                   </td>
-                  <td data-label="This year spent" className={MONEY_CELL} />
+                  {/* Unlabelled so the card layout hides it: there is no total to show. */}
+                  <td className={MONEY_CELL} />
                   <td data-label="Requested" className={`${MONEY_CELL} font-semibold`}>
                     {formatCurrency(totals.requested)}
                   </td>

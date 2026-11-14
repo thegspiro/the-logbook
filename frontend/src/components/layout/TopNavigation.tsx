@@ -8,6 +8,8 @@ import {
   Contrast,
   ChevronDown,
   Bell,
+  ClipboardCheck,
+  CreditCard,
   UserCog,
   WifiOff,
   RefreshCw,
@@ -26,14 +28,17 @@ import { canOpenAdministrationSection } from './adminNavigation';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
-import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
+import { triggerAllOfflineDrains } from '../../hooks/useOfflineSyncEngine';
 import { fitNavItems } from './topNavigationOverflow';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 import { operationsNavItems } from './operationsNavigation';
 import { governanceNavItems } from './governanceNavigation';
 import { trainingNavItems } from './trainingNavigation';
+import { EVALUATIONS_AREA_PREFIX, EVALUATIONS_HOME_PATH } from './evaluationsNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
+import { useHasAssignedApplicants } from '../../modules/prospective-members/hooks/useHasAssignedApplicants';
+import { useHasCrew } from '../../hooks/useHasCrew';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -48,6 +53,12 @@ interface SubNavItem {
   /** Any one of these permissions grants access (OR logic). */
   anyPermission?: string[];
   isDivider?: boolean;
+  /**
+   * Prefixes under this entry's URL that belong to another entry, so the two
+   * are never marked current together: `/reports/evaluations` is Evaluations,
+   * not Reports.
+   */
+  excludePrefixes?: string[];
 }
 
 interface NavItem {
@@ -87,10 +98,15 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   const mobileMenuRef = useFocusTrap<HTMLDivElement>(mobileMenuOpen);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
-  const practicalSkillsMethod = usePracticalSkillsMethod();
+  const practicalSkillsMethod = usePracticalSkillsMethod(!modulesLoading && isModuleOn('training'));
   const { isConnected } = useConnectedIntegrations({ enabled: !modulesLoading && isModuleOn('integrations') });
   const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
   const ownsBudgets = useOwnsBudgets(currentUser?.id, !modulesLoading && isModuleOn('finance'));
+  const hasAssignedApplicants = useHasAssignedApplicants(
+    currentUser?.id,
+    !modulesLoading && isModuleOn('prospective_members')
+  );
+  const hasCrew = useHasCrew(currentUser?.id);
   const plansNextYear = usePlansNextYear(currentUser?.id, !modulesLoading && isModuleOn('finance'));
 
   // The mobile bottom bar's "More" button asks us to open the menu; a second
@@ -166,6 +182,12 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     { label: 'Members', path: '/members' },
     { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
+    // Gate mirrors SideNavigation's My Applicants — see there.
+    ...(hasAssignedApplicants
+      ? [{ label: 'My Applicants', path: '/prospective-members/my-applicants' } as NavItem]
+      : []),
+    // Gate mirrors SideNavigation's My Crew — see there.
+    ...(hasCrew ? [{ label: 'My Crew', path: '/members/my-crew' } as NavItem] : []),
     // Every member's inbox for department announcements, and the suggestion
     // box. SideNavigation has always listed both; without them here a
     // department on this layout had no way to reach either screen.
@@ -245,6 +267,19 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
           } as NavItem,
         ]
       : []),
+    ...(isModuleOn('history')
+      ? [
+          {
+            label: 'History',
+            path: '/history',
+            subItems: [
+              { label: 'Overview', path: '/history' },
+              { label: 'Past Members', path: '/history/people' },
+              { label: 'Honor Roll', path: '/history/honor-roll' },
+            ],
+          } as NavItem,
+        ]
+      : []),
 
     // ── Administration (only for admins) ──
     ...(hasAnyAdminPermission
@@ -280,8 +315,11 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   ]
                 : []),
               { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
+              ...(isModuleOn('medical_screening')
+                ? [{ label: 'Medical Screening', path: '/medical-screening', permission: 'medical_screening.view' }]
+                : []),
               DIV,
-              { label: 'Manage Events', path: '/events', permission: 'events.manage' },
+              { label: 'Manage Events', path: '/events/admin', permission: 'events.manage' },
               ...(isModuleOn('training')
                 ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }]
                 : []),
@@ -325,7 +363,16 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               ...(isModuleOn('integrations')
                 ? [{ label: 'Integrations', path: '/integrations', permission: 'settings.manage' }]
                 : []),
-              ...(isModuleOn('reports') ? [{ label: 'Reports', path: '/reports', permission: 'reports.view' }] : []),
+              ...(isModuleOn('reports')
+                ? [
+                    {
+                      label: 'Reports',
+                      path: '/reports',
+                      permission: 'reports.view',
+                      excludePrefixes: [EVALUATIONS_AREA_PREFIX],
+                    },
+                  ]
+                : []),
               DIV,
               { label: 'Organization', path: '/settings', permission: 'settings.manage' },
               { label: 'Role Management', path: '/settings/roles', permission: 'positions.manage_permissions' },
@@ -350,7 +397,15 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
-  const isSubItemActive = (path: string, siblings: { path: string }[]) => {
+  const isExcluded = (entry: { excludePrefixes?: string[] | undefined }) =>
+    (entry.excludePrefixes ?? []).some((prefix) => isActive(prefix));
+
+  const isEntryActive = (entry: { path: string; excludePrefixes?: string[] | undefined }) =>
+    isActive(entry.path) && !isExcluded(entry);
+
+  const isSubItemActive = (subItem: SubNavItem, siblings: { path: string }[]) => {
+    const { path } = subItem;
+    if (isExcluded(subItem)) return false;
     if (location.pathname === path) return true;
     if (!location.pathname.startsWith(path + '/')) return false;
     // Don't prefix-match if a sibling is a more specific match
@@ -364,9 +419,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
 
   const isParentActive = (item: NavItem) => {
     if (item.subItems) {
-      return item.subItems.some((sub) => isActive(sub.path));
+      return item.subItems.some(isEntryActive);
     }
-    return isActive(item.path);
+    return isEntryActive(item);
   };
 
   // Close dropdown when clicking outside
@@ -401,9 +456,12 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   // off it is an entry to a refusal that can never show a number.
   const showNotifications = isModuleOn('notifications');
   const accountActive = isActive('/account');
+  const myIdCardPath = currentUser?.id ? `/members/${currentUser.id}/id-card` : null;
+  const myIdCardActive = myIdCardPath !== null && isActive(myIdCardPath);
+  const evaluationsActive = isActive(EVALUATIONS_AREA_PREFIX);
   const activeDestination = navItems
     .flatMap((item) => (item.subItems?.length ? item.subItems : [item]))
-    .filter((item) => item.path !== '#' && isActive(item.path))
+    .filter((item) => item.path !== '#' && isEntryActive(item))
     .sort((a, b) => b.path.length - a.path.length)[0];
 
   // The groups this viewer may see, filtered once so the bar, the More menu and
@@ -476,7 +534,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
         return <div key={`div-${idx}`} className="border-theme-surface-border my-1 border-t" role="separator" />;
       }
       const subActive = isSubItemActive(
-        subItem.path,
+        subItem,
         (item.subItems || []).filter((s) => !s.isDivider)
       );
       return (
@@ -691,7 +749,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   (pendingSyncCount > 0 && isOnline ? (
                     <button
                       onClick={() => {
-                        void triggerOfflineDrain();
+                        void triggerAllOfflineDrains();
                       }}
                       className="inline-flex items-center gap-1 rounded-full border border-blue-500/40 bg-blue-500/15 px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-500/25 dark:text-blue-300"
                       title="Click to retry syncing pending submissions"
@@ -854,7 +912,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                                 );
                               }
                               const subActive = isSubItemActive(
-                                subItem.path,
+                                subItem,
                                 (item.subItems || []).filter((s) => !s.isDivider)
                               );
                               return (
@@ -913,7 +971,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   {isOnline && pendingSyncCount > 0 && (
                     <button
                       onClick={() => {
-                        void triggerOfflineDrain();
+                        void triggerAllOfflineDrains();
                       }}
                       className="flex w-full items-center space-x-2 rounded-md bg-blue-500/15 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-500/25 dark:text-blue-300"
                     >
@@ -930,7 +988,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                       href="/notifications?tab=inbox"
                       onClick={(e) => handleNavigation('/notifications?tab=inbox', e)}
                       aria-current={notificationsActive ? 'page' : undefined}
-                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                         notificationsActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                       }`}
                     >
@@ -943,20 +1001,48 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                       )}
                     </a>
                   )}
+                  {/* One entry for the whole area; conducting and setup are
+                      reached from the strip at the top of the evaluation pages. */}
+                  {isModuleOn('reports') && (
+                    <a
+                      href={EVALUATIONS_HOME_PATH}
+                      onClick={(e) => handleNavigation(EVALUATIONS_HOME_PATH, e)}
+                      aria-current={evaluationsActive ? 'page' : undefined}
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                        evaluationsActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+                      }`}
+                    >
+                      <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
+                      <span>Evaluations</span>
+                    </a>
+                  )}
                   <a
                     href="/account"
                     onClick={(e) => handleNavigation('/account', e)}
                     aria-current={accountActive ? 'page' : undefined}
-                    className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                    className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                       accountActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                     }`}
                   >
                     <UserCog className="h-4 w-4" aria-hidden="true" />
                     <span>My Account</span>
                   </a>
+                  {myIdCardPath && (
+                    <a
+                      href={myIdCardPath}
+                      onClick={(e) => handleNavigation(myIdCardPath, e)}
+                      aria-current={myIdCardActive ? 'page' : undefined}
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                        myIdCardActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+                      }`}
+                    >
+                      <CreditCard className="h-4 w-4" aria-hidden="true" />
+                      <span>My ID Card</span>
+                    </a>
+                  )}
                   <button
                     onClick={cycleTheme}
-                    className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
+                    className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
                   >
                     <ThemeIcon className="h-4 w-4" aria-hidden="true" />
                     <span>Theme: {themeLabel}</span>
@@ -964,7 +1050,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   <button
                     onClick={toggleHighContrast}
                     aria-pressed={theme === 'high-contrast'}
-                    className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                    className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                       theme === 'high-contrast' ? 'text-amber-700 dark:text-amber-400' : 'text-theme-text-secondary'
                     }`}
                   >
@@ -973,7 +1059,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   </button>
                   <button
                     onClick={onLogout}
-                    className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
+                    className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
                   >
                     <LogOut className="h-4 w-4" aria-hidden="true" />
                     <span>Logout</span>

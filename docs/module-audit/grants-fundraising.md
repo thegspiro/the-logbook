@@ -85,36 +85,48 @@ application FKs validated via the **shared** `assert_in_org` helper
 (`_validate_application_fks`, `allow_none=True`). 8 unit tests added. See
 `docs/app-review/grants-fundraising.md`.
 
-### GF-7 — MEDIUM (flagged) — No financial state-machine / overspend guards
+### GF-7 — MEDIUM — No financial state-machine / overspend guards — ✅ FIXED (owner decision, 2026-10-11)
 
-No path checks total expenditures against `amount_awarded` / `amount_budgeted`
-(`amount_remaining` can go negative); `update_application` applies any
-status/amount change with no transition guard (a CLOSED/AWARDED grant stays fully
-editable); an `awarded → active → awarded` round-trip **regenerates a duplicate**
-full set of compliance tasks. **Status:** flagged — needs a product-defined
-state machine.
+This section previously read "flagged," which became stale the moment the fix
+below landed — corrected 2026-10-30 (security-review pass 12). Originally: no
+path checked total expenditures against `amount_awarded`/`amount_budgeted`;
+`update_application` applied any status/amount change with no transition
+guard; an `awarded → active → awarded` round-trip regenerated a duplicate
+full set of compliance tasks. **Fix:** `APPLICATION_STATUS_TRANSITIONS`
+(`app/models/grant.py`) is the grant lifecycle; `update_application` refuses
+any other status change with a 400 before anything is written. Overspend
+warns, never blocks, via `app/utils/grant_spending.py`, audited as
+`grant_overspend_recorded`. See `KNOWN_LIMITATIONS.md`'s GF-7 row.
 
-### GF-8 — MEDIUM (flagged) — `is_anonymous` flag never enforced in responses
+### GF-8 — MEDIUM — `is_anonymous` flag never enforced in responses — ✅ FIXED (owner decision, 2026-10-11)
 
-`DonationResponse` / `DonorResponse` always serialize `donor_name`/`donor_email`/
-`donor_id`/`amount` regardless of `is_anonymous`; `get_dashboard_data`
-recent-donations returns donor-identified rows to any `fundraising.view` user.
-No public surface, so staff-only — but the anonymity flag carries no effect.
-**Status:** flagged — decide whether to suppress donor identity on anonymous
-gifts for `view` (vs `manage`).
+This section previously read "flagged," which became stale the moment the fix
+below landed — corrected 2026-10-30 (security-review pass 12). Originally:
+`DonationResponse`/`DonorResponse` always serialized donor identity regardless
+of `is_anonymous`. **Fix:** `app/services/donor_privacy.py` clears
+`donor_name`/`donor_email`/`donor_id` on an anonymous donation and donor
+contact detail on an anonymous donor, for any caller without
+`fundraising.manage`, and a view-only search no longer matches the hidden
+name. See `KNOWN_LIMITATIONS.md`'s GF-8 row.
 
-### GF-9 — LOW (flagged) — Float money math in reports; zero/unbounded amounts; donor-PII gate breadth
+### GF-9 — LOW — Float money math in reports; zero/unbounded amounts; donor-PII gate breadth — ✅ FIXED (all three parts)
 
-Report/dashboard aggregation accumulates via `float()` before coercing back to
-`Decimal` (prefer summing in `Decimal`); money fields accept `0` and have no
-upper cap; `list_donors`/`get_donor` expose full donor PII to `fundraising.view`
-(policy question). **Status:** flagged.
+Report/dashboard aggregation accumulated via `float()`; money fields accepted
+`0` with no upper cap; `list_donors`/`get_donor` exposed full donor PII to
+`fundraising.view`.
 
 **Float part resolved 2026-10-05 (owner decision):** `get_grant_report` and
 `get_fundraising_report` sum money as `Decimal` and convert each total to a
 float once, at the response; the average gift rounds half-up to the cent.
-Covered by `TestGrantReportIsExact` and `TestFundraisingReportIsExact`. Zero
-and unbounded amounts, and the donor-PII gate, stand as before.
+Covered by `TestGrantReportIsExact` and `TestFundraisingReportIsExact`.
+
+**Remaining two-thirds resolved 2026-10-21 (owner decision), corrected here
+2026-10-30 (security-review pass 12) — this section previously read "stand as
+before" after that fix had already landed:** every amount field on a
+grants/fundraising request schema now carries an upper bound, and a
+`fundraising.view`-only caller no longer reads a donor's contact detail
+(`app/services/donor_privacy.py`, `DONOR_CONTACT_FIELDS` — needs
+`fundraising.manage`). See `KNOWN_LIMITATIONS.md`'s GF-9 row.
 
 ## Notes
 

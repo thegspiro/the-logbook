@@ -22,7 +22,8 @@
 import React from 'react';
 import { Settings as SettingsIcon, ArrowLeft } from 'lucide-react';
 import SaveStatusPill, { type SaveState } from './SaveStatusPill';
-import { Breadcrumbs } from '../ux/Breadcrumbs';
+import { Breadcrumbs, type BreadcrumbItem } from '../ux/Breadcrumbs';
+import { AdminPageHeader } from '../admin/AdminPageHeader';
 
 export interface SettingsSubPage<K extends string = string> {
   key: K;
@@ -76,6 +77,23 @@ interface SettingsLayoutProps<K extends string, S extends string> {
    * the page, and nothing that competes with the pill for the same meaning.
    */
   headerAside?: React.ReactNode;
+  /**
+   * Set on a settings screen reached from the Administration menu ("Administration")
+   * and the screen draws the shared admin header instead of its own: eyebrow,
+   * title and subtitle through `AdminPageHeader`, no icon tile and no back
+   * arrow (the trail is the way back, as on every admin page), and a content
+   * column that starts at the page gutter rather than centring, so the header
+   * lines up with every other admin page's. A member's own settings leave it
+   * unset and keep the settings-screen header.
+   */
+  eyebrow?: string | undefined;
+  /**
+   * Admin header only: a trail written by the screen instead of the one the
+   * URL generates. For a screen whose URL parent this viewer cannot open --
+   * Members Settings, reached by an officer without the Members hub grant from
+   * Organization Settings -- so the way back still leads somewhere they can go.
+   */
+  breadcrumbs?: BreadcrumbItem[] | undefined;
   /** Renders a back button left of the icon tile when set. */
   onBack?: (() => void) | undefined;
   backLabel?: string;
@@ -145,6 +163,8 @@ export function SettingsLayout<K extends string, S extends string = string>({
   saveState,
   onRetrySave,
   headerAside,
+  eyebrow,
+  breadcrumbs,
   onBack,
   backLabel = 'Go back',
   showBreadcrumbs = false,
@@ -159,6 +179,9 @@ export function SettingsLayout<K extends string, S extends string = string>({
   // An idle pill draws nothing, so it is not a control to hand anyone: passed
   // on, it left an empty actions box — and its gap — under a phone's title.
   const showPill = saveState !== undefined && saveState !== 'idle';
+  // See `eyebrow`. A hub-embedded screen or a caller-drawn header keeps its
+  // own arrangement.
+  const adminHeader = Boolean(eyebrow) && !inHub && !pageHeader;
   const controls =
     headerAside || showPill ? (
       <>
@@ -167,9 +190,13 @@ export function SettingsLayout<K extends string, S extends string = string>({
       </>
     ) : null;
 
+  // The admin header lines up with every other admin page only if nothing
+  // pads it in from AppLayout's gutter. That gutter rule strips a page root's
+  // own padding, but Organization Settings wraps this layout, so its
+  // sm:px-6 lg:px-8 survived there and set the title 32px in.
   return (
     <div
-      className={`mx-auto py-8 sm:px-6 lg:px-8 ${inHub ? 'px-4' : 'px-0'} ${width === 'wide' ? 'max-w-[1600px]' : pageHeader ? 'max-w-7xl' : 'max-w-6xl'}`}
+      className={`mx-auto py-8 ${adminHeader ? '' : 'sm:px-6 lg:px-8'} ${inHub ? 'px-4' : 'px-0'} ${width === 'wide' ? 'max-w-[1600px]' : pageHeader || adminHeader ? 'max-w-7xl' : 'max-w-6xl'}`}
     >
       {pageHeader?.(controls)}
       {/* One content column at every settings screen, replacing the max-w-4xl /
@@ -177,10 +204,22 @@ export function SettingsLayout<K extends string, S extends string = string>({
           single documented exception — see the prop. Both caps are applied
           here and on the outer container, because max-w-6xl (1152px) would
           otherwise clamp the wide column back down without anything saying so. */}
-      <div className={`mx-auto flex w-full flex-col gap-5 ${width === 'wide' ? 'max-w-[1600px]' : 'max-w-[960px]'}`}>
+      <div
+        className={`flex w-full flex-col gap-5 ${adminHeader ? '' : 'mx-auto'} ${width === 'wide' ? 'max-w-[1600px]' : 'max-w-[960px]'}`}
+      >
         {/* `mb-0` because this column's own flex gap already spaces the trail
-            from the header below it. */}
-        {showBreadcrumbs ? <Breadcrumbs className="mb-0" /> : null}
+            from the header below it. The admin header draws its own. */}
+        {showBreadcrumbs && !adminHeader ? <Breadcrumbs className="mb-0" /> : null}
+
+        {adminHeader ? (
+          <AdminPageHeader
+            title={title}
+            description={subtitle ?? current?.description}
+            eyebrow={eyebrow}
+            breadcrumbs={breadcrumbs ?? (showBreadcrumbs ? undefined : [])}
+            actions={controls}
+          />
+        ) : null}
 
         {/* Wraps rather than squeezing: a title, a subtitle and a status pill
             do not fit one row on a
@@ -190,7 +229,7 @@ export function SettingsLayout<K extends string, S extends string = string>({
             screen, so a second icon tile, <h1> and subtitle would repeat them
             and give the page two top-level headings. The title stays for
             heading navigation only; the controls beside it stay as they are. */}
-        {pageHeader ? null : (
+        {pageHeader || adminHeader ? null : (
           <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
             {inHub ? <h2 className="sr-only">{title}</h2> : null}
             {!inHub && (

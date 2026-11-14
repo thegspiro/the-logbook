@@ -20,6 +20,15 @@ AUTH_DEPS = {
     "require_permission",
     "require_all_permissions",
     "require_role",
+    # Per-applicant access (app/api/prospect_access.py); each resolves the
+    # caller through get_current_user before deciding.
+    "require_prospect_access",
+    "require_interview_access",
+    "require_pipeline_reader",
+    "require_view_all",
+    # Shift-report review (endpoints/shift_completion.py): training.manage or
+    # the department's reviewer role, resolved through get_current_user.
+    "require_report_reviewer",
 }
 
 # Reviewed, intentionally-public endpoints, keyed by (module, function). These
@@ -70,6 +79,11 @@ ALLOWLISTED_PUBLIC = {
     # single-use pending attempt stored on the integration.
     ("google_calendar_oauth.py", "google_calendar_oauth_callback"),
     ("outlook_calendar_oauth.py", "outlook_calendar_oauth_callback"),
+    # QuickBooks Online: Intuit redirects the browser here, possibly after the
+    # session lapsed. Same three bindings (signed state, nonce cookie, single-use
+    # pending attempt on the connection), and the Treasurer must still hold
+    # finance.manage (quickbooks_sync_service.complete_connect).
+    ("quickbooks_online.py", "quickbooks_oauth_callback"),
 }
 
 BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

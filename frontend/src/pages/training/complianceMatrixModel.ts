@@ -82,6 +82,8 @@ export interface EvaluatedCell {
   dateLabel: string;
   /** Set only when a waiver moved the target. */
   waiverNote: string | null;
+  /** Set only when the Chief's override, not the count, met the requirement. */
+  overrideNote: string | null;
 }
 
 export interface EvaluatedMember {
@@ -141,7 +143,7 @@ export const isMetTone = (tone: CellTone): boolean => tone === CellTone.MET || t
  * leaves it out of both met and total, and the tally here must equal the
  * backend's or the row contradicts the standing printed beside it.
  */
-export const isGradedTone = (tone: CellTone): boolean => tone !== CellTone.CATCH_UP;
+export const isGradedTone = (tone: CellTone): boolean => tone !== CellTone.CATCH_UP && tone !== CellTone.NOT_YET_HELD;
 
 /** A number the UI can print: 18, not 18.0; 7.5 stays 7.5. */
 const num = (value: number): string => (Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10));
@@ -149,6 +151,7 @@ const num = (value: number): string => (Number.isInteger(value) ? String(value) 
 const unitLabel = (unit: string | null | undefined, count: number): string => {
   if (!unit) return '';
   if (unit === 'hours') return count === 1 ? 'hour' : 'hours';
+  if (unit === 'sessions') return count === 1 ? 'session' : 'sessions';
   return unit;
 };
 
@@ -178,6 +181,7 @@ export const daysUntilExpiry = (cell: ComplianceMatrixCell, asOf: string): numbe
 
 export const toneOf = (cell: ComplianceMatrixCell, asOf: string): CellTone => {
   if (cell.status === 'catch_up') return CellTone.CATCH_UP;
+  if (cell.status === 'not_applicable') return CellTone.NOT_YET_HELD;
   if (cell.status === 'expired') return CellTone.LAPSED;
   if (MET_STATUSES.has(cell.status)) {
     const days = daysUntilExpiry(cell, asOf);
@@ -204,6 +208,7 @@ const percentOf = (cell: ComplianceMatrixCell, tone: CellTone): number => {
 };
 
 const progressLabelOf = (cell: ComplianceMatrixCell, tone: CellTone, asOf: string): string => {
+  if (tone === CellTone.NOT_YET_HELD) return 'No sessions held yet';
   const required = cell.progress_required ?? 0;
   if (required > 0) {
     const current = cell.progress_current ?? 0;
@@ -270,11 +275,17 @@ const waiverNoteOf = (cell: ComplianceMatrixCell): string | null => {
   if (waived <= 0) return null;
   const base = cell.base_required;
   const adjusted = cell.progress_required;
-  // Not "on leave": fetch_org_waivers merges leave-of-absence periods with
-  // training waivers (new_member, administrative, other) and the cell reports
-  // only a count of waived months, so the source is not knowable here. Saying
-  // "on leave" put a reason on the record that may be untrue of the member.
-  const months = `${waived} waived month${waived === 1 ? '' : 's'}`;
+  // "On leave" only for the months a leave of absence covered: the cell splits
+  // its count by reason, and naming leave where a training waiver (new
+  // member, administrative) was the reason puts an untrue reason on the
+  // record. A server that does not split the count reads as waived months.
+  const leave = cell.leave_months ?? 0;
+  const waiver = cell.waiver_months ?? 0;
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const parts: string[] = [];
+  if (leave > 0) parts.push(`${plural(leave, 'month')} on leave`);
+  if (waiver > 0) parts.push(plural(waiver, 'waived month'));
+  const months = parts.length > 0 ? parts.join(' and ') : plural(waived, 'waived month');
   if (base != null && adjusted != null && base !== adjusted) {
     return `Target reduced ${num(base)} → ${num(adjusted)} ${unitLabel(cell.progress_unit, adjusted)} for ${months}`;
   }
@@ -301,6 +312,7 @@ export const evaluateCell = (
     progressLabel: progressLabelOf(cell, tone, basis),
     dateLabel: dateLabelOf(cell, tone),
     waiverNote: waiverNoteOf(cell),
+    overrideNote: cell.overridden ? "Met by the Chief's override" : null,
   };
 };
 
@@ -412,7 +424,9 @@ export const requirementMeta = (requirement: ComplianceMatrixRequirement | undef
   if (requirement.frequency) {
     parts.push(requirement.frequency.replace(/_/g, ' '));
   }
-  if (requirement.target && requirement.target_unit) {
+  if (requirement.target && requirement.target_unit === 'percent_of_sessions') {
+    parts.push(`${num(requirement.target)}% of sessions`);
+  } else if (requirement.target && requirement.target_unit) {
     parts.push(`${num(requirement.target)} ${unitLabel(requirement.target_unit, requirement.target)}`);
   } else if (requirement.requirement_type) {
     parts.push(requirement.requirement_type.replace(/_/g, ' '));

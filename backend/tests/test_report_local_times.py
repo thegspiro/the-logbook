@@ -194,6 +194,9 @@ class TestEquipmentCheckCsvExport:
             }
         )
         monkeypatch.setattr(endpoint, "EquipmentCheckService", lambda _db: service)
+        # The export is audited against a real session in
+        # test_pdf_export_audit.py; this stub session cannot hold the row.
+        monkeypatch.setattr(endpoint, "_audit_equipment_export", AsyncMock())
         org = MagicMock()
         org.scalar_one_or_none.return_value = _org()
         db = SimpleNamespace(execute=AsyncMock(return_value=org))

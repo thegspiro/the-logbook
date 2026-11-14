@@ -116,7 +116,9 @@ async function gotoSubmit(page: Page, submissions: unknown[] = []): Promise<Capt
   await signIn(page);
   const captured = await mockSubmitScreen(page, submissions);
   await page.goto('/training/submit');
-  await expect(page.getByRole('heading', { name: 'Submit External Training' })).toBeVisible();
+  // The form's first field, not the heading: the heading is drawn while the
+  // page loads, so it no longer says the form is there.
+  await expect(form(page).getByLabel(/Course or class name/)).toBeVisible();
   return captured;
 }
 

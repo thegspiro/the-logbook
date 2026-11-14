@@ -28,6 +28,13 @@ import type {
   ElectionReportResponse,
   ElectionResults,
   ElectionSettings,
+  AttendancePeriodQuery,
+  ElectionAttendance,
+  ElectoratePreview,
+  MemberMeetings,
+  ElectoratePreviewRequest,
+  MemberVotingEligibility,
+  MemberVotingEligibilityUpdate,
   ElectionStats,
   ElectionUpdate,
   EligibilityRoster,
@@ -478,6 +485,37 @@ export const electionService = {
   },
 
   /**
+   * Each active member's meeting attendance over a period, and whether they
+   * may vote in this election (its eligibility roster's answer).
+   */
+  async getElectionAttendance(electionId: string, query: AttendancePeriodQuery): Promise<ElectionAttendance> {
+    const response = await api.get<ElectionAttendance>(`/elections/${electionId}/attendance`, {
+      params: query,
+      // meeting_type repeats (?meeting_type=a&meeting_type=b), as FastAPI reads a list.
+      paramsSerializer: { indexes: null },
+    });
+    return response.data;
+  },
+
+  /** One member's meetings over a period, newest first. */
+  async getMemberMeetings(electionId: string, userId: string, query: AttendancePeriodQuery): Promise<MemberMeetings> {
+    const response = await api.get<MemberMeetings>(`/elections/${electionId}/attendance/${userId}/meetings`, {
+      params: query,
+      paramsSerializer: { indexes: null },
+    });
+    return response.data;
+  },
+
+  /**
+   * Count how many active members a new election with these voter rules
+   * would admit today (the same check the ballot send applies).
+   */
+  async previewElectorate(request: ElectoratePreviewRequest): Promise<ElectoratePreview> {
+    const response = await api.post<ElectoratePreview>('/elections/eligibility-preview', request);
+    return response.data;
+  },
+
+  /**
    * Get organization-level election settings
    */
   async getSettings(): Promise<ElectionSettings> {
@@ -490,6 +528,25 @@ export const electionService = {
    */
   async updateSettings(data: Partial<ElectionSettings>): Promise<ElectionSettings> {
     const response = await api.patch<ElectionSettings>('/elections/settings', data);
+    return response.data;
+  },
+
+  /**
+   * A member's voting waiting period and any per-member override
+   */
+  async getMemberVotingEligibility(userId: string): Promise<MemberVotingEligibility> {
+    const response = await api.get<MemberVotingEligibility>(`/elections/members/${userId}/voting-eligibility`);
+    return response.data;
+  },
+
+  /**
+   * Set or clear a member's waiting-period override
+   */
+  async updateMemberVotingEligibility(
+    userId: string,
+    data: MemberVotingEligibilityUpdate
+  ): Promise<MemberVotingEligibility> {
+    const response = await api.put<MemberVotingEligibility>(`/elections/members/${userId}/voting-eligibility`, data);
     return response.data;
   },
 

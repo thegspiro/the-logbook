@@ -8,10 +8,10 @@
 fastapi==0.162.0
 # starlette pinned explicitly (normally transitive): the 1.x line carries
 # the security fixes pip-audit flagged; fastapi>=0.141 accepts it.
-starlette==1.9.0
+starlette==1.10.0
 uvicorn[standard]==0.54.0
-pydantic==2.14.1
-pydantic-settings==2.16.1
+pydantic==2.14.3
+pydantic-settings==2.16.2
 slowapi==0.1.10
 
 # ============================================
@@ -24,7 +24,7 @@ mcp==2.3.0
 # ============================================
 # Database - MySQL
 # ============================================
-sqlalchemy==2.1.6
+sqlalchemy==2.1.8
 alembic==1.20.1
 pymysql==1.2.0  # Held: 1.2.1+ removed escape_bytes_prefixed, which aiomysql 0.3.2 calls for every bytes param (see docs/KNOWN_LIMITATIONS.md)
 aiomysql==0.3.2
@@ -42,14 +42,14 @@ hiredis==3.5.0
 # ============================================
 PyJWT[crypto]==2.15.1
 bcrypt==5.0.0
-python-multipart==0.0.32
+python-multipart==0.0.33
 pyotp==2.10.0
 # Passkeys (WebAuthn) as a second factor
 webauthn==3.0.1
 qrcode==8.2
 
 # OAuth & SSO
-authlib==1.9.1
+authlib==1.9.5
 
 # ============================================
 # Encryption & Security
@@ -64,7 +64,7 @@ jinja2==3.1.6
 # ============================================
 # SMS
 # ============================================
-twilio==9.12.0
+twilio==9.13.0
 
 # ============================================
 # Web Push (PWA notifications)
@@ -76,8 +76,8 @@ pywebpush==2.5.0
 # ============================================
 # File Storage
 # ============================================
-boto3==1.43.118  # AWS S3
-azure-storage-blob==12.31.0
+boto3==1.43.126  # AWS S3
+azure-storage-blob==12.31.1
 google-cloud-storage==3.17.1
 python-magic==0.4.27
 
@@ -87,10 +87,11 @@ python-magic==0.4.27
 python-docx==1.2.0
 openpyxl==3.1.5
 reportlab==5.1.0
-pypdf==6.21.2  # 6.14.2 is vulnerable: CVE-2026-71852, CVE-2026-71870; 6.21.0 is vulnerable: CVE-2026-113786; 6.21.1 is vulnerable: CVE-2026-115572, CVE-2026-115580, CVE-2026-115585
+pypdf==7.0.0  # 6.14.2 is vulnerable: CVE-2026-71852, CVE-2026-71870; 6.21.0 is vulnerable: CVE-2026-113786; 6.21.1 is vulnerable: CVE-2026-115572, CVE-2026-115580, CVE-2026-115585; 6.21.2 is vulnerable: CVE-2026-119206, CVE-2026-119207, CVE-2026-119208, CVE-2026-119209; 6.21.3 is vulnerable: CVE-2026-119203, CVE-2026-119204, CVE-2026-119205
 Pillow==13.0.0
 defusedxml==0.7.1  # Safe XML parsing (blocks XXE / entity-expansion attacks)
 nh3==0.3.7  # Allowlist HTML sanitizer for rich-text minutes sections (app/utils/rich_text.py)
+markdown-it-py==4.2.0  # Markdown for history biographies (app/utils/markdown_render.py)
 
 # ============================================
 # API & Networking
@@ -98,25 +99,25 @@ nh3==0.3.7  # Allowlist HTML sanitizer for rich-text minutes sections (app/utils
 httpx==0.28.1
 requests==2.34.2  # For health checks (CVE-2024-35195 & CVE-2024-47081 fixes)
 aiofiles==25.1.0
-websockets==17.3
+websockets==17.4
 
 # ============================================
 # Data Validation & Parsing
 # ============================================
 email-validator==2.3.0
 python-dateutil==2.9.0.post0
-tzdata>=2026.5  # Timezone data for zoneinfo (Python 3.9+ built-in)
+tzdata>=2026.6  # Timezone data for zoneinfo (Python 3.9+ built-in)
 
 # ============================================
 # Payments
 # ============================================
-stripe==16.0.0
+stripe==16.1.0
 
 # ============================================
 # Monitoring & Logging
 # ============================================
 loguru==0.7.3
-sentry-sdk==2.73.0
+sentry-sdk==2.74.0
 psutil==7.2.2  # System monitoring for health checks
 
 # ============================================
@@ -127,7 +128,7 @@ geoip2==5.3.0
 # ============================================
 # Task Queue
 # ============================================
-celery==5.6.3
+celery==5.7.0
 
 
 # ============================================
@@ -135,20 +136,20 @@ celery==5.6.3
 # ============================================
 msal==1.39.0
 msgraph-core==1.5.2
-google-auth==2.62.0
+google-auth==2.62.1
 google-auth-oauthlib==1.5.0
 google-api-python-client==2.201.0
 
 # ============================================
 # Development & Testing
 # ============================================
-pytest==9.1.1  # schemathesis 4.10+ requires >=9; clears PYSEC-2026-1845
-pytest-asyncio==1.4.0
+pytest==9.2.0  # schemathesis 4.10+ requires >=9; clears PYSEC-2026-1845
+pytest-asyncio==1.4.1.post1
 pytest-cov==7.1.0
 pytest-randomly==5.0.0
 pytest-timeout==2.4.0
-hypothesis==6.170.9  # schemathesis 4.x requires >=6.130.12
-schemathesis==4.32.4
+hypothesis==6.170.15  # schemathesis 4.x requires >=6.130.12
+schemathesis==4.33.1
 # Pinned because these two move together. 4.24.3 called
 # CanonicalSchema.is_satisfiable(), which jsonschema-rs 0.50 removed, and an
 # unbounded transitive upgrade made every generated API contract case fail
@@ -164,23 +165,23 @@ schemathesis==4.32.4
 # the same way). Read that range off the schemathesis release being pinned
 # before changing this line; the dependency bot does not read this comment and
 # has now proposed an out-of-range bump twice.
-jsonschema-rs==0.60.1
-faker==40.43.0
+jsonschema-rs==0.60.3
+faker==40.44.0
 # Stands in for a department's S3 bucket in tests; never imported by app/.
-moto[s3]==5.2.4
+moto[s3]==5.2.5
 
 # Code Quality
 black==26.10.1
-flake8==7.4.1
+flake8==7.5.0
 flake8-pytest-style==2.2.0
-mypy==2.4.0
+mypy==2.4.1
 # Type stubs for runtime dependencies that ship none. Each follows its
 # library's version line: move it when the library moves. httplib2 has no pin
 # above because it arrives through google-api-python-client.
 types-defusedxml==0.7.0.20260504
-types-httplib2==0.32.0.20260720
-types-python-dateutil==2.9.0.20261021
-types-reportlab==5.0.0.20261008
+types-httplib2==0.32.1.20261029
+types-python-dateutil==2.9.0.20261104
+types-reportlab==5.1.0.20261104
 isort==9.0.2
 # pylint declares a hard upper bound on isort, so the two only move together:
 # an isort bump on its own makes this file unresolvable. 3.x capped it at <7,
@@ -192,4 +193,4 @@ pylint==4.1.3
 # Utilities
 # ============================================
 python-dotenv==1.2.4
-click==8.5.0
+click==8.5.1

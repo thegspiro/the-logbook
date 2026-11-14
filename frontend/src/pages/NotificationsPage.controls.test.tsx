@@ -84,7 +84,59 @@ describe('NotificationsPage controls (W56)', () => {
     expect(screen.getByLabelText('Trigger Event')).toHaveValue('event_reminder');
 
     await user.click(screen.getByRole('button', { name: 'Create Rule' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Enter a rule name.');
+    // Announced through the field it is about (forms review F-3).
+    expect(screen.getByRole('textbox', { name: /^Rule Name/ })).toHaveAccessibleDescription('Enter a rule name.');
+  });
+
+  describe('create rule dialog refusing a save', () => {
+    beforeEach(() => {
+      vi.mocked(notificationsService.createRule).mockReset();
+      vi.mocked(notificationsService.createRule).mockResolvedValue({ ...rule, id: 'rule-2' } as never);
+    });
+
+    const openCreate = async (user: ReturnType<typeof userEvent.setup>) => {
+      renderWithRouter(<NotificationsPage />);
+      await user.click(await screen.findByRole('button', { name: /add rule/i }));
+    };
+
+    it('names the missing rule name under its field and focuses it', async () => {
+      const user = userEvent.setup();
+      await openCreate(user);
+      await user.click(screen.getByRole('button', { name: 'Create Rule' }));
+
+      const name = screen.getByRole('textbox', { name: /^Rule Name/ });
+      expect(name).toHaveAttribute('aria-invalid', 'true');
+      expect(name).toHaveAttribute('aria-required', 'true');
+      expect(name).toHaveAccessibleDescription('Enter a rule name.');
+      expect(name).toHaveFocus();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(notificationsService.createRule).not.toHaveBeenCalled();
+    });
+
+    it('puts a 422 on the field the server names', async () => {
+      vi.mocked(notificationsService.createRule).mockRejectedValue({
+        response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
+      });
+      const user = userEvent.setup();
+      await openCreate(user);
+      await user.type(screen.getByRole('textbox', { name: /^Rule Name/ }), 'Drill notices');
+      await user.click(screen.getByRole('button', { name: 'Create Rule' }));
+
+      const name = await screen.findByRole('textbox', { name: /^Rule Name/, description: 'Value is too long.' });
+      expect(name).toHaveAttribute('aria-invalid', 'true');
+      expect(name).toHaveFocus();
+    });
+
+    it('keeps a server failure inside the dialog', async () => {
+      vi.mocked(notificationsService.createRule).mockRejectedValue(new Error('Rules service unavailable'));
+      const user = userEvent.setup();
+      await openCreate(user);
+      await user.type(screen.getByRole('textbox', { name: /^Rule Name/ }), 'Drill notices');
+      await user.click(screen.getByRole('button', { name: 'Create Rule' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Rules service unavailable');
+      expect(screen.getByRole('dialog', { name: 'Create Notification Rule' })).toBeInTheDocument();
+    });
   });
 
   it('marks the chosen Send Log channel as pressed', async () => {

@@ -11,6 +11,7 @@ same card.
 """
 
 import copy
+from datetime import date
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -21,6 +22,9 @@ from app.models.operational_rank import OperationalRank
 from app.models.user import Organization, User
 from app.services.label_service import member_badge_value
 from app.services.member_badge_service import MemberBadgeService
+from app.services.member_service_history_service import (
+    MemberServiceHistoryService,
+)
 from app.utils.id_card_renderer import (
     ORIENTATION_LANDSCAPE,
     SIDES_FRONT,
@@ -72,6 +76,10 @@ def _read_layout(settings: Any) -> Dict[str, str]:
             except ValueError:
                 pass
     return layout
+
+
+def _year(day: Optional[date]) -> Optional[str]:
+    return str(day.year) if day else None
 
 
 def _return_lines(org: Organization) -> List[str]:
@@ -181,6 +189,11 @@ class MemberIdCardService:
         await MemberBadgeService(self.db).ensure_codes(users)
 
         ranks = await self._rank_names(organization_id)
+        # "Member since" is the year credited service runs from (owner
+        # decision 2026-11-01), the same date the digital card shows.
+        since = await MemberServiceHistoryService(self.db).service_since_by_user(
+            organization_id, users
+        )
         cards = []
         for user in users:
             if is_administrative(user.member_class, user.membership_type):
@@ -199,7 +212,7 @@ class MemberIdCardService:
                     title=title,
                     station=user.station,
                     member_number=user.membership_number,
-                    member_since=str(user.hire_date.year) if user.hire_date else None,
+                    member_since=_year(since.get(str(user.id))),
                     photo=user.photo_url,
                 )
             )

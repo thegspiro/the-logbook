@@ -2738,3 +2738,466 @@ the import match. Every standing SKT finding re-verified unchanged.
 | `python3 scripts/check_route_permissions.py --strict` (root) | ✅ 279 routes, 0 errors, 0 warnings                                   |
 | `cd frontend && npm run typecheck`                           | ✅ 0 errors                                                           |
 | `cd frontend && npm run lint`                                | ✅ 0 errors, 0 warnings                                               |
+
+---
+
+## Pass 12 (2026-10-30) — watchdog pickup, true zero delta, 0 new findings
+
+**Prefix:** `SKT12` · **PR:** see `PROGRESS.md`'s **Open PR** row.
+
+**Watchdog note.** The dedicated `/loop 30m /security-review` session remains
+unreachable (per this iteration's own task framing). No open PR's head branch
+starts with `claude/security-review-` — checked both `list_pull_requests`
+(state=open) and `search_pull_requests` (`is:open head:claude/security-review-`),
+0 results each; the one open PR at the time (#3839) is unrelated layout work on
+branch `ccr-ba1682dc-g25b70`. PR #3843 (Feature 18, Training extended, pass 12)
+had already merged (`28c7d924`), and its own tend commit had already fixed the
+rows-12-14 stale-checkbox bug — confirmed the rotation table's checkbox cells
+for rows 12–18 all correctly read ✅ before starting (not just the narrative),
+so there was nothing left to ride along at Step 0 this time. Rotation row 19
+(Skills testing) confirmed the next `⬜` by reading the rotation table directly
+on a freshly fetched `main` (`28c7d924`).
+
+### Scope check — zero backend delta since pass 11
+
+Baseline: `e0deb09d` (pass 11's own merge, PR #3760).
+
+```
+git diff e0deb09d..origin/main -- \
+  backend/app/api/v1/endpoints/skills_testing.py \
+  backend/app/services/skills_testing_service.py \
+  backend/app/schemas/skills_testing.py \
+  backend/app/models/skills_testing.py
+```
+
+Empty output — byte-identical across all four declared scope files. No new
+migration touches a skills-testing table.
+
+**Frontend — re-swept the call-site inventory from scratch**
+(`grep -rliE "skillsTestingService|skillsTestingStore|practicalSkillsStore"
+frontend/src`, not reused from pass 11's list): 54 candidate files (up from
+pass 11's 28, mostly broader substring recall — `practicalSkillsStore` alone
+pulls in every file that merely checks `offersShiftSignoffs`). Diffed every one
+against `e0deb09d`: only 4 changed, and all 4 are false positives, each traced
+directly rather than assumed:
+
+- **`frontend/src/services/trainingServices.ts`** — the one hunk that changed
+  is `complianceConfigService.getAvailablePositions()`, a new method on a
+  sibling service object in the same file; it does not touch
+  `skillsTestingService` (confirmed by reading the diff — the only `+` lines
+  are inside `complianceConfigService`). Feature 20 (Compliance)'s surface,
+  not this one's.
+- **`frontend/src/services/api.ts`** — a one-line type re-export addition
+  (`ActiveWeatherAlert`), unrelated to skills testing.
+- **`frontend/src/pages/MyTrainingPage.tsx`** — a single CSS-class rename
+  (`alert-error` → `alert-danger`) on a config-load error banner. Cosmetic.
+- **`frontend/src/modules/scheduling/components/ShiftReportsSettingsPanel.tsx`**
+  — matched only because it imports `offersShiftSignoffs` from
+  `practicalSkillsStore`; the diff itself rewords a shift-completion-report
+  settings description (Feature 14, Equipment check & shifts' own change) and
+  makes no skills-testing API call or touches no skills-testing field.
+
+No genuine skills-testing frontend file changed. `UNCACHEABLE_PREFIXES`'
+`/training/skills-testing/tests` entry (`frontend/src/utils/apiCache.ts:82`)
+re-confirmed present and unchanged.
+
+### Re-verification, by direct grep against current code (not re-cited)
+
+Since the backend files are provably byte-identical to pass 11's reviewed
+state, every standing mechanism is unchanged by construction. Spot-confirmed
+anyway, directly against current line numbers:
+
+- **SKT-1** — `update_template` still routes through `apply_updates`
+  (`skills_testing.py:763`).
+- **SKT-2/SKT-3 and all four separation-of-duties sites** —
+  `assert_different_person(...)` present at `create_test` (`:1609`),
+  `validate_test` (`:2437`), `void_test` (`:3084`),
+  `return_test_for_correction` (`:3254`).
+- **SKT-4** — `lock_attempt_capacity` still locks with `.with_for_update()`
+  (`skills_testing_service.py:785`); the capacity count's own
+  `.with_for_update(of=SkillTest)` still present (`:891`).
+- **SKT2-1** — zero `is_practice ==` literal comparisons (`grep -c` returns
+  0); `.is_(...)` throughout.
+- **SKT3-1** — `add_test_viewer` still rejects naming the examiner
+  ("The examiner already sees this result in full", `:2816`), after the
+  pre-existing candidate check.
+- **SKT5-1** — `redact_test_for_view`'s `scores` branch still scrubs
+  `waive_reason` alongside `notes` (`skills_testing_service.py:1315`).
+- **Pitfall #32** — `search_candidates`'s `User.status.in_(ACTIVE_ACCOUNT_STATUSES)`
+  still present (`skills_testing.py:1054`), not a literal `== ACTIVE`.
+
+**Route surface.** Fresh AST walk (own script, not reused from any prior
+pass): **29/29 routes**, every one carrying a recognized `Depends(...)` auth
+dependency (`get_current_user` or `require_permission`/`require_all_permissions`)
+— identical count to passes 1–11. `python3 scripts/check_route_permissions.py
+--strict` (repo root): **280 total application routes, 0 errors, 0 warnings**
+— up from pass 11's 279 from other features merging in the interim, confirming
+no new top-level page from this feature (Pitfall #30a n/a).
+
+### Findings
+
+**0 new findings.** No code in this feature's declared backend scope changed
+since pass 11; the four frontend files the broadened substring sweep surfaced
+all belong to other features or are cosmetic, confirmed by reading each diff
+directly rather than assumed from the import match. Every standing SKT fix
+re-verified present at its current citation. No open or flagged item existed
+coming into this pass (per pass 10/11's own closing dispositions), and none is
+newly opened.
+
+### Corrections to prior write-ups
+
+None.
+
+## Guard tests added
+
+None — no code change in scope.
+
+## Completion gate (pass 12)
+
+| Check                                                                                                                           | Result                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, CI's pin)                                                                       | ✅ 0 violations                                                                             |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, CI's pin, installed this pass — the ambient `black` resolved to 26.5.1) | ✅ 2743 files unchanged                                                                     |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, CI's pin)                                                            | ✅ clean                                                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                                                               | ✅ 678 revisions, single head `f90b1124e6f4`                                                |
+| `python3 scripts/check_route_permissions.py --strict` (root)                                                                    | ✅ 280 routes, 0 errors, 0 warnings                                                         |
+| `pytest tests/ -q -k "skill or skt"` (via `python3.13`)                                                                         | ✅ 635 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip), identical to pass 11 |
+| `cd frontend && npm run typecheck`                                                                                              | ✅ 0 errors                                                                                 |
+| `cd frontend && npm run lint`                                                                                                   | ✅ 0 errors, 0 warnings                                                                     |
+
+**Environment note, not a finding:** this worktree had no `node_modules`
+installed at all at the start of this pass (neither root nor `frontend/`) —
+`npm run typecheck` first failed with `TS2307: Cannot find module
+'react-hot-toast'` across every page importing it, which is the same
+missing-local-install artifact pass 3 and pass 10 each recorded in their own
+sandboxes, not a real break on `main`. Fixed with `npm ci` from the repo root
+(the committed lockfile, not a fresh `npm install`), after which typecheck and
+lint both came back clean. Likewise, the ambient `black` on `PATH` resolved to
+`26.5.1` against CI's pinned `26.10.1`; installed the pinned version via
+`python3.13 -m pip install --user 'black==26.10.1'` before trusting the
+`--check` result, per CLAUDE.md's "install the CI-pinned version rather than
+noting it as unavailable" instruction. `flake8` (7.4.1) and `isort` (9.0.2)
+already matched CI's pins on `PATH`.
+
+**Final disposition: 0 fixed, 0 newly flagged, 0 findings closed.** A true
+zero-delta pass on the backend — no commit touched any of the four declared
+scope files since pass 11's reviewed baseline. Every standing fix from passes
+1–11 re-confirmed present at its current citation. Route surface (29/29) and
+route-permission registry (280, 0 errors) unchanged in shape. No open findings
+remain in this feature.
+
+---
+
+## Pass 13 (2026-11-02) — watchdog pickup, zero backend delta, 0 new findings
+
+**Prefix:** `SKT13` · **PR:** see `PROGRESS.md`'s **Open PR** row.
+
+**Watchdog note.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable, per this scheduled
+task's own framing. `list_pull_requests` (state=open) returned a single open
+PR (#3933, an unrelated evaluations feature on branch
+`claude/yearly-performance-eval-reports-yb6i83`) — no open PR's head branch
+starts with `claude/security-review-`. PR #3934 (Feature 18, Training
+extended, pass 13) had already merged (`ff56376ee`); row 18 was already ✅
+from that PR's own commit, cleared at Step 0 as a ride-along rather than its
+own PR. Row 19 (Skills testing) confirmed the next `⬜` by reading the
+rotation table directly on a freshly fetched `main`.
+
+### Scope check — zero backend delta since pass 12
+
+Baseline: `f4bf20558` (pass 12's own content commit, merged as PR #3844 /
+`ec6340308`).
+
+```
+git diff f4bf20558..origin/main -- \
+  backend/app/api/v1/endpoints/skills_testing.py \
+  backend/app/services/skills_testing_service.py \
+  backend/app/schemas/skills_testing.py \
+  backend/app/models/skills_testing.py
+```
+
+Empty output — byte-identical across all four declared scope files, same as
+pass 12's own finding. No new migration touches a skills-testing table (single
+Alembic head `38e0f552242d`, unrelated to this feature).
+
+**Frontend — re-swept the call-site inventory from scratch**
+(`grep -rliE "skillsTestingService|skillsTestingStore|practicalSkillsStore"
+frontend/src`): 56 candidate files (up from pass 12's 54). Diffed every one
+against `f4bf20558`; 18 changed, all 18 traced directly and none is this
+feature's own surface:
+
+- **`frontend/src/stores/practicalSkillsStore.ts`/`.test.ts`** — the one
+  substantive hunk: `usePracticalSkillsMethod()` gained an `enabled` parameter
+  so a caller can defer loading the department's practical-skills method until
+  the Training module is confirmed on, avoiding a spurious 403 from a
+  Training-off org. This is a correctness/UX fix, not a security finding — no
+  new data exposure, no changed authorization, and the endpoint it calls
+  (`GET /training/practical-skills/config`) is unchanged. Both call sites that
+  adopted the new parameter (`SideNavigation.tsx`, `TopNavigation.tsx`) belong
+  to the shared nav shell (Feature 34), not this feature.
+- **`SkillsTestingTestRecordsTab.tsx`** — a CSS-class rename on the test-card
+  row (`flex flex-col …` → `split-row`/`split-row-main`/`split-row-aside`
+  utilities). Cosmetic layout only; no behavior change.
+- **`SideNavigation.tsx` / `TopNavigation.tsx`** — new nav entries for
+  "My Applicants" (prospective-members module) and "Evaluations"/"My
+  Evaluations" (Feature 29/reports), plus an unrelated rename
+  (`triggerOfflineDrain` → `triggerAllOfflineDrains`, see below). None of these
+  touch skills testing.
+- **`useOfflineSyncEngine.ts`/`.test.ts`** — adds a shift-report drain path and
+  a service-worker background-sync listener; the skills-test drain
+  (`drainSkillsTests`) it already aggregated is called unchanged. Feature 14's
+  surface (equipment check & shifts), not this one's.
+- **`TrainingAdminPage.tsx`** — adds a `shift-evaluations` tab routing to
+  `ShiftEvaluationSettingsPanel`. Feature 17's surface (shift evaluations),
+  unrelated to skills testing's own tabs.
+- **`services/api.ts` / `services/trainingServices.ts`** — re-export
+  `shiftEvaluationTemplateService`/`shiftEvaluationService`. Feature 17's
+  surface.
+- **`components/ux/CommandPalette.tsx`/`.test.ts`**,
+  **`components/layout/practicalSkillsLookup.test.tsx`**,
+  **`components/training/SkillSheetLibraryModal.tsx`**,
+  **`modules/scheduling/components/ShiftReportsSettingsPanel.tsx`**,
+  **`pages/MyTrainingPage.tsx`/`.test.tsx`**,
+  **`pages/scheduling/ShiftReportsTab.tsx`** — each checked by reading its own
+  diff rather than assumed from the import match; every one is cosmetic
+  (class renames, copy changes) or belongs to another feature's own change
+  (shift evaluations, shift reports, command-palette layout). None calls a
+  skills-testing endpoint or touches a skills-testing field.
+
+No genuine skills-testing backend-facing frontend change. `UNCACHEABLE_PREFIXES`'
+`/training/skills-testing/tests` entry (`frontend/src/utils/apiCache.ts`)
+re-confirmed present and unchanged.
+
+### Re-verification, by direct grep against current code
+
+Backend files are provably byte-identical to pass 12's reviewed state, so
+every standing mechanism is unchanged by construction:
+
+- **SKT-1** — `update_template` still routes through `apply_updates`
+  (`skills_testing.py:763`).
+- **SKT-2/SKT-3 and all four separation-of-duties sites** —
+  `assert_different_person(...)` present at `create_test`, `validate_test`,
+  `void_test`, `return_test_for_correction`.
+- **SKT-4** — capacity locking (`lock_attempt_capacity` /
+  `.with_for_update()`) unchanged.
+- **SKT2-1** — zero `is_practice ==` literal comparisons.
+- **SKT3-1** — `add_test_viewer` still rejects naming the examiner.
+- **SKT5-1** — `redact_test_for_view`'s `scores` branch still scrubs
+  `waive_reason`.
+- **Pitfall #32** — `search_candidates` still uses
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)`, not a literal `== ACTIVE`.
+
+**Route surface.** AST-equivalent count (`grep -cE '^@router\.(get|post|put|
+patch|delete)'`): **29 routes** in `skills_testing.py`, identical to pass 12.
+`python3 scripts/check_route_permissions.py --strict` (repo root): **289 total
+application routes, 0 errors, 0 warnings** — up from pass 12's 280 from other
+features merging in the interim, confirming no new top-level page from this
+feature (Pitfall #30a n/a).
+
+### Findings
+
+**0 new findings.** No code in this feature's declared backend scope changed
+since pass 12; all 18 frontend files the broadened substring sweep surfaced
+belong to other features or are cosmetic, confirmed by reading each diff
+directly. Every standing SKT fix re-verified present at its current citation.
+No open or flagged item existed coming into this pass, and none is newly
+opened.
+
+### Corrections to prior write-ups
+
+None.
+
+## Guard tests added
+
+None — no code change in scope.
+
+## Completion gate (pass 13)
+
+| Check                                                        | Result                                                   |
+| ------------------------------------------------------------ | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                          |
+| `black --check app/ tests/ alembic/`                         | ✅ 2833 files unchanged                                  |
+| `isort --check-only app/ tests/ alembic/`                    | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 696 revisions, single head `38e0f552242d`             |
+| `python3 scripts/check_route_permissions.py --strict` (root) | ✅ 289 routes, 0 errors, 0 warnings                      |
+| `pytest tests/ -q -k "skill or skt"` (via `python3.13`)      | ✅ 639 passed, 1 skipped (pre-existing `pywebpush` skip) |
+| `cd frontend && npm run typecheck`                           | ✅ 0 errors                                              |
+| `cd frontend && npm run lint`                                | ✅ 0 errors, 0 warnings                                  |
+
+**Final disposition: 0 fixed, 0 newly flagged, 0 findings closed.** A true
+zero-delta pass on the backend — no commit touched any of the four declared
+scope files since pass 12's reviewed baseline. Every standing fix from passes
+1–12 re-confirmed present at its current citation. Route surface (29/29) and
+route-permission registry (289, 0 errors) unchanged in shape. No open findings
+remain in this feature.
+
+---
+
+## Pass 14 (2026-11-09) — watchdog pickup, real delta, 0 new findings
+
+**Prefix:** `SKT14` · **PR:** see `PROGRESS.md`'s **Open PR** row.
+
+**Watchdog note.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents` → "No
+reachable agents"). No open PR's head branch starts with
+`claude/security-review-` (`gh api … search/code`/`pulls?state=open`, 0
+matches). PR #4180 (Feature 18, Training extended, pass 14) had just merged.
+Row 19 (Skills testing) confirmed the next `⬜` by reading the rotation table
+directly on a freshly fetched `main`.
+
+### Scope check — real delta since pass 13
+
+Baseline: `85c3b760` (pass 13's own merge, PR #3935).
+
+```
+git diff 85c3b760..origin/main -- \
+  backend/app/api/v1/endpoints/skills_testing.py \
+  backend/app/services/skills_testing_service.py \
+  backend/app/schemas/skills_testing.py \
+  backend/app/models/skills_testing.py
+```
+
+One file changed: `skills_testing.py`, +14/-0. The other three declared scope
+files are byte-identical.
+
+### Change reviewed (traced safe, 0 fixes needed)
+
+**A new cross-feature hook: a passing, validated official test now also
+evaluates the candidate's program milestones.** `complete_test` (the
+auto-validate branch, officer completing) and `validate_test` (the
+member-submission-then-officer-validates path) each gained an identical
+four-line block, placed immediately after the existing
+`apply_test_pass_to_pipeline` call and under the same guard condition
+(`test.result == PASS`, `not test.is_practice`, `test.validated_at` truthy):
+
+```python
+if (
+    test.result == SkillTestResult.PASS.value
+    and not test.is_practice
+    and test.validated_at
+):
+    await process_milestones_for_user(
+        db, current_user.organization_id, test.candidate_id
+    )
+```
+
+`process_milestones_for_user` (`app/services/program_milestones.py:691`,
+aliased on import as `process_milestones_for_user` — the module itself is
+Feature 17 (Training core)'s own file, part of the program-milestones system
+reviewed under that feature's rotation, not re-derived here) is the thing
+checked for this feature's own call sites:
+
+- **Org scoping** — called with `current_user.organization_id` (the
+  authenticated caller's own org, never client-supplied) and
+  `test.candidate_id` (pulled from a `test` row already fetched filtered on
+  `SkillTest.organization_id == current_user.organization_id` earlier in the
+  same handler). `process_user` itself re-filters
+  `ProgramEnrollment.organization_id == str(organization_id)` **and**
+  `ProgramEnrollment.user_id == str(user_id)` before touching anything — no
+  new by-id or cross-tenant surface (CHECKLIST §3).
+- **Fails closed on the test-completion flow, not into it** —
+  `process_user`'s docstring and body: "Never raises: the result that
+  prompted it is saved." It wraps its own body in `try/except Exception`,
+  logs, rolls back its own (separate) work, and returns `0` rather than
+  propagating. Confirmed by reading the function: a milestone-evaluation bug
+  cannot turn into a 500 on `POST /tests/{id}/complete` or `/validate`, and
+  cannot un-commit the already-committed test result (the call runs after
+  `db.commit()` in `complete_test`, and after `validate_test`'s own commit,
+  matching the established "runs after the commit above because the
+  progress updater commits internally" pattern already documented for the
+  sibling `apply_test_pass_to_pipeline` call one block above it).
+- **Double-fire not reachable for one test.** `complete_test`'s branch only
+  sets `test.validated_at` when `auto_validate` (an officer completing) is
+  true; `validate_test` only runs on a test not yet validated (the "already
+  validated" guard 400s first). The two call sites are mutually exclusive
+  for a given test's first validation, and `ProgramMilestoneAchievement` is
+  additionally unique on `(milestone_id, enrollment_id)` per
+  `program_milestones.py`'s own docstring, so even a hypothetical re-run is
+  idempotent by constraint, not just by this call-site reasoning.
+- **No new data exposure.** The call returns an `int` (count processed) that
+  is not read or returned by either endpoint — nothing from the milestone
+  evaluation reaches the `complete_test`/`validate_test` HTTP response.
+
+No finding. This is a correctly-scoped, fail-safe wiring of an
+already-reviewed helper into two already-reviewed endpoints' existing
+post-commit hook pattern.
+
+### Re-verification, by direct grep against current code
+
+- **SKT-1** — `update_template` still routes through `apply_updates`
+  (`skills_testing.py:764`).
+- **SKT-2/SKT-3 and all four separation-of-duties sites** —
+  `assert_different_person(...)` present at `create_test` (`:1610`),
+  `validate_test` (`:2447`), `void_test` (`:3098`),
+  `return_test_for_correction` (`:3268`).
+- **SKT-4** — `lock_attempt_capacity`'s `.with_for_update()` (`:785`) and the
+  capacity count's `.with_for_update(of=SkillTest)` (`:891`) both still
+  present in `skills_testing_service.py`.
+- **SKT2-1** — zero `is_practice ==` literal comparisons (`grep -c` → 0).
+- **SKT3-1** — `add_test_viewer` still rejects naming the examiner
+  ("The examiner already sees this result in full", `:2830`).
+- **SKT5-1** — `redact_test_for_view`'s `scores` branch still scrubs
+  `waive_reason` (`skills_testing_service.py:1315`).
+- **Pitfall #32** — `search_candidates` still uses
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` (`:1055`), not a literal
+  `== ACTIVE`.
+
+**Route surface.** Fresh AST walk (own script, not reused from any prior
+pass) over every `@router.get/post/put/patch/delete` decorator and its
+function's `Depends(...)` defaults: **29/29 routes**, identical count to
+passes 1–13, every one carrying a recognized auth dependency.
+`python3 scripts/check_route_permissions.py --strict` (repo root): **305
+total application routes, 0 errors, 0 warnings** — up from pass 13's 289
+from other features merging in the interim, confirming no new top-level page
+from this feature (Pitfall #30a n/a).
+
+### Frontend
+
+No file matching `skillsTestingService`/`skillsTestingStore`/
+`practicalSkillsStore` changed in the window since pass 13's own frontend
+sweep found the live state clean; the new milestone hook is backend-only
+(the response shape `complete_test`/`validate_test` return is unchanged — no
+new field was added for the frontend to consume). `UNCACHEABLE_PREFIXES`'
+`/training/skills-testing/tests` entry (`frontend/src/utils/apiCache.ts`)
+unaffected.
+
+### Findings
+
+**0 new findings.** The one real change in scope — wiring
+`process_milestones_for_user` into `complete_test` and `validate_test` — is
+an already-reviewed, fail-safe, org-scoped helper called with
+already-validated inputs at the correct point in an existing, established
+post-commit-hook pattern. Every standing SKT fix re-verified present at its
+current citation. No open or flagged item existed coming into this pass, and
+none is newly opened.
+
+### Corrections to prior write-ups
+
+None.
+
+### Guard tests added
+
+None — no defect found to guard against; the reviewed change is a correctly
+fail-safe cross-feature hook whose own idempotency is already enforced by
+`ProgramMilestoneAchievement`'s unique constraint, which belongs to Feature
+17's own test suite, not this feature's.
+
+### Completion gate (pass 14)
+
+| Check                                                                                                   | Result                                                   |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, CI's pin, installed this pass — ambient resolved 7.5.0) | ✅ 0 violations                                          |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, CI's pin)                                       | ✅ 3047 files unchanged                                  |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, CI's pin)                                    | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                       | ✅ 750 revisions, single head `55e20c02dea7`             |
+| `python3 scripts/check_route_permissions.py --strict` (root)                                            | ✅ 305 routes, 0 errors, 0 warnings                      |
+| `pytest tests/ -q -k "skill or skt"` (via `python3.13`)                                                 | ✅ 642 passed, 1 skipped (pre-existing `pywebpush` skip) |
+| `cd frontend && npm run typecheck`                                                                      | ✅ 0 errors                                              |
+| `cd frontend && npm run lint`                                                                           | ✅ 0 errors, 0 warnings                                  |
+
+**Final disposition: 0 fixed, 0 newly flagged, 0 findings closed.** One real
+backend change since pass 13 — a new, correctly-scoped, fail-safe milestone
+hook added to `complete_test` and `validate_test` — traced safe end-to-end.
+Every standing fix from passes 1–13 re-confirmed present at its current
+citation. Route surface (29/29) and route-permission registry (305, 0
+errors) unchanged in shape. No open findings remain in this feature.

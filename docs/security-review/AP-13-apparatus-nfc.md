@@ -1,6 +1,6 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12), 2026-09-17 (pass 13), 2026-10-06 (pass 14), 2026-10-13 (pass 15), 2026-10-15 (pass 16), 2026-10-19 (pass 17), 2026-10-23 (pass 18), 2026-10-26 (pass 19) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5, merged), [#2623](https://github.com/thegspiro/the-logbook/pull/2623) (pass 13 — rotation pass 6, merged), [#2969](https://github.com/thegspiro/the-logbook/pull/2969) (pass 14 — rotation pass 7, 0 fixed, 0 new findings), [#3185](https://github.com/thegspiro/the-logbook/pull/3185) (pass 15 — watchdog pickup, 1 fixed, 0 new findings), [#3289](https://github.com/thegspiro/the-logbook/pull/3289) (pass 16 — watchdog pickup, 0 fixed, 0 new findings), [#3434](https://github.com/thegspiro/the-logbook/pull/3434) (pass 17 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3589](https://github.com/thegspiro/the-logbook/pull/3589) (pass 18 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 19 (this PR)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12), 2026-09-17 (pass 13), 2026-10-06 (pass 14), 2026-10-13 (pass 15), 2026-10-15 (pass 16), 2026-10-19 (pass 17), 2026-10-23 (pass 18), 2026-10-26 (pass 19), 2026-10-29 (pass 20), 2026-11-02 (pass 21), 2026-11-06 (pass 22) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5, merged), [#2623](https://github.com/thegspiro/the-logbook/pull/2623) (pass 13 — rotation pass 6, merged), [#2969](https://github.com/thegspiro/the-logbook/pull/2969) (pass 14 — rotation pass 7, 0 fixed, 0 new findings), [#3185](https://github.com/thegspiro/the-logbook/pull/3185) (pass 15 — watchdog pickup, 1 fixed, 0 new findings), [#3289](https://github.com/thegspiro/the-logbook/pull/3289) (pass 16 — watchdog pickup, 0 fixed, 0 new findings), [#3434](https://github.com/thegspiro/the-logbook/pull/3434) (pass 17 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3589](https://github.com/thegspiro/the-logbook/pull/3589) (pass 18 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3740](https://github.com/thegspiro/the-logbook/pull/3740) (pass 19 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 20 (no PR — committed directly to `main` as `b6a86b4d4`, bypassing the branch/PR flow; its "Open PR" row said "PR (pending)" and the rotation table's row 13 was never flipped to ✅, which this pass corrects), [#3924](https://github.com/thegspiro/the-logbook/pull/3924) (pass 21, merged), pass 22 (this PR)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (94 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py`,
@@ -17,6 +17,335 @@ that tree changed this pass)
 `a8c3b50b6d9b_nfc_card_taps_and_auto_suspend`
 
 ---
+
+## Pass 22 (2026-11-06, watchdog pickup) — zero backend delta, one dashboard-tile wiring fix reviewed, 0 fixed, 0 new findings
+
+**Watchdog pickup.** PR #4108 (Feature 12, Facilities, pass 15) had just
+merged (`2ff2abf75`); a fresh `list_pull_requests` (state=open) found 0 PRs
+with a `claude/security-review-*` head branch, and the dedicated `/loop 30m
+/security-review` session remains unreachable. `PROGRESS.md`'s rotation
+table had rows 00–12 `✅` and row 13 (this feature) as the next `⬜`.
+
+### Scope and delta
+
+Baseline: pass 21's merge commit (`bb77eae12`, PR #3924) to current `main`
+(`2ff2abf75`, PR #4108's merge). `git log bb77eae12..HEAD` restricted to
+this feature's full declared scope returns 75 commits when the broad
+`backend/alembic/versions` pathspec is included — almost all of them
+unrelated migration-head rejoins and merge commits from concurrent
+owner-decision batches, the same noise pass 21's own note on `fac-12`-style
+scans warns about. Re-run **excluding** `alembic/versions` and restricted to
+this feature's actual files narrows that to exactly **3** non-merge commits,
+all read in full:
+
+- **`d099c5066` — "Apparatus & Facilities: build the owner's 2026-11-01
+  decisions (batch 6)" (DASH-38).** Only 3 files in this feature's scope:
+  `ApparatusListPage.tsx`, a new `MaintenanceDueList.tsx`, and that
+  component's test. The dashboard's "Maintenance Due" tile previously summed
+  `maintenanceDueSoon + maintenanceOverdue`, double-counting overdue items
+  (`maintenanceDueSoon` already includes them) — fixed to show
+  `maintenanceDueSoon` alone, with a caption stating the window and that
+  overdue is included. The tile is now a `<Link to="/apparatus?maintenance=due">`
+  and the list page renders the new `MaintenanceDueList` component for that
+  query value, following the same `DASHBOARD_FILTERS` pattern pass 21's
+  DASH-37 review already verified (exact-value match, not prefix/substring).
+  `MaintenanceDueList` calls `apparatusMaintenanceService.getMaintenanceDue()`
+  → `GET /apparatus/maintenance/due`
+  (`api/v1/endpoints/apparatus.py:1046-1071`) — a **pre-existing** endpoint,
+  unchanged in this window (confirmed: zero diff on `apparatus.py` and
+  `apparatus_service.py` since pass 21's baseline), already gated on
+  `require_permission("apparatus.view", "apparatus.manage")` and already
+  org-scoped (`ApparatusService.get_maintenance_due` filters
+  `ApparatusMaintenance.organization_id == organization_id` —
+  `apparatus_service.py:1519`), with `days_ahead` server-bounded
+  (`ge=1, le=365`). This pass's only new exposure is that the response is
+  now rendered as a list instead of only feeding a count — re-read
+  `get_maintenance_due`'s serialization (`apparatus_service.py:1547-`) and
+  confirmed no field beyond id/apparatus id/unit number/maintenance type
+  name/due date/overdue flag is returned — no PII, no internal id leakage
+  beyond what the detail page (same permission) already shows. List items
+  link to `/apparatus/{id}?tab=maintenance`, each gated by the same page's
+  own existing permission check. No new route, no permission change,
+  confirmed by the AST re-enumeration below.
+- **`e810d2b77` — "Evaluate shifts members log on an outside agency's
+  units."** Touches this feature's scope only via
+  `external_apparatus_service.py` (+2 lines): a new
+  `evaluate_shifts: bool` field threaded through `create_agency`'s payload
+  (`bool(payload.get("evaluate_shifts", False))`) and the serializer
+  (`bool(agency.evaluate_shifts)`). Both call sites already sit inside an
+  org-scoped agency create/read (the surrounding `organization_id=` and the
+  method's existing org filter, both unchanged by this diff); the new field
+  is a plain boolean with no injection or exposure surface of its own. The
+  feature's substantial work (external-agency shift evaluation, a new
+  `shift_evaluations.external_shift_id`/`occasion`/`preceptor_name`, a new
+  Training-gated endpoint pair) is entirely Training's declared scope (the
+  rotation's Feature 17/18 rows), not reviewed here.
+- **`d70bfb10a` — "Lay out card and field grids by their own width."**
+  Touches this feature's scope only via `DocumentsTab.tsx` (1 line): a
+  Tailwind class swap from a screen-width breakpoint to the `card-grid`
+  utility (CLAUDE.md's shared-pattern convention). Pure layout, no data flow
+  change.
+
+No other file in the declared scope has a commit since pass 21 — `apparatus.py`,
+`apparatus_service.py`, `evoc_level_service.py`, `driver_exception_service.py`,
+`nfc_tags.py`, `nfc_tag_service.py`, `nfc_card_admin_service.py`,
+`nfc_card_status_sync.py`, `mcp/tools/apparatus.py`, `models/apparatus.py`,
+`models/nfc_tag.py`, `schemas/apparatus.py`, and `schemas/nfc_tag.py` are all
+byte-identical to pass 21 (confirmed by an explicit `git diff --stat` against
+each, not inferred from the commit list).
+
+### Standing findings re-verified
+
+No open finding exists for this feature. AP2-4 was resolved in pass 21 (by
+ordinary feature work, not this rotation) and this window's diff touches
+neither `evoc_level_service.py` nor any other file AP2-4 concerned.
+`docs/module-audit/apparatus.md` and `docs/app-review/apparatus.md` were
+re-checked directly (grepped for `🚩`/`OPEN`/`FLAGGED`) — both report zero
+open items, consistent with AP2-4's resolution being carried into both docs
+at pass 21.
+
+### Route inventory
+
+Re-enumerated **by AST**: `apparatus.py` **94**, `nfc_tags.py` **11** — both
+unchanged from pass 21 (the `GET /apparatus/maintenance/due` endpoint this
+pass's only reviewed surface depends on is pre-existing, not new).
+`check_route_permissions.py --strict` (repo-wide): 303 routes (up from 286
+at pass 21, from unrelated features landing in between), 0 errors, 0
+warnings.
+
+### Findings (pass 22)
+
+**0 fixed, 0 new findings.** No application code in this feature's own
+scope needed a fix — `external_apparatus_service.py`'s 2-line change and
+`apparatus.py`/`apparatus_service.py`'s zero diff are both clean as
+reviewed above; the frontend wiring reuses an already-reviewed,
+already-org-scoped endpoint correctly.
+
+## Completion gate (pass 22)
+
+| Check                                                                                                                                  | Result                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                                                          | ✅ 0 violations                                  |
+| `black --check app/ tests/ alembic/`                                                                                                   | ✅ 2993 files unchanged                          |
+| `isort --check-only app/ tests/ alembic/`                                                                                              | ✅ clean                                         |
+| `python3 scripts/validate_migrations.py --strict`                                                                                      | ✅ 737 revisions, single head (`c6b690cc33d6`)   |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                  | ✅ 303 routes, 0 errors/0 warnings               |
+| Scoped backend pytest (`-k "apparatus or nfc or evoc or driver_exception"`)                                                            | ✅ 1390 passed, 1 pre-existing skip (`py_vapid`) |
+| Standing guard suites (capacity locking, org-scoping ratchet, LIKE escaping, CSV sweep, migration chain, `create_all`-table tolerance) | ✅ 166 passed                                    |
+| `cd frontend && npm run typecheck`                                                                                                     | ✅ 0 errors                                      |
+| `cd frontend && npm run lint`                                                                                                          | ✅ 0 errors, 0 warnings                          |
+| `npx vitest run src/modules/apparatus`                                                                                                 | ✅ 123 passed (15 files, up from 119 at pass 21) |
+
+## Pass 21 (2026-11-02, watchdog pickup) — AP2-4 resolved by a feature commit, one new dashboard-tile filter reviewed, 0 fixed, 0 new findings
+
+**Watchdog pickup.** PR #3923 (Feature 12, Facilities, pass 14) had just
+merged; a fresh `list_pull_requests` (state=open) found 0 PRs with a
+`claude/security-review-*` head branch, and the dedicated `/loop 30m
+/security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`) remains
+unreachable (`ListAgents`: "No reachable agents"). `PROGRESS.md`'s rotation
+table had rows 00–12 `✅` and row 13 (this feature) as the next `⬜`.
+
+**Tracker correction (see header above):** pass 20 was committed directly to
+`main` (`b6a86b4d4`) rather than through a branch and PR — it updated this
+findings file and the `PROGRESS.md` "Open PR" narrative, but left that
+narrative on a literal "PR (pending)" placeholder and never flipped row 13's
+table cell to ✅. This pass's own `PROGRESS.md` commit corrects the table cell
+and the narrative; see Changes below.
+
+### Scope and delta
+
+Baseline: pass 20's commit (`b6a86b4d4`), re-synced against the current `main`
+head (`f2e7bd578`, PR #3923's merge) before writing this section.
+`git log b6a86b4d4..HEAD` restricted to this feature's full declared scope
+(`apparatus.py`, `apparatus_service.py`, `evoc_level_service.py`,
+`driver_exception_service.py`, `external_apparatus_service.py`, `nfc_tags.py`,
+`nfc_tag_service.py`, `nfc_card_admin_service.py`, `nfc_card_status_sync.py`,
+`mcp/tools/apparatus.py`, `models/nfc_tag.py`, `schemas/nfc_tag.py`,
+`frontend/src/modules/apparatus`) returns exactly 3 non-merge commits, all
+read in full:
+
+- **`3a6064707` — "EVOC gate: a shift's deleted vehicle refuses the driver
+  seat" (AP2-4, fixed by ordinary feature work, not by this rotation).**
+  `evoc_level_service.py::check_driver_evoc_eligibility` previously returned
+  `eligible: True` for any `shifts.apparatus_id` not found in the `apparatus`
+  table — the exact gap AP2-4 (MED, open since pass 2/app-review B2) tracked.
+  It now resolves `BasicApparatus` first (`BasicApparatus.id == apparatus_id
+AND BasicApparatus.organization_id == organization_id` — org-scoped,
+  satisfies checklist §3/XC-3 and Pitfall #14a) and treats a basic vehicle as
+  carrying no requirement, matching the pre-existing behavior for that case.
+  An id found in **neither** table now returns `eligible: False` with a
+  message to re-pick the shift's vehicle — fail-closed, per CLAUDE.md
+  Pitfall #14's "fail closed in access-control helpers" and the owner
+  decision recorded in `KNOWN_LIMITATIONS.md` (2026-10-31). The log line uses
+  one formatting pass, three positional args for three `{}` placeholders —
+  no f-string-plus-arguments double-format (Pitfall #33). `docs/
+KNOWN_LIMITATIONS.md`'s AP2-4 entry already carries a "Resolved
+  (2026-10-31)" paragraph from this same commit; `docs/app-review/
+apparatus.md`'s AP2-4 entry and its "Future development" item 1 did not —
+  both were stale (still said 🚩 FLAGGED / undecided) and are corrected by
+  this pass (see Changes). Re-ran the adjacent dangling-requirement path
+  (`required_level is None`, already fail-closed since an earlier pass) —
+  untouched, still correct.
+
+- **`7f0ef2c1d` — "Dashboard tiles land on the rows they counted"
+  (DASH-37).** In this feature's scope: `GET /apparatus` gains three
+  optional query params — `service_status: Literal["unavailable"] | None`,
+  `has_deficiency: bool | None`, `inspection: Literal["overdue"] | None` — so
+  the fleet dashboard's "Out of service" / "Has deficiency" / "Inspection
+  overdue" tiles can deep-link to the exact rows they counted. Read
+  `apparatus_service.py::list_apparatus` in full: `conditions` starts as
+  `[Apparatus.organization_id == organization_id]` (line 619) and all three
+  new filters are appended to that same list, which both the count query and
+  the paginated query consume via `and_(*conditions)` — org-scoping and the
+  "count query parallels the list query" requirement (checklist §3) both
+  hold structurally, not by convention. The `service_status` filter's inner
+  subquery (`select(ApparatusStatus.id).where(ApparatusStatus.code.in_(...))`)
+  is not itself org-filtered, but this is safe: `ApparatusStatus.
+organization_id` is nullable (system-defined statuses, Pitfall #2/#8
+  pattern, confirmed in `models/apparatus.py`), and the subquery only
+  produces a candidate id set matched against `Apparatus.status_id` on rows
+  already restricted to this org by the outer condition — no row outside the
+  caller's org can be selected or counted through it. `has_deficiency` is a
+  plain boolean column filter. `inspection="overdue"` compares against
+  `resolve_org_today(self.db, organization_id)` (the org's calendar day, not
+  UTC) rather than the server's date — correct per CLAUDE.md's UTC-stored/
+  local-rendered rule and consistent with the equivalent fix already reviewed
+  for Facilities' `due_within_days` (PR #3923) and Inventory's
+  `low_stock_categories`. No raw SQL, no new route (confirmed by the AST
+  re-enumeration below), no permission change. Frontend
+  (`ApparatusListPage.tsx`, `services/api.ts`, `types/index.ts`): reads the
+  three params from `useSearchParams()`, shows a dismissible
+  `alert-warning` banner per active filter with a "Clear filter" button, and
+  sends `hasDeficiency: deficiencyOnly || undefined` — `||`, not `??`, so a
+  `false` value as well as an absent one both omit the key (Pitfall #1's
+  shape, applied to a boolean). No `dangerouslySetInnerHTML`, no
+  `window.confirm`/`.alert`/`.prompt`, no raw `fetch(` bypassing the module's
+  axios instance, no re-enabled `closeOnClickOutside`.
+
+- **`eb3cfee5c` — test-only.** Two source-reading test files
+  (`App.toast.test.ts`, outside this feature's scope, and
+  `ApparatusDetailHeader.layout.test.ts`, in scope) updated their pinned
+  class-string assertions after an unrelated shared-header refactor
+  (`SectionPageHeader` moved to the `page-header` utility). No behavior
+  change; re-read to confirm it only follows the refactor, not a weakened
+  assertion (Pitfall #37's "test changed beside the code it checks" concern)
+  — it asserts the same layout behavior (column below `sm`, wrapping row
+  from `sm`) against the new class names plus a new check against the
+  stylesheet itself.
+
+No other file in the declared scope has a commit since pass 20 —
+`nfc_tags.py`, `nfc_tag_service.py`, `nfc_card_admin_service.py`,
+`nfc_card_status_sync.py`, `mcp/tools/apparatus.py`, `models/nfc_tag.py`, and
+`schemas/nfc_tag.py` are all byte-identical to pass 20.
+
+### Route inventory
+
+Re-enumerated **by AST** (not `grep -c`): `apparatus.py` **94**,
+`nfc_tags.py` **11** — both unchanged from pass 20 (the new `GET /apparatus`
+query params are not a new route). `check_route_permissions.py --strict`
+(repo-wide): 286 routes, 0 errors, 0 warnings.
+
+### Findings (pass 21)
+
+**0 fixed by this pass, 0 new findings.** AP2-4 is **resolved** (by the
+feature commit reviewed above, not by this security-review pass) — see
+"Changes" for the doc corrections this pass makes to reflect that. No other
+standing item exists for this feature.
+
+## Completion gate (pass 21)
+
+| Check                                                                       | Result                                           |
+| --------------------------------------------------------------------------- | ------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                               | ✅ 0 violations                                  |
+| `black --check app/ tests/ alembic/`                                        | ✅ 2822 files unchanged                          |
+| `isort --check-only app/ tests/ alembic/`                                   | ✅ clean                                         |
+| `python3 scripts/validate_migrations.py --strict`                           | ✅ 693 revisions, single head (`1476abf56dd3`)   |
+| `python3 scripts/check_route_permissions.py --strict`                       | ✅ 286 routes, 0 errors/0 warnings               |
+| Scoped backend pytest (`-k "apparatus or nfc or evoc or driver_exception"`) | ✅ 1388 passed, 1 pre-existing skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                          | ✅ 0 errors                                      |
+| `cd frontend && npm run lint`                                               | ✅ 0 errors, 0 warnings                          |
+| `npx vitest run src/modules/apparatus`                                      | ✅ 119 passed (15 files, up from 114 at pass 20) |
+
+## Pass 20 (2026-10-29, watchdog pickup) — near-zero delta, one wording-only refusal fix, 0 fixed, 0 new findings
+
+**Watchdog pickup.** `list_pull_requests` (state=open) returned 0 PRs with a
+`claude/security-review-*` head branch, and no Claude session was reachable
+via `ListAgents` (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, remains unreachable). PR #3832
+(Feature 12, Facilities, pass 13) had already merged (`3949326e`); this
+pickup followed promptly rather than waiting for the next scheduled tick.
+`PROGRESS.md`'s rotation table had row 13 (Apparatus & NFC) as the first
+`⬜`, matching PR #3832's own "Next feature" note.
+
+### Scope and delta
+
+Baseline: pass 19's merge (`1dfe6f47`, PR #3740). `git log 1dfe6f47..HEAD`
+restricted to this feature's full declared scope (`apparatus.py`,
+`apparatus_service.py`, `evoc_level_service.py`,
+`driver_exception_service.py`, `external_apparatus_service.py`,
+`nfc_tags.py`, `nfc_tag_service.py`, `nfc_card_admin_service.py`,
+`nfc_card_status_sync.py`, `mcp/tools/apparatus.py`, `models/nfc_tag.py`,
+`schemas/nfc_tag.py`, `frontend/src/modules/apparatus`) returns exactly
+one non-merge commit, `4cac9ff2` ("Keep three refusals within what
+safe_error_detail lets through"), read in full:
+
+- **`evoc_level_service.py` (1 line)** — `delete_evoc_level`'s refusal
+  message ("Cannot delete EVOC level that is assigned to apparatus...")
+  previously said "Remove the EVOC requirement from those apparatus
+  first.", which matches `safe_error_detail`'s `DELETE ... FROM` SQL-sniff
+  pattern and so was replaced with the generic "An unexpected error
+  occurred." Reworded to "Clear the EVOC requirement on those apparatus
+  first." — same meaning, no longer matches the pattern. Pure wording; the
+  method's query (`Apparatus.required_evoc_level_id == level_id AND
+Apparatus.organization_id == organization_id`) is untouched, and this is
+  a different method from `check_evoc_eligibility` (the one AP2-4 concerns,
+  defined further down the same file) — confirmed by reading both in
+  place, not by proximity in the diff. This is the same cross-cutting
+  refusal-message-capping commit already independently reviewed for
+  Documents & legal (PR #3816) and Facilities (PR #3832); its only new
+  touch in this feature's scope is this one line.
+
+No other file in the declared scope has a single commit since pass 19.
+`frontend/src/modules/apparatus`, `nfc_tags.py`, `nfc_tag_service.py`,
+`nfc_card_admin_service.py`, `nfc_card_status_sync.py`, `mcp/tools/
+apparatus.py`, `models/nfc_tag.py`, and `schemas/nfc_tag.py` are all
+byte-identical to pass 19.
+
+### Route inventory
+
+Re-enumerated **by AST** (not `grep -c`) this pass: `apparatus.py` **94**,
+`nfc_tags.py` **11** — both unchanged from pass 19.
+`check_route_permissions.py --strict` (repo-wide): 280 routes, 0 errors,
+0 warnings.
+
+### Standing flagged item (unchanged)
+
+**AP2-4** (MED, app-review, mirrored in `KNOWN_LIMITATIONS.md`) re-confirmed
+unchanged — `check_evoc_eligibility` (the eligibility-check method AP2-4
+concerns) has zero commits in this pass's delta; the one touched line this
+pass is in a different method (`delete_evoc_level`) and changes only a
+refusal's wording, not any query or the fail-open verdict AP2-4 describes.
+
+## Findings (pass 20)
+
+None new. The one real change this pass is a one-line error-message reword
+with no query, permission, or org-scoping content — verified by reading
+the method in full, not inferred from the commit's stated intent. AP2-4
+remains the only standing item.
+
+## Completion gate (pass 20)
+
+| Check                                                                       | Result                                           |
+| --------------------------------------------------------------------------- | ------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                               | ✅ 0 violations                                  |
+| `black --check app/ tests/ alembic/`                                        | ✅ 2725 files unchanged                          |
+| `isort --check-only app/ tests/ alembic/`                                   | ✅ clean                                         |
+| `python3 scripts/validate_migrations.py --strict`                           | ✅ 669 revisions, single head                    |
+| `python3 scripts/check_route_permissions.py --strict`                       | ✅ 280 routes, 0 errors/0 warnings               |
+| Scoped backend pytest (`-k "apparatus or nfc or evoc or driver_exception"`) | ✅ 1377 passed, 1 pre-existing skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                          | ✅ 0 errors                                      |
+| `cd frontend && npm run lint`                                               | ✅ 0 errors, 0 warnings                          |
+| `npx vitest run src/modules/apparatus`                                      | ✅ 114 passed (15 files)                         |
 
 ## Pass 19 (2026-10-26, watchdog pickup) — real delta: Member ID Cards admin surface (NFC tap log, bulk revoke, coverage report), 0 fixed, 0 new findings
 

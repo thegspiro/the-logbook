@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints import shift_history_import as endpoint
 from app.core.security import email_fingerprint
+from app.models.apparatus import Apparatus, ApparatusStatus, ApparatusType
 from app.models.external_shift_hours import (
     ExternalAgency,
     ExternalApparatus,
@@ -115,6 +116,7 @@ class World:
         self.bob = bob
         self.a106e = a106e
         self.county_a106 = ""
+        self.county_agency = ""
 
 
 @pytest.fixture
@@ -136,6 +138,7 @@ async def world(db_session: AsyncSession) -> World:
     await db_session.flush()
     w = World(org_id, admin, alice, bob, unit.id)
     w.county_a106 = county.id
+    w.county_agency = agency.id
     return w
 
 
@@ -221,6 +224,86 @@ class TestDrafts:
             await service.update_mappings(
                 draft, members={"name:j. ng": {"action": "map", "user_id": stranger}}
             )
+
+    async def test_another_organizations_agency_is_refused(self, db_session, world):
+        service, draft = await _draft(
+            db_session, world, _csv("Alice Ng,101,M7,2025-03-01,0700,1900,,,")
+        )
+        other_org = await _add_org(db_session, "Elsewhere")
+        foreign = ExternalAgency(id=_uid(), organization_id=other_org, name="Theirs")
+        db_session.add(foreign)
+        await db_session.flush()
+        with pytest.raises(ValueError, match="Invalid outside agency"):
+            await service.update_mappings(
+                draft,
+                units={
+                    "|m7": {
+                        "action": "create_external",
+                        "agency_id": foreign.id,
+                        "agency_name": "Theirs",
+                        "unit_name": "M7",
+                    }
+                },
+            )
+
+    async def test_options_list_agencies_and_flag_hidden_units(self, db_session, world):
+        county = await db_session.get(ExternalApparatus, world.county_a106)
+        assert county is not None
+        county.is_active = False
+        await db_session.flush()
+        service, draft = await _draft(
+            db_session, world, _csv("Alice Ng,101,A106,2025-03-01,0700,1900,,,")
+        )
+        options = (await service.detail(draft))["analysis"]["options"]
+        assert options["agencies"] == [
+            {"id": world.county_agency, "name": "County EMS", "is_active": True}
+        ]
+        outside = [u for u in options["units"] if u["kind"] == "external"]
+        assert [(u["id"], u["is_active"]) for u in outside] == [
+            (world.county_a106, False)
+        ]
+        # A hidden unit still matches the file: old files name retired units.
+        analysis, _ = await service.analyze(draft)
+        assert analysis.units[0].target_id == world.county_a106
+
+    async def test_options_flag_retired_own_units(self, db_session, world):
+        basic = await db_session.get(BasicApparatus, world.a106e)
+        assert basic is not None
+        basic.is_active = False
+        kind = ApparatusType(
+            id=_uid(), organization_id=world.org_id, name="Engine", code="ENG1"
+        )
+        status = ApparatusStatus(
+            id=_uid(), organization_id=world.org_id, name="Sold", code="sold"
+        )
+        db_session.add_all([kind, status])
+        await db_session.flush()
+        sold = Apparatus(
+            id=_uid(),
+            organization_id=world.org_id,
+            unit_number="E1",
+            apparatus_type_id=kind.id,
+            status_id=status.id,
+            is_archived=True,
+        )
+        current = Apparatus(
+            id=_uid(),
+            organization_id=world.org_id,
+            unit_number="E2",
+            apparatus_type_id=kind.id,
+            status_id=status.id,
+        )
+        db_session.add_all([sold, current])
+        await db_session.flush()
+        service, draft = await _draft(
+            db_session, world, _csv("Alice Ng,101,A106E,2025-03-01,0700,1900,,,")
+        )
+        options = (await service.detail(draft))["analysis"]["options"]
+        own = {u["id"]: u["is_active"] for u in options["units"] if u["kind"] == "own"}
+        assert own == {world.a106e: False, sold.id: False, current.id: True}
+        # A retired unit still matches the file: years of history ran on it.
+        analysis, _ = await service.analyze(draft)
+        assert analysis.units[0].target_id == world.a106e
 
     async def test_edits_correct_a_row_and_can_be_reverted(self, db_session, world):
         service, draft = await _draft(
@@ -369,6 +452,96 @@ class TestCommit:
         assert draft.summary["agencies_created"] == 1
         assert draft.summary["external_units_created"] == 1
         assert draft.summary["external_hours_created"] == 1
+
+    async def test_a_unit_the_import_adds_starts_hidden_from_members(
+        self, db_session, world
+    ):
+        await self._committed(
+            db_session,
+            world,
+            ["Alice Ng,101,M7,2025-03-01,0700,1900,,,"],
+            units={
+                "|m7": {
+                    "action": "create_external",
+                    "agency_name": "Metro Fire",
+                    "unit_name": "M7",
+                }
+            },
+        )
+        unit, agency = (
+            await db_session.execute(
+                select(ExternalApparatus, ExternalAgency)
+                .join(ExternalAgency, ExternalAgency.id == ExternalApparatus.agency_id)
+                .where(
+                    ExternalApparatus.organization_id == world.org_id,
+                    ExternalApparatus.name == "M7",
+                )
+            )
+        ).one()
+        assert unit.is_active is False
+        # The agency is left offered, so switching the unit on is one step.
+        assert agency.is_active is True
+
+    async def test_a_picked_agency_is_used_whatever_name_came_with_it(
+        self, db_session, world
+    ):
+        _, draft = await self._committed(
+            db_session,
+            world,
+            ["Alice Ng,101,M7,2025-03-01,0700,1900,,,"],
+            units={
+                "|m7": {
+                    "action": "create_external",
+                    "agency_id": world.county_agency,
+                    "agency_name": "Count EMS",
+                    "unit_name": "M7",
+                }
+            },
+        )
+        assert draft.summary["agencies_created"] == 0
+        assert draft.summary["external_units_created"] == 1
+        entry = (
+            await db_session.execute(
+                select(ExternalShiftHours).where(
+                    ExternalShiftHours.organization_id == world.org_id
+                )
+            )
+        ).scalar_one()
+        assert entry.agency_name == "County EMS"
+        unit = await db_session.get(ExternalApparatus, entry.external_apparatus_id)
+        assert unit is not None
+        assert unit.agency_id == world.county_agency
+
+    async def test_several_names_share_one_catch_all_unit(self, db_session, world):
+        catch_all = {
+            "action": "create_external",
+            "agency_name": "Other",
+            "unit_name": "Other",
+        }
+        _, draft = await self._committed(
+            db_session,
+            world,
+            [
+                "Alice Ng,101,POV,2025-03-01,0700,1900,,,",
+                "Bob Diaz,102,Other EMS,2025-03-02,0700,1900,,,",
+            ],
+            units={"|pov": catch_all, "|other ems": catch_all},
+        )
+        assert draft.summary["agencies_created"] == 1
+        assert draft.summary["external_units_created"] == 1
+        units = (
+            (
+                await db_session.execute(
+                    select(ExternalShiftHours.external_apparatus_id).where(
+                        ExternalShiftHours.organization_id == world.org_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(units) == 2
+        assert len(set(units)) == 1
 
     async def test_former_member_becomes_an_archived_record(self, db_session, world):
         _, draft = await self._committed(

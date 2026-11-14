@@ -1,6 +1,20 @@
 import { test, expect } from '@playwright/test';
 import { MIN_FONT_PX, MIN_TAP, PHONE, ROUTES, signInForRoute } from './mobile-routes';
 import type { SignInState } from './mobile-routes';
+import { findSpilledText } from './spilledText';
+
+/**
+ * Tablet sizes each route is also measured at, by resizing the page it already
+ * has open. The side navigation is open from `md`, so a 768px screen gives a
+ * page ~460px and a 1024px one ~700px, while every `sm:`/`md:`/`lg:` rule
+ * believes it has the whole screen. Rows of stat tiles and page headers that
+ * fit a phone and a desktop broke here and nowhere else — a sweep of every
+ * route on 2026-10-29 found eleven — so the phone pass alone cannot see them.
+ */
+const TABLET_SIZES = [
+  { width: 768, height: 1024 },
+  { width: 1024, height: 768 },
+];
 
 /**
  * One pass over every feature at phone size, checking each one is presentable.
@@ -44,6 +58,8 @@ interface Measurement {
   smallTargets: number;
   smallExamples: string[];
   tinyText: number;
+  spilledText: string[];
+  headerButtons: string[];
 }
 
 /**
@@ -63,7 +79,16 @@ test.describe('mobile presentation', () => {
     // 5.9 min run — 1.13x — so an ordinary slow runner would have taken it red,
     // and a 4-worker local run did exactly that by starvation. A budget that
     // close to the measured time reports load, not a defect.
-    test.setTimeout(720_000);
+    //
+    // Raised again on 2026-10-29, for the tablet pass below: 7.5-8.8 min
+    // measured locally with it (5.9 on CI without it), and 2x the slower is
+    // the budget.
+    //
+    // Raised on 2026-11-13, by owner decision, to 2x the measured run as the
+    // route list grows. 9.9 min on `main` (run 43208484077, 2026-11-12); 15.4
+    // min on both of #4267's runs once the finance screens joined; the nine
+    // grants screens add ~5% more, so ~16.2 min, and 2x that is 33.
+    test.setTimeout(1_980_000);
     await page.setViewportSize(PHONE);
     // The fixture user has no permissions by default (`signIn` sets
     // `permissions: []`, overriding TEST_USER's list), so a manager-gated route
@@ -84,6 +109,9 @@ test.describe('mobile presentation', () => {
     const invalidScrollRegions: string[] = [];
     const tapBudgetBusted: string[] = [];
     const textBudgetBusted: string[] = [];
+    const spilled: string[] = [];
+    const headerRows: string[] = [];
+    const tabletFailures: string[] = [];
     const blank: string[] = [];
     const table: string[] = [];
 
@@ -92,6 +120,7 @@ test.describe('mobile presentation', () => {
       // case stays one sign-in for the whole pass.
       granted = await signInForRoute(page, route, granted);
 
+      await page.setViewportSize(PHONE);
       await page.goto(route.path);
       await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
       await page.waitForTimeout(400);
@@ -114,7 +143,11 @@ test.describe('mobile presentation', () => {
         wrongPage.push(`${route.path}: expected text "${route.expectText}" is not on the page`);
       }
 
-      const measure = (): Promise<Measurement> =>
+      const measure = async (): Promise<Measurement> => ({
+        ...(await measureGeometry()),
+        spilledText: await page.evaluate(findSpilledText),
+      });
+      const measureGeometry = (): Promise<Omit<Measurement, 'spilledText'>> =>
         page.evaluate(
           ({ minTap, minFont }) => {
             const doc = document.documentElement;
@@ -223,6 +256,39 @@ test.describe('mobile presentation', () => {
                 return failures.length ? [`${describe(el)}: ${failures.join(', ')}`] : [];
               });
 
+            // The header's buttons, as the page-header-actions rule in index.css
+            // lays them out on a phone: text buttons on one row share it at one
+            // width, and an icon-only button keeps its square. A row of
+            // lopsided buttons, or an icon button stretched across the row
+            // because it was styled by hand without btn-icon / btn-icon-sm, is
+            // reported here. Within 1px, so fractional layout cannot flag a row
+            // that is equal by construction.
+            const headerButtons = [...document.querySelectorAll('.page-header .page-header-actions')]
+              .filter(isVisible)
+              .flatMap((area) => {
+                const children = [...area.children].filter(
+                  (el) => (el.tagName === 'BUTTON' || el.tagName === 'A') && isVisible(el)
+                );
+                const icons = children.filter((el) => el.matches('.btn-icon, .btn-icon-sm'));
+                const text = children.filter((el) => !icons.includes(el));
+                const problems = icons
+                  .filter((el) => el.getBoundingClientRect().width > 48)
+                  .map((el) => `icon button stretched: ${describe(el)}`);
+                const rows = new Map<number, Element[]>();
+                for (const el of text) {
+                  const top = Math.round(el.getBoundingClientRect().top);
+                  const row = [...rows.keys()].find((key) => Math.abs(key - top) <= 2) ?? top;
+                  rows.set(row, [...(rows.get(row) ?? []), el]);
+                }
+                for (const row of rows.values()) {
+                  const widths = row.map((el) => el.getBoundingClientRect().width);
+                  if (Math.max(...widths) - Math.min(...widths) > 1) {
+                    problems.push(`unequal row: ${row.map(describe).join(' | ')}`);
+                  }
+                }
+                return problems;
+              });
+
             return {
               crashed: document.body.innerText.includes('Oops! Something went wrong'),
               scrollWidth: doc.scrollWidth,
@@ -239,6 +305,7 @@ test.describe('mobile presentation', () => {
                 return `${label} ${Math.round(b.width)}x${Math.round(b.height)}`;
               }),
               tinyText: tiny.length,
+              headerButtons,
             };
           },
           { minTap: MIN_TAP, minFont: MIN_FONT_PX }
@@ -252,6 +319,12 @@ test.describe('mobile presentation', () => {
         if (m.crashed) crashed.push(label);
         if (m.overflowExamples.length) {
           overflowed.push(`${label} (page scroll width ${m.scrollWidth}px):\n    ${m.overflowExamples.join('\n    ')}`);
+        }
+        if (m.spilledText.length) {
+          spilled.push(`${label}:\n    ${m.spilledText.slice(0, 6).join('\n    ')}`);
+        }
+        if (m.headerButtons.length) {
+          headerRows.push(`${label}:\n    ${m.headerButtons.join('\n    ')}`);
         }
         if (m.invalidScrollRegions.length) {
           invalidScrollRegions.push(`${label}:\n    ${m.invalidScrollRegions.join('\n    ')}`);
@@ -368,6 +441,53 @@ test.describe('mobile presentation', () => {
           record(`${route.path} [${name}]`, m);
         }
       }
+
+      // The same page, resized rather than reloaded — what rotating a tablet or
+      // dragging a window does — so this costs a layout, not a visit. Reduced
+      // motion settles it at once: growing past `md` slides the side
+      // navigation in over 300ms, and a measurement taken during the slide
+      // reports it hanging off the left edge.
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      for (const size of TABLET_SIZES) {
+        await page.setViewportSize(size);
+        await page.waitForTimeout(250);
+        const at = `${route.path} at ${size.width}x${size.height}`;
+        const tabletSpill = await page.evaluate(findSpilledText);
+        const tabletOverflow = await page.evaluate(() => {
+          const width = document.documentElement.clientWidth;
+          return [...document.body.querySelectorAll('*')]
+            .filter((el) => {
+              if (el.closest('[data-mobile-scroll-region]')) return false;
+              // The shapes inside an icon are judged by the <svg> that holds
+              // them. An <svg> clips its own content by default, so the walk
+              // below would stop at it and blame an icon scrolled out of a
+              // table's card, though the card it scrolls in is on screen.
+              if (el instanceof SVGElement && !(el instanceof SVGSVGElement)) return false;
+              const b = el.getBoundingClientRect();
+              if (!(b.width > 0 && b.height > 0 && b.right > 0 && (b.right > width + 1 || b.left < -1))) return false;
+              // A table wider than its card is fine when the card scrolls and
+              // stays on screen: the overflow is reachable, not lost. What
+              // decides is the nearest ancestor that clips.
+              for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+                if (getComputedStyle(p).overflowX !== 'visible') {
+                  const pb = p.getBoundingClientRect();
+                  return pb.right > width + 1 || pb.left < -1;
+                }
+              }
+              return true;
+            })
+            .slice(0, 4)
+            .map(
+              (el) =>
+                `${el.tagName.toLowerCase()}.${[...el.classList].slice(0, 2).join('.')} "${(el as HTMLElement).innerText?.trim().slice(0, 40) ?? ''}"`
+            );
+        });
+        if (tabletSpill.length)
+          tabletFailures.push(`${at} — text outside its box:\n    ${tabletSpill.slice(0, 6).join('\n    ')}`);
+        if (tabletOverflow.length)
+          tabletFailures.push(`${at} — past the screen edge:\n    ${tabletOverflow.join('\n    ')}`);
+      }
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
     }
 
     console.log('\nMobile presentation — 390x844\n' + table.join('\n'));
@@ -382,6 +502,14 @@ test.describe('mobile presentation', () => {
     expect(unchangedStates, 'driven states that rendered content already measured').toEqual([]);
     expect(missingStates, 'declared states whose selector matched nothing').toEqual([]);
     expect(overflowed, 'routes with visible elements extending outside the viewport').toEqual([]);
+    // Text drawn outside the element holding it, which the overflow check above
+    // cannot see while the element itself stays on screen: a label run across
+    // its tile's chevron, a title spilling out of a squeezed header column.
+    expect(spilled, 'routes with text drawn outside its own box at phone width').toEqual([]);
+    expect(headerRows, 'page headers whose phone buttons are unequal on a row, or an icon button stretched').toEqual(
+      []
+    );
+    expect(tabletFailures, 'routes that spill or overflow at tablet width').toEqual([]);
     expect(invalidScrollRegions, 'intentional scroll regions that break the accessibility contract').toEqual([]);
     expect(tapBudgetBusted, `routes that grew tap targets under ${MIN_TAP}px`).toEqual([]);
     expect(textBudgetBusted, `routes that grew text under ${MIN_FONT_PX}px`).toEqual([]);

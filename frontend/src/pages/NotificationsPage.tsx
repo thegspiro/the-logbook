@@ -26,6 +26,7 @@ import {
   PackageCheck,
   Pencil,
   Trash2,
+  Stethoscope,
 } from 'lucide-react';
 import { Breadcrumbs, SkeletonPage } from '../components/ux';
 import { useAuthStore } from '../stores/authStore';
@@ -42,6 +43,8 @@ import { groupNotificationsIntoStacks, isStackable, stackUnreadCount } from '../
 import { useTablist } from '../hooks/useTablist';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { blankToNull } from '../utils/formValues';
+import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 
 // Maps trigger enum values to display-friendly icons and colors
 const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
@@ -85,6 +88,11 @@ const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; la
     color: 'text-amber-700 dark:text-amber-400',
     label: 'Equipment Request Update',
   },
+  medical_screening_expiry: {
+    icon: <Stethoscope className="h-5 w-5" />,
+    color: 'text-rose-700 dark:text-rose-400',
+    label: 'Medical Screening Expiry',
+  },
 };
 
 // Dropdown options for the create modal.
@@ -96,6 +104,17 @@ const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; la
 // (ENFORCED_TRIGGERS in models/notification.py) and reports `enforced` on
 // every rule, so rules already created for those triggers are still listed,
 // labelled for what they are.
+type RuleField = 'name' | 'trigger' | 'description';
+const RULE_FIELDS: FieldSpecs<RuleField> = {
+  name: { id: 'rule-name', label: 'Rule Name' },
+  // The category is derived from the trigger, so a complaint about it is one
+  // about the trigger chosen.
+  trigger: { id: 'rule-trigger', label: 'Trigger Event', apiKeys: ['category'] },
+  description: { id: 'rule-description', label: 'Description' },
+};
+// NotificationRuleCreate.name is max_length=255; description is unbounded.
+const RULE_NAME_MAX_LENGTH = 255;
+
 const TRIGGER_OPTIONS = [
   { label: 'Event Reminder', value: 'event_reminder', effect: 'Sends reminders before scheduled events.' },
   {
@@ -115,6 +134,12 @@ const TRIGGER_OPTIONS = [
     effect:
       'Tells a member when the quartermaster approves, declines or issues their equipment request, with any note left for them. Disabling it stops the notice; the request’s status still shows on My Equipment.',
   },
+  {
+    label: 'Medical Screening Expiry',
+    value: 'medical_screening_expiry',
+    effect:
+      'Emails a member 90, 60, 30 and 7 days before one of their medical screenings falls due, when the Medical Screening module is on. On unless a rule for it is disabled; the Compliance tab still shows what is due.',
+  },
 ];
 
 // Category mapping from trigger to category
@@ -127,6 +152,7 @@ const TRIGGER_CATEGORY_MAP: Record<string, string> = {
   form_submitted: 'general',
   suggestion_submitted: 'general',
   equipment_request_update: 'general',
+  medical_screening_expiry: 'general',
 };
 
 function getTriggerDisplay(trigger: string) {
@@ -217,6 +243,11 @@ const NotificationsPage: React.FC = () => {
   // The channel a fetch should ask for, resolved when the request is made
   // rather than when its caller was rendered.
   const logChannelFilterRef = useRef<'all' | 'email' | 'in_app'>('all');
+  // The failed filter and its scope, read the same way and for the same reason.
+  const logFailedFilterRef = useRef<{ failed: boolean; scope: NotificationLogScope }>({
+    failed: false,
+    scope: NotificationLogScope.MINE,
+  });
 
   // UI states
   const [loading, setLoading] = useState(true);
@@ -275,6 +306,16 @@ const NotificationsPage: React.FC = () => {
   // same footing as the inbox. The organization-wide view still exists behind
   // `scope=organization` + `notifications.manage`, for auditing deliverability.
   const requestedTab = searchParams.get('tab');
+  // The operations dashboard's Notification failures tile links here as
+  // ?status=failed. It counts every recipient's deliveries that recorded an
+  // error, so for a `notifications.manage` holder — the only caller who is
+  // shown that tile — the log is asked for the organization-wide view with
+  // the server's failed filter, which applies the tile's own predicate. Anyone
+  // else following such a link sees their own failed deliveries rather than a
+  // 403. Derived from the URL like the tab, so Back and the clear control
+  // cannot leave the list and the address bar disagreeing.
+  const failedOnly = searchParams.get('status') === 'failed';
+  const logScope = failedOnly && canManage ? NotificationLogScope.ORGANIZATION : NotificationLogScope.MINE;
   const tabIsAvailable: Record<'inbox' | 'rules' | 'templates' | 'log', boolean> = {
     inbox: true,
     rules: canView,
@@ -287,8 +328,16 @@ const NotificationsPage: React.FC = () => {
   // for a member before its button was.
   const isTabName = (value: string | null): value is keyof typeof tabIsAvailable =>
     value === 'inbox' || value === 'rules' || value === 'templates' || value === 'log';
+  // The failed filter belongs to the Send Log, so a link carrying it alone
+  // opens that tab rather than the default one.
   const activeTab: 'inbox' | 'rules' | 'templates' | 'log' =
-    isTabName(requestedTab) && tabIsAvailable[requestedTab] ? requestedTab : canView ? 'rules' : 'inbox';
+    isTabName(requestedTab) && tabIsAvailable[requestedTab]
+      ? requestedTab
+      : failedOnly
+        ? 'log'
+        : canView
+          ? 'rules'
+          : 'inbox';
   const [logChannelFilter, setLogChannelFilter] = useState<'all' | 'email' | 'in_app'>('all');
 
   // Create form states
@@ -296,7 +345,7 @@ const NotificationsPage: React.FC = () => {
   const [createTrigger, setCreateTrigger] = useState('event_reminder');
   const [createDescription, setCreateDescription] = useState('');
   const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const ruleErrors = useFieldErrors(RULE_FIELDS);
 
   const loadCategoryUnreadCounts = useCallback(async () => {
     try {
@@ -349,13 +398,15 @@ const NotificationsPage: React.FC = () => {
     // during that POST reloaded the *previous* channel — and, since the
     // reload is newer, that stale answer won.
     const channel = logChannelFilterRef.current;
+    const { failed, scope } = logFailedFilterRef.current;
     const requestId = ++logsRequestRef.current;
     if (append) setLoadingMoreLogs(true);
     else setLoadingLogs(true);
     setLogsError(null);
     try {
       const data = await notificationsService.getLogs({
-        scope: NotificationLogScope.MINE,
+        scope,
+        ...(failed ? { failed } : {}),
         ...(channel === 'all' ? {} : { channel }),
         ...(cursor ? { cursor } : {}),
         limit: LOG_PAGE_SIZE,
@@ -393,8 +444,9 @@ const NotificationsPage: React.FC = () => {
 
   useEffect(() => {
     logChannelFilterRef.current = logChannelFilter;
+    logFailedFilterRef.current = { failed: failedOnly, scope: logScope };
     void loadLogPage({ append: false });
-  }, [logChannelFilter, loadLogPage]);
+  }, [logChannelFilter, failedOnly, logScope, loadLogPage]);
 
   // Fetch admin data on mount (only if user has permission)
   useEffect(() => {
@@ -450,13 +502,13 @@ const NotificationsPage: React.FC = () => {
     setCreateName(rule.name);
     setCreateTrigger(rule.trigger);
     setCreateDescription(rule.description ?? '');
-    setCreateError(null);
+    ruleErrors.clear();
     setShowCreateModal(true);
   };
 
   const closeRuleDialog = () => {
     setShowCreateModal(false);
-    setCreateError(null);
+    ruleErrors.clear();
     // An edit's values must not reappear in the next Create; a create's draft
     // is kept, as it always was, so closing by mistake loses nothing.
     if (editingRule) {
@@ -468,12 +520,17 @@ const NotificationsPage: React.FC = () => {
   };
 
   const handleSaveRule = async () => {
-    if (!createName.trim()) {
-      setCreateError('Enter a rule name.');
+    // Named under the field it is about, not in a banner above the dialog
+    // (forms review F-3).
+    const problems: FieldErrors<RuleField> = {};
+    if (!createName.trim()) problems.name = 'Enter a rule name.';
+    ruleErrors.setFormError(null);
+    ruleErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      ruleErrors.focusFirst(problems);
       return;
     }
     setCreating(true);
-    setCreateError(null);
     try {
       const category = TRIGGER_CATEGORY_MAP[createTrigger] || 'general';
       if (editingRule) {
@@ -516,8 +573,9 @@ const NotificationsPage: React.FC = () => {
       setCreateDescription('');
       setShowCreateModal(false);
     } catch (err: unknown) {
-      const message = getErrorMessage(err, editingRule ? 'Failed to save the rule' : 'Failed to create rule');
-      setCreateError(message);
+      ruleErrors.focusFirst(
+        ruleErrors.setFromApiError(err, editingRule ? 'Failed to save the rule' : 'Failed to create rule')
+      );
     } finally {
       setCreating(false);
     }
@@ -718,7 +776,12 @@ const NotificationsPage: React.FC = () => {
     }
   };
 
+  // Leaving the Send Log drops its failed filter; reselecting it keeps it.
   const handleTabChange = (tab: typeof activeTab) => {
+    if (tab === 'log' && failedOnly) {
+      setSearchParams({ tab, status: 'failed' });
+      return;
+    }
     setSearchParams({ tab });
   };
 
@@ -739,8 +802,8 @@ const NotificationsPage: React.FC = () => {
         <Breadcrumbs />
 
         {/* Page Header */}
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center space-x-3">
+        <div className="page-header mb-8 gap-3 sm:items-center">
+          <div className="page-header-title flex items-center space-x-3">
             <div className="shrink-0 rounded-lg bg-orange-600 p-2">
               <Bell className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
@@ -750,7 +813,9 @@ const NotificationsPage: React.FC = () => {
                 {activeTab === 'inbox'
                   ? 'Your in-app notifications. Pinned ones stay at the top.'
                   : activeTab === 'log'
-                    ? 'Every notification sent to you, across all channels, with delivery status'
+                    ? logScope === NotificationLogScope.ORGANIZATION
+                      ? 'Notifications sent to anyone in the department, with delivery status'
+                      : 'Every notification sent to you, across all channels, with delivery status'
                     : 'Manage automated notification rules and email templates'}
               </p>
             </div>
@@ -822,7 +887,7 @@ const NotificationsPage: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'inbox'}
             className={`touch:min-h-[44px] flex items-center space-x-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'inbox' ? 'bg-orange-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+              activeTab === 'inbox' ? 'bg-orange-800 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
             <span>My Notifications</span>
@@ -1170,6 +1235,25 @@ const NotificationsPage: React.FC = () => {
                 <p className="flex-1 text-sm text-red-700 dark:text-red-300">{logsError}</p>
               </div>
             )}
+            {failedOnly && (
+              <div
+                className="alert-warning mb-4 flex flex-wrap items-center justify-between gap-2 text-sm"
+                role="status"
+              >
+                <span>
+                  {logScope === NotificationLogScope.ORGANIZATION
+                    ? 'Showing only failed deliveries, for every member of the department.'
+                    : 'Showing only your failed deliveries.'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSearchParams({ tab: 'log' }, { replace: true })}
+                  className="touch-target-phone font-medium underline"
+                >
+                  Show all deliveries
+                </button>
+              </div>
+            )}
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div className="bg-theme-surface-secondary flex items-center space-x-1 rounded-lg p-1">
                 {(
@@ -1193,7 +1277,9 @@ const NotificationsPage: React.FC = () => {
                   </button>
                 ))}
               </div>
-              {logs.some((l) => !l.read) && (
+              {/* "Mark all as read" clears the caller's whole log, which is
+                  not the set on screen under the failed filter. */}
+              {!failedOnly && logs.some((l) => !l.read) && (
                 <button
                   onClick={() => {
                     void handleMarkAllRead();
@@ -1222,9 +1308,11 @@ const NotificationsPage: React.FC = () => {
                 <Clock className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
                 <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Notifications Found</h3>
                 <p className="text-theme-text-secondary mb-6">
-                  {logChannelFilter === 'all'
-                    ? 'Nothing has been sent to you yet. Each email and in-app notification you receive will be listed here with its delivery status.'
-                    : `No ${logChannelFilter === 'email' ? 'email' : 'in-app'} notifications sent to you.`}
+                  {failedOnly
+                    ? 'No failed deliveries.'
+                    : logChannelFilter === 'all'
+                      ? 'Nothing has been sent to you yet. Each email and in-app notification you receive will be listed here with its delivery status.'
+                      : `No ${logChannelFilter === 'email' ? 'email' : 'in-app'} notifications sent to you.`}
                 </p>
               </div>
             ) : (
@@ -1341,74 +1429,89 @@ const NotificationsPage: React.FC = () => {
                       <X className="h-5 w-5" />
                     </button>
                   </div>
-                  {createError && (
+                  {ruleErrors.formError && (
                     <div
                       role="alert"
                       className="mb-4 flex items-start space-x-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3"
                     >
                       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-700 dark:text-red-400" />
-                      <p className="text-sm text-red-700 dark:text-red-300">{createError}</p>
+                      <p className={`text-sm ${FIELD_ERROR_CLASS}`}>{ruleErrors.formError}</p>
                     </div>
                   )}
                   <div className="space-y-4">
-                    <div>
-                      <label htmlFor="rule-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                        Rule Name <span aria-hidden="true">*</span>
-                      </label>
-                      <input
-                        id="rule-name"
-                        type="text"
-                        value={createName}
-                        onChange={(e) => setCreateName(e.target.value)}
-                        className="form-input"
-                        placeholder="e.g., Monthly Report Reminder"
-                        required
-                        aria-required="true"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="rule-trigger"
-                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                      >
-                        Trigger Event
-                      </label>
-                      <select
-                        id="rule-trigger"
-                        value={createTrigger}
-                        onChange={(e) => setCreateTrigger(e.target.value)}
-                        className="form-input"
-                      >
-                        {TRIGGER_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                        {/* An existing rule on a trigger nothing reads keeps its
-                            value selectable, so opening it to rename does not
-                            silently move it to the first trigger in the list. */}
-                        {editingRule && !TRIGGER_OPTIONS.some((opt) => opt.value === editingRule.trigger) && (
-                          <option value={editingRule.trigger}>
-                            {getTriggerDisplay(editingRule.trigger).label} (not enforced)
-                          </option>
-                        )}
-                      </select>
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="rule-description"
-                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                      >
-                        Description
-                      </label>
-                      <textarea
-                        id="rule-description"
-                        rows={2}
-                        value={createDescription}
-                        onChange={(e) => setCreateDescription(e.target.value)}
-                        className="form-input"
-                      />
-                    </div>
+                    <FormField
+                      id={RULE_FIELDS.name.id}
+                      label="Rule Name"
+                      required
+                      error={ruleErrors.errors.name}
+                      labelClassName="text-theme-text-secondary mb-1 block text-sm font-medium"
+                    >
+                      {(field) => (
+                        <input
+                          {...field}
+                          type="text"
+                          maxLength={RULE_NAME_MAX_LENGTH}
+                          value={createName}
+                          onChange={(e) => {
+                            setCreateName(e.target.value);
+                            ruleErrors.setError('name', null);
+                          }}
+                          className="form-input"
+                          placeholder="e.g., Monthly Report Reminder"
+                        />
+                      )}
+                    </FormField>
+                    <FormField
+                      id={RULE_FIELDS.trigger.id}
+                      label="Trigger Event"
+                      error={ruleErrors.errors.trigger}
+                      labelClassName="text-theme-text-secondary mb-1 block text-sm font-medium"
+                    >
+                      {(field) => (
+                        <select
+                          {...field}
+                          value={createTrigger}
+                          onChange={(e) => {
+                            setCreateTrigger(e.target.value);
+                            ruleErrors.setError('trigger', null);
+                          }}
+                          className="form-input"
+                        >
+                          {TRIGGER_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                          {/* An existing rule on a trigger nothing reads keeps its
+                              value selectable, so opening it to rename does not
+                              silently move it to the first trigger in the list. */}
+                          {editingRule && !TRIGGER_OPTIONS.some((opt) => opt.value === editingRule.trigger) && (
+                            <option value={editingRule.trigger}>
+                              {getTriggerDisplay(editingRule.trigger).label} (not enforced)
+                            </option>
+                          )}
+                        </select>
+                      )}
+                    </FormField>
+                    <FormField
+                      id={RULE_FIELDS.description.id}
+                      label="Description"
+                      error={ruleErrors.errors.description}
+                      labelClassName="text-theme-text-secondary mb-1 block text-sm font-medium"
+                    >
+                      {(field) => (
+                        <textarea
+                          {...field}
+                          rows={2}
+                          value={createDescription}
+                          onChange={(e) => {
+                            setCreateDescription(e.target.value);
+                            ruleErrors.setError('description', null);
+                          }}
+                          className="form-input"
+                        />
+                      )}
+                    </FormField>
                     {editEffect && (
                       <div role="status" className="alert-warning flex items-start space-x-2 p-3">
                         <AlertTriangle

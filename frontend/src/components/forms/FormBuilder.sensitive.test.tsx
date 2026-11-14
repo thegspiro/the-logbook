@@ -37,6 +37,7 @@ const stored = (overrides: Partial<FormField> & Pick<FormField, 'id' | 'label' |
 
 const fields: FormField[] = [
   stored({ id: 'name', label: 'Full name', field_type: 'text' }),
+  stored({ id: 'street', label: 'Street', field_type: 'text', sort_order: 2, applicant_field: 'address_street' }),
   stored({ id: 'history', label: 'Criminal history', field_type: 'textarea', sort_order: 1, is_sensitive: true }),
 ];
 
@@ -103,5 +104,48 @@ describe('FormBuilder sensitive fields', () => {
       'form-1',
       expect.objectContaining({ label: 'Criminal history (copy)', is_sensitive: true })
     );
+  });
+
+  it('badges a pre-filled field with the applicant field it reads', async () => {
+    renderWithRouter(<FormBuilder formId="form-1" />);
+
+    expect(await screen.findByText('Pre-fills: Street address')).toBeInTheDocument();
+  });
+
+  it('keeps the pre-fill through a rename, and sends null when it is removed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<FormBuilder formId="form-1" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit Street' }));
+    let dialog = editorDialog();
+    expect(within(dialog).getByLabelText(/Pre-fill from applicant/)).toHaveValue('address_street');
+    await user.click(within(dialog).getByRole('button', { name: 'Update Field' }));
+    expect(updateField).toHaveBeenLastCalledWith(
+      'form-1',
+      'street',
+      expect.objectContaining({ applicant_field: 'address_street' })
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Edit Street' }));
+    dialog = editorDialog();
+    await user.selectOptions(within(dialog).getByLabelText(/Pre-fill from applicant/), '');
+    await user.click(within(dialog).getByRole('button', { name: 'Update Field' }));
+    expect(updateField).toHaveBeenLastCalledWith(
+      'form-1',
+      'street',
+      expect.objectContaining({ applicant_field: null })
+    );
+  });
+
+  it('will not let one field both pre-fill and be sensitive', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<FormBuilder formId="form-1" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit Street' }));
+    expect(within(editorDialog()).getByRole('checkbox', { name: 'Sensitive' })).toBeDisabled();
+    await user.click(within(editorDialog()).getByRole('button', { name: 'Cancel' }));
+
+    await user.click(await screen.findByRole('button', { name: 'Edit Criminal history' }));
+    expect(within(editorDialog()).getByLabelText(/Pre-fill from applicant/)).toBeDisabled();
   });
 });

@@ -38,6 +38,7 @@ from reportlab.platypus import (
 )
 
 from app.utils.election_pdf_style import (
+    BOTTOM_MARGIN,
     INK,
     MUTED,
     SIDE_MARGIN,
@@ -52,6 +53,7 @@ from app.utils.election_pdf_style import (
     ruled_table,
     section,
 )
+from app.utils.pdf_fonts import BODY_FONT, BOLD_FONT
 
 _VOTING_METHOD_LABELS = {
     "simple_majority": "Simple majority (one choice per position)",
@@ -200,9 +202,11 @@ def render_pre_meeting_package_pdf(
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
+        # The canvas otherwise declares Helvetica, never embedded, on every page.
+        initialFontName=BODY_FONT,
         pagesize=letter,
         topMargin=VERTICAL_MARGIN,
-        bottomMargin=VERTICAL_MARGIN,
+        bottomMargin=BOTTOM_MARGIN,
         leftMargin=SIDE_MARGIN,
         rightMargin=SIDE_MARGIN,
         title="Pre-Meeting Package",
@@ -226,7 +230,7 @@ def render_pre_meeting_package_pdf(
     styles["subhead"] = ParagraphStyle(
         "PkgSubhead",
         parent=styles["panel"],
-        fontName="Helvetica-Bold",
+        fontName=BOLD_FONT,
         fontSize=11,
         leading=14,
         leftIndent=8,

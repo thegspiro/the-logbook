@@ -94,6 +94,24 @@ class IntegrationType(str, enum.Enum):
     EVENT_REQUEST = "event_request"
 
 
+# Applicant-record fields a follow-up form may pre-fill and write back, in the
+# order the form builder offers them. The names are ProspectiveMember columns.
+APPLICANT_FIELDS: tuple[str, ...] = (
+    "first_name",
+    "last_name",
+    "email",
+    "phone",
+    "mobile",
+    "date_of_birth",
+    "address_street",
+    "address_city",
+    "address_state",
+    "address_zip",
+    "interest_reason",
+    "referral_source",
+)
+
+
 class Form(Base):
     """
     Form model
@@ -257,6 +275,10 @@ class FormField(Base):
     width: Mapped[Optional[str]] = mapped_column(
         String(20), default="full"
     )  # "full", "half", "third"
+
+    # The applicant-record field a follow-up form pre-fills this field from,
+    # and writes a changed answer back to. One of APPLICANT_FIELDS, or NULL.
+    applicant_field: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
 
     # Answers to a sensitive field are stored encrypted in
     # FormSubmission.sensitive_data, never in the plain `data` JSON, and are

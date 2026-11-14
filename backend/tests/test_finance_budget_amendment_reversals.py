@@ -3,8 +3,11 @@
 Owner decision, 2026-10-09: a mistaken amendment is corrected by a
 **reversing entry**, never by editing or deleting it.
 
-* the reversal is a new amendment row for the whole amount, negated, naming
-  the amendment it reverses, with its own reason, approval and approval date;
+* the reversal is a new amendment row for the whole amount, negated -- or,
+  since the owner's decision of 2026-11-01, any part of it -- naming the
+  amendment it reverses, with its own reason, approval and approval date;
+* a rejected reversal keeps naming that amendment for display
+  (``reversesAmendmentRef``), though its link is cleared;
 * it is entered pending, like any amendment, and lowers ``amount_budgeted``
   only once a second officer confirms it; the original budget (current less
   every confirmed row's amount) stays where it was;
@@ -77,8 +80,17 @@ class TestReversalSchema:
         with pytest.raises(ValidationError):
             BudgetAmendmentReverse.model_validate(body)
 
-    def test_the_body_carries_no_amount(self):
-        assert "amount" not in BudgetAmendmentReverse.model_fields
+    def test_the_amount_is_optional_and_means_the_whole_amendment(self):
+        # Owner decision 2026-11-01: partial reversals. Left out, the whole
+        # amendment is reversed, as before.
+        assert BudgetAmendmentReverse.model_validate(_REVERSAL).amount is None
+        body = BudgetAmendmentReverse.model_validate({**_REVERSAL, "amount": "2250"})
+        assert body.amount == Decimal("2250")
+
+    @pytest.mark.parametrize("amount", ["-250.00", "0", "0.001"])
+    def test_a_reversal_amount_must_be_a_positive_cent_figure(self, amount):
+        with pytest.raises(ValidationError):
+            BudgetAmendmentReverse.model_validate({**_REVERSAL, "amount": amount})
 
     @pytest.mark.parametrize("amount", ["-250.00", "0"])
     def test_creating_an_amendment_still_refuses_a_non_positive_amount(self, amount):
@@ -570,3 +582,192 @@ class TestListShowsTheLink:
             again = await _reverse(client, line, orphan.id)
         assert rows[orphan.id]["isReversal"] is True
         assert again.status_code == 400
+
+
+# ============================================
+# Partial reversals (owner decision, 2026-11-01)
+# ============================================
+
+
+@pytest.mark.integration
+class TestPartialReversal:
+    async def test_corrects_the_amount_in_one_entry(self, db_session, dept, audit):
+        """$2,500 entered for $250: one reversal of $2,250, not two entries."""
+        line = dept["lines"]["active"]
+        typo = dept["typo"]["active"]
+        async with _client(db_session, dept["treasurer"]) as client:
+            entered = await _reverse(client, line, typo, amount="2250.00")
+        assert entered.status_code == 201, entered.text
+        reversal = entered.json()["amendment"]
+        assert Decimal(reversal["amount"]) == Decimal("-2250.00")
+        assert reversal["reversesAmendmentId"] == typo
+        confirmed = await _decide(
+            db_session, dept["reviewer"], line, reversal["id"], "confirm"
+        )
+        assert confirmed.status_code == 200, confirmed.text
+        budget = confirmed.json()["budget"]
+        assert Decimal(budget["amountBudgeted"]) == Decimal("1300.00")
+        assert Decimal(budget["originalAmount"]) == Decimal("800.00")
+        assert Decimal(budget["amendmentsTotal"]) == Decimal("500.00")
+        assert await _amount(db_session, line) == Decimal("1300.00")
+        # The original keeps its amount; the list says how much was taken back.
+        async with _client(db_session, dept["viewer"]) as client:
+            rows = {
+                r["id"]: r
+                for r in (
+                    await client.get(f"/finance/budgets/{line}/amendments")
+                ).json()
+            }
+        assert Decimal(rows[typo]["amount"]) == Decimal("2500.00")
+        assert Decimal(rows[typo]["reversedAmount"]) == Decimal("2250.00")
+        assert rows[typo]["reversedByAmendmentId"] == reversal["id"]
+        audited = audit.await_args_list[0].kwargs["event_data"]
+        assert audited["amount"] == "-2250.00"
+
+    async def test_left_out_the_amount_is_the_whole_amendment(
+        self, db_session, dept, audit
+    ):
+        line = dept["lines"]["active"]
+        typo = dept["typo"]["active"]
+        async with _client(db_session, dept["treasurer"]) as client:
+            entered = await _reverse(client, line, typo)
+            rows = {
+                r["id"]: r
+                for r in (
+                    await client.get(f"/finance/budgets/{line}/amendments")
+                ).json()
+            }
+        assert Decimal(entered.json()["amendment"]["amount"]) == Decimal("-2500.00")
+        assert Decimal(rows[typo]["reversedAmount"]) == Decimal("2500.00")
+
+    async def test_more_than_the_amendment_is_refused(self, db_session, dept, audit):
+        line = dept["lines"]["active"]
+        async with _client(db_session, dept["treasurer"]) as client:
+            resp = await _reverse(
+                client, line, dept["typo"]["active"], amount="2500.01"
+            )
+        assert resp.status_code == 400
+        assert "at most" in resp.json()["detail"]
+        assert len(await _rows(db_session, line)) == 2
+
+    async def test_a_partly_reversed_amendment_is_not_reversed_again(
+        self, db_session, dept, audit
+    ):
+        line = dept["lines"]["active"]
+        typo = dept["typo"]["active"]
+        async with _client(db_session, dept["treasurer"]) as client:
+            entered = await _reverse(client, line, typo, amount="100.00")
+        assert Decimal(entered.json()["amendment"]["amount"]) == Decimal("-100.00")
+        await _decide(
+            db_session,
+            dept["reviewer"],
+            line,
+            entered.json()["amendment"]["id"],
+            "confirm",
+        )
+        async with _client(db_session, dept["treasurer"]) as client:
+            again = await _reverse(client, line, typo, amount="100.00")
+        assert again.status_code == 409
+
+    async def test_the_spend_check_uses_the_partial_amount(
+        self, db_session, dept, audit
+    ):
+        """3,550 budgeted, 100 spent: taking back 3,450 is allowed, 3,451 not."""
+        line = dept["lines"]["active"]
+        first = BudgetAmendment(
+            organization_id=dept["org_id"],
+            budget_id=line,
+            amount=Decimal("5000.00"),
+            reason="r",
+            approved_by="Chief",
+            approved_on=date(2026, 10, 8),
+            status=BudgetAmendmentStatus.CONFIRMED,
+        )
+        db_session.add(first)
+        await db_session.flush()
+        async with _client(db_session, dept["treasurer"]) as client:
+            short = await _reverse(client, line, first.id, amount="3450.01")
+            exact = await _reverse(client, line, first.id, amount="3450.00")
+        assert short.status_code == 409
+        assert exact.status_code == 201, exact.text
+
+    async def test_a_locked_year_still_refuses_a_partial_reversal(
+        self, db_session, dept, audit
+    ):
+        async with _client(db_session, dept["treasurer"]) as client:
+            resp = await _reverse(
+                client,
+                dept["lines"]["locked"],
+                dept["typo"]["locked"],
+                amount="2250.00",
+            )
+        assert resp.status_code == 400
+        assert "locked" in resp.json()["detail"]
+
+
+# ============================================
+# A rejected reversal keeps naming its amendment (owner decision, 2026-11-01)
+# ============================================
+
+
+@pytest.mark.integration
+class TestRejectedReversalKeepsItsReference:
+    async def test_the_reference_survives_the_rejection(self, db_session, dept, audit):
+        line = dept["lines"]["active"]
+        typo = dept["typo"]["active"]
+        async with _client(db_session, dept["treasurer"]) as client:
+            reversal_id = (await _reverse(client, line, typo)).json()["amendment"]["id"]
+        rejected = await _decide(
+            db_session,
+            dept["reviewer"],
+            line,
+            reversal_id,
+            "reject",
+            {"note": "Wrong line"},
+        )
+        assert rejected.status_code == 200, rejected.text
+        row = rejected.json()["amendment"]
+        # The link that holds the unique key is freed...
+        assert row["reversesAmendmentId"] is None
+        # ...and the display reference still names the amendment.
+        assert row["reversesAmendmentRef"] == typo
+        async with _client(db_session, dept["owner"]) as client:
+            rows = {
+                r["id"]: r
+                for r in (
+                    await client.get(f"/finance/budgets/{line}/amendments")
+                ).json()
+            }
+        assert rows[reversal_id]["reversesAmendmentRef"] == typo
+        assert rows[typo]["reversedByAmendmentId"] is None
+        # The audit event takes the pair from the reference.
+        rejected_event = audit.await_args_list[-1].kwargs["event_data"]
+        assert rejected_event["reversed_amendment_id"] == typo
+
+    async def test_the_reference_does_not_hold_the_amendment(
+        self, db_session, dept, audit
+    ):
+        line = dept["lines"]["active"]
+        typo = dept["typo"]["active"]
+        async with _client(db_session, dept["treasurer"]) as client:
+            first = (await _reverse(client, line, typo)).json()["amendment"]["id"]
+        await _decide(
+            db_session, dept["reviewer"], line, first, "reject", {"note": "No"}
+        )
+        entered, _ = await _reverse_and_confirm(db_session, dept, line, typo)
+        second = entered.json()["amendment"]["id"]
+        rows = {r.id: r for r in await _rows(db_session, line)}
+        assert rows[first].reverses_amendment_ref == typo
+        assert rows[second].reverses_amendment_ref == typo
+        assert rows[second].reverses_amendment_id == typo
+
+    async def test_an_ordinary_amendment_has_no_reference(
+        self, db_session, dept, audit
+    ):
+        async with _client(db_session, dept["viewer"]) as client:
+            rows = (
+                await client.get(
+                    f"/finance/budgets/{dept['lines']['active']}/amendments"
+                )
+            ).json()
+        assert all(r["reversesAmendmentRef"] is None for r in rows)

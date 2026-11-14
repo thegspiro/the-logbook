@@ -27,14 +27,18 @@ from app.models.event import Event
 from app.models.training import TrainingApproval, TrainingSession
 from app.models.user import User
 from app.schemas.training_session import (
+    MandatoryTiersRequest,
+    MandatoryTiersResponse,
     RecurringTrainingSessionCreate,
     TrainingApprovalRequest,
     TrainingApprovalResponse,
     TrainingApprovalSummary,
     TrainingSessionAttach,
+    TrainingSessionAttendanceRequirements,
     TrainingSessionCreate,
     TrainingSessionLinkageUpdate,
     TrainingSessionResponse,
+    UnmappedRequirementResponse,
 )
 from app.services.training_session_service import (
     TRAINING_DETAILS_EXIST,
@@ -61,7 +65,9 @@ def _session_error(error: str) -> HTTPException:
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
 
-def _session_response(ts: TrainingSession) -> TrainingSessionResponse:
+def _session_response(
+    ts: TrainingSession, attendance_requirement_ids: Optional[list[str]] = None
+) -> TrainingSessionResponse:
     """Build the response schema from a TrainingSession row.
 
     One shared constructor so every endpoint carries the same fields — the
@@ -78,6 +84,7 @@ def _session_response(ts: TrainingSession) -> TrainingSessionResponse:
         program_id=ts.program_id,
         phase_id=ts.phase_id,
         requirement_id=ts.requirement_id,
+        attendance_requirement_ids=attendance_requirement_ids or [],
         course_name=ts.course_name,
         course_code=ts.course_code,
         training_type=ts.training_type.value,
@@ -101,6 +108,13 @@ def _session_response(ts: TrainingSession) -> TrainingSessionResponse:
         updated_at=ts.updated_at,
         created_by=ts.created_by,
     )
+
+
+async def _session_payload(
+    service: TrainingSessionService, ts: TrainingSession
+) -> TrainingSessionResponse:
+    links = await service.attendance_requirement_ids([str(ts.id)])
+    return _session_response(ts, links.get(str(ts.id)))
 
 
 @router.post(
@@ -149,7 +163,7 @@ async def create_training_session(
         username=current_user.username,
     )
 
-    return _session_response(training_session)
+    return await _session_payload(service, training_session)
 
 
 @router.post(
@@ -198,7 +212,10 @@ async def create_recurring_training_session(
         username=current_user.username,
     )
 
-    return [_session_response(ts) for ts in training_sessions]
+    links = await service.attendance_requirement_ids(
+        [str(ts.id) for ts in training_sessions]
+    )
+    return [_session_response(ts, links.get(str(ts.id))) for ts in training_sessions]
 
 
 @router.get("/by-event/{event_id}", response_model=Optional[TrainingSessionResponse])
@@ -232,7 +249,7 @@ async def get_training_session_by_event(
     if not training_session:
         return None
 
-    return _session_response(training_session)
+    return await _session_payload(service, training_session)
 
 
 @router.post(
@@ -284,7 +301,46 @@ async def attach_training_details(
         username=current_user.username,
     )
 
-    return _session_response(training_session)
+    return await _session_payload(service, training_session)
+
+
+@router.post("/mandatory-tiers", response_model=MandatoryTiersResponse)
+async def get_mandatory_tiers(
+    body: MandatoryTiersRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("events.manage", "training.manage")
+    ),
+):
+    """
+    Who an event counting toward these attendance requirements is mandatory for
+
+    The training-event form's pre-fill for "Mandatory for": the membership
+    tiers whose members the requirements grade, "All members" when one
+    applies to everyone, and a note for each requirement no tier stands for.
+    Reads only; a POST because the requirement list is a body.
+
+    **Authentication required**
+    **Requires permission: events.manage or training.manage**
+    """
+    tiers, error = await TrainingSessionService(db).mandatory_tiers(
+        body.requirement_ids, current_user.organization_id
+    )
+    if error or tiers is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
+    return MandatoryTiersResponse(
+        everyone=tiers.everyone,
+        tier_ids=tiers.tier_ids,
+        unmapped=[
+            UnmappedRequirementResponse(
+                requirement_id=u.requirement_id, name=u.name, reason=u.reason
+            )
+            for u in tiers.unmapped
+        ],
+    )
 
 
 @router.get(
@@ -364,7 +420,54 @@ async def update_training_session_linkage(
         username=current_user.username,
     )
 
-    return _session_response(training_session)
+    return await _session_payload(service, training_session)
+
+
+@router.put(
+    "/{training_session_id}/attendance-requirements",
+    response_model=TrainingSessionResponse,
+)
+async def set_session_attendance_requirements(
+    training_session_id: UUID,
+    body: TrainingSessionAttendanceRequirements,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """
+    Set the attendance requirements a training session counts toward
+
+    Replaces the session's whole set; an empty list makes it optional. Allowed
+    whether or not attendance is finalized, since the link changes only how
+    the session is graded, never a record it wrote. Every id must name a
+    session-attendance requirement in the caller's organization.
+
+    **Authentication required**
+    **Requires permission: events.manage**
+    """
+    service = TrainingSessionService(db)
+    training_session, error = await service.set_attendance_requirements(
+        training_session_id=training_session_id,
+        requirement_ids=body.requirement_ids,
+        organization_id=current_user.organization_id,
+    )
+    if error or training_session is None:
+        raise _session_error(error or "An unexpected error occurred")
+
+    await log_audit_event(
+        db=db,
+        event_type="training_session_updated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "session_id": str(training_session_id),
+            "action": "attendance_requirements_set",
+            "requirement_ids": sorted(str(r) for r in body.requirement_ids),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return await _session_payload(service, training_session)
 
 
 @router.post("/{training_session_id}/finalize")
@@ -483,7 +586,7 @@ async def reopen_training_session(
         username=current_user.username,
     )
 
-    return _session_response(training_session)
+    return await _session_payload(service, training_session)
 
 
 @router.get("/approve/{token}", response_model=TrainingApprovalResponse)

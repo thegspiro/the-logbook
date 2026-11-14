@@ -195,7 +195,23 @@ class TestFinalizeShiftArchivesPrompt:
         svc.compute_member_call_counts = AsyncMock(return_value={})
         svc._create_draft_reports_for_trainees = AsyncMock(return_value=0)
 
-        with patch("app.services.scheduling_service.NotificationsService") as notif_cls:
+        # The shift-evaluation check and the close-out credit re-sync are
+        # collaborators like the draft reports above: stubbed here, and covered
+        # against real tables in test_shift_evaluations.py and
+        # test_shift_evaluation_review_fixes.py.
+        with (
+            patch("app.services.scheduling_service.NotificationsService") as notif_cls,
+            patch(
+                "app.services.shift_evaluation_service.ShiftEvaluationService"
+                ".missing_required",
+                AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.shift_evaluation_service.ShiftEvaluationService"
+                ".sync_credit_for_shift",
+                AsyncMock(return_value=None),
+            ),
+        ):
             archive = AsyncMock()
             notif_cls.return_value.archive_related_notifications = archive
             result, err = await svc.finalize_shift(

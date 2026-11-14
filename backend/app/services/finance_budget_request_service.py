@@ -52,6 +52,7 @@ from app.services.finance_service import (
     FinanceEntityNotFoundError,
     FinanceService,
 )
+from app.services.finance_year_due_notifications import close_due
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -76,6 +77,34 @@ class BudgetRequestConflictError(ValueError):
 
 class BudgetRequestForbiddenError(PermissionError):
     """The caller may see the request but is not its line's owner."""
+
+
+class BudgetRequestIncompleteError(ValueError):
+    """A request handed to the Treasurer without an amount or a justification.
+
+    ``fields`` maps each missing field to what to tell the member, so the
+    endpoint can answer a 422 the form puts on those fields.
+    """
+
+    def __init__(self, fields: dict[str, str]):
+        super().__init__(" ".join(fields.values()))
+        self.fields = fields
+
+
+def _missing_for_the_treasurer(
+    requested_amount: Optional[Decimal], justification: Optional[str], step: str
+) -> dict[str, str]:
+    """What a request lacks that the Treasurer needs to decide it.
+
+    A draft may lack both (owner decision, 2026-11-11: a draft always saves);
+    a request being submitted, or already submitted, may lack neither.
+    """
+    missing: dict[str, str] = {}
+    if requested_amount is None:
+        missing["requested_amount"] = f"Enter the amount you are requesting {step}."
+    if not (justification or "").strip():
+        missing["justification"] = f"Say what the money is for {step}."
+    return missing
 
 
 # The order a draft year's budget moves through on its way to adoption. A
@@ -181,13 +210,8 @@ class FinanceBudgetRequestService:
             )
             if fy.status == FiscalYearStatus.DRAFT:
                 row["planning_stage"] = planning_stage(fy.planning_stage).value
-            # An end date entered as a calendar day is that day's midnight
-            # UTC, so its UTC date is the last day of the year.
-            row["close_due"] = (
-                fy.status == FiscalYearStatus.ACTIVE
-                and not fy.is_locked
-                and today > fy.end_date.date()
-            )
+            # The same rule the Treasurer's close-due email follows.
+            row["close_due"] = close_due(fy, today)
             rows.append(row)
         return rows
 
@@ -585,8 +609,12 @@ class FinanceBudgetRequestService:
             category_id=None if budget_id else category_id,
             station_id=None if budget_id else (station_id or None),
             owner_position_id=owner_position_id or None,
-            requested_amount=Decimal(data["requested_amount"]),
-            justification=data["justification"],
+            requested_amount=(
+                Decimal(data["requested_amount"])
+                if data.get("requested_amount") is not None
+                else None
+            ),
+            justification=data.get("justification") or None,
             status=BudgetRequestStatus.DRAFT,
         )
         self.db.add(request)
@@ -608,6 +636,17 @@ class FinanceBudgetRequestService:
         await self._authorize_owner_change(request, fy, org_id, user_id, is_manager)
         if request.status not in _OWNER_EDITABLE:
             raise ValueError("A decided request can no longer be edited.")
+        if request.status == BudgetRequestStatus.SUBMITTED:
+            # Refused as a whole, before anything is written: the form sends
+            # the rest again without the refused field (owner save rule,
+            # 2026-11-05), so nothing is lost.
+            missing = _missing_for_the_treasurer(
+                data.get("requested_amount", request.requested_amount),
+                data.get("justification", request.justification),
+                "on a submitted request",
+            )
+            if missing:
+                raise BudgetRequestIncompleteError(missing)
         apply_updates(request, data)
         await self.db.flush()
         await self.db.refresh(request, ["updated_at"])
@@ -621,6 +660,11 @@ class FinanceBudgetRequestService:
         await self._authorize_owner_change(request, fy, org_id, user_id, is_manager)
         if request.status != BudgetRequestStatus.DRAFT:
             raise ValueError("Only a draft request can be submitted.")
+        missing = _missing_for_the_treasurer(
+            request.requested_amount, request.justification, "before you submit"
+        )
+        if missing:
+            raise BudgetRequestIncompleteError(missing)
         request.status = BudgetRequestStatus.SUBMITTED
         request.submitted_by = user_id
         request.submitted_at = datetime.now(timezone.utc)
@@ -720,6 +764,13 @@ class FinanceBudgetRequestService:
             )
 
         if new_status == BudgetRequestStatus.APPROVED:
+            # Submitting needs an amount and a submitted request cannot lose
+            # it, so this holds for any request that reached the Treasurer;
+            # checked rather than assumed because a null would approve $0.
+            if request.requested_amount is None:
+                raise ValueError(
+                    "This request has no amount to approve. Adjust it instead."
+                )
             amount = Decimal(request.requested_amount)
         elif new_status == BudgetRequestStatus.ADJUSTED:
             if approved_amount is None:
@@ -887,10 +938,37 @@ class FinanceBudgetRequestService:
         request.review_amount = Decimal(amount)
         request.review_note = note.strip()
         request.reviewed_by = reviewer_id
-        request.reviewed_at = datetime.now(timezone.utc)
+        # Whole seconds, as the column stores them: MySQL 8 rounds a fraction
+        # where MariaDB truncates it, and the leadership-change notice keys
+        # on this time, so a fraction left here let the stored value land a
+        # second after the key and a repeat call emailed everyone again.
+        request.reviewed_at = datetime.now(timezone.utc).replace(microsecond=0)
         await self.db.flush()
         await self.db.refresh(request, ["updated_at"])
         return request
+
+    async def owner_amount(self, request_id: str, org_id: str) -> Optional[Decimal]:
+        """The amount a request stands at for its owner: leadership's, else the
+        Treasurer's approved one. ``None`` for none, or another org's request.
+
+        Read before a leadership review overwrites it, so the owner is emailed
+        only when their amount actually changes (owner decision, 2026-11-01).
+        """
+        row = (
+            await self.db.execute(
+                select(
+                    BudgetRequest.review_amount, BudgetRequest.approved_amount
+                ).where(
+                    BudgetRequest.id == request_id,
+                    BudgetRequest.organization_id == org_id,
+                )
+            )
+        ).one_or_none()
+        if row is None:
+            return None
+        review: Optional[Decimal] = row.review_amount
+        approved: Optional[Decimal] = row.approved_amount
+        return review if review is not None else approved
 
     # ========================================
     # Reads

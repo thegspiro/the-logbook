@@ -29,12 +29,14 @@ const ROWS_SHOWN = 500;
 
 const SOURCE_LABELS: Record<LastSeenSource, string> = {
   nfc_tap: 'NFC tap',
+  barcode_put_away: 'Barcode put-away',
   assignment: 'Assigned',
   return: 'Returned',
   checkout: 'Checked out',
   check_in: 'Checked in',
   issuance: 'Issued',
   issuance_return: 'Issuance returned',
+  created: 'Added to inventory',
 };
 
 export const InventoryNotSeenPage: React.FC = () => {

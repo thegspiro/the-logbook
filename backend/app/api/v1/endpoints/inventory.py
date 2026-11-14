@@ -365,6 +365,9 @@ async def list_categories(
         exclude_item_types=MEDICAL_ITEM_TYPES,
         active_only=active_only,
     )
+    await service.flag_duplicate_category_names(
+        current_user.organization_id, categories
+    )
     return categories
 
 
@@ -630,6 +633,39 @@ def _item_response(item: InventoryItem) -> InventoryItemResponse:
     return payload
 
 
+async def _low_stock_item_ids(
+    service: InventoryService,
+    organization_id: Any,
+    low_stock: bool,
+    low_stock_categories: bool,
+) -> list[str] | None:
+    """The item ids the two low-stock filters narrow a listing to, or None.
+
+    Each filter reuses the scan behind the link that opens it, so the list holds
+    exactly what was counted: ``low_stock`` is the alert email's per-item
+    reorder-point scan, ``low_stock_categories`` the dashboard tile's
+    per-category threshold scan. A second definition of "low" here would let
+    the list and its source disagree. Both together intersect. An empty list
+    must reach the query as an empty list: None means "no narrowing".
+    """
+    narrowed: list[str] | None = None
+    if low_stock:
+        low_rows = await service.get_low_stock_items_for_alerts(
+            organization_id, exclude_item_types=MEDICAL_ITEM_TYPES
+        )
+        narrowed = [str(item.id) for item, _on_hand, _from_lots in low_rows]
+    if low_stock_categories:
+        in_low_categories = await service.item_ids_in_low_stock_categories(
+            organization_id, exclude_item_types=MEDICAL_ITEM_TYPES
+        )
+        if narrowed is None:
+            narrowed = in_low_categories
+        else:
+            keep = set(in_low_categories)
+            narrowed = [item_id for item_id in narrowed if item_id in keep]
+    return narrowed
+
+
 @router.get("/items", response_model=ItemsListResponse)
 async def list_items(
     category_id: UUID | None = None,
@@ -654,6 +690,7 @@ async def list_items(
     limit: int = Query(100, ge=1, le=500),
     fuzzy: bool = False,
     low_stock: bool = False,
+    low_stock_categories: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
@@ -662,6 +699,9 @@ async def list_items(
 
     ``low_stock=true`` narrows to the gear and uniform items at or below their
     reorder point — the set the daily low-stock alert email lists.
+    ``low_stock_categories=true`` narrows to the items filed under a category
+    at or below its low-stock threshold — the categories the dashboard's Low
+    stock tile counts.
 
     **Authentication required**
     **Requires permission: inventory.view**
@@ -713,14 +753,9 @@ async def list_items(
     # whether `groups` comes back populated.
     grouping = group_by if group_by in InventoryService.GROUPABLE else None
 
-    # The alert email's own scan, so the list its link opens holds exactly the
-    # items it named; a second definition of "low" here would let them disagree.
-    low_stock_ids = None
-    if low_stock:
-        low_rows = await service.get_low_stock_items_for_alerts(
-            current_user.organization_id, exclude_item_types=MEDICAL_ITEM_TYPES
-        )
-        low_stock_ids = [str(item.id) for item, _on_hand, _from_lots in low_rows]
+    low_stock_ids = await _low_stock_item_ids(
+        service, current_user.organization_id, low_stock, low_stock_categories
+    )
 
     items, total = await service.get_items(
         organization_id=current_user.organization_id,
@@ -1073,6 +1108,7 @@ async def export_items_csv(
     sort_by: str | None = None,
     sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
     low_stock: bool = False,
+    low_stock_categories: bool = False,
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Export inventory items as CSV.
@@ -1145,12 +1181,9 @@ async def export_items_csv(
         # accepted risk.
         async with async_session_factory() as db:
             service = InventoryService(db)
-            low_stock_ids = None
-            if low_stock:
-                low_rows = await service.get_low_stock_items_for_alerts(
-                    organization_id, exclude_item_types=MEDICAL_ITEM_TYPES
-                )
-                low_stock_ids = [str(item.id) for item, _oh, _fl in low_rows]
+            low_stock_ids = await _low_stock_item_ids(
+                service, organization_id, low_stock, low_stock_categories
+            )
             skip = 0
             while True:
                 # get_items_page, not get_items: the latter COUNTs the whole
@@ -3528,7 +3561,19 @@ async def export_impact_plan_pdf(
             detail=safe_error_detail(e),
         )
 
-    headers = {"Content-Disposition": "attachment; filename=impact-plan.pdf"}
+    # The plan lists members with their contact details, so the export is
+    # recorded like any other disclosure of member data.
+    await log_audit_event(
+        db=db,
+        event_type="inventory_impact_plan_exported",
+        event_category="inventory",
+        severity="info",
+        event_data={"format": "pdf"},
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+    headers = {"Content-Disposition": 'attachment; filename="impact-plan.pdf"'}
     return StreamingResponse(pdf_buf, media_type="application/pdf", headers=headers)
 
 
@@ -4948,6 +4993,8 @@ async def put_away_items(
         area_id=area_id,
         item_ids=request.item_ids,
         organization_id=current_user.organization_id,
+        # A barcode put-away counts as seeing each item (Items Not Seen).
+        barcode_scanned_by=current_user.id,
     )
     if result is None:
         raise HTTPException(status_code=404, detail="Storage area not found")
@@ -5986,14 +6033,14 @@ async def get_nfpa_retirement_due(
 @router.websocket("/ws")
 async def inventory_websocket(
     websocket: WebSocket,
-    token: str | None = Query(None),
 ):
     """
     WebSocket endpoint for real-time inventory change notifications.
 
-    Authentication: Prefer httpOnly cookies (sent automatically by browsers
-    during the WebSocket handshake). Falls back to a query-param token for
-    non-browser clients.
+    Authentication: the httpOnly ``access_token`` cookie, which browsers send
+    with the handshake. A ``?token=`` query parameter is not accepted: a
+    bearer token in a URL is written to proxy and server access logs, where
+    anyone who reads them can replay it until it expires.
 
     Events pushed to clients:
         { "type": "inventory_changed", "action": "...", "data": {...} }
@@ -6020,13 +6067,11 @@ async def inventory_websocket(
     # which the browser surfaces as a generic error (no close code).
     await websocket.accept()
 
-    # Prefer httpOnly cookie, fall back to query param for non-browser clients
-    if not token:
-        token = websocket.cookies.get("access_token")
+    token = websocket.cookies.get("access_token")
     if not token:
         from loguru import logger
 
-        logger.warning("Inventory WS rejected: no access_token cookie or query param")
+        logger.warning("Inventory WS rejected: no access_token cookie")
         await websocket.close(code=4001, reason="Missing token")
         return
 
@@ -6047,6 +6092,13 @@ async def inventory_websocket(
                 await websocket.close(code=4001, reason="Invalid or revoked session")
                 return
             org_id = user.organization_id
+            # The stream names which member is issued, assigned or checked out
+            # which item. Reading another member's gear is inventory.manage
+            # only (INV-9), and both pages that open this socket are already
+            # gated on it, so nobody else has a reason to hold one open.
+            may_watch = _has_permission(
+                "inventory.manage", _collect_user_permissions(user)
+            )
 
             # The router's module gate stands aside for WebSocket handshakes
             # (see get_request_enabled_modules), so the switch is enforced
@@ -6061,6 +6113,11 @@ async def inventory_websocket(
     if "inventory" not in enabled:
         # 4003 is final on the client: useInventoryWebSocket does not retry it.
         await websocket.close(code=4003, reason="Inventory module is not enabled")
+        return
+
+    if not may_watch:
+        # 4003 is final on the client, so a refused caller does not retry.
+        await websocket.close(code=4003, reason="Requires inventory.manage")
         return
 
     if not await ws_manager.connect(websocket, org_id):

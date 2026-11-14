@@ -7,7 +7,7 @@ Business logic for training management including courses, records, requirements,
 import calendar
 import copy
 from datetime import date, timedelta
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from uuid import UUID
 
 from sqlalchemy import func
@@ -32,13 +32,17 @@ from app.schemas.training import (
 from app.services.training_waiver_service import (
     WaiverPeriod,
     adjust_required,
+    excused_month_reasons,
     fetch_user_waivers,
     get_rolling_period_months,
+    month_waivers,
     total_months_in_period,
-    waived_month_keys,
 )
 from app.utils.hours import meets_required_hours
 from app.utils.org_timezone import resolve_org_today
+
+if TYPE_CHECKING:
+    from app.services.training_compliance import HeldSession
 
 # What a requirement check reads from a completed record; the preload that
 # serves a page of checks loads these and nothing else.
@@ -54,6 +58,7 @@ _PROGRESS_RECORD_COLUMNS = (
     TrainingRecord.expiration_date,
     TrainingRecord.hours_completed,
     TrainingRecord.certification_number,
+    TrainingRecord.source_event_id,
 )
 
 
@@ -231,6 +236,9 @@ class TrainingService:
             try:
                 from app.models.user import Organization as _Org
                 from app.models.user import User as _User
+                from app.services.membership_tier_service import (
+                    MembershipTierService,
+                )
 
                 user_result = await self.db.execute(
                     select(_User).where(
@@ -247,11 +255,8 @@ class TrainingService:
                     if _org:
                         _tier_cfg = (_org.settings or {}).get("membership_tiers", {})
                         _tiers = _tier_cfg.get("tiers", [])
-                        _member_tier_id = (
-                            getattr(_member, "membership_type", None) or "active"
-                        )
-                        _tier_def = next(
-                            (t for t in _tiers if t.get("id") == _member_tier_id), None
+                        _tier_def = MembershipTierService.tier_for_member(
+                            _tiers, _member
                         )
                         if _tier_def:
                             _benefits = _tier_def.get("benefits", {})
@@ -279,7 +284,10 @@ class TrainingService:
                 str(user_id),
             )
             today = await resolve_org_today(self.db, organization_id)
-            from app.services.training_compliance import load_credited_shift_dates
+            from app.services.training_compliance import (
+                load_credited_shift_dates,
+                load_held_sessions,
+            )
 
             shift_dates = (
                 await load_credited_shift_dates(
@@ -292,6 +300,9 @@ class TrainingService:
                     full_history=True,
                 )
             ).get(str(user_id), [])
+            held_sessions = await load_held_sessions(
+                self.db, str(organization_id), requirements
+            )
 
             for req in requirements:
                 # Tier-based exemption: treat requirement as met
@@ -314,6 +325,7 @@ class TrainingService:
                     today=today,
                     join_date=join_date,
                     shift_dates=shift_dates,
+                    held_sessions=held_sessions,
                 )
                 if progress.is_complete:
                     requirements_met.append(req.id)
@@ -421,6 +433,7 @@ class TrainingService:
         from app.services.training_compliance import (
             certification_record_matches,
             hours_record_counts,
+            record_name_matches,
         )
 
         if req_type == RequirementType.CERTIFICATION.value:
@@ -440,15 +453,11 @@ class TrainingService:
             )
 
         # Fallback (skills_evaluation, checklist, etc.): training_type
-        # match, or the requirement name appearing in the record's course
-        # name -- the same two criteria the fallback branch itself uses.
+        # match, or the legacy name match (record_name_matches) -- the same
+        # two criteria the fallback branch itself uses.
         if requirement.training_type:
             return bool(record.training_type == requirement.training_type)
-        return bool(
-            requirement.name
-            and record.course_name
-            and requirement.name.lower() in record.course_name.lower()
-        )
+        return record_name_matches(requirement, record)
 
     async def _anchor_records(
         self,
@@ -578,6 +587,8 @@ class TrainingService:
         org_include_current_month: bool = True,
         join_date: Optional[date] = None,
         shift_dates: Optional[Sequence[date]] = None,
+        held_sessions: Optional[Mapping[str, Sequence["HeldSession"]]] = None,
+        course_catalog: Optional[Mapping[str, Tuple[str, Optional[str]]]] = None,
     ) -> Dict:
         """Evaluate a member's progress on a single requirement (in-memory).
 
@@ -601,20 +612,37 @@ class TrainingService:
         requirement counted from attendance (``counts_shift_attendance``).
         A rolling one anchors its due date on the latest of them, so pass
         them loaded with ``full_history=True`` when it matters.
+
+        *held_sessions* is ``training_compliance.load_held_sessions`` for the
+        requirements being evaluated, required for a SESSION_ATTENDANCE one.
+
+        *course_catalog* maps a course id to its ``(name, code)``, for the
+        courses COURSES requirements name (``load_required_course_catalog``).
+        With it, a COURSES requirement also reports ``course_checklist``: each
+        required course and when the member last completed it in the window,
+        so a screen can say which courses the count is made of. Without it the
+        key is null, as it is for every other requirement type.
         """
         from app.models.training import RequirementType
         from app.services.training_compliance import (
+            _require_held_sessions,
             _require_shift_dates,
             apply_recency,
             catch_up_deadline,
             certification_record_matches,
             counts_shift_attendance,
             credited_shifts_in_window,
+            fallback_record_matches,
             hours_record_counts,
+            monthly_counts,
             monthly_hours,
             next_window_opens,
             recency_cutoff,
             rolling_hours_has_no_deadline,
+            tally_session_attendance,
+        )
+        from app.services.training_requirement_courses import (
+            course_checklist_entries,
         )
 
         # The real day, captured before it is replaced by the evaluation
@@ -664,10 +692,19 @@ class TrainingService:
         base_required: float = 0
         adjusted_required: float = 0
         waived_months = 0
-        active_months = 0
+        active_months: float = 0
         cert_expired = False
         blocks_activity = False
         month_breakdown: Optional[List[Dict]] = None
+        count_breakdown: Optional[List[Dict]] = None
+        # Dates of the shifts or calls counted, for their monthly breakdown.
+        counted_dates: Optional[List[date]] = None
+        course_checklist: Optional[List[Dict]] = None
+        attendance_met: Optional[bool] = None
+        attendance_overridden = False
+        # No linked session held in the window yet: not graded at all
+        # (training_compliance.NOT_YET_HELD_STATUS, workflow review W80-9).
+        nothing_held = False
 
         # ---- HOURS ----
         if req_type == RequirementType.HOURS.value:
@@ -681,7 +718,7 @@ class TrainingService:
                     type_matched,
                     start_date,
                     min(end_date, today),
-                    waived_month_keys(_waivers, start_date, end_date, str(req.id)),
+                    month_waivers(_waivers, start_date, end_date, str(req.id)),
                 )
             base_required = req.required_hours or 0
             adjusted_required = base_required
@@ -720,6 +757,10 @@ class TrainingService:
             completed_value = float(matched)
             base_required = float(len(course_ids))
             adjusted_required = base_required
+            if course_catalog is not None:
+                course_checklist = course_checklist_entries(
+                    course_ids, windowed, course_catalog
+                )
 
         # ---- CERTIFICATION ----
         elif req_type == RequirementType.CERTIFICATION.value:
@@ -742,13 +783,10 @@ class TrainingService:
         # ---- SHIFTS ----
         elif req_type == RequirementType.SHIFTS.value:
             if counts_shift_attendance(req):
-                completed_value = float(
-                    len(
-                        credited_shifts_in_window(
-                            req, _require_shift_dates(req, shift_dates), today
-                        )
-                    )
+                counted_dates = credited_shifts_in_window(
+                    req, _require_shift_dates(req, shift_dates), today
                 )
+                completed_value = float(len(counted_dates))
             else:
                 type_matched = windowed
                 if req.training_type:
@@ -756,6 +794,7 @@ class TrainingService:
                         r for r in windowed if r.training_type == req.training_type
                     ]
                 completed_value = float(len(type_matched))
+                counted_dates = [r.completion_date for r in type_matched]
             base_required = float(req.required_shifts or 0)
             adjusted_required = base_required
 
@@ -767,6 +806,7 @@ class TrainingService:
                     _waivers,
                     str(req.id),
                     period_months=get_rolling_period_months(req),
+                    whole_units=True,
                 )
 
         # ---- CALLS ----
@@ -777,6 +817,7 @@ class TrainingService:
                     r for r in windowed if r.training_type == req.training_type
                 ]
             completed_value = float(len(type_matched))
+            counted_dates = [r.completion_date for r in type_matched]
             base_required = float(req.required_calls or 0)
             adjusted_required = base_required
 
@@ -788,19 +829,29 @@ class TrainingService:
                     _waivers,
                     str(req.id),
                     period_months=get_rolling_period_months(req),
+                    whole_units=True,
                 )
+
+        # ---- SESSION_ATTENDANCE: training_compliance's rule, not a copy ----
+        elif req_type == RequirementType.SESSION_ATTENDANCE.value:
+            tally = tally_session_attendance(
+                req,
+                member_records,
+                _require_held_sessions(req, held_sessions),
+                today,
+                waivers=_waivers,
+                join_date=join_date,
+            )
+            completed_value = float(tally.attended)
+            adjusted_required = float(tally.needed)
+            base_required = float(tally.base_needed)
+            attendance_met = tally.met
+            attendance_overridden = tally.overridden
+            nothing_held = tally.held == 0
 
         # ---- Fallback ----
         else:
-            matching = []
-            if req.training_type:
-                matching = [r for r in windowed if r.training_type == req.training_type]
-            if not matching and req.name:
-                matching = [
-                    r
-                    for r in windowed
-                    if r.course_name and req.name.lower() in r.course_name.lower()
-                ]
+            matching = fallback_record_matches(req, windowed)
             base_required = 1
             adjusted_required = 1
             if matching:
@@ -812,6 +863,16 @@ class TrainingService:
             else:
                 completed_value = 0
 
+        if counted_dates is not None and start_date and end_date:
+            # Shifts and calls month by month, as the hours breakdown above,
+            # so a member on leave sees which months were excused.
+            count_breakdown = monthly_counts(
+                counted_dates,
+                start_date,
+                min(end_date, today),
+                month_waivers(_waivers, start_date, end_date, str(req.id)),
+            )
+
         # Calculate percentage
         if adjusted_required > 0:
             pct = (
@@ -819,6 +880,10 @@ class TrainingService:
                 if meets_required_hours(completed_value, adjusted_required)
                 else min(completed_value / adjusted_required * 100, 100)
             )
+        elif base_required > 0:
+            # A shift or call target leave rounded down to nothing: the member
+            # owes nothing for the window.
+            pct = 100.0
         else:
             # No positive target (an unset/misconfigured hours target, or a
             # courses requirement with no courses linked): met only if something
@@ -828,8 +893,14 @@ class TrainingService:
 
         if cert_expired:
             pct = 0.0
+        if attendance_met is not None:
+            # Nothing charged yet is met, as the compliance grader reads it;
+            # the no-target rule above would read it as unmet.
+            pct = 100.0 if attendance_met else pct
 
-        is_met = pct >= 100 and not cert_expired
+        if nothing_held:
+            pct = 0.0
+        is_met = pct >= 100 and not cert_expired and not nothing_held
 
         # Effective due date
         rolling_months = get_rolling_period_months(req)
@@ -908,6 +979,11 @@ class TrainingService:
                 effective_due_date = end_date if end_date else None
         if rolling_hours_has_no_deadline(req):
             effective_due_date = None
+        if attendance_met is not None:
+            # Attendance is measured over the window, not anchored on a
+            # completion: a calendar window falls due when it closes, and a
+            # trailing one never does.
+            effective_due_date = None if rolling_months else end_date
         # This legacy BIANNUAL override predates due_date_type awareness and
         # is skipped for rolling/certification-period requirements: it
         # selects the newest expiration across *any* record with a bare
@@ -916,7 +992,11 @@ class TrainingService:
         # certification's expiration -- e.g. a biannual EMT cert due in 30
         # days getting silently replaced by an unrelated cert expiring next
         # year, which would then never surface in a 90-day at-risk forecast.
-        if freq == RequirementFrequency.BIANNUAL.value and not anchored_type:
+        if (
+            freq == RequirementFrequency.BIANNUAL.value
+            and not anchored_type
+            and attendance_met is None
+        ):
             with_exp = [r for r in completed if r.expiration_date]
             if req.training_type:
                 with_exp = [r for r in with_exp if r.training_type == req.training_type]
@@ -931,7 +1011,7 @@ class TrainingService:
         )
 
         deadline = catch_up_deadline(req, join_date, real_today)
-        if deadline is not None and not is_met:
+        if deadline is not None and not is_met and not nothing_held:
             effective_due_date = deadline
             days_until_due = (deadline - real_today).days
             # Nothing is held against the member until the deadline passes,
@@ -956,9 +1036,17 @@ class TrainingService:
             "completed_hours": completed_value,
             "progress_percentage": round(pct, 1),
             "is_met": is_met,
+            # Neither met nor unmet: no linked session held yet. Callers leave
+            # it out of met/total, as the compliance grader does.
+            "not_applicable": nothing_held,
+            # Met by a Chief's override rather than by the count.
+            "overridden": attendance_overridden,
             "due_date": str(effective_due_date) if effective_due_date else None,
             "days_until_due": days_until_due,
             "waived_months": waived_months,
+            **excused_month_reasons(
+                _waivers if waived_months else [], start_date, end_date, str(req.id)
+            ),
             "active_months": active_months,
             "cert_expired": cert_expired,
             "blocks_activity": blocks_activity,
@@ -974,6 +1062,8 @@ class TrainingService:
                 else None
             ),
             "monthly_hours": month_breakdown,
+            "monthly_counts": count_breakdown,
+            "course_checklist": course_checklist,
         }
 
     async def check_requirement_progress(
@@ -987,6 +1077,7 @@ class TrainingService:
         today: Optional[date] = None,
         join_date: Optional[date] = None,
         shift_dates: Optional[Sequence[date]] = None,
+        held_sessions: Optional[Mapping[str, Sequence["HeldSession"]]] = None,
     ) -> RequirementProgress:
         """
         Check a user's progress towards a specific requirement.
@@ -1021,7 +1112,9 @@ class TrainingService:
             certification_record_matches,
             counts_shift_attendance,
             credited_shifts_in_window,
+            fallback_record_matches,
             hours_record_counts,
+            is_session_attendance,
             load_credited_shift_dates,
             recency_cutoff,
             rolling_hours_has_no_deadline,
@@ -1043,6 +1136,17 @@ class TrainingService:
         # against the same day.
         if today is None:
             today = await resolve_org_today(self.db, organization_id)
+        if is_session_attendance(requirement):
+            return await self._session_attendance_progress(
+                requirement,
+                str(user_id),
+                str(organization_id),
+                today,
+                waivers,
+                completed_records,
+                join_date,
+                held_sessions,
+            )
         if shift_dates is None and counts_shift_attendance(requirement):
             shift_dates = (
                 await load_credited_shift_dates(
@@ -1192,6 +1296,7 @@ class TrainingService:
         completed_value: float = 0
         required_value: float = 0
         is_complete = False
+        prorated_to_zero = False
 
         # ---- HOURS requirements ----
         if req_type == RequirementType.HOURS.value:
@@ -1390,12 +1495,14 @@ class TrainingService:
                     waivers,
                     str(requirement.id),
                     period_months=get_rolling_period_months(requirement),
+                    whole_units=True,
                 )
+                prorated_to_zero = required_value <= 0
 
             is_complete = (
                 completed_value >= required_value
                 if required_value > 0
-                else completed_value > 0
+                else prorated_to_zero or completed_value > 0
             )
 
         # ---- CALLS requirements ----
@@ -1419,29 +1526,20 @@ class TrainingService:
                     waivers,
                     str(requirement.id),
                     period_months=get_rolling_period_months(requirement),
+                    whole_units=True,
                 )
+                prorated_to_zero = required_value <= 0
 
             is_complete = (
                 completed_value >= required_value
                 if required_value > 0
-                else completed_value > 0
+                else prorated_to_zero or completed_value > 0
             )
 
         # ---- Fallback (skills_evaluation, checklist, etc.) ----
         else:
             records = await _windowed()
-            matching = []
-            if requirement.training_type:
-                matching = [
-                    r for r in records if r.training_type == requirement.training_type
-                ]
-            if not matching and requirement.name:
-                matching = [
-                    r
-                    for r in records
-                    if r.course_name
-                    and requirement.name.lower() in r.course_name.lower()
-                ]
+            matching = fallback_record_matches(requirement, records)
 
             if matching:
                 latest = max(matching, key=lambda r: r.completion_date or date.min)
@@ -1464,6 +1562,9 @@ class TrainingService:
                 if meets_required_hours(completed_value, required_value)
                 else completed_value / required_value * 100
             )
+        elif prorated_to_zero:
+            # A shift or call target leave rounded down to nothing.
+            percentage = 100.0
         else:
             # No positive target: 100% only if something matching was actually
             # completed, otherwise 0% — never a default "compliant" for a member
@@ -1488,6 +1589,70 @@ class TrainingService:
             due_date=effective_due_date,
             days_until_due=days_until_due,
             catch_up_deadline=deadline,
+        )
+
+    async def _session_attendance_progress(
+        self,
+        requirement: TrainingRequirement,
+        user_id: str,
+        organization_id: str,
+        today: date,
+        waivers: Optional[List[WaiverPeriod]],
+        completed_records: Optional[Sequence[Any]],
+        join_date: Optional[date],
+        held_sessions: Optional[Mapping[str, Sequence["HeldSession"]]],
+    ) -> RequirementProgress:
+        """A SESSION_ATTENDANCE check, projected from ``evaluate_requirement_detail``.
+
+        The rule lives in ``training_compliance.tally_session_attendance``;
+        this only loads what it reads and reshapes the result, so this check
+        and the compliance matrix cannot disagree (CLAUDE.md pitfall 29).
+        """
+        from app.services.training_compliance import (
+            get_org_include_current_month,
+            load_held_sessions,
+        )
+
+        if held_sessions is None:
+            held_sessions = await load_held_sessions(
+                self.db, organization_id, [requirement]
+            )
+        if waivers is None:
+            waivers = await fetch_user_waivers(self.db, organization_id, user_id)
+        if completed_records is None:
+            result = await self.db.execute(
+                select(TrainingRecord).where(
+                    TrainingRecord.organization_id == organization_id,
+                    TrainingRecord.user_id == user_id,
+                    TrainingRecord.status == TrainingStatus.COMPLETED,
+                    TrainingRecord.source_event_id.isnot(None),
+                )
+            )
+            completed_records = result.scalars().all()
+        detail = self.evaluate_requirement_detail(
+            requirement,
+            completed_records,
+            today,
+            waivers=waivers,
+            org_include_current_month=await get_org_include_current_month(
+                self.db, organization_id
+            ),
+            join_date=join_date,
+            held_sessions=held_sessions,
+        )
+        due = detail["due_date"]
+        deadline = detail["catch_up_deadline"]
+        return RequirementProgress(
+            requirement_id=requirement.id,
+            requirement_name=requirement.name,
+            required_hours=detail["required_hours"],
+            completed_hours=detail["completed_hours"],
+            percentage_complete=round(detail["progress_percentage"], 2),
+            is_complete=detail["is_met"],
+            due_date=date.fromisoformat(due) if due else None,
+            days_until_due=detail["days_until_due"],
+            catch_up_deadline=date.fromisoformat(deadline) if deadline else None,
+            not_applicable=detail["not_applicable"],
         )
 
     async def get_all_requirements_progress(
@@ -1555,7 +1720,10 @@ class TrainingService:
         # The member's worked shifts, for any requirement counted from
         # attendance; full history, as a rolling one anchors its due date on
         # the latest shift however old.
-        from app.services.training_compliance import load_credited_shift_dates
+        from app.services.training_compliance import (
+            load_credited_shift_dates,
+            load_held_sessions,
+        )
 
         shift_dates = (
             await load_credited_shift_dates(
@@ -1568,6 +1736,9 @@ class TrainingService:
                 full_history=True,
             )
         ).get(str(user_id), [])
+        held_sessions = await load_held_sessions(
+            self.db, str(organization_id), requirements
+        )
         progress_list = []
         for req in requirements:
             progress = await self.check_requirement_progress(
@@ -1580,6 +1751,7 @@ class TrainingService:
                 today=today,
                 join_date=join_date,
                 shift_dates=shift_dates,
+                held_sessions=held_sessions,
             )
             progress_list.append(progress)
         return progress_list

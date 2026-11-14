@@ -684,6 +684,7 @@ export const facilitiesService = {
     facility_id?: string;
     is_completed?: boolean;
     is_overdue?: boolean;
+    due_within_days?: number;
     search?: string;
     skip: number;
     limit: number;
@@ -717,6 +718,7 @@ export const facilitiesService = {
     facility_id?: string;
     result?: InspectionResultFilter;
     search?: string;
+    due_within_days?: number;
     skip: number;
     limit: number;
   }): Promise<RecordPage<Inspection>> {
@@ -1081,6 +1083,8 @@ export const facilitiesService = {
   // Compliance Checklists
   async getComplianceChecklists(params?: {
     facility_id?: string;
+    is_completed?: boolean;
+    due_within_days?: number;
     skip?: number;
     limit?: number;
   }): Promise<ComplianceChecklist[]> {

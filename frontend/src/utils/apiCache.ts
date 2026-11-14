@@ -41,9 +41,11 @@ const UNCACHEABLE_PREFIXES = [
   '/notifications/my', // user-specific notification state (list too, not just sub-paths)
   '/notifications/logs', // delivery logs: recipient identities (PII)
   '/email-templates/scheduled', // scheduled emails: recipient PII
+  '/email-templates/member-email-opt-outs', // which named members turned off which emails (per-member preferences)
   '/officers', // office holders: member names, emails, phone numbers (PII)
   '/nfc-tags', // member ID card credentials: names, card state, usage (PII + security)
   '/nfc-activity', // card taps by room and by event: who checked in where and when (PII)
+  '/grants/zeffy/', // Zeffy payers' names (PII); a stale ledger would also hide what a sync or a new link just applied
   '/integrations/google-workspace/', // a member's Google account address and its provisioning state (PII); a stale one hides a retry's result
   '/apparatus/operators', // per-member driving qualification: name, licence restrictions, restriction notes (PII)
   '/apparatus/driver-exceptions', // name + the justification and restrictions behind an exception — health-adjacent free text (PII); covers /approvers too
@@ -51,11 +53,13 @@ const UNCACHEABLE_PREFIXES = [
   '/inventory/reorder-requests', // requester_name on the list and the detail (PII)
   '/operational-ranks/validate', // resolves member_name for each rank being validated (PII)
   '/organization/settings/file-storage/status', // where uploads go right now: a stale answer hides the result of a connection test or a settings save
+  '/training/programs/milestone-options', // member names and membership numbers for the milestone recipient picker (PII)
   '/suggestions', // suggestion boxes: complaints, anonymous submissions and follow-up threads — never cached, and a cached thread would hide a reply
   '/testing-checklist', // shared testing run: another tester's mark can land at any moment, and a stale one reads as a lost result
   '/training/waivers', // medical/health waivers (PHI)
   '/training/submissions/', // user-specific training submissions
   '/training/shift-reports/', // attendance/location data
+  '/training/shift-evaluations/', // a member's ratings and the officer's comments on them
   '/training/stats/user/', // individual compliance stats
   '/training/reports/user/', // individual training reports
   '/training/compliance-summary/', // per-member compliance status
@@ -64,6 +68,7 @@ const UNCACHEABLE_PREFIXES = [
   '/training/competency/', // per-member competency evaluations
   '/training/recertification/tasks/', // per-member renewal tasks
   '/training/module-config/my-training', // current user's full training record
+  '/training/module-config/members/', // a named member's requirements and leave dates/types (leave type can be medical)
   '/training/programs/enrollments/', // per-member program enrollment & progress
   '/training/instructors/qualifications', // per-member instructor credentials
   '/training/instructors/validate/', // GET /validate/{user_id}/{course_id}: a named member's qualification verdict
@@ -108,6 +113,8 @@ const UNCACHEABLE_PREFIXES = [
   '/inventory/users/', // member-specific inventory, issuances & history (PII)
   '/dashboard/action-items', // unified meeting/minutes action items: assignee_name + free-text description (RPT-29)
   '/inventory/checkout/', // GET active/overdue: who currently holds equipment (PII)
+  '/reports/saved', // saved-report configs list their recipients' email addresses (PII)
+  '/public-portal/access-logs', // external callers' IP addresses, user agents and referers; a stale page hides a new flagged entry
   '/inventory/members-summary', // per-member inventory roster (names, membership numbers)
   '/inventory/members/', // member size preferences — body measurements (PII)
   '/inventory/my/', // current user's own size preferences (PII)
@@ -143,6 +150,12 @@ const UNCACHEABLE_PREFIXES = [
   '/admin-hub/', // module attention queues: medical-screening lapses, applicant backlogs (PHI/PII-adjacent)
   '/equipment-checks', // reporter/member names, free-text restock notes, deployed-lot detail (PII)
   '/analytics/export', // raw analytics events: per-event user_id + free-form metadata
+  '/evaluations', // member performance evaluations: ratings, the evaluator's free-text
+  // comments, signatures and deletion/amendment records (evaluator_name,
+  // display_name, amended_by_name, deleted_by_name, signed_name — none of which
+  // match PII_FIELDS in test_api_cache_pii_exclusions.py, so that ratchet cannot
+  // see this module; pinned there too). No trailing slash so GET /evaluations
+  // (the list) is covered as well as /evaluations/mine and /evaluations/{id}.
 ] as const;
 
 /**
@@ -158,6 +171,7 @@ const UNCACHEABLE_SUBSTRINGS = [
   // cached copy would stay readable for 90s after an organizer restricts the
   // event's attendee visibility.
   '/rsvp-history', // per-member attendance/decline history (PII) — not matched by '/rsvps'
+  '/overrides', // a Chief's requirement overrides: member names and reasons that may be medical (PHI)
   '/attendance-petitions', // members' requests to be marked present: names and
   // their free-text reasons (PII), and a pending/decided state that a 30s-stale
   // copy would misreport right after the organizer acts on it.

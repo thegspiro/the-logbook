@@ -5,7 +5,7 @@
  */
 
 // Loading & Progress
-export { Skeleton, SkeletonRow, SkeletonCard, SkeletonPage, SkeletonCardGrid } from './Skeleton';
+export { Skeleton, SkeletonText, SkeletonRow, SkeletonCard, SkeletonPage, SkeletonCardGrid } from './Skeleton';
 export { TopProgressBar } from './TopProgressBar';
 export { ProgressSteps } from './ProgressSteps';
 export type { Step } from './ProgressSteps';
@@ -18,6 +18,11 @@ export type { BreadcrumbItem } from './Breadcrumbs';
 export { Pagination } from './Pagination';
 export { PageTransition } from './PageTransition';
 export { Collapsible } from './Collapsible';
+
+// Forms
+export { FormField, FIELD_ERROR_CLASS } from './FormField';
+export type { FieldControlProps, FormFieldControlProps } from './FormField';
+export { ErrorSummary } from './ErrorSummary';
 
 // Feedback & Confirmation
 export { EmptyState } from './EmptyState';
@@ -35,6 +40,8 @@ export type { SortDirection } from './SortableHeader';
 export { DateRangePicker } from './DateRangePicker';
 export { FileDropzone } from './FileDropzone';
 export { InlineEdit } from './InlineEdit';
+export { KpiTile } from './KpiTile';
+export { StatGrid } from './StatGrid';
 
 // Mobile-first Components
 export { MobileItemCard } from './MobileItemCard';
@@ -43,6 +50,7 @@ export { FloatingActionButton } from './FloatingActionButton';
 
 // Form Controls
 export { default as DateTimeQuarterHour } from './DateTimeQuarterHour';
+export { DraftRestoredNotice } from './DraftRestoredNotice';
 
 // Information
 export { WhatsNew } from './WhatsNew';

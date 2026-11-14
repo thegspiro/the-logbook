@@ -74,8 +74,14 @@ const PlanningSettingsSummary: React.FC = () => {
     { label: 'Default shift length', value: `${settings.defaultDurationHours} hours`, href: general },
     { label: 'Default minimum staffing', value: `${settings.defaultMinStaffing} people`, href: general },
     {
-      label: 'Overtime threshold',
-      value: `${settings.overtimeThresholdHoursPerWeek} hours/week`,
+      // The Overtime advisory is the rule the assignment warning reads; the
+      // Department Defaults threshold it replaced was read by nothing.
+      label: 'Overtime advisory',
+      value: feature
+        ? feature.max_hours_per_window
+          ? `Over ${feature.max_hours_per_window} hours in ${feature.hours_window_days} days`
+          : 'Off'
+        : '—',
       href: general,
     },
     {

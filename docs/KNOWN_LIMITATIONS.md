@@ -1,5 +1,1199 @@
 # Known Limitations & Open Decisions
 
+## Attendance Waiver Emails and Template Copies — Choices Made Without a Ruling (2026-11-11)
+
+The waiver emails and the template-CC fix (defect D1) follow the owner
+decisions of 2026-11-10. Where those left a gap, the conservative choice was
+taken; each is listed so the owner can confirm or reverse it.
+
+- **A CC copy leaves out the category and the decider's note, not only the
+  buttons and the reason.** The decision said a copy carries "no buttons and
+  no reason text". A category (_Medical_) or a note can say as much as a
+  reason, so both read _Not included in this copy_. Reversing it is a
+  one-line change per field in `AttendanceWaiverEmails._context`.
+- **The withdrawal email goes only to approvers the request email reached.**
+  Not to everyone routed now: an approver who was never emailed has nothing
+  to stop doing. A request made before this release was never emailed, so
+  withdrawing it emails nobody (the in-app prompt is still archived).
+- **A send that dies mid-flight is not retried.** Each email is claimed before
+  it goes out and released if the send fails; a process killed between the
+  two leaves the claim, so that one email is never sent (at most once). The
+  in-app prompt reaches the same approvers either way. Claiming first is
+  what stops a retry or a second worker mailing anyone twice; the cost is
+  the rare email lost to a crash (pitfall #36 asks for the order to be
+  stated).
+- **Template copies reach every message of a bulk send.** A template with a
+  default CC that goes to many members at once (an event reminder) copies
+  the CC on each member's message, which is what the editor has always
+  promised. `docs/UPGRADING.md` tells operators to review saved CC lists.
+- **Credential templates are never copied, scheduled or not.** The exclusion
+  is `ALWAYS_SENT_TYPES` (welcome, password reset, IT password, ballot,
+  applicant status, follow-up form and contact-changed). There is no MFA or
+  sign-in-code template to add: those emails carry no template type. A
+  scheduled email of one of these types used to carry the template's CC; it
+  now keeps only the addresses typed for that email.
+- **The meeting templates are sent from the meeting screens' release**
+  (#4266), under `EVENT_DUTIES` for approvers and `EVENT_CHANGES` for the
+  member (`_KINDS` in `attendance_waiver_email_service.py`), the kinds the
+  meeting workflow's in-app notices already used.
+- **A waiver policy's CC positions copy a decision in the app only** _(owner
+  choice, 2026-11-13)_. #4266 also emailed those holders, beside the decided
+  template's own CC positions, so a person named in both would have been
+  emailed twice; the email copy is left to the template. The request, decision
+  and withdrawal are emailed only from their templates; the hand-built emails
+  remain for the notices no template covers (a question, an answer, a moved
+  session, an expiry).
+
+## Elections — Voter Rules by Member Type (Owner Decisions, 2026-11-13)
+
+Election Settings › Voter Eligibility now sets who may vote as one row per
+member type (version 2 rules, `app/services/voter_rules.py`): may vote, a
+waiting period counted from joining the department or from becoming the type,
+and any number of meeting-attendance rules, up to four, all of which must pass.
+Four kinds of vote carry their own set — regular business meeting, annual
+meeting, bylaws amendment, special meeting — and each but the first uses the
+regular set until given one.
+
+### Decided
+
+- **Administrative and social members are judged by two rows.** Their status
+  row (Regular, Probationary, Life, a department tier…) and their class row
+  both apply. This is what the membership tiers already did, since a tier
+  follows status whatever the class, so converting a department's tier rules
+  takes no vote away from anyone on that basis. It can take one away: a
+  status row's waiting period now reaches administrative and social members,
+  who before waited only on their class.
+- **Version 2 rules replace the tiers' voting benefits.** The tier screen no
+  longer offers "Can vote" or the attendance threshold; it points to Election
+  Settings. The stored values are kept, not deleted, and seed a department's
+  rows until the secretary first saves this screen.
+- **No data migration.** Stored rules and tier benefits are converted when
+  they are read (`rules_from_v1`), never rewritten, so a department that never
+  opens the screen keeps exactly the electorate it had.
+- **Elections created before this keep version 1 rules,** and are judged as
+  they were — tier benefits included — until they close.
+
+### Left open
+
+- **A tier's attendance threshold now stops the ballot being sent.** Before, it
+  was checked only when the member tried to vote, so a member who fell short
+  received a ballot link and was then refused. As a row rule it applies
+  everywhere the other rules do: the roster, the ballot send and the vote.
+- ~~**Minutes › Attendance still reads the tier benefits** for its "Voting"
+  column.~~ Resolved 2026-11-13: the column now asks the same gate the ballot
+  send does, under the department's regular business meeting rules
+  (`ElectionService.voting_reason_under_rules`), so it agrees with an
+  election held on those defaults. It cannot speak for an election with
+  customized rules; Elections › Meeting Attendance does, per election.
+- **A version 1 election's tier rules can no longer be edited,** because the
+  tier screen dropped the fields. Its own election-wide rules still can, until
+  voting opens.
+- **A tier added after the rows were saved** has no row of its own and is
+  judged by the row of the status it counts as (or by no row at all, if it
+  counts as none) until the secretary gives it one; the screen says so on that
+  row.
+
+### Holding an election outside the defaults (2026-11-13)
+
+- **A reason is required whenever an election's rules differ from its kind's
+  defaults** (owner decision), on create and on any edit that touches the
+  rules, the kind or the reason. It is cleared when the rules match the
+  defaults again, written to the audit log
+  (`election_voter_rules_customized`), shown on the election, and carried in
+  the results the minutes file. This includes an explicit "no rules" (null),
+  which the API accepted without a reason before.
+- **A ballot item can follow another kind's rules, or rules of its own**
+  (owner decision: the bylaws carve-out is per ballot item, not per member).
+  Its own rules replace the election's — and the tier ladder's — for that item
+  only. Custom item rules need a reason; following a kind's defaults does not.
+- **In an election with such an item, a vote is judged live against the rules
+  of the item being voted on**, even for a member on the roll frozen when
+  voting opened. The roll holds everyone eligible for at least one item, so
+  being on it no longer proves eligibility for the item in hand. The cost: a
+  meeting recorded while the vote is open can change the answer for those
+  elections, which the frozen roll otherwise prevents. Elections with no such
+  item keep the frozen-roll behaviour.
+- **The create dialog's count of members who would receive a ballot** covers
+  the election's rules only, not each ballot item's own voter types, check-in
+  or carve-out rules; it says so beside the number.
+
+### Elections › Meeting Attendance (2026-11-13)
+
+`/elections/attendance` shows each member's meetings over a period the
+secretary picks (presets of 3 to 24 months, or custom dates up to five years),
+whether they may vote in the chosen election, and each member's meetings with
+how they counted and where the record came from (owner decisions: a second
+page with the same data as Minutes › Attendance; check-in time and recorded-by
+added; `elections.manage` is enough; eligibility follows the election chosen).
+
+- **The period is for reading only.** "May vote" is the election's own roster
+  answer, and its attendance rules count their own last N meetings or months,
+  whatever period the page shows. The page says so beside the tiles.
+- **Check-in time and recorded-by start now.** `meeting_attendees` gained
+  `checked_in_at`, `recorded_by` and `recorded_via`; rows written before this
+  have none, and nothing backfills them, since there is no record of who
+  entered them. Those meetings show their status with no source beside it.
+  Only an event check-in has a check-in time: a secretary's entry claims no
+  moment for one.
+- **Excused, on-leave and pre-membership meetings** are classified by the
+  same tally the ballot check uses, so a meeting held before a member's
+  current stint is left out of both the count and their list.
+
+## Evaluations — Waiver Data Points in the Annual Review (2026-11-11)
+
+The annual review can show a member's requests to be excused from training
+sessions and business meetings (`training.session_waivers_summary`,
+`training.session_waiver_history`, `meetings.waivers_summary`,
+`meetings.waiver_history`; see `docs/EVALUATIONS_MODULE.md`). Gaps the owner's
+decisions did not settle, each answered conservatively:
+
+- **"Attachment on file" always reads no.** Attachments are being added by a
+  parallel change and have no table on `main` yet. The flag is wired through
+  `EvaluationDataService._waiver_attachments_on_file`, which returns nothing
+  until that table lands; switching it on is a query in that one method. An
+  evaluation drafted before then records "no" permanently, as every snapshot
+  records what was true when it was taken.
+- **A voided request is listed, and counted only as voided.** Nothing voids a
+  request yet. When something does, the history shows the request and that it
+  was voided, and the summary counts it under `voided` rather than as approved
+  or denied, since a voided approval no longer counts toward the cap.
+- **The screens show the summary's count, not its breakdown.** The evaluation
+  pages and PDF print a count source as its number; the approved / denied /
+  withdrawn split is stored beside it (`breakdown`) and every request's
+  outcome is on the history lines, but nothing shows the split on its own.
+  Showing it would mean teaching the frontend's `formatFigure` and the PDF's
+  `format_figure` about an extra field. **Open:** whether to.
+- **Deciders are named by their current name**, or "a former member" when the
+  account is gone, as the request screens name them. A decision log step
+  carries no name snapshot.
+- **The category is shown.** It is the department's own label, chosen from its
+  policy list, and the owner exposed "all waiver data … but not reasons or
+  attachments". A department whose categories are themselves medical ("Cardiac
+  follow-up") will see them in the review; name categories accordingly.
+
+## Training Waiver Requests — What the Screens Leave Open (2026-11-11)
+
+The member, approver and settings screens for session waiver requests (the
+backend is #4225) made four conservative choices where the approved design left
+a gap. None blocks the feature; each is the owner's to revisit.
+
+- **The hub count is the viewer's own queue, not the department's.** The
+  Training Admin hub badges its Waiver Requests destination with the pending
+  requests the signed-in officer may decide, read from
+  `GET /training/waivers/requests?status=pending`. It is not an item in the
+  hub's attention queue (`admin_hub_service._training_attention`), which counts
+  org-wide for every `training.manage` holder: a training manager who is not
+  a routed approver would have been shown requests they cannot open. Adding a
+  department-wide item means a backend change and a decision on who should see
+  it.
+- **No attachment setting yet.** The policy model forbids unknown keys and has
+  no attachment field, because nothing reads one (pitfall #19). The settings
+  panel says attachments arrive later instead of offering a switch. The
+  attachments work adds the field, the upload control in the request dialog and
+  the list on the decision page.
+- **The overlap warning reads membership types only.** Saving a
+  session-attendance requirement warns when another active one grades the same
+  membership types (or both grade every type), the rule
+  `governing_attendance_requirement` narrows by. Position, rank and profile
+  scoping can still keep two such requirements apart, so it may warn where the
+  backend would pick one; it never stays silent where membership types alone
+  make the choice ambiguous. The warning is non-blocking.
+- **The decided list pages through the unfiltered list.** The list endpoint
+  filters by one status at a time, so the queue loads every pending request in
+  one call (up to the endpoint's 200) and pages the unfiltered list for the
+  decided ones, leaving out the pending rows it repeats. A page can therefore
+  show fewer than 50 decided rows. More than 200 pending requests for one
+  approver are reported as a count rather than listed.
+
+## PDF Reports — What the Generated PDFs Do Not Yet Meet (2026-11-09)
+
+A review of every server-rendered PDF (see `docs/PDF_REPORTS.md`) fixed the
+escaping, audit and truncation defects. Training and equipment-check reports
+now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
+
+- **No tagged PDF (PDF/UA).** Open-source ReportLab cannot build a structure
+  tree; automatic tagging is in the commercial ReportLab product only. Reports
+  carry a title, language and outline, but a screen reader reads them as
+  untagged text. **Accepted** until a library decision is made. Moving to an
+  HTML-to-PDF engine with PDF/UA output, such as WeasyPrint, would mean
+  rewriting every renderer and bringing that engine's SSRF hardening with it
+  (CVE-2025-68616, CVE-2026-55073).
+- ~~**Latin-1 only, fonts not embedded, no PDF/A.**~~ **Resolved
+  2026-11-10:** documents embed Noto Sans, and certified results,
+  evaluations and minutes are PDF/A-2b. What remains:
+  - **Scripts outside Latin, Greek and Cyrillic** (CJK, Arabic, Hebrew,
+    emoji) still print as empty boxes; Noto Sans CJK is CFF-based and
+    ReportLab cannot embed it. **Accepted** until a member needs it.
+  - **Label sheets and ID cards stay on Helvetica** by owner decision
+    (2026-11-09): their text is fitted to physical stock.
+  - **Minutes that append attachment PDFs make no PDF/A claim** (owner
+    decision, 2026-11-09): outside pages cannot be vouched for.
+  - **CI does not run veraPDF.** Conformance was confirmed with veraPDF 1.28
+    on 2026-11-10; `tests/test_pdfa.py` guards the structure it checked, not
+    every rule.
+- **The Reports page prints from the browser.** "Print / PDF" has no page
+  numbers, no repeated header, the browser's own time zone and no audit row.
+  **Decided, to build (owner, 2026-11-09):** a server-side PDF on the kit,
+  audited on the server.
+- **Print hints reach Acrobat, not browsers.** Label sheets and ID cards ask
+  to print at actual size (`/PrintScaling /None`), but most browser PDF
+  viewers ignore that and default to "Fit". The label pages tell the user to
+  set Scale to 100%; nothing can enforce it. The tray-by-page-size hint is not
+  set, because ReportLab rejects the key. The browser-printed label sheet
+  also depends on the print dialog's margins being left at "Default", where
+  the page's own `@page` margins apply. (Print-safe margins and the Avery
+  5160 alignment were fixed on 2026-11-09; see "Printing" in
+  `docs/PDF_REPORTS.md`.)
+- **Minutes, the inventory impact plan and the election documents keep their
+  own layouts**, numbered "Page N" rather than "Page X of Y" (except the
+  ballot). They escape correctly and are audited; moving them onto the kit is
+  a layout change, not a fix.
+
+## Medical Screening — What Is Still Plaintext at Rest (MS-18, 2026-11-05)
+
+**Decided 2026-11-04: encrypt the status first.** `screening_records.status`
+is AES-256-GCM ciphertext (`EncryptedEnum`, migration `80fa2c83bf9d`), so a
+dump no longer says which member _failed_ a screening. The provider, results
+and notes were already encrypted (MS-1). Searchable fingerprints were ruled
+out: with seven statuses and six types, a keyed hash puts every "failed"
+record under one value, and one known record reveals the rest.
+
+✅ **Decided 2026-11-06: "type + link + audit", built.** Migration
+`ac1687769b62`:
+
+- **The screening type is ciphertext** (`EncryptedEnum`). The pipeline gate's
+  lookup by type, the records list's type filter and the Members hub's
+  grouping by type match the decrypted value in Python, org-scoped;
+  `screening_records.screening_type` left `enum_normalization`. The
+  requirement's own type stays plaintext: it is the department's policy, not
+  a person's history.
+- **The requirement link is ciphertext** (`EncryptedReference`). The database
+  foreign key is gone; deleting a requirement clears its records' links in
+  `MedicalScreeningService.delete_requirement`, over the deleting
+  organization's records only. Grading and the expiring list match the link
+  after decryption. `tests/test_medical_screening_type_encrypted.py`.
+- **New audit entries do not name the type.** The record-created entry no
+  longer carries `screening_type`, and the records-list entry says only
+  whether a type filter was used (`screening_type_filtered`).
+
+Still plaintext, and staying that way unless decided otherwise:
+
+- **The dates and the member link.** Grading, the expiring list, the expiry
+  reminders and every screen filter and join on them.
+- **Audit entries written before 2026-11-06** still name the type of each
+  record created, and the type filter used on the records list. The audit log
+  is hash-chained, so rewriting a row breaks the chain.
+- **The records-list status filter** is still written into the audit entry,
+  as before; only the type was in scope.
+- **Backups taken before the upgrade** hold every one of these in plaintext.
+
+## Owner Decisions of 2026-11-01
+
+The owner answered every open question in this file on 2026-11-01, from a page
+that listed all 122 with their options. This section is the record: each
+entry names the question, the section it came from, and the decision. Where a
+section below still reads as open, this record decides it.
+
+- **Accepted as is (23):** the current behaviour stands; nothing will be built.
+- **To build (99):** decided, and built in area batches, one pull request per
+  area. Each section's own entry is marked resolved as its batch lands.
+
+**Policy: one department per installation.** Asked who should see brute-force
+alerts on a multi-department install, the owner answered that installations
+should not be multi-tenant: each instance serves one department. Existing
+multi-organization code stays as it is, and new work does not add
+multi-department handling. Questions that arise only with several departments
+on one install are closed on that basis.
+
+### Accepted as is
+
+**Elections**
+
+- Should ballot sending move to a dedicated background worker? _Decision:_ Leave as is (Web-process jobs with stale-job detection). From "Elections — Background Ballot Sends Live in the Web Process (2026-10-17)".
+
+**Events**
+
+- Should a late RSVP still get an event reminder interval that already passed with no recipients? _Decision:_ Leave as is (Mark sent to avoid reprocessing). From "CRON-31-7/8 — Two More Scheduled-Task Dedup Trade-offs, and a Redis-Down Fallback (2026-08-31)".
+
+**Finance**
+
+- Should a one-officer finance department be able to confirm its own amendments? _Decision:_ Leave as is (Require a second officer). From "Finance — Amendment Confirmation: What It Does Not Cover (2026-10-09)".
+- During leadership review, should leadership be able to change requests the Treasurer has not yet decided? _Decision:_ Leave as is (Leadership changes Treasurer-decided items only). From "Finance — Budget Adoption Stages: What They Do Not Cover (2026-10-09)".
+- Should the board's changes be entered directly in board review? _Decision:_ Leave as is (Move the year back). From "Finance — Budget Adoption Stages: What They Do Not Cover (2026-10-09)".
+- Should unsubmitted drafts move into the new year when a year closes? _Decision:_ Leave as is (Requesters re-create them). From "Finance — The Year-End Close: What It Does Not Cover (2026-10-09)".
+
+**Integrations**
+
+- Should Claude/AI clients be able to register themselves to connect to the app? _Decision:_ Leave as is (Administrators register each client). From "Claude (MCP) — Member Sign-In (OAuth) Residuals (2026-10-06)".
+- Should an AI client that retries a token refresh keep its connection? _Decision:_ Leave as is (Strict: any reuse disconnects). From "Claude (MCP) — Member Sign-In (OAuth) Residuals (2026-10-06)".
+
+**Members**
+
+- Should the shipped Senior tier count as a regular voting member by default? _Decision:_ Leave as is (Each department sets it by hand; safest for elections). From "Members — Class, Status, Tiers and Committees (2026-10-29)".
+- Should the baseline "Member" position appear on member profiles? _Decision:_ Leave as is (Hide it on profiles; show offices and committees only). From "Members — Class, Status, Tiers and Committees (2026-10-29)".
+- Should breaks in service for members reinstated before service tracking existed be reconstructed? _Decision:_ Leave as is (Officers correct by hand). From "Membership — Length of Service Across a Break: What Is Deliberately Left Alone (2026-09-24)".
+- Should the medical compliance roster load only each person's latest screening? _Decision:_ Leave as is (Load all; fine at department scale). From "MS-15 — Compliance Roster Loads Every Screening Record in the Organization, Unbounded (2026-10-13)".
+
+**Minutes & Meetings**
+
+- Should a signed copy be allowed to be attached to minutes after they are approved? _Decision:_ Leave as is (Allow the signed copy on approved minutes). From "Meeting Minutes — What Record Keeping Does Not Do (2026-10-14)".
+- Should election results be filed into meeting minutes automatically, with corrections as additional addenda? _Decision:_ Leave as is (Auto-file on, corrections as addenda). From "Meeting Minutes — What Record Keeping Does Not Do (2026-10-14)".
+- Is the public minutes page showing the right amount of detail? _Decision:_ Leave as is (Stricter public copy). From "Minutes — Publishing and the Public Page (2026-10-17)".
+- Should the public minutes page work on installations hosting more than one department? _Decision:_ Leave as is (Single-organization only). From "Minutes — Publishing and the Public Page (2026-10-17)".
+- Should departments' saved minutes outlines be updated to prepare motions for approving previous minutes and adjourning? _Decision:_ Leave as is (Departments tick it themselves). From "Minutes — Prepared Motions and Accepting the Previous Minutes (2026-10-18)".
+
+**Platform & Ops**
+
+- What should happen to the OneDrive/SharePoint and "Other" file-storage choices that are not connected? _Decision:_ Keep, clearly labelled (Leave them selectable with the "not connected yet" notice). From "File Storage — The Onboarding Platform Choice Has No Reader (2026-10-08)".
+
+**Scheduling**
+
+- Should the call-volume report read each shift under the tracking mode in force when it closed? _Decision:_ Leave as is (Warn only). From "Call Volume Reporting — Two Gaps Between Payload and Screen (2026-08-19, narrowed 2026-10-04)".
+
+**Security & Auth**
+
+- On an installation hosting several departments, who should see brute-force alerts against unknown usernames? _Decision:_ One department per installation (policy above). From "Multi-Tenant Isolation & Module Audit (2026-07-25)".
+- For deployments that route integrations through an outbound proxy, should the proxy be trusted to block internal addresses? _Decision:_ Accept the proxy as the control (Document that the proxy must block private/metadata addresses). From "Outbound Integration Requests — DNS Rebinding Is Closed for Direct `httpx` Connections; a Proxied Deployment and the `boto3`-Based S3/MinIO Connector Rely on the Up-Front Check Alone (SCH-10, resolved 2026-10-05 for `httpx`; S3/MinIO gap noted 2026-10-25)".
+- Should audit-log shipping guarantee each batch is sent only once? _Decision:_ Leave as is (At-least-once; collectors dedupe). From "OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)".
+
+**Training**
+
+- Should a training program's own shifts requirement count shifts actually worked instead of shift reports filed? _Decision:_ Leave as is (Keep counting officer-filed shift reports). From "Scheduling Module".
+
+### Decided, to build
+
+**Apparatus & Facilities**
+
+- When a location is deleted, should training records and classes keep it (location deactivated instead)? _Decision:_ Protect training history (Treat these like events: deactivate the location instead of deleting it). From "Locations — Deleting One Clears Its Location From Nine Kinds of Records (2026-10-21, updated 2026-10-25)".
+- When a location is deleted, should meetings and event requests keep it, while items, storage areas and tag logs lose it? _Decision:_ Protect meetings and requests only (Deactivate instead of delete when meetings or requests reference it; let the rest clear). From "Locations — Deleting One Clears Its Location From Nine Kinds of Records (2026-10-21, updated 2026-10-25)".
+- Should facility documents already filed outside the facility folders be moved into them? _Decision:_ Move them (Refile into the facility's restricted folders). From "FAC-13 — Every Facility Folder Requires the Sensitive-Family Permission Set, Silencing Three Established-Baseline Categories for Their Intended Audience (2026-09-03)".
+- Should tapping a room tag with an expired session return the member to that room after sign-in? _Decision:_ Return to the room (Require sign-in on both check-in pages and return after it). From "LOC-37 — A Room Tag Tapped With An Expired Session Loses The Room (2026-10-04)".
+- Should the two room-display data builders be merged into one? _Decision:_ Consolidate (One shared builder). From "LOC-40 / LOC-41 — Two Locations Decisions Left Open (2026-10-04)".
+- Should the database enforce unique location names within a building? _Decision:_ Add the constraint (Settle duplicates and enforce in the database). From "LOC-40 / LOC-41 — Two Locations Decisions Left Open (2026-10-04)".
+- Should an apparatus maintenance page be built, or should the dashboard fold the figure into the fleet board? _Decision:_ Fold into fleet board (Make the fleet board explicitly carry it). From "DASH-38 / DASH-39 / DASH-40 — Three Smaller Dashboard Decisions (2026-10-04)".
+- Should the dashboard show facility maintenance due in the next 30 days? _Decision:_ Add the tile (Add a due-soon query and filter). From "DASH-38 / DASH-39 / DASH-40 — Three Smaller Dashboard Decisions (2026-10-04)".
+
+**Communications**
+
+- When the setup wizard's email connection test fails, should it still save the settings? _Decision:_ Confirm (Ask the installer to confirm saving settings that failed the test; they can go back and fix them). From "Onboarding — Two Module Switches the Setup Wizard Offers or Sets Without a Reader (2026-10-31)".
+- Should administrators see which members have opted out of which emails? _Decision:_ Add an opt-out view (Admin screen listing members' email opt-outs). From "Member Emails — An Opted-Out Officer or Nominee Hears Nothing for Email-Only Alerts (2026-09-30)".
+
+**Documents & Forms**
+
+- Should reverting a legal document to the built-in text be recorded in its visible history? _Decision:_ Record reverts (Add revert rows or replaced-at/by fields). From "Legal Documents — History, Attribution and Formatting Gaps (2026-10-04)".
+- How should edits to someone else's legal-document proposal be attributed? _Decision:_ Record "edited by" (Show who edited a proposal). From "Legal Documents — History, Attribution and Formatting Gaps (2026-10-04)".
+- Should department legal text support a small safe set of formatting (headings, lists)? _Decision:_ Allow headings and lists (Support a small safe subset). From "Legal Documents — History, Attribution and Formatting Gaps (2026-10-04)".
+- Should Finance and Documents agree a lock order so receipt-protecting delete checks are race-proof? _Decision:_ Agree lock order (Define cross-feature lock order and lock). From "DOC-31 — A Document Delete's New Receipt-Reference Guard Reads Without Locking The Row It Checks (2026-10-23)".
+
+**Elections**
+
+- Should the older direct "send ballots" and "remind non-voters" endpoints be locked or retired? _Decision:_ Retire them (Remove the direct endpoints now that the queue covers both sends). From "Elections — Background Ballot Sends Live in the Web Process (2026-10-17)".
+- What should happen to a filed election result in adopted minutes when that election is rolled back? _Decision:_ Supersede with a dated correction (File a correction addendum that replaces the old result). From "Elections — A Rolled-Back Election Leaves Its Filed Result in Circulated Minutes (2026-10-22)".
+
+**Events**
+
+- Should the public event-request status link be stored hashed/encrypted like the applicant status link? _Decision:_ Hash/encrypt it (Apply the same protection; a database read no longer yields a live link). From "Multi-Tenant Isolation & Module Audit (2026-07-25)".
+- Should reminder markers wrongly copied across recurring events be cleared? _Decision:_ Clear with a migration (Remove copied markers based on each row's schedule). From "Events — Edit Form Gaps (2026-10-04)".
+
+**Finance**
+
+- Should dues payment history show who recorded each payment? _Decision:_ Show the name (Display who recorded each payment). From "Multi-Tenant Isolation & Module Audit (2026-07-25)".
+- Should dues schedules support grace periods, late fees, fiscal years and membership-type targeting? _Decision:_ Build them (Make generation honour membership types and fiscal year, and apply grace periods and late fees). From "Multi-Tenant Isolation & Module Audit (2026-07-25)".
+- Should recording a donation update the matching pledge automatically? _Decision:_ Link donations to pledges (Let a donation reference a pledge and update it automatically). From "Grants & Fundraising — Pledges and Fundraising Events (2026-08-08)".
+- Should departments be able to set their own budget-request reminder schedule or get bell notices? _Decision:_ Make it configurable (Add a setting for offsets and in-app notices). From "Finance — Budget Request Reminders Go Out 7 Days and 1 Day Before, for Every Department (2026-10-08)".
+- Should budget amendments support partial reversals or reversals in a locked year? _Decision:_ Allow partial reversals (Correct an amount in one entry). From "Finance — Budget Amendment Corrections Are Whole Reversals Only (2026-10-09)".
+- Should someone be notified when a large request is waiting for its second approval? _Decision:_ Email finance approvers (Notify eligible approvers by email). From "Finance — Dual Approval: What It Does Not Cover (2026-10-11)".
+- Should the second approval on a large request be limited to specific officers? _Decision:_ Named second approver setting (Let the department name the office that gives the second approval). From "Finance — Dual Approval: What It Does Not Cover (2026-10-11)".
+- Should an emailed approval and an in-app approval by the same person be recognised as one person? _Decision:_ Match by email address too (Treat a member and an email approver with the same address as one person). From "Finance — Dual Approval: What It Does Not Cover (2026-10-11)".
+- Should the dual-approval threshold vary by request type or category, or allow cents? _Decision:_ Per-type thresholds (A separate threshold for each request type). From "Finance — Dual Approval: What It Does Not Cover (2026-10-11)".
+- Should officers be notified when a budget amendment is waiting for confirmation? _Decision:_ Email + pending queue (Notify confirmers and list pending amendments in one place). From "Finance — Amendment Confirmation: What It Does Not Cover (2026-10-09)".
+- Should a rejected reversal keep showing which amendment it tried to reverse? _Decision:_ Keep a display-only link (Store the reference separately for display). From "Finance — Amendment Confirmation: What It Does Not Cover (2026-10-09)".
+- Should budget-line owners be emailed when leadership changes their amount? _Decision:_ Email owners on change (Send an email when leadership changes an owner's amount). From "Finance — Budget Adoption Stages: What They Do Not Cover (2026-10-09)".
+- Should fiscal years start or close automatically, or at least email the Treasurer? _Decision:_ Email reminder (Also email the Treasurer when a start/close is due). From "Finance — The Year-End Close: What It Does Not Cover (2026-10-09)".
+- Should one receipt be attachable to several expense lines? _Decision:_ Share a receipt (Let one upload cover several lines). From "Finance — Expense Receipts: What the Requirement Does Not Cover (2026-10-09)".
+- Should mileage lines have their own trip log instead of a receipt upload? _Decision:_ Built-in mileage log (Record trips in the form instead of uploading). From "Finance — Expense Receipts: What the Requirement Does Not Cover (2026-10-09)".
+- Should purchase requests and check requests require a receipt before payment? _Decision:_ Require before payment (Refuse "Mark Paid" on a purchase request without a receipt). From "Finance — Expense Receipts: What the Requirement Does Not Cover (2026-10-09)".
+- Should the remaining planned finance reports be built (expense summary by member, dues delinquency, purchase orders by vendor)? _Decision:_ Build them (Add the three reports). From "Finance — Board Reports: What They Do Not Cover (2026-10-12)".
+- Should the finance office be able to raise a cash advance for another member? _Decision:_ Allow on behalf (Finance raises advances for a named member). From "Finance — Cash Advances: What They Do Not Cover (2026-10-14)".
+- Should cash advances support the IRS periodic-statement method? _Decision:_ Add periodic statements (Model quarterly statements and their deadlines). From "Finance — Cash Advances: What They Do Not Cover (2026-10-14)".
+- Should outstanding cash advances be listed among a year's open items at close? _Decision:_ List at close (Show outstanding advances in the year-end open items). From "Finance — Cash Advances: What They Do Not Cover (2026-10-14)".
+- Should a live QuickBooks Online connection be built? _Decision:_ Build it (Live posting as Purchases to vendors via Intuit's API). From "Finance — QuickBooks Export Gaps (2026-10-08)".
+- When an approval chain names a position or member who lacks finance-approve permission, should naming them let them approve, or should saving be refused? _Decision:_ Naming grants that step (Being named lets them act on that step). From "Finance — Purchase Requests: Named Approvers, Notices and the Paid Amount (2026-10-14)".
+- Which finance approval events should notify whom? _Decision:_ Email approvers and requesters (Email approvers when a step reaches them and requesters on decision). From "Finance — Purchase Requests: Named Approvers, Notices and the Paid Amount (2026-10-14)".
+- Should "Mark Paid" ask for the actual amount paid? _Decision:_ Ask for the amount (Prompt for actual amount and show any difference). From "Finance — Purchase Requests: Named Approvers, Notices and the Paid Amount (2026-10-14)".
+- Should purchase-request approval chains also route expense reports and check requests? _Decision:_ Match own type only (Each chain routes only its own type (with an upgrade note)). From "Finance — Expense Reports: Routed by Purchase Chains, and Charged to No Budget (2026-10-14)".
+- Who should charge an expense report to a budget line, and should approval commit it? _Decision:_ Member picks, approval commits (Requester chooses the line). From "Finance — Expense Reports: Routed by Purchase Chains, and Charged to No Budget (2026-10-14)".
+- Should members see their own dues and get dues reminders? _Decision:_ My dues view + email reminders (Self-view and email reminders). From "Finance — Dues: Overpayments, and Members Who Cannot See What They Owe (2026-10-14, overpayments resolved 2026-10-27)".
+- Should the four Federal Programs cards become real grant opportunities? _Decision:_ Seed as opportunities (Make them real, startable opportunities). From "Grants — Opportunities Could Not Be Edited (2026-10-15, edit and retire resolved 2026-10-25)".
+
+**Integrations**
+
+- Should the calendar-publishing range and event-type filter be settable on screen? _Decision:_ Add settings (Expose range and event types on the integration card). From "Calendar Publishing — What a Pass Sends, and What No Screen Sets (2026-10-16)".
+- Should integration catalog changes (status, description, category) reach existing departments? _Decision:_ Reconcile chosen columns (Decide which columns the catalog owns and update existing rows via migration). From "INT2-3 / INT2-4 — Integrations Connect Without Credentials, And The Catalog Never Updates Existing Rows (2026-10-16, INT2-3 resolved 2026-10-27)".
+
+**Inventory**
+
+- Should inventory category names be unique, and what happens to duplicates that already exist? _Decision:_ Unique among siblings, grandfather existing (Refuse new duplicates under the same parent; leave and flag existing ones). From "Inventory — Input Rules Deliberately Left Open (2026-10-20)".
+- Should inventory items refuse implausible dates (warranty ending before purchase, year 0001)? _Decision:_ Check only when a date changes (Refuse bad pairs on create or when a date field is edited). From "Inventory — Input Rules Deliberately Left Open (2026-10-20)".
+- Should unassigning gear from an item's page ask for confirmation and the return condition? _Decision:_ Confirm and ask condition (Ask to confirm and record the return condition). From "Inventory — Input Rules Deliberately Left Open (2026-10-20)".
+- Should creating or importing an item count as "seeing" it on the Items Not Seen report? _Decision:_ Count creation (New items start as seen at creation). From "Inventory — NFC Tags and Items Not Seen: Open Decisions (2026-09-30)".
+- Should Tag Items in Bulk show the item's barcode so same-named items can be told apart? _Decision:_ Show barcode (Include each item's barcode). From "Inventory — NFC Tags and Items Not Seen: Open Decisions (2026-09-30)".
+- Should Items Not Seen stop naming a deleted storage area? _Decision:_ Hide deleted areas (Match the item page). From "Inventory — NFC Tags and Items Not Seen: Open Decisions (2026-09-30)".
+- Should a barcode put-away count as seeing an item? _Decision:_ Count it (Record a sighting for barcode put-aways). From "Inventory — NFC Tags and Items Not Seen: Open Decisions (2026-09-30)".
+
+**Members**
+
+- Should ordinary members see the department's own membership tier names? _Decision:_ Expose names read-only (Add a members-visible list of tier names (no advancement rules) so everyone sees the department's own labels). From "Members — Members See the Built-In Tier Names (2026-10-31)".
+- Which features should use the new "Reports To" supervisor relationship? _Decision:_ Crew views and approvals (Also let line officers see their crew's records/evaluations and route approvals to the supervisor). From "Members — No Supervisor or "Reports To" Relationship (2026-10-31)".
+- Should two members be allowed to supervise each other? _Decision:_ Refuse loops (Reject an assignment that would create a cycle (direct or longer)). From "Members — No Supervisor or "Reports To" Relationship (2026-10-31)".
+- Should tier benefits (voting, office-holding, training exemption) be looked up from the member's status rather than the old membership-type field? _Decision:_ Move readers to status (Change elections, training, events and service history to look the tier up from the member's status; fixes the missed benefits). From "Members — Class, Status, Tiers and Committees (2026-10-29)".
+- Should the applicant-to-member conversion dialog offer the department's own tiers? _Decision:_ Offer department tiers (List custom tiers in the conversion dialog). From "Members — Class, Status, Tiers and Committees (2026-10-29)".
+- Should existing applicant names stored with escaped characters (O&#x27;Brien) be cleaned up? _Decision:_ Backfill existing records (One-time cleanup converting escaped names back to plain text). From "Prospective Members — Follow-up Form Links (2026-10-29)".
+- Should officers be able to preview what a member must return before dropping them? _Decision:_ Add a preview button (Show the property-return preview on the member's profile). From "Member Lifecycle — The Page That Was Documented but Never Built (2026-08-08)".
+- Should screens like the ID card's "Member since" use credited service rather than hire date? _Decision:_ Use credited service where relevant (Switch selected readers to credited service). From "Membership — Length of Service Across a Break: What Is Deliberately Left Alone (2026-09-24)".
+- Should there be a separate permission to read medical screening narrative details? _Decision:_ Add a detail permission (View covers compliance status; a new permission covers clinical narrative). From "MS-14 — `medical_screening.view` Grants Full Narrative PHI, With No Finer-Grained Read Tier (2026-10-06)".
+- Should medical screening requirements honour their grace period? _Decision:_ Enforce it (Count members compliant during the grace period). From "MS-16 — `grace_period_days` / `applies_to_roles` / `frequency_months` Are Stored and Read By Nothing (2026-10-15, two of three resolved)".
+- Should a screening record satisfy only the requirement it is linked to? _Decision:_ Match by linked requirement (A record counts only for its own requirement). From "Medical Screening — A Screening With No Expiration Date Never Fell Due (2026-10-16, grading resolved 2026-10-25)".
+- Should the AI assistant's expiring-screenings tool include screenings due by frequency? _Decision:_ Compute in the tool (Calculate derived due dates in the tool). From "Medical Screening — A Screening With No Expiration Date Never Fell Due (2026-10-16, grading resolved 2026-10-25)".
+
+**Minutes & Meetings**
+
+- Who should count toward quorum in minutes: should members who left early count, and should proxies exist? _Decision:_ Make it a department setting (Let each department choose who counts, and optionally add a proxy status). From "Meeting Minutes — What Record Keeping Does Not Do (2026-10-14)".
+- Should minutes attachments be searchable, included in the published copy, and embedded in the PDF? _Decision:_ Include in published copy and PDF (Publish and embed attachments; larger files, possible exposure of attachments). From "Meeting Minutes — What Record Keeping Does Not Do (2026-10-14)".
+- Should action-item due-date reminders be emailed, not just shown in the app? _Decision:_ Email them (Send reminders by email as well as the bell (member can opt out)). From "Meeting Minutes — What Record Keeping Does Not Do (2026-10-14)".
+- Should minutes list only members present by default for new installations? _Decision:_ Present-only for new installs (Default new installations to present only; existing ones unchanged). From "Minutes — Attendance Listing (2026-10-18)".
+- Should meeting-record action items get a screen? _Decision:_ Build a screen (Show and manage meeting action items). From "Action Items — Who Is Assigned, and Who Closes (2026-10-04)".
+- Should the dashboard's action-items list be paged or capped? _Decision:_ Page or cap (Add paging or a cap). From "DASH-38 / DASH-39 / DASH-40 — Three Smaller Dashboard Decisions (2026-10-04)".
+
+**Platform & Ops**
+
+- Should the setup wizard offer the Public Information module, or leave it at its default? _Decision:_ Offer it during setup (Add Public Information to the wizard's Modules step so the department chooses it explicitly; one more question during setup). From "Onboarding — Two Module Switches the Setup Wizard Offers or Sets Without a Reader (2026-10-31)".
+- Should the shipped containers run the same Python and Node versions the tests run on? _Decision:_ Pin images to tested versions (Build images on Python 3.13 / Node 22; production matches what is tested). From "Dependencies".
+- How should the Unraid Community Apps template be made installable? _Decision:_ Combined image (Build one image with web and API plus a release workflow to publish it; needs someone owning releases). From "Unraid Community Apps Template — Not Installable Yet (2026-10-13)".
+- Can the three folder-backfill bookkeeping tables on upgraded databases be dropped? _Decision:_ Drop them (Remove; those backfills can no longer be undone). From "Upgraded and Fresh Databases Still Differ (2026-10-20)".
+- Should five old compliance tables that no code uses be removed? _Decision:_ Retire them (Drop the tables (losing any rows)). From "Upgraded and Fresh Databases Still Differ (2026-10-20)".
+- When onboarding is reopened after a browser restart, should the wizard say the session expired? _Decision:_ Show a banner (Say the session expired and answers are a local draft). From "Onboarding Cannot Be Resumed Across a Browser Restart (2026-08-15)".
+
+**Scheduling**
+
+- Should members be notified when an open shift swap they could pick up is posted? _Decision:_ Bell entry only (In-app notice only; less noise, easy to miss). From "Authentication & Security".
+- What maximum size should a shift close-out's per-member call counts and call-type tallies have? _Decision:_ Cap at 100 / 200 (100 entries for member counts (matches responding members), 200 call types). From "Scheduling Module".
+- Should outside-department shifts need officer approval before they count? _Decision:_ Optional approval setting (Let a department require approval before credit). From "Scheduling Module".
+- Should officers be able to seat a member in a custom crew seat that no rank or position grants? _Decision:_ Allow officer override (Officers may seat anyone in an ungranted custom seat). From "SCHED-CUSTOM-SEAT — A Department's Own Crew Seat Cannot Be Assigned to Anybody (2026-09-09, resolved 2026-10-06)".
+- Should certifications be able to qualify members for custom crew seats? _Decision:_ Map qualifications to custom seats (Let a certification confer a custom seat). From "SCHED-CUSTOM-SEAT — A Department's Own Crew Seat Cannot Be Assigned to Anybody (2026-09-09, resolved 2026-10-06)".
+- Should notifications and printed rosters use the department's chosen label for custom seats? _Decision:_ Use the chosen label (Read the department's label when rendering). From "SCHED-CUSTOM-SEAT — A Department's Own Crew Seat Cannot Be Assigned to Anybody (2026-09-09, resolved 2026-10-06)".
+
+**Security & Auth**
+
+- How should repeated wrong passwords at the "confirm it's you" prompt be limited? _Decision:_ Per-account rate limit, no lock (Slow guesses per account over a longer window without locking; smaller version of the same trade-off). From "Authentication & Security".
+- Should creating a member or changing a member's rank require the "confirm it's you" re-check, like granting roles does? _Decision:_ Gate only the sensitive part (Ask for re-confirmation only when the request changes rank or roles). From "Authentication & Security".
+- Should creating, editing or deleting ranks require the "confirm it's you" re-check? _Decision:_ Add the re-check (Require re-confirmation on rank create/edit/delete). From "Authentication & Security".
+- Should suspending, dropping or archiving a member require the "confirm it's you" re-check, as deleting does? _Decision:_ Add the re-check (Require re-confirmation for status change and archive). From "Authentication & Security".
+- Should setting up Gmail sending through a domain-wide service account require the "confirm it's you" re-check? _Decision:_ Re-check only the service-account fields (Ask for re-confirmation only when the service-account settings change (on both save paths)). From "Authentication & Security".
+- How should sign-in limits work when a whole station shares one internet address? _Decision:_ Limit per account and address (Count attempts per account as well, so one station's members don't block each other). From "Sign-in From a Shared Station Address (2026-10-05)".
+- Should files uploaded before malware scanning was turned on be scanned now? _Decision:_ Scan existing files once (Run a one-time scan over stored files and images). From "Self-Report Attachments — What Happens to the File (2026-08-23)".
+- Who should be allowed to set a custom S3/MinIO storage endpoint? _Decision:_ Restrict to installation operators (Only operators can set a self-hosted endpoint). From "Outbound Integration Requests — DNS Rebinding Is Closed for Direct `httpx` Connections; a Proxied Deployment and the `boto3`-Based S3/MinIO Connector Rely on the Up-Front Check Alone (SCH-10, resolved 2026-10-05 for `httpx`; S3/MinIO gap noted 2026-10-25)".
+
+**Training**
+
+- Should the cohort wizard expose description, notes, RSVP requirement, auto-record creation and default duration? _Decision:_ Add to the wizard (Expose the fields on the form). From "Application Review — Feature Rotation (2026-08-05)".
+- When review is off, should editing an approved shift report update the trainee's training credit? _Decision:_ Restate credit in place (Recalculate credit immediately on edit when review is off). From "Scheduling — Left Open by the Shifts-Module Review (2026-10-24)".
+- Should unsent offline skills evaluations survive an automatic sign-out? _Decision:_ Keep until same examiner returns (Hold unsent evaluations on the device for that examiner only). From "Skills Testing — Offline Support (2026-08-07)".
+- Should certification requirements stop matching records by name and code text? _Decision:_ Stored match key (Store a normalized key on each record). From "Training — Compliance Grading Still Reads Full History for Certifications and One-Time Requirements (2026-10-05)".
+- Should skills-evaluation, checklist and knowledge-test requirements stop matching records by name, as certifications did? _Decision:_ Extend the cut-off (Apply the same rule to fallback types). From "Training — Credit From Event Attendance (2026-09-29)".
+- What should happen to the older, duplicate training-enrollment endpoint? _Decision:_ Remove it (Delete the route). From "Training — `POST /training/enrollments` Duplicates, and Lags, the Fixed Enrollment Path (2026-10-06)".
+
+## Forms — Save With an Error, Resolve It Before Submitting (Owner Decision, 2026-11-05)
+
+**Owner decision (2026-11-05): a form always saves, even with a validation
+error. The error stays flagged on its field until it is resolved, and it must
+be resolved before the record is submitted or published.** Saving is never the
+step that refuses; submitting, publishing, sending for approval or
+finalizing is.
+
+- **Draft-then-submit forms** (training submission, purchase / expense /
+  check requests, events saved as draft, minutes, the custom-forms builder):
+  Save Draft always succeeds and shows every open error; Submit or Publish is
+  refused until they are fixed.
+- **Single-save forms** (a member's profile, an officer's edit-member page):
+  Save is the final step, so a value the record cannot hold is not written —
+  the rest of the form saves, the stored value is kept, and the field stays
+  flagged with a message until it is fixed.
+
+Built so far: the legal-name fields on `/account` and the officer's
+edit-member page (forms review F-1, `docs/FORMS_REVIEW_2026-11-05.md`), and
+the shared pieces the rest move onto — `FormField` and `ErrorSummary` in
+`components/ux/`, `useFieldErrors` in `hooks/` and the 422 mapping in
+`utils/serverFieldErrors.ts` — on Submit Training, `/account`, Add Member,
+Create Shift and Create Event, then extended to the shift template and
+pattern dialogs and the scheduling notification CC lists. Two sessions built
+these in parallel; their two `FormField` components were combined into one on
+2026-11-09, keeping both feature sets. On `/account` any field the server
+refuses is handled the way a blank name was: the request is resent without
+it, the rest of the profile saves, and the field keeps what was typed, flagged
+with the server's reason, until it is changed. The rest of the app's forms
+still refuse a save on error in various ways (F-3 in that review) and come
+into line module by module.
+
+Also on the shared pieces since: every create dialog the review found with a
+button greyed out until valid (Locations, Facilities, Documents' New Folder,
+Forms' Create Form, Medical Supplies' Add supply, Inventory's Add several
+items and Request Equipment, the suggestion box form, Apparatus (basic)).
+Then the dialogs that relied on the browser's `required` bubble: Create
+Election, event templates, custom roles, Create Pipeline, Inventory's item,
+kit, category, variant group, vendor, storage area and reorder dialogs, and
+notification rules.
+
+Training drafts keep a minimum (owner decision, 2026-11-08): a draft still
+needs a course name and a completion date, because both are NOT NULL
+columns, and making them nullable was declined. Every other field follows
+the rule above.
+
+**Create forms do not partially save.** Add Member, Create Shift and Create
+Event put each refusal on its field and create nothing until it is fixed:
+creating a record without the refused value and then flagging it would leave
+the flag on a form that has already navigated away. An event saved as a draft
+is still refused for the rules the server enforces on every event (an end after
+the start, an RSVP deadline before it).
+
+**Rolled out further on 2026-11-08** (batch 16). The shared field, 422s on
+their fields, schema `maxLength`, `<form>` with Enter, and discard protection
+now also cover:
+
+- **Top-level pages:** Action Items › Update, Locations › Station and Room,
+  basic Apparatus, Role Management, Documents › Create Folder and Upload, and
+  Scheduling's outside-shift form.
+- **Inventory and assets:** Inventory › Add / Edit Item, Apparatus › Fuel Log,
+  Maintenance Record, Equipment and Operator, Facilities › Add Facility,
+  Medical Supplies › Add / Edit, and the Store's item and order-window dialogs.
+- **Finance and grants:** purchase, check and expense requests (the server
+  draft and the expense session draft still work), the budget line and dues
+  schedule dialogs, pledges, fundraising events, donations, grant
+  opportunities and applications, and Admin Hours' category, manual entry and
+  entry editor.
+- **Minutes, communications and the smaller modules:** medical screening
+  records and requirements, messages, shift patterns and Generate Shifts,
+  Record Meeting Minutes, IP exception requests, meeting action items, legal
+  revisions and Add Applicant.
+
+Edits on these follow the single-save rule above, including Edit Pattern and
+the meeting action item, whose pages now refresh behind a dialog left open on a
+refused field. **One exception: Admin Hours' entry editor does not partially
+save.** It resubmits the whole entry and checks the start and end together, so
+saving one time without the other could leave an entry whose duration makes no
+sense; it saves nothing until every refusal is fixed. Dialogs that check their
+own fields turn off the browser's validation bubbles (`noValidate`), so the
+reason appears on the field instead of a native popup.
+
+**Rolled out further on 2026-11-09** (batch 17): Create Election, the member
+admin edit page (its uppercase labels kept through `FormField`'s
+`labelClassName`), the Create Training Session wizard, Inventory's Receive
+Stock, Request Equipment, vendors and contacts, Add several items, Unassign and
+Assign terms, Apparatus › Archive and NFPA items, the facility emergency
+contacts, medical supply deliveries, sixteen Finance dialogs (expense line,
+dues payment, advance return, reimbursement, pay by check, mark paid, budget
+request, amendment and reversal, adoption, fiscal-year lock, leadership and
+decision, the approvals-admin override, approval chain, export mapping), and
+the minutes sign, adopt, carry-forward, agenda, outline and suggestion forms,
+minutes reminder and signer settings, evaluation sign / amend / delete, saved
+reports, suggestion boxes and Schedule Email. The same rules apply: a create
+form creates nothing until fixed, an edit saves the rest, and a step that
+approves (adopt, sign, adopt a budget) refuses. Where main's own forms work had
+already converted a form (Create Election, Request Equipment, Add several items,
+Add / Edit Vendor, the suggestion box), it keeps main's `useFieldErrors`
+messages, with this batch's additions on top.
+
+**Owner decision (2026-11-11) — a budget request draft saves blank. Built.**
+The owner rule says Save Draft always succeeds, and `BudgetRequestCreate` used
+to require `requested_amount` and a non-blank `justification` on every request,
+so a blank draft was refused. Migration `0136dd6d4144` makes both columns
+nullable and the check moved to Submit: `submit_request` refuses an unfinished
+draft with a 422 naming the missing fields, and an edit of a submitted request
+may not clear either. On the owner's screen, Submit on an unfinished draft
+opens it with those fields flagged instead of sending it; the Treasurer's list
+shows a blank amount as _Not entered yet_. Downgrading fills a blank draft with
+0.00 and an empty justification (see `docs/UPGRADING.md`).
+
+**Owner decision (2026-11-11) — the Approvals approve / deny prompt asks
+before discarding. Built.** It is a `PromptDialog`, which had no discard
+question and no place for a server field error. Both are now opt-in props on
+the shared dialog: `askBeforeDiscard` asks "Keep editing" / "Discard changes"
+when the typed value differs from the one it opened with, and `error` shows the
+server's refusal on the field until it is edited, with the dialog left open.
+Approvals uses both; the approvals-admin override form beside it already did.
+The other `PromptDialog` callers are unchanged until they opt in.
+
+Still to come, module by module: the locations setup wizard, the other training
+builders and pipeline pages, the rest of Inventory (settings, stock lots, the
+checklist builder and the smaller dialogs), the full apparatus form, the
+facility overview, files and settings, medical supply lots and imports, store
+checkout, the finance cards and settings, the minutes editor,
+the remaining report dialogs, communications templates and intake, scheduling
+templates and settings, applicant conversion and stage settings, the org chart
+node and IP security admin, and onboarding, history, membership and the public
+portal. Each is listed in `docs/FORMS_REVIEW_2026-11-05.md`.
+
+**Rolled out further on 2026-11-11** (batch 18): Inventory's categories,
+variant groups, storage areas, kits, allowances, reorder requests, the
+write-off review, Copy checklist and Move NFC tag; Grants & Fundraising's
+donors, campaigns and the Zeffy link; Communications' officers and footers.
+The same rules apply. The edit loop the earlier batches wrote inline in each
+dialog is now one helper, `utils/saveExceptRefused.ts`. Three of these are
+replaced whole on every save and so refuse rather than save part: the Zeffy
+link, an officer assignment and the footer library (a refusal there names the
+card and field it belongs to). The write-off review is an approve-type step:
+Deny and Approve stay pressable and say what is missing (the note, the
+acknowledgement) on its field rather than sitting greyed out.
+
+**Rolled out further on 2026-11-11** (batch 19): a facility's systems,
+rooms and compliance checklists; the maintenance and inspection dialogs, on a
+facility's own sections and on the cross-facility Maintenance and Inspections
+pages; the medical supply category dialog; and the medical create panel the
+checklist builder and the item picker open. The same rules apply. The
+maintenance and inspection dialogs had been written out twice each, once per
+screen, and are now one component each, so a change lands on both. A save that
+failed with a reason no field answers for ("due date cannot be before the
+scheduled date", a room nesting rule, a duplicate name) is said in the form,
+where it stays until the next save, rather than in a toast.
+
+**Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
+Two of the three options, and not the third:
+
+- **Escape asks first — built.** A dialog that tracks whether its fields have
+  changed asks "Keep editing" / "Discard changes" before Escape, its X or its
+  Cancel throws them away; a clean dialog closes at once, so Escape stays the
+  way out (Pitfall #31). It is opt-in per dialog (`isDirty` on `Modal` /
+  `DialogPanel`, or `useDiscardGuard`), adopted on Inventory › Add / Edit Item
+  and Scheduling › Create Shift on 2026-11-06 and on every dialog the 2026-11-08
+  rollout converted (above); other dialogs still close without asking until
+  they pass the flag.
+- **Local drafts — built** for training submission (new ones; an edit is
+  already stored on the server), the manual shift report (Scheduling's shift
+  reports already kept their own draft), the expense report and Add Member.
+  sessionStorage, keyed by member and form, so a draft lasts as long as the tab
+  and never reaches another member; purged at sign-out. **PHI is never
+  drafted:** Add Member's draft leaves out the emergency contacts and the date
+  of birth, and no medical-screening form drafts. Attached files are not
+  drafted. Finance's purchase request keeps its existing server-side draft.
+- **A data router — rejected.** Navigating away inside the app (a sidebar
+  link) still leaves a page without asking; the drafts are what bring the work
+  back. `hooks/useUnsavedChanges.ts` still covers closing the tab.
+
+## Fundraising — The Donations List's Receipt Column Is Never Filled (2026-11-05)
+
+The Donations list shows a Receipt column read from `receipt_sent`, but nothing
+in the application sends a donor receipt or sets the flag, so it shows a dash
+for every gift (workflow review W69). **Owner decision (2026-11-05): leave
+it as it is for now.** The column is kept rather than hidden, and no manual
+"mark sent" control is added. Receipts are issued outside the application until
+the department decides how it wants them sent.
+
+## History — Decisions the Module Ships With (2026-11-03)
+
+The History module's first phase (past members, the Honor Roll, titles, family
+links and the clearance list; design in [HISTORY_MODULE.md](HISTORY_MODULE.md)).
+Each is an owner decision or a deliberate deferral, recorded so whoever handles
+an erasure request, a public-website question or a large upload knows it.
+
+- **Anonymizing a member does not touch their history record (owner decision,
+  Q-B option A).** A past-member record keeps its own copy of the person's
+  name and details from the moment it is created, even when it is linked to an
+  account. `member_anonymization_service` scrubs the account and leaves the
+  `historical_members` row, so the department's history outlives a right-to-
+  erasure request against the account. A request that should reach the
+  history record too has to be handled by the Historian by hand — editing or
+  deleting the record (a published one is unpublished first).
+- **"Public" is stored but not yet shown anywhere outside the app (owner
+  decision: the public feed ships in phase 7).** Publishing to the public
+  writes a cleared snapshot and the clearance list is enforced, but no public
+  portal endpoint reads it yet. The person page says so beside the button.
+- **Audio and video are limited to 55 MB a file.** ✅ Photos and media
+  shipped 2026-11-13 (phase 3). Uploads stay under the 60 MB proxy limit every
+  nginx configuration sets (`client_max_body_size 60M`) — 55 MB per file was
+  agreed; long recordings wait for chunked uploads.
+- **Person merge and bulk import are phase 2.** ✅ **Shipped 2026-11-13.**
+  Until then a duplicate was warned about at entry but two records for one
+  person were combined by hand. The decisions they ship with are below.
+- **An import never creates a login account (owner decision, 2026-11-03).**
+  A roster row is matched to an existing history record, mapped to an existing
+  member account, created as a new unlinked record, or skipped. A former
+  member who never had an account stays a history record only.
+- **A matched row only fills what is empty.** Names, badge, birth and death
+  dates, the line-of-duty flag and the notes are written only where the record
+  has nothing; what the Historian entered always wins, and a row's notes are
+  dropped where the record already has research notes. The row's service
+  period is added unless an identical one is already there.
+- **A blank "Left" means unknown, not still serving.** Only `present` (or
+  `current`, `now`) makes a service period ongoing.
+- **Slashed dates are read month first** (`6/14/1952` is 14 June). One whose
+  month would be over 12 is reported for correction, never swapped.
+- **Import drafts are deleted 30 days after anyone last worked on them**
+  (owner decision, 30 days; measured from the last change rather than the
+  upload, so a large roster reviewed over several sittings is not lost). The
+  rows hold the file's personal data encrypted; the import record itself is
+  kept, marked expired, as the audit of what was uploaded.
+- **"Remove this import's records" is not a batch undo.** It deletes only the
+  records the import created that are still drafts and that nobody has
+  edited, published, reviewed, linked to family or merged since; each one kept
+  is named with the reason. What the import added to existing records stays.
+- **A review screen reloads the whole draft after each decision.** Fine for a
+  department roster; a 5,000-row file answers each click in a second or two.
+- **Merging keeps the kept record's publication level** (choice made in the
+  phase 2 spec). If the removed record was published more widely, the merge
+  screen says so before the merge, and the Historian publishes again
+  afterwards. A merge into a public record is a substantial edit, so the public
+  keeps the last cleared version until the result is cleared.
+- **A merge deletes the removed record's clearance requests.** Clearance is
+  decided by revision number, so a request cleared for the removed record
+  could otherwise vouch for a revision of the kept one that nobody reviewed.
+  The change history, which moves to the kept record, still records every step
+  of that review.
+- **A memorial or line-of-duty designation on either record carries through a
+  merge.** A flag that is off is treated as an absence, not as a value that
+  competes with the other record's.
+- **Reading published history needs no permission.** Any signed-in member of a
+  department with the module on reads what is published to members. This was
+  chosen over a `history.view` grant on every position, which would have
+  needed a positions migration for every department; `history.view` instead
+  reads drafts and research.
+
+Phase 3, photos and media (2026-11-13), ships with these:
+
+- **TIFF is refused (owner decision).** It is refused everywhere else on the
+  platform as a complex format with a history of decoder vulnerabilities, and
+  the archive follows suit: a Historian converts a TIFF scan to JPEG or PNG
+  before uploading it, and the archival TIFF itself is kept outside the app.
+- **ffmpeg is part of the backend image (owner decision).** It makes the
+  image larger on every platform (Docker, Unraid, the ARM build); it is
+  installed without Debian's recommended extras to keep that down. It strips
+  audio and video for members — the streams are copied, not re-encoded, so
+  quality is unchanged and the members' copy roughly doubles each
+  recording's storage — and makes a video's poster frame and the length shown
+  in the gallery.
+- **A host without ffmpeg refuses audio and video (owner decision).** A
+  bare Linux or cloud install that runs the backend outside the image must
+  install the `ffmpeg` package (which provides `ffprobe`) for audio and video
+  uploads; until then they are refused with a message naming the package,
+  never stored unstripped. Photos are unaffected.
+- **Stripping covers tags and side tracks, not the sound or picture
+  itself.** Location, device and title tags, chapters, subtitles, data
+  tracks (where some cameras keep GPS) and embedded cover art are removed. A
+  place spoken aloud or visible in the frame is not, nor anything a codec
+  hides inside the encoded stream; the Historian still listens and watches
+  before publishing.
+- **The original is downloadable by `history.manage` only.** It is kept
+  byte for byte; everyone else gets the stripped copy.
+- **A photo-use consent warning never blocks.** A tagged person who declined
+  photo use, or never answered, is named on the item page and in a
+  confirmation before publishing; the Historian may publish anyway. A past
+  member with no account has no answer to show.
+- **Tags point at past-member records, not member accounts.** A current member
+  is tagged through their history record, which the Historian creates first
+  (`POST /people/from-member/{user_id}`).
+- **An item can be deleted only while it is a draft.** A published one is
+  returned to draft first, so deleting it is a deliberate second step.
+- **A batch upload is not one transaction.** Each file is its own request; if
+  the browser is closed part way, the files already sent stay as drafts and
+  the rest were never uploaded. The shared `batch_id` identifies the set.
+- **Documents (letters, minutes, scanned PDFs) are phase 4.** The media
+  upload refuses PDF and office files.
+
+## Medical Screening — Gaps for the Owner (2026-11-02, updated 2026-11-03)
+
+From the medical-screening deep dive
+([W71b](workflow-review/W71b-medical-screening-deep-dive.md)). Each was seen in
+the browser except the last, which was read from code. None is fixed, because
+each changes saved members' standing, writes PHI rows, or adds behaviour.
+
+- **A failed screening does not count against the member (W71b-1, HIGH).**
+  ✅ **Resolved 2026-11-02 (owner decision: the latest result decides).** A
+  failure leaves the requirement unmet until a later pass, completion or
+  waiver; the panel reads "Failed — not cleared", and the older pass leaves
+  the expiring list. `tests/test_medical_screening_failed_result.py`. Original
+  finding:
+  `_grade` considers only passed, completed and waived records. A member who
+  failed their physical last week, but passed one eleven months ago, reads
+  **compliant** on the roster, in the per-member panel and on their own
+  dashboard ("Clear, with conditions"). None of them mentions the failure.
+  Options:
+  - the latest dated result decides, so a failure makes the requirement
+    unmet;
+  - keep the grade but show "newer failed result" on the panel and roster;
+  - leave as is.
+- **Converting a prospect to a member leaves their screenings behind
+  (W71b-2, HIGH).** ✅ **Resolved 2026-11-02 (owner decision: re-link, and
+  migrate the prospects already converted).** Departments screen both before
+  and after the membership vote; the transfer now adds the new member's id to
+  the prospect's records (keeping `prospect_id`), and migration `beedcad5b36a`
+  does the same for earlier transfers. `tests/test_prospect_transfer_screenings.py`,
+  `tests/test_relink_transferred_prospect_screenings_migration.py`. Original
+  finding: `_do_transfer` does not re-link `screening_records`, so a
+  prospect who passed every pre-membership screening joins as "0 of N met".
+  The records stay on a TRANSFERRED prospect that no roster shows. The
+  proposed fix has two parts:
+  - set `user_id` on the prospect's records at transfer, keeping
+    `prospect_id`;
+  - a migration that backfills prospects already transferred, through
+    `transferred_user_id`, with a test that runs against existing rows.
+- **The Members administration hub grades screenings its own way (W71b-3,
+  MED).** ✅ **Resolved 2026-11-03 (owner decision: use the Compliance tab's
+  numbers).** The tile and the attention item now read
+  `get_compliance_roster`, members only; the item is "N members not compliant
+  with medical screening", links to the Compliance tab, and no longer claims
+  the lapse blocks duty assignment. Whether a lapse should block scheduling
+  remains a separate, unbuilt feature. `tests/test_admin_hub_db.py`. Original
+  finding: "Screenings current" counts anyone with one unexpired passed
+  record of any type. It ignores requirements, the frequency rule, position
+  scoping and waivers, and read 20% where the Compliance tab had 2 of 20
+  fully compliant. The "expired screenings" attention item ignores
+  frequency-derived lapses. It also says "blocks duty assignment", which
+  nothing implements. The proposal is to build both from
+  `MedicalScreeningService.get_compliance_roster` (pitfall #29), which
+  changes what the tile counts. Separately, decide whether a lapsed
+  screening should in fact block scheduling, or the claim should go.
+- **Nothing reminds anyone a screening is about to expire (W71b-4, MED).**
+  ✅ **Resolved 2026-11-08 (owner decision 2026-11-06: the same as
+  certifications).** A daily task emails the member 90, 60, 30 and 7 days
+  before a screening falls due, once per tier per screening and due date
+  (`screening_reminder_sends`, unique on that key). Email only, gated by the
+  Medical Screening module, the `medical_screening_expiry` notification rule
+  (on with no rule) and the member's "Training and certification reminders"
+  choice. The email names the requirement and the due date only; there is no
+  bell entry, which would store the requirement name beside the member in
+  plaintext. Officers are not copied, unlike the certification 30- and 7-day
+  tiers: the owner's decision named the member, and a copy to officers would
+  tell them which screening a member owes. `tests/test_screening_expiry_reminders.py`.
+  Original finding: certifications get tiered 90/60/30/7-day emails, and
+  screenings got none; a lapse was visible only on the Compliance tab and the
+  member's dashboard.
+- **A new requirement starts as one-time (W71b-5, LOW).** ✅ **Resolved
+  2026-11-08 (owner decision 2026-11-06: recurring by default).** A new
+  requirement starts with One-time unticked and recurs every 12 months;
+  existing requirements open as they were saved.
+  `ScreeningRequirementForm.recurringDefault.test.tsx`. Original finding: the
+  box started ticked though the hidden frequency was pre-filled with 12, so an
+  annual physical added in a hurry never fell due.
+
+## Zeffy — What the Integration Leaves to the Treasurer (2026-10-31)
+
+The Zeffy integration ([ZEFFY_INTEGRATION.md](ZEFFY_INTEGRATION.md)) applies
+Zeffy payments to donations, fundraising-event revenue and member dues. These
+were chosen deliberately and are open for the owner to confirm or change.
+**Owner decision (2026-11-06): all five confirmed as built.** The list is kept
+as the record of what the integration leaves to the treasurer:
+
+- **A refund of dues already credited is flagged, not reversed.** The dues
+  ledger has no reversal entry, so the payment shows **Needs review** and the
+  treasurer adjusts the dues by hand. Donations and event revenue are adjusted
+  automatically.
+- **Linking starts "from now on" by default.** Earlier Zeffy payments are
+  recorded but applied only if the link's start date is moved back, so nothing
+  the treasurer already typed in is counted twice.
+- **A payment stays on the record it was first applied to** when its campaign's
+  link is pointed elsewhere.
+- **A refund made more than 7 days after the sale arrives only by webhook.**
+  Zeffy's payment list has no "changed since" filter, so the hourly sync cannot
+  find it. Departments without the webhook will not see such refunds.
+- **Membership payments are matched to members by email only.** A payer who
+  used a different address than the one on their profile is left **No member
+  match** for the treasurer.
+
+## Onboarding — Two Module Switches the Setup Wizard Offers or Sets Without a Reader (2026-10-31)
+
+**✅ Resolved (Mobile App Access removed 2026-11-01; Public Information offered
+during setup 2026-11-03).** Found in the workflow review's W01 third pass
+(`docs/workflow-review/W01-onboarding.md`).
+
+- **Mobile App Access (W01-23) — resolved 2026-11-01.** Owner decision: remove
+  it. It is no longer offered by the setup wizard or by Settings → Modules. The
+  `ModuleSettings.mobile` field is kept (in `ONBOARDING_RETIRED_MODULES`) so
+  stored settings and the modules API do not change; nothing reads it.
+- **Public Information (W01-24) — resolved 2026-11-03.** Owner decision
+  (2026-11-01, confirmed 2026-11-04 over a later "leave it on by default"
+  record): offer it during setup. It is in the Modules step under
+  Communication (`ONBOARDING_OFFERED_MODULES` and the wizard's module
+  registry), so what the department answers is what is stored. It has no
+  permissions of its own (its admin screens need `settings.manage`), so the
+  Positions step shows no row for it. Tested in
+  `tests/test_module_settings_defaults.py`. Every module setup does not ask
+  about keeps its declared default (`modules_from_setup_answers` in
+  `services/onboarding.py`, used by both writers). Existing installations were
+  backfilled by migration `289504a34d3c` (2026-11-03): Public Information turns
+  on where setup stored it off, but not where the audit log shows an
+  administrator set it under Settings → Modules. See `docs/UPGRADING.md`.
+  **Resolved 2026-11-04** (owner decision: keep Public Information on for
+  these installs). An installation old enough to have no stored module
+  settings builds them once, on first read, from its legacy onboarding record
+  (`OrganizationService`). That writer used to store Public Information off,
+  and the backfill runs before it. It now follows the setup rule
+  (`modules_from_setup_answers`), except that Public Information keeps its
+  declared default (on) when the record does not name it: the setup that
+  wrote such a record never asked about it, so its absence is not a "no".
+
+Also from the same pass, resolved 2026-11-01: the email step saved settings that
+had just failed their connection test without a word (W01-27). Owner decision:
+warn, but allow saving. The failure now stays on the page, and Continue asks
+before saving.
+
+**✅ Resolved (owner decision 2026-11-01: confirm; built 2026-11-05).** Asked
+whether a failed test should still save, the owner chose to ask the installer
+first, who can go back and fix the settings. That is the W01-27 behaviour, and
+it was checked against the decision rather than rebuilt: after a failed test,
+**Continue** opens **Save settings that failed the test?** through
+`useConfirm` (CLAUDE.md pitfall #16) with **Fix the settings** and **Save
+anyway**. Fix the settings saves nothing and stays on the step; Save anyway
+saves and moves on. A passing test, no test, or a test whose settings were
+changed since (the warning clears) saves without asking, as before. Covered by
+`EmailConfiguration.failedTest.test.tsx` (both confirmation tests go red with
+the confirmation removed).
+
+## Members — Members See the Built-In Tier Names (2026-10-31)
+
+The department's membership tiers ("Active Member", "Senior Member", …) come
+from `GET /users/membership-tiers/config`, which requires `members.manage`. A
+member without that grant sees the built-in names instead. In the directory's
+status filter and on profiles that is "Regular member" and "Life member", and a
+custom tier such as Senior is missing from the filter. Officers and members
+therefore describe the same person differently (workflow re-check MR-3).
+
+**Open decision:** expose the tier _names_ to members through a read-only
+endpoint (ids and names only, without the advancement rules), or decide that
+tier naming is officer-facing and leave it as it is.
+
+**Resolved (2026-11-04), owner decision of 2026-11-01: expose names
+read-only.** `GET /users/membership-tiers/names` returns
+`{"tiers": [{"id", "name"}]}` in ladder order to any signed-in member of the
+organization — no advancement years, benefits or member counts, and the
+shipped ladder for an organization that has not saved one, as the config
+endpoint does. It sits under `/users`, which the frontend API cache never
+caches. `useMembershipTierOptions` reads it for every screen that labels a
+status — the directory's status filter, the profile's "… member" line, the
+add and edit member forms, the scheduling eligibility card and the conversion
+dialog — so officers and members read one name. The tier editor keeps the
+`members.manage` config endpoint.
+
+## Members — No Supervisor or "Reports To" Relationship (2026-10-31)
+
+Nothing in the data model records who supervises whom. A member has a rank, a
+station is a free-text field, and positions say what a member does, but no
+column or table links a member to the officer they report to. So "my crew" and
+"the members I supervise" cannot be answered anywhere in the application.
+
+Member performance evaluations (`app/models/evaluation.py`) are the first
+feature to feel this. Until a relationship exists, anyone holding the
+evaluator permission may be assigned to evaluate any member (owner decision
+2026-10-31): the evaluator is named per evaluation, by whoever drafts it or in
+bulk by an evaluation manager, rather than derived from a supervisor. The one
+structural rule — an evaluator is never the member being evaluated — is
+enforced by the evaluation service, not the database (see the `Evaluation`
+model's docstring for why).
+
+**Open decision:** add a supervisor relationship to members (likely a nullable
+`reports_to_id` on `users`, or a dated assignment table so the history of who
+supervised a member is kept), and then decide which features read it —
+evaluator defaults, line-officer visibility of their own crew's evaluations,
+and approvals. Not started; it is a change to the member model and its editing
+screens, separate from the evaluations work.
+
+**Resolved (2026-11-01), owner decision: dated supervisor assignments.**
+`member_supervisor_assignments` (migration `a1c3e5f7b9d2`) records who a member
+reports to as inclusive date ranges.
+
+How the dates work:
+
+- A change from day D ends the previous assignment on D−1.
+- A change dated the day the current assignment began corrects it in place.
+- If a former supervisor's account is hard-deleted, the dates stay
+  (`SET NULL`).
+
+Rules:
+
+- One open assignment per member, held by a generated `open_marker` column
+  under a unique key and by a member-row lock.
+- The supervisor is a current member of the department, never the member.
+
+Members-managers set, change and end it on the profile (**Reports To**), and a
+member sees their own.
+
+The evaluator default reads it: a manager who drafts an evaluation without
+naming an evaluator gets the member's current supervisor when the supervisor
+holds `evaluations.conduct`, and is the evaluator otherwise
+(`EvaluationService.create`, owner decision 2026-11-01).
+
+**✅ Resolved 2026-11-04 (owner decision 2026-11-01: crew views and
+approvals).** A member who supervises others _today_ — an assignment covering
+today's date on the department's calendar, whose supervisor is still a current
+member — gets read access to them by the relationship, not by a permission,
+checked on every request inside the caller's department, so an assignment that
+has ended grants nothing the next day. Nothing it opens is a write.
+
+- **My Crew** (`/members/my-crew`, `GET /users/me/crew`) lists the crew; the
+  menu offers it only to a member who has one.
+- **Training standing and records:** `GET /training/compliance-summary/{id}`,
+  `/stats/user/{id}`, `/requirements/progress/{id}`, `/category-hours/{id}`,
+  `/reports/user/{id}`, and `GET /training/records?user_id=` for one crew
+  member — the figures a line officer needs to supervise compliance and
+  certifications.
+- **Evaluations:** `GET /evaluations/crew` lists every evaluation of the crew;
+  each opens with its status and steps, and with its content once it is
+  released to the member — what the member may read. Drafting, writing,
+  signing, calibrating, amending and deleting never read the relationship.
+- **Not opened:** medical screening (PHI), emergency contacts and other contact
+  details beyond the directory, documents, and shift attendance history (the
+  roster already shows who is on each shift; a per-member history was not
+  needed for the decision).
+
+**Approvals:** a member's **time-off request** emails its supervisor (Shift
+notices; bell entry beside it), who may approve or deny it alongside every
+holder of `scheduling.manage`, who still review every request. The supervisor
+check is repeated under the request's row lock at the moment of the decision.
+With no supervisor today nothing changes. Left with their existing approvers,
+deliberately: **training self-reports** (approval grants credit and pipeline
+progress, is bound by the training officer's separation-of-duties rules, and a
+submission can carry PHI), **shift swaps** (two members, possibly with
+different supervisors, and qualification overrides), **pre-shift work**
+(credited hours), leaves of absence (recorded by members-managers, not
+requested) and finance approvals (their own approval chains).
+
+**✅ Resolved 2026-11-04 (owner decision 2026-11-01: refuse loops).** Setting
+or changing a supervisor is refused (400, "This would create a supervision
+loop: …", naming the chain) when the member would end up above their own
+supervisor — directly or through any number of others — on at least one day
+both assignments cover. Assignments on different dates are not a loop: a
+member may supervise their former supervisor. The check takes the
+organization row lock and reads every assignment with a locking read, so two
+simultaneous requests that are each half of a loop cannot both land
+(`MemberSupervisorService._refuse_loop`). Ending an assignment is never
+refused. Loops already recorded before 2026-11-04 are not changed:
+`backend/scripts/report_supervision_loops.py` lists them (exit status 1 when
+any exist) for a members-manager to break by changing or ending one
+assignment; none existed in the development database when this was built.
+
+**Still open:** an org chart does not read the relationship.
+
+## Members — No History of Positions Held (2026-11-01)
+
+**✅ Resolved (owner decision 2026-11-06: keep a dated history; built
+2026-11-08).** `member_position_terms` (migration `67ad01c43434`) records each
+stretch a member held a position: `started_at`, `ended_at` (NULL while held),
+and who assigned and removed it when the path knows (the position endpoints and
+the position service do; onboarding and the membership pipeline's conversion
+record no one). A session hook keeps it in step with `user_positions` on every
+path that goes through the relationship, in the same transaction; the paths
+that write `user_positions` with Core statements (member creation, the position
+service, the onboarding position step's bulk delete, the test-user seed) call
+the same reconciliation. One open term per member and position is held by a
+generated `open_marker` column under a unique key, and a repeated assignment or
+a removal of a position not held opens or closes nothing.
+
+What is kept and what is not:
+
+- A position deleted outright closes its open terms, and the terms survive
+  under the name and kind it had (`position_id` becomes NULL). A hard-deleted
+  member's terms go with them, as their `user_positions` rows do.
+- History starts at each member's current `assigned_at` when the migration
+  ran. Earlier changes are **not** reconstructed from the audit log's
+  `user_role_assigned` / `user_role_removed` events.
+- "Positions held" on an evaluation now lists every office and committee seat
+  held at any time during the review period (a term overlapping it), not only
+  those held when the figures were taken.
+- The member profile lists earlier offices and committee seats with their
+  dates, to everyone who sees the current ones, without the baseline Member
+  position or the rank mirrors.
+
+The original entry follows.
+
+`user_positions` records only who holds each position now: assigning one adds
+a row stamped `assigned_at`, and removing one deletes the row. Nothing keeps a
+member's earlier offices or committee seats.
+
+Member performance evaluations show "Positions held" as a data source, and the
+owner chose (2026-11-01) to list the offices and committee seats the member
+holds when the figures are taken and that were assigned by the end of the
+review period (`EvaluationDataService._positions`). A position held earlier in
+the period and given up before the figures were taken does not appear, and the
+evaluation says the list is as of when the figures were taken.
+
+**Open decision:** keep a dated history of position assignments (an
+assignment table with start and end dates, written when a position is assigned
+or removed), after which evaluations can list what a member held during the
+period. The audit log records `user_role_assigned` / `user_role_removed`
+events, but rebuilding history from it depends on the log being complete and
+was not chosen.
+
+## Frontend API Cache — An Inventory Item's Detail Is Cacheable and Names the Holder (2026-10-31)
+
+`GET /inventory/items/{id}` fills in `assigned_to_name` — who currently holds the
+item — for a caller who manages inventory or who holds it themselves. The shared
+API cache (`frontend/src/utils/apiCache.ts`) keeps GET responses for 30 seconds
+fresh and 90 stale, and `/inventory/items/{id}` is not in `UNCACHEABLE_PREFIXES`,
+although `/inventory/checkout/` and `/inventory/users/` are excluded for exactly
+this reason (who holds what is PII).
+
+It is left as it is because an earlier decision (FE9-34, pinned by a test in
+`apiCache.test.ts`) deliberately keeps the item list and detail cacheable and
+excludes only the maintenance sub-resource. Excluding the detail needs a prefix
+that would also uncache the item's other sub-routes, which is a performance
+change to a hot screen. Choosing between that and the current exposure is an
+owner decision.
+
+Owner decision: either (a) keep it — the response is already redacted per
+viewer on the server, and the cache is cleared on logout; or (b) exclude
+`/inventory/items/{id}` itself (a narrower pattern than a prefix) and update the
+FE9-34 test to match.
+
+## Members — Class, Status, Tiers and Committees (2026-10-29)
+
+The member standing rework (class and status as two controls, tiers as
+statuses, committee positions) leaves these for the owner:
+
+- **A tier member's missing class is not guessed.** Members moved onto a
+  department tier before `member_class` existed carry no class. Migration
+  `c4d7e2a91b60` settles their status to the tier and leaves the class NULL
+  (owner decision 2026-10-29: flag, do not guess). They show **Not set** on the
+  profile and under the roster's **Class not set** filter, and are treated as
+  neither operational nor administrative until an officer sets the class.
+- **The shipped Senior tier counts as nothing until set.** `ranks_as` is left
+  unset on upgrade so no ballot's electorate widens without a decision; a
+  department whose bylaws treat senior members as regular members sets
+  **Counts as** on the tier by hand.
+- **Tier benefits still resolve by the legacy field.** Voting eligibility,
+  the office-holding right and training exemption are looked up by
+  `membership_type == tier.id`, which for an operational member on a tier is
+  the tier id, but for an administrative or social member is the class word.
+  An administrative life member therefore does not receive the Life tier's
+  training exemption through the tier. The readers (election service,
+  training service, events, attendance dashboard, service history) should move
+  to `MembershipTierService.tier_for_status(tiers, member_status)`; not done
+  here to keep the change set to one model change.
+  **Resolved (2026-11-04), owner decision of 2026-11-01: move readers to
+  status.** One lookup, `tier_for_member` in `app/utils/membership.py`
+  (status first, the legacy value only when no status is recorded), now
+  serves every reader: the election voting and office-holding checks, the
+  ballot eligibility check and the turnout denominator, the events
+  "mandatory for" list (`member_holds_tier`), and — through
+  `MembershipTierService`, which delegates to it — the training report's
+  exemption and the attendance dashboard. Service history reads no tier
+  benefit. A training requirement's `required_membership_types` and a
+  compliance profile's membership chips still match the legacy value; they
+  scope by membership type, not by a tier's benefits, and guide 02 documents
+  that. A department tier whose id is a legacy class word
+  (`administrative`) is matched as the regular standing it spells.
+- **The pipeline's conversion outcomes are built-in statuses only.** The
+  applicant conversion dialog offers the seven built-in statuses, not the
+  department's tiers; a converted member who should start on a custom tier is
+  moved there from the edit page.
+  **Resolved (2026-11-04), owner decision of 2026-11-01: offer department
+  tiers.** The dialog's **Starting status** lists Probationary and Regular
+  plus the department's tiers by name, and the transfer accepts a tier id
+  after checking it against the organization's ladder (under the
+  Organization row lock); any other value is refused. A pipeline's stored
+  conversion rule still names only the two built-in starting statuses.
+- **The baseline Member position is no longer shown on the profile chips.**
+  It is of kind `system`, held by everyone, and the profile now lists offices
+  and committees; the members admin hub still shows it where it can be
+  removed from an archived member.
+
 This page consolidates known limitations and deferred design decisions surfaced
 by the ongoing code review (see [review-log.md](./review-log.md) for the raw
 findings and rotation). Items here are **intentionally open** — they need an
@@ -48,56 +1242,79 @@ entry stays only while code, tests or `CLAUDE.md` still cite it by name.
 > not just the date they were written. When you fix something listed here,
 > update its row in the same change.
 
+## Credentials Sent by Email — Two Decisions Left Open (ADV-10, 2026-11-08)
+
+Found by the adversarial exfiltration pass
+(`docs/security-review/ADV-01-adversarial-exfiltration.md`). Its fixes stop an
+officer rewriting the credential emails and stop an officer repointing a
+colleague's email without the reset ceiling and step-up. Two things remain for
+the owner, because closing them changes how members get into their accounts:
+
+- **The welcome email carries a temporary password.** Anyone who can read the
+  new member's inbox — a forwarding rule, a shared family account, a mail
+  provider's logs — holds a working password until the member's first sign-in
+  forces a change. A one-time setup link that expires and works once would
+  carry nothing reusable. It changes the welcome email, the first-login flow
+  and the IT-password notice, so it was deferred rather than folded into the
+  security fixes (owner decision, 2026-11-08).
+- **A reset link goes to an address nobody has verified.** Forgot-password
+  finds the account by email and does not check `email_verified`, and an
+  email change clears that flag. Refusing resets to unverified addresses would
+  close the path ADV-1 exploited for good, but many existing members have never
+  verified theirs, and they would lose self-service reset on upgrade. Left as
+  is; the email change itself is now ceiling-bound, step-up gated, audited and
+  reported to the previous address.
+
 ## Authentication & Security
 
-| Item                                                                                                                                                                                                                                                                                                  | Status                                                                                                                                   | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Several `config.py` settings have no reader anywhere in the backend**                                                                                                                                                                                                                               | ✅ Resolved (owner decision 2026-10-08: delete the dead settings; security review CI3-33-4)                                              | `RATE_LIMIT_PER_MINUTE`, `MAX_FILE_SIZE`, `STORAGE_TYPE`, `UPLOAD_DIR` and `DB_POOL_MIN` were declared in `app/core/config.py` and documented, but nothing read them: the per-scope rate limits are fixed in `security_middleware.py` (`RATE_LIMIT_DEFAULT` is the tunable one), every upload writer uses its own path under `/app/uploads`, and only `DB_POOL_MAX` reaches `create_async_engine`. **Resolved 2026-10-08:** the five fields are deleted and listed in `RETIRED_SETTINGS`, so a `.env` that still names one boots, ignores it and logs a warning asking for the line to be removed (pydantic-settings would otherwise refuse the unknown key). They are gone from the three Compose `environment:` blocks, `.env.example.full`, the Unraid templates and the wiki. `LDAP_*` remains a separate, documented case. See `docs/security-review/CI3-33-core-infra.md` (CI3-33-4).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **A failed public-portal authentication is never recorded, so its anomaly detector cannot fire**                                                                                                                                                                                                      | ✅ Resolved (owner decision 2026-10-11: nullable org/config, log every 401, unattributable rows platform-only)                           | `detect_anomalies` counts `public_portal_access_log` rows with `status_code == 401` per IP, but nothing wrote one: `authenticate_api_key` raises its 401 from the dependency, and an unknown key could not be filed under any organization while `organization_id`/`config_id` were NOT NULL. (The 429 half was recorded from 2026-09-24.) **Resolved 2026-10-11:** migration `e6d21e605d99` makes both columns nullable (downgrade deletes the platform-level rows, then restores NOT NULL). `authenticate_api_key` now writes and commits a 401 row for every refusal — no key, an unknown key, a revoked key, an expired key — through `_log_refusal`, which first runs the detector so the attempt that crosses its threshold (more than five failures from one IP in five minutes) is itself flagged. A key that was found but refused is attributed to its own department; one that matches no stored key is written with no organization and no config, and is **platform-level**: every per-organization reader (the Access Logs tab, the usage statistics) filters on `organization_id`, so no department sees it, while the detector, which counts by IP across the table, does. There is no platform-operator screen for these rows; they are read from the database or through the detector's flags in the server log. **Retention resolved 2026-10-12 (owner decision: a daily task deletes rows older than 90 days, successful and failed alike):** nothing had pruned `public_portal_access_log`, and writing every 401 made it grow with failed traffic too. The daily `prune_public_portal_access_log` scheduled task now deletes every row older than `PUBLIC_PORTAL_ACCESS_LOG_RETENTION_DAYS` (90), platform-level rows included, in batches of 1,000 committed one at a time. The detector and the usage tiles look back at most 30 days, so they are unaffected; the Access Logs tab and the all-time usage figures now cover 90 days (`docs/UPGRADING.md`, `tests/test_prune_public_portal_access_log.py`). Tested in `tests/test_public_portal_failed_auth_logging.py`, including the migration against a scratch table. See `docs/security-review/PUB-03-public-surface-webhooks.md` (PUB-8).                                                                                                                                                                                               |
-| **A member's phone and mobile are free text, and any text counts as "a number on file"**                                                                                                                                                                                                              | ✅ Resolved (owner decision 2026-10-05: lenient validation on new writes only, existing rows untouched; workflow review W04-7)           | Member phone and mobile now accept digits, spaces, dashes, dots, brackets, a leading `+` and an extension (`ext 4`, `x4`, `#4`), with 7–15 digits before the extension (`app/utils/phone_numbers.py`). Creating a member refuses anything else (`422`); `PATCH /users/{id}/contact-info` and `PATCH /users/{id}/profile` refuse a changed value that fails (`400`, naming the field) and pass one sent back unchanged, so a member whose stored number predates the rule can still save the rest of their profile. Stored values were not rewritten, so the Notifications tab's `hasMobileOnFile` can still count a legacy non-number as a mobile on file until it is edited. (`tests/test_member_phone_validation.py`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **Two positions can share a name, and nothing tells them apart where they are assigned**                                                                                                                                                                                                              | ✅ Resolved (owner decision 2026-10-05: refuse duplicates on create/rename, existing duplicates left and flagged; workflow review W05-5) | Creating, cloning or renaming a position to a name another position in the organization already uses — compared trimmed and case-insensitively — is refused with `409` (`RoleManagementService._assert_position_name_free`, which locks the organization row so two concurrent creates cannot both pass). Positions that already share a name are not touched: saving one without renaming it still works, and Role Management marks each with **Same name as another position** and its internal name (slug) so an administrator can rename one apart. No unique index or migration, because existing duplicates would block it. Onboarding's position setup writes its own rows and is not covered. (`tests/test_position_name_uniqueness.py`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **Add Member cannot set a new member's account status or preferred contact method**                                                                                                                                                                                                                   | ✅ Resolved (owner decision 2026-10-05: add status to the create endpoint as a new optional field; workflow review W08-1)                | `POST /users` takes an optional `status` — `active` (the default when omitted), `inactive` or `leave` — and creates the member with it. Dropped, retired, archived and suspended are refused at create, because the status change is what records their service history and property return. Add Member offers Active / Inactive / On Leave again and sends the choice. Preferred contact method is still not recorded: the owner chose the status-only option, so there is no field and the form offers no control for it. (`tests/test_add_member_initial_status.py`, `AddMember.test.tsx`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| **A member's base Member position can be removed like any other**                                                                                                                                                                                                                                     | ✅ Resolved (owner decision 2026-10-05: refuse unless the member is archived; workflow review W11-9)                                     | The base `member` position carries the baseline grants every member needs, so taking it off a member who is not archived is now refused with `400` on both write paths — the single removal and the replace-all assignment the admin screens use (`_refuse_base_position_removal` in `users.py`). Manage Roles no longer offers the remove control on it and keeps its box ticked and locked; an archived member's can still be removed. (`tests/test_base_member_position_removal.py`, `MembersAdminPage.test.tsx`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| **A waiver cannot excuse meetings without also excusing shifts**                                                                                                                                                                                                                                      | Accepted by the owner (2026-10-05; workflow review W13-5)                                                                                | Waiver Management offered "Meeting Attendance" and "Shift Requirements" as separate choices, and either one created the same leave of absence — `member_leaves_of_absence` has no field saying which it covers, and scheduling, attendance and tier grading all treat a leave as excusing both. The form now offers one "Meeting Attendance & Shift Requirements" choice, which is what the data has always meant (W13-1). **Accepted by the owner (2026-10-05): one combined waiver stays.** The UI already states the combined meaning, no department has asked to excuse one without the other, and the split would need a column, a migration and a change to every reader of leaves. Revisit if a department asks for it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| **A departure clearance cannot be worked or completed from any screen**                                                                                                                                                                                                                               | ✅ Resolved (2026-10-11, owner decision: build the clearance record screen)                                                              | A member dropped while holding property gets a departure clearance, and only `POST /inventory/clearances/{id}/items/{line}/resolve` and `…/complete` close one; no screen called either, so the clearance stayed `initiated` and the member was never auto-archived. **Built:** `/inventory/admin/clearances/:clearanceId` (`DepartureClearancePage`) lists each line with its disposition, resolves a line as Returned, Returned damaged (with the return condition), Written off or Waived, and completes the clearance or — with items still outstanding — closes it incomplete after a confirmation stating how many items and how much value stay unresolved. The hub's **Unresolved departure clearance** row now opens it. `GET /inventory/clearances/{id}` returns `member_name`. Returning an item the ordinary way on **Members** still does not resolve its clearance line — the line is resolved on the clearance, which performs the return itself. Initiating a clearance by hand still has no button; the drop creates one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **A member dropped today cannot be reinstated until tomorrow**                                                                                                                                                                                                                                        | ✅ Resolved (owner decision 2026-10-05: an undo-drop action; workflow review W15-3)                                                      | `record_rejoin` still refuses a return date on or before the last day of service, by design. A mistaken drop is now undone instead: `POST /users/{id}/undo-drop` (`members.manage`) restores the member — Active by default, or Probationary, Inactive or On Leave; never Suspended — and reopens the service stint the drop closed, so their service runs on unbroken. It is available for **7 days** after the drop — counted from the drop's effective date (the end of the stint it closed), not the day it was recorded, and never later than the recording (2026-10-16) — (`UNDO_DROP_WINDOW_DAYS`; `GET /users/{id}/undo-drop` reports whether and until when), because after that it would erase a real gap; a member who really left and came back is a rejoin. The property return report and any departure clearance the drop created are left for the quartermaster. The profile's Status area offers the control while it is available. (`tests/test_undo_member_drop.py`, `UndoDropControl.test.tsx`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| **Departed members are listed in every member's directory**                                                                                                                                                                                                                                           | ✅ Resolved (owner decision 2026-10-05: hide archived from non-managers, default filter Active; workflow review W15-4)                   | A member without `members.manage` is served the directory from `GET /users/directory`, which now leaves archived (departed) members out, and their Members page opens on the **Active** filter (**All Statuses** still shows inactive, on-leave and retired members). Coordinators keep the whole roster, archived included, from `GET /users`, which is unchanged for its other callers — so archived members still appear in other screens' member pickers that read it. (`tests/test_member_directory_endpoint.py`, `Members.test.tsx`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **Staff can read every applicant's status-page token from the label preview, and a printed applicant label carries it**                                                                                                                                                                               | ✅ Resolved (2026-09-28, workflow review W17-3)                                                                                          | Resolved at the owner's direction: applicant labels now print the short record id (`_short_id(id)`), like other modules, and the label preview no longer returns the status token. **Still open:** labels printed before this change carry live tokens. Revoking them means rotating every applicant's `status_token`, which breaks every status link already emailed; that was not done. A department that has printed applicant labels and is concerned about them can ask for a rotation, which is a separate decision. **Rotation built (2026-10-11), as the owner chose — per department, on request:** `backend/scripts/rotate_applicant_status_tokens.py --org <id or exact name> [--apply]` gives every applicant in that one department a fresh token (dry run by default, one audit event with the count). It breaks every status link already emailed to that department, and re-sends nothing; departments that do not ask keep their links.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **Recurring series stored before the W18 fixes are not repaired: some sit an hour off, on the wrong day, or collapsed onto one date**                                                                                                                                                                 | ✅ Resolved (2026-10-11, workflow review W18-3) — by report, not repair                                                                  | Resolved as the owner chose — report only, officers fix by hand: `backend/scripts/report_recurring_series_drift.py [--org …] [--include-past] [--all-differences]` writes nothing and lists, per series, occurrences 1 hour or 1 day off the date the parent's stored pattern gives under the fixed generator (stored vs expected, with RSVP counts), and series collapsed onto one start with the pattern dates no occurrence holds. **Still true:** no stored series is changed; a deliberate move of exactly an hour or a day is listed too, and the officer decides. Original finding: Two defects fixed in W18 wrote wrong occurrence times, and the fix corrects new series and later edits only. (1) `_generate_recurrence_dates` stepped the stored UTC instant, so a series spanning a daylight-saving change is an hour off after it, and an evening series with custom weekdays, an Nth-weekday pattern or skip dates could be matched against the UTC day (a day late). (2) `update_future_events` copied the anchor's start and end onto every later occurrence, so any series edited with "This and all future events" has those occurrences collapsed onto one date; the original dates are not recoverable from the occurrence rows, only by regenerating from the parent's stored pattern. Repairing either moves events members may have RSVP'd to and is a data migration, so it was not done.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **A member promoted off an event's waitlist is told only in the app, not by email**                                                                                                                                                                                                                   | ✅ Resolved (2026-10-11, workflow review W19-1)                                                                                          | Resolved as the owner chose — an email, a template and its own switch: `promote_from_waitlist` now also emails the promoted member (non-fatal, after the in-app entry) through the new **Off the Waitlist** template (`event_waitlist_promotion`; migration `32a58e65eb63` widens `email_templates`/`scheduled_emails.template_type`). The email is gated by a new optional member email kind, `event_waitlist` (**Off the waitlist**, on by default, not tied to the Event reminders switch), which a department can make required. Original finding: `promote_from_waitlist` logs an `in_app` notification ("You're off the waitlist: …") and sends nothing else. CLAUDE.md pitfall 18 makes email the channel of record with the bell layered on top, so a member who reads only their inbox never learns they are confirmed, may not come, and holds the seat. Adding it is a new outbound email with its own template and a place among the per-member email switches, which is a product change rather than a fix.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **An automatic waitlist promotion does not appear in an event's RSVP Activity**                                                                                                                                                                                                                       | ✅ Resolved (2026-10-11, workflow review W19-3)                                                                                          | Resolved as the owner chose — a marker column and a row: migration `43b88e6ec431` adds `rsvp_history.is_automatic` (boolean, default false; guarded, since `rsvp_history` is a `create_all`-only table), `promote_from_waitlist` writes a `waitlisted → going` row with `is_automatic = true` and no `changed_by`, `GET /events/{id}/rsvp-history` returns `is_automatic`, and RSVP Activity reads "… was moved from Waitlisted to Going (automatically, when a spot opened up)". Promotions made before the change wrote no row and are not backfilled. Original finding: `promote_from_waitlist` writes no `rsvp_history` row, so the officer's feed shows the member waitlisted and nothing after it while the list above shows them Going. A row with an empty `changed_by` would read as the member's own change ("Null means self-change"); recording it honestly as automatic needs a new column or marker on `rsvp_history`, which is a migration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **Deleting an event template only deactivates it, while the dialog says it cannot be undone**                                                                                                                                                                                                         | ✅ Resolved (2026-10-11, workflow review W21-5)                                                                                          | Resolved as the owner chose — relabel, do not delete: the action is now **Deactivate** (archive icon, shown on active templates only), its dialog reads _"Deactivate "…"? It will no longer be offered when creating an event. Events already created from it are not affected, and you can reactivate it at any time with its switch."_, and the "cannot be undone" copy is gone. The backend's `DELETE /events/templates/{id}` still soft-deletes, unchanged. Original finding: Driven: Delete → "This action cannot be undone." → Delete, and the template is still listed as Inactive, identical to Deactivate. `delete_template` soft-deletes deliberately ("Soft-delete a template by deactivating it"), presumably so events created from it keep a valid reference. Whether templates can be removed — and so whether the dialog or the button is wrong — is a product decision.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **Event analytics' attendance rate counts upcoming events as no-shows**                                                                                                                                                                                                                               | ✅ Resolved (2026-10-11, workflow review W21-6)                                                                                          | Resolved as the owner chose — past events only, per-event average: `avg_attendance_rate` is now the mean of checked-in ÷ Going for each event in the period that has ended (`end_datetime <= now`) and had anyone Going, so the "Avg" label is accurate and upcoming RSVPs no longer pull it down. The response field and the card label are unchanged. **Still as before:** "Top Events by Attendance" lists upcoming events at 0%. Original finding: `get_analytics_summary` divides every checked-in RSVP by every Going RSVP in the period, pooled, including events that have not started; the review install read "Avg Attendance Rate 67%" with one past event at 100% and one upcoming event at 0%, which "Top Events by Attendance" also lists. The figure falls whenever members RSVP to something upcoming, and it is a pooled ratio despite the "Avg" label. Which events it should cover, and pooled versus per-event average, is a metric definition.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| **A public event requester is never given their status link**                                                                                                                                                                                                                                         | Accepted by the owner (2026-10-05; MED, workflow review W22-4)                                                                           | After submitting the public request form the requester sees only "Thank you for your submission!"; neither the acknowledgement nor the status-change email carries the `/event-request/status/<token>` link, which is reachable only by a coordinator pressing Copy Link and sending it by hand. That page is where the requester follows progress and cancels, and it promises email updates that depend on the department's triggers (and still promises them after a cancellation). Showing the link on the confirmation screen changes a public endpoint's response; adding a `{{status_link}}` to the default acknowledgement changes what the department emails a stranger and would not reach a customised template. Which, or both, is a product decision. **Accepted by the owner (2026-10-05):** leave as is — the status link stays something a coordinator shares by hand, the deliberate posture recorded under "Outreach Requests — Two Deliberate Choices in the Public Pipeline" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **A guest sign-in's applicant lands in no pipeline, and nobody can see it**                                                                                                                                                                                                                           | ✅ Resolved (owner decision 2026-10-08: fall back to the sole/first active pipeline + backfill stranded; workflow review W23-1)          | A guest sign-in created its prospect with no pipeline whenever the department's pipeline was not flagged `is_default`, and the board, table and source filter all omitted it. **Resolved 2026-10-11:** `_get_default_pipeline` now falls back to the organization's first active, non-template pipeline (by creation time) when none is default, so a new applicant always lands on a board when one exists. Migration `e1a5bfe7a2ed` places the applicants already stranded — open ones only (`active`, `on_hold`) — on the same pipeline, at its first stage with a progress row per stage, and logs `pipeline_assigned_by_backfill` in each applicant's activity log; closed applications stay as they were, and a department with no usable pipeline keeps its rows unplaced. The downgrade takes back exactly those placements. `tests/test_prospect_pipeline_fallback.py`, `tests/test_place_stranded_prospects_migration.py`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| **No screen shows who signed in as a guest**                                                                                                                                                                                                                                                          | ✅ Resolved (2026-10-11, owner decision: guests list on the event page, not counted in member attendance)                                | A kiosk guest sign-in is stored as an external attendee (`GET /events/{id}/external-attendees`, `events.manage`), and nothing in the frontend read it, so the event page said "Attendance (0)" after guests signed in. **Built:** the event page shows a **Guests (_n_)** card to event managers (`EventGuestsCard`) — name, organization, email, phone, sign-in time and source — and states that guests are not counted in attendance; member attendance figures are unchanged (they are read from RSVPs, which guests do not have). Shown on an event that takes guest sign-ins even when empty. Not built: guests in check-in monitoring or attendance exports, and editing a guest from the card. _(2026-10-25)_ Adding a guest and signing a listed guest in from the card are built.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **A program's linked requirement starts at zero, whatever the member already holds**                                                                                                                                                                                                                  | ✅ Resolved (2026-10-06, owner decision: read the compliance result live)                                                                | A department requirement linked into a program now reads the member's compliance result: each such progress row is a projection of `evaluate_member_requirement_detail` (the compliance matrix's grader) as of the department's today — the member's graded records, shifts worked, waivers and catch-up included — written onto the row by `TrainingProgramService.refresh_linked_progress` whenever program progress is shown (enrollment detail, My Enrollments, a member's enrollments, the program's Enrollments tab, the My Training pipeline card), after which the enrollment percentage re-rolls and a completed phase advances as for any progress update. A member with 4 of 6 Hazmat hours now reads 4/6 in both places. _Linked_ means a requirement no program link owns (`owns_requirement`); a requirement a program created for itself — including one a duplicated program shares — keeps its program ledger. Feeds (shift reports, sessions, skills tests, credits) accrue nothing on a linked row and write no ledger credit; an officer cannot set its value or mark it complete (400, with the reason), only waive it for the program or lift the waiver. **Enrollments already made** read live from the next view: no migration, no row deleted; their stored values are replaced by the compliance figure on first read. **Not followed live:** completed, withdrawn, failed and expired enrollments keep the progress they finished with, so an annual requirement's new period cannot reopen last year's completion. Reports that read `requirement_progress` directly (struggling members, the program report counts) see a linked row as of its last refresh.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **An open shift swap cannot be picked up, and approving one moves nothing**                                                                                                                                                                                                                           | ✅ Resolved (2026-10-05, owner decision: offer to members eligible for the seat; pickup moves the assignment)                            | An open swap is now listed to every member cleared for its seat (`GET /scheduling/swap-requests/open`, on the Requests tab under **Open shifts you can pick up**), judged by the same `get_eligible_positions` rule as signup and two-way exchanges. `POST /swap-requests/{id}/pick-up` moves the assignment to the member under the signup window and the full `_validate_assignment_candidate` checks (eligibility, leave, overlap, EVOC, seat cap) — no override. Officer approval of an open swap is refused, since it moved nothing; deny still works. Not built: open swaps are not pushed to eligible members by email or notification — they are found on the Requests tab. Whether to notify them is a separate decision. (W33-4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **The inventory setup wizard's first step needs a grant the quartermaster does not hold**                                                                                                                                                                                                             | ✅ Resolved (2026-10-11, owner decision: grant `locations.create` to the quartermaster; workflow review W38-1)                           | `/inventory/admin/setup` is gated on `inventory.manage`, and its first step adds rooms through `POST /locations`, which requires `locations.create` or `locations.manage`. The seeded Quartermaster position now carries `locations.create` in `DEFAULT_POSITIONS`, and migration `9e8b0b6f3fe8` (`grant_quartermaster_locations_create`) adds it to every stored system `quartermaster` position that still holds `inventory.manage` and does not already cover it (`locations.create`/`locations.manage`/`locations.*`/`*`) — an addition gated on evidence per pitfall #23; its downgrade removes the grant. Create only: `locations.edit`/`locations.delete` are not granted. The wizard's room form was already shown by permission, so it now appears for the quartermaster; a position without the grant still sees the explanation instead of a form. Pinned by `tests/test_quartermaster_locations_create_grant.py` (registry, the grant/revoke functions, and the migration's own upgrade/downgrade against a temporary table).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **Receiving gear back does not close the member's return notice**                                                                                                                                                                                                                                     | ✅ Resolved (2026-10-11, owner decision: mark received for inspection; workflow review W39-5)                                            | `unassign_item`, `return_to_pool` and `checkin_item` (and so batch return, the kiosk check-in and departure clearance, which call them) now mark the member's open `requested` return notice for the same holding `received`: `reviewed_by`/`reviewed_at` set, `received_quantity` recorded, `review_notes` "Received through <path>, not through this notice; not inspected here." `observed_condition` stays empty and no follow-up is raised — the direct return's own condition is the record, and the notice is not completed. The notice leaves the returns queue, the hub's pending-returns count and the member's Pending count; the returns panel gains a **Received another way** filter. A pool return of fewer units than the notice announced leaves it open; another member's notice on the same pool item is untouched. The notices are locked before the item, the order `review_return_request` uses, so the two paths cannot deadlock. **Follow-on (2026-10-12, owner decision):** a received notice can now be **inspected**. `PUT /inventory/return-requests/{id}/review` accepts `status: "inspected"` for a `received` notice only (any other state, and `received`/`denied` on a received notice, is refused; the fetch is org-scoped), records `observed_condition`, the notes and the same follow-up a receipt raises (maintenance, write-off, or a pool charge review), and completes the notice. It moves no stock and closes no holding a second time; the one item change is the receipt's safety rule — a serialized item found poor, damaged or out of service while it is still on the shelf (`available`, unassigned) goes to `in_maintenance`, while gear already out again is left to the follow-up record. The owner confirmed this rule on 2026-10-12. The notice has no inspector column, so `reviewed_by`/`reviewed_at` move to the inspector and the receipt's actor is appended to the preserved "Received through …" note ("Received by <name>."), followed by "Inspected: <condition> -- <notes>"; the audit event records the decision and observed condition. The returns panel shows **Inspect** on received notices, opening the review dialog with condition, follow-up and notes but no identifier or count. Pinned by `tests/test_inventory_direct_return_closes_notice.py`, `tests/test_inventory_inspect_received_notice.py` and `ReturnRequestsPanel.test.tsx`. |
-| **A variant group created on the Variant Groups page can never be filled**                                                                                                                                                                                                                            | ✅ Resolved (2026-10-11, owner decision: group picker on the item form; workflow review W40-7)                                           | The Add/Edit Item form (`ItemFormModal.tsx`) now has a **Variant Group** select listing the organization's groups (active ones offered, an item's current inactive group shown as "(inactive)"). Create sends the chosen `variant_group_id` (omitted when none); edit sends it or an explicit `null` to remove the item from its group — the existing `POST`/`PATCH /inventory/items` contract, whose FK is already org-validated by `_assert_item_fks_in_org`. The picker is hidden while Generate Sizes & Styles is on, which still creates its own group. The Variant Groups page's empty state now points at the picker. No backend change. Pinned by `ItemFormModal.test.tsx` ("variant group picker") and `VariantGroupsPage.test.tsx`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| **A reorder request made in the app can never be received**                                                                                                                                                                                                                                           | ✅ Resolved (2026-10-11, owner decision: both — item picker at create and linking at receipt; workflow review W41-5)                     | The create and edit forms on `/inventory/admin/reorder` now carry an **Inventory item** picker (`InventoryItemPicker`, gear catalog), and the low-stock quick fill and the hub's `?category=` prefill link the category's lowest item: `GET /inventory/low-stock` items gain an additive `id`. An unlinked request's **Receive stock** dialog asks for the item first and links it through `PATCH /inventory/reorder-requests/{id}` before posting the receipt (the plain PATCH does not bump `version`, so the receipt's `expected_version` still matches). `ReorderRequestUpdate` gains an additive `item_id` (org-validated by `_assert_reorder_fks_in_org`); the update refuses to change or clear it once `quantity_received > 0`, and an unchanged id passes, so the edit form can send it every save. Pinned by `tests/test_inventory_reorder_item_link.py`, `tests/test_low_stock_lot_totals.py` and `ReorderRequestsPage.test.tsx`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **A write-off raised for one returned unit of pool stock retires the whole item**                                                                                                                                                                                                                     | ✅ Resolved (2026-10-11, owner decision, docket W41-6)                                                                                   | Owner decision: do not offer write-off for pool issuances. Receiving a damaged pool return (`return_type = issuance`) no longer lists **Write-off review** as a safety follow-up, and `review_return_request` refuses `follow_up = write_off` for a pool issuance with a 400 ("Write-off review is not available for pool issuances"). `auto` on an out-of-service pool return now maps to `maintenance`, the follow-up a damaged pool return already got, instead of `write_off`. The returned units were already kept out of issuable stock by the receipt (`_return_units_to_stock`), so nothing is lost; the hazard was the write-off request naming the item, whose approval retired the whole shelf and released every holder. Individual items are unchanged. A quantity write-off remains unbuilt by decision. Pinned by `tests/test_inventory_return_receipt.py` and `ReturnRequestsPanel.test.tsx`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| **The check log and fleet board count a checklist as missed on days before it existed**                                                                                                                                                                                                               | ✅ Resolved 2026-10-11 (owner decision 2026-10-05: from template creation; MED, 2026-09-30, workflow review W46-19)                      | Resolved by counting a checklist from its creation. `EquipmentReadinessService._expected_pairs` — the one definition the fleet board, check log and Check Reports compliance counts share — now pairs a shift with a checklist only if the checklist existed before the shift was over: a shift whose `end_time` is at or before the template's `created_at` owes nothing, a shift still under way at creation does, and a shift with no recorded end owes it from the creation day on the department's calendar. The 9:54 PM checklist no longer makes the previous day missed. Re-scoping an existing checklist (new apparatus or type) does not restart the clock, per the chosen option; no publish timestamp was added. `tests/test_checklist_expected_from_creation.py` pins it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| **The dashboard's Low stock counts a lot-stocked category as empty**                                                                                                                                                                                                                                  | ✅ Resolved (2026-10-11, owner decision: sum lots for lot-stocked items; exclude medical to match the list)                              | `InventoryService.get_low_stock_items` summed `InventoryItem.quantity` per category, and an item stocked through lots leaves that column at 0, so a category of lot-stocked supplies read as empty against its threshold; the dashboard's "Low stock" widget also counted medical categories the `/inventory?stock=low` list it opens leaves out (the widget read 2, the list 1). **Fixed:** an item's on-hand is now read the way the reorder alert reads it — its in-date lots when it has any lot (expired lots count as nothing), `quantity` otherwise — in the category sum, the threshold comparison and the per-item names; and the dashboard widget passes `exclude_item_types=MEDICAL_ITEM_TYPES`, as the MCP tool already did. Medical Supplies keeps counting its own low stock from item reorder points. `tests/test_low_stock_lot_totals.py`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **A member checked in after an election opens cannot vote**                                                                                                                                                                                                                                           | ✅ Accepted by the owner (2026-10-05) — secretary override only                                                                          | Opening an election freezes the voter roll, and an attendance-gated ballot item counts only members already checked in, so a member checked in after opening is recorded as present and refused a ballot. **The owner decided (2026-10-05) that a late arrival votes only through a secretary voter override** — the bylaw-neutral choice, and a mechanism that already exists: the override admits the member past the frozen roll and the attendance rule, and is recorded with its reason and officer. Late check-in does not add to the roll. The Attendance tab says a check-in after opening does not add a voter; the elections guide's edge-case table says to add an override.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **Results of an election closed early stay hidden until its scheduled end**                                                                                                                                                                                                                           | ✅ Resolved (owner decision 2026-10-05; workflow review W50-10)                                                                          | Resolved as the owner chose: an early close releases results exactly as the scheduled end would have. `get_election_results` unlocks on CLOSED alone (or the pre-open live-tally flag set on the election form); the scheduled end is no longer a condition, so the officer who closes the vote at the meeting, and every `elections.view` holder, sees the result then. The Results panel says closing is what releases them. Test: `TestResultsVisibilityGate` in `tests/test_election_voting_flow.py`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **An election run on positions alone cannot email ballots, and nothing says so before it opens**                                                                                                                                                                                                      | 🔶 Warned on Open (2026-10-05, W50-11)                                                                                                   | The emailed ballot page votes on ballot items only, so an election built from positions alone cannot email ballots, and the ballot cannot change once voting is open. **Owner decision (2026-10-05): warn on Open.** The Open election confirmation now says that the election has no ballot items, that ballot emails cannot be sent once it opens and members will vote in the app only, and to add the races in the Ballot Builder first (`ElectionDetailPage.w50-open-confirm.test.tsx`). The limitation itself goes when the emailed ballot carries plain positions (the ballot convergence entry, 2026-08-12). Re-observed 2026-10-06 (W50-91): the API does not refuse the send, and a token ballot on such an election reads "Make a selection for each item below" over no items, with a Submit button. **Fixed 2026-10-15:** the emailed ballot page now says the ballot has no items and keeps Submit disabled (`BallotVotingPage.w50-empty.test.tsx`); **Fixed 2026-10-16:** `ElectionService.send_ballot_emails` now refuses an election with neither ballot items nor positions (HTTP 400 from send-ballot, send-test-ballot and remind-non-voters; the auto-open send logs it and alerts managers); `tests/test_election_send_empty_ballot.py`. A positions-only election is not empty: plain positions are served as ballot items on the emailed ballot.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **A department on basic apparatus cannot pin a checklist to one unit**                                                                                                                                                                                                                                | ✅ Accepted by the owner (2026-10-05: leave as is — assign by type; LOW, 2026-09-30, workflow review W46-20)                             | `equipment_check_templates.apparatus_id` is a foreign key to the Apparatus module's `apparatus` table, so a unit from onboarding's `basic_apparatus` list cannot be stored there, and the server refused it as "Invalid apparatus". The builder now offers only Apparatus-module units, and such a department assigns checklists by apparatus type, which works (the fleet board and log resolve it). Supporting per-unit checklists for basic apparatus is a schema change (a polymorphic reference, as `utils/apparatus_ref` handles for shifts) and is left to the owner. **Owner decision (2026-10-05): leave as is.** A department on basic apparatus assigns checklists by apparatus type; no polymorphic template reference will be built.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **`POST /auth/step-up` has no account-tied lockout** (AUTH-23, MED, security review AUTH-01 pass 12, 2026-10-25, open decision)                                                                                                                                                                       | 🔶 Open — needs an owner decision                                                                                                        | `step_up` (`backend/app/api/v1/endpoints/auth.py`) checks the submitted password or TOTP code and, on a mismatch, only audits the failure — it never increments `failed_login_attempts`/`locked_until`, the columns the account-lockout control is measured against, unlike `/login` and `/mfa/login`. The only throttle is the shared per-**IP** `rate_limit_login()` (5/60s, then a 30-minute IP lockout). An attacker who already holds a member's **live session** (stolen cookie, unattended device) but not their password/TOTP secret can guess against `/auth/step-up` at that IP rate indefinitely, with no account-level consequence ever recorded against the real owner — and step-up gates 24 of the most sensitive handlers in the app (`admin_reset_password`, `admin_reset_mfa`, `delete_user`, `anonymize_member`, `set_mfa_policy`, every `roles.py`/`ip_security.py` mutation, several exports). **Why open:** tying step-up failures into the same lockout columns `authenticate_user` uses would let the same attacker who stole the session deliberately lock the legitimate owner out of signing in at all, by failing step-up on purpose — trading a guessing weakness for a new DoS lever against the real account holder. A narrower per-account (not per-IP) rate limit scoped to step-up, with a longer window but no lock, is the other candidate and carries a smaller version of the same tradeoff. Owner must choose which failure mode to prefer. See `docs/security-review/AUTH-01-auth-session.md`'s Pass 12 section (AUTH-23).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| **The new step-up gate covers role-granting handlers in `users.py` but not the equally ceiling-bound rank-granting ones in the same file** (PERM-10, MED, security review PERM-02 pass 12, 2026-10-25, open decision)                                                                                 | 🔶 Open — needs an owner decision                                                                                                        | `assign_user_roles`/`add_role_to_user`/`remove_role_from_user` (`users.py`) now require a fresh step-up, same as `roles.py`’s mutating routes — but `update_user_profile`’s rank-change branch (`users.py:2011-2039`/`:2094`, `members.manage`-gated, bound by the identical `_enforce_rank_grant_ceiling`) and `create_member` (`POST /users`, sets a client-chosen password **and** a ceiling-checked rank **and** ceiling-checked role_ids in one call, `users.create`-gated only) did not. Both are functionally indistinguishable from paths that did get the gate — `create_member` in particular combines `admin_reset_password`’s shape (sets a credential) with `assign_user_roles`’s shape (grants up to the ceiling), and is arguably the more natural way to entrench access from a stolen live session, since it sidesteps needing to touch an existing account at all. **Why open:** `STEPUP_HANDLERS` (`backend/tests/test_mfa_policy.py`) is Feature 01’s own pinned, AST-checked set; `create_member`/`update_user_profile` also mix the sensitive branch with routine, high-frequency traffic (ordinary self-service profile edits; routine onboarding) that a blanket gate on the whole handler would needlessly catch. The ceiling still bounds the grant to the attacker’s own permission level — this is a gap in the step-up control’s coverage, not an escalation beyond it. See `docs/security-review/PERM-02-permissions-roles.md`’s Pass 12 section (PERM-10).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **Rank CRUD has no step-up gate, unlike the structurally parallel role CRUD it sits beside** (PERM-11, MED, security review PERM-02 pass 12, 2026-10-25, open decision)                                                                                                                               | 🔶 Open — needs an owner decision                                                                                                        | `roles.py`’s `create_role`/`update_role`/`delete_role`/`clone_role` all gained `require_stepup` this pass. `operational_ranks.py`’s `create_rank`/`update_rank`/`delete_rank` — equally `settings.manage`/`members.manage`-gated and equally bound by a ceiling check (`_enforce_rank_grant_ceiling`, plus this pass’s new `assert_rank_code_may_change` guard) before any grant-bearing write — did not. `reorder_ranks` is correctly not part of this comparison: it never touches the ceiling and grants nothing. **Why open:** expanding `STEPUP_HANDLERS` is Feature 01’s reviewed, test-pinned decision; unlike PERM-10’s two call sites, these three handlers carry no routine/self-service traffic, so — of the two findings — this is the cheaper one to act on once the owner decides to extend the gate. See `docs/security-review/PERM-02-permissions-roles.md`’s Pass 12 section (PERM-11).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **The step-up gate added to `delete_user` does not cover the two sibling member-status mutations bound by the identical privilege ceiling** (USR-11, MED, security review USR-07 pass 12, 2026-10-25, open decision)                                                                                  | 🔶 Open — needs an owner decision                                                                                                        | `users.py`'s `delete_user` gained `require_stepup` the same pass that found PERM-10/PERM-11. `member_status.py`'s `change_member_status` and `archive_member` — both bound by the identical `_enforce_account_reset_ceiling` call `delete_user` uses, added together with it one pass earlier as three equally privilege-ceiling-sensitive "destructive member action" mutations — did not gain it and are absent from `STEPUP_HANDLERS`. A stolen-live-session attacker holding `members.manage` is asked to re-verify before deleting a member but not before suspending, dropping, or archiving one — an equally destructive outcome on the same target population, still bounded by the ceiling (not an escalation beyond the stolen session's own level). **Why open:** identical reasoning to PERM-10/PERM-11 — `STEPUP_HANDLERS` (`backend/tests/test_mfa_policy.py`) is Feature 01's own pinned, test-enforced set; adding a handler to it is a deliberate behavior change belonging to that feature's owner, not a mechanical fix. Neither call site carries routine/self-service traffic, so — like PERM-11 — this is a cheap item to act on once the owner decides to extend the gate. See `docs/security-review/USR-07-users-organizations.md`'s Pass 12 section (USR-11).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| **The new Gmail domain-wide-delegated-service-account capability is reachable without re-verification, unlike its two step-up-gated settings-route siblings** (USR-12, MED, security review USR-07 pass 13, 2026-10-28, open decision; revised 2026-10-28 after a Copilot review comment on PR #3810) | 🔶 Open — needs an owner decision                                                                                                        | Both `PATCH /organizations/settings/email` (`update_email_settings`) and the generic `PATCH /organizations/settings` (`update_organization_settings`) can configure a Gmail service account with domain-wide delegation, able to send as any address in the department's Google Workspace domain — strictly more capability than the SMTP/App-Password/OAuth options the route already held. Setting it up or changing it correctly requires `admin.access` server-side (`OrganizationService.update_organization_settings`'s `may_configure_delegated_email` check, fails closed) — but neither route carries `require_stepup`, unlike `update_auth_settings` and `update_file_storage_settings`, its two siblings in `STEPUP_HANDLERS`'s identical "Security and policy changes" category. **Bounded by a Google-side prerequisite the Logbook doesn't control:** Google itself refuses to issue a token for a service-account key whose client ID hasn't already been authorized for the `gmail.send` scope under Domain-wide Delegation in the organization's own Google Admin console (`backend/app/utils/google_oauth.py:175-196`), and changing the sending identity without also supplying a fresh, already-authorized key clears the stored key rather than impersonating anyone (`organization_service.py:562-566`). So a stolen **live session** belonging to an `admin.access` holder is not sufficient on its own — the attacker also needs a key the organization's Google Admin console has already delegated. **Why open:** `STEPUP_HANDLERS` (`backend/tests/test_mfa_policy.py`) is Feature 01's own pinned, exact-set-equality-checked list; the routes also save ordinary low-stakes settings (SMTP host, From name, toggling email off), so gating either route whole needs either a narrower endpoint for the service-account fields or a conditional step-up inside the shared handler — both are decisions for that mechanism's owner, not a mechanical fix, and a fix needs to cover both write paths. See `docs/security-review/USR-07-users-organizations.md`'s Pass 13 section (USR-12).                                                                                                                                                                                                                                                                                                 |
+| Item                                                                                                                                                                                                                                                                                                  | Status                                                                                                                                   | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Several `config.py` settings have no reader anywhere in the backend**                                                                                                                                                                                                                               | ✅ Resolved (owner decision 2026-10-08: delete the dead settings; security review CI3-33-4)                                              | `RATE_LIMIT_PER_MINUTE`, `MAX_FILE_SIZE`, `STORAGE_TYPE`, `UPLOAD_DIR` and `DB_POOL_MIN` were declared in `app/core/config.py` and documented, but nothing read them: the per-scope rate limits are fixed in `security_middleware.py` (`RATE_LIMIT_DEFAULT` is the tunable one), every upload writer uses its own path under `/app/uploads`, and only `DB_POOL_MAX` reaches `create_async_engine`. **Resolved 2026-10-08:** the five fields are deleted and listed in `RETIRED_SETTINGS`, so a `.env` that still names one boots, ignores it and logs a warning asking for the line to be removed (pydantic-settings would otherwise refuse the unknown key). They are gone from the three Compose `environment:` blocks, `.env.example.full`, the Unraid templates and the wiki. `LDAP_*` remains a separate, documented case. See `docs/security-review/CI3-33-core-infra.md` (CI3-33-4).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **A failed public-portal authentication is never recorded, so its anomaly detector cannot fire**                                                                                                                                                                                                      | ✅ Resolved (owner decision 2026-10-11: nullable org/config, log every 401, unattributable rows platform-only)                           | `detect_anomalies` counts `public_portal_access_log` rows with `status_code == 401` per IP, but nothing wrote one: `authenticate_api_key` raises its 401 from the dependency, and an unknown key could not be filed under any organization while `organization_id`/`config_id` were NOT NULL. (The 429 half was recorded from 2026-09-24.) **Resolved 2026-10-11:** migration `e6d21e605d99` makes both columns nullable (downgrade deletes the platform-level rows, then restores NOT NULL). `authenticate_api_key` now writes and commits a 401 row for every refusal — no key, an unknown key, a revoked key, an expired key — through `_log_refusal`, which first runs the detector so the attempt that crosses its threshold (more than five failures from one IP in five minutes) is itself flagged. A key that was found but refused is attributed to its own department; one that matches no stored key is written with no organization and no config, and is **platform-level**: every per-organization reader (the Access Logs tab, the usage statistics) filters on `organization_id`, so no department sees it, while the detector, which counts by IP across the table, does. There is no platform-operator screen for these rows; they are read from the database or through the detector's flags in the server log. **Retention resolved 2026-10-12 (owner decision: a daily task deletes rows older than 90 days, successful and failed alike):** nothing had pruned `public_portal_access_log`, and writing every 401 made it grow with failed traffic too. The daily `prune_public_portal_access_log` scheduled task now deletes every row older than `PUBLIC_PORTAL_ACCESS_LOG_RETENTION_DAYS` (90), platform-level rows included, in batches of 1,000 committed one at a time. The detector and the usage tiles look back at most 30 days, so they are unaffected; the Access Logs tab and the all-time usage figures now cover 90 days (`docs/UPGRADING.md`, `tests/test_prune_public_portal_access_log.py`). Tested in `tests/test_public_portal_failed_auth_logging.py`, including the migration against a scratch table. See `docs/security-review/PUB-03-public-surface-webhooks.md` (PUB-8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **A member's phone and mobile are free text, and any text counts as "a number on file"**                                                                                                                                                                                                              | ✅ Resolved (owner decision 2026-10-05: lenient validation on new writes only, existing rows untouched; workflow review W04-7)           | Member phone and mobile now accept digits, spaces, dashes, dots, brackets, a leading `+` and an extension (`ext 4`, `x4`, `#4`), with 7–15 digits before the extension (`app/utils/phone_numbers.py`). Creating a member refuses anything else (`422`); `PATCH /users/{id}/contact-info` and `PATCH /users/{id}/profile` refuse a changed value that fails (`400`, naming the field) and pass one sent back unchanged, so a member whose stored number predates the rule can still save the rest of their profile. Stored values were not rewritten, so the Notifications tab's `hasMobileOnFile` can still count a legacy non-number as a mobile on file until it is edited. (`tests/test_member_phone_validation.py`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Two positions can share a name, and nothing tells them apart where they are assigned**                                                                                                                                                                                                              | ✅ Resolved (owner decision 2026-10-05: refuse duplicates on create/rename, existing duplicates left and flagged; workflow review W05-5) | Creating, cloning or renaming a position to a name another position in the organization already uses — compared trimmed and case-insensitively — is refused with `409` (`RoleManagementService._assert_position_name_free`, which locks the organization row so two concurrent creates cannot both pass). Positions that already share a name are not touched: saving one without renaming it still works, and Role Management marks each with **Same name as another position** and its internal name (slug) so an administrator can rename one apart. No unique index or migration, because existing duplicates would block it. Onboarding's position setup writes its own rows and is not covered. (`tests/test_position_name_uniqueness.py`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Add Member cannot set a new member's account status or preferred contact method**                                                                                                                                                                                                                   | ✅ Resolved (owner decision 2026-10-05: add status to the create endpoint as a new optional field; workflow review W08-1)                | `POST /users` takes an optional `status` — `active` (the default when omitted), `inactive` or `leave` — and creates the member with it. Dropped, retired, archived and suspended are refused at create, because the status change is what records their service history and property return. Add Member offers Active / Inactive / On Leave again and sends the choice. Preferred contact method is still not recorded: the owner chose the status-only option, so there is no field and the form offers no control for it. (`tests/test_add_member_initial_status.py`, `AddMember.test.tsx`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **A member's base Member position can be removed like any other**                                                                                                                                                                                                                                     | ✅ Resolved (owner decision 2026-10-05: refuse unless the member is archived; workflow review W11-9)                                     | The base `member` position carries the baseline grants every member needs, so taking it off a member who is not archived is now refused with `400` on both write paths — the single removal and the replace-all assignment the admin screens use (`_refuse_base_position_removal` in `users.py`). Manage Roles no longer offers the remove control on it and keeps its box ticked and locked; an archived member's can still be removed. (`tests/test_base_member_position_removal.py`, `MembersAdminPage.test.tsx`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **A waiver cannot excuse meetings without also excusing shifts**                                                                                                                                                                                                                                      | Accepted by the owner (2026-10-05; workflow review W13-5)                                                                                | Waiver Management offered "Meeting Attendance" and "Shift Requirements" as separate choices, and either one created the same leave of absence — `member_leaves_of_absence` has no field saying which it covers, and scheduling, attendance and tier grading all treat a leave as excusing both. The form now offers one "Meeting Attendance & Shift Requirements" choice, which is what the data has always meant (W13-1). **Accepted by the owner (2026-10-05): one combined waiver stays.** The UI already states the combined meaning, no department has asked to excuse one without the other, and the split would need a column, a migration and a change to every reader of leaves. Revisit if a department asks for it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **A departure clearance cannot be worked or completed from any screen**                                                                                                                                                                                                                               | ✅ Resolved (2026-10-11, owner decision: build the clearance record screen)                                                              | A member dropped while holding property gets a departure clearance, and only `POST /inventory/clearances/{id}/items/{line}/resolve` and `…/complete` close one; no screen called either, so the clearance stayed `initiated` and the member was never auto-archived. **Built:** `/inventory/admin/clearances/:clearanceId` (`DepartureClearancePage`) lists each line with its disposition, resolves a line as Returned, Returned damaged (with the return condition), Written off or Waived, and completes the clearance or — with items still outstanding — closes it incomplete after a confirmation stating how many items and how much value stay unresolved. The hub's **Unresolved departure clearance** row now opens it. `GET /inventory/clearances/{id}` returns `member_name`. Returning an item the ordinary way on **Members** still does not resolve its clearance line — the line is resolved on the clearance, which performs the return itself. Initiating a clearance by hand still has no button; the drop creates one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **A member dropped today cannot be reinstated until tomorrow**                                                                                                                                                                                                                                        | ✅ Resolved (owner decision 2026-10-05: an undo-drop action; workflow review W15-3)                                                      | `record_rejoin` still refuses a return date on or before the last day of service, by design. A mistaken drop is now undone instead: `POST /users/{id}/undo-drop` (`members.manage`) restores the member — Active by default, or Probationary, Inactive or On Leave; never Suspended — and reopens the service stint the drop closed, so their service runs on unbroken. It is available for **7 days** after the drop — counted from the drop's effective date (the end of the stint it closed), not the day it was recorded, and never later than the recording (2026-10-16) — (`UNDO_DROP_WINDOW_DAYS`; `GET /users/{id}/undo-drop` reports whether and until when), because after that it would erase a real gap; a member who really left and came back is a rejoin. The property return report and any departure clearance the drop created are left for the quartermaster. The profile's Status area offers the control while it is available. (`tests/test_undo_member_drop.py`, `UndoDropControl.test.tsx`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Departed members are listed in every member's directory**                                                                                                                                                                                                                                           | ✅ Resolved (owner decision 2026-10-05: hide archived from non-managers, default filter Active; workflow review W15-4)                   | A member without `members.manage` is served the directory from `GET /users/directory`, which now leaves archived (departed) members out, and their Members page opens on the **Active** filter (**All Statuses** still shows inactive, on-leave and retired members). Coordinators keep the whole roster, archived included, from `GET /users`, which is unchanged for its other callers — so archived members still appear in other screens' member pickers that read it. (`tests/test_member_directory_endpoint.py`, `Members.test.tsx`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Staff can read every applicant's status-page token from the label preview, and a printed applicant label carries it**                                                                                                                                                                               | ✅ Resolved (2026-09-28, workflow review W17-3)                                                                                          | Resolved at the owner's direction: applicant labels now print the short record id (`_short_id(id)`), like other modules, and the label preview no longer returns the status token. **Still open:** labels printed before this change carry live tokens. Revoking them means rotating every applicant's `status_token`, which breaks every status link already emailed; that was not done. A department that has printed applicant labels and is concerned about them can ask for a rotation, which is a separate decision. **Rotation built (2026-10-11), as the owner chose — per department, on request:** `backend/scripts/rotate_applicant_status_tokens.py --org <id or exact name> [--apply]` gives every applicant in that one department a fresh token (dry run by default, one audit event with the count). It breaks every status link already emailed to that department, and re-sends nothing; departments that do not ask keep their links.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Recurring series stored before the W18 fixes are not repaired: some sit an hour off, on the wrong day, or collapsed onto one date**                                                                                                                                                                 | ✅ Resolved (2026-10-11, workflow review W18-3) — by report, not repair                                                                  | Resolved as the owner chose — report only, officers fix by hand: `backend/scripts/report_recurring_series_drift.py [--org …] [--include-past] [--all-differences]` writes nothing and lists, per series, occurrences 1 hour or 1 day off the date the parent's stored pattern gives under the fixed generator (stored vs expected, with RSVP counts), and series collapsed onto one start with the pattern dates no occurrence holds. **Still true:** no stored series is changed; a deliberate move of exactly an hour or a day is listed too, and the officer decides. Original finding: Two defects fixed in W18 wrote wrong occurrence times, and the fix corrects new series and later edits only. (1) `_generate_recurrence_dates` stepped the stored UTC instant, so a series spanning a daylight-saving change is an hour off after it, and an evening series with custom weekdays, an Nth-weekday pattern or skip dates could be matched against the UTC day (a day late). (2) `update_future_events` copied the anchor's start and end onto every later occurrence, so any series edited with "This and all future events" has those occurrences collapsed onto one date; the original dates are not recoverable from the occurrence rows, only by regenerating from the parent's stored pattern. Repairing either moves events members may have RSVP'd to and is a data migration, so it was not done.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **A member promoted off an event's waitlist is told only in the app, not by email**                                                                                                                                                                                                                   | ✅ Resolved (2026-10-11, workflow review W19-1)                                                                                          | Resolved as the owner chose — an email, a template and its own switch: `promote_from_waitlist` now also emails the promoted member (non-fatal, after the in-app entry) through the new **Off the Waitlist** template (`event_waitlist_promotion`; migration `32a58e65eb63` widens `email_templates`/`scheduled_emails.template_type`). The email is gated by a new optional member email kind, `event_waitlist` (**Off the waitlist**, on by default, not tied to the Event reminders switch), which a department can make required. Original finding: `promote_from_waitlist` logs an `in_app` notification ("You're off the waitlist: …") and sends nothing else. CLAUDE.md pitfall 18 makes email the channel of record with the bell layered on top, so a member who reads only their inbox never learns they are confirmed, may not come, and holds the seat. Adding it is a new outbound email with its own template and a place among the per-member email switches, which is a product change rather than a fix.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **An automatic waitlist promotion does not appear in an event's RSVP Activity**                                                                                                                                                                                                                       | ✅ Resolved (2026-10-11, workflow review W19-3)                                                                                          | Resolved as the owner chose — a marker column and a row: migration `43b88e6ec431` adds `rsvp_history.is_automatic` (boolean, default false; guarded, since `rsvp_history` is a `create_all`-only table), `promote_from_waitlist` writes a `waitlisted → going` row with `is_automatic = true` and no `changed_by`, `GET /events/{id}/rsvp-history` returns `is_automatic`, and RSVP Activity reads "… was moved from Waitlisted to Going (automatically, when a spot opened up)". Promotions made before the change wrote no row and are not backfilled. Original finding: `promote_from_waitlist` writes no `rsvp_history` row, so the officer's feed shows the member waitlisted and nothing after it while the list above shows them Going. A row with an empty `changed_by` would read as the member's own change ("Null means self-change"); recording it honestly as automatic needs a new column or marker on `rsvp_history`, which is a migration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Deleting an event template only deactivates it, while the dialog says it cannot be undone**                                                                                                                                                                                                         | ✅ Resolved (2026-10-11, workflow review W21-5)                                                                                          | Resolved as the owner chose — relabel, do not delete: the action is now **Deactivate** (archive icon, shown on active templates only), its dialog reads _"Deactivate "…"? It will no longer be offered when creating an event. Events already created from it are not affected, and you can reactivate it at any time with its switch."_, and the "cannot be undone" copy is gone. The backend's `DELETE /events/templates/{id}` still soft-deletes, unchanged. Original finding: Driven: Delete → "This action cannot be undone." → Delete, and the template is still listed as Inactive, identical to Deactivate. `delete_template` soft-deletes deliberately ("Soft-delete a template by deactivating it"), presumably so events created from it keep a valid reference. Whether templates can be removed — and so whether the dialog or the button is wrong — is a product decision.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Event analytics' attendance rate counts upcoming events as no-shows**                                                                                                                                                                                                                               | ✅ Resolved (2026-10-11, workflow review W21-6)                                                                                          | Resolved as the owner chose — past events only, per-event average: `avg_attendance_rate` is now the mean of checked-in ÷ Going for each event in the period that has ended (`end_datetime <= now`) and had anyone Going, so the "Avg" label is accurate and upcoming RSVPs no longer pull it down. The response field and the card label are unchanged. **Still as before:** "Top Events by Attendance" lists upcoming events at 0%. Original finding: `get_analytics_summary` divides every checked-in RSVP by every Going RSVP in the period, pooled, including events that have not started; the review install read "Avg Attendance Rate 67%" with one past event at 100% and one upcoming event at 0%, which "Top Events by Attendance" also lists. The figure falls whenever members RSVP to something upcoming, and it is a pooled ratio despite the "Avg" label. Which events it should cover, and pooled versus per-event average, is a metric definition.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **A public event requester is never given their status link**                                                                                                                                                                                                                                         | Accepted by the owner (2026-10-05; MED, workflow review W22-4)                                                                           | After submitting the public request form the requester sees only "Thank you for your submission!"; neither the acknowledgement nor the status-change email carries the `/event-request/status/<token>` link, which is reachable only by a coordinator pressing Copy Link and sending it by hand. That page is where the requester follows progress and cancels, and it promises email updates that depend on the department's triggers (and still promises them after a cancellation). Showing the link on the confirmation screen changes a public endpoint's response; adding a `{{status_link}}` to the default acknowledgement changes what the department emails a stranger and would not reach a customised template. Which, or both, is a product decision. **Accepted by the owner (2026-10-05):** leave as is — the status link stays something a coordinator shares by hand, the deliberate posture recorded under "Outreach Requests — Two Deliberate Choices in the Public Pipeline" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **A guest sign-in's applicant lands in no pipeline, and nobody can see it**                                                                                                                                                                                                                           | ✅ Resolved (owner decision 2026-10-08: fall back to the sole/first active pipeline + backfill stranded; workflow review W23-1)          | A guest sign-in created its prospect with no pipeline whenever the department's pipeline was not flagged `is_default`, and the board, table and source filter all omitted it. **Resolved 2026-10-11:** `_get_default_pipeline` now falls back to the organization's first active, non-template pipeline (by creation time) when none is default, so a new applicant always lands on a board when one exists. Migration `e1a5bfe7a2ed` places the applicants already stranded — open ones only (`active`, `on_hold`) — on the same pipeline, at its first stage with a progress row per stage, and logs `pipeline_assigned_by_backfill` in each applicant's activity log; closed applications stay as they were, and a department with no usable pipeline keeps its rows unplaced. The downgrade takes back exactly those placements. `tests/test_prospect_pipeline_fallback.py`, `tests/test_place_stranded_prospects_migration.py`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **No screen shows who signed in as a guest**                                                                                                                                                                                                                                                          | ✅ Resolved (2026-10-11, owner decision: guests list on the event page, not counted in member attendance)                                | A kiosk guest sign-in is stored as an external attendee (`GET /events/{id}/external-attendees`, `events.manage`), and nothing in the frontend read it, so the event page said "Attendance (0)" after guests signed in. **Built:** the event page shows a **Guests (_n_)** card to event managers (`EventGuestsCard`) — name, organization, email, phone, sign-in time and source — and states that guests are not counted in attendance; member attendance figures are unchanged (they are read from RSVPs, which guests do not have). Shown on an event that takes guest sign-ins even when empty. Not built: guests in check-in monitoring or attendance exports, and editing a guest from the card. _(2026-10-25)_ Adding a guest and signing a listed guest in from the card are built.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **A program's linked requirement starts at zero, whatever the member already holds**                                                                                                                                                                                                                  | ✅ Resolved (2026-10-06, owner decision: read the compliance result live)                                                                | A department requirement linked into a program now reads the member's compliance result: each such progress row is a projection of `evaluate_member_requirement_detail` (the compliance matrix's grader) as of the department's today — the member's graded records, shifts worked, waivers and catch-up included — written onto the row by `TrainingProgramService.refresh_linked_progress` whenever program progress is shown (enrollment detail, My Enrollments, a member's enrollments, the program's Enrollments tab, the My Training pipeline card), after which the enrollment percentage re-rolls and a completed phase advances as for any progress update. A member with 4 of 6 Hazmat hours now reads 4/6 in both places. _Linked_ means a requirement no program link owns (`owns_requirement`); a requirement a program created for itself — including one a duplicated program shares — keeps its program ledger. Feeds (shift reports, sessions, skills tests, credits) accrue nothing on a linked row and write no ledger credit; an officer cannot set its value or mark it complete (400, with the reason), only waive it for the program or lift the waiver. **Enrollments already made** read live from the next view: no migration, no row deleted; their stored values are replaced by the compliance figure on first read. **Not followed live:** completed, withdrawn, failed and expired enrollments keep the progress they finished with, so an annual requirement's new period cannot reopen last year's completion. Reports that read `requirement_progress` directly (struggling members, the program report counts) see a linked row as of its last refresh.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **An open shift swap cannot be picked up, and approving one moves nothing**                                                                                                                                                                                                                           | ✅ Resolved (2026-10-05, owner decision: offer to members eligible for the seat; pickup moves the assignment)                            | An open swap is now listed to every member cleared for its seat (`GET /scheduling/swap-requests/open`, on the Requests tab under **Open shifts you can pick up**), judged by the same `get_eligible_positions` rule as signup and two-way exchanges. `POST /swap-requests/{id}/pick-up` moves the assignment to the member under the signup window and the full `_validate_assignment_candidate` checks (eligibility, leave, overlap, EVOC, seat cap) — no override. Officer approval of an open swap is refused, since it moved nothing; deny still works. _(2026-11-04, owner decision of 2026-11-01: bell entry only)_ Posting an open swap now puts an in-app notice ("Open shift you can pick up", linking to the Requests tab) in front of every member the pickup list would offer it to — the same listing query and eligibility check, so the two cannot disagree — and nobody else: not the poster, a member already on the shift, or another department. No email, SMS or push, deliberately, though notices elsewhere are email-first: an open swap reaches most of the roster and the owner chose less noise, so a member who never opens the app can miss one. Each member is told once per seat (`open_swap_notices`, unique on shift, offerer and recipient), so a re-run, a double-tapped "Ask for cover" or a retried request adds nothing; a member who withdraws an open swap and posts the same seat again does not re-notify those already told. A member who becomes eligible after the swap was posted is not told; the swap is on their Requests tab. (W33-4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **The inventory setup wizard's first step needs a grant the quartermaster does not hold**                                                                                                                                                                                                             | ✅ Resolved (2026-10-11, owner decision: grant `locations.create` to the quartermaster; workflow review W38-1)                           | `/inventory/admin/setup` is gated on `inventory.manage`, and its first step adds rooms through `POST /locations`, which requires `locations.create` or `locations.manage`. The seeded Quartermaster position now carries `locations.create` in `DEFAULT_POSITIONS`, and migration `9e8b0b6f3fe8` (`grant_quartermaster_locations_create`) adds it to every stored system `quartermaster` position that still holds `inventory.manage` and does not already cover it (`locations.create`/`locations.manage`/`locations.*`/`*`) — an addition gated on evidence per pitfall #23; its downgrade removes the grant. Create only: `locations.edit`/`locations.delete` are not granted. The wizard's room form was already shown by permission, so it now appears for the quartermaster; a position without the grant still sees the explanation instead of a form. Pinned by `tests/test_quartermaster_locations_create_grant.py` (registry, the grant/revoke functions, and the migration's own upgrade/downgrade against a temporary table).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **Receiving gear back does not close the member's return notice**                                                                                                                                                                                                                                     | ✅ Resolved (2026-10-11, owner decision: mark received for inspection; workflow review W39-5)                                            | `unassign_item`, `return_to_pool` and `checkin_item` (and so batch return, the kiosk check-in and departure clearance, which call them) now mark the member's open `requested` return notice for the same holding `received`: `reviewed_by`/`reviewed_at` set, `received_quantity` recorded, `review_notes` "Received through <path>, not through this notice; not inspected here." `observed_condition` stays empty and no follow-up is raised — the direct return's own condition is the record, and the notice is not completed. The notice leaves the returns queue, the hub's pending-returns count and the member's Pending count; the returns panel gains a **Received another way** filter. A pool return of fewer units than the notice announced leaves it open; another member's notice on the same pool item is untouched. The notices are locked before the item, the order `review_return_request` uses, so the two paths cannot deadlock. **Follow-on (2026-10-12, owner decision):** a received notice can now be **inspected**. `PUT /inventory/return-requests/{id}/review` accepts `status: "inspected"` for a `received` notice only (any other state, and `received`/`denied` on a received notice, is refused; the fetch is org-scoped), records `observed_condition`, the notes and the same follow-up a receipt raises (maintenance, write-off, or a pool charge review), and completes the notice. It moves no stock and closes no holding a second time; the one item change is the receipt's safety rule — a serialized item found poor, damaged or out of service while it is still on the shelf (`available`, unassigned) goes to `in_maintenance`, while gear already out again is left to the follow-up record. The owner confirmed this rule on 2026-10-12. The notice has no inspector column, so `reviewed_by`/`reviewed_at` move to the inspector and the receipt's actor is appended to the preserved "Received through …" note ("Received by <name>."), followed by "Inspected: <condition> -- <notes>"; the audit event records the decision and observed condition. The returns panel shows **Inspect** on received notices, opening the review dialog with condition, follow-up and notes but no identifier or count. Pinned by `tests/test_inventory_direct_return_closes_notice.py`, `tests/test_inventory_inspect_received_notice.py` and `ReturnRequestsPanel.test.tsx`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **A variant group created on the Variant Groups page can never be filled**                                                                                                                                                                                                                            | ✅ Resolved (2026-10-11, owner decision: group picker on the item form; workflow review W40-7)                                           | The Add/Edit Item form (`ItemFormModal.tsx`) now has a **Variant Group** select listing the organization's groups (active ones offered, an item's current inactive group shown as "(inactive)"). Create sends the chosen `variant_group_id` (omitted when none); edit sends it or an explicit `null` to remove the item from its group — the existing `POST`/`PATCH /inventory/items` contract, whose FK is already org-validated by `_assert_item_fks_in_org`. The picker is hidden while Generate Sizes & Styles is on, which still creates its own group. The Variant Groups page's empty state now points at the picker. No backend change. Pinned by `ItemFormModal.test.tsx` ("variant group picker") and `VariantGroupsPage.test.tsx`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **A reorder request made in the app can never be received**                                                                                                                                                                                                                                           | ✅ Resolved (2026-10-11, owner decision: both — item picker at create and linking at receipt; workflow review W41-5)                     | The create and edit forms on `/inventory/admin/reorder` now carry an **Inventory item** picker (`InventoryItemPicker`, gear catalog), and the low-stock quick fill and the hub's `?category=` prefill link the category's lowest item: `GET /inventory/low-stock` items gain an additive `id`. An unlinked request's **Receive stock** dialog asks for the item first and links it through `PATCH /inventory/reorder-requests/{id}` before posting the receipt (the plain PATCH does not bump `version`, so the receipt's `expected_version` still matches). `ReorderRequestUpdate` gains an additive `item_id` (org-validated by `_assert_reorder_fks_in_org`); the update refuses to change or clear it once `quantity_received > 0`, and an unchanged id passes, so the edit form can send it every save. Pinned by `tests/test_inventory_reorder_item_link.py`, `tests/test_low_stock_lot_totals.py` and `ReorderRequestsPage.test.tsx`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **A write-off raised for one returned unit of pool stock retires the whole item**                                                                                                                                                                                                                     | ✅ Resolved (2026-10-11, owner decision, docket W41-6)                                                                                   | Owner decision: do not offer write-off for pool issuances. Receiving a damaged pool return (`return_type = issuance`) no longer lists **Write-off review** as a safety follow-up, and `review_return_request` refuses `follow_up = write_off` for a pool issuance with a 400 ("Write-off review is not available for pool issuances"). `auto` on an out-of-service pool return now maps to `maintenance`, the follow-up a damaged pool return already got, instead of `write_off`. The returned units were already kept out of issuable stock by the receipt (`_return_units_to_stock`), so nothing is lost; the hazard was the write-off request naming the item, whose approval retired the whole shelf and released every holder. Individual items are unchanged. A quantity write-off remains unbuilt by decision. Pinned by `tests/test_inventory_return_receipt.py` and `ReturnRequestsPanel.test.tsx`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **The check log and fleet board count a checklist as missed on days before it existed**                                                                                                                                                                                                               | ✅ Resolved 2026-10-11 (owner decision 2026-10-05: from template creation; MED, 2026-09-30, workflow review W46-19)                      | Resolved by counting a checklist from its creation. `EquipmentReadinessService._expected_pairs` — the one definition the fleet board, check log and Check Reports compliance counts share — now pairs a shift with a checklist only if the checklist existed before the shift was over: a shift whose `end_time` is at or before the template's `created_at` owes nothing, a shift still under way at creation does, and a shift with no recorded end owes it from the creation day on the department's calendar. The 9:54 PM checklist no longer makes the previous day missed. Re-scoping an existing checklist (new apparatus or type) does not restart the clock, per the chosen option; no publish timestamp was added. `tests/test_checklist_expected_from_creation.py` pins it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **The dashboard's Low stock counts a lot-stocked category as empty**                                                                                                                                                                                                                                  | ✅ Resolved (2026-10-11, owner decision: sum lots for lot-stocked items; exclude medical to match the list)                              | `InventoryService.get_low_stock_items` summed `InventoryItem.quantity` per category, and an item stocked through lots leaves that column at 0, so a category of lot-stocked supplies read as empty against its threshold; the dashboard's "Low stock" widget also counted medical categories the `/inventory?stock=low` list it opens leaves out (the widget read 2, the list 1). **Fixed:** an item's on-hand is now read the way the reorder alert reads it — its in-date lots when it has any lot (expired lots count as nothing), `quantity` otherwise — in the category sum, the threshold comparison and the per-item names; and the dashboard widget passes `exclude_item_types=MEDICAL_ITEM_TYPES`, as the MCP tool already did. Medical Supplies keeps counting its own low stock from item reorder points. `tests/test_low_stock_lot_totals.py`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **A member checked in after an election opens cannot vote**                                                                                                                                                                                                                                           | ✅ Accepted by the owner (2026-10-05) — secretary override only                                                                          | Opening an election freezes the voter roll, and an attendance-gated ballot item counts only members already checked in, so a member checked in after opening is recorded as present and refused a ballot. **The owner decided (2026-10-05) that a late arrival votes only through a secretary voter override** — the bylaw-neutral choice, and a mechanism that already exists: the override admits the member past the frozen roll and the attendance rule, and is recorded with its reason and officer. Late check-in does not add to the roll. The Attendance tab says a check-in after opening does not add a voter; the elections guide's edge-case table says to add an override.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Results of an election closed early stay hidden until its scheduled end**                                                                                                                                                                                                                           | ✅ Resolved (owner decision 2026-10-05; workflow review W50-10)                                                                          | Resolved as the owner chose: an early close releases results exactly as the scheduled end would have. `get_election_results` unlocks on CLOSED alone (or the pre-open live-tally flag set on the election form); the scheduled end is no longer a condition, so the officer who closes the vote at the meeting, and every `elections.view` holder, sees the result then. The Results panel says closing is what releases them. Test: `TestResultsVisibilityGate` in `tests/test_election_voting_flow.py`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **An election run on positions alone cannot email ballots, and nothing says so before it opens**                                                                                                                                                                                                      | 🔶 Warned on Open (2026-10-05, W50-11)                                                                                                   | The emailed ballot page votes on ballot items only, so an election built from positions alone cannot email ballots, and the ballot cannot change once voting is open. **Owner decision (2026-10-05): warn on Open.** The Open election confirmation now says that the election has no ballot items, that ballot emails cannot be sent once it opens and members will vote in the app only, and to add the races in the Ballot Builder first (`ElectionDetailPage.w50-open-confirm.test.tsx`). The limitation itself goes when the emailed ballot carries plain positions (the ballot convergence entry, 2026-08-12). Re-observed 2026-10-06 (W50-91): the API does not refuse the send, and a token ballot on such an election reads "Make a selection for each item below" over no items, with a Submit button. **Fixed 2026-10-15:** the emailed ballot page now says the ballot has no items and keeps Submit disabled (`BallotVotingPage.w50-empty.test.tsx`); **Fixed 2026-10-16:** `ElectionService.send_ballot_emails` now refuses an election with neither ballot items nor positions (HTTP 400 from send-ballot, send-test-ballot and remind-non-voters; the auto-open send logs it and alerts managers); `tests/test_election_send_empty_ballot.py`. A positions-only election is not empty: plain positions are served as ballot items on the emailed ballot.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **A department on basic apparatus cannot pin a checklist to one unit**                                                                                                                                                                                                                                | ✅ Accepted by the owner (2026-10-05: leave as is — assign by type; LOW, 2026-09-30, workflow review W46-20)                             | `equipment_check_templates.apparatus_id` is a foreign key to the Apparatus module's `apparatus` table, so a unit from onboarding's `basic_apparatus` list cannot be stored there, and the server refused it as "Invalid apparatus". The builder now offers only Apparatus-module units, and such a department assigns checklists by apparatus type, which works (the fleet board and log resolve it). Supporting per-unit checklists for basic apparatus is a schema change (a polymorphic reference, as `utils/apparatus_ref` handles for shifts) and is left to the owner. **Owner decision (2026-10-05): leave as is.** A department on basic apparatus assigns checklists by apparatus type; no polymorphic template reference will be built.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **`POST /auth/step-up` has no account-tied lockout** (AUTH-23, MED, security review AUTH-01 pass 12, 2026-10-25)                                                                                                                                                                                      | ✅ Resolved (owner decision 2026-11-01: a per-account rate limit, no account lock; built 2026-11-03)                                     | `step_up` (`backend/app/api/v1/endpoints/auth.py`) used to only audit a wrong password, TOTP code or passkey, so someone holding a member's **live session** but not their secret could guess at the shared per-address sign-in rate indefinitely, against a gate in front of 24 of the most sensitive handlers. **What was built:** `app/core/stepup_throttle.py` counts step-up attempts per **account** (user id, not address) in a fixed window — `STEPUP_MAX_FAILED_ATTEMPTS` (5) per `STEPUP_FAILURE_WINDOW_MINUTES` (15) — and refuses further attempts with a 429 and `Retry-After` while over it, even with the right code. An attempt is reserved before the secret is checked, so parallel guesses cannot race past the count, and a successful step-up clears it. Redis-backed, with a bounded in-memory fallback. **It never touches `failed_login_attempts` / `locked_until`:** the owner chose this explicitly so the session thief cannot lock the real owner out of signing in by failing on purpose. The accepted cost is that the thief can make the owner wait out the window before re-verifying. `tests/test_stepup_throttle.py` pins the limit, the reset on success, the untouched lockout columns (including against a stored member) and the Redis fallback. See `docs/security-review/AUTH-01-auth-session.md`'s Pass 12 section (AUTH-23).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **The new step-up gate covers role-granting handlers in `users.py` but not the equally ceiling-bound rank-granting ones in the same file** (PERM-10, MED, security review PERM-02 pass 12, 2026-10-25, open decision)                                                                                 | ✅ Resolved (owner decision 2026-11-01)                                                                                                  | **Resolved 2026-11-03 (owner decision 2026-11-01: gate only the sensitive part).** `create_member` asks for step-up when the request sets a rank or any `role_ids`, after both ceiling checks and before anything is written; `update_user_profile` asks only when the save gives the member a different, non-empty rank, after every other check. Clearing a rank (including the clear a move to administrative makes) and ordinary profile saves never prompt. Both call `ensure_stepup` inside the handler, so neither is in `STEPUP_HANDLERS`. Tests: `tests/test_stepup_on_rank_and_role_grants.py`. `assign_user_roles`/`add_role_to_user`/`remove_role_from_user` (`users.py`) now require a fresh step-up, same as `roles.py`’s mutating routes — but `update_user_profile`’s rank-change branch (`users.py:2011-2039`/`:2094`, `members.manage`-gated, bound by the identical `_enforce_rank_grant_ceiling`) and `create_member` (`POST /users`, sets a client-chosen password **and** a ceiling-checked rank **and** ceiling-checked role_ids in one call, `users.create`-gated only) did not. Both are functionally indistinguishable from paths that did get the gate — `create_member` in particular combines `admin_reset_password`’s shape (sets a credential) with `assign_user_roles`’s shape (grants up to the ceiling), and is arguably the more natural way to entrench access from a stolen live session, since it sidesteps needing to touch an existing account at all. **Why open:** `STEPUP_HANDLERS` (`backend/tests/test_mfa_policy.py`) is Feature 01’s own pinned, AST-checked set; `create_member`/`update_user_profile` also mix the sensitive branch with routine, high-frequency traffic (ordinary self-service profile edits; routine onboarding) that a blanket gate on the whole handler would needlessly catch. The ceiling still bounds the grant to the attacker’s own permission level — this is a gap in the step-up control’s coverage, not an escalation beyond it. See `docs/security-review/PERM-02-permissions-roles.md`’s Pass 12 section (PERM-10).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Rank CRUD has no step-up gate, unlike the structurally parallel role CRUD it sits beside** (PERM-11, MED, security review PERM-02 pass 12, 2026-10-25, open decision)                                                                                                                               | ✅ Resolved (owner decision 2026-11-01)                                                                                                  | **Resolved 2026-11-03 (owner decision 2026-11-01: add the re-check).** `create_rank`, `update_rank` and `delete_rank` take `require_stepup` after their permission dependency and are in `STEPUP_HANDLERS`; `reorder_ranks` stays ungated. `roles.py`’s `create_role`/`update_role`/`delete_role`/`clone_role` all gained `require_stepup` this pass. `operational_ranks.py`’s `create_rank`/`update_rank`/`delete_rank` — equally `settings.manage`/`members.manage`-gated and equally bound by a ceiling check (`_enforce_rank_grant_ceiling`, plus this pass’s new `assert_rank_code_may_change` guard) before any grant-bearing write — did not. `reorder_ranks` is correctly not part of this comparison: it never touches the ceiling and grants nothing. **Why open:** expanding `STEPUP_HANDLERS` is Feature 01’s reviewed, test-pinned decision; unlike PERM-10’s two call sites, these three handlers carry no routine/self-service traffic, so — of the two findings — this is the cheaper one to act on once the owner decides to extend the gate. See `docs/security-review/PERM-02-permissions-roles.md`’s Pass 12 section (PERM-11).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **The step-up gate added to `delete_user` does not cover the two sibling member-status mutations bound by the identical privilege ceiling** (USR-11, MED, security review USR-07 pass 12, 2026-10-25, open decision)                                                                                  | ✅ Resolved (owner decision 2026-11-01)                                                                                                  | **Resolved 2026-11-03 (owner decision 2026-11-01: add the re-check).** `change_member_status` and `archive_member` take `require_stepup` after their permission dependency and are in `STEPUP_HANDLERS`. `users.py`'s `delete_user` gained `require_stepup` the same pass that found PERM-10/PERM-11. `member_status.py`'s `change_member_status` and `archive_member` — both bound by the identical `_enforce_account_reset_ceiling` call `delete_user` uses, added together with it one pass earlier as three equally privilege-ceiling-sensitive "destructive member action" mutations — did not gain it and are absent from `STEPUP_HANDLERS`. A stolen-live-session attacker holding `members.manage` is asked to re-verify before deleting a member but not before suspending, dropping, or archiving one — an equally destructive outcome on the same target population, still bounded by the ceiling (not an escalation beyond the stolen session's own level). **Why open:** identical reasoning to PERM-10/PERM-11 — `STEPUP_HANDLERS` (`backend/tests/test_mfa_policy.py`) is Feature 01's own pinned, test-enforced set; adding a handler to it is a deliberate behavior change belonging to that feature's owner, not a mechanical fix. Neither call site carries routine/self-service traffic, so — like PERM-11 — this is a cheap item to act on once the owner decides to extend the gate. See `docs/security-review/USR-07-users-organizations.md`'s Pass 12 section (USR-11).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **The new Gmail domain-wide-delegated-service-account capability is reachable without re-verification, unlike its two step-up-gated settings-route siblings** (USR-12, MED, security review USR-07 pass 13, 2026-10-28, open decision; revised 2026-10-28 after a Copilot review comment on PR #3810) | ✅ Resolved (owner decision 2026-11-01)                                                                                                  | **Resolved 2026-11-03 (owner decision 2026-11-01: re-check only the service-account fields).** `OrganizationService.update_organization_settings` takes a `confirm_delegated_email_change` hook and awaits it exactly where it already decides a save sets up or changes the delegated service account (choosing it, changing whom it sends as, or a fresh key), before anything is written. Both `PATCH /organizations/settings/email` and `PATCH /organizations/settings` pass the step-up check as that hook, so an ordinary email save never prompts. An administrator's save that would change the service account without a hook is refused, so a new caller fails closed. Tests: `TestTheServiceAccountChangeReVerifies` in `tests/test_gmail_service_account_settings.py`. Both `PATCH /organizations/settings/email` (`update_email_settings`) and the generic `PATCH /organizations/settings` (`update_organization_settings`) can configure a Gmail service account with domain-wide delegation, able to send as any address in the department's Google Workspace domain — strictly more capability than the SMTP/App-Password/OAuth options the route already held. Setting it up or changing it correctly requires `admin.access` server-side (`OrganizationService.update_organization_settings`'s `may_configure_delegated_email` check, fails closed) — but neither route carries `require_stepup`, unlike `update_auth_settings` and `update_file_storage_settings`, its two siblings in `STEPUP_HANDLERS`'s identical "Security and policy changes" category. **Bounded by a Google-side prerequisite the Logbook doesn't control:** Google itself refuses to issue a token for a service-account key whose client ID hasn't already been authorized for the `gmail.send` scope under Domain-wide Delegation in the organization's own Google Admin console (`backend/app/utils/google_oauth.py:175-196`), and changing the sending identity without also supplying a fresh, already-authorized key clears the stored key rather than impersonating anyone (`organization_service.py:562-566`). So a stolen **live session** belonging to an `admin.access` holder is not sufficient on its own — the attacker also needs a key the organization's Google Admin console has already delegated. **Why open:** `STEPUP_HANDLERS` (`backend/tests/test_mfa_policy.py`) is Feature 01's own pinned, exact-set-equality-checked list; the routes also save ordinary low-stakes settings (SMTP host, From name, toggling email off), so gating either route whole needs either a narrower endpoint for the service-account fields or a conditional step-up inside the shared handler — both are decisions for that mechanism's owner, not a mechanical fix, and a fix needs to cover both write paths. See `docs/security-review/USR-07-users-organizations.md`'s Pass 13 section (USR-12). |
 
 ## Dependencies
 
-| Item                                        | Status                             | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **PyMySQL held at 1.2.0**                   | Accepted by the owner (2026-10-05) | PyMySQL 1.2.1 (GHSA-x4f8-9hx9-hpp9) now sends `bytes` parameters as hex literals and replaced `pymysql.converters.escape_bytes_prefixed` with a string sentinel (1.2.3 only restored the _name_). aiomysql 0.3.2 — its latest release — imports that name and calls it for every `bytes` parameter, so with PyMySQL ≥ 1.2.1 every BLOB write fails with `TypeError: 'str' object is not callable` (caught by `tests/test_storefront_service.py::TestProductImages`). The advisory is an injection through the big5, gbk, sjis, cp932 and gb18030 connection charsets; this application connects with `DB_CHARSET=utf8mb4`, which is not affected. `requirements.txt` therefore pins 1.2.0 and `.github/dependabot.yml` ignores `pymysql >= 1.2.1`. **Owner decision pending when either changes:** lift both once aiomysql ships a compatible release; if pip-audit starts flagging 1.2.0 first, the alternative is to take PyMySQL ≥ 1.2.1 and replace aiomysql's `escape_bytes_prefixed` with the hex-literal encoding at startup. **Accepted by the owner (2026-10-05):** keep holding at 1.2.0 until aiomysql ships a compatible release, rather than shim `escape_bytes_prefixed`; the unaffected `utf8mb4` connection charset is why the hold is safe. |
-| **jsdom held at 30.0.1**                    | ⚠️ Open (2026-09-22)               | vitest replaces jsdom's `URL.createObjectURL` with a shim that copies each jsdom `Blob` into a Node `Blob`, and it locates jsdom's private implementation object by taking the _first_ own symbol of `new window.Blob()`. jsdom 30.1 changed that, so `blob[implSymbol]` is `undefined` and the shim throws `Cannot read properties of undefined (reading '_buffer')` from inside `URL.createObjectURL` — under vitest 4.1.11 and 5.0.1 alike, and with jsdom 30.1.0 and 30.1.1 alike. The four photo tests in `EquipmentCheckFormCounts.test.tsx` fail on it. It is test-environment only: jsdom is a devDependency and the shipped app never loads it. `frontend/package.json` and the root `package.json` therefore keep `jsdom` at 30.0.1, and `.github/dependabot.yml` ignores `jsdom >= 30.1.0`. Lift both once a vitest release handles jsdom ≥ 30.1.                                                                                                                                                                                                                                                                                                                                                                                                 |
-| **Images run newer runtimes than CI tests** | ⚠️ Open (2026-10-14)               | `backend/Dockerfile` builds on `python:3.14-slim` and `frontend/Dockerfile` on `node:26-alpine`, while the unit, integration, contract and frontend test jobs in `.github/workflows/ci.yml` run on Python 3.13 and Node 22, and `CLAUDE.md` names Python 3.13 and Node >= 22 as the toolchain. The Docker job (`tests/test_docker_integration.py`) does build both images and smoke-tests them — the backend container starts and listens, nginx serves the index — so a dependency that will not install or an app that will not boot on the newer runtime is caught. What no job catches is behaviour that differs at runtime once the app is up (a removed or changed stdlib API on a path the smoke test does not reach, a changed default): the test suites never run on the interpreter production uses. **Owner decision pending:** pin the images to what the suites test (`python:3.13-slim`, `node:22-alpine`), or move the test jobs to the versions the images ship (or test both).                                                                                                                                                                                                                                                              |
-| **No nested `frontend/package-lock.json`**  | ✅ Resolved (2026-08-05)           | The repo is npm **workspaces** (`workspaces: [backend, frontend]`), so the root `package-lock.json` is the only lockfile `npm ci` reads, and `frontend/Dockerfile` copies just `package.json` and runs `npm install`. A stale nested lock had survived since PR #1071, pinning axios 1.13.6 / form-data 4.0.5 / @remix-run/router 1.23.0 while the root lock carried the patched axios 1.19.0 and form-data 4.0.6. Nothing installed from it — but Trivy scans every lockfile it finds, so it reported 12 HIGH advisories against dependency versions the build does not use. Deleted. Do not re-add a per-workspace lockfile; run `npm install` from the repo root.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Item                                        | Status                                                                                   | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **PyMySQL held at 1.2.0**                   | Accepted by the owner (2026-10-05)                                                       | PyMySQL 1.2.1 (GHSA-x4f8-9hx9-hpp9) now sends `bytes` parameters as hex literals and replaced `pymysql.converters.escape_bytes_prefixed` with a string sentinel (1.2.3 only restored the _name_). aiomysql 0.3.2 — its latest release — imports that name and calls it for every `bytes` parameter, so with PyMySQL ≥ 1.2.1 every BLOB write fails with `TypeError: 'str' object is not callable` (caught by `tests/test_storefront_service.py::TestProductImages`). The advisory is an injection through the big5, gbk, sjis, cp932 and gb18030 connection charsets; this application connects with `DB_CHARSET=utf8mb4`, which is not affected. `requirements.txt` therefore pins 1.2.0 and `.github/dependabot.yml` ignores `pymysql >= 1.2.1`. **Owner decision pending when either changes:** lift both once aiomysql ships a compatible release; if pip-audit starts flagging 1.2.0 first, the alternative is to take PyMySQL ≥ 1.2.1 and replace aiomysql's `escape_bytes_prefixed` with the hex-literal encoding at startup. **Accepted by the owner (2026-10-05):** keep holding at 1.2.0 until aiomysql ships a compatible release, rather than shim `escape_bytes_prefixed`; the unaffected `utf8mb4` connection charset is why the hold is safe. |
+| **jsdom held at 30.0.1**                    | ⚠️ Open (2026-09-22)                                                                     | vitest replaces jsdom's `URL.createObjectURL` with a shim that copies each jsdom `Blob` into a Node `Blob`, and it locates jsdom's private implementation object by taking the _first_ own symbol of `new window.Blob()`. jsdom 30.1 changed that, so `blob[implSymbol]` is `undefined` and the shim throws `Cannot read properties of undefined (reading '_buffer')` from inside `URL.createObjectURL` — under vitest 4.1.11 and 5.0.1 alike, and with jsdom 30.1.0 and 30.1.1 alike. The four photo tests in `EquipmentCheckFormCounts.test.tsx` fail on it. It is test-environment only: jsdom is a devDependency and the shipped app never loads it. `frontend/package.json` and the root `package.json` therefore keep `jsdom` at 30.0.1, and `.github/dependabot.yml` ignores `jsdom >= 30.1.0`. Lift both once a vitest release handles jsdom ≥ 30.1.                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Images run newer runtimes than CI tests** | ✅ Resolved (owner decision 2026-11-01: pin images to tested versions; built 2026-11-03) | `backend/Dockerfile` built on `python:3.14-slim` and `frontend/Dockerfile` on `node:26-alpine`, while every test job in `.github/workflows/ci.yml` runs on Python 3.13 and Node 22, so the suites never ran on the interpreter production used. **Resolved 2026-11-03:** the backend now builds on `python:3.13-slim` and both Node stages of the frontend on `node:22-alpine` (variants unchanged; tags, not digests, as before). The combined Unraid image (`docker/combined/Dockerfile`) is built on top of those two images rather than naming a runtime of its own, so it inherits the same versions. `tests/test_image_runtime_versions.py` reads the `setup-python` / `setup-node` versions out of every workflow and the `FROM` lines out of every Dockerfile and fails when they disagree, and also checks the `engines.node` floor in both `package.json` files names the same major — so the next bump has to move CI and the images together. `nginx:alpine` is not pinned: it runs no code the suites test. Tags float within a minor (`3.13-slim` takes each 3.13.x patch), which is the precision CI itself uses.                                                                                                                             |
+| **No nested `frontend/package-lock.json`**  | ✅ Resolved (2026-08-05)                                                                 | The repo is npm **workspaces** (`workspaces: [backend, frontend]`), so the root `package-lock.json` is the only lockfile `npm ci` reads, and `frontend/Dockerfile` copies just `package.json` and runs `npm install`. A stale nested lock had survived since PR #1071, pinning axios 1.13.6 / form-data 4.0.5 / @remix-run/router 1.23.0 while the root lock carried the patched axios 1.19.0 and form-data 4.0.6. Nothing installed from it — but Trivy scans every lockfile it finds, so it reported 12 HIGH advisories against dependency versions the build does not use. Deleted. Do not re-add a per-workspace lockfile; run `npm install` from the repo root.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ## Training Module
 
@@ -566,19 +1783,19 @@ guides can point at one place and an owner can decide it.
   information that `members.view` reads; what is gated is the assembled,
   scannable badge.
 
-## Inventory — Input Rules Deliberately Left Open (2026-10-20)
+## Inventory — Input Rules Deliberately Left Open (2026-10-20, resolved 2026-11-05)
 
 Found by driving the module end to end. The rest of that pass (blank names,
 numbers a column cannot hold, duplicate identifiers, a tracking-mode change
 under a live assignment, the assign URL/body mismatch, category loops) is fixed;
-these were left because each is a policy choice or needs a schema change.
+these were left because each is a policy choice or needs a schema change. The
+owner decided all three on 2026-11-01, and they were built on 2026-11-05.
 
-| Item                                                  | Status        | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ----------------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Duplicate category names                              | Open decision | `inventory_categories` has no uniqueness on `(organization_id, name)`, so "Radios" and "radios" can both exist. A rule has to decide what to do with duplicates installations already hold (merge, rename or grandfather), and whether it spans parents or only siblings.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Date plausibility on items                            | Open decision | A warranty expiring before the purchase date, and a purchase date of `0001-01-01`, are accepted. Enforcing it on update would also refuse unrelated edits to rows that already hold such a pair unless it only applies when a date field changes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Request field still unbounded by choice               | Open          | Every numeric request field is bounded: to its column's range where it has one, to the range its meaning fixes where it does not (a port, a quarter, a weekday number, a percentage), to the 32-bit ceiling for counts and scores stored in JSON, and to 30 days for every reminder lead time (`app/schemas/reminder_limits.py`: 30 days, or 720 hours for `reminder_schedule`). The reminder limit is on request schemas only, so a response still serializes a lead time stored further out by an earlier release. `tests/test_request_numeric_bounds.py` walks the live routes and fails on a new unbounded one. Two membership-number fields are bounded by a schema validator instead (the formatted id must fit its 50-character column). One field remains open because the right ceiling is a department rule nobody has set: how far a class may be shifted (`CohortShiftRequest.days`, which feeds date arithmetic, so an enormous value raises `OverflowError`). Pick a number and the field gets a bound. The election quorum default is bounded from its own meaning: at least 1 and at most the 32-bit ceiling, and at most 100 when its type is a percentage. |
-| Unassign takes effect on one click, with no condition | Open decision | `ItemDetailPage` unassigns with no confirmation and records no return condition, though `unassign_item` accepts one. The Returns screen captures it; whether the detail page should is a product call.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Item                                                  | Status                                                                                                 | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Duplicate category names                              | ✅ Resolved (owner decision 2026-11-01: unique among siblings, grandfather existing; built 2026-11-05) | Creating, renaming, moving or reactivating a category onto a name an active sibling already uses is refused with a 400 ("A category with this name already exists at this level"). Siblings share an organization, a parent (top level counts as one) and a domain — medical or gear, the split the two category pages already draw — and names are compared trimmed and case-insensitively. The check runs under a per-department lock (`INVENTORY_CATEGORY_NAMES` in `app/utils/org_locks.py`) with a locking read, so two simultaneous creates cannot both land; the setup presets take the same lock. Deactivated categories hold no name. Existing duplicates were left as they are — no data migration and no database constraint, since installations hold them — and stay editable; the gear and medical category lists now send `duplicate_name` and show a **Duplicate name** badge on each so an officer can rename one. |
+| Date plausibility on items                            | ✅ Resolved (owner decision 2026-11-01: check only when a date changes; built 2026-11-05)              | `app/utils/item_dates.py` refuses a warranty expiring before the purchase date, and any purchase, warranty or inspection date outside 1900 to 100 years past the current year, naming the field. A create checks every date it writes. An update checks only a date whose value differs from the stored one — the edit form resends every field, so presence alone would not do — and compares a changed side of the pair with the stored other side. A row already holding a bad pair therefore saves for unrelated edits, and is refused once someone changes either date without fixing it. The item form shows the refusal beside the dates as well as in the toast.                                                                                                                                                                                                                                                            |
+| Unassign takes effect on one click, with no condition | ✅ Resolved (owner decision 2026-11-01: confirm and ask condition; built 2026-11-05)                   | **Unassign** on `ItemDetailPage` opens a dialog that names the member and asks for the return condition, from the Returns screen's own list (`RETURN_CONDITION_OPTIONS`: excellent, good, fair, poor, damaged), with optional notes; nothing is sent until a condition is chosen, and **Keep it assigned** backs out. No API change: `POST /inventory/items/{id}/unassign` already stored `return_condition` and `return_notes` on the assignment and applied the condition to the item (poor or damaged sends it to maintenance). The field stays optional there, so other clients that omit it keep working, and the item then keeps its stored condition as before.                                                                                                                                                                                                                                                              |
 
 ## Medical Supplies — Automatic Reorders Land in a Queue the EMS Officer Cannot Open (2026-10-11)
 
@@ -596,6 +1813,24 @@ reopen this if the department moves medical purchasing to the EMS officer.
 
 ## Locations — Deleting One Clears Its Location From Nine Kinds of Records (2026-10-21, updated 2026-10-25)
 
+✅ **Resolved (owner decisions 2026-11-01: protect training history; protect
+meetings and requests only; built 2026-11-05).** Training records, course
+classes, cohorts and cohort classes, meetings and event requests now keep their
+location: deleting a location any of them names deactivates it instead, as an
+event already did. Their foreign keys changed from `ON DELETE SET NULL` to
+`ON DELETE RESTRICT` (migration `2bb7c963f351`) and the six columns joined
+`_RESTRICTING_LOCATION_REFERENCES`, so a reference that races in after the
+service's count is refused (`LocationInUseError`, "try again to deactivate")
+rather than nulled. Inventory items, storage areas and NFC tap logs keep
+clearing, unchanged. The two paths that remove locations in bulk follow
+suit: re-entering onboarding's stations step removes the earlier pass's station
+locations through `remove_location` (a referenced one is deactivated and
+kept), and the onboarding reset, which erases the whole department, first
+releases every blocking reference (`release_location_references`). Tested in `tests/test_delete_reference_guards.py`
+(`TestTrainingMeetingsAndRequestsKeepTheirLocation`) and
+`tests/test_location_restrict_references.py`, which now also names the decided
+split. The table below is kept as the record of what was decided.
+
 Found by the pass-8 security review of Locations & Kiosk
 ([`LOC8-32-locations-kiosk.md`](./security-review/LOC8-32-locations-kiosk.md),
 LOC8-2). Deleting a location that events, event templates or apparatus still
@@ -607,10 +1842,10 @@ hard-deleted and each of them silently loses its location. (Pass 9,
 added the ninth — `nfc_card_taps`, from Apparatus & NFC's 2026-10-23
 migration — to this table; the decision itself is unchanged.)
 
-| Records                                                                           | Status        | Detail                                                                                                                                                                                                                                                                        |
-| --------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `training_records`, `course_classes`, `course_cohorts`, `course_cohort_classes`   | Open decision | Where a class or training record took place may be part of the history the record exists to keep. Adding these columns to `_RESTRICTING_LOCATION_REFERENCES` makes such a location deactivate instead; `tests/test_location_restrict_references.py` then needs the same list. |
-| `meetings`, `event_requests`, `inventory_items`, `storage_areas`, `nfc_card_taps` | Open decision | An item, storage area or NFC tap log with no location is an ordinary state, so clearing it may be the right outcome here. A meeting or request is closer to an event, which is already protected, so it is worth deciding deliberately.                                       |
+| Records                                                                           | Status                                                                  | Detail                                                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `training_records`, `course_classes`, `course_cohorts`, `course_cohort_classes`   | ✅ Kept (deactivate)                                                    | Where a class or training record took place may be part of the history the record exists to keep. Adding these columns to `_RESTRICTING_LOCATION_REFERENCES` makes such a location deactivate instead; `tests/test_location_restrict_references.py` then needs the same list. |
+| `meetings`, `event_requests`, `inventory_items`, `storage_areas`, `nfc_card_taps` | ✅ Meetings and requests kept (deactivate); the other three still clear | An item, storage area or NFC tap log with no location is an ordinary state, so clearing it may be the right outcome here. A meeting or request is closer to an event, which is already protected, so it is worth deciding deliberately.                                       |
 
 ## Room Kiosk Badge Check-In — A Copied Card Works With Nobody Watching (2026-10-03)
 
@@ -910,10 +2145,111 @@ existing rows were deliberately not rewritten: the correct date is derivable
 would change historical compliance results, and that was judged not worth it.
 An officer can correct an individual record's date where it matters.
 
+## Membership Number — Add Member Requires One, Import Does Not (W09-6, 2026-11-10)
+
+**Owner decision needed.** When the department does not number members
+automatically (Members Administration → Settings → Membership IDs), the two
+ways of adding a member disagree:
+
+- **Add Member** refuses to save without a membership number (`AddMember.tsx`).
+- **Import Members** creates a member with none when the column is blank. The workflow review's W09 second pass imported three members this way.
+
+`POST /users` accepts either. It assigns a number when automatic numbering is
+on, and otherwise stores none. The rule exists only in Add Member's form.
+
+Until W09-5, the import's instructions promised that a blank number would be
+assigned, so an officer had no reason to fill the column. The instruction now
+says whether one will be. Two questions are open:
+
+- **Should a membership number be required when numbering is off?** If so, the rule belongs on `POST /users`, so that both paths and any API caller meet it.
+- **What happens to members already stored without one?** They can be found by a query and given numbers from each profile; no bulk assignment was checked.
+
+## Department Contact Details — Settings Stores Them However They Are Typed (W06-6, 2026-11-08)
+
+**Owner decision needed.** Under Settings → Contact, the department's phone
+and website are saved as typed. The workflow review's W06 second pass stored
+"call us maybe" and "not a url", and both came back after a reload.
+`OrganizationProfileUpdate` (`backend/app/schemas/organization.py`) bounds
+their length and checks nothing else.
+
+The two writers of these fields disagree:
+
+- **Onboarding** refuses a website that doesn't look like an address ("Enter a valid website address", `OrganizationSetup.tsx`), and its schema adds `https://` when no scheme is given.
+- **The department's phone** gets none of the W04-7 rule that applies to members' own numbers (`app/utils/phone_numbers.py`).
+
+The website is printed in email footers (`organization_website`) and returned
+by the public portal API, so a bad value reaches members and the public. Only
+administrators can set it.
+
+Three questions are open, the same three as the emergency-contact entry below:
+
+- **Apply the onboarding website check and the W04-7 phone rule to the Settings path?**
+- **Refuse a bad value, or save it and flag the field** under the 2026-11-05 forms decision?
+- **What happens to values already stored?**
+
+## Emergency Contacts — The Phone Has No Format Check (W04-12, 2026-11-08)
+
+**Owner decision needed.** A member's emergency contact is saved with any phone
+up to 20 characters. The workflow review's W04 second pass saved "nope", and
+the server stored it. `EmergencyContact.phone` (`backend/app/schemas/user.py`)
+has no rule. The W04-7 rule (`app/utils/phone_numbers.py`, owner decision
+2026-10-05) covers a member's own phone and mobile only. It accepts digits,
+spaces, dashes, dots, brackets, a leading `+` and an extension, with 7 to 15
+digits.
+
+This is the number the department calls when something has happened to the
+member. Three questions are open:
+
+- **Extend the W04-7 rule to emergency-contact phones?** As there, it would apply to new writes only, with a value sent back unchanged still accepted.
+- **What happens to contacts already stored?** They are encrypted (`emergency_contacts` is an encrypted column), so finding bad ones means decrypting each.
+- **Follow the 2026-11-05 forms decision?** A contact with a bad phone could be kept and flagged rather than refused.
+
+## Password Reset Requests Store the Typed Address in the Audit Log (W03-13, 2026-11-08)
+
+**Resolved (2026-11-08), owner decision: a keyed fingerprint for unknown
+addresses.** `POST /auth/forgot-password` wrote the typed address into its
+`auth.password_reset_requested` audit row, including addresses that match
+nobody. The audit log is hash-chained and kept for good.
+
+It no longer writes the address:
+
+- **A request that matched a member** is named by `user_id` alone.
+- **Any other request** stores `email_fingerprint`, the keyed HMAC the account lookup uses (`app.core.security.email_fingerprint`). Repeats of one address can be matched, but the address can't be read back.
+- **Requests with email off** always carry the fingerprint, because the server looks nothing up then.
+
+Every row also carries the department's `organization_id` (W03-9).
+`tests/test_forgot_password_audit_scope.py` covers all three cases.
+
+**Still true:**
+
+- Rows written before this change keep the address, because editing them would break the hash chain.
+- A fingerprint is computed under the current `ENCRYPTION_KEY`, so after a key rotation the same address fingerprints differently from older rows.
+- No screen turns an address into its fingerprint, so an administrator who wants to ask "was this address tried?" has no tool for it yet.
+
 ## Sign-in From a Shared Station Address (2026-10-05)
 
-**Open decision.** A station's members usually share one public address, and
-two sign-in limits are counted per address rather than per member:
+**Resolved (2026-11-03), owner decision of 2026-11-01: count attempts per
+account as well.** The backend's `rate_limit_login` now counts 5 attempts a
+minute per **account at an address** — the submitted username or email on
+`/login` (trimmed, case-folded and hashed, and counted whether or not it names
+a real member, so the limit does not reveal which names exist), the
+pending-MFA token's member on `/mfa/login`, and the session's member on the
+signed-in routes that share the limiter (step-up, MFA setup and disable,
+recovery codes, passkey registration). One member's attempts no longer spend
+another's, and the in-memory fallback's 30-minute lockout lands on that one
+account at that address rather than on everyone behind it. A looser
+per-address backstop of 30 a minute (a plain sliding window, no lockout)
+stops one address trying accounts without bound, and nginx's `login_limit` in
+both bundled proxies was raised to the same 30 a minute (burst 30) so the
+proxy does not refuse what the backend allows —
+`test_nginx_config_consistency.py` pins the two together. Account lockout and
+the suspicious-IP throttle, which count failures across accounts, are
+unchanged. `tests/test_login_rate_limit_per_account.py` covers the sixth
+member, the same account's sixth attempt, the backstop and the fallback, on
+Redis and without it. What follows is the problem as it stood.
+
+A station's members usually share one public address, and
+two sign-in limits were counted per address rather than per member:
 
 - nginx's `login_limit` in both bundled proxies (`infrastructure/nginx/nginx.conf`,
   `infrastructure/nginx/docker.conf`): 5 a minute, burst 3.
@@ -932,6 +2268,23 @@ count, or to key the backend limiter on the account as well as the address;
 account lockout and the suspicious-IP throttle already cover the cross-account
 case. Until then, with Redis running, the cost is a member asked to wait a
 minute.
+
+### Resolved: the sign-in screen's own back-off is per account (W02-8, 2026-11-05)
+
+**Owner decision 2026-11-05: per account.** The sign-in page's failed-attempt
+counter used to be one per tab. From the fifth failure it disabled Sign in
+for `2s × 2^(n−5)`, capped at five minutes, whatever name was typed. So at a
+station computer one member's mistakes held the next member at the sign-in
+screen. The workflow review's W02 second pass drove it.
+
+`authStore` (`frontend/src/stores/authStore.ts`) now keeps `loginLockouts`,
+one entry per account, keyed the way the server folds a name (trimmed,
+lower-cased). It keeps at most 20 accounts per tab. A successful sign-in
+clears only that account, and the sign-in page shows the wait for the name in
+the field. A `429` still sets that account's wait from `Retry-After`. If the
+server's per-address backstop is what refused, every other account reaches
+the server and gets its own `429`, so nothing is lost by keying the client
+per account. Tests: `authStore.test.ts`, `LoginPage.test.tsx`.
 
 ## Suggestion Boxes — What Anonymity Does and Does Not Cover (2026-09-23)
 
@@ -957,8 +2310,9 @@ What the application cannot promise, and why each is left as it is:
   error handling. **A proxy the operator runs in front of these is outside the
   repository** — Unraid's SWAG or Nginx Proxy Manager, an AWS load balancer's
   access logs, Cloudflare — and records the IP and the second unless it is
-  configured the same way. `docs/deployment/aws.md` shows how for the host
-  nginx it documents.
+  configured the same way. `docs/deployment/aws.md`,
+  `docs/deployment/azure.md`, `docs/deployment/gcp.md` and
+  `docs/deployment/digitalocean.md` show how for the host nginx they document.
 - **Someone with server access can still correlate by time.** The reviewers'
   notification email is sent — and logged to `message_history` — at
   submission time, their in-app notification rows carry an exact `sent_at`,
@@ -1021,17 +2375,77 @@ made these choices where nothing had been decided. Each is easy to reverse.
 - **Approved minutes from before this change have no approved version.**
   `GET /{id}/verify` says so rather than inventing a hash for content nobody
   hashed. Reopening and re-approving one creates version 1.
-- **Quorum counts present, late and left early; not guests, and there is no
-  proxy status.** The code does not know the department's bylaws on a member
-  who left before the vote, or on proxies. If either should change the count,
-  it is `COUNTS_TOWARD_QUORUM` in `app/utils/minutes_attendance.py`.
-- **Attachments are not searchable, are not in the published Documents copy,
-  and the PDF lists them without embedding them.**
+- ~~**Quorum counts present, late and left early; not guests, and there is no
+  proxy status.**~~ **Resolved (owner decision 2026-11-01: make it a
+  department setting; built 2026-11-05).** **Minutes → Settings → Quorum**
+  chooses whether members marked Late or Left early count (both on unless
+  switched off, which is how every department counted before) and whether the
+  department uses proxies (off unless switched on). With proxies on, the roll
+  call offers **Represented by proxy** and such a member counts toward quorum.
+  A member marked present always counts and a guest never does. The rule is
+  stored in the `minutes` settings (`quorum_counts_late`,
+  `quorum_counts_left_early`, `proxy_attendance`, read by
+  `quorum_counting_in` in `app/utils/minutes_settings.py`) and applied only by
+  `QuorumService.calculate_quorum`, whose description names any departure
+  from the default ("members who left early not counted; proxies counted").
+  `proxy` is a stored roll-call status (JSON, no migration). A proxy is never
+  `present`, which now means "in the room" rather than "counted toward
+  quorum", so a proxy does not vote in a roll call and is not counted toward a
+  "majority of members present" threshold; the published copy, the PDF and the
+  public page name proxies separately, under every attendance listing. A line
+  already recorded as a proxy stays editable after the department switches
+  proxies off, but then no longer counts. Changing the rule recounts drafts
+  the next time their quorum is checked; adopted minutes keep the quorum they
+  were adopted with. Tests: `tests/test_minutes_quorum_counting.py`,
+  `tests/test_quorum_service.py` (`TestWhoCounts`),
+  `QuorumCountingPanel.test.tsx`, `AttendancePanel.test.tsx`.
+- ~~**Attachments are not searchable, are not in the published Documents copy,
+  and the PDF lists them without embedding them.**~~ **Resolved (owner
+  decision 2026-11-01: include in published copy and PDF; built 2026-11-05).**
+  Publishing lists the files in the library copy and stamps each
+  `minutes_attachments.published_at`; whoever can read that document opens
+  them from its paperclip in Documents
+  (`GET /documents/{id}/minutes-attachments[/{attachment_id}/file]`), under
+  the document's own folder rules, so an executive copy's files stay with
+  leadership and a `minutes.view` holder without access to the document still
+  opens them from the minutes only. Only files the copy lists are served: a
+  signed copy filed after publishing appears once the minutes are published
+  again. The bytes stay in the minutes' storage area; nothing is copied into
+  Documents. `GET /{id}/pdf` draws images after the signatures, appends PDFs
+  after the minutes and lists Word, Excel and text files by name, within a
+  budget of 40 MB of files read, 300 appended pages and 40 megapixels per
+  image (`app/utils/minutes_pdf_attachments.py`); a file left out is listed
+  with the reason. **Accepted costs, as the decision named them:** a PDF with
+  attachments is larger, and every reader of the published copy can now open
+  its files — a department that files something on minutes it would not show
+  the library's audience must leave it off or not publish. **Still not
+  done:** attachments are not searchable (the decision covered the published
+  copy and the PDF only); the public copy carries none, as before; appended
+  pages carry no minutes footer, so a printed attachment page is matched to
+  the record by the SHA-256 in the attachment table, not by its own footer;
+  and Documents has no viewer for a generated document's text, so the
+  published copy's readers see its card and attachments but read the minutes
+  themselves in Minutes. Tests: `tests/test_minutes_published_attachments_integration.py`,
+  `tests/test_minutes_pdf_attachments.py`, `PublishedMinutesAttachments.test.tsx`.
 - **Assignees are emailed when minutes are approved.** An item added to
   approved minutes emails its assignee then; a carried-forward item is not
-  re-announced. The due-date reminders in `run_action_item_reminders` still go
+  re-announced. ~~The due-date reminders in `run_action_item_reminders` still go
   only to the in-app bell, not to email — at odds with the email-first rule
-  (CLAUDE.md pitfall #18), and unchanged by this work.
+  (CLAUDE.md pitfall #18), and unchanged by this work.~~ **Resolved (owner
+  decision 2026-11-01: email them, member can opt out; built 2026-11-05).**
+  Items on adopted minutes were already emailed by
+  `minutes_action_item_reminders` (2026-10-15). The remaining bell-only
+  reminders, for action items on a meeting record, are now emailed on the same
+  days as the bell (3 and 1 days before, the due date, the day after), under
+  the member's "Action items from meetings and minutes" switch
+  (`EmailKind.MINUTES_ACTION_ITEMS`). `meeting_action_items.reminder_emailed_on`
+  makes a second run on the same day send nothing; a failed send is retried
+  on the next run. Items on draft or circulated minutes still get the bell
+  only: their items are not yet a commitment, the rule the minutes reminder
+  email follows. **Residual:** the bell entry itself has no such marker, so
+  running `action_item_reminders` twice in a day still puts a second bell
+  entry in front of the assignee, as it always has. Tests:
+  `tests/test_meeting_action_item_reminder_emails.py`.
 - **Confirmed by the owner (2026-10-14).** Minutes are circulated for review
   and adopted (the API statuses are unchanged); any member who can view minutes
   may suggest changes; an election that runs past the meeting is attached to the
@@ -1080,6 +2494,10 @@ Still open:
 
 - **OneDrive / SharePoint and "Other" are still unread.** The screen says
   files stay on the server for them, and lists what can be connected.
+  **Onboarding now says so too (2026-10-31, W01-29/W01-30):** the setup
+  wizard's OneDrive card and settings page used to say files would be stored
+  there; they now say it is not connected yet and files stay on the server.
+  The Local Storage page marks its path field as recorded but not used.
   **Resolved 2026-10-23: Google Drive works** (decision 32), through a
   service account and a Shared Drive. It needs Google Workspace; a personal
   Google account has no Shared Drives.
@@ -1260,6 +2678,39 @@ of `sensitive_answers.view` (see "Sensitive Fields" in
 `sensitive_answers.view` is granted to no seeded position, so a department
 that wants its membership committee to read these answers grants it by hand.
 
+## Prospective Members — Follow-up Form Links (2026-10-29)
+
+**Open, each deliberate.**
+
+- **A forwarded link shows what is pre-filled.** The link needs no sign-in, so
+  anyone the applicant forwards their email to opens the form with the address,
+  phone and date of birth it pre-fills. The token is 256 bits, the page is
+  served no-store and no-referrer, and only the fields the form maps are
+  filled — but the link is the credential, as the status-page link is.
+- **An email change reaches the new address at once.** Later pipeline emails
+  go to it as soon as the form is submitted. The safeguards are the flag on the
+  applicant's card and the notice to the old address; a change is not held for
+  approval (the owner's decision of 2026-10-25).
+- **Applicant names entered on an interest form are stored HTML-escaped.**
+  `FormsService` escapes every answer, and the interest-form mapping copies the
+  escaped text onto the applicant record, so "O'Brien" is stored as
+  `O&#x27;Brien` and the pipeline screens show it that way. Follow-up forms
+  unescape for display and comparison, and write plain text back when the
+  applicant changes a value, but records nobody has edited keep the escaped
+  text. Fixing it needs a decision on a backfill of existing records.
+  **Resolved (2026-11-04), owner decision of 2026-11-01: backfill existing
+  records.** The interest-form mapping now unescapes each answer before it
+  writes the applicant (the stored submission keeps its escaped answers), and
+  migration `67fac0bf1c09` converts `first_name`, `last_name`,
+  `interest_reason` and `referral_source` once — only values that are exactly
+  `html.escape` output, so it is idempotent; a value such as `&amp;amp;` that
+  would unescape again is left as it is and counted in the upgrade log.
+  **Still open:** the encrypted columns the mapping also filled (`email`,
+  `phone`, `mobile`, the address) are not backfilled — a migration cannot
+  decrypt them, and `email_hash` derives from the stored email — so an
+  applicant whose address held an apostrophe or ampersand keeps the escaped
+  form until it is edited.
+
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
 A member can attach a certificate (PDF/JPG/PNG, 10 MB) to a self-reported
@@ -1335,43 +2786,127 @@ administrator notice (`GET /system-notices`). Configuration: `CLAMAV_ENABLED`, `
 
 What remains for the owner:
 
-| Item                                         | Status                      | Detail                                                                                                                                                                                                                                                                                                                |
-| -------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Scanner outage fails closed**              | Owner's decision 2026-10-08 | With scanning enabled, an unreachable clamd, a timeout, or any reply other than `OK`/`FOUND` refuses the upload with a retryable `503` (`LB-UPLD-005`) — on every upload path. The owner confirmed it for the on-by-default rollout: a host that upgrades without a running scanner refuses uploads until it has one. |
-| **Files stored before scanning was enabled** | Open                        | Not rescanned. Scanning covers new uploads only; files already on disk (and logos, photos and images already in the database) were never scanned.                                                                                                                                                                     |
+| Item                                         | Status                                                                   | Detail                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Scanner outage fails closed**              | Owner's decision 2026-10-08                                              | With scanning enabled, an unreachable clamd, a timeout, or any reply other than `OK`/`FOUND` refuses the upload with a retryable `503` (`LB-UPLD-005`) — on every upload path. The owner confirmed it for the on-by-default rollout: a host that upgrades without a running scanner refuses uploads until it has one. |
+| **Files stored before scanning was enabled** | ✅ Resolved (owner decision 2026-11-01: scan them now; built 2026-11-03) | Every stored file and database-held image is scanned once by the `stored_file_malware_scan` task — see below.                                                                                                                                                                                                         |
+
+**Files stored before scanning (resolved 2026-11-03, owner decision
+2026-11-01: run a one-time scan over stored files and images).** Upload
+scanning reached self-report certificates on 2026-10-06 and every upload path
+on 2026-10-08, and reaches nothing while `CLAMAV_ENABLED=false`; whatever was
+stored outside those windows had never met a scanner.
+`app/services/stored_file_rescan.py` now scans it, from the in-process
+scheduler (`stored_file_malware_scan`, hourly, at most 500 objects a run), so
+no operator has to remember to start it:
+
+- **What it covers:** every file a row references, on the uploads volume or
+  in a department's own store — documents (and so facility and apparatus
+  files), event, training-record and self-report attachments, applicant
+  files, email-template attachments, suggestion screenshots, minutes
+  attachments and evaluation PDFs — plus the images held in the database:
+  organization logos, member photos, storefront product images and
+  equipment-check photos. Each file is read through the storage layer,
+  confined to its own row's organization, one at a time; a path pointing
+  anywhere else is counted and never opened. CSV imports are parsed and
+  discarded on upload, so there is nothing of them to scan.
+- **Once, and resumable:** the `stored_file_scans` ledger holds one row per
+  object scanned, keyed by a unique `scan_key` (SHA-256 of the file's storage
+  reference, or of the table, row and stored value for an image), written as
+  each verdict arrives. A second run, or a run after a crash, scans only what
+  has no row. A replaced photo is a new value and is scanned again; a file
+  moved by `relocate_uploads.py` or into a bucket has a new reference and is
+  scanned once more. Files uploaded since scanning was enabled are scanned
+  here a second time as well — nothing records that the upload path scanned
+  them, and one extra scan is cheaper than adding that record to every path.
+- **No verdict, no row:** while `CLAMAV_ENABLED=false` the task returns
+  without touching the database, so it starts by itself when scanning is
+  turned on. An unreachable scanner, a timeout or an unreadable file writes
+  nothing and is retried on the next run; after three scanner failures in a
+  row a run stops rather than spending a timeout on every remaining file.
+- **An infected object is treated as the upload path treats one:** it is not
+  kept, and the detection is audited as `upload_malware_detected` (signature,
+  type, size, SHA-256, through the same helper the upload path uses) with
+  `upload: stored_file_rescan`, the table and the row id. A file is deleted
+  from storage — audit first, delete second, and a delete a crash interrupted
+  is finished by the next run without a second audit row — and an image is
+  cleared from its row in the same transaction as its audit (only if the row
+  still holds the scanned value, so a replacement is never wiped).
+  **The row itself is kept**: the document or training record still lists the
+  attachment, and downloading it reports the file as not found. The audit
+  entry is the only account of why; nobody is emailed.
+
+To run a batch now instead of waiting for the hour, the System Owner
+(`system.run_tasks`) can call
+`POST /api/v1/scheduled/run-task?task=stored_file_malware_scan`. Tests:
+`tests/test_stored_file_rescan.py`.
 
 ## Unraid Community Apps Template — Not Installable Yet (2026-10-13)
 
-**Open decision.** `unraid/the-logbook.xml` is a Community Applications
-template for a single container, `ghcr.io/thegspiro/the-logbook:latest`,
-answering on 3000 (web) and 3001 (API). Two things stand between it and a
-working install:
+**Resolved (owner decision 2026-11-01: combined image; built 2026-11-03).**
+`unraid/the-logbook.xml` is a Community Applications template for a single
+container, `ghcr.io/thegspiro/the-logbook:latest`. Nothing built or published
+that image, and the project had no combined image to publish: it ships
+`backend/Dockerfile` (uvicorn on 3001) and `frontend/Dockerfile` (nginx on 80,
+forwarding `/api` to a host named `backend`) as two containers.
 
-- **Nothing builds or publishes that image.** No workflow pushes to ghcr.io,
-  and there is no root `Dockerfile`; `UNRAID-INSTALLATION.md` already warns
-  that a pull fails with "manifest unknown".
-- **The project has no combined image to publish.** It ships two:
-  `backend/Dockerfile` (uvicorn on 3001, fixed uid 1000) and
-  `frontend/Dockerfile` (nginx on port 80, forwarding `/api` to a host named
-  `backend`). Publishing either one under the template's name would not
-  give it a container that answers on both ports.
+**What was built:**
 
-The template is marked as a draft in its own header, its overview and its
-`Status:Beta` category, so nobody submits it as it stands. The settings no
-image reads were removed: `/app/data`, `PUID`/`PGID` (the backend runs as uid
-1000 whatever they say) and a placeholder donate link. The Docker Compose path
-(`unraid/QUICK-START.md`) remains the supported Unraid install.
+- **`docker/combined/Dockerfile`**, assembled by **`docker-bake.hcl`** from the
+  finished production stages of the two existing Dockerfiles (bake `target:`
+  contexts) rather than from a copy of their build steps. It starts from the
+  backend image — same Python, dependencies, `appuser` (uid 1000) and code —
+  adds Debian's nginx, and copies in the frontend image's bundle and its own
+  `frontend/nginx.conf`, rewritten at build time in exactly two places: it
+  listens on **3000** and proxies to **127.0.0.1:3001**. The build fails if
+  either rewrite matches nothing, then runs `nginx -t` as `appuser`.
+- **`docker/combined/entrypoint.sh`**, POSIX `sh`, starts uvicorn (same
+  `main:app`, same four workers, `WEB_CONCURRENCY` to change it) bound to
+  loopback and nginx in the foreground, and exits non-zero as soon as either
+  dies, stopping the other, so the restart policy brings both back. `docker
+stop` is forwarded to both. Migrations still run in the app's own startup,
+  as in the backend image. It refuses to start, naming the folder, if
+  `/app/uploads` or `/app/logs` is not writable by uid 1000.
+- **`.github/workflows/release-image.yml`** publishes it for `linux/amd64` and
+  `linux/arm64` on a pushed `v*.*.*` tag (`:1.2.3`, `:1.2`, `:v1.2.3`,
+  `:latest`) or a manual run (`:sha-…` only, so a trial run never moves
+  `:latest`), logging in with `GITHUB_TOKEN` under `packages: write` on that
+  job alone. Third-party actions are pinned to commit SHAs.
+- **The template** drops its draft markers and the API port mapping (the API
+  is reached through `/api` on the web port), and gains the settings the
+  production startup gate refuses to boot without — `SECURITY_ENFORCE_HTTPS`,
+  `COOKIE_SECURE`, `SECURITY_REQUIRE_TLS`, `DB_SSL`, `REDIS_SSL`,
+  `ENABLE_DOCS` — with the Unraid compose stack's defaults, plus
+  `TRUSTED_PROXY_IPS` for a reverse proxy in front of the container. Redis's
+  password is now required, as production already demanded.
 
-**To make it installable, choose one:**
+`tests/test_combined_image.py` holds the template, workflow, bake file,
+Dockerfile and entrypoint to one image name and one port, and
+`tests/test_docker_integration.py` builds the image and checks it serves the
+bundle. The separate images and every compose stack are unchanged.
 
-1. **A combined image**: nginx and the backend under one process supervisor,
-   plus a workflow that publishes it to ghcr.io on each release. That needs
-   package-write permission on the repository and someone owning releases.
-   MySQL, Redis and ClamAV stay separate containers the user installs (the
-   template already asks for their hosts).
-2. **Two templates**: publish the existing backend and frontend images and
-   split the template in two. The frontend's nginx would need the backend
-   address made configurable instead of the fixed `backend` hostname.
+**Still true, and not a code question:**
+
+- **It is installable only once a release is published.** Until somebody
+  pushes the first `v*.*.*` tag (or runs the workflow by hand from a tag),
+  `ghcr.io/thegspiro/the-logbook` does not exist and a pull fails with
+  "manifest unknown". After the first publish the GHCR package must be made
+  **public** in the repository's package settings, or Unraid cannot pull it
+  anonymously. **Someone has to own releases** — tagging, checking the
+  workflow went green, and the package visibility — and has not been named.
+- **The template has not been submitted to Community Applications.** That is
+  a manual step for a maintainer (`unraid/COMMUNITY-APP-SUBMISSION.md`), best
+  taken after an install from the published image has been tried on Unraid.
+- **Behind a reverse proxy, the client address and scheme the API sees come
+  from this container's nginx**, as with the separate frontend container:
+  without `TRUSTED_PROXY_IPS` every member is recorded under the proxy's
+  address, and `X-Forwarded-Proto` is always `http`.
+- **The container runs as uid 1000**, not Unraid's usual `nobody:users`
+  (99:100); the appdata folders must be writable by it. `PUID`/`PGID` are
+  still not supported.
+
+The Docker Compose path (`unraid/QUICK-START.md`) remains the fuller install,
+since it also runs MySQL, Redis, ClamAV and the nightly backup.
 
 Related and not changed here: `unraid/docker-compose-unraid.yml` also passes
 `PUID`/`PGID` to the backend and frontend, where nothing reads them either.
@@ -1407,7 +2942,7 @@ reader has to know to ask about.
 | **Count-only call tracking: no cross-unit attach picker**              | ✅ Resolved (2026-10-05, owner decision: build the picker)                   | The close-out wizard's step 2 now lists **Already logged by another unit** — calls another unit recorded while the shift was on, matched by overlapping shift times — and a tick sends `attach_call_ids`, an untick `detach_call_ids` (new; removes only this shift's response, and refuses a call no other unit is on). `attachable_calls` is served from `CallTrackingService.list_attachable_calls` for an unfinalized count-only shift, with `unit_labels` and `attached`. The call-volume report's count-only branch now serves `counts_unit_responses: false` and reads **Total Calls**. What remains is a matter of practice, not code: a second unit that types the incident into its own count instead of ticking it still records a second call, and nothing can match the two afterwards. (SCHED-10)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **`dispatch` / `derived` call sources have no writer**                 | Accepted (forward compatibility)                                             | `CallSource.DISPATCH` / `.DERIVED` and the `uq_org_call_external_ref (organization_id, external_ref)` constraint exist so a CAD integration can be added without a migration — the constraint is what would make a re-sync idempotent. Nothing writes either value today; every row is `manual`. (SCHED-12)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **A program-owned SHIFTS requirement counts shift reports**            | Open (needs product decision)                                                | A SHIFTS requirement created inside a training program (`ProgramRequirement.owns_requirement`) applies to nobody on the compliance screens; only the program's `RequirementProgress` ledger grades it, adding one per shift completion report an officer files for the trainee (`shift_completion_service._update_requirement_progress`). It therefore still counts shift reports, not `ShiftAttendance`. Moving it to attendance would drop the officer's "this shift counts toward the program" step and needs a start date (enrollment, or the requirement's own window), which the shifts-three-sources decision did not settle.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **`member_call_counts` / `reported_call_types` have no list/dict cap** | Open (needs an owner-picked ceiling)                                         | `ShiftFinalizeRequest.member_call_counts` (a list) and `.reported_call_types` (a dict keyed by call type) take an authenticated `scheduling.manage`/shift-officer submission with no size bound, unlike the sibling `attach_call_ids`/`detach_call_ids` fields, which were capped at 200 (matching `CallTrackingService.MAX_ATTACHABLE_CALLS`) by security review SCH-15 pass 8's addendum (2026-10-15, SCH-18). Each entry costs a per-member/per-type lookup, so an oversized submission is a cost multiplier on one request — abuse-resistance, not a data-isolation gap. `responding_members`'s existing 100-entry cap is a plausible precedent for the list; the dict has no clean existing ceiling since the call-type vocabulary itself is unbounded in org settings. (SCH-19)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **`member_call_counts` / `reported_call_types` have no list/dict cap** | ✅ Resolved (2026-11-04, owner decision of 2026-11-01: cap at 100 / 200)     | `ShiftFinalizeRequest.member_call_counts` (a list) and `.reported_call_types` (a dict keyed by call type) take an authenticated `scheduling.manage`/shift-officer submission with no size bound, unlike the sibling `attach_call_ids`/`detach_call_ids` fields, which were capped at 200 (matching `CallTrackingService.MAX_ATTACHABLE_CALLS`) by security review SCH-15 pass 8's addendum (2026-10-15, SCH-18). Each entry costs a per-member/per-type lookup, so an oversized submission is a cost multiplier on one request — abuse-resistance, not a data-isolation gap. `responding_members`'s existing 100-entry cap is a plausible precedent for the list; the dict has no clean existing ceiling since the call-type vocabulary itself is unbounded in org settings.. **Built:** `member_call_counts` takes at most 100 entries (`MAX_MEMBER_CALL_CREDITS`, matching `responding_members`) and `reported_call_types` at most 200 keys (`MAX_REPORTED_CALL_TYPES`) on both `ShiftFinalizeRequest` and `CloseoutCallsRequest`; an oversized request is a 422 naming the field and the limit. Request schemas only, so stored close-outs are read as before. The close-out wizard sends every member while the crew fits under 100 and, above that, only the members credited below the apparatus count (the server credits anyone omitted with that count); more than 100 adjusted members is refused on screen with the reason. (SCH-19)                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ### Shifts With Other Departments — Counted on Entry (2026-09-27)
 
@@ -1420,6 +2955,25 @@ purpose, and a department should know them:
   Reports → Member Hours** and rejects an entry that should not count, which
   removes it from every total. The member sees the reason. A department that
   needs sign-off _before_ credit does not have that option today.
+  **Resolved (2026-11-04), owner decision of 2026-11-01: optional approval
+  setting.** Scheduling Settings → **Require approval for outside-department
+  shifts** (`external_shifts_require_approval`, off by default — absent or
+  anything but `true` reads as off, which is the behaviour above). On, a
+  member's new entry is logged **Awaiting approval** (`pending`) and counts
+  toward nothing — hours report, My Hours, the apparatus summary, compliance
+  and shift evaluations all count `counted` alone — until an officer with
+  `scheduling.manage` approves it (the `approve` action on
+  `/scheduling/external-hours/{id}`, resolved in the caller's organization)
+  or rejects it. Officers are emailed (under **Scheduling
+  officer duties**) and get a bell entry when one is waiting; the member who
+  logged it is not. The **Awaiting approval** filter on the Member Hours
+  report lists every pending entry, whatever the report period. A member's
+  edit that changes the date, times, hours or unit of a counted entry sends
+  it back for approval while the setting is on; a note or role edit does not.
+  Entries logged before the setting was switched on keep counting; entries
+  imported by an officer from a shift history file count as before. Switching
+  the setting off does not approve entries already waiting: they stay pending
+  until an officer decides them.
 - **It is reported beside the department's own hours, never inside them.**
   `hours` / `worked_hours` stay attendance on this department's shifts, and
   outside time appears as `external_*`. It **is** added into the shift and
@@ -1552,7 +3106,7 @@ Per-module docs under `docs/module-audit/` carry the full lower-severity list.
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Executive-session minutes need a viewer tier below `minutes.manage`?**                                                                                                        | Accepted by the owner (2026-10-05)                                                                                                      | MM-3 is fixed: plain `minutes.view` holders now see only approved, non-executive minutes; `minutes.manage` sees all. Follow-up open decision: if board members who attend executive sessions but don't hold `minutes.manage` should read executive minutes, a dedicated `minutes.view_executive` tier is needed (seed + roles + frontend). Also: frontend `canManage` uses `meetings.manage` while the backend uses `minutes.manage` — roles managing minutes should hold both. **Update (MM2-1, 2026-08-06):** publishing executive minutes to the shared Meeting Minutes document folder is now blocked, because that folder is readable by the broad `documents.view` audience and so bypassed the restriction. Sharing an executive session with a _restricted_ audience is the same build as the `minutes.view_executive` tier above (a restricted document folder or per-document permission), not a one-click publish. **Accepted by the owner (2026-10-05):** leave as is — only `minutes.manage` holders read executive minutes, and no `minutes.view_executive` tier is built.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Equipment-check: read endpoints bypass `equipment_check.view`; compliance metrics stubbed**                                                                                   | ✅ Resolved (2026-10-11, owner decision: gate reads on view and build the cadence counts)                                               | **Fixed earlier:** `complete_incomplete_check` re-applies the expired/under-min auto-fail rule (EC-10); `create_report` validates a client-supplied `trainee_id` is in-org (EC-6); `get_report` takes an org filter (EC-9). **EC-7:** the detail reads (`get_shift_checklists`, `get_check`, the template list/detail) gate on `inventory.check_view` OR `inventory.check_submit`; the routes still on bare `get_current_user` are self-scoped (`/my-checklists`, its history, the photo upload on the caller's org's check), scope themselves by permission (`/log`), or carry a router-level `check_manage` gate (the changelog). **EC-11, built 2026-10-11:** `get_compliance_report` counts an expected check as one per shift per applicable checklist — the fleet board's rule, through `EquipmentReadinessService.expected_checks_between` — so each apparatus carries `checks_expected` and `checks_missed` and the report's `overdue_count` is the missed total; owed checks only (a rig out of service or a check not yet due is not counted). No cadence setting and no migration. The Check Reports compliance tab, its CSV and PDF show them. Still flagged: a few by-id reads used only for changelog text lack an org filter (harmless, EC-8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| **Public portal: per-process rate limiter + application-status token plaintext at rest**                                                                                        | ✅ Resolved (2026-10-05, owner decision PP-6)                                                                                           | **Both halves done (owner: "do both").** The portal's per-IP and per-API-key limits now count in Redis, shared by every worker (`_shared_window_hit` in `app/core/public_portal_security.py`), so the ceiling is the limit rather than workers × limit; the per-process caches answer only when Redis is down or a command fails (degraded, never unchecked). The applicant status token is looked up only by its SHA-256 (`status_token_hash`) and stored AES-256-GCM encrypted (`EncryptedText`) for the emails that re-send the link, so a database or backup read no longer yields a live token. Migration `f7c09cfec5b0` hashes and encrypts existing tokens in place — the token itself never changes, so links already in applicants' inboxes keep working. Tests: `test_public_portal_security.py::TestSharedRateLimit`, `test_status_token_at_rest.py`. **Resolved earlier from this cluster:** `authenticate_api_key` throttles the `last_used_at` write (≤ once/60 s per key) and `detect_anomalies` uses 2 COUNT queries instead of 3 (PP-7); the access-log viewer auto-escapes `user-agent`/`referer`/`ip` via JSX (no stored-XSS — PP-5). Accepted design limitations: the whitelist has no per-subfield granularity (a whitelisted `mailing_address` exposes the whole nested dict — intentionally-public org data, not member PII), and the ≥36-bit display code has no per-code lockout (bounded by the per-IP limit, now global). **Not covered:** `EventRequest.status_token` (the public event-request status link) is a separate credential on a separate table and is still plaintext at rest; it was not part of PP-6.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Public portal: per-process rate limiter + application-status token plaintext at rest**                                                                                        | ✅ Resolved (2026-10-05, owner decision PP-6)                                                                                           | **Both halves done (owner: "do both").** The portal's per-IP and per-API-key limits now count in Redis, shared by every worker (`_shared_window_hit` in `app/core/public_portal_security.py`), so the ceiling is the limit rather than workers × limit; the per-process caches answer only when Redis is down or a command fails (degraded, never unchecked). The applicant status token is looked up only by its SHA-256 (`status_token_hash`) and stored AES-256-GCM encrypted (`EncryptedText`) for the emails that re-send the link, so a database or backup read no longer yields a live token. Migration `f7c09cfec5b0` hashes and encrypts existing tokens in place — the token itself never changes, so links already in applicants' inboxes keep working. Tests: `test_public_portal_security.py::TestSharedRateLimit`, `test_status_token_at_rest.py`. **Resolved earlier from this cluster:** `authenticate_api_key` throttles the `last_used_at` write (≤ once/60 s per key) and `detect_anomalies` uses 2 COUNT queries instead of 3 (PP-7); the access-log viewer auto-escapes `user-agent`/`referer`/`ip` via JSX (no stored-XSS — PP-5). Accepted design limitations: the whitelist has no per-subfield granularity (a whitelisted `mailing_address` exposes the whole nested dict — intentionally-public org data, not member PII), and the ≥36-bit display code has no per-code lockout (bounded by the per-IP limit, now global). ~~**Not covered:** `EventRequest.status_token` (the public event-request status link) is a separate credential on a separate table and is still plaintext at rest; it was not part of PP-6.~~ ✅ **Resolved (owner decision 2026-11-01: hash/encrypt it, the same protection; built 2026-11-05).** The event-request token now has the applicant token's protection: the public status page and the requester's cancel look a request up only by `status_token_hash` (SHA-256), and `status_token` is stored AES-256-GCM encrypted (`EncryptedText`) because the coordinator's **Copy status link** control still shows it. An unknown token is the same plain 404 as before. The token is issued in `EventRequest.__init__` so the hash is set from the start (a column default would never reach the validator). Migration `e429ae62992e` hashes and encrypts existing tokens in place — reversible with the same `ENCRYPTION_KEY` — so links coordinators have already shared keep working. Both key-rotation scripts now re-encrypt the column. Tests: `tests/test_event_request_status_token_at_rest.py`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **Onboarding: role editor accepts client-controlled permissions / priority / system-flag**                                                                                      | ✅ Resolved (owner decision 2026-10-11: clamp and allowlist)                                                                            | `save_session_roles` accepted client-supplied `permissions`, `priority` and `is_custom` (which set `is_system`), keyed on the client slug — so a setup session could mint a high-priority `is_system` role, rewrite an existing system role by slug, or emit near-arbitrary `{module}.*` grants. **Resolved 2026-10-11 (owner decision: clamp and allowlist):** before anything is written, every `permissions` key must be a module row the Positions editor renders (`ONBOARDING_POSITION_EDITOR_MODULE_IDS` — the frontend registry including Positions and Settings, held to `moduleRegistry.ts` by a test), else 400 naming the modules; a custom position may not reuse a built-in identifier (a `DEFAULT_POSITIONS` slug or an existing system row), else 400. A built-in position stores the registry priority (or its seeded row's own when the registry no longer lists it) — the client's figure is ignored, matching `RoleService.update_role` after setup; anything client-defined is clamped to one below the System Owner's `it_manager` (99). `is_system` now follows the registry, not the client flag: a non-custom slug the registry does not define (a template a stale draft remembers) is stored as an ordinary, deletable position. Three wizard templates whose displayed priority disagreed with the registry (Board of Directors, Historian, Fundraising Chair) were aligned. **What the editor can no longer express:** a custom position named like a built-in one, or a per-position priority of its own. Tested in `tests/test_onboarding_role_clamps.py`. (ONB-7)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **Onboarding: session TTL has no absolute cap, only a sliding 30-minute window**                                                                                                | ✅ Resolved (owner decision 2026-10-11: cap at 24 hours)                                                                                | `validate_session` renewed `expires_at` by another 30 minutes on every successful call with no maximum age, and three routes (`GET /system-info`, `/security-check`, `/database-check`) call it with `require_csrf=False`, so a holder of just the session id could keep the pre-completion window open indefinitely by polling. **Resolved 2026-10-11:** `SESSION_MAX_LIFETIME_HOURS = 24` in `api/v1/onboarding.py`. Both places that slide the expiry (`validate_session` and `get_or_create_session`) now clamp it to `created_at + 24h`, and `validate_session` refuses a session past that ceiling with 401 `ONBD_SESSION_INVALID` ("reached its 24-hour limit") even when an earlier poll had slid `expires_at` forward. Resuming a session past the ceiling mints a fresh one, which rehydrates the saved progress exactly as a 30-minute lapse does. Tested in `tests/test_onboarding_session_lifetime_cap.py`. (ONB2-30-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Onboarding: `/test/email`'s self-hosted SMTP test has no SSRF/private-network protection**                                                                                    | ✅ Resolved (owner decision 2026-10-11: unify error messages only — on-premises relays keep working)                                    | `POST /onboarding/test/email` (`platform: "selfhosted"`/`"other"`) connects via `smtplib` to a fully client-supplied `smtpHost`/`smtpPort`, reachable pre-auth while no organization exists. Differentiated errors (connection-refused vs. timeout vs. DNS-failure vs. wrong-protocol) let a caller fingerprint an internal `host:port`. **Resolved 2026-10-11:** private addresses stay allowed (blocking them would break the on-premises SMTP relays this audience runs), but the oracle is gone — the onboarding path now calls `test_smtp_connection_uniform`, which returns one message (`UNIFORM_SMTP_UNREACHABLE_MESSAGE`) and one set of detail keys (`error: "connection_failed"`, the echoed host/port/encryption/from) for **every** failure before a server greets as SMTP, including the endpoint's own 30-second timeout; the specific cause goes to the backend log only. After an SMTP greeting, authentication and TLS errors keep their specific messages. The authenticated **Settings → Email** test is unchanged. **What remains, accepted with the decision:** the connection is still made, so response **timing** still differs (a refused port answers at once, a filtered one after the 10-second socket timeout), and a target that greets as SMTP is distinguishable from one that does not — the latter is inherent in a test that can succeed. Tested in `tests/test_onboarding_smtp_uniform_errors.py`. (ONB-30-3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -1565,7 +3119,7 @@ Per-module docs under `docs/module-audit/` carry the full lower-severity list.
 | **Compliance: reporting correctness & email abuse-surface polish**                                                                                                              | Partially resolved (LOW/MED)                                                                                                            | **Fixed:** the report email HTML now `html.escape`s the org name, `report_type`, and period label (was raw interpolation of user-controlled values — mail-client HTML/script injection); `report_type` is constrained to `monthly`/`annual` (was free-form, persisted + interpolated). **Still flagged:** report emailing accepts client-supplied recipients (external auditors are a legitimate case — **owner decision 2026-08-09: allow any recipient, but audit-log each send to a non-member address**; `_email_report` now calls `audit_external_recipients`, which writes an `external_recipient_send` audit event listing every out-of-org address); attestation history over-fetch is **resolved** — this row previously said it was still blocked on a deferred `audit_logs.organization_id` column; that column was added and the query updated on 2026-07-30 (`d07a51821`, "Add organization_id to the audit log with org-scoped reads"), and `get_attestation_history` (`compliance_officer_service.py`) has filtered `AuditLog.organization_id == str(organization_id)` directly in the query — not a global fetch with Python-side filtering — since before this row's own last edit; corrected here during the CMP-20 security-review pass 8 re-verification (2026-10-16); `records_with_certification` mislabel left as-is (ambiguous intent). (CS-9)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **Compliance: "notify non-compliant members" / reminder-days settings were stored but never sent**                                                                              | ✅ Resolved 2026-10-11 (owner decision: build the daily email task — settings work as configured, email-first)                          | **Resolved per the owner's decision.** The daily `compliance_member_notices` scheduled task (`app/services/compliance_member_notices.py`, registered in `TASK_RUNNERS`/`TASK_INTERVALS_SECONDS`) reads both settings, each on its own: `notify_days_before_deadline` emails a member a reminder for each unmet requirement whose deadline (the end of its current compliance window, or the member's catch-up deadline) is that many days away — the most urgent begun window, so a missed run still sends; `notify_non_compliant_members` emails a member whose standing is `non_compliant` a notice listing what is unmet. Members are graded by the shared evaluator (`training_compliance.grade_org_members`, the same rules as `compute_org_compliance_tally`), so the emails agree with the dashboard and matrix. Email only (`EmailKind.TRAINING_REMINDERS`, honouring a member's opt-out unless the department requires it); idempotent through email-channel `NotificationLog` rows keyed by (requirement, deadline, offset) and by the unmet (requirement, window) set. The panel's "Not yet active" warning is gone. **Behaviour to know on upgrade:** a department whose saved configuration holds the suggested `[30, 14, 7]` starts sending reminders on the first run; clearing the list stops them. **Not changed:** `grace_period_days` is still not consulted by any grading (outside this decision; the configuration page says so). Tests: `tests/test_compliance_member_notices.py`. (CMP2-1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Finance: no separation of duties on terminal money movement**                                                                                                                 | ✅ Resolved (owner decision: same-person guard, no new role)                                                                            | **Resolved 2026-10-11 per the owner's decision — guard the same person on every disbursement, add no new role.** The request **approval step** calls the shared `assert_different_person` guard, so one person cannot both raise a purchase/check request and approve it. `mark_pr_paid`, `mark_expense_paid`, `issue_check` and `waive_dues` each compare the actor against the request's `requested_by` / the expense's `submitted_by` / the dues member and refuse on a match. **`record_dues_payment` now does the same** (`recorded_by` vs `dues.user_id`, refused before the ledger is touched), matching its storefront analogue `record_payment` and its sibling `waive_dues` on the same record — the gap OPS-8 recorded. `void_check` and `unwaive_dues` take no actor and are reversals that move money _away_ from the actor, so they are correctly unguarded. **Accepted, by decision:** there is no distinct `finance.disburse` permission, so this is self-dealing prevention rather than three-way separation — a `finance.manage` holder can still execute an already-approved payment that somebody else raised. The owner chose this over a new role because a small department would need a second holder of it. A treasurer paying their own dues must have another `finance.manage` holder record it. Tests: `tests/test_dues_payment_guards.py::TestRecordingYourOwnDuesIsRefused`, `tests/test_money_separation_of_duties.py`. (FIN-4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| **Finance: dues administration has no UI — every write is API-only**                                                                                                            | ✅ Resolved (owner decision, 2026-10-11)                                                                                                | _Resolved 2026-10-11 (owner: "build it — documented click-paths become real")._ **Finance › Dues** now carries, for a `finance.manage` holder: **New schedule** / **Edit schedule** (`DuesScheduleDialog`), **Generate dues** behind a confirmation, **Record payment** (`DuesPaymentDialog`, amount prefilled with what is owed), **Waive** and **Reverse waiver** (reason required, `PromptDialog`), and a **Payment history** dialog over `GET /finance/dues/{id}/payments` for every reader. `GET /finance/dues` now sends each row's `memberName`, so the list names members instead of showing a user id. **Still open:** the schedule form offers only name, amount, frequency, due date, notes and active, because nothing reads the stored grace period, late fee, fiscal year or membership types (pitfall #19) — generation bills every active member and no late fee is ever charged; the payment history does not show who recorded each payment (the id is stored, the name is not sent). See `docs/training/11-finance.md`, "Dues & Assessments".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Finance: dues administration has no UI — every write is API-only**                                                                                                            | ✅ Resolved (owner decision, 2026-10-11)                                                                                                | _Resolved 2026-10-11 (owner: "build it — documented click-paths become real")._ **Finance › Dues** now carries, for a `finance.manage` holder: **New schedule** / **Edit schedule** (`DuesScheduleDialog`), **Generate dues** behind a confirmation, **Record payment** (`DuesPaymentDialog`, amount prefilled with what is owed), **Waive** and **Reverse waiver** (reason required, `PromptDialog`), and a **Payment history** dialog over `GET /finance/dues/{id}/payments` for every reader. `GET /finance/dues` now sends each row's `memberName`, so the list names members instead of showing a user id. ~~**Still open:** the schedule form offers only name, amount, frequency, due date, notes and active, because nothing reads the stored grace period, late fee, fiscal year or membership types (pitfall #19) — generation bills every active member and no late fee is ever charged; the payment history does not show who recorded each payment (the id is stored, the name is not sent).~~ **✅ Resolved (owner decisions 2026-11-01: "Show the name" and "Build them"; built 2026-11-06).** The payment history names who recorded each payment (`recordedByName` on `GET /finance/dues/{id}/payments`; "a former member" when that account is gone). The schedule form offers the grace period, late fee, fiscal year and membership types, and all four now apply (`app/services/dues_terms.py`): generation bills only members whose membership standing is a listed tier (none listed bills everyone, as before; matched by `member_holds_tier`, the rule an event's "mandatory for" list uses), a due date outside the schedule's fiscal year is refused on save, and generation is refused once that year is closing or locked; the daily `dues_late_fees` task adds the late fee to `amount_due` once, recording it in `late_fee_applied`, on dues still owing after the due date plus the grace period. It is a stored charge, not an on-read rule, so every screen, export and report that totals `amount_due` already includes it; its UPDATE requires `late_fee_applied IS NULL`, so a second or concurrent run charges nothing (pitfall #36). **Existing schedules behave as before until saved:** the new `dues_schedules.terms_effective_at` is NULL for every schedule that existed at upgrade, and such a schedule keeps billing every active member and charging no fee whatever it stores (a late fee or membership list written through the API before now did nothing, and still does not). Saving it from the form sets it — the form says so first — and a fee is charged only where the grace period ends after that instant, so turning terms on never charges for lateness that already happened. A fee already charged is not re-priced when the schedule's fee changes. Tests: `tests/test_dues_terms_and_reminders.py`, `duesTerms.test.tsx`. See `docs/training/11-finance.md`, "Dues & Assessments".                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Finance: correctness/DoS polish (export, pagination, request numbers, float aggregates)**                                                                                     | ⚠️ Mostly resolved (re-verified, security-review FIN-05 pass 4, 2026-09-08; corrected same-day, Codex review on PR #2398)               | This row had gone stale — the items marked "still flagged" below were already fixed on `main` (in the finance-approvals security-review's own earlier passes, never threaded back into this row). Re-verified directly against current code: `_generate_request_number` is MAX-of-suffix-based with a per-org unique constraint and a SAVEPOINT retry allocator (fixed 2026-07-31); every list method the original finding named (`list_purchase_requests`, `list_expense_reports`, `list_check_requests`, etc.) pushes `.offset()`/`.limit()` into the SQL query, none fetches-all-then-slices; `generate_export` caps at `max_records=10_000` and streams in 500-row batches via `SafeCsvWriter`; `_mutate_budget` takes a locking read and raises `BudgetLimitExceededError` whenever a spend/encumbrance would exceed `amount_budgeted`, fail-closed with no override. Money storage and arithmetic are `Decimal`/`Numeric(12,2)` throughout; the only remaining `float()` casts are two percentage/rate display roundings, not currency math (one needless `Decimal`→`float`→`Decimal` round-trip on `entity_amount` in `get_pending_approvals` was found and removed this pass). **Still open:** `list_dues_payments` (`GET /dues/{dues_id}/payments`) is also a list method and does not paginate — it eager-loads one member's entire payment ledger unbounded (this row's own first correction overclaimed "every list method" before Codex review caught the exception); left flagged rather than fixed since pagination would change the endpoint's response shape. **Owner decision (2026-10-05): leave as is** — one member's dues ledger is small, so `GET /dues/{dues_id}/payments` stays unpaginated. _(2026-10-04: `get_pending_approvals` now filters to the steps the caller is the named approver of — the step's `approver_type`/`approver_value`, matched by `finance_approver_matching.py`, needed no new assignee field — and approve/deny enforce the same rule; see `docs/FINANCE_MODULE.md` → "Who may act on a step".)_ (FIN-7/FIN-30; see `docs/module-audit/finance.md`'s FIN-7 entry for the full re-verification.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Recurring: create/update paths trust client-supplied FK ids without an org check (XC-1)**                                                                                     | ✅ Resolved (2026-10-11, owner decision XC-1: roll out per module)                                                                      | The dominant cross-cutting pattern — create/update methods stored `user_id`/`category_id`/`assignee_id`/etc. without verifying the referenced row is in-org. **Closed by the 2026-10 sweep:** every create/update path in the 134 services and their endpoints was reviewed; the ones still unvalidated now call `assert_in_org` / `assert_all_in_org` (`app/utils/org_scoping.py`) before any write — departure clearances, election eligible voters, minutes attendees, inline form conditions, training course/category/requirement/skill/program references, session locations, competency matrices, module-config apparatus, shift patterns, shift-report equipment checks, the event-request default coordinator, inventory requests/allowances/exposures, apparatus equipment catalog links and report filters. Everything else was already validated by an org-scoped fetch or a local helper. Tests: `backend/tests/test_xc1_*.py`. A JSON program import keeps only this department's own `target_roles` rather than refusing. New code must keep doing this — pitfall #14c; there is still no repo-wide machine check for it. Details in [`docs/module-audit/CROSS-CUTTING.md`](./module-audit/CROSS-CUTTING.md) (XC-1).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **Email attachments: the detected MIME type is validated, then discarded**                                                                                                      | ✅ Resolved 2026-10-08 (owner decision 2026-10-05: reject on mismatch, with OOXML/zip equivalence; LOW, 2026-09-09, app-review MAIL-22) | `upload_attachment` sniffs the real content type with `detect_mime_type` (`email_templates.py:616`), uses it to accept or reject the upload (`:623`), and then persists `content_type=file.content_type` (`:665`) — the **client's claim**, which is what the send path attaches the file as. Extension and content are each checked against their own allowlist and never against each other, so a file named `.pdf` whose bytes are `image/svg+xml` satisfies both and is mailed out declared as `application/pdf`. Impact is bounded by who can reach it — the uploader already holds `settings.manage` — which is why this is LOW; the substance is that the code does the expensive, correct thing and throws the answer away. **Why not fixed in the review that found it: the obvious fix is wrong.** `.docx`/`.xlsx`/`.pptx` are ZIP containers and libmagic commonly reports `application/zip` for them, which is exactly why `ALLOWED_EMAIL_MIME_TYPES` lists both `application/zip` and the three OOXML types — so simply storing `detected_mime` would attach a Word document as a zip and mail clients would present it as one. The real change is a consistency check between the extension and the detected type, carrying an explicit OOXML/zip equivalence, plus a decision on what to do on mismatch: reject the upload, or accept it and store the detected type. Both are defensible and the choice is the owner's. Note the `MAIL-` prefix is shared with `docs/security-review/MSG-25-messaging-notifications.md`, whose own MAIL-1…5 are unrelated to this row. See [`docs/app-review/email-templates.md`](./app-review/email-templates.md) → Pass 5. **Resolved in `ce50c5c6b` (2026-10-08).** `upload_attachment` (`email_templates.py`) now stores the file through `FileStorageService` with `keep_consistent_extension`, which rejects an upload whose extension and sniffed content disagree (`file_storage_service.py`), treating `application/zip` as consistent with `.docx`/`.xlsx`/`.pptx` (`mime_validation.py`); the stored `content_type` is the detected type, not the client's claim. The text above describes the code before that commit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -1581,7 +3135,8 @@ Owner-decision items from the feature-by-feature review under
 | **Admin hours: no per-org self-approval override; a resync can grow an already-approved entry past its threshold without re-review** | ✅ Resolved (owner decision 2026-10-05: toggle + re-queue above a threshold)                             | Both items closed. (1) `admin_hours.allow_self_approval` in the organization settings (off by default; writable only under `settings.manage`, not `admin_hours.manage`) lets a sole-officer department approve its own entries on the single and bulk paths; a self-approval still records `approved_by == user_id`. (2) A resync that grows an `APPROVED` attendance entry by more than `admin_hours.resync_requeue_growth_percent` (default **25**, 0–1000, per department) into a length its category would not auto-approve returns it to Pending Review. Both are shown and edited on the **Review Rules** tab at `/admin-hours/manage`. (`app/utils/admin_hours_settings.py`; `tests/test_admin_hours_review_settings.py`; `docs/security-review/AH-21-admin-hours.md`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **Storefront: no reconciliation backfill**                                                                                           | ✅ Resolved (2026-10-06, owner decision SF-backfill)                                                     | Previously: if PayPal's verify-webhook-signature API was unreachable the webhook returned 401, PayPal eventually stopped retrying, and the capture was absent from the ledger with no way to re-ingest it. **Now:** the daily `paypal_capture_backfill` scheduled task (also runnable through `POST /scheduled/run-task`) lists each enabled PayPal integration's successful incoming transactions for the last 7 days through Transaction Search, skips ids already in `store_payment_events`, re-reads each remaining one from the Payments API capture endpoint, and records only a capture that endpoint reports COMPLETED — through the webhook's own `record_external_payment`, so matching and auto-apply are identical. Idempotent with the webhook on the (org, provider, capture id) unique key; a lost race now returns the winning row instead of erroring. **Operator requirement:** the department's PayPal REST app needs the Transaction Search permission; without it the task logs a clear error to that department's error monitor and records nothing. Captures that were refunded before the backfill saw them are not recorded (the webhook path records only completed captures either). (SF future-dev #1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Consent enforcement**                                                                                                              | ✅ Resolved (2026-08-05) for SMS; the other two types have no consumer                                   | `ConsentService.has_consent` had **zero callers** — members could refuse `PHOTO_USE`, `PUBLIC_ROSTER_LISTING` and `SMS_NOTIFICATIONS` and be ignored. Enforcement was blocked on a backfill decision, since "never asked" counts as refused and wiring it in would have stopped SMS to every existing member. **Owner's rule removed the blocker:** messages always go to the member's email, so consent suppresses the text but never the notice. SMS is now consent-gated in both send paths (department-message escalation and the inventory low-stock alert) via a new bulk `granted_user_ids` helper, and email is unconditional — sent for every department message and no longer filtered by the `email_notifications` preference, which still governs the seven reminder/alert flows. **Still open:** `PHOTO_USE` and `PUBLIC_ROSTER_LISTING` have no consumer to gate — there is no public roster or public photo publishing in the app today. Whoever builds them must gate on `has_consent`; the requirement is recorded in the `consent_service` docstring. (AUTH-2)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| **Cohort: a few create fields are still API-only**                                                                                   | ⚠️ Narrowed (2026-10-06) — room booking resolved; minor fields open                                      | **✅ Room booking (CC-2) is resolved:** the owner chose a per-cohort room with a per-class override. The cohort wizard sets the cohort's room on its Schedule step and lets each class be moved to another room on the Preview step; the syllabus builder sets a class's own room. The preview now takes the cohort room and the per-class overrides, validates every location id in-org, resolves each class's room with the same helper generation uses (`_class_location`: wizard pick, then syllabus row, then cohort) and runs the double-booking check on that room, so "Location already booked" fires before anything is created (`tests/test_cohort_location_picker.py`). **Still open:** `description`, `notes`, `requires_rsvp`, `auto_create_records` and `default_duration_minutes` on `CourseCohortCreate` remain API-only — the wizard sends the defaults. Low value; recorded so the next pass does not rediscover them. (CC-2)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Cohort: a few create fields are still API-only**                                                                                   | ✅ Resolved (owner decision 2026-11-01; built 2026-11-04)                                                | **✅ Room booking (CC-2) is resolved:** the owner chose a per-cohort room with a per-class override. The cohort wizard sets the cohort's room on its Schedule step and lets each class be moved to another room on the Preview step; the syllabus builder sets a class's own room. The preview now takes the cohort room and the per-class overrides, validates every location id in-org, resolves each class's room with the same helper generation uses (`_class_location`: wizard pick, then syllabus row, then cohort) and runs the double-booking check on that room, so "Location already booked" fires before anything is created (`tests/test_cohort_location_picker.py`). **✅ The remaining fields are resolved (owner decision 2026-11-01: add to the wizard; built 2026-11-04).** The Course step takes a description and notes, the Schedule step a default class length (1–1440 minutes, the schema's bounds, checked before the preview, which now uses it too), and the Generate step the RSVP and in-progress-record switches, both starting at the schema's `True`. Blank text is omitted from the create (Pitfall #1). The cohort page shows the description to everyone on the cohort and the notes to officers only, and the detail response now withholds `notes` from a roster member. There is no cohort edit screen, so nothing else changed; `PATCH` still takes `description` and `notes` only (`tests/test_course_cohort.py`, `CohortWizard.test.tsx`, `CohortDetailPage.test.tsx`). (CC-2)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Cohort: a cancelled cohort still accepts changes**                                                                                 | ⚠️ Open — owner decision (app-review pass 6, CC-9)                                                       | `cancel_cohort` cancels the future classes and marks the cohort cancelled but leaves the roster active, and no mutator checks the cohort status. On a cancelled cohort an officer can still credit a missed class (a completed training record), schedule a make-up (a new class, event and session), add a class or add members. Refusing changes on a cancelled cohort would stop that, and would also stop anyone who reopens a cohort by adding a class. Left as is until the owner decides which behaviour is wanted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **Onboarding: role editor accepts client-supplied permissions/priority/system-flag**                                                 | ✅ Resolved (owner decision 2026-10-11: clamp and allowlist)                                             | `save_session_roles` accepted client-supplied `permissions`, `priority` and `is_custom` (which set `is_system`), keyed on the client slug — so a setup session could mint a high-priority `is_system` role, rewrite an existing system role by slug, or emit near-arbitrary `{module}.*` grants. **Resolved 2026-10-11 (owner decision: clamp and allowlist):** before anything is written, every `permissions` key must be a module row the Positions editor renders (`ONBOARDING_POSITION_EDITOR_MODULE_IDS` — the frontend registry including Positions and Settings, held to `moduleRegistry.ts` by a test), else 400 naming the modules; a custom position may not reuse a built-in identifier (a `DEFAULT_POSITIONS` slug or an existing system row), else 400. A built-in position stores the registry priority (or its seeded row's own when the registry no longer lists it) — the client's figure is ignored, matching `RoleService.update_role` after setup; anything client-defined is clamped to one below the System Owner's `it_manager` (99). `is_system` now follows the registry, not the client flag: a non-custom slug the registry does not define (a template a stale draft remembers) is stored as an ordinary, deletable position. Three wizard templates whose displayed priority disagreed with the registry (Board of Directors, Historian, Fundraising Chair) were aligned. **What the editor can no longer express:** a custom position named like a built-in one, or a per-position priority of its own. Tested in `tests/test_onboarding_role_clamps.py`. (ONB-7)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **Roles: the org-wide `member` role can be mass-escalated up to the caller's ceiling**                                               | ✅ Resolved (owner decision 2026-10-05: confirmation naming the member count)                            | Editing the baseline `member` role's permissions is still allowed up to the caller's own grant ceiling — that is how a capability is rolled out org-wide — but Role Management now opens a confirmation before saving any permission change to it, naming the permissions granted or removed and how many members hold the position (from `GET /roles`' `user_count`). A rename or description edit does not ask. (`RoleManagementPage.tsx`; ORU-7c.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Scheduling: swap accept-path skips target re-validation + weaker approver check**                                                  | ✅ Resolved (confirmed by security review SCH-15 pass 2, 2026-08-28)                                     | Duplicate of the "swap accept-path re-validation & self-approval; finalize manual_hours" row above; kept rather than deleted since this was the original app-review wording and other docs may still cross-reference it. See that row for the resolution mechanism. (SCH-5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -1647,11 +3202,11 @@ configuration had already gone this way.
 | Archived members          | Members → **Archived** filter → **Reactivate**, or the member's profile                                                                                                                 | ✅ (2026-09-24)        |
 | Tier configuration        | Members Admin → Settings → Membership Tiers; the monthly task advances members                                                                                                          | ✅                     |
 
-| Item                                                                 | Status                             | Detail                                                                                                                                                                                                                                                                                                                                          |
-| -------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Leave of absence is created from Waiver Management**               | Accepted by the owner (2026-10-05) | The owner chose to keep leave work where leaves are already created rather than move it to a lifecycle page, and editing now sits beside creation there. It is still not where a membership coordinator might first look; the membership guide points to it.                                                                                    |
-| **`POST /users/advance-membership-tiers` has no button**             | Accepted by the owner (2026-10-05) | The scheduled task `membership_tier_advance` runs it on the first of each month when the department's auto-advance switch is on; an on-demand run is API only. Not part of the 2026-10-05 decision. **Accepted by the owner (2026-10-05), decided separately:** leave as is — the monthly task is the runner, and no on-demand button is added. |
-| **`GET /users/{id}/property-return-report` (preview) has no screen** | Open (LOW)                         | The preview of what a member would have to return, before a drop, is still API only; the drop itself generates the full report into Documents. Not part of the 2026-10-05 decision.                                                                                                                                                             |
+| Item                                                                 | Status                                                                          | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Leave of absence is created from Waiver Management**               | Accepted by the owner (2026-10-05)                                              | The owner chose to keep leave work where leaves are already created rather than move it to a lifecycle page, and editing now sits beside creation there. It is still not where a membership coordinator might first look; the membership guide points to it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **`POST /users/advance-membership-tiers` has no button**             | Accepted by the owner (2026-10-05)                                              | The scheduled task `membership_tier_advance` runs it on the first of each month when the department's auto-advance switch is on; an on-demand run is API only. Not part of the 2026-10-05 decision. **Accepted by the owner (2026-10-05), decided separately:** leave as is — the monthly task is the runner, and no on-demand button is added.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **`GET /users/{id}/property-return-report` (preview) has no screen** | ✅ Resolved (owner decision 2026-11-01: add a preview button; built 2026-11-04) | **Resolved 2026-11-04.** A members-manager sees **Preview property return** under Status on a member's profile while the member is still serving (`PropertyReturnPreview`). It opens a dialog listing each item — name, serial number or asset tag, how it is held (assigned, checked out, issued), quantity and value — with the total, or "Nothing to return". The endpoint now has a typed response (`PropertyReturnPreviewResponse`, each item carrying `quantity`) and stays read-only: no document, email, clearance, status or service-history change. It builds the list with the same `PropertyReturnService.generate_report` the drop calls, so the preview lists exactly what the drop's letter lists, and takes the same `members.manage` grant with an org-scoped fetch. `tests/test_property_return_preview.py` drops a member after previewing them and compares the two. |
 
 The overdue list's response shape was also corrected on the frontend:
 `OverdueMember` had described fields the endpoint never sent (`drop_date`,
@@ -1693,10 +3248,30 @@ dashboard's Outstanding Pledges tile links to the pledges page again.
 
 What remains, deliberately:
 
-- **A pledge is kept in step with donations by hand.** Nothing in the backend
+- ~~**A pledge is kept in step with donations by hand.** Nothing in the backend
   moves a pledge's received amount or status when a donation arrives, so the
   edit form asks for both. Linking a donation to a pledge would be a backend
-  change.
+  change.~~ **✅ Resolved (owner decision 2026-11-01: link donations to
+  pledges; built 2026-11-06).** A donation can name a pledge
+  (`donations.pledge_id`, migration `6dadac1674c8`): **Record Donation**
+  offers the chosen donor's open pledges (pending, partial or overdue). The
+  backend refuses another department's pledge (not found), another donor's,
+  and a fulfilled or cancelled one. A completed gift adds its amount to the
+  pledge's fulfilled amount, and editing it moves the difference — a new
+  amount, a refund or other non-completed status, unlinking, or moving it to
+  another pledge — with the pledges locked while they move. The status
+  follows: fulfilled once paid in full, otherwise partial or pending; a
+  cancelled pledge stays cancelled and an overdue one overdue until paid in
+  full. The fulfilled amount is moved by the gift's amount rather than
+  recomputed from linked gifts, so an amount entered by hand before the link
+  is kept and added to; the pledge form still edits both for money that
+  arrived another way. An anonymous gift's pledge is hidden from a view-only
+  caller, as its donor is. **Not covered:** there is no way to delete a
+  donation (no endpoint exists), so "deleting" a linked gift is done by
+  refunding or unlinking it, and no existing donation is linked on upgrade —
+  which gift paid which pledge was never recorded. Tests:
+  `tests/test_fundraising_donation_pledges.py`,
+  `DonationFormPage.test.tsx`.
 - **Not on the forms:** a pledge's payment schedule (nothing reads it), and
   an event's sponsors and calendar-event link. All stay API-only. The
   pledge's **Send reminders** switch is on the form, read by the daily
@@ -1753,6 +3328,25 @@ The Create Budget row is closed too — see
 
 ## Finance — Budget Request Reminders Go Out 7 Days and 1 Day Before, for Every Department (2026-10-08)
 
+**✅ Resolved (owner decision 2026-11-01: make it configurable; built
+2026-11-06).** Each department sets its own reminder days — up to five, 0 (the
+deadline day) to 60 — and whether each reminder also puts an entry in the
+owner's notification bell, on **Finance › Settings › Budget request
+reminders** (`GET`/`PUT /finance/settings/budget-request-reminders`,
+`finance.manage`; stored as `budget_request_reminder_days` and
+`budget_request_bell_notices` in the department's finance settings, read by
+`budget_request_reminders_in` in `app/utils/finance_settings.py`). Unset is
+today's schedule — 7 and 1, email only — so an upgrade changes nothing; an
+empty list turns the reminder off. The email always goes out with the bell
+entry (pitfall #18), and the bell entry goes to an owner who muted the
+emails too. Each channel is recorded per year, deadline, reminder day and
+member, so a second run sends neither again. Tests:
+`TestReminderSettingsReading`, `TestConfiguredReminders` and
+`TestReminderSettingsEndpoint` in
+`tests/test_finance_budget_request_notices.py`,
+`BudgetRequestReminderSettingsCard.test.tsx`. The text below is the record of
+the gap.
+
 The deadline reminder for next year's budget requests is sent 7 days and 1 day
 before a draft year's request deadline, to line owners who still owe a request.
 The two offsets are constants (`REMINDER_OFFSETS_DAYS` in
@@ -1771,7 +3365,7 @@ _Treasurer duties_), and a department can make either required. See
 **Owner decision needed** only if a department asks for a different schedule
 or for bell entries.
 
-## Finance — Budget Amendment Corrections Are Whole Reversals Only (2026-10-09)
+## Finance — Budget Amendment Corrections Are Whole Reversals Only (2026-10-09, resolved 2026-11-06)
 
 **Resolved in part (owner decision, 2026-10-09).** A mistaken amendment is now
 corrected by a **reversing entry** —
@@ -1784,8 +3378,21 @@ and should not be used for this: it moves the original budget.
 
 What remains limited, by design:
 
-- **No partial reversal.** $2,500 entered for $250 is fixed by reversing the
-  whole $2,500 and recording a new $250 amendment — two entries, not one.
+- ~~**No partial reversal.** $2,500 entered for $250 is fixed by reversing the
+  whole $2,500 and recording a new $250 amendment — two entries, not one.~~
+  **✅ Resolved (owner decision 2026-11-01: allow partial reversals; built
+  2026-11-06).** The reverse endpoint takes an optional `amount` — any part of
+  the amendment, up to the whole (400 past it); left out, the whole amendment
+  is reversed as before. $2,500 entered for $250 is now one reversal of
+  $2,250. An amendment is still reversed once: a part-reversed amendment is
+  not reversed again, and what is left of it stays. The spend check, the
+  pending confirmation and the locked-year refusal apply to the partial amount
+  exactly as to a whole one. The line's page shows a part-reversed amendment
+  as "Reduced by $X", not struck through, and the Reverse dialog asks for the
+  amount (the whole by default) and says what stays. See
+  `docs/FINANCE_MODULE.md`, "Reversing a mistaken amendment". Tests:
+  `TestPartialReversal` in `tests/test_finance_budget_amendment_reversals.py`,
+  `budgetAmendmentReversals.test.tsx`.
 - **A reversal is final.** It cannot itself be reversed; restoring the money
   takes a new amendment with a fresh approval.
 - **A locked year takes no reversal**, as it takes no amendment. A mistake found
@@ -1794,66 +3401,139 @@ What remains limited, by design:
   the lower budget (409 "Insufficient available budget"); the spending has to be
   resolved first.
 
-**Owner decision needed** only if partial reversals, or reversals in a locked
-year, are wanted.
+The other three stand. The owner's decision was partial reversals only, so a
+locked year still takes no reversal, partial or whole.
 
-## Finance — Dual Approval: What It Does Not Cover (2026-10-11)
+## Finance — Dual Approval: What It Does Not Cover (2026-10-11, resolved 2026-11-06)
 
 Large requests can need two different approvers
 (`finance.dual_approval_threshold`; see `docs/FINANCE_MODULE.md`, "Dual
-approval"). Four gaps are deliberate, pending a decision:
+approval"). Four gaps were left pending a decision; the owner decided all four
+on 2026-11-01 and they were built on 2026-11-06.
 
-- **Nobody is told a request is waiting for its second approval.** It is
-  listed on the Approvals screen and marked on its own page, but no email or
-  bell entry goes out.
-- **Any `finance.approve` holder may give the second approval**, not only the
-  approvers a chain names. The rule is "two different people", not "two named
-  officers"; a department that wants the second approver to be a specific
-  office needs a two-step chain naming it.
-- **People are told apart by account.** An approval from an emailed link
-  counts as the address the step names, so one person who is both a member and
-  an external email approver could be counted twice. Steps that auto-approve
-  count as nobody.
-- **The threshold is whole dollars and one figure for all three request
-  types.** A per-type or per-category threshold, or one in cents, is not
-  supported.
+- **Nobody is told a request is waiting for its second approval — ✅ resolved
+  (owner decision 2026-11-01: email finance approvers; built 2026-11-06).**
+  The first time a request is held, the members who could give the second
+  approval are emailed (`app/services/finance_second_approval.py`): active
+  `finance.approve` holders who have not approved it and did not raise it,
+  narrowed to the named office's holders while that office is still owed.
+  Email only, under the optional `finance_duties` kind; no text or bell entry
+  (pitfall 18). The request's `second_approval_requested_at` (migration
+  `ee9ff4596ce7`) is claimed with a conditional update in the approval's
+  transaction, which queues the notice; the endpoint sends it only after the
+  commit, on the same queue as the other approval emails
+  (`finance_approval_notifications`). A rollback takes the claim and the
+  notice with it, a retry finds the claim taken, and a crash between the
+  commit and the send loses that one email (the Approvals screen still lists
+  the request). A failed send is logged and never fails the approval. A
+  request already held when the upgrade ran is not emailed retroactively.
+- **Any `finance.approve` holder may give the second approval — ✅ resolved
+  (owner decision 2026-11-01: named second approver setting; built
+  2026-11-06).** `finance.second_approver_position` names a position by slug
+  (Finance > Settings > Approval chains, "Who gives the second approval";
+  `settings.manage`). A held request then completes only once two different
+  people have approved it **and** one of them holds that position: a request
+  the office has not yet approved waits for one of its holders, and another
+  approver is refused with "The second approval on this request must come
+  from the … position". Unset, the rule is "two different people" as before.
+  Saving a slug the department does not have is refused; one deleted after it
+  was chosen fails closed (the request waits, and the settings card says the
+  position no longer exists). The office's holders also need
+  `finance.approve` to use the manual approval.
+- **People are told apart by account — ✅ resolved (owner decision
+  2026-11-01: match by email address too; built 2026-11-06).** An approval
+  from an emailed link now counts as the member whose account has the step's
+  address (case-insensitive, deleted accounts excepted), so a member who
+  approved by link cannot also give the in-app approval. An address no member
+  has is still a person of its own. Steps that auto-approve still count as
+  nobody.
+- **The threshold is one figure for all three request types — ✅ resolved
+  (owner decision 2026-11-01: per-type thresholds; built 2026-11-06).**
+  `finance.dual_approval_thresholds` holds a figure per type
+  (`purchase_request`, `check_request`, `expense_report`). A type left unset
+  follows `dual_approval_threshold`, so nothing changed for any department
+  until one is set; `0` turns the rule off for that type alone.
+  `FinanceSettings.threshold_for` is the one reader, shared by the approval
+  hold, the route preview and `GET /finance/settings`. Still not supported, and
+  not asked for: a per-category threshold, and cents (the figure is whole
+  dollars).
 
-## Finance — Amendment Confirmation: What It Does Not Cover (2026-10-09)
+## Finance — Amendment Confirmation: What It Does Not Cover (2026-10-09, resolved 2026-11-06)
 
 Amendments and reversals are entered pending and move money only once a
 `finance.budget_review` or `finance.manage` holder other than whoever entered
 them confirms them (`docs/FINANCE_MODULE.md`, "Second-officer confirmation").
-Three gaps are deliberate, pending a decision:
+Three gaps were left pending a decision; the owner decided all three on
+2026-11-01, and the two that called for building were built on 2026-11-06.
 
-- **Nobody is told an amendment is waiting.** No email, bell entry or queue
+- ~~**Nobody is told an amendment is waiting.** No email, bell entry or queue
   lists pending amendments across lines; the confirmer finds them on the line's
   page (marked _Pending confirmation_) or, at year-end, in the open items that
-  hold the lock. The Treasurer tells the confirming officer.
-- **A department with one finance officer cannot confirm anything.** Someone
+  hold the lock. The Treasurer tells the confirming officer.~~ **✅ Resolved
+  (owner decision 2026-11-01: email + pending queue; built 2026-11-06).**
+  Entering an amendment or a reversal emails every active member who may
+  confirm it — `finance.budget_review` or `finance.manage`, wildcards
+  included — other than whoever entered it, under the optional _Finance
+  duties_ kind (`finance_duties`); email only, no text or bell entry (pitfall
+  #18). Each send is recorded in the email sent-log keyed on the amendment, so
+  a second notice for the same amendment sends nothing. **Finance › Budget
+  amendments** (`/finance/budget-amendments`; the API is
+  `GET /finance/budget-amendments/pending`, the same two permissions) lists every
+  pending one across the department's lines, oldest first, with its line and
+  year, and offers Confirm and Reject there — so a reviewer who holds only
+  `finance.budget_review` and cannot open the line can still act. Tests:
+  `tests/test_finance_budget_change_notices.py`,
+  `PendingAmendmentsPage.test.tsx`.
+- **A department with one finance officer cannot confirm anything** (owner
+  decision 2026-11-01: leave as is, require a second officer). Someone
   other than the entering member must hold `finance.budget_review` or
   `finance.manage`; until one does, amendments stay pending and a closing year
   cannot be locked. This is the control working as intended, but a very small
   department has to grant `finance.budget_review` to a second officer first.
-- **A rejected reversal loses its link on the row.** Rejecting a pending
+- ~~**A rejected reversal loses its link on the row.** Rejecting a pending
   reversal clears `reverses_amendment_id` so the original can be reversed
   again; the rejected row then reads "Reverses an earlier amendment" rather
   than naming it. The audit event `finance.budget_amendment_rejected` keeps
-  `reversed_amendment_id`.
+  `reversed_amendment_id`.~~ **✅ Resolved (owner decision 2026-11-01: keep a
+  display-only link; built 2026-11-06).** `budget_amendments.reverses_amendment_ref`
+  (migration `0961ffc2cdf1`) is written when a reversal is entered and never
+  cleared; it has no foreign or unique key, so it frees nothing and holds
+  nothing back, and nothing that moves money reads it. A rejected reversal now
+  reads "Would have reversed the {date} amendment of +$Y". The migration
+  filled it for existing reversals — from the link where it still stands,
+  and for already-rejected ones from the audit log's
+  `finance.budget_amendment_reversed` / `…_rejected` events, only where the
+  amendment named is on the same line. Tests:
+  `TestRejectedReversalKeepsItsReference`,
+  `tests/test_budget_amendment_reversal_ref_migration.py`.
 
-## Finance — Budget Adoption Stages: What They Do Not Cover (2026-10-09)
+## Finance — Budget Adoption Stages: What They Do Not Cover (2026-10-09, resolved 2026-11-06)
 
 Next year's budget moves through taking requests, leadership review and board
 review to an adoption the Treasurer records (see `docs/FINANCE_MODULE.md`,
-"Adopting the budget"). Three gaps are deliberate, pending a decision:
+"Adopting the budget"). Three gaps were left pending a decision; the owner
+decided all three on 2026-11-01, and the one that called for building was
+built on 2026-11-06.
 
-- **Leadership changes only what the Treasurer decided.** A request still
+- **Leadership changes only what the Treasurer decided** (owner decision
+  2026-11-01: leave as is). A request still
   submitted or declined, and a draft line nobody requested (one copied from
   last year and never requested), cannot be changed in leadership review. The
   Treasurer moves the year back to taking requests, or edits the line.
-- **Owners are not emailed when leadership changes their amount.** They see the
+- ~~**Owners are not emailed when leadership changes their amount.** They see the
   change and its note on _Next year's budget_, and the adoption email lists the
-  final amounts.
-- **The board's changes are entered by moving the year back.** Board review
+  final amounts.~~ **✅ Resolved (owner decision 2026-11-01: email owners on
+  change; built 2026-11-06).** When leadership changes a request's amount in
+  leadership review, the request's submitter and the active holders of the
+  line's owner position (its own, else its category's) are emailed — never
+  the reviewer — with the amount before and after and leadership's note, under
+  the optional _Next year's budget requests_ kind (`budget_requests`). Saving
+  the amount the owner already had sends nothing, and a second notice for the
+  same review sends nothing (sent-log keyed on the request, the review time
+  and the amount). Tests: `TestLeadershipChangeEmail` in
+  `tests/test_finance_budget_change_notices.py`.
+- **The board's changes are entered by moving the year back** (owner decision
+  2026-11-01: leave as is). Board review
   freezes the draft; if the board amends the budget at its meeting, the
   Treasurer moves the year back to leadership review (or taking requests),
   makes the change there, and returns it to board review before recording the
@@ -1873,7 +3553,19 @@ year"). Three gaps remain, pending a decision:
   a banner once the end date passes (`closeDue`), but no email goes out and the
   year stays active until its close is begun; likewise an adopted year waits
   for **Start the year**. Both are deliberate — each step is an officer's
-  decision on the record.
+  decision on the record. **✅ Email resolved (owner decision 2026-11-01:
+  also email the Treasurer; built 2026-11-06).** The daily
+  `fiscal_year_due_reminders` task emails the Treasurers — the department's
+  active `finance.manage` holders, as every Treasurer notice resolves them,
+  under the _Treasurer duties_ email kind — when an adopted, unlocked draft
+  reaches its start date and when the active, unlocked year passes its end
+  date (the banner's own rule, `close_due` in
+  `app/services/finance_year_due_notifications.py`). Once per Treasurer, year
+  and date, through a sent-log: a moved end date that passes again is a new
+  close, and a Treasurer appointed later is told on the next run. A start
+  email names the year still active, if any, so its close is begun first.
+  Still nothing is started or closed automatically. Tests: `TestYearDue*` in
+  `tests/test_finance_budget_request_notices.py`.
 - **Drafts left in a closing year stay as drafts.** A purchase request, expense
   report or check request never submitted cannot be submitted once the close
   begins, and does not stop the lock. A requester who still needs it raises it
@@ -1885,13 +3577,47 @@ Every expense line needs an uploaded receipt before its report is submitted
 (see `docs/FINANCE_MODULE.md`, "Expense receipts are required"). Gaps,
 pending a decision:
 
-- **One receipt per line.** A hotel folio covering several lines is attached
-  to each of them.
-- **Mileage has no log of its own.** A mileage line needs a file like any
-  other; the guide asks for the trip log. Nothing checks what the file is.
-- **Purchase requests and check requests do not require one.** A purchase
+- ~~**One receipt per line.** A hotel folio covering several lines is attached
+  to each of them.~~ **✅ Resolved (owner decision 2026-11-01: share a receipt;
+  built 2026-11-06).** A line can use the receipt already uploaded to another
+  line of the same report (`POST …/items/{id}/receipt/share`), never one on
+  another report or another member's; on a draft, `DELETE …/items/{id}/receipt`
+  takes it off one line and leaves the others and the document. A document
+  that any line of a report past draft refers to still cannot be deleted. See
+  `docs/FINANCE_MODULE.md`, "One receipt on several lines, and the mileage
+  trip log". Tests: `tests/test_finance_shared_receipts_and_mileage.py`,
+  `expenseMileageAndSharedReceipts.test.tsx`.
+- ~~**Mileage has no log of its own.** A mileage line needs a file like any
+  other; the guide asks for the trip log. Nothing checks what the file is.~~
+  **✅ Resolved (owner decision 2026-11-01: built-in mileage log; built
+  2026-11-06).** A mileage line records its trips (date, from, to, purpose,
+  miles) in the form; the server prices it at the department's
+  `finance.mileage_rate`, dates it by its first trip, and the log stands in
+  for the receipt (migration `5f3bc23bc9a6`). There was no rate setting, so
+  one was added (Finance › Settings › Approval chains, `settings.manage`) with
+  no built-in figure: until a department sets it, a trip log is refused with a
+  message and mileage is claimed with an uploaded log as before. Left out: the
+  module does not check a trip's miles against a map, and a log is not
+  carried to QuickBooks beyond the line's amount.
+- ~~**Purchase requests and check requests do not require one.** A purchase
   request can carry an uploaded receipt, but nothing requires it before
-  payment, and check requests take none.
+  payment, and check requests take none.~~ **✅ Resolved (owner decision
+  2026-11-01: require before payment; built 2026-11-06).** `mark_pr_paid`
+  refuses a purchase request with no uploaded receipt, and `issue_check` a
+  check request with none, each with a 400 that says to attach it
+  (`ReceiptRequiredError`). A typed `receipt_url` does not count. Check
+  requests now take an upload (`check_requests.receipt_document_id`,
+  migration `100121b59d94`; `POST`/`GET /finance/check-requests/{id}/receipt`,
+  the purchase request's access rule), and a document that is the receipt on
+  a check request past draft cannot be deleted, as for the other two. An
+  advance and a reimbursement check need none — their receipts are the
+  expense report's lines — which `check_request_needs_receipt` decides for
+  both the service and the page. Mark Paid and Issue Check stay on screen,
+  disabled, with the reason beside them until the receipt is attached.
+  Requests approved before the upgrade need a receipt attached before they
+  can be paid (`docs/UPGRADING.md`). Tests:
+  `tests/test_finance_paid_amounts_receipts_commitments.py`,
+  `paidAmountsReceipts.test.tsx`.
 
 ## Finance — Restricted Funds: What They Do Not Cover (2026-10-13)
 
@@ -1986,31 +3712,79 @@ purpose:
   voided before then, so this arises only if a row is edited directly.
 - **No server-side PDF**, and no scheduled delivery. The browser's print, or
   its _Save as PDF_, is the PDF.
-- **Not yet built from the original plan:** expense summary by member, dues
-  collection with delinquency, and purchase orders by vendor. Restricted funds
-  and functional expense classification (program / management / fundraising)
-  have reports of their own (Restricted funds, Functional expenses).
+- ~~**Not yet built from the original plan:** expense summary by member, dues
+  collection with delinquency, and purchase orders by vendor.~~ **✅ Resolved
+  (owner decision 2026-11-01: build them; built 2026-11-06).** _Expenses by
+  member_ (the payments register's reimbursements for a period, by member),
+  _Dues delinquency_ (collection totals for the dues falling due in a period,
+  and each member overdue today by the dues code's own `dues_overdue_clause`)
+  and _Purchases by vendor_ (a fiscal year's approved and paid purchase
+  requests) are tabs on Finance › Reports, `finance.view`, each with a
+  `SafeCsvWriter` CSV. Left out: a partly paid dues record is not overdue
+  under the dues rule and so is not listed as delinquent, and vendor names are
+  free text, grouped only by case and spacing. Restricted funds and functional
+  expense classification (program / management / fundraising) have reports of
+  their own (Restricted funds, Functional expenses). Tests:
+  `tests/test_finance_board_reports_members_dues_vendors.py`,
+  `financeReportsMembersDuesVendors.test.tsx`.
 
-## Finance — Cash Advances: What They Do Not Cover (2026-10-14)
+## Finance — Cash Advances: What They Do Not Cover (2026-10-14, three resolved 2026-11-06)
 
 Described in
 [FINANCE_MODULE.md](./FINANCE_MODULE.md#cash-advances-2026-10-14). Left out
 on purpose, or needing a decision first:
 
-- **Only the requester's own advance.** An advance is paid to the member who
+- ~~**Only the requester's own advance.** An advance is paid to the member who
   asks for it; the finance office cannot raise one on another member's behalf,
   since the member who owes it, the overdue block and the separation of duties
-  all key on the requester.
-- **Fixed-date method only.** The 120 days run from the check. The IRS's other
+  all key on the requester.~~ **✅ Resolved (owner decision 2026-11-01: allow
+  on behalf; built 2026-11-06).** A `finance.manage` holder raises an advance
+  for a named member (`advanceHolderId` on `POST /finance/check-requests`; the
+  form's **Advance for** picker, fed by `GET /finance/advances/holders`). The
+  member must be a current member of the department (active or probationary,
+  pitfall #32) and becomes `requested_by` — the holder, who owes it, is blocked
+  while it is overdue and is emailed its statements; the officer is stored as
+  `check_requests.raised_by` (migration `fd900bc2c9e7`), shown on the advance's
+  page and audit-logged `finance.advance_raised_on_behalf`. The officer may then
+  neither approve it (in-app or a manual approval; an emailed-link step whose
+  address is theirs is refused too) nor issue its check, beside the existing
+  rule that the holder may not. Only an advance can be raised on someone
+  else's behalf; an ordinary check request is still the requester's own.
+- ~~**Fixed-date method only.** The 120 days run from the check. The IRS's other
   safe harbor, the periodic statement method (quarterly statements, 120 days
-  from each), is not modelled.
+  from each), is not modelled.~~ **✅ Resolved (owner decision 2026-11-01: add
+  periodic statements; built 2026-11-06).** Organization settings
+  `finance.advance_return_method` chooses `fixed_date` (the default — every
+  existing department is unchanged) or `periodic_statement`, on **Finance ›
+  Approval Chains › Cash advance deadline** (`settings.manage`). Under the
+  periodic method a statement falls on each calendar-quarter end after the
+  check, on the department's calendar, and the advance is due through the
+  120th day after the **first** one: anything outstanding then was on it.
+  `AdvanceBalance.due_at` is the one computation, so overdue, the block on
+  another advance, the advance page and the advances report all follow it. An
+  advance takes the method in force when its check is issued
+  (`check_requests.advance_return_method`), so a change of setting moves no
+  running deadline; existing advances read as fixed-date. The daily
+  `advance_statements` task emails the holder each quarter's statement once
+  (unique per advance and quarter in `advance_statements`). What is still not
+  done: a quarter the scheduler misses entirely is not sent late (the next
+  quarter's lists the same balance); the statement is not subject to the
+  member's email preferences, since the deadline runs from it; and the
+  deadline counts from the quarter end, not from the day the email went out.
 - **Overdue is flagged, not reported to payroll.** The advances report lists
   what is overdue; turning it into wages on a W-2 is the treasurer's job, as for
   late reimbursements on _Outside the accountable plan_.
-- **Not part of the year-end close.** An advance still outstanding at year end
+- ~~**Not part of the year-end close.** An advance still outstanding at year end
   is not listed among the year's open items; the advances report is where to
-  look before closing. Returned cash can still be recorded against an advance
-  whose year is locked, since a return moves no budget figure.
+  look before closing.~~ **✅ Resolved (owner decision 2026-11-01: list at
+  close; built 2026-11-06).** `GET /finance/fiscal-years/{id}/open-items`
+  lists the year's issued advances not yet fully accounted for (kind
+  `cash_advance`, at what is outstanding, `overdue` or `outstanding`), and the
+  lock dialog shows them in their own list. They carry `blocksLock: false`
+  and do not stop the lock: a member may take the full deadline, and returned
+  cash can still be recorded against an advance whose year is locked, since a
+  return moves no budget figure. Only the year's own advances are listed; an
+  earlier year's advance still owed is on the advances report.
 - **Cash from petty cash is still a "check".** Issuing asks for a check number;
   an advance paid in cash is issued with a reference such as `CASH` in that
   field.
@@ -2028,7 +3802,18 @@ export, subcategory inheritance and exporting dues were closed on 2026-10-14. Th
 remain, and each needs a decision or a follow-up change rather than a fix
 inside that one:
 
-- **There is no live QuickBooks connection.** Posting entries and reading back
+- ✅ **Resolved (owner decision 2026-11-01: build it, posting as Purchases to
+  vendors; built 2026-11-06).** A department connects its QuickBooks Online
+  company on **Finance › QuickBooks Export** (`finance.manage`), with the
+  Intuit app named by `QBO_CLIENT_ID` / `QBO_CLIENT_SECRET` /
+  `QBO_REDIRECT_URI` / `QBO_ENVIRONMENT`; without them the page says it is not
+  configured. Paid purchase requests, issued checks and paid expense reports
+  then post as cash **Purchases** to their vendors, once each (see
+  `docs/FINANCE_MODULE.md`, "QuickBooks Online connection", and what is still
+  open under "Finance — QuickBooks Online Connection Limits" below). Reading
+  QuickBooks budgets and actuals back was not part of the decision and is not
+  built. The original entry follows.
+  **There is no live QuickBooks connection.** Posting entries and reading back
   the chart of accounts, budgets and actuals needs the QuickBooks Online
   Accounting API. That means an Intuit developer app, OAuth 2.0 with encrypted
   per-organization tokens, and a background sync, and it is planned as its own
@@ -2046,7 +3831,10 @@ inside that one:
   cannot see whether the Treasurer then imported the file. A file downloaded
   and never imported leaves its payments marked as sent; the Treasurer sends
   that period again with `includeExported`. The live connection would close
-  this, since it would know what QuickBooks accepted. _(2026-10-18)_ The
+  this, since it would know what QuickBooks accepted. _(2026-11-06)_ It does,
+  for the payments it posts: each reads **Accepted by QuickBooks**, with
+  QuickBooks' own record number, on its detail page and on the connection
+  card. A payment that goes in a file is unchanged. _(2026-10-18)_ The
   Treasurer can now mark a file as imported in **Export history**, and sending
   a marked file's payments again is refused until they confirm the earlier
   entries were deleted. That depends on the Treasurer marking it: an imported
@@ -2071,6 +3859,75 @@ inside that one:
   parser reads the Account List report's layout as Intuit has published it
   ("Account" or "Full name" columns); a future change to that report could
   need the parser updated.
+
+## Finance — QuickBooks Online Connection Limits (2026-11-06)
+
+The live connection (owner decision 2026-11-01) posts each paid purchase
+request, issued check and paid expense report as a QuickBooks Purchase to its
+vendor. Each Intuit detail it relies on was checked against Intuit's own
+documentation (the list and URLs are in
+`app/services/quickbooks_online_client.py`); what could not be confirmed there
+was left out rather than guessed, and is listed here with the other gaps. Each
+needs a decision or a follow-up change:
+
+- **✅ Resolved 2026-11-08 — checks post as checks, card payments as credit
+  card expenses.** Owner decision (2026-11-06): "checks and cards". An issued
+  check posts as a QuickBooks Check with its check number (`DocNumber`; the
+  request number goes in the private note) and is not queued to print; a
+  payment from a category whose paid-from account is a QuickBooks Credit Card
+  account posts as a credit card expense instead of being refused; the rest
+  stay cash expenses from a bank account. The values were confirmed against
+  what Intuit publishes beside its Purchase reference (its v3 schema in the
+  PHP and Java SDKs, the .NET SDK's tests, and its Java "Data services
+  extensions" page; sources in `quickbooks_online_client.py`), because the
+  reference page itself renders only in a browser. What remains:
+  - Purchase requests and expense reports record no payment method, so one
+    paid by check from a bank account posts as a cash expense, not a Check.
+    Recording how a request was paid would be its own change.
+  - A check whose paid-from account is a credit card account is refused
+    live and goes in the CSV export; a check number longer than QuickBooks'
+    21 characters likewise. A check number QuickBooks already holds is
+    refused by QuickBooks (it is not sent with `allowduplicatedocnum`), and
+    the posting shows QuickBooks' reason.
+  - A check posted before this change stays in QuickBooks as the cash expense
+    it was posted as. A payment refused as "not a Bank account" before it
+    stays refused until the Treasurer presses **Send again**, or sends it in
+    the CSV export.
+- **Some payments still need the CSV export.** Cash advances, expense reports
+  and reimbursement checks that account for an advance (a Purchase is paid from
+  one account, and those are paid partly from the advance), dues, returned
+  advance cash, and a report whose lines are paid from different accounts.
+  A department that is connected and has any of these runs both.
+- **Voiding a posted check does not reverse it in QuickBooks.** The CSV export
+  reverses a voided check; the live connection makes no change to a Purchase
+  it created (the scope it holds can, but deleting records was not part of the
+  decision). Void it in QuickBooks too. Owner decision (2026-11-06): not built
+  now.
+- **Vendors are matched by display name**, ignoring case. A vendor renamed in
+  QuickBooks gets a new one created under the old name on the next payment to
+  it; a name used by a QuickBooks customer or employee is refused (Intuit error 6240) and the posting says so. An inactive vendor is refused, not
+  reactivated.
+- **A subaccount is found by its `Parent:Child` name only when QuickBooks
+  returns `FullyQualifiedName` on the account.** That field was confirmed on
+  Intuit's Class and Item examples, not on Account; without it, a subaccount
+  matches only by its own name, and a mapping written `Parent:Child` is refused
+  with "QuickBooks has no account named …". Matching is exact, case included,
+  as the CSV export's chart check is.
+- **`TxnDate` and `DocNumber`** are set from the payment's day on the
+  department's calendar and its request number (a check's `DocNumber` is its
+  check number). _(2026-11-08)_ Both are confirmed on Purchase: Intuit's schema
+  puts them on the Transaction type Purchase extends, and its own SDK tests set
+  them on a Purchase.
+- **A payment waiting on a retry when the department disconnects stays out of
+  the CSV export**: QuickBooks may already hold it. Reconnecting to the same
+  company sends it again under the same request id, which Intuit answers with
+  the original Purchase. Reconnecting to a different company would create it
+  there as a new Purchase.
+- **Posting starts from the moment of connecting.** Earlier payments stay on
+  the CSV export; the Treasurer can move the date (**Post payments made on or
+  after**), and a payment already sent in a file is never posted.
+- **Reading budgets and actuals back from QuickBooks** is not built. Owner
+  decision (2026-11-06): not built now.
 
 ## Finance — Nobody Could Approve Anything (2026-08-12, narrowed 2026-09-06)
 
@@ -2125,9 +3982,8 @@ not, and remains unwired.
 ## Upgraded and Fresh Databases Still Differ (2026-10-20)
 
 A fresh install is built from the models (`main.py`'s fast path:
-`create_all`, then `MIGRATION_ONLY_FILES` and the seed files, then a stamp at
-head). An existing installation is built by the Alembic chain plus the startup
-column repair. A comparison of the two on 2026-10-20 found defects that are
+`create_all`, then the seed files, then a stamp at head). An existing
+installation is built by the Alembic chain plus the startup column repair. A comparison of the two on 2026-10-20 found defects that are
 now fixed:
 
 - duplicate RESTRICT foreign keys on 18 apparatus columns;
@@ -2136,26 +3992,37 @@ now fixed:
   (`f938324f8081` relaxed `training_waivers.end_date`; `6dce1364ff7e` made the
   other 99 NOT NULL everywhere).
 
-The differences below are **accepted** for now.
+The differences below are **accepted** for now, except the first two, which
+were resolved on 2026-11-03.
 `backend/tests/test_live_schema_drift.py` guards the fixed directions on CI's
 migrated database, nullability included. It deliberately does not assert
 these.
 
-**Tables only an upgraded database has: by design.** Three bookkeeping tables,
+**Tables only an upgraded database has.** ✅ **Resolved (owner decision
+2026-11-01: drop them; built 2026-11-03).** Three bookkeeping tables,
 `document_unfiled_backfill`, `facility_document_refile_backfill` and
-`facility_folder_tier_backfill`, are written by the 2026-10-11 folder backfills
-so their downgrades can move each document back. A fresh install never ran
-those backfills and has nothing to undo. Drop them only after deciding those
-downgrades are no longer needed.
+`facility_folder_tier_backfill`, were written by the 2026-10-11 folder
+backfills so their downgrades could move each document back. A fresh install
+never ran those backfills and had nothing to undo. Migration `d75ecbc15bae`
+drops them, so those backfills can no longer be undone: a downgrade past
+`dcb8a46ac50c` or `65128d5ccd50` now finds no record and leaves documents and
+folder permissions as they are. _(2026-11-05)_ One new table of the same kind,
+`facility_outside_refile_backfill`, is written by `986b38c2086b` — but only on
+a database where that migration moved a file, so its downgrade can move it
+back; see FAC-13 below.
 
-**Five tables that no code reads.** `compliance_policies`,
+**Five tables that no code read.** ✅ **Resolved (owner decision 2026-11-01:
+retire them; built 2026-11-03).** `compliance_policies`,
 `policy_acknowledgments`, `compliance_checklists`, `checklist_submissions` and
-`compliance_incidents` come from `20260201_0016`. Every installation has them,
-fresh ones included, because `MIGRATION_ONLY_FILES` replays that migration, but
-nothing under `backend/app/` references them. The facilities module's checklist
-tables are the separately named `facility_compliance_checklists` family.
-**Open decision:** retire them (this drops whatever rows a department has in
-them), or leave them as harmless empty tables.
+`compliance_incidents` came from `20260201_0016`. Every installation had them,
+fresh ones included, because `main.py` replayed that migration on a fresh
+install and on schema repair, but nothing under `backend/app/` referenced them.
+The facilities module's checklist tables are the separately named
+`facility_compliance_checklists` family and are untouched. `d75ecbc15bae` drops
+the five, losing any rows in them, and `main.py` no longer replays
+`20260201_0016`, so nothing rebuilds them. `20260201_0016`'s own downgrade can
+no longer run. `tests/test_drop_unused_compliance_and_backfill_tables.py`; the
+operator note is in `docs/UPGRADING.md`.
 
 **Server defaults only upgraded databases carry.** 133 columns have a server
 default (`0`, `1`, a sort order, `'pending'`) on an upgraded database and none
@@ -2294,6 +4161,27 @@ settings.
 
 ## Integrations — Weather Alerts and Generic Webhooks Do Nothing After Their Test (2026-10-08)
 
+> **Generic Webhooks — resolved (2026-10-29), as the owner chose: build it
+> out.** A connected webhook is now sent `event.created`, `shift.created` and
+> `training.recorded`, the events the chat integrations get, through
+> `dispatch_generic_webhooks` beside the chat dispatch. Its settings pick which
+> (`event_types`, validated against `WEBHOOK_EVENT_TYPES`); none ticked means
+> all, so a webhook connected earlier starts receiving every event. Each
+> delivery is recorded in the integration's run history. Covered by
+> `tests/test_generic_webhook_dispatch.py`.
+>
+> **NWS Weather Alerts — resolved (2026-10-29), as the owner chose: build it
+> out.** `weather_alert_poll` checks each department's zone every 15 minutes
+> and keeps Severe and Extreme alerts (real ones, not tests) in the new
+> `weather_alerts` table, unique on department and NWS alert id, so each alert
+> is announced once. The department picks the channels in the integration's
+> settings: a dashboard banner while the alert is active
+> (`GET /integrations/weather/active-alerts`), a bell notice to every current
+> member, and an email under the new optional **Severe weather alerts** kind;
+> banner and bell default on, email off. The row is committed before anyone is
+> told, so a crash in between loses that alert's notices rather than repeating
+> them to the department. Covered by `tests/test_weather_alerts.py`.
+
 Both are listed in the integrations catalogue as `available`
 (`app/api/v1/endpoints/integrations.py`), can be connected, and pass their
 **Test** — and that test is the only thing either of them ever does.
@@ -2332,6 +4220,16 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    **Labelled (2026-10-11):** the setting's description now says it changes
    the reminder, and it shows "Not in effect yet — a shift can still be closed
    out without a report." Enforcing it at close-out is still open.
+   **Resolved (2026-10-29), owner decision: enforce at close-out.** With the
+   setting on (and post-shift validation on, which is when the box shows),
+   `finalize_shift` refuses while any member in a training seat has no shift
+   completion report for the shift, naming them; a shift with no training
+   seats closes as before. A `scheduling.manage` holder may override with a
+   reason (`override_missing_reports`), audit-logged as
+   `shift_finalized_report_override`; a shift officer without that grant may
+   not. Both close-out paths show the block (`TraineeReportGate`, reading
+   `GET /scheduling/shifts/{id}/trainee-reports`). Covered by
+   `tests/test_shift_trainee_report_requirement.py`.
 2. **"Reviewer role"** (Shift Reports settings). Saved as
    `report_review_role` in the training module config and read by nothing.
    Approving reports is gated on `training.manage` alone
@@ -2340,11 +4238,28 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    and the My Training settings page) show "Not in effect yet — anyone who can
    manage training can review reports, whatever is chosen here." Wiring it is
    still open.
+   **Resolved (2026-10-31), owner decision: also allow that role.** While
+   review is required, members holding the chosen position (or rank) may work
+   the review queue, read and review pending or flagged reports, and batch
+   review, in addition to `training.manage` holders, who keep what they had.
+   "Chief" covers `fire_chief`, `deputy_chief` and `assistant_chief`. A role
+   reviewer never sees or reviews a report about themselves. The screen asks
+   `GET /training/shift-reports/review-access`. Covered by
+   `tests/test_shift_report_reviewer_role.py`.
 3. **Department Defaults** (default duration, minimum staffing, overtime
    threshold). Stored and shown on the settings summary, but nothing applies
    them: new shifts and templates do not pick them up, and no overtime warning
    reads the threshold. **Labelled (2026-10-11):** the card shows "Not in
    effect yet". Applying the defaults is still open.
+   **Resolved (2026-10-31), owner decision: apply them, and merge the
+   overtime threshold into the Overtime advisory.** A new shift template
+   starts from the default length (end time that many hours after 08:00) and
+   minimum staffing, and the built-in Day/Night/24 Hour shift types staff to
+   that minimum. The weekly overtime threshold field is removed: the Overtime
+   advisory card (hours limit over a window of days) already drives the
+   assignment warning, and two limits that could disagree would be worse. Its
+   stored value is kept untouched, and the settings summary now reports the
+   advisory instead.
 4. **Start-of-shift reminder emails default on in the backend, off on the
    screen.** `scheduled_tasks.py` (~line 2358) reads
    `reminder_cfg.get("send_email", True)` ("sent by default"); the
@@ -2365,12 +4280,19 @@ are the shape CLAUDE.md Pitfall #19 warns about: a switch with no reader.
    members are the exceptions. **Same refusal now extends to pattern
    generation (2026-10-24):** generated seats run the same check, so an
    excluded member is left unseated rather than seated by the pattern.
+   **Resolved (2026-10-29), owner decision: correct the text.** The card now
+   says an excluded type cannot sign up or be assigned, except to a shift
+   opened to all members. No override was added.
 6. **"Manage schedules" sees assign controls the server refuses.**
    `ShiftDetailPanel.tsx` and `OpenShiftsTab.tsx` show **Assign someone** to
    `scheduling.manage` holders, but creating, editing or removing an assignment
    requires `scheduling.assign` or being the shift officer
    (`endpoints/scheduling.py`); `scheduling.manage` does not imply it. The
    officer fills the form and gets "Insufficient permissions".
+   **Resolved (2026-10-29), owner decision: hide the controls.** Both screens
+   now offer assigning only to `scheduling.assign` holders and the shift's own
+   officer; the server's rule is unchanged. A manage-only officer still sees
+   the check-in QR code and the declined/removed list, which are read-only.
 7. **A shift-panel hint points to a tab that no longer exists.**
    `ShiftDetailPanel.tsx` (~line 3114) reads "Start check → Go to Checklists
    tab". Equipment checks moved to Inventory; the working route is the panel's
@@ -2399,6 +4321,14 @@ recorded here rather than built.
    To change a generated shift's start, cancel it and create the replacement
    by hand. A fix needs a stored pattern/occurrence key on generated shifts (a
    column and a migration).
+   **Resolved (2026-10-31), owner decision: add the key.** Generation now
+   records every occurrence it makes in `shift_pattern_occurrences` (pattern,
+   date, day/night side), and both a manual Generate and the scheduled run skip
+   an occurrence already recorded, whatever happened to its shift since.
+   Deleting the shift clears only the row's `shift_id`. Shifts generated before
+   the table existed are not backfilled (nothing records which pattern made
+   them), so they rely on the start-time guard as before. Covered by
+   `TestOccurrenceLedger` in `tests/test_scheduling_generation_fixes.py`.
 2. **The nightly run reports skipped seats as a count in the server log
    only.** Generation now seats a member only where the seat, eligibility,
    seat cap, leave and overlap checks an officer's assignment runs would allow
@@ -2408,13 +4338,52 @@ recorded here rather than built.
    position configured sees crews left unseated with no on-screen notice.
    Surfacing it (a notification to schedulers, or a badge on the pattern) is
    open.
+   **Resolved (2026-10-31), owner decision: notify the schedulers.** After a
+   scheduled run, every `scheduling.manage` holder gets a bell entry listing
+   each pattern's empty seats (driver seats included), and those who keep
+   Scheduling officer duties email get the same list by email. Sent once per
+   run; the occurrence ledger (item 1) keeps a rerun from repeating it. Covered
+   by `test_the_scheduled_run_tells_the_schedulers_who_was_not_seated`.
 3. **Editing an approved shift report does not restate its training
-   credit.** The filing officer can no longer change a submitted report's
-   status, but can still edit an approved report's hours, calls and skills,
-   and the credit already applied keeps the old figures, so the report and the
-   pipeline disagree. Locking content edits after approval would remove
-   behaviour existing call-type provenance tests depend on; restating the
-   credit on edit is the alternative. Either is the owner's choice.
+   credit — narrowed 2026-10-27 (EC-17), still open where review is off.**
+   An edit to an approved report now sends it back to `pending_review` in any
+   org that requires review, which is also the only path to that credit being
+   restated (whoever re-approves the revised report re-triggers
+   `_trigger_deferred_progress` with the edited figures). Where the
+   department's `report_review_required` setting is off, the report stays
+   `approved` after the edit and the credit already applied keeps the old
+   figures, so the report and the pipeline still disagree for those orgs. See
+   `docs/security-review/SCH-15-scheduling.md` pass 12 and
+   `EC-14-equipment-check-shifts.md`'s EC-17 for the mechanism. Restating the
+   credit in place for the review-off case, rather than relying on a
+   re-review to do it, is still the owner's choice.
+   **Resolved (2026-11-04), owner decision of 2026-11-01: restate credit in
+   place.** Where review is off, an edit to an approved report that changes
+   what credit reads (hours, calls, call types, skills observed, enrollment)
+   reruns `_trigger_deferred_progress`, the approval path's own calculation,
+   in restate mode. Each requirement's credit is restated on the
+   requirement-progress ledger, whose `(progress, shift_report, report id)`
+   key is what makes a second run a no-op: edited twice, the report still
+   holds one credit per requirement, at the latest figure. A requirement the
+   edit no longer feeds has its credit reversed, the report's call-type
+   history entries are replaced rather than appended, and a skill sign-off for
+   a skill no longer listed is removed. The change is audited as
+   `shift_report_credit_restated` with each requirement's units before and
+   after. Where review is on, EC-17 is unchanged: the edit returns to review
+   and the credit waits. This also corrects the claim above: re-approval did
+   **not** restate the credit (the ledger's idempotency skipped the new
+   figure); it does now, through the same restating calculation. Covered by
+   `tests/test_shift_report_credit_restatement.py`. **Residual:** (a) the
+   ledger's numeric reversal never reopens a completed requirement, so an
+   edit that lowers hours below a target the report had met restates the
+   value and percentage but leaves the requirement completed (common to every
+   feed that restates, including a re-finalized training session); (b) the
+   edit and the restatement share one request and session but not one
+   database transaction, because the shared progress updater commits per
+   requirement, as it does on approval; (c) competency is not stepped back
+   when a sign-off is removed, since its history records no source; (d)
+   call-type history written before 2026-11-04 carries no report id and is
+   not replaced on a restatement.
 4. **Sign-offs recorded before 2026-10-24 can still duplicate on
    re-approval.** Re-approving a report no longer adds a second skill sign-off
    for the same skill, keyed on the report id now stored in
@@ -2425,20 +4394,38 @@ recorded here rather than built.
    `member_check_in` already did, but `shift_attendance` has no unique
    constraint on `(shift_id, user_id)`. Adding one needs a migration that first
    settles any duplicate rows already stored (CLAUDE.md Pitfall #35).
+   **Resolved (2026-10-31), owner decision: add the key.** Migration
+   `1740b4886e52` merges any duplicates into the earliest row (earliest
+   check-in, latest check-out, the largest minutes and call count — not the
+   sum, which would double-count a stint recorded twice), deletes the rest, and
+   adds `uq_shift_attendance_shift_user`. Covered by
+   `tests/test_shift_attendance_unique_migration.py`.
 6. **Shift cancellation notices are in-app only.** `cancel_shift` notifies the
    crew in the app and sends no email, and unlike the decline and assignment
    notices there is no setting to turn email on. CLAUDE.md Pitfall #18 makes
    email the channel of record; whether a cancellation should email, and
    under which member email kind, is a product decision.
+   **Resolved (2026-10-29), owner decision: email under Shift notices.** The
+   crew is now emailed as well as notified in the app, after the cancellation
+   is saved; a member who turned Shift notices off gets the bell entry only.
 7. **The month and week calendars stop at 500 shifts without saying so.**
    `get_month_shifts` and `get_week_shifts` pass `limit=500`, so a department
    running enough units with day and night shifts loses the end of the month
    from the calendar.
+   **Resolved (2026-10-29), owner decision: load every shift in range.** Both
+   now pass no limit; the week or month is the bound. Covered by
+   `test_month_view_is_not_capped_at_500`.
 8. **Driver/EVOC enforcement knows the seat named `driver` only.** Custom
    seat names are stored as typed, so a department that names its wheel seat
    "Engineer" or "Driver/Operator" seats members without the required EVOC
    level, with no block or warning. A fix is a "drives apparatus" flag on the
    seat definition or an alias list.
+   **Resolved (2026-10-31), owner decision: a "Drives apparatus" flag.** Each
+   custom position under Scheduling Settings → Position Names carries a
+   **Drives apparatus** tick (`drivesApparatus`, off by default). A ticked seat
+   gets the driver EVOC check everywhere `driver` does: assignment, editing
+   an assignment, re-timing or re-vehicling a shift, and pattern generation.
+   `driver` is always checked. Covered by `tests/test_custom_driver_seats.py`.
 
 ## Admin — No Scheduled Tasks Page (2026-08-09)
 
@@ -3182,6 +5169,26 @@ member's half of `CohortDetailPage` — a permissions decision plus a feature,
 not a correctness fix. This loop does not widen route guards, so it needs an
 owner.
 
+**Resolved (2026-11-01), owner decision: give members their own view.**
+
+- My Training shows a **My classes** section listing the caller's cohorts
+  (`GET /training/cohorts/mine`), each linking to `/training/cohorts/:cohortId`.
+- That route is now gated only on sign-in and the Training module. The API
+  is the authority: it returns 404 to a member not on the roster, and
+  `members: []` with no attendance counts to one who is.
+- Without `training.manage`, `CohortDetailPage` draws the class timeline only:
+  no roster, classmates, progress or officer actions. A 404 shows "Cohort not
+  found". Officers keep the full page at the same URL.
+
+Still open, each the owner's call:
+
+- The member response still carries the cohort's `notes` and creator ids.
+  They are not displayed, but they are sent.
+- `is_roster_member` admits a withdrawn member, while `/mine` lists only
+  active ones.
+- A `training.view_all` holder without `training.manage` sees the member view
+  rather than a read-only roster.
+
 **Deferred by the owner (2026-10-05):** the member's view of a cohort is not
 being built now; the cohort page stays officer-only until it is.
 
@@ -3223,10 +5230,10 @@ anonymity salt, and by a change to the ballot.
 records a `ballot_send_jobs` row and returns `202`. The send runs after the
 response, and the page polls `GET /elections/{id}/ballot-send-jobs/{job_id}`
 for the outcome. While a send is queued or running, a second one for the same
-election is refused with `409`, from both the new endpoint and the synchronous
-`POST /elections/{id}/send-ballot`. The synchronous endpoint is kept, unchanged
-in behaviour otherwise, for API callers. Tests: `tests/test_ballot_send_jobs.py`,
-`electionService.test.ts`.
+election is refused with `409`. The synchronous
+`POST /elections/{id}/send-ballot` that was kept beside it for API callers was
+removed on 2026-11-05 (see ELEC-48 below). Tests:
+`tests/test_ballot_send_jobs.py`, `electionService.test.ts`.
 
 Two limitations remain:
 
@@ -3258,9 +5265,16 @@ Two limitations remain:
   every tick, and an alert per retry would mail them every fifteen minutes
   through an outage. Tests: `test_election_lifecycle.py`
   (`TestAutomaticReminderJob`), `test_w50_auto_open_sends_ballots.py`.
-- **The synchronous endpoints can still race each other directly (ELEC-48,
-  security review pass 10, 2026-10-18).** The "refused with 409" guard above
-  was, until pass 10, a plain read behind a snapshot the auth dependency's own
+- ~~**The synchronous endpoints can still race each other directly (ELEC-48,
+  security review pass 10, 2026-10-18).**~~ **Resolved (owner decision
+  2026-11-01: retire them; built 2026-11-05).** `POST /elections/{id}/send-ballot`
+  and `POST /elections/{id}/remind-non-voters` are removed and answer 404/405;
+  `ballot-send-jobs` and `reminder-send-jobs`, whose in-progress check is a
+  locking read, are the one way to send either. Nothing in the frontend called
+  them. `tests/test_retired_ballot_send_routes.py` pins the removal, and the
+  tests that drove the old routes now drive the queue. API clients: see
+  `docs/UPGRADING.md`. The original finding follows.
+  The "refused with 409" guard above was, until pass 10, a plain read behind a snapshot the auth dependency's own
   user lookup had already fixed earlier in the same transaction — two requests
   to `POST /elections/{id}/ballot-send-jobs` arriving together could both see
   no job in progress and both queue one, even though the endpoint locks the
@@ -3282,8 +5296,9 @@ as a `ballot_send_jobs` row with `kind = 'reminder'`, polled through the same
 outright (election not open, reminders off, inside the one-hour cooldown) is
 refused before anything is queued. Ballot sends and reminders share the
 in-progress guard, because both mint fresh tokens. The synchronous
-`POST /elections/{id}/remind-non-voters` is kept for API callers and now also
-answers `409` while a send is running.
+`POST /elections/{id}/remind-non-voters` was kept for API callers, answering
+`409` while a send was running, until it was removed with `send-ballot` on
+2026-11-05.
 
 ## Elections — A Rolled-Back Election Leaves Its Filed Result in Circulated Minutes (2026-10-22)
 
@@ -3295,11 +5310,45 @@ so after a rollback the minutes keep the old tally, the next close files
 nothing (a result is filed once per minutes and election), and the addendum
 cannot be removed. Found by the pass-11 security review (ELEC-49).
 
-**Needs an owner decision:** on a rollback, supersede the addendum with a
-dated correction, annotate it as withdrawn, or refuse a rollback once the
-result sits in adopted minutes. Until then, a manager who must roll back an
-election whose result is in adopted minutes should record the correction in
-the next meeting's minutes.
+**Resolved (owner decision 2026-11-01: supersede with a dated correction;
+built 2026-11-05).** Rolling an election back from closed now settles every
+result filed for it, in the same transaction as the reopening
+(`supersede_filed_results` in `app/services/minutes_election_filing.py`):
+
+- **Circulated or adopted minutes, or a result filed as an addendum:** the
+  result stays word for word and gains a dated correction —
+  `superseded_at`, `superseded_reason` (the rollback's reason) and
+  `superseded_by` on `minutes_election_results`. The adopted text is not
+  edited, and the correction sits outside the approval snapshot like any
+  addendum, so an adopted version still verifies.
+- **A draft's own result** is content the secretary can still edit, so it is
+  removed, as the secretary could have done by hand.
+- **The re-run.** A superseded result gives up its slot (the unique pair is now
+  minutes + `current_election_id`, which is NULL once superseded), so when the
+  election closes again its new result is filed as a further addendum —
+  automatically into the meeting's newest minutes, or by hand anywhere else —
+  and every copy shows it as replacing the superseded one. Each rollback
+  corrects only the result standing at that moment; an earlier correction keeps
+  its date.
+- **Every copy shows it.** The minutes screen badges the old result
+  _Superseded_ with the correction over it; the PDF and the library copy print
+  the correction above the result, with the reason; the public copy shows the
+  date but not the reason (free text that may name people). Standing library
+  and public copies of approved minutes are re-rendered in place when a
+  correction or any later addendum is filed, keeping their version, posting
+  date and replacement note; a withdrawn copy, or one marked as being corrected,
+  is left alone.
+- **Existing rows.** Migration `61e85742f52b` supersedes results filed before
+  a recorded rollback from closed, dated from the election's
+  `rollback_history`. It supersedes rather than removes a draft's stale row; a
+  re-run that has already re-closed has no result filed and can be imported by
+  hand.
+
+Safe to run twice (Pitfall #36): only a standing result is touched, and the
+unique slot means two filings racing for one election cannot both stand.
+Tests: `tests/test_minutes_election_correction_integration.py`,
+`tests/test_election_result_correction_migration.py`,
+`ElectionResultsPanel.test.tsx`, `PublicMinutesPage.test.tsx`.
 
 ## Elections — Broadcast Election Emails Go One Message Per Member (2026-10-18)
 
@@ -3513,6 +5562,34 @@ on real connections) and the lock-order assertions in
 
 ## Membership — Length of Service Across a Break: What Is Deliberately Left Alone (2026-09-24)
 
+**✅ Resolved 2026-11-04 (owner decision 2026-11-01: use credited service where
+relevant).** "Member since" on the member profile, the digital ID card and the
+printed ID card now shows the date credited service runs from
+(`service_since` in `member_service_history_service.py`, which is
+`summarize`'s `effective_service_start` — the figure tier advancement reads).
+It is a date, so it stays on a card that is printed once: the hire date for a
+member who never left, the rejoin date for one who restarted at zero, and the
+hire date moved forward by the time away for one whose earlier service keeps
+counting. A separated member's date is measured to their last day of service so
+it does not drift. `GET /users/{id}/with-roles` carries it as `service_since`
+(the profile's write endpoints do not, and the page keeps the value it had).
+**Who sees it (owner decision 2026-11-05):** the member themselves and
+officers holding `members.manage` or `members.manage_id_cards`. Credited
+service can count time at another department, so a member who can open the
+roster with `members.view` alone gets `service_since: null` for anyone else,
+and the profile hides the row (`tests/test_credited_service_readers.py`,
+`TestWhoSeesMemberSince`).
+**Left on `hire_date`, deliberately:** the hire date field itself and the
+roster's Hire Date column (both name the hire date); the Salesforce sync
+(`Hire_Date__c` is the hire date); the event-attendance cut-off, the meeting
+attendance dashboard's `hire_date` field and the training join date used for
+catch-up periods (each asks when someone joined, not how long they served — the
+gap-aware version of the cut-off is the current stint's start, not credited
+service); and tier advancement, which already reads credited service. A member
+reinstated before 2026-09-24 with no recorded gap still shows their hire date
+until an officer edits their Service History. `tests/test_credited_service_readers.py`
+pins it.
+
 Credited service now comes from recorded stints (`member_service_periods`,
 `app/services/member_service_history_service.py`): time a member spent dropped,
 retired or archived is not counted, and a returning member's earlier stints can
@@ -3525,10 +5602,12 @@ the reader. Four things are unchanged on purpose, each for the owner to revisit:
   `status_changed_at` is overwritten on archive. Their service still runs
   unbroken from `hire_date` — the pre-existing behaviour, so nobody's tier moves
   on upgrade — until an officer edits their **Service History**.
-- **Other `hire_date` readers are untouched.** The ID card's "Member since", the
+- **Other `hire_date` readers were untouched (resolved 2026-11-04 for "Member
+  since", see above).** When this shipped, the ID card's "Member since", the
   roster's Hire Date column, the Salesforce sync and event-attendance cut-offs
-  still read `hire_date`. It remains the date the member first joined; credited
+  read `hire_date`. It remains the date the member first joined; credited
   service is a separate figure.
+
 - **An archived member's inferred last day is the archive date.** When a member
   with no recorded stints is reactivated, the end of their earlier service is
   taken from `status_changed_at`, which archiving overwrites. The Reactivate
@@ -3967,16 +6046,24 @@ connectivity at all** was scoped in
 [SKILLS_TESTING_OFFLINE_PLAN.md](./SKILLS_TESTING_OFFLINE_PLAN.md) and built
 on 2026-10-06 once the owner had answered the plan's questions:
 
-| Item                                                               | Status                                                           | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------------------------------------------ | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **The read path blocks before the write path does**                | ✅ Resolved (2026-10-06)                                         | Built per the plan. A live test the examiner opens is kept on the device (only their own, only while draft or in progress); with no signal `loadTest` opens that copy with any queued scoring laid over it, and a test never opened on the device says so instead of spinning. `/api/*` stays `NetworkOnly` in the service worker — the copy is IndexedDB, owner-tagged and purged with the other offline stores.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| **The generic offline queue cannot carry a skills test**           | ✅ Resolved (2026-10-06)                                         | A skills-test-specific queue (`utils/skillsTestOffline.ts`): one entry per test, every save merged into it (an hour offline is one PUT), and each entry's steps run in order — create, then the merged save against the version it was made from, then `complete` — so scoring never runs on a partial scorecard. A refused step marks the entry failed with the server's reason and keeps the payload; nothing is dropped after N retries, and only the examiner can discard it. Entries carry the owner tag and the drain sends only the signed-in member's own (FE3-34-5).                                                                                                                                                                                                                                                                                                                                                       |
-| **May logout keep destroying unsynced work on a shared terminal?** | ✅ Decided (2026-10-06) — block with a warning; ⚠️ residual open | **Sign Out** first tries to send unsent skills evaluations; any still on the device block sign-out behind a warning naming how many, with **Stay signed in** or **Sign out and delete**. Everything else still purges as before (FE-6/FE-7). **Open, needs an owner decision:** only an interactive sign-out can ask. The **idle timeout** (default 15 min) and an **expired session** still purge without asking, and so can still discard an unsent evaluation — blocking either would defeat the automatic logoff it exists for, and keeping the scorecards past them is the "retain until the same examiner signs in" option the owner did not choose. Signing in as a different member also purges, by design.                                                                                                                                                                                                                 |
-| **Must offline support cover a cold start?**                       | ✅ Resolved (2026-10-06) — owner: yes                            | Test ids are client-minted: the store mints a UUID for every create, online or not, and `POST /tests` accepts it once. A replay by the same examiner for the same template, candidate and mode returns the existing test; any other holder of the id gets one 409 whoever owns it. Starting with no signal builds the test on the device from a published sheet kept when **Start Skill Test** was last opened with signal (up to 25, bodies only — no member data) and offers the members this examiner has tested on the device; the create is queued ahead of the scoring. It sends `expected_template_version`, and a sheet edited meanwhile is refused (409) rather than frozen into a snapshot that does not match the scorecard. **Residual:** a test created on sync is dated by its arrival (`created_at`, which "Tests This Month" counts), not by when it was scored; the elapsed time is the examiner's clock as usual. |
+| Item                                                               | Status                                                                                                          | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The read path blocks before the write path does**                | ✅ Resolved (2026-10-06)                                                                                        | Built per the plan. A live test the examiner opens is kept on the device (only their own, only while draft or in progress); with no signal `loadTest` opens that copy with any queued scoring laid over it, and a test never opened on the device says so instead of spinning. `/api/*` stays `NetworkOnly` in the service worker — the copy is IndexedDB, owner-tagged and purged with the other offline stores.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **The generic offline queue cannot carry a skills test**           | ✅ Resolved (2026-10-06)                                                                                        | A skills-test-specific queue (`utils/skillsTestOffline.ts`): one entry per test, every save merged into it (an hour offline is one PUT), and each entry's steps run in order — create, then the merged save against the version it was made from, then `complete` — so scoring never runs on a partial scorecard. A refused step marks the entry failed with the server's reason and keeps the payload; nothing is dropped after N retries, and only the examiner can discard it. Entries carry the owner tag and the drain sends only the signed-in member's own (FE3-34-5).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **May logout keep destroying unsynced work on a shared terminal?** | ✅ Decided (2026-10-06) — block with a warning; residual resolved (owner decision 2026-11-01; built 2026-11-04) | **Sign Out** first tries to send unsent skills evaluations; any still on the device block sign-out behind a warning naming how many, with **Stay signed in** or **Sign out and delete**. Everything else still purges as before (FE-6/FE-7). **✅ Residual resolved (owner decision 2026-11-01: keep until the same examiner returns; built 2026-11-04).** An automatic sign-out — the idle timeout, an expired session, a session ended by a password change, or another member signing in — now keeps each examiner's unsent evaluations, and the copies of the live tests they score into, in the same IndexedDB store, bound to the examiner's id; cached sheets and recent candidates are still purged. Every read and both drains (the page's and the service worker's) already serve only the signed-in member's own entries, so another member signing in sees and sends none of them, and their own **Sign Out** deletes only their own. When the examiner signs back in they get them back and can send them. An interactive **Sign Out** keeps the earlier decision: warn, then **Sign out and delete** deletes the examiner's own. **Retention: seven days** from when an entry was first held (a 24/48 rotation with a Kelly day), checked at every sign-in and sign-out; an entry held longer is deleted, and the clock stops while its examiner is signed in. An entry with no recorded examiner (written before FE3-34-5) cannot be held for anyone and is purged as before. Covered by `skillsHeldForExaminer.test.ts`. **Residual:** the rows are not encrypted — the store never was — so another member is kept from them by the app's owner filter, not by cryptography; someone who opens the browser's developer tools on that profile can read a held scorecard for up to seven days. An examiner whose held work expired is not told at sign-in. |
+| **Must offline support cover a cold start?**                       | ✅ Resolved (2026-10-06) — owner: yes                                                                           | Test ids are client-minted: the store mints a UUID for every create, online or not, and `POST /tests` accepts it once. A replay by the same examiner for the same template, candidate and mode returns the existing test; any other holder of the id gets one 409 whoever owns it. Starting with no signal builds the test on the device from a published sheet kept when **Start Skill Test** was last opened with signal (up to 25, bodies only — no member data) and offers the members this examiner has tested on the device; the create is queued ahead of the scoring. It sends `expected_template_version`, and a sheet edited meanwhile is refused (409) rather than frozen into a snapshot that does not match the scorecard. **Residual:** a test created on sync is dated by its arrival (`created_at`, which "Tests This Month" counts), not by when it was scored; the elapsed time is the examiner's clock as usual.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ## Onboarding Cannot Be Resumed Across a Browser Restart (2026-08-15)
 
-**Status: accepted trade-off**, recorded because it is visible to installers and
+**✅ Resolved 2026-11-03 (owner decision 2026-11-01: show a banner).** When a
+setup step opens with typed answers and no session in this tab,
+`ExpiredSessionBanner` (rendered by `OnboardingGate` on every step) says the
+session has ended, that the answers shown are a draft kept on this device, and
+that the first step starts a new session (asking the System Owner to sign in
+once that account exists). The session identifier still does not survive a
+restart, by design. The history below is kept for context.
+
+**Status before 2026-11-03: accepted trade-off**, recorded because it is visible to installers and
 because the wizard's own behavior makes it look like a bug.
 
 The onboarding session identifier moved from `localStorage` to `sessionStorage`
@@ -4151,7 +6238,7 @@ reason. (Security review EC-14 residual,
 **Accepted by the owner (2026-10-05):** the read keeps its `.view` gate, one
 tier looser than the write, so no existing viewer's screen starts refusing.
 
-## Outbound Integration Requests — DNS Rebinding Is Closed for Direct `httpx` Connections; a Proxied Deployment and the `boto3`-Based S3/MinIO Connector Rely on the Up-Front Check Alone (SCH-10, resolved 2026-10-05 for `httpx`; S3/MinIO gap noted 2026-10-25)
+## Outbound Integration Requests — DNS Rebinding Is Closed for Direct `httpx` Connections; a Proxied Deployment and the `boto3`-Based S3/MinIO Connector Rely on the Up-Front Check Alone (SCH-10, resolved 2026-10-05 for `httpx`; S3/MinIO gap noted 2026-10-25, its endpoint made operator-only 2026-11-03)
 
 **Resolved for every sender this entry tracked, on a direct connection.**
 `assert_outbound_url_safe()` (`app/utils/url_validator.py`) resolves an
@@ -4227,13 +6314,52 @@ but a rebind inside that window — or a hostname that resolves safely at
 config time and unsafely by the time `boto3` connects — reaches the internal
 address unpinned. Closing it needs a `botocore`-specific mechanism (a custom
 endpoint resolver or connection pool), not a reuse of `SSRFSafeAsyncTransport`.
-**Owner decision, if this matters for a deployment:** restrict which
-administrators can set a custom S3 endpoint (the risk does not apply to
-AWS's own endpoints, only to a self-hosted MinIO/S3-compatible one with an
-operator-chosen hostname), or accept the same narrowed check the pre-SCH-10
-integrations ran under until a `botocore`-specific pin is built. Not guarded
-by `tests/test_integration_dns_pinning.py`, which covers the `httpx` path
-only. (Security review SEC-00 pass 12, SEC12-1.)
+Not guarded by `tests/test_integration_dns_pinning.py`, which covers the
+`httpx` path only. (Security review SEC-00 pass 12, SEC12-1.)
+
+**Owner decision (2026-11-01, clarified 2026-11-03), built 2026-11-03: a
+custom endpoint is set only through server configuration.** A department
+administrator no longer types the hostname; whoever runs the installation
+lists the self-hosted endpoints a department may use in `S3_ALLOWED_ENDPOINTS`
+(comma-separated, default empty, in all three compose files). AWS S3 itself —
+no custom endpoint, botocore deriving AWS's regional one — is unchanged and
+still configured on screen.
+
+- **Matching** is exact on a normalised form (`normalize_endpoint_url` in
+  `app/core/config.py`: lowercase scheme and host, explicit port, path without
+  a trailing slash), never a prefix or substring. An entry with a user name,
+  password, query or fragment, or that is not an `http(s)` URL with a host,
+  stops startup.
+- **Saving** a custom endpoint that is not listed is a 400 naming
+  `S3_ALLOWED_ENDPOINTS`: both settings PATCHes (checked on the merged section
+  in `OrganizationService.update_organization_settings`) and onboarding's
+  `POST /onboarding/session/file-storage`. An endpoint already stored is let
+  through a save unchanged, so a department can still change other fields or
+  switch to local storage; it is refused at use instead.
+- **Use** fails closed: `check_config` (each time `file_storage_service`
+  builds a department's client, and before the connection test) and
+  `S3Backend.__init__` refuse an unlisted endpoint, so one stored before this
+  change stops being used — uploads and downloads against that bucket are a
+  503, the backend log names the organization by id (not the URL), and the
+  File Storage screen shows the reason. Listing it restores everything; the
+  saved connection test still matches. `docs/UPGRADING.md` tells operators to
+  list their endpoints before upgrading. No data is migrated.
+- **The screen** offers Amazon S3 or one of the listed endpoints (sent to it as
+  `allowed_s3_endpoints` on the file-storage status response, settings
+  administrators only), and with none listed explains that the operator sets
+  one.
+- **The up-front SSRF check still runs for a listed endpoint**, including the
+  `S3_ALLOW_PRIVATE_ENDPOINT` gate for a private address or plain HTTP.
+  Deliberately: the allowlist names a hostname, and the check is what notices
+  that hostname resolving somewhere else (a listed third-party provider's DNS
+  is not the operator's to control). A LAN MinIO therefore needs both
+  settings, which bundled-MinIO installations already set one of.
+
+**What remains:** the `botocore` rebinding window itself is not closed — a
+listed hostname can still answer the check with one address and the
+connection with another. It is now the operator's hostname and the operator's
+DNS, which is the risk the decision accepts; closing it still needs a
+`botocore`-specific pin. Guarded by `backend/tests/test_s3_endpoint_allowlist.py`.
 
 A related behaviour change worth knowing: the five factory connectors that
 never called `assert_outbound_url_safe()` (`salesforce`, `salesforce_oauth`,
@@ -4315,6 +6441,8 @@ seconds.
 
 ## Calendar Publishing — What a Pass Sends, and What No Screen Sets (2026-10-16)
 
+✅ **Resolved 2026-11-05** — the range and event types are set on the card (below).
+
 The `calendar_sync` scheduled task publishes department events one way to a
 Google Calendar or Outlook integration's calendar
 (`app/services/calendar_sync_service.py`, mapping rows in
@@ -4331,6 +6459,24 @@ true. It skips drafts, deletes cancelled events from the calendar, covers 30
 days back to `days_ahead` (default 180) ahead, and honours an
 `event_types_to_sync` list. The cards set `sync_descriptions`; no screen sets
 `days_ahead` or `event_types_to_sync`, which only the API accepts.
+
+**✅ Resolved (owner decision 2026-11-01: add settings on the integration
+card; built 2026-11-05).** A connected Google Calendar or Outlook card now has
+a **What is published** section: **Days ahead** (a whole number from 1 to 730,
+showing 180 when nothing is saved) and an **Event types** checklist of the
+department's event types (none ticked publishes every type), saved together
+with **Save publishing settings** as one `PATCH /integrations/{id}`. The
+reader is unchanged — `_load_desired` in `calendar_sync_service.py` already
+read both keys, defaulting to 180 days and every type, so a department that
+never opens the section publishes exactly what it did. The API now refuses an
+event type the pass could not match (anything outside `EventType`, which used
+to be stored and silently filtered out every event of that name) with a 422,
+alongside the range bounds it already enforced. A filter saved before this
+check that names an unknown type is left in place rather than rewritten, does
+not block later changes to the other settings, and the card says it is there.
+The 30-day look-back stays fixed. Covered by
+`tests/test_calendar_publish_settings.py` (including a saved range and filter
+reaching the pass) and `CalendarPublishPanel.test.tsx`.
 
 ## Salesforce Integration — Clearing the Refresh Token Has No Reachable UI Control (INT-11, 2026-09-13)
 
@@ -4362,6 +6508,31 @@ the client id/secret and public settings kept, an omitted token left alone).
 `docs/security-review/INT-27-integrations.md`.)
 
 ## Training — Compliance Grading Still Reads Full History for Certifications and One-Time Requirements (2026-10-05)
+
+**✅ Certifications and the fallback types resolved (owner decision
+2026-11-01: stored match key; built 2026-11-04).** Each training record now
+stores `match_key` (its course name) and `certification_key` (its
+certification number), normalized by
+`app/utils/training_match_key.training_match_key` — NFKC, Unicode case
+folding, letters and digits only — and set by the model on every ORM write.
+A certification requirement matches a legacy record by name only when the
+keys are equal, and a certification number only when its key begins with the
+registry code's, so `graded_records_clause` asks SQL for a linked course, the
+training type or those keys instead of every completed record. Equal keys
+compare equal under every collation, so the filter can only over-select, and
+the grader re-checks the stored keys in Python. The fallback types
+(skills evaluation, checklist, knowledge test) are bounded the same way,
+IN_PROGRESS records included. **Not identical results, by decision:** a
+course name that merely contains the requirement's name, or a certification
+number with the code past its start, no longer matches — see
+`docs/UPGRADING.md` (2026-11-04). Migration `bd8fc0c4a941` keys the existing
+records; one with no letter or digit in its course name gets no key and
+matches only by course or type. One-time hours, courses, shifts and calls
+requirements without `recency_days` still load the member's whole completed
+history (below). Tests: `tests/test_training_match_key.py`,
+`tests/test_training_match_key_migration.py`, and
+`tests/test_graded_records_bounded_load.py` (bounded and unbounded loads
+still grade identically under the new rule).
 
 Department-wide compliance grading used to load every `TrainingRecord` each
 member ever had, then grade in Python (TR2-4: the dashboard summary; TR4-2:
@@ -4400,7 +6571,8 @@ catch-up deadlines and waivers read the member and waiver tables, not
 records, so they widen nothing. SCHEDULED, CANCELLED and FAILED records are
 never read, so they are never loaded.
 
-**Still unbounded:**
+**Still unbounded** (as of 2026-10-05; the first and third items are resolved
+above):
 
 - **Certification requirements without `recency_days`** load the member's
   whole COMPLETED history. A certification ignores its frequency window by
@@ -4856,13 +7028,18 @@ made these choices. Everything is off until the department switches it on.
 **Open — owner decisions to confirm.** See
 [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#who-the-minutes-name-2026-10-18).
 
-- **Unset reads as "everyone", not "present only".** The owner preferred present
-  only as the default, but an installation that never chose would otherwise
-  start hiding absences on printed and published copies the moment it upgraded.
-  A department switches to present only under Minutes → Settings → Attendance. To make
-  present only the default for new installs, change `DEFAULT_ATTENDANCE_LISTING`
-  in `app/utils/minutes_attendance.py` (existing installs that never set it
-  would change too).
+- ~~**Unset reads as "everyone", not "present only".**~~ **Resolved (owner
+  decision 2026-11-01: present only for new installs, existing ones
+  unchanged; built 2026-11-05).** Setup writes `attendance_listing: "present"`
+  into a new department's `minutes` settings when it creates the department
+  (`OnboardingService.create_organization`, from
+  `NEW_DEPARTMENT_ATTENDANCE_LISTING`), unless the caller supplied a listing
+  of its own. How an absent value reads did not change: it is still
+  "everyone" (`DEFAULT_ATTENDANCE_LISTING`), so a department that predates
+  the decision and never chose keeps naming everyone across the upgrade, and
+  no migration touches existing settings. Either kind of department changes it
+  under Minutes → Settings → Attendance. Tested in
+  `tests/test_minutes_quorum_counting.py` (`TestANewInstallListsPresentOnly`).
 - **The listing applies when a copy is shown, not when minutes are adopted.**
   Changing the department default changes how already adopted minutes print,
   and a library copy already filed keeps the listing it was published with
@@ -5282,6 +7459,27 @@ staleness as the rest of a catalog the caller is already authorized to read;
 
 ## MS-14 — `medical_screening.view` Grants Full Narrative PHI, With No Finer-Grained Read Tier (2026-10-06)
 
+✅ **Resolved (owner decision 2026-11-01: add a detail permission; built
+2026-11-04).** `medical_screening.view_details` reads a record's clinical
+narrative — `provider_name`, `result_summary`, `result_data`, `notes`
+(`NARRATIVE_FIELDS` in `schemas/medical_screening.py`). `GET /records` and
+`GET /records/{id}` return those four null to a caller holding `.view` alone;
+everything else on a record (type, dates, the passed/failed/waived outcome,
+the linked requirement, the reviewer) stays on `.view`, as do the compliance
+and expiring routes, which never carried the narrative. `.manage` reads it
+too, because the edit form that writes those fields has to show them; the
+form hides and stops sending them when the caller cannot read them, so a
+save cannot erase them. The read audit records `narrative_included`. The
+grant is MFA-privileged like the other two. **Upgrade:** migration
+`d6906e3dd76c` gives `view_details` to every position, system or
+department-created, that holds `medical_screening.view`, so nobody loses the
+narrative on upgrade; `docs/UPGRADING.md` tells the department to remove it
+from positions meant to see status only. No seeded position holds a medical
+screening grant, so `DEFAULT_POSITIONS` is unchanged. Covered by
+`tests/test_medical_screening_narrative_permission.py`,
+`tests/test_medical_screening_owner_decisions_migration.py` and
+`MedicalScreeningPage.narrative.test.tsx`.
+
 Five routes are gated on `medical_screening.view`:
 `GET /requirements`/`{id}` (configuration only, not PHI), `GET /records`/
 `{id}` (the full `ScreeningRecordResponse` — including the decrypted
@@ -5351,7 +7549,9 @@ MS-15).
 
 ## MS-16 — `grace_period_days` / `applies_to_roles` / `frequency_months` Are Stored and Read By Nothing (2026-10-15, two of three resolved)
 
-**✅ `applies_to_roles` resolved 2026-10-19 (owner decision: it names _positions_).** A requirement listing positions now applies only to members who hold one of them, matched by position name or slug, ignoring case and word separators; a blank list applies to everyone; a prospect holds no positions and is graded on every requirement; a member left with nothing that applies reads `not_applicable` on the roster, never compliant. The form says so and the "Not enforced yet" notice is gone from that field (`_applicable_requirements` in `medical_screening_service.py`; `tests/test_medical_screening_requirement_positions.py`). **✅ `frequency_months` resolved 2026-10-25** (W71-1 above): a record with no expiration date falls due that many months after completion. **`grace_period_days` is unchanged and still open**, as described below.
+**✅ `grace_period_days` resolved (owner decision 2026-11-01: enforce it; built 2026-11-04).** A satisfying screening counts until its due date — its expiration date, or the one its requirement's frequency derives — plus the requirement's grace period. While in grace the member is compliant and the screening is shown as due: it counts toward `expiring_soon` (a roster row reads **Expiring soon**; no new standing was added), the item carries `in_grace_period` and `grace_period_ends`, the member's panel reads "Past due — grace period until …", and the expiring list and the AI assistant's tool name it with a negative `days_until_expiration`. The member's own countdown reads 0 for it. One rule, `screening_deadline` in `medical_screening_service.py`, serves the summary, roster, admin hub, expiring list and both MCP tools. **Upgrade effect, accepted:** the column defaulted to 30, so every existing requirement now gives 30 days' grace unless the department lowers it; a member who lapsed within the last 30 days reads compliant again. The form's "Not enforced yet" notice is gone (`tests/test_medical_screening_grace_period.py`).
+
+**✅ `applies_to_roles` resolved 2026-10-19 (owner decision: it names _positions_).** A requirement listing positions now applies only to members who hold one of them, matched by position name or slug, ignoring case and word separators; a blank list applies to everyone; a prospect holds no positions and is graded on every requirement; a member left with nothing that applies reads `not_applicable` on the roster, never compliant. The form says so and the "Not enforced yet" notice is gone from that field (`_applicable_requirements` in `medical_screening_service.py`; `tests/test_medical_screening_requirement_positions.py`). **✅ `frequency_months` resolved 2026-10-25** (W71-1 above): a record with no expiration date falls due that many months after completion. `grace_period_days` is resolved above; the history below describes it as it was.
 
 `screening_requirements.grace_period_days` (default 30) and `.applies_to_roles`
 have labelled, editable controls on `ScreeningRequirementForm.tsx`, each with
@@ -5403,12 +7603,36 @@ root into a restricted folder (photo-referenced files into Photos), moves a
 Documents-list file out of the three opened sub-folders, gives user-made
 folders in the tree the sensitive tier, and records everything for a real
 downgrade. Tested in `tests/test_facility_folder_tiers.py` and
-`tests/test_facility_folder_tier_migration.py`. **What remains:** the
-already-filed sub-case in item (3) — a facility-referenced document that was
-filed somewhere outside the facility tree stays where it was and is governed by
-that folder's own ACL — is unchanged; and files a sensitive-only person filed by
-hand into Photos, Maintenance Records or Inspection Reports are now readable by
-every facilities role, which is what the decision opens.
+`tests/test_facility_folder_tier_migration.py`. **What remains:** files a
+sensitive-only person filed by hand into Photos, Maintenance Records or
+Inspection Reports are now readable by every facilities role, which is what the
+decision opens.
+
+✅ **The already-filed sub-case in item (3) is resolved (owner decision
+2026-11-01: move them, refile into the facility's restricted folders; built
+2026-11-05).** Migration `986b38c2086b` moves every file a facility record
+points at that sits outside that facility's folders — another folder, another
+facility's tree, or no folder at all — into the facility's restricted
+**Facility Documents** folder, or into **Photos** when only facility photos
+point at it, creating the facility's folders the way `ensure_facility_folder`
+does when they are missing. A file two facilities point at goes to the
+facility that attached it first (every facility folder carries the same
+permission tiers, so the choice does not change who can open it), and to
+Facility Documents if either attaches it as a document. Moves and created
+folders are recorded for a real downgrade. Tested in
+`tests/test_facility_outside_refile_migration.py`; the operator note is in
+`docs/UPGRADING.md`. **Deliberately not moved, and still governed by the
+folder it is in:** a file another module also owns — an apparatus photo or
+document, a purchase-request or expense receipt, published meeting minutes, or
+one whose `source_type` names another module — because moving it behind
+facility rights would take it from that module's own audience. A facility
+reference made to such a file after the upgrade is likewise left where it is,
+as `_validate_shared_document_reference` already did. **Bookkeeping table:**
+the move record, `facility_outside_refile_backfill`, exists only on an
+upgraded database where something was moved — the same upgrade-only shape the
+owner retired on 2026-11-01 for the three earlier folder backfills
+(`d75ecbc15bae`). It was kept so the downgrade can put files back; dropping it
+in a later revision would make this one irreversible, as those three now are.
 
 `GET /{facility_id}/folders` is gated at baseline `facilities.view`/
 `.manage`, and FAC-5's design deliberately splits facility data into five
@@ -5514,8 +7738,9 @@ folder, and `delete_folder`'s subtree walk now refuses if any descendant is
 a system folder regardless of how it got there (FAC-23). None of FAC-14
 through FAC-23 are listed here because they are resolved, not open
 limitations. The already-filed sub-case in item (3) above and the
-Blueprints & Permits classification question in item (2) remain open,
-unresolved by any of these rounds.
+Blueprints & Permits classification question in item (2) were left open by
+these rounds; both are now decided and built (see the resolution notes at the
+top of this section).
 
 ## FAC-30 — A `facilities.delete`-Only Custom Role Cannot Delete a Facility Document/Folder Through the Generic Documents API (2026-08-25)
 
@@ -5677,16 +7902,39 @@ remove those assignments and claims first.
 
 **Still open, recorded rather than decided here:**
 
-- **Eligibility for a custom seat is grant-only.** A seat nothing grants (no
-  rank, not on Open Positions, not an open-to-all shift) is eligible for nobody,
-  which is how every seat is treated; officer assignment enforces eligibility
-  too, so such a seat cannot be filled by anyone until it is granted. Template
-  and apparatus seats carry no rank or certification requirement of their own,
-  so there is nowhere to read a per-seat rule from. Whether an officer should be
-  able to seat a member in an ungranted custom seat is an owner question.
+- **Eligibility for a custom seat is grant-only.** ✅ **Resolved (owner
+  decision 2026-11-01: allow officer override; built 2026-11-04).** A seat
+  nothing grants is still eligible for nobody, and a member still cannot sign
+  up for one. A member holding `scheduling.manage` may now seat somebody in it:
+  the officer assignment (and an edit that moves a member's seat) is refused
+  with **`LB-SCHED-004`**, the crew board's assign form offers **Assign
+  anyway** with a required reason, and the retry carries
+  `override_seat_eligibility` and `override_reason`. The override waives only
+  the eligibility check for that seat — the named-seat cap and its locking
+  (Pitfall #27), leave, overlap and the EVOC check on a seat marked _Drives
+  apparatus_ still apply — and it is noted on the assignment
+  (`[Seated with officer override]` and the reason) and audited as
+  `shift_seat_eligibility_override`. "Ungranted" is decided by
+  `ShiftEligibilityService.seat_is_granted` from the department-wide sources
+  (any rank, a mapped certification, a training program, Open Positions); a
+  custom seat any of them grants is never overridable, and neither is a
+  built-in seat. A delegated assigner or shift officer without
+  `scheduling.manage` gets a 403 if they ask for the override.
 - **Qualifications and training programs map onto built-in seats only**
   (`positions_for_qualifications`, `TRAINING_POSITION_MAP`). A certification
-  cannot confer a custom seat.
+  cannot confer a custom seat. ✅ **Resolved for certifications (owner decision
+  2026-11-01: map qualifications to custom seats; built 2026-11-04).**
+  Scheduling → Position Names now lists the certifications under each custom
+  seat, and ticking one makes every member holding it — as of the shift date —
+  eligible for the seat on every path (signup, officer assignment, the bulk
+  answer, the position roster, swaps). It is stored on the seat's own entry in
+  `scheduling_module_configs.custom_positions` as `qualifications`, a sorted,
+  de-duplicated list of known codes settled on save (Pitfall #20); an unknown
+  code is a 422 on save, and an entry saved before the field reads as `[]`, so
+  no migration was needed. The seat is the entry's own value, so a mapping can
+  only name a seat the department defined. Training programs still unlock
+  built-in seats only (`TRAINING_POSITION_MAP` passes a custom target through
+  unchanged, which already worked).
 - **The crew board offers the apparatus's seats; the server checks the
   shift's.** `apparatus_positions` on the shift response prefers the apparatus's
   riding seats over the shift's own, while the seat cap, eligibility and now the
@@ -5698,7 +7946,13 @@ remove those assignments and claims first.
 - **Server-rendered seat names use a title-cased token for a custom seat**
   (`position_label`), not the label chosen under Position Names — notification
   bodies and printed rosters read "Rescue Tech" for a seat the screens call
-  "Rescue Technician".
+  "Rescue Technician". ✅ **Resolved (owner decision 2026-11-01: use the chosen
+  label; built 2026-11-04).** `position_label` takes the department's labels
+  (`department_seat_labels`, read from Position Names) and consults them first,
+  as the screens' `positionLabel` does; the assignment, decline and
+  confirmation notices (bell and email), the shift-start reminder email and its
+  roster, the exchange refusal messages and the printed shift roster all pass
+  them. A caller with no department in hand still gets the title-cased token.
 
 <details>
 <summary>The original entry (2026-09-09)</summary>
@@ -5917,9 +8171,23 @@ ones skipped.
   requirement, on every screen at once — link the course on the requirement
   to credit it. Records completed before the upgrade are unaffected. Still
   open: a record backdated after the upgrade to a completion date before the
-  cut-off is legacy by that date; and the non-certification fallback types
-  (skills evaluation, checklist, knowledge test) still match by name with no
-  cut-off — the decision covered certifications only.
+  cut-off is legacy by that date. **✅ Fallback types resolved (owner decision
+  2026-11-01: extend the cut-off; built 2026-11-04).** Skills-evaluation,
+  checklist and knowledge-test requirements — every type the grader's
+  fallback branch handles — now match by name under the same rule, through
+  the one `record_name_matches` (`app/services/training_compliance.py`) every
+  grader calls: only a record dated on or before `name_match_until`, and only
+  when its stored `match_key` equals the requirement name's (the same key
+  certifications now use, see "Compliance Grading Still Reads Full History"
+  above). Migration `bd8fc0c4a941` sets `name_match_until` to the day it runs
+  on every existing requirement of those types — the day their rule changed,
+  so a record graded under the old rule before the upgrade keeps its credit
+  if its name has the same key. Requirements created afterwards never match
+  by name. Members credited only by a name match on a later record, or by a
+  course name that merely contained the requirement's, lose that credit
+  (`docs/UPGRADING.md`, 2026-11-04). Tests:
+  `TestFallbackTypesStopMatchingByNamePastTheCutoff` in
+  `tests/test_training_match_key.py`.
 - **Duplicates of a self-reported or hand-entered record are not detected.** A
   member who submitted the same class, or an officer who entered it by hand as a
   workaround, gets a second record from finalize; void the manual one.
@@ -5933,9 +8201,60 @@ ones skipped.
   scheduled or started.
 - **The NFPA completeness report flags a missing instructor** on records from
   events without a course.
-- **A rolling recurring series cannot carry training details** — the nightly
-  job that extends it copies events, not sessions. Its occurrences are still
-  credited, as their titles.
+- **A rolling recurring series cannot carry training details — ✅ resolved
+  2026-11-11** (owner decision 2026-11-10: rolling series inherit training
+  details and links). The nightly job now copies the latest occurrence, its
+  training session and the session's attendance links on to each new
+  occurrence. See "Training — One Form for Training Events, Backend" below.
+
+## Training — One Form for Training Events, Backend (2026-11-11)
+
+The owner chose one training-event form for both Training Admin and Events
+(2026-11-10). This is its backend: `POST /events` and `/events/recurring`
+take every training field, including "Counts toward attendance"; an event
+edit carries `training_details`, for one event or "this and all future"; a
+rolling series and a duplicate keep their session and links; and
+`POST /training/sessions/mandatory-tiers` pre-fills "Mandatory for". The form
+itself follows in later pull requests.
+
+**Defaults assumed on the owner's "Yes" (2026-11-11), and what they cost:**
+
+- **A rolling series copies its latest occurrence, not its parent.** This
+  fixed a "this and all future events" edit being lost: it never reached the
+  parent, so every occurrence the job added reverted to the old values. The
+  cost is that a "this event only" edit to the very last generated
+  occurrence, about twelve months out, now carries forward too.
+- **A training manager cannot change training details through an event
+  edit** (403). Every session write already needs `events.manage`. A training
+  manager still edits the event's own fields. TR14-2 is unchanged.
+- **A requirement no membership tier stands for is named, not guessed**, when
+  "Mandatory for" is pre-filled. That means administrative and honorary
+  (member classes, not rungs), a membership word with no tier on the ladder
+  (Retired, on the default ladder), and a requirement scoped only by rank or
+  position. If nothing maps, "Mandatory for" is left as it was rather than
+  falling back to everyone.
+
+**Known gaps, not fixed here:**
+
+- **The pre-fill is an approximation.**
+  - A requirement grades by legacy membership type; an event's "Mandatory
+    for" matches by membership tier.
+  - An administrative or social member on a mapped tier is listed as missing
+    a session the requirement never graded them on.
+  - A requirement cannot name the default ladder's Senior tier, so no
+    pre-fill ever selects it.
+  - Grandfathering and compliance profiles are ignored.
+  - The officer can edit the result.
+- **A finalized Training event with no session cannot be given attendance
+  links** from the event edit. Attaching a session to a finalized event is
+  refused, as it always was; reopen attendance first. An event with a
+  session takes new links at any time.
+- **The Events form still hides training details on a rolling series** until
+  the single form replaces that block.
+- **`TrainingSessionAttach` and `TrainingSessionDetailsUpdate` refuse unknown
+  keys** (422). Before, an unknown key was dropped and the request still
+  answered 201. Nothing in this repository sends one; an outside API client
+  that does will now see the refusal.
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 
@@ -5983,8 +8302,21 @@ same screen, and left as they are:
   occurrences too, and a later finalized occurrence that has a category refuses
   the save. A save from a finalized occurrence leaves all of these fields out
   and is not affected.
-- **Reminder and validation markers an earlier series save copied are still
-  there.** Before this change, a "This and all future events" save wrote the
+- ~~**Reminder and validation markers an earlier series save copied are still
+  there.**~~ ✅ **Resolved (owner decision 2026-11-01: clear with a migration,
+  based on each row's schedule; built 2026-11-05).** Migration
+  `f4583df5025b` examines rows in a recurring series only. It removes a
+  `reminders_sent` interval whose send moment for that row's own start — worked
+  out as `run_event_reminders` works it out, in the department's timezone and
+  reminder time — is still ahead, and a `validation_notification_sent` on an
+  event that has not ended. To keep a reminder from going out twice (pitfall
+  #36), a row keeps its reminder markers if an `event_reminder` notice was ever
+  logged for it, and its validation marker if an `event_validation` notice was.
+  **Still true:** a copied marker for an interval whose moment has already
+  passed cannot be told from a sent one and stays, so that occurrence still
+  skips that one notice; the cleanup is irreversible (downgrade leaves rows as
+  they are). Tests: `tests/test_clear_copied_event_markers_migration.py`. The
+  original finding: Before this change, a "This and all future events" save wrote the
   edited occurrence's `reminders_sent` and `validation_notification_sent` onto
   every later occurrence. It no longer does, and each row now keeps only its own
   markers, but rows already reached keep the copies: those occurrences skip the
@@ -6110,6 +8442,48 @@ Found driving W52 (`docs/workflow-review/W52-action-items.md`).
   name before this are left as they are — they show their name but never match
   "Assigned to me".
   - Still open: meeting action items (`assigned_to`) have no screen.
+
+    **✅ Resolved (owner decision 2026-11-01: build a screen; built
+    2026-11-05).** The existing **Action Items** page (`/action-items`,
+    `ActionItemsPage`) is the screen, rather than a second list beside it: it
+    already listed both sources, sat in the Governance navigation and was where
+    the dashboard tile pointed. It now manages meeting items as well as showing
+    them:
+    - **Filters:** status (now including Cancelled), source, **meeting** and
+      **assignee**, plus "Assigned to me". `?meeting=` and `?assignee=` seed
+      them like `?status=` and `?source=`. The meeting list is the 100 most
+      recent meetings; the assignee list is the active-member picker, offered
+      to whoever can assign (below).
+    - **Meeting items** (`meetings.manage`, as the API requires): **Mark
+      complete**, **Edit** (`MeetingActionItemDialog`: description, assignee,
+      due date, priority, status, completion notes — every field
+      `PATCH /meetings/action-items/{id}` takes, all sent on every save, a
+      cleared one as `null`) and **Delete**, behind `useConfirm`. Rows now name
+      their meeting and their assignee, which the feed did not carry for
+      meeting items. An assignee who has since left stays selectable in the
+      edit form, so saving does not unassign the item.
+    - **Minutes items** keep W52-7's rule: the assignee, or any
+      `minutes.manage` holder, may **Mark complete** or **Update status**
+      (status and completion notes). The other fields are still edited on the
+      minutes, which the dialog links to. A carried-forward item shows a
+      **Carried forward** badge and offers nothing: it is worked in the minutes
+      it was carried to.
+    - `GET /minutes-records/action-item-assignees` now admits
+      `meetings.manage` as well as `minutes.manage`, so a meetings manager
+      assigns from the same active-member list.
+    - **Linked from:** the Minutes page's **Open Action Items** tile
+      (`/action-items?status=open`), each meeting card's "N action items"
+      (`/action-items?meeting=<id>`), the Governance navigation as before, and
+      the dashboard tile (DASH-40 below).
+
+    Tests: `ActionItemsPage.manage.test.tsx`, the updated
+    `ActionItemsPage*.test.tsx`, `MinutesPage.minutesLinks.test.tsx`,
+    `tests/test_action_item_assignee_picker_gate.py`,
+    `tests/test_dashboard_action_items_paging.py`. Residuals: a meeting item's
+    row still links to `/minutes`, because a meeting has no page of its own;
+    new meeting items are still created only through the API (the screen
+    edits what exists, as decided); and the meeting filter offers the 100 most
+    recent meetings, so an older one is reached through `?meeting=`.
 - **W52-7 — An assignee cannot close their own item.** ✅ Resolved
   (2026-10-11), as the owner chose: `PUT /minutes-records/{id}/action-items/
 {item_id}` accepts the item's assignee, keyed on `assignee_id`, for `status`
@@ -6152,6 +8526,43 @@ folders keep theirs) and `required_permissions` (set by modules, not by hand).
 
 ## Legal Documents — History, Attribution and Formatting Gaps (2026-10-04)
 
+> ✅ **All three resolved (owner decision 2026-11-01, built 2026-11-05).**
+>
+> - **W54-3, as the owner chose: record reverts.** "Revert to the built-in
+>   text" now writes a row into the published history — **Built-in text
+>   restored by …**, with the date — so the history shows what members saw
+>   after it. A revert row (`reverts_to_default`) was chosen over "replaced
+>   at / by" columns because a revert can follow text that has no revision
+>   row at all (configured in settings before this screen existed), and only
+>   a row of its own can record that. It is born archived, so it can never be
+>   edited, published or discarded, and nothing is recorded when the built-in
+>   text was already live. The history is now ordered by when each entry went
+>   live rather than when it was drafted. Existing rows were left untouched:
+>   reverts made before 2026-11-05 are in the audit log only.
+> - **W54-4, as the owner chose: record "edited by".** When someone other
+>   than the proposer edits a draft, the revision records them and the time
+>   (`edited_by` / `edited_at`); the card reads "Sam Ortiz proposed this" and
+>   "Edited by Pat Lee on …", and the published history keeps both names
+>   ("Proposed by Sam Ortiz, edited by Pat Lee"). Only the latest such editor
+>   is shown; every edit remains in the audit log
+>   (`legal.revision_updated`). The proposer revising their own wording names
+>   no editor.
+> - **W54-5, as the owner chose: allow headings and lists.** Department text
+>   may use `## ` / `### ` headings, `- ` (or `* `) bullets and `1. `
+>   numbered items; everything else — HTML, links, emphasis — is shown exactly
+>   as typed. No dependency was added: `pages/legal/legalMarkup.ts` parses the
+>   subset into plain data and `LegalMarkup.tsx` renders each string as a
+>   React text node, so there is no HTML to sanitize. The one renderer is used
+>   on `/privacy` and `/terms` (and so their printout), for the published text,
+>   proposals and history in Governance → Legal Documents, and as a preview in
+>   the editor. A new proposal now starts from the built-in text with its
+>   headings as `## ` lines. Published text that already had lines starting
+>   `- ` now shows them as a list. Tests:
+>   `backend/tests/test_legal_documents_history_attribution.py`,
+>   `test_legal_revert_edit_migration.py`,
+>   `frontend/src/pages/legal/legalMarkup.test.tsx` (XSS cases included),
+>   `LegalPage.test.tsx`, `LegalDocumentsPage.test.tsx`.
+
 Found driving W54 (`docs/workflow-review/W54-org-chart-and-legal.md`, W54-3 to
 W54-5). Publishing, reverting and the permission split all work; these three
 need an owner decision before anything is built.
@@ -6186,7 +8597,39 @@ can't be attached from the app yet." A department that needs a file on an event
 attaches it through the API. Building the control, or dropping the endpoint, is
 an owner decision.
 
+**Resolved (2026-10-31), owner decision: add the control.** The event page's
+**Attachments** card shows **Attach file** and a remove button for each file
+to `events.manage` holders. It shows even when the event has no files yet.
+It uses the existing endpoints and the server's type and size rules (25 MB,
+also checked in the browser before sending). Removing asks first. Covered by
+`EventAttachmentsList.test.tsx`.
+
 ## Inventory — NFC Tags and Items Not Seen: Open Decisions (2026-09-30)
+
+> ✅ **Four of five resolved (owner decision 2026-11-01, built 2026-11-05).**
+>
+> - **W44-2, as the owner chose: count creation.** Every path that creates an
+>   item (the form, CSV import, bulk add, size variants) writes a `created`
+>   sighting in the same transaction, through one writer,
+>   `app/services/inventory_sightings.py`. Existing items were **not**
+>   backfilled: the decision is that _new_ items start as seen, so an older
+>   item never handled still reads "Never".
+> - **W44-3, as the owner chose: show the barcode.** Tag Items in Bulk shows
+>   each item's barcode beside its serial and asset tag, and nothing for a
+>   legacy item without one.
+> - **W44-4, as the owner chose: hide deleted areas.** Items Not Seen (and Tag
+>   Items in Bulk) name a storage area only while it is active, as
+>   `Name (Label)`, the item page's rule, now shared as
+>   `active_storage_area_names`.
+> - **Barcode put-away, as the owner chose: count it.** The barcode put-away
+>   records a `barcode_put_away` sighting for each item it filed or found
+>   already on the shelf; a skipped item is not sighted, as with NFC. A
+>   retried put-away moves nothing and adds a second sighting of the same
+>   shelf, which only refreshes the last-seen time.
+>
+> Migration `d1165a97b48e` adds the two values to `inventory_nfc_scans.action`.
+> Covered by `tests/test_inventory_sightings.py`. The last bullet, an unlocked
+> written tag, was not among the decisions and is unchanged.
 
 Workflow review W44 (`docs/workflow-review/W44-nfc.md`) and the NFC design left
 these for the owner. None is a defect in the sense of code doing something it
@@ -6216,6 +8659,46 @@ was not meant to; each is a definition or a trade-off.
   tags_.
 
 ## Member Emails — An Opted-Out Officer or Nominee Hears Nothing for Email-Only Alerts (2026-09-30)
+
+> ✅ **Resolved (2026-10-29), as the owner chose: give them in-app copies.**
+> `app/services/officer_alert_copies.py` writes a bell entry for every officer
+> each alert is about, whether or not they receive the email: low stock, the
+> shelf-audit digest, NFPA retirement, Supplies to Replace and the automatic
+> reorder request; member archived, the property return summary, a new store
+> order, the directory-accounts digest, and an applicant withdrawing, going
+> inactive or coming up for auto-purge. A recurring digest refreshes an unread
+> entry instead of adding one per run. Two of the original items needed
+> nothing: failed equipment checks already wrote a bell entry for every
+> recipient, and the third-party nominee's accept-or-decline request already
+> had one (`_record_nominee_bell_notice`). Behaviour that changed with it: an
+> auto-purge warning, the shelf-audit digest and a withdrawal now count as given
+> when every coordinator or manager has turned the email off, because the bell
+> entries are the notice. The administrator view of who has opted out of what
+> is resolved separately, below. Covered by `tests/test_officer_alert_copies.py`
+> and `tests/test_prospect_auto_purge_warning.py`. The history below is kept as
+> the record.
+>
+> ✅ **Resolved (owner decision 2026-11-01: add an opt-out view; built
+> 2026-11-05).** **Member Email Opt-Outs**
+> (`/communications/member-emails/opt-outs`), linked from **Member Emails &
+> Texts** as "See which members have turned these off", lists the
+> department's current members (active and probationary) who have turned off
+> **Email Notifications** or any optional email, by the emails' own labels.
+> **Show** narrows it to the members who will not be emailed one kind, and
+> each choice carries that count, so an officer deciding whether to switch on
+> **Require for every member** can see who it would reach. An opt-out from a
+> kind the department already requires is marked _still sent_. Read-only:
+> opt-outs stay the member's own choice. Gated like the policy page it sits
+> beside — `settings.manage`, `organization.update_settings` or
+> `notifications.manage`, no new permission — and backed by
+> `GET /api/v1/email-templates/member-email-opt-outs`, which is org-scoped,
+> paged (`limit` at most 200), carries no contact fields and is in the
+> frontend's `UNCACHEABLE_PREFIXES`. Who counts as not emailed is decided by
+> `email_policy.not_emailed`, tested to agree with `member_receives_email`
+> for every kind, so the view cannot drift from the senders (CLAUDE.md
+> pitfall #29). Covered by `tests/test_member_email_opt_outs.py`,
+> `tests/test_member_email_opt_outs_integration.py` and
+> `MemberEmailOptOutsPage.test.tsx`.
 
 **Open (owner decision).** Since 2026-09-28 every member email is either always
 sent or optional (`app/services/email_policy.py`), and a member's **Email
@@ -6281,6 +8764,19 @@ affected shift the moment it deployed.
 Either way the gate stops depending on a reference nothing maintains. Until one
 is chosen, the log line is the only signal.
 
+**Resolved (2026-10-31), owner decision: resolve both tables and fail
+closed.** A foreign key turned out not to be possible: `shifts.apparatus_id`
+names a row in either `apparatus` or `basic_apparatus`, depending on the
+department, so a key to one table would reject the other. Both deletes
+already refuse a vehicle a shift still names (`apparatus_in_use`), so only
+references from before those guards can dangle. The gate now treats a
+`basic_apparatus` id as having no requirement, which matches what it did
+before. An id found in neither table is ineligible, with a message telling
+the officer to pick the shift's vehicle again. The department's enforcement
+setting still decides whether that blocks or only warns, and a chief's
+exception still applies. No migration was needed. Covered by
+`TestDriverEligibility` in `tests/test_evoc_level_service.py`.
+
 ## FAC2-5 — The Cross-Facility Maintenance And Inspection Lists Showed At Most 100 Records (2026-10-11, resolved 2026-10-25)
 
 **Resolved.** `GET /facilities/maintenance/page` and `GET /facilities/inspections/page`
@@ -6316,7 +8812,29 @@ concurrent editing of one draft is a supported workflow (the per-section
 endpoint) or is to be refused with a conflict message (the precondition). Same
 lost-update class as SF-9. See `docs/app-review/meetings-minutes.md` → Pass 5.
 
+**Resolved (2026-10-31), owner decision: refuse with a conflict.**
+`meeting_minutes.edit_version` (migration `e15d635bbb98`) goes up by one on
+every content save. The minutes page sends the version it loaded as
+`expected_version` with every section edit (save, not-taken-up, reorder, add,
+delete). If someone has saved since, `PUT /minutes-records/{id}` refuses with 409. The version is read with a locking read, so two saves racing each other
+cannot both pass. The page keeps whatever was in the editor and shows a
+**Reload** banner. A save that sends no version is unconditional, as before.
+Covered by `tests/test_minutes_edit_conflict_integration.py` and the
+rich-text page test.
+
 ## ELEC2-9 — Seven `default_*` Election Settings Are Accepted, Stored And Returned, But Nothing Reads Them (2026-10-13)
+
+> ✅ **Resolved (2026-10-29), as the owner chose: wire a reader.** Election
+> Settings has a **Defaults** section again, and the **Create Election** form
+> starts from the saved values; with nothing saved it starts where it always
+> did. The PATCH now refuses an unknown voting method, victory condition or
+> quorum type, and the GET reads a value stored before that check (or a null)
+> as the built-in. A default quorum, which the form has no control for, is
+> shown on the form as a read-only line. Accepted limit: only the form reads
+> the defaults, so an election created directly through the API still takes
+> the schema's own. Covered by `tests/test_election_defaults.py`,
+> `ElectionsPage.defaults.test.tsx`, `ElectionsSettingsPage.test.tsx` and
+> `utils/electionDefaults.test.ts`. The history below is kept as the record.
 
 `PATCH /elections/settings` accepts `default_voting_method`,
 `default_victory_condition`, `default_victory_percentage`,
@@ -6359,6 +8877,8 @@ Until one is chosen, the fields are harmless to set and useless.
 
 ## INT2-3 / INT2-4 — Integrations Connect Without Credentials, And The Catalog Never Updates Existing Rows (2026-10-16, INT2-3 resolved 2026-10-27)
 
+✅ **Both resolved** — INT2-3 on 2026-10-27, INT2-4 on 2026-11-05 (below).
+
 **INT2-3 — resolved (owner decision: require the credentials at connect).**
 `POST /integrations/{id}/connect` now refuses PayPal without `client_id` and
 `client_secret`, Documenso without `api_token`, Cal.com without `api_key`, and
@@ -6376,6 +8896,23 @@ for every existing department, and no migration reconciles them. **Owner decisio
 decide which columns the catalog owns (status, description, category), then reconcile
 them in a migration — noting that a status reconcile can change what a department sees as
 connected — or accept that catalog changes reach new organizations only.
+
+**✅ INT2-4 resolved (owner decision 2026-11-01: reconcile chosen columns;
+built 2026-11-05).** The catalog owns `name`, `description` and `category`
+outright, and `status` only between `available` and `coming_soon`
+(`CATALOG_OWNED_COLUMNS` and `catalog_status` in
+`app/api/v1/endpoints/integrations.py`). A row that is `connected` or in
+`error` is the department's connection and keeps its status — so a demoted
+integration a department has connected stays connected until it disconnects,
+and reads coming soon from then on; nothing a department sees as connected is
+changed by a catalog edit. `enabled`, `config`, the encrypted secrets, the
+health columns and `contains_phi` (which the Claude MCP row derives from a
+department setting) are never touched. Migration `7c41e9a2b6d8` applied the
+rule, from a frozen copy of the catalog, to every row that existed; from then
+on `ensure_catalog` applies it to a department's existing rows each time the
+integrations page lists them, so the next catalog change reaches existing
+departments without another migration. A row whose type the catalog no longer
+lists is left alone. Covered by `tests/test_integration_catalog_reconcile.py`.
 
 See `docs/app-review/integrations.md` → Pass 5.
 
@@ -6406,33 +8943,90 @@ W62-6 and W62-7).
     and amount are needed to make the decision; the requester's name and the
     description are more sensitive.
 
+**Resolved (2026-11-01), owner decisions: show send status, allow re-send, and
+show title, amount and requester.**
+
+- **Send status.** Each emailed link records whether its email was sent or
+  failed (`approval_step_records.email_status` and `email_status_at`, migration
+  `b2d4f6a8c0e3`). Expiry is read from `token_expires_at`. The Approvals queue
+  shows one of: "Email sent <date>", "Email could not be sent", "Link expired",
+  "No link has been emailed", or, for links sent before tracking began, "Link
+  emailed (sending not recorded)".
+- **Re-send.** An approvals admin (`finance.approve` plus
+  `finance.configure_approvals`) can **Re-send link**.
+  - A fresh 7-day link is minted, and the old one stops working.
+  - The send is recorded and audit-logged as `finance.approval_link_resent`.
+  - A repeated click sends nothing (`email_link_version`).
+  - Staff never see or copy the link.
+- **What the approver sees.** The emailed page and the email show the
+  request's title, amount and requester's name. The description, vendor and
+  lines stay behind the login, and an expired or used link shows none of it.
+
 ## Finance — Purchase Requests: Named Approvers, Notices and the Paid Amount (2026-10-14)
 
 Found driving W63 (`docs/workflow-review/W63-purchase-request-approval.md`,
 W63-5, W63-6 and W63-7).
 
-- **A chain can name an approver who cannot approve.** Approve, deny and the
-  Approvals queue require `finance.approve`. A chain step naming a position
-  (the Chief, here) whose holders lack it leaves them a 403 on the queue and
-  a 404 on the request. Only an approvals admin's override moves it on.
-  - The chain screen now says so ("Nobody on this step has the finance
-    approval permission", W63-2).
-  - Decision: either naming a position or member in a chain lets them act on
-    that step, or saving such a step is refused.
-- **Nobody is told.** No email, bell entry or text goes to:
-  - an approver whose step a request has reached;
-  - the requester when it is approved or denied.
+- **A chain can name an approver who cannot approve — ✅ resolved (owner
+  decision 2026-11-01: naming grants that step; built 2026-11-06).** Approve
+  and deny used to require `finance.approve`, so a step naming a position (the
+  Chief, here) whose holders lacked it left them a 403, and the request a 404.
+  - Being named is now the grant. `POST /finance/approvals/{id}/approve` and
+    `/deny` admit any member; the service refuses (403) a caller without
+    `finance.approve` whom the step does not name before it reads the step's
+    order or its request (`may_reach_step`), then applies the step's own rule.
+  - It reaches that step only: not a later step naming someone else, not
+    another request, not a step that names nobody (still any
+    `finance.approve` holder), not a request no chain routes (manual
+    approval keeps its gate), and not the Approvals queue page, which stays a
+    `finance.approve` screen. A named member works from the request's own
+    page, which they can now open (`reviews_entity`) and which the approval
+    email links to.
+  - An override still needs `finance.approve` as well as
+    `finance.configure_approvals` (`may_override`), so opening the gate did
+    not make the approvals-admin grant alone a licence to decide requests.
+  - The approver-coverage report counts named members as covering their step;
+    its `no_approve_permission` problem and the chain screen's "Nobody on this
+    step has the finance approval permission" warning are gone.
+- **Nobody is told — ✅ resolved (owner decision 2026-11-01: email approvers
+  and requesters; built 2026-11-06).** `app/services/finance_approval_notifications.py`:
+  - when a request reaches an approval step, the active members it names are
+    emailed (optional kind `finance_duties`, now labelled "Finance duties"),
+    never the requester; an emailed-link step's link is still its only notice;
+  - when it is approved or denied, the requester is (new optional kind
+    `finance_requests`, "Your purchase, expense and check requests"), with the
+    denial reason, unless they withdrew it themselves.
 
-  The existing entries record this for dual approval's second approval and
-  for amendments. It holds for every ordinary step and for the decision too.
-  Decision: which events notify whom (email first, pitfall 18).
+  Email only, no text or bell entry. The emails are queued while the request
+  changes and sent after the commit, so none announces a step or a decision
+  that a later failure rolled back; a crash in between loses that email (the
+  request's page still shows it). A step is stamped `approvers_notified_at`
+  (migration `50c94d5c30f8`) when its notice is queued and never notified
+  again; a decision is notified only by the call that moves the request out of
+  pending approval, so a retried approve or deny sends nothing. Notices for a
+  second approval and for amendments are their own entries.
 
-- **The paid amount is always the estimate.** "Mark Paid" sends no amount,
+- ~~**The paid amount is always the estimate.** "Mark Paid" sends no amount,
   though `POST /finance/purchase-requests/{id}/mark-paid` takes
   `actual_amount` and the service records it. An invoice that differs from
   the quote leaves the budget line's spent and committed figures wrong, with
   no way to correct them on screen. Decision: whether "Mark Paid" asks for
-  the amount, and how a difference from the commitment is shown.
+  the amount, and how a difference from the commitment is shown.~~ **✅
+  Resolved (owner decision 2026-11-01: ask for the amount; built
+  2026-11-06).** Mark Paid opens a dialog asking what was paid, starting from
+  the approved estimate, and always sends it as `actual_amount`. The endpoint
+  keeps the parameter optional so existing API clients keep working (left
+  out, the estimate is recorded; zero or less is a 422). Every payment stores
+  the amount, so a value a draft's edit form put in
+  `actual_amount` is overwritten, never spent. The budget line's actuals are
+  what was paid: the whole approved estimate is released from committed and
+  the paid amount is spent, in one locked mutation, so an invoice over or
+  under the quote lands on the line either way (paying over still needs the
+  line, and any restricted fund, to cover it). A paid request reports
+  `paid_difference` — paid less approved — which the page shows as "$30.00
+  over" or "$14.50 under". A request paid before this with no amount recorded
+  shows none. Tests: `tests/test_finance_paid_amounts_receipts_commitments.py`,
+  `paidAmountsReceipts.test.tsx`.
 
 ## Finance — Expense Reports: Routed by Purchase Chains, and Charged to No Budget (2026-10-14)
 
@@ -6452,18 +9046,45 @@ W64-5).
     of Trustees.
   - It has worked this way since the module was added, so changing it
     re-routes live requests.
-  - Decision: match only the request's own type (with an `UPGRADING.md` note
-    and perhaps a migration copying purchase chains to the other types), add
-    an explicit "All requests" option, or keep it and say so on the chain
-    screen.
-- **Expense lines carry no budget.** The form offers no budget line, so
+  - **✅ Resolved (owner decision 2026-11-01: match own type only; built
+    2026-11-06).** `resolve_approval_chain` has matched only the request's own
+    type since 2026-10-17; an expense report or check request with no chain of
+    its own is decided by hand (Approve or Deny on the request's own page, by
+    any `finance.approve` holder), not routed through a purchase chain. No
+    migration copies purchase chains to the other types: which approvers a
+    reimbursement or a payout should have is the department's decision, so
+    `docs/UPGRADING.md` tells an operator to create those chains. Requests
+    already routed keep the steps they were given. The chain form now says a
+    chain routes only its own type.
+- ~~**Expense lines carry no budget.** The form offers no budget line, so
   `budget_id` is null, and `mark_expense_paid` posts spending only to lines
   that have one. A paid reimbursement reaches no budget line, and nothing
   commits it on approval as a purchase request's amount is. Decision: who
   picks the line (the member, or the Treasurer on approval), and whether
-  approval commits it.
+  approval commits it.~~ **✅ Resolved (owner decision 2026-11-01: member
+  picks, approval commits; built 2026-11-06).**
+  - The member chooses each expense's budget line on the report form and the
+    line dialog, from the same picker a purchase request uses (the lines they
+    may charge in the report's year). The writes already checked the line is
+    the department's (pitfall 14c) and that the member may charge it.
+  - Approval commits the lines (`_commit_report_lines`): each budget line's
+    committed figure rises by its lines' total, under the line's row lock with
+    the ceiling check, so an approval a line cannot cover is refused (409) like
+    a purchase request's. `expense_reports.budget_committed_at` (migration
+    `100121b59d94`) records it.
+  - Paying releases the commitment in the same mutation as the spend; a
+    cancelled approved report releases it; a voided reimbursement check
+    restores it with the report. Each releases only a report that was
+    committed, so reports approved before the upgrade, and a report claiming
+    back a purchase (whose own approval already encumbered it), move only
+    what they always did.
+  - The line's transaction history lists an approved report's lines as
+    Committed; the report's page names each line's budget line.
+  - Like a purchase request, a line may still be left without one.
+  - Tests: `tests/test_finance_paid_amounts_receipts_commitments.py`,
+    `paidAmountsReceipts.test.tsx`.
 
-## Finance — Dues: Overpayments, and Members Who Cannot See What They Owe (2026-10-14, overpayments resolved 2026-10-27)
+## Finance — Dues: Overpayments, and Members Who Cannot See What They Owe (2026-10-14, overpayments resolved 2026-10-27, self-view and reminders resolved 2026-11-06)
 
 Found driving W66 (`docs/workflow-review/W66-dues.md`, W66-3 and W66-4).
 
@@ -6476,14 +9097,30 @@ Found driving W66 (`docs/workflow-review/W66-dues.md`, W66-3 and W66-4).
   none). If the dues are already paid, the whole amount is the donation. A
   retried submission with the same reference records neither twice. Covered by
   `tests/test_dues_overpayment_donation.py` and `DuesPaymentDialog.test.tsx`.
-- **A member cannot see their own dues.**
-  - No screen shows a member what they owe; `/finance/dues` needs
-    `finance.view`.
-  - `GET /finance/dues` already confines a non-manager to their own records,
-    but its `finance.view` gate refuses a plain member first.
-  - Nothing tells a member their dues are due or overdue.
-  - Decision: whether members get a "My dues" view (and on what gate), and
-    which dues reminders go out (email first, pitfall 18).
+- **A member cannot see their own dues — resolved 2026-11-06** (owner
+  decision 2026-11-01: "My dues view + email reminders").
+  - **Finance › My Dues** (`/finance/my-dues`, `GET /finance/my-dues`) needs
+    only a session: it lists the caller's own dues — amount, paid, still owed,
+    due date, status, any late fee charged, a late fee still to come and the
+    date after which it is added, and the payments. Status and late fee come
+    from the same rules the Treasurer's screen and the late-fee task use
+    (pitfall #29). It is in the Finance navigation for everyone who sees the
+    group.
+  - The daily `dues_reminders` task emails a member once when their dues fall
+    due within 7 days and once when they become overdue (naming any late fee
+    and when it is added). Email only, never SMS (pitfall #18), as the new
+    optional **Your dues** email kind (`dues_reminders`): on by default, and a
+    member may turn it off; a department may make it required. Each is sent at
+    most once per dues record (`member_dues.due_reminder_sent_at` /
+    `overdue_reminder_sent_at`); a failed send is retried the next day. Only the
+    member the dues belong to, while their account is current, is emailed.
+  - **Accepted limits.** The overdue email goes only for dues that became
+    overdue in the last 30 days, so the first run after an upgrade does not
+    email everyone about dues long overdue that the Treasurer has dealt with
+    by hand; such members are not reminded, and see the dues on My Dues. A
+    member with no dues still sees the My Dues entry and an empty page. The
+    `GET /finance/dues` list itself still needs `finance.view`. Tests:
+    `tests/test_dues_terms_and_reminders.py`, `myDues.test.tsx`.
 
 ## Department Store — The Cart Does Not Survive a Reload (2026-10-15, resolved 2026-10-27)
 
@@ -6509,9 +9146,20 @@ Found driving W68 (`docs/workflow-review/W68-grants.md`, W68-10).
   record, so applications started from it still name their program; **Show
   retired** lists retired ones and reinstates them. Retired opportunities offer
   no Start Application.
-- **Still open:** the four Federal Programs cards are fixed text with no way to
+- ~~**Still open:** the four Federal Programs cards are fixed text with no way to
   start an application from them. **Decision:** whether they become real,
-  seeded opportunities.
+  seeded opportunities.~~ **✅ Resolved (owner decision 2026-11-01: seed as
+  opportunities; built 2026-11-06).** AFG, SAFER, FP&S and the Firehouse Subs
+  Public Safety Foundation are each department's own opportunity records
+  (`app/services/grant_federal_programs.py`), with the cards' text, a
+  recurring deadline type and no award range or match (they change each
+  funding year; the department fills them in). A new department gets them at
+  creation; migration `3c1f5e2a9d47` gives them to every existing one. Both
+  skip a program code the department already holds, retired or typed in by
+  hand, so a retired program stays retired. The page's fixed cards are gone:
+  the records are listed with every other opportunity and can be started,
+  edited and retired. Tests: `tests/test_grant_federal_programs.py`,
+  `GrantOpportunitiesPage.federalPrograms.test.tsx`.
 
 ## Medical Screening — A Screening With No Expiration Date Never Fell Due (2026-10-16, grading resolved 2026-10-25)
 
@@ -6527,14 +9175,28 @@ Found driving W71 (`docs/workflow-review/W71-medical-screening.md`, W71-1).
   both screens mark such a date "by frequency". **Upgrade effect, accepted:**
   existing records saved without an expiration can change standing on the
   first read after upgrade.
-- **Still open — records are matched to a requirement by screening _type_,
-  not by `requirement_id`,** so two requirements of the same type are
-  satisfied by one record. **Decision:** whether a record should satisfy only
-  the requirement it is linked to.
-- **Still open — the MCP `list_expiring_screenings` tool** pages in SQL on the
-  stored `expiration_date`, so it does not list a record falling due by
-  frequency that the dashboard lists. Bringing it in needs the derived date in
-  SQL, or giving up SQL paging for that tool.
+- ✅ **Resolved (owner decision 2026-11-01: match by linked requirement;
+  built 2026-11-04) — a record satisfies only the requirement it is linked
+  to.** Grading, supersession (`superseded_record_clause`) and the expiring
+  list all partition by `requirement_id`; a record linked to nothing counts
+  toward nothing and is marked "Not linked to a requirement" on the Records
+  tab, and the Edit dialog can now set or change the link. The frequency an
+  undated record falls due by is its own requirement's. **Upgrade:** migration
+  `d6906e3dd76c` links each unlinked record to its organization's one active
+  requirement of the same type (with none active, to the one requirement of
+  that type); a department with one requirement per type sees no change. A
+  record whose type matches two or more requirements is left unlinked — it
+  counted toward all of them before and counts toward none now, until an
+  officer links it — and a record whose type matches no requirement counted
+  toward nothing before either. Covered by
+  `tests/test_medical_screening_linked_requirement.py`.
+- ✅ **Resolved (owner decision 2026-11-01: compute in the tool; built
+  2026-11-04) — the MCP `list_expiring_screenings` tool** now takes its rows
+  from `get_expiring_soon(members_only=True)`, the Compliance tab's own list,
+  so it includes screenings due by frequency and ones in their grace period
+  (`due_by_frequency`, `in_grace_period`, `grace_period_ends`), and pages the
+  window in Python rather than SQL; the window is bounded by `days` ≤ 365 and
+  one current record per member and requirement.
 - **Resolved 2026-10-25 — superseded records on the expiring list.**
   `get_expiring_soon` now leaves out a record a newer one of the same type
   supersedes for the same member or prospect, using the same
@@ -6560,6 +9222,25 @@ Found driving W73 (`docs/workflow-review/W73-integrations.md`, W73-5).
 
   The catalog row is seeded per organization, so the last two also need a
   data change for existing installations.
+
+**Resolved (2026-11-01), owner decision: build the department events feed.**
+Most of it had shipped on 2026-10-16, a day before this entry. Connecting
+issues a secret feed URL, shown on the card with Copy and a confirmed
+**Reset link**, and `GET /api/public/v1/calendar/org/{token}.ics` serves the
+department's published, non-cancelled events, 30 days back to 365 ahead,
+filtered by `included_event_types`.
+
+What was missing, and is now built:
+
+- Nothing read `include_shifts`; the schema refused it outright.
+- No screen set either filter.
+
+The connected card now has **Settings**: event types to publish (none ticked
+means all) and **Include duty shifts**, which adds scheduled shifts showing
+times and platoon only, never who is assigned or notes. An unknown event
+type is refused on save. A disconnected or disabled integration serves 404.
+Members' personal feeds are unchanged. Covered by
+`tests/test_department_ical_feed.py` and `IntegrationsPage.test.tsx`.
 
 ## Inventory — "Needs Attention" Means Two Things on One Dashboard (2026-10-23, resolved 2026-10-27)
 
@@ -6746,7 +9427,42 @@ pin to match rather than reverting `requirements.txt` backward, so a
 Dependabot-style forward bump doesn't have to fight this pin again. See
 `docs/security-review/CI9-33-core-infra.md`.
 
-## LOC-37 — A Room Tag Tapped With An Expired Session Loses The Room (2026-10-04)
+## LOC-37 — A Room Tag Tapped With An Expired Session Loses The Room (2026-10-04, resolved 2026-11-05)
+
+> ✅ **Resolved (owner decision 2026-11-01: return to the room; built
+> 2026-11-05).** Both check-in landing pages, `/locations/:locationId/check-in`
+> and `/events/:id/check-in`, are now wrapped in their own bare
+> `<ProtectedRoute>` — authentication only, no module and no permission gate —
+> in `modules/facilities/routes.tsx` and `modules/events/routes.tsx`.
+>
+> **One correction to the analysis below.** Both routes already sat under the
+> layout route's bare `ProtectedRoute` in `App.tsx`, so a visitor with **no**
+> session was already sent to `/login` with `state.from` and came back. The
+> room was lost on the other path: a phone still carrying `has_session` from
+> a session that had lapsed. There `ProtectedRoute` waits on `loadUser()`, its
+> `GET /auth/me` 401s, the refresh fails, and `handleExpiredSession` leaves
+> with a full page load to `/login`, which can carry no router state. The
+> route-level wrap makes the sign-in each page promises its own, so moving one
+> out from under the layout cannot drop it; the fix for the lost room is the
+> second half:
+>
+> - `handleExpiredSession` (`services/apiClient.ts`) now redirects to
+>   `/login?from=<path+query+hash>` via `loginPathReturningTo`, for every page
+>   but `/` and `/login` itself — the same return `ProtectedRoute` already
+>   gave a signed-out visitor, now also given to an expired one.
+> - `postLoginRedirect(state, search)` (`utils/postLoginRedirect.ts`) reads
+>   `?from=` when the router state names no page; router state wins. Both go
+>   through one check: a path beginning with a single `/`, with no backslash
+>   (which a browser reads as `/`, so `/\host` is `//host`) and no control
+>   character; a `?from=` is also parsed against a throwaway origin and must
+>   stay on it. The backslash rule is new for router state too — before it,
+>   `{ from: { pathname: '/\evil.example' } }` passed the check.
+>
+> The OAuth sign-in buttons still leave the app for the provider and come back
+> to the dashboard, with or without `from`, exactly as for any other protected
+> page; nothing about that changed here. Covered by
+> `modules/facilities/checkInRoutes.test.tsx`, `utils/postLoginRedirect.test.ts`,
+> `services/apiClient.test.ts` and `pages/LoginPage.test.tsx`.
 
 `/locations/:locationId/check-in` is where a room's NFC sticker lands a member's
 phone. It is the **only route in the app entered cold from a physical object**
@@ -6802,6 +9518,45 @@ again after signing in is what they need to do.
   query has already applied the stricter window while the public one computes
   the permissive check, so a shared builder needs that as a parameter and the
   blast radius includes a public kiosk endpoint.
+
+  ✅ **Resolved (owner decision 2026-11-01: consolidate; built 2026-11-05).**
+  Both endpoints return `build_location_display` from
+  `app/services/location_display.py`, which builds every `QRCheckInData` row
+  and the top-level fields once. The `is_valid` difference is its keyword
+  `recheck_window`: `True` for the public kiosk (re-evaluate each event with
+  `_validate_check_in_window` now, and report that as both `is_valid` and
+  `can_check_in`), `False` for the authenticated room page (both `True`, since
+  the selection already applied the strict window). Everything else is now
+  filled the same way, so the authenticated response gained real values for
+  `allow_guest_check_in` and `badge_check_in_enabled` (the latter costs the
+  integration lookup only for a room with its badge switch on). The public
+  kiosk's response is unchanged — the same keys, and the same values for the
+  same room, compared before and after — and
+  `tests/test_location_display_builder.py` pins its exact key set, the fields
+  it carries only empty (description, training flags, a member's own check-in
+  times), that the two responses are equal for an open event, and that they
+  differ only in the window rule otherwise.
+
+- ✅ **LOC-41 — resolved (owner decision 2026-11-01: add the constraint,
+  settling duplicates; built 2026-11-05).** Migration `2bb7c963f351` adds a
+  stored generated column `building_key = COALESCE(building, '')` and the
+  unique key `uq_locations_org_name_building` over `organization_id`, `name`
+  and `building_key`. Keying on the generated column is what covers locations with
+  no building, which a key on `building` would not (NULLs repeat in a unique
+  index); no building and an empty building are now one scope, in the key and
+  in the service check alike, and names compare under the column collation
+  (case- and trailing-space-insensitive) in both. Duplicates already stored are
+  renamed first: the oldest of each group keeps its name and each later one
+  gets ` (2)`, ` (3)`, … (skipping numbers already in use), which is not undone
+  by the downgrade — see `docs/UPGRADING.md`. `LocationService` maps a lost
+  race on the key to the same "already exists" 400 its check gives, and a
+  facility room's location, which the system names itself, is numbered the
+  same way rather than refused when two rooms in one building share a name
+  (as is a station's location in onboarding); one that loses a race for its
+  name to a simultaneous save is retried once, in a savepoint, with a locking
+  re-read that sees the winner (`save_system_named_location`). Tested in
+  `tests/test_location_name_uniqueness.py` and
+  `tests/test_location_name_unique_migration.py`. The original finding:
 - **LOC-41 — (name, building) uniqueness for locations has no database
   constraint behind it.** `Location.__table_args__` declares four plain
   indexes and no `UniqueConstraint`, so the rule lives only in
@@ -6875,6 +9630,47 @@ mounted route (now marked in the file, 2026-10-11). Server-supplied and registry
 both drifted from the routes they name, for the same reason — nothing in the
 type system connects either to a `path=` string.
 
+**Resolved (2026-10-31), owner decision: the pages honour the filter.**
+
+Every parameterised target now lands on the rows its tile counted, and the
+filter is shown on the page with a way to clear it:
+
+- **Apparatus** (`serviceStatus`, `hasDeficiency`, `inspection`): new optional
+  `GET /apparatus` filters. The out-of-service codes are one shared constant.
+- **Inspections** (`dueWithin`): `due_within_days` on
+  `GET /facilities/inspections/page`.
+- **Facilities** (`compliance=due`): a "Compliance deadlines in the next 30
+  days" list, from `due_within_days` on `GET /facilities/compliance-checklists`.
+- **Low stock** (`stock=low`): `low_stock_categories` on the item list and its
+  export. These are the items in the categories the tile counts. The tile
+  counts categories, so its number differs from the row count.
+- **Overdue returns** (`status=overdue`): opens the Overdue tab.
+  - The tile and the tab now share one overdue rule,
+    `overdue_checkout_clause` (in `inventory_service.py`). The tile used to count loans
+    whose stored flag was set even after they were extended.
+  - The tab loads up to 200 loans.
+- **Admin hours** (`status=pending`): opens Pending Review.
+- **Notifications** (`status=failed`): `failed` on `GET /notifications/logs`.
+- **Action items** (`status=overdue`, `source`): `overdue` and `source` on
+  `GET /dashboard/action-items`.
+  - The meeting tile now links with `source=meeting`.
+  - Minutes items are overdue by the department's calendar day, not the clock.
+    This changed the minutes tile's and the admin summary's counts slightly: an
+    item due today is no longer overdue from 00:00 UTC.
+- **Members** (`status=active`): seeds the status filter.
+- **Events** (`range=next-30-days`): a "Next 30 days" chip over the same
+  department-calendar window.
+
+A neutral total tile (the Inventory count) now says only **Open**.
+
+**Residual limits:**
+
+- Event and compliance lists cap at 500 rows.
+- Action-item tiles are gated on the `.manage` permissions, while the page
+  lists by the `.view` ones.
+- The out-of-service tile's fleet summary does not exclude archived apparatus.
+  Archiving changes the status, so the two agree in practice.
+
 ## DASH-38 / DASH-39 / DASH-40 — Three Smaller Dashboard Decisions (2026-10-04)
 
 - **DASH-38 — no apparatus maintenance page.** `/apparatus/maintenance` is an
@@ -6884,11 +9680,62 @@ type system connects either to a `path=` string.
   and pointed there, so it bounced off the catch-all; pass 3 retargeted it to
   the fleet board, which surfaces the same tallies in its summary strip. Either
   build the page or fold the figure in explicitly.
+
+  **✅ Resolved (owner decision 2026-11-01: fold into the fleet board; built
+  2026-11-05).** No maintenance page is built. The tile now links to
+  `/apparatus?maintenance=due`, where the fleet board lists the maintenance
+  items in place of the fleet (`MaintenanceDueList`), read from
+  `GET /apparatus/maintenance/due?days_ahead=30&include_overdue=true`. That is
+  `ApparatusService.get_maintenance_due` with the window `get_fleet_summary`
+  counts `maintenance_due_soon` with, so the list's length is the tile's
+  number, overdue work included. The board's **Maintenance Due** summary card
+  shows the same figure and links to the same view; it used to add
+  `maintenance_overdue` on top, counting each overdue item twice.
+  `tests/test_apparatus_maintenance_due_board.py`,
+  `ApparatusListPage.test.tsx`. Residuals: the figure counts items, not
+  apparatus, so the board shows the items rather than filtering its apparatus
+  table; and, as before, it does not exclude items on archived apparatus. The
+  summary card is shown only to `apparatus.manage`, while the tile also reaches
+  a `settings.manage` holder with `apparatus.view`, who lands on the list
+  without the card.
+
 - **DASH-39 — no genuine upcoming-facility-maintenance figure.** Pass 3 removed
   a `facilities-maintenance` tile that re-rendered its neighbour's overdue count
   (DASH-31). Restoring the concept needs a `due_date > today AND <= today + 30`
   query **and** a `due` value accepted by `MaintenanceListPage`'s
   `all | pending | completed | overdue` filter. The apparatus block is the model.
+
+  **✅ Resolved (owner decision 2026-11-01: add the tile; built 2026-11-05).**
+  A `facilities-maintenance-due` tile, **Maintenance due**, counts open work
+  due by today + 30 (`FACILITY_MAINTENANCE_DUE_DAYS`, the department's date)
+  that is not yet marked overdue, at facilities that are not archived, and
+  links to `/facilities/maintenance?status=due`. `MaintenanceListPage` accepts
+  `due` (labelled **Due soon**) and sends `due_within_days=30` to
+  `GET /facilities/maintenance/page`. The tile and the page both build their
+  query from `FacilitiesService.maintenance_due_soon_conditions`, so they
+  cannot disagree. The page now also ignores an unknown `status` instead of
+  passing it through.
+
+  **The overdue tile was fixed at the same time (found while building
+  DASH-39).** "Urgent work orders" counted `due_date <= today` at active
+  facilities, while the `?status=overdue` list it opens, the facilities
+  dashboard's **Overdue Maintenance** card and preview, and every row's badge
+  used the stored `is_overdue` flag. The flag is overdue's existing
+  definition: set on create and update when the due date is before the
+  department's today, then flipped daily by `run_mark_overdue_maintenance`. So
+  work due today was "urgent" on the tile but missing from the list. All four
+  now read `FacilitiesService.maintenance_overdue_conditions`: not completed,
+  flagged overdue, at a facility that is not archived. The facilities
+  dashboard's count therefore no longer includes archived facilities. On a
+  single facility's own page the overdue filter is still the plain flag, so an
+  archived facility lists its own overdue work. The two tiles split the open
+  work: due-soon is the flag's negation, so work due today, and past-due work
+  the daily task has not flagged yet (for up to a day), counts under
+  **Maintenance due**, never under both and never under neither.
+  `tests/test_facility_list_pages.py`
+  (`test_maintenance_tiles_partition_and_match_their_lists`),
+  `MaintenanceListPage.test.tsx`, `useMaintenanceForm.test.ts`.
+
 - **DASH-40 — `/dashboard/action-items` is unpaginated.** It returns every
   matching action item in the organization from both sources, merged and sorted
   in Python, with no `limit`/`offset` and no cap. `ActionItemSummary` carries
@@ -6896,7 +9743,67 @@ type system connects either to a `path=` string.
   just the row count; a department with years of minutes sends the lot on every
   dashboard load.
 
+  **✅ Resolved (owner decision 2026-11-01: page or cap — both; built
+  2026-11-05).** `GET /dashboard/action-items` keeps the bare list it always
+  answered, so no API client breaks, but is **capped at 200**
+  (`ACTION_ITEMS_LIST_CAP`); `limit` (at most 200) and `offset` move through
+  it. A new `GET /dashboard/action-items/page` (the
+  `/facilities/maintenance/page` precedent) answers
+  `{items, total, open_total, overdue_total, limit, offset}`, default 50 a
+  page, and is what the Action Items screen reads. Both routes share one
+  reader. Each half is read in the merged order (undated last, then by
+  calendar day, then oldest first) only as far as `offset + limit`, the two are
+  merged with a stable `heapq.merge`, and the page is cut from the merged list,
+  so page two starts where page one ended whichever source its rows come
+  from. `/page`'s totals are one aggregate query per half under the same
+  filters, so they count every matching row, not the page; the bare list runs
+  no count queries. Three filters were added to both: `assignee_id`,
+  `source_id` (a meeting or minutes id) — inside the same organization and
+  permission conditions as before — and `open_only`, which replaced the page's
+  fetch-everything-and-filter "Open".
+
+  **Open and overdue now have one definition each (Pitfall #29).** The
+  dashboard's admin summary counted a minutes item open when `pending` or
+  `in_progress`; the Minutes page's tile, "My action items" and carry-forward
+  counted `overdue` too and left out an item already carried into later
+  minutes; and the Action Items page's own tiles counted every non-closed row
+  it had been sent. `minutes_action_item_open()` in `dashboard.py` now uses the
+  Minutes module's `OPEN_ITEM_STATUSES` and excludes carried-forward items, and
+  the admin summary, the overdue predicates (the operations dashboard cards
+  too), the feed's `open_only` and its totals all read it. A department with
+  hand-set `overdue` items or carried items will see the dashboard tile's
+  number move to match the Minutes page's.
+
+  **No dashboard list widget existed.** Nothing on the dashboard itself read
+  this feed; its only reader was the Action Items page. The dashboard's
+  Action Items tile counts open items from the admin summary, and now opens
+  `/action-items?status=open`, the list of exactly what it counted, instead of
+  every item ever recorded. The page asks for one page at a time
+  (`DEFAULT_PAGE_SIZE`, with the shared `Pagination` control) and shows the
+  feed's totals in its tiles. API clients are told about the cap and the new
+  route in `docs/UPGRADING.md`. Tests: `tests/test_dashboard_action_items_paging.py`
+  (real rows: page boundaries across both sources, totals, the open rule, the
+  tile and the list agreeing, filters, org scoping, the bare list's shape and
+  its cap of 200), the updated overdue-filter test, `adminServices.test.ts`, `ActionItemsPage.manage.test.tsx`,
+  `Dashboard.test.tsx`. Residual: a deep page costs `offset + limit` rows per
+  half, since neither half can skip rows the other may need to precede.
+
 ## Training — `POST /training/enrollments` Duplicates, and Lags, the Fixed Enrollment Path (2026-10-06)
+
+**✅ Resolved (owner decision 2026-11-01: remove it; built 2026-11-04).**
+`training.py`'s `enroll_member_in_program` is deleted, so
+`POST /api/v1/training/enrollments` answers 404/405 and
+`POST /api/v1/training/programs/enrollments`
+(`TrainingProgramService.enroll_member`, locked, with progress rows, phase,
+recert deadline and notification) is the only way to enroll a member by
+hand. A search of the frontend, e2e specs, scripts, tests and docs found no
+caller other than the route's own tests (removed with it) and three docs that
+named it (`wiki/Module-Training-Developer.md`, `docs/README.md`,
+`docs/TROUBLESHOOTING.md`, now pointing at the program route). The schema
+and service code it used are shared with the fixed path and stay. The race
+and the structural gaps below went with the route. API clients are told in
+`docs/UPGRADING.md` (2026-11-04). Test:
+`tests/test_legacy_enrollment_route_removed.py`.
 
 Found by security review TR-17 pass 7
 (`docs/security-review/TR-17-training-core.md`, TR7-1). There are two HTTP
@@ -6937,22 +9844,98 @@ duplicate route outright — is a product decision, not a drive-by patch.
 Exposure today is narrow: nothing in the frontend calls this route, so it
 reaches only a direct API client holding `training.manage`.
 
-**Still open as of security review TR-17 pass 8 (2026-10-16), and the gap
+**Was open as of security review TR-17 pass 8 (2026-10-16), and the gap
 widened in the interim.** `training_program_service.py`'s `enroll_member` (the
 fixed path) gained prerequisite-program enforcement on 2026-10-14
 (`e3aee773`, "enforce prerequisites on single-member enrollment") — a member
 missing a prerequisite now gets a clean 400 through that path. `training.py`'s
-duplicate was not touched, so `POST /training/enrollments` now also silently
-enrolls a member who has not met a program's prerequisites, in addition to the
-race and the missing `RequirementProgress`/phase/recert/notification behavior
-already recorded above. Every one of this duplicate's defects traces to the
-same root cause — a second, hand-maintained copy of enrollment logic that
-nothing keeps in sync with the one the rest of the codebase fixes — so each
-new fix to the real path is now also a new way for the duplicate to fall
-further behind it. Confirmed the frontend still calls only
-`/training/programs/enrollments`; no owner decision has been recorded yet.
+duplicate was not touched at that point, so `POST /training/enrollments` also
+silently enrolled a member who had not met a program's prerequisites, in
+addition to the race and the missing `RequirementProgress`/phase/recert/
+notification behavior already recorded above.
 
-## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06)
+**The prerequisite gap closed on 2026-10-23** (`94e3d2e0`, "Close the
+remaining pipeline gaps: empty required sets, inactive due dates,
+prerequisite checks on auto and legacy enrollment") — its own message: "The
+legacy POST /training/enrollments now refuses a missing prerequisite with the
+same message as the other manual paths." **Passes 9–11 of TR-17 did not
+notice**: pass 11 reviewed `94e3d2e0` itself (grouped with a sibling commit
+under "inactive-aware completion" in its write-up) but described only its
+pipeline/phase-completion effects, then separately re-asserted "TR7-1 — still
+OPEN/FLAGGED, unchanged" on the stated grounds that neither
+`enroll_member_in_program` nor `enroll_member` appeared among that pass's
+reviewed commits — which was incorrect; `94e3d2e0` touches
+`enroll_member_in_program` directly. Caught and corrected by TR-17 pass 12
+(2026-10-29), which re-read the current function end to end rather than
+trusting the "unchanged" citation.
+
+**Still open: the race and the structural incompleteness.** Confirmed by
+TR-17 pass 12 against the current code — "Check for existing active
+enrollment" is still a plain `SELECT` with no `.with_for_update()` and no
+backing unique constraint on `(user_id, program_id, status)`, and the
+function still never creates `RequirementProgress` rows, determines a
+starting phase, schedules a recert deadline, or sends the enrollment
+notification. Every one of these two remaining defects traces to the same
+root cause — a second, hand-maintained copy of enrollment logic that nothing
+keeps fully in sync with the one the rest of the codebase fixes. Confirmed
+the frontend still calls only `/training/programs/enrollments`; no owner
+decision on delegating, locking in place, or removing the route has been
+recorded yet.
+
+## Training — Event Organizers Decide Which Sessions Count Toward a Session-Attendance Requirement (2026-11-08, security review TR14-2)
+
+**Accepted by the owner (2026-11-10): keep it.** Whoever creates the session
+(`events.manage`) decides which sessions count toward a session-attendance
+requirement, and linking past sessions after the fact stays allowed. The audit
+entry described below remains the control. The text below is the finding as
+it was raised.
+
+~~**Open, awaiting an owner decision.**~~ A training officer (`training.manage`)
+creates a session-attendance requirement, for example "attend 60% of the
+company drills this year". The decision about _which_ sessions count toward it
+is made with `events.manage` alone:
+`PUT /api/v1/training/sessions/{id}/attendance-requirements` and the
+`attendance_requirement_ids` field on `POST /training/sessions` and
+`/training/sessions/recurring` (`training_sessions.py`). Linking a session is
+allowed after attendance is finalized, on purpose, so that past drills can count
+toward a requirement created after them.
+
+The consequence is that an event organizer with no training grant can change
+members' compliance standing on every training screen. Linking past drills to
+the requirement lowers everyone's attended share. Unlinking a drill a member
+missed raises that member's share. The ids are validated (each must be a
+session-attendance requirement in the department), and every change is audited
+(`training_session_updated`, `action: attendance_requirements_set`, with the
+full id list). Nothing beyond the audit trail stops it.
+
+This matches the gate every other training-session mutation already uses
+(create, attach, finalize and linkage are all `events.manage`), which is why it
+was flagged rather than changed. The options are to keep it, to require
+`training.manage` for the link (an organizer could still schedule and finalize
+the drill, and a training officer would link it), or to require both grants.
+Found by `docs/security-review/TR-17-training-core.md` pass 14.
+
+## Training — Records From the Older CSV Importers Read "The Logbook" (2026-11-10)
+
+**Accepted (owner decision 2026-11-10).** Training lists, the print page and
+the individual CSV and PDF exports show where each record came from:
+
+- the provider for a sync ("Target Solutions");
+- "Imported" for the Historical Data Import;
+- "The Logbook" for everything else.
+
+The server decides the label in `app/services/training_record_source.py`. It
+needs nothing stored: a sync carries `external_provider_id` and
+`external_record_id`, and the Historical Data Import ledgers every record it
+writes in `imported_source_records`.
+
+The two older importers on the Training screens, the CSV import wizard
+(`POST /training/import/confirm`) and `POST /training/records/import-csv`,
+leave no such mark. Their records therefore read "The Logbook". The owner chose
+this over adding a stored source column, which could only have labelled records
+imported after the change.
+
+## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06, resolved 2026-10-29)
 
 Found by security review SKT-19 pass 7
 (`docs/security-review/SKT-19-skills-testing.md`, pass 7 cross-feature scope
@@ -6981,15 +9964,25 @@ org-scoped FK validation on the requirement link (XC-1) and a frozen-per-attempt
 paper design, but a self-description in a commit message is exactly what
 this rotation exists to verify independently rather than accept.
 
-**Not reviewed, not fixed.** This is a scope-ownership gap, not a finding
-against any existing feature's code. The rotation should add
-`knowledge_tests.py`/`knowledge_test.py` (model and schema) to Feature 17's
-declared scope — it is the closest sibling (a requirement-credit path,
-like `training_programs.py`'s own enrollment logic) — and give it a first
-full pass before Feature 17 is next due in the rotation, rather than let it
-ride uncovered through another full cycle under Feature 17's existing ✅.
+**Resolved (2026-10-29, security review TR-17 pass 12).** The three files
+(plus `app/schemas/knowledge_test.py`) are now in Feature 17's declared
+scope and received their first full pass against all seven checklist
+dimensions — see `docs/security-review/TR-17-training-core.md`'s **Pass 12**
+section. Clean: every one of the 13 routes carries an auth dependency and the
+correct permission (`training.manage` for every bank write, self/officer
+split for attempts), every query is org-scoped or XC-1-validated, answer
+secrecy holds under direct trace (no path reaches `correct_option_ids` before
+submission), the attempt cap and the start-attempt dedup both lock before
+they read (Pitfall #27), and migration `7c2e9a41b6d3` is `create_all`-
+tolerant with both `SET NULL` columns nullable. No fix was needed. One
+process gap was found and corrected: this surface's own guard tests
+(`tests/test_knowledge_tests.py`, `tests/test_training_knowledge_test_score.py`)
+did not match training-core's scoped completion-gate filter
+(`pytest tests/ -k "training or compliance"`), so they had never actually run
+under that gate; the filter is now `"training or compliance or
+knowledge_test"`.
 
-## DOC-31 — A Document Delete's New Receipt-Reference Guard Reads Without Locking The Row It Checks (2026-10-23)
+## DOC-31 — A Document Delete's New Receipt-Reference Guard Reads Without Locking The Row It Checks (2026-10-23, resolved 2026-11-05)
 
 Found by security review DOC-10 pass 11
 (`docs/security-review/DOC-10-documents-legal.md`, pass 11, DOC-31). An
@@ -7009,13 +10002,74 @@ through the missing check. The window is one request's own transaction, and
 the worst case is no worse than the pre-pass-11 behavior; this is an unclosed
 gap in the new guard, not a regression.
 
-**Not fixed.** Closing it means taking a locking read
+~~**Not fixed.** Closing it means taking a locking read
 (`.with_for_update()`) on the referencing `PurchaseRequest`/`ExpenseReport`
 rows inside a document-delete transaction, which raises a lock-ordering
 question against Finance's own locking conventions (Pitfall #27) that a
 documents-feature review pass should not decide unilaterally — Finance and
 Documents would need to agree on one order before this can lock safely
-without risking a new cross-feature deadlock.
+without risking a new cross-feature deadlock.~~
+
+**✅ Resolved (owner decision 2026-11-01: agree a lock order and lock; built
+2026-11-05).** One order now covers both features, written once in the
+"canonical lock order" note at the top of `app/services/documents_service.py`
+(FAC-35's note, extended): document folder, then document, then the record
+that points at the document — a facility reference, or a purchase request,
+expense line or expense report.
+
+- **The guard locks what it reads.** `_release_document_references` reads
+  every purchase request and expense line naming the document with
+  `FOR UPDATE`, and their reports with a shared lock, all `NOWAIT`
+  (`read_referencing_rows_nowait` in `app/utils/document_locks.py`). A
+  request submitted after the delete's snapshot is now seen and the delete
+  refused; a submit arriving after the guard waits for the delete, and finds
+  the draft's receipt gone, as a draft's may. Requests and lines are locked
+  exclusively because the `SET NULL` key writes them when the document goes:
+  a shared lock upgraded at that write deadlocked against a waiting submit.
+- **The delete never waits on a finance row or a minutes row.** A finance
+  writer can hold its record and then need the document (the foreign key
+  check on a receipt), and minutes lock their own row and then write their
+  library copy, so a delete waiting on either could close a cycle. A row
+  another transaction is changing makes the delete refuse with "being changed
+  right now; try the delete again in a moment" (400) instead of waiting.
+- **Finance takes the document side first where it will reference one.**
+  Claiming a purchase back share-locks the receipt it copies before locking
+  the purchase (`lock_documents_for_reference`), and both receipt uploads
+  share-lock Finance > Receipts before the request or report
+  (`DocumentsService.lock_finance_receipts_folder`); the new document's
+  foreign key would otherwise take that lock last. Submitting, approving,
+  cancelling and paying touch no document and take nothing from the first
+  two levels. Cash advances and check requests hold no document reference.
+- **Two deadlocks found while agreeing the order are fixed too.**
+  - _Finance against itself._ Submitting or paying a reimbursement report,
+    and issuing or voiding the check that pays it, locked the report and then
+    the purchase it claims back; cancelling or paying the purchase, and
+    raising the claim, locked the purchase and then the report. Purchase
+    first is now the order everywhere (`_lock_claimed_purchase` in
+    `finance_service.py`), and the note records the whole Finance order:
+    purchase, report, line, check.
+  - _Minutes against a document delete._ Reopening minutes locks them and
+    then flags their library copy; the delete held the copy and then cleared
+    the minutes naming it, and with `published_document_id` unindexed that
+    clear locked every minutes row in the department. Migration
+    `c6b690cc33d6` indexes the column (no data change; skipped where the
+    table or index already exists), and the delete now takes the naming rows
+    `NOWAIT` and clears them by primary key.
+- The finance locking reads need no migration: the foreign keys' indexes on
+  `receipt_document_id` already make them touch only the referencing rows.
+
+`tests/test_document_receipt_reference_race.py` runs each interleaving on two
+real connections: a request and a report submitted after the delete's
+snapshot keep their receipts, a submit after the guard waits for it, a delete
+meeting a submit in flight refuses without waiting, and the reimbursement and
+upload paths leave the purchase request unlocked while they wait for the
+document side. All six failed against the unlocked guard.
+`tests/test_cross_feature_lock_order.py` covers the two deadlocks: paying a
+report while its purchase is being cancelled, and reopening minutes while
+their copy is being deleted (both ended in MySQL error 1213 before), the
+purchase-first order on submit and on issuing the check, and the delete
+leaving unrelated minutes unlocked and refusing at once on minutes in flight.
+All six failed before the fix.
 
 ## EC-17 — A Shift Report Stays Editable By Its Filing Officer After Approval (2026-10-26, resolved 2026-10-27)
 
@@ -7032,9 +10086,223 @@ edit only drafts; this governs `PUT /shift-reports/{id}`. Covered by
 `tests/test_shift_completion.py::TestAnEditedReportGoesBackToReview`; history
 in `docs/security-review/EC-14-equipment-check-shifts.md`.
 
+## W80 — Training Event Decisions (2026-11-08, resolved 2026-11-11)
+
+From the training-event lifecycle pass
+([`workflow-review/W80-training-event-lifecycle.md`](./workflow-review/W80-training-event-lifecycle.md)).
+Decided and fixed in the same pass (#4169): over-credit is warned, not capped;
+an approver on a roster cannot approve it; a schedule change that strands
+check-ins is refused; a training-only waiver can name its requirements. The
+items left open were decided by the owner on 2026-11-08 and are now fixed:
+
+- **W80-11 — Postpone** (#4179, list badge #4188). `POST
+/events/{id}/postpone`, three nullable columns on `events` (migration
+  `09f0171ccf5e`), and a Postpone Event action on the event page. It clears
+  check-ins and the credit they produced, keeps RSVPs, and notifies Going and
+  Maybe with the old and new time.
+- **W80-16 — Editing an event's time and its reminders** (#4181). Decision:
+  reset them when the start moves. An edit that moves the start lets the
+  reminders go out again; one that keeps it does not.
+- **W80-8 — Recording one member on a past drill** (#4187). Decision: add the
+  member, with times. Once check-in has closed, an attendance manager can add a
+  member with arrival and departure times from the event page.
+- **W80-9 — "0/0 sessions — Complete"** (#4185). Decision: not applicable. A
+  session-attendance requirement with no session held in a member's window is
+  not graded, and is left out of every compliance count rather than counted
+  met. Departments with such members will see their percentages move.
+- **W80-10 — Training waivers and "missed mandatory"** (#4182). Decision: yes,
+  when the waiver covers the event. An active training waiver covering the
+  event's date, and its linked requirements when the waiver names any, takes it
+  off the list.
+
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
 mirrored here so they're visible outside the log. The parallel module-by-module
 security audit tracks its rotation and per-module findings under
 [`docs/module-audit/`](./module-audit/PROGRESS.md); its open decisions are
 mirrored in the Multi-Tenant Isolation section above.
+
+## LIFE-11 — Anonymizing a Member Leaves Their Separation Letter, With Home Address, in Documents (2026-11-10, app review A6 pass 6)
+
+Anonymization (`POST /users/{id}/anonymize`, `MemberAnonymizationService`)
+scrubs the member's personal data from a long list of tables but touches no
+`Document`. The property-return letter generated when the member was dropped is
+filed in the leadership-only **Member Separations** folder, and its body states
+the member's home address and the reason given for the separation. After an
+erasure both remain readable to anyone with access to that folder.
+
+A separation letter may be a record the department must keep: it states a
+chargeable liability for property not returned. So this is a decision, not a
+fix. Options:
+
+1. **Redact on anonymization** — rewrite stored letters with the address and
+   reason removed, keeping the item list and values.
+2. **Delete** the letters with the rest of the member's personal data.
+3. **Keep them as they are** and say so in the anonymization docstring and
+   `docs/COMPLIANCE.md`, so a privacy reviewer is not told the member is fully
+   scrubbed.
+
+## LIFE-2 — A Pool Issuance Is Valued Three Ways, and the Departure Clearance's Figure Is Wrong (2026-08-05, evidence added 2026-11-10, app review A6)
+
+A departing member's unreturned pool issuance (uniform pieces and the like) is
+valued differently by the three places that state what the member owes:
+
+| Where                                                  | Formula                                                          |
+| ------------------------------------------------------ | ---------------------------------------------------------------- |
+| Member charges (`inventory_service.py:8550`)           | `unit_cost_at_issuance × quantity issued`                        |
+| Property-return letter (`property_return_service.py`)  | `current_value × quantity issued`                                |
+| Departure clearance (`departure_clearance_service.py`) | `current_value ÷ (quantity + quantity_issued) × quantity issued` |
+
+`current_value` is a per-unit value: every inventory valuation total sums
+`current_value * quantity`. So the clearance divides a per-unit value by the
+pool's whole size and **understates the item by that factor**. A pool of 40
+shirts at $25 each, two of them issued, shows $1.25 outstanding on the clearance and
+$50 on the letter.
+
+Which basis is right — today's value, or the cost recorded at issuance that
+charges already use — is an accounting decision. Whichever is chosen, the
+clearance and the letter should both use it; the clearance's current formula
+is wrong under either. Existing clearances store their line values, so a
+change applies to new clearances unless the owner also wants open ones
+recomputed.
+
+## DASH-2 — `GET /dashboard/stats` Returns Three Made-Up Figures, and Nothing Calls It (2026-08-05, recorded here 2026-11-10, app review A7)
+
+`GET /api/v1/dashboard/stats` counts members, active members and events created
+in the last 30 days, and returns three more fields as constants:
+`total_documents` is always `0`, `pending_tasks_count` always `0`, and
+`setup_percentage` always `100`. The last is the risk: it tells any client that
+the department's setup is complete whatever its state. The frontend's
+`dashboardService.getStats` has no caller, so no screen shows these figures
+today; an external client or a future screen could.
+
+Flagged in every app-review pass since the first, but never recorded here, so it
+was not among the questions the owner answered on 2026-11-01. Options:
+
+1. **Remove the route** and `dashboardService.getStats`. Nothing in the app
+   uses them; a third-party client that does would get 404.
+2. **Compute the three figures** — documents from the Documents module,
+   pending tasks from the action-item feed's open count, and setup from the
+   onboarding checklist the Organization Setup widget already reads.
+3. **Remove only the three made-up fields**, keeping the counts that are real.
+   This changes the response shape for any caller.
+
+## Training — Waiver Request Documents: What Was Left Out (2026-11-11)
+
+**Open, chosen conservatively; the owner may revisit any of these.** Documents
+on session waiver requests (PDF, JPEG, PNG or HEIC, 10 MB each, three per
+request, kept 365 days) shipped with these gaps, each the narrower choice:
+
+- **A filed document cannot be removed by the member.** Once filed it stays
+  until the retention task deletes it. A member who filed the wrong file can
+  withdraw a pending request and ask again; the withdrawn request's documents
+  then age out with it. Allowing removal would have needed a rule for removing
+  the last document under a `required` policy, which nothing decided.
+- **The uploader's filename is not kept at all**, not only hidden from
+  downloads: a doctor's note's name can say what it is about. A decider sees
+  `waiver-attachment-1.pdf`, its type, size and date.
+- **A withdrawn or voided request is timed from its last change**
+  (`updated_at`), since it has no decision time; an approved or denied one
+  from its decision.
+- **The request page does not say documents were once filed** after retention
+  removes them. The `attendance_waiver_attachment_retention` audit entry
+  records which documents of which requests were deleted.
+- **Retention covers the training workflow only.** The business-meeting
+  workflow files no documents; when it does, its own policy needs to be read
+  by the sweep.
+- **HEIC is stored as filed, not converted.** A decider on Windows may need
+  the HEIF extension to open an iPhone photo; nothing previews it in the page.
+- **The upload field sits in the request dialog and the document list on the
+  decision page; the policy screen sets both new settings.** There is no
+  preview of a document in the page: a decider downloads it.
+
+## Meetings — Business-Meeting Waiver Requests: Choices Made Without An Owner Ruling (2026-11-11)
+
+The business-meeting waiver workflow (owner decisions, 2026-11-10) shares the
+training workflow's engine. Where the decisions left a gap, the conservative
+option was taken; each is open for the owner to revisit.
+
+- **Cancelling or deleting an event closes only pending requests.** The brief
+  asked for requests to be voided "as the training workflow does", but the
+  training workflow voided nothing. A pending request is now voided (its slot
+  freed, the deciders' prompts archived, the member told in the app), for both
+  workflows. An **approved** request is kept: the model already keeps an
+  approved request as the member's record when its event is deleted. So an
+  approval for a meeting that was then cancelled still counts toward the
+  member's cap. Voiding approved requests as well would give the waiver back.
+- **A member on a leave of absence that covers the meeting cannot ask**
+  ("on_leave"): the voting tally already excludes such a meeting, so there is
+  nothing to excuse.
+- **A Chief may decide any meeting request**, as in training, although the
+  meeting routing's fallback is the Secretary, then `meetings.manage` holders.
+  The Secretary decides only when the chosen positions leave nobody, like the
+  Chief in training.
+- **An approval does not overwrite a waiver the Secretary already granted by
+  hand** for that member and meeting; the request is approved, the Secretary's
+  wording stands, and the attendee row is not linked to the request. A
+  Secretary's grant over a waiver an approval wrote replaces the standard text
+  and drops the link, so the waiver is the Secretary's.
+- **The meeting screens are not built yet.** A decider's in-app prompt links
+  to `/meetings/waiver-requests/{id}`, which the frontend does not have until
+  the meeting screens land; the member's notice links to the event. Until then
+  the policy can be saved only through the API, so no prompt is sent.
+- **Postponing an event does not touch its waiver requests.** A request keeps
+  the session date it was made for (training and meetings alike).
+- **`idx_meeting_attendees_meeting` is now a prefix of the new unique
+  `(meeting_id, user_id)` index** and could be dropped; it was left to keep
+  the migration to what the feature needs.
+
+## Training — Shift Evaluations: What the 2026-11-13 Review Left Open
+
+A review of the five shift-evaluation pull requests (#3884, #3902, #3922,
+#3956, #4264) fixed the defects listed in its pull request. These were found
+and deliberately not changed, because each needs an owner ruling or reaches
+beyond the feature.
+
+**For the owner to decide**
+
+- **The evaluations a shift calls for follow today's settings, not the
+  shift's.** Who needs which evaluation is worked out on every read from the
+  current "one evaluation for several programs" setting and the member's
+  current enrollments. Switching that setting, or enrolling a member in a
+  second program, while a shift is still open re-scopes it: evaluations
+  already submitted are kept but no longer required, new ones are required,
+  and close-out waits for them. Freezing the set at close-out would need a
+  stored snapshot.
+- **No-show and pending crew are asked for an evaluation.** The rule mirrors
+  the trainee-report gate (only declined and cancelled seats are left out),
+  so the two agree; excusing no-shows would mean changing both.
+- **No requirement type counts the calls an evaluation records.** Evaluated
+  shifts, transports and refusals are credited; the existing Calls type is
+  still fed by shift reports.
+- **A department requirement of an evaluation type, linked into a program
+  with "Link existing", is not credited by evaluations.** A linked row is
+  graded by the compliance engine, which has no branch for these types and
+  falls back to matching training records by type.
+
+**Accepted for now**
+
+- **Going to an evaluation from the Shift Completion Report loses most of the
+  report's unsaved fields.** The report's draft restore keeps crew selections,
+  remarks and the narrative; calls, ratings and the rest reload empty. The
+  restore logic predates evaluations, which now make leaving the report
+  routine.
+- **Two evaluation credits to the same requirement at the same moment can
+  lose one.** The shared credit primitive computes the new value from an
+  unlocked read. It is shared by every credit source, so it is not changed
+  here.
+- **Credit is not re-stated when a requirement's crediting rule changes**
+  (its type, or "leave out the lowest rating"), **when an evaluation's
+  combined scope shrinks**, or **when its shift is deleted, an outside entry
+  moves to an agency that does not evaluate, or the member is removed from the
+  shift.** Each leaves earlier credit standing until the evaluation is saved
+  again.
+- **A deactivated evaluation form is still offered and required** where a
+  program or the department settings still name it.
+- **Two administrators creating forms with the same name at the same moment
+  get a 500** rather than the duplicate-name 400.
+- **A preceptor-link submission that collides with an officer creating the
+  same evaluation** retries once; the retry keeps the link marked used but
+  loses the submitting device's address and browser from the record.
+- **Restoring a pending outside shift approves it**, without approve's
+  pending-only check (it still needs `scheduling.manage`).

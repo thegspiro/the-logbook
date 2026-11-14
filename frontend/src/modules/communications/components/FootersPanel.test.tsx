@@ -125,7 +125,8 @@ describe('FootersPanel', () => {
 
     // Flagged on both cards — neither one is "the" duplicate.
     expect(await screen.findAllByText('Another footer already uses this key.')).toHaveLength(2);
-    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
+    // Save stays pressable and refuses, rather than sitting greyed out with no word why (forms review F-3).
+    await user.click(screen.getByRole('button', { name: /save/i }));
     expect(mockUpdateFooters).not.toHaveBeenCalled();
   });
 
@@ -141,7 +142,41 @@ describe('FootersPanel', () => {
     await user.type(keyInput, 'Not A Key');
 
     expect(await screen.findByText(/lowercase letters/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
+    expect(keyInput).toHaveAccessibleDescription(expect.stringMatching(/lowercase letters/i) as string);
+    await user.click(screen.getByRole('button', { name: /save/i }));
+    expect(mockUpdateFooters).not.toHaveBeenCalled();
+    await waitFor(() => expect(keyInput).toHaveFocus());
+  });
+
+  it('puts a refusal of one footer on that card and field', async () => {
+    const user = userEvent.setup();
+    mockGetFooters.mockResolvedValue(library([makeFooter(), makeFooter({ key: 'public', name: 'Public' })]));
+    mockUpdateFooters.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'footers.1.lines.0', message: 'Value is too long.' }] } },
+    });
+
+    renderWithRouter(<FootersPanel />);
+    const name = await screen.findByDisplayValue('Public');
+    await user.type(name, ' mail');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    const [, secondLines] = await screen.findAllByRole('group', { name: 'Lines' });
+    await waitFor(() =>
+      expect(secondLines).toHaveAccessibleDescription('A line is too long — keep it to 300 characters.')
+    );
+  });
+
+  it('names a blank footer name on its field instead of greying out Save', async () => {
+    const user = userEvent.setup();
+    mockGetFooters.mockResolvedValue(library([makeFooter()]));
+
+    renderWithRouter(<FootersPanel />);
+    const name = await screen.findByDisplayValue('Internal — members');
+    await user.clear(name);
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    expect(screen.getByRole('textbox', { name: 'Footer name' })).toHaveAccessibleDescription('Name this footer.');
+    expect(mockUpdateFooters).not.toHaveBeenCalled();
   });
 
   it('saves the whole library, default included', async () => {

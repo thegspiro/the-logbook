@@ -45,11 +45,8 @@ const ReviewPositions: React.FC<ReviewPositionsProps> = ({ analysis, busy, onMap
           {positions.map((position) => {
             const selectId = `position-decision-${position.key || 'blank'}`;
             return (
-              <li
-                key={position.key || 'blank'}
-                className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
+              <li key={position.key || 'blank'} className="split-row gap-3 p-4 sm:items-center">
+                <div className="split-row-main">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-theme-text-primary font-medium">{position.source || '(blank)'}</span>
                     <span className={`badge border ${HISTORY_IMPORT_RESOLUTION_COLORS[position.status] ?? ''}`}>
@@ -62,7 +59,7 @@ const ReviewPositions: React.FC<ReviewPositionsProps> = ({ analysis, busy, onMap
                     {position.seat ? ` · seat: ${positionLabel(position.seat)}` : ''}
                   </p>
                 </div>
-                <div className="sm:w-64">
+                <div className="split-row-aside sm:w-64">
                   <label htmlFor={selectId} className="sr-only">
                     Seat for {position.source || 'blank position'}
                   </label>

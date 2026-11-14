@@ -609,12 +609,12 @@ export const GrantApplicationsPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="mx-auto max-w-full px-4 py-6 sm:px-6 lg:px-8">
         {/* Page header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="page-header gap-4 sm:items-center">
+          <div className="page-header-title">
             <h1 className="text-theme-text-primary text-2xl font-bold">Grant Applications</h1>
             <p className="text-theme-text-secondary mt-1 text-sm">Track each application from research to closeout</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="page-header-actions flex flex-wrap items-center gap-3">
             {/* View toggle */}
             <div className="card flex p-0.5">
               <button
@@ -644,10 +644,7 @@ export const GrantApplicationsPage: React.FC = () => {
             </div>
 
             {/* New Application */}
-            <Link
-              to="/grants/applications/new"
-              className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
-            >
+            <Link to="/grants/applications/new" className="btn-primary inline-flex items-center gap-2 text-sm">
               <Plus className="h-4 w-4" />
               New Application
             </Link>
@@ -726,7 +723,15 @@ export const GrantApplicationsPage: React.FC = () => {
           /* ================================================================ */
           <>
             {pipelineEmpty && emptyState}
-            <div className="-mx-4 mt-6 overflow-x-auto px-4 pb-4">
+            {/* Ten status columns, each w-72: the board scrolls sideways at
+                every width, and the marker declares that intentional to the
+                mobile presentation sweep. Its cards are buttons, so a keyboard
+                reaches the far columns without the strip taking focus. */}
+            <div
+              className="-mx-4 mt-6 overflow-x-auto px-4 pb-4"
+              data-mobile-scroll-region
+              aria-label="Applications by status"
+            >
               <div className="inline-flex gap-3" style={{ minHeight: '60vh' }}>
                 {PIPELINE_COLUMNS.map((status) => (
                   <PipelineColumn

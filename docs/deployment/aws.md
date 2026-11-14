@@ -8,7 +8,12 @@ Deploy The Logbook on Amazon Web Services using EC2, or with managed RDS and Ela
 | ---------------------------------------- | ----------- | ------------------------------------------------ |
 | **EC2 + Docker Compose** (Simple)        | ~$15-40/mo  | Small teams, testing, self-contained             |
 | **EC2 + RDS + ElastiCache** (Production) | ~$50-100/mo | Production, automated backups, high availability |
-| **ECS/Fargate** (Container-native)       | ~$40-80/mo  | Teams already using AWS container services       |
+
+Both methods run the Docker Compose stack on an EC2 instance. The repository
+ships no ECS task definitions, Helm chart or Kubernetes manifests, so ECS,
+Fargate and EKS are **not** supported targets: they would need the persistent
+`uploads` and `audit_archives` volumes, the ClamAV sidecar and the startup
+migration lock re-created by hand.
 
 ---
 

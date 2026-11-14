@@ -639,9 +639,11 @@ Scheduling officer duties, Training officer duties, Election administration,
 Membership and store administration) are optional. An officer who has
 **Email Notifications** switched off, or has turned off that duty under **My
 Account → Notifications → Emails you can turn off**, no longer receives them.
-Before the upgrade most of these senders ignored the switch. Quartermaster
-alerts (low stock, shelf audit, retirement, expiring supplies, failed equipment
-checks) have no in-app copy, so the officer hears nothing at all.
+Before the upgrade most of these senders ignored the switch. Since
+2026-10-29 quartermaster alerts (low stock, shelf audit, retirement, expiring
+supplies, automatic reorder requests) and membership and store administration
+notices also leave a bell notice, so an officer who turned the email off still
+sees them in the app. Failed equipment checks always did.
 
 **Solutions**:
 
@@ -2458,7 +2460,7 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 **Not working? Check these causes**:
 
 1. **Leave is not active**: Go to **Members > Admin > Waivers** and verify the leave is active (not deactivated)
-2. **Leave doesn't cover enough days**: A month is only waived if the leave covers ≥15 days of that month. A leave from Jan 20–Jan 31 (12 days) does NOT waive January.
+2. **Leave doesn't cover enough days**: under the department's **Months on leave** setting set to a 15-day rule, a month with fewer than 15 days of leave is owed in full (`half`) or only partly reduced (`proportional`). Under the default, full month, any day of leave excuses the month.
 3. **Wrong requirement type**: Only Hours, Shifts, and Calls requirements are adjusted proportionally. Courses and Certifications are binary (complete or not) and are never adjusted.
 4. **Training Waiver vs. Leave of Absence**: A Leave of Absence (Members > Admin > Waivers) applies to ALL requirements. A Training Waiver (`/training/waivers` API) can target specific requirements via `requirement_ids`. You don't need both — a Leave of Absence is sufficient for general leaves.
 
@@ -2487,7 +2489,7 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 3. Falls back to any active training program with "probationary" in the name
 4. Creates an active `ProgramEnrollment` automatically
 
-**Manual Enrollment**: The training officer can enroll anyone into any program via `POST /api/v1/training/enrollments?user_id={id}&program_id={id}`.
+**Manual Enrollment**: The training officer can enroll anyone into any program via `POST /api/v1/training/programs/enrollments` with a JSON body of `{"user_id": ..., "program_id": ...}` (the older `POST /api/v1/training/enrollments?user_id=…&program_id=…` was removed on 2026-11-04).
 
 **Not working?** Check that:
 
@@ -3078,7 +3080,7 @@ The Training module manages courses, requirements, programs (pipelines), shift c
 
 1. The leave has `exempt_from_training_waiver = true` set
 2. The auto-linked training waiver was not created (backend service error)
-3. The leave does not cover ≥15 days of any calendar month
+3. The department uses a 15-day rule (**Months on leave** on the compliance settings page) and the leave covers fewer than 15 days of any calendar month
 
 **Solutions**:
 
@@ -5465,7 +5467,7 @@ Expected: 10 system folders (SOPs, Policies, Forms & Templates, Reports, Trainin
 
 **Cause**: A request notifies the event's **organizer** and **alternate** in-app and by email. When neither can take it (both have left, or the only one set is the member asking), it goes to the position chosen for that event type under **Manage Events → Event settings → Attendance → Attendance requests** (default **Secretary**), then the `secretary` position, then every `events.manage` holder. Email follows each recipient's **Event officer duties** preference, so someone who switched that off sees the request only in the notification bell and on the event page.
 
-**Solution**: Check the event's **Organized by** row, and **Transfer event** to someone active if the organizer has moved on — open requests move with it. Anyone holding `events.manage` can also decide a request from the event page, or see every waiting request at once on **Attendance Requests** (`/events/attendance-requests`) with **All events**.
+**Solution**: Check the event's **Organized by** row, and **Transfer event** to someone active if the organizer has moved on — open requests move with it. A fallback recipient (the configured position or the Secretary) can decide the request they were sent from the event page without holding `events.manage`. Anyone holding `events.manage` can also decide a request from the event page, or see every waiting request at once on **Attendance Requests** (`/events/attendance-requests`) with **All events**.
 
 ---
 
@@ -5500,6 +5502,35 @@ The Locations system serves as the universal "place picker" across all modules (
 - Verify the display code on the Locations page — check the room card for the correct URL
 - Re-activate the location if it was deactivated
 - Run migrations: `docker exec the-logbook-backend-1 alembic upgrade head`
+
+---
+
+#### Deleting a Location Deactivated It Instead
+
+**Cause**: Something still names the location — an event or event template, an
+apparatus (home station, current location or location history), training
+history (a training record, course class, cohort or cohort class), a meeting,
+or an event request. Deleting it would erase where those happened, so it is
+deactivated: it leaves every picker but stays on those records. Inventory
+items, storage areas and NFC tap logs do not hold it back; they lose the
+location instead (owner decisions of 2026-11-01).
+
+**Solution**: Nothing to fix. Re-activate it from the Locations page if it was
+removed by mistake. "This location was just put into use by another record"
+means a reference appeared mid-delete; trying again deactivates it.
+
+#### "Location with name '…' already exists" / A Location Gained a " (2)" Suffix
+
+**Cause**: A location's name is unique within its building, and locations
+with no building count as one building. Since migration `2bb7c963f351`
+(2026-11-05) the database enforces this, and the upgrade renamed duplicates it
+found: the oldest kept its name and later ones got ` (2)`, ` (3)`, …. A
+facility room whose name another room in the same facility already uses gets
+the same numbering on its linked location. Case and trailing spaces do not
+make a name different.
+
+**Solution**: Rename the location (or the room) to something that tells the
+two apart, or give one a building.
 
 ---
 
@@ -7945,7 +7976,8 @@ The `receive` lambda used to re-wrap the request body was synchronous, but ASGI 
 **Edge Cases:**
 
 - Existing rooms created before this fix won't have linked locations — they'll be created on next room update
-- Deleting a room deletes the linked location
+- Deleting a room deletes the linked location, or deactivates it when something still references it (see "Deleting a Location Deactivated It Instead")
+- Two rooms of one name in one facility get linked locations numbered ` (2)`, ` (3)`, … since location names are unique within a building
 - The FacilityRoomPicker component (`components/FacilityRoomPicker.tsx`) provides a reusable facility dropdown + room dropdown for cross-module room selection
 
 ---

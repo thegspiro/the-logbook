@@ -11,6 +11,7 @@ import {
 } from '../components/integrations/calendarProviders';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router';
 import {
+  History,
   Plug,
   Calendar,
   MessageSquare,
@@ -50,6 +51,7 @@ import {
   CalendarClock,
   Wallet,
   CreditCard,
+  HandCoins,
   KeyRound,
   Bot,
   Mail,
@@ -67,10 +69,22 @@ import {
 } from '../services/api';
 import type { McpStatus } from '../services/adminServices';
 import { getErrorMessage } from '../utils/errorHandling';
-import { ConnectionStatus } from '../constants/enums';
+import { ConnectionStatus, EventType } from '../constants/enums';
+import { getEventTypeLabel } from '../utils/eventHelpers';
 import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { AdminPageHeader } from '../components/admin/AdminPageHeader';
+
+/** The events a Generic Webhook can be sent (backend WEBHOOK_EVENT_TYPES). */
+const WEBHOOK_EVENT_OPTIONS = [
+  { value: 'event.created', label: 'An event is created' },
+  { value: 'shift.created', label: 'A shift is created' },
+  { value: 'training.recorded', label: 'A training record is added' },
+] as const;
+
+/** Event types the department feed can be limited to (backend EventType). */
+const ICAL_EVENT_TYPE_OPTIONS: readonly EventType[] = Object.values(EventType);
 
 // UI metadata for integration types (icons, colors)
 const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgColor: string; features: string[] }> = {
@@ -175,6 +189,12 @@ const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgC
     color: 'text-indigo-700 dark:text-indigo-400',
     bgColor: 'bg-indigo-500/10',
     features: ['Store payment matching', 'Auto-settles orders', 'Business account'],
+  },
+  zeffy: {
+    icon: <HandCoins className="h-6 w-6" />,
+    color: 'text-teal-700 dark:text-teal-400',
+    bgColor: 'bg-teal-500/10',
+    features: ['Donations, tickets & memberships', 'Refunds followed', 'Read-only'],
   },
   'google-workspace': {
     icon: <Mail className="h-6 w-6" />,
@@ -321,10 +341,12 @@ const CONFIG_TYPES = new Set([
   'nemsis-export',
   'generic-webhook',
   'epcr-import',
+  'ical',
   'salesforce',
   'documenso',
   'calcom',
   'paypal',
+  'zeffy',
   'claude-mcp',
   'google-workspace',
   'microsoft-365',
@@ -364,8 +386,8 @@ const labelClass = 'form-label';
 
 // Public inbound-webhook URL a department pastes into the provider's dashboard
 // so its events reach us: Documenso/Cal.com advance a prospect's pipeline stage,
-// PayPal settles a store order.
-const webhookCallbackUrl = (provider: 'documenso' | 'calcom' | 'paypal', integrationId: string): string =>
+// PayPal settles a store order, Zeffy records a fundraising payment.
+const webhookCallbackUrl = (provider: 'documenso' | 'calcom' | 'paypal' | 'zeffy', integrationId: string): string =>
   `${window.location.origin}/api/public/v1/webhooks/${provider}/${integrationId}`;
 
 // The members a link run leaves alone, and why, in one sentence each.
@@ -387,6 +409,9 @@ const IntegrationsPage: React.FC = () => {
   // A delegated key manager holds the key permission alongside the screen's
   // own gate, not necessarily integrations.manage; the key panel is theirs too.
   const canIssueKeys = checkPermission('integrations.mcp_keys');
+  // IT administrator only by default, like the MCP keys: an import writes years
+  // of every member's hours in one pass.
+  const canImportHistory = checkPermission('integrations.historical_import');
   const isOrgAdmin = checkPermission('admin.access');
   const canChange = (integrationType: string): boolean =>
     canManage && (!ADMIN_ONLY_TYPES.has(integrationType) || isOrgAdmin);
@@ -418,11 +443,17 @@ const IntegrationsPage: React.FC = () => {
   // Config form state
   const [webhookUrl, setWebhookUrl] = useState('');
   const [zoneId, setZoneId] = useState('');
+  // How members hear about a weather alert; the department chooses.
+  const [weatherBanner, setWeatherBanner] = useState(true);
+  const [weatherBell, setWeatherBell] = useState(true);
+  const [weatherEmail, setWeatherEmail] = useState(false);
   const [stateCode, setStateCode] = useState('');
   const [fdid, setFdid] = useState('');
   const [agencyId, setAgencyId] = useState('');
   const [genericWebhookUrl, setGenericWebhookUrl] = useState('');
   const [genericWebhookSecret, setGenericWebhookSecret] = useState('');
+  /** Events the Generic Webhook is sent; none ticked means all of them. */
+  const [webhookEventTypes, setWebhookEventTypes] = useState<string[]>([]);
   const [importFormat, setImportFormat] = useState('csv');
   const [sfInstanceUrl, setSfInstanceUrl] = useState('');
   const [sfClientId, setSfClientId] = useState('');
@@ -444,12 +475,16 @@ const IntegrationsPage: React.FC = () => {
   const [paypalClientSecret, setPaypalClientSecret] = useState('');
   const [paypalWebhookId, setPaypalWebhookId] = useState('');
   const [paypalAutoApply, setPaypalAutoApply] = useState(true);
+  const [zeffyApiKey, setZeffyApiKey] = useState('');
+  const [zeffyWebhookSecret, setZeffyWebhookSecret] = useState('');
   const [mcpAccessMode, setMcpAccessMode] = useState<'read_only' | 'read_write'>('read_only');
   const [mcpExposeFinance, setMcpExposeFinance] = useState(false);
   const [mcpExposeMedical, setMcpExposeMedical] = useState(false);
   const [mcpExposeFullSchedule, setMcpExposeFullSchedule] = useState(false);
   const [mcpExposeMedicalSupplies, setMcpExposeMedicalSupplies] = useState(false);
   const [mcpOauthEnabled, setMcpOauthEnabled] = useState(false);
+  const [icalEventTypes, setIcalEventTypes] = useState<string[]>([]);
+  const [icalIncludeShifts, setIcalIncludeShifts] = useState(false);
   const [gwsServiceAccountKey, setGwsServiceAccountKey] = useState('');
   const [gwsKeyFileName, setGwsKeyFileName] = useState('');
   const [gwsAdminEmail, setGwsAdminEmail] = useState('');
@@ -606,12 +641,21 @@ const IntegrationsPage: React.FC = () => {
   const resetFormState = (integration?: IntegrationConfig) => {
     const stored = integration?.config ?? {};
     setWebhookUrl('');
-    setZoneId('');
+    // Seeded from what is stored: a blank zone would fail its pattern on save.
+    setZoneId(typeof stored['zone_id'] === 'string' ? stored['zone_id'] : '');
+    setWeatherBanner(stored['notify_banner'] !== false);
+    setWeatherBell(stored['notify_bell'] !== false);
+    setWeatherEmail(stored['notify_email'] === true);
     setStateCode('');
     setFdid('');
     setAgencyId('');
     setGenericWebhookUrl('');
     setGenericWebhookSecret('');
+    setWebhookEventTypes(
+      Array.isArray(stored['event_types'])
+        ? stored['event_types'].filter((e): e is string => typeof e === 'string')
+        : []
+    );
     setImportFormat('csv');
     setSfInstanceUrl('');
     setSfClientId('');
@@ -633,6 +677,8 @@ const IntegrationsPage: React.FC = () => {
     setPaypalClientSecret('');
     setPaypalWebhookId(typeof stored['webhook_id'] === 'string' ? stored['webhook_id'] : '');
     setPaypalAutoApply(stored['auto_apply_payments'] !== false);
+    setZeffyApiKey('');
+    setZeffyWebhookSecret('');
     // Every switch on this add-on defaults to off; reopening the form on a
     // live connection must show what is stored, not the defaults.
     setMcpAccessMode(stored['access_mode'] === 'read_write' ? 'read_write' : 'read_only');
@@ -641,6 +687,12 @@ const IntegrationsPage: React.FC = () => {
     setMcpExposeFullSchedule(stored['expose_full_schedule'] === true);
     setMcpExposeMedicalSupplies(stored['expose_medical_supplies'] === true);
     setMcpOauthEnabled(stored['oauth_enabled'] === true);
+    setIcalEventTypes(
+      Array.isArray(stored['included_event_types'])
+        ? stored['included_event_types'].filter((t): t is string => typeof t === 'string')
+        : []
+    );
+    setIcalIncludeShifts(stored['include_shifts'] === true);
     // The key is never echoed back; a blank one on save means "keep it".
     setGwsServiceAccountKey('');
     setGwsKeyFileName('');
@@ -677,15 +729,24 @@ const IntegrationsPage: React.FC = () => {
     }
     switch (integrationType) {
       case 'nws-weather':
-        return { zone_id: zoneId };
+        return {
+          zone_id: zoneId,
+          notify_banner: weatherBanner,
+          notify_bell: weatherBell,
+          notify_email: weatherEmail,
+        };
       case 'nfirs-export':
         return { state_code: stateCode, state_fdid: fdid };
       case 'nemsis-export':
         return { state_code: stateCode, agency_id: agencyId };
       case 'generic-webhook':
-        return { url: genericWebhookUrl, secret: genericWebhookSecret };
+        return { url: genericWebhookUrl, secret: genericWebhookSecret, event_types: webhookEventTypes };
       case 'epcr-import':
         return { import_format: importFormat };
+      case 'ical':
+        // Both sent on every save: an empty list is "every event type", and
+        // omitting it would keep the previous selection.
+        return { included_event_types: icalEventTypes, include_shifts: icalIncludeShifts };
       case 'documenso':
         return {
           api_base_url: documensoBaseUrl.trim() || undefined,
@@ -707,6 +768,12 @@ const IntegrationsPage: React.FC = () => {
           client_secret: paypalClientSecret.trim() || undefined,
           webhook_id: paypalWebhookId.trim() || undefined,
           auto_apply_payments: paypalAutoApply,
+        };
+      case 'zeffy':
+        return {
+          // Blank means "leave unchanged": neither is ever echoed back.
+          api_key: zeffyApiKey.trim() || undefined,
+          webhook_secret: zeffyWebhookSecret.trim() || undefined,
         };
       case 'google-workspace':
         return {
@@ -1114,6 +1181,38 @@ const IntegrationsPage: React.FC = () => {
                 Find your zone at weather.gov. Format: state code + C/Z + 3 digits (e.g., NYZ072, CAC006).
               </p>
             </div>
+            <fieldset>
+              <legend className={labelClass}>Tell members about severe weather</legend>
+              <p className="text-theme-text-muted text-xs">
+                The zone is checked every 15 minutes. Only Severe and Extreme alerts count, such as tornado, severe
+                thunderstorm and flash flood warnings.
+              </p>
+              <div className="mt-2 space-y-1">
+                {[
+                  {
+                    label: 'Dashboard banner while the alert is active',
+                    checked: weatherBanner,
+                    set: setWeatherBanner,
+                  },
+                  { label: 'Bell notice when an alert is issued', checked: weatherBell, set: setWeatherBell },
+                  {
+                    label: 'Email when an alert is issued (members can turn these emails off)',
+                    checked: weatherEmail,
+                    set: setWeatherEmail,
+                  },
+                ].map((option) => (
+                  <label key={option.label} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={option.checked}
+                      onChange={(e) => option.set(e.target.checked)}
+                    />
+                    <span className="text-theme-text-primary">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
           </div>
         );
 
@@ -1222,6 +1321,77 @@ const IntegrationsPage: React.FC = () => {
                 If set, each request is signed with HMAC-SHA256 in the X-Webhook-Signature header.
               </p>
             </div>
+            <fieldset>
+              <legend className={labelClass}>Send these events</legend>
+              <div className="mt-1 space-y-1">
+                {WEBHOOK_EVENT_OPTIONS.map((option) => (
+                  <label key={option.value} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={webhookEventTypes.includes(option.value)}
+                      onChange={(e) =>
+                        setWebhookEventTypes((current) =>
+                          e.target.checked
+                            ? [...current, option.value]
+                            : current.filter((value) => value !== option.value)
+                        )
+                      }
+                    />
+                    <span className="text-theme-text-primary">{option.label}</span>
+                    <code className="text-theme-text-muted text-xs">{option.value}</code>
+                  </label>
+                ))}
+              </div>
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Leave all unticked to send every event. Each request carries the event name in its event_type field and
+                the X-Webhook-Event header.
+              </p>
+            </fieldset>
+          </div>
+        );
+
+      case 'ical':
+        return (
+          <div className="space-y-3">
+            <fieldset>
+              <legend className={labelClass}>Event types in the feed</legend>
+              <div className="mt-1 space-y-1">
+                {ICAL_EVENT_TYPE_OPTIONS.map((value) => (
+                  <label key={value} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={icalEventTypes.includes(value)}
+                      onChange={(e) =>
+                        setIcalEventTypes((current) =>
+                          e.target.checked ? [...current, value] : current.filter((t) => t !== value)
+                        )
+                      }
+                    />
+                    <span className="text-theme-text-primary">{getEventTypeLabel(value)}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Leave all unticked to publish every type. Drafts and cancelled events are never published.
+              </p>
+            </fieldset>
+            <label className="text-theme-text-primary flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={icalIncludeShifts}
+                onChange={(e) => setIcalIncludeShifts(e.target.checked)}
+                className="form-checkbox mt-0.5"
+              />
+              <span>
+                Include duty shifts
+                <span className="text-theme-text-muted block text-xs">
+                  Adds each scheduled shift&apos;s times and platoon. Who is assigned and shift notes are never
+                  published.
+                </span>
+              </span>
+            </label>
           </div>
         );
 
@@ -1980,11 +2150,14 @@ const IntegrationsPage: React.FC = () => {
                 type="password"
                 value={paypalClientSecret}
                 onChange={(e) => setPaypalClientSecret(e.target.value)}
-                placeholder="Leave blank to keep the stored secret"
+                placeholder="From your PayPal REST app"
                 className={inputClass}
               />
+              {/* As for Zeffy: this form opens only from Connect, and the page
+                  cannot see whether a secret is already stored. */}
               <p className="text-theme-text-muted mt-1 text-xs">
-                Create a REST app at developer.paypal.com under Apps &amp; Credentials.
+                Create a REST app at developer.paypal.com under Apps &amp; Credentials. When connecting again after a
+                disconnect, leave it blank to keep the saved secret.
               </p>
             </div>
             <div>
@@ -2025,6 +2198,68 @@ const IntegrationsPage: React.FC = () => {
           </div>
         );
 
+      case 'zeffy':
+        return (
+          <div className="space-y-3">
+            <p className="text-theme-text-secondary text-sm">
+              Read-only: the Logbook reads payments and campaigns from Zeffy and never changes anything there. Zeffy
+              keeps issuing tax receipts. After connecting, link each campaign under{' '}
+              <RouterLink to="/grants/zeffy" className="font-medium underline">
+                Grants &amp; Fundraising &rarr; Zeffy
+              </RouterLink>
+              .
+            </p>
+            <div>
+              <label htmlFor="zeffy-api-key" className={labelClass}>
+                API Key
+              </label>
+              <input
+                id="zeffy-api-key"
+                type="password"
+                value={zeffyApiKey}
+                onChange={(e) => setZeffyApiKey(e.target.value)}
+                placeholder={editingSettings ? 'Leave blank to keep the current key' : 'Paste the key from Zeffy'}
+                className={inputClass}
+                autoComplete="off"
+              />
+              {/* A stored key is never sent back. Settings opens only on a
+                  connected card, and Zeffy cannot connect without a key, so
+                  there one is certainly stored. From Connect the page cannot
+                  tell a first connection from a reconnection, so the note
+                  states when a blank box keeps a key. */}
+              <p className="text-theme-text-muted mt-1 text-xs">
+                The Zeffy organization owner generates it in Zeffy under Settings &rarr; Integrations.
+                {editingSettings
+                  ? ' Enter a new one only to replace the key.'
+                  : ' When connecting again after a disconnect, leave it blank to keep the saved key.'}
+              </p>
+            </div>
+            <div>
+              <label htmlFor="zeffy-webhook-secret" className={labelClass}>
+                Webhook Signing Secret (optional)
+              </label>
+              <input
+                id="zeffy-webhook-secret"
+                type="password"
+                value={zeffyWebhookSecret}
+                onChange={(e) => setZeffyWebhookSecret(e.target.value)}
+                placeholder="whsec_..."
+                className={inputClass}
+                autoComplete="off"
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Without it, payments arrive on the hourly sync. For payments and refunds within seconds, add this URL as
+                a webhook in Zeffy&apos;s Integrations dialog, subscribe it to the payment events, and paste the signing
+                secret it shows here.
+                {editingSettings && ' Leave it blank to keep the saved secret, if one was entered.'}
+              </p>
+              <code className="bg-theme-surface-secondary text-theme-text-secondary mt-1 block rounded px-2 py-1 text-xs break-all">
+                {webhookCallbackUrl('zeffy', integration.id)}
+              </code>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -2041,20 +2276,28 @@ const IntegrationsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        {/* Page Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="rounded-lg bg-indigo-600 p-2">
-              <Plug className="h-6 w-6 text-white" aria-hidden="true" />
+        <AdminPageHeader
+          title="Integrations"
+          description="Connect with external tools like Google Calendar, Slack, and more"
+          className="mb-8"
+        />
+
+        {canImportHistory && (
+          <div className="card split-row mb-8 gap-3 p-4 sm:items-center">
+            <div className="split-row-main flex items-start gap-3">
+              <History className="text-theme-text-secondary mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+              <div>
+                <h2 className="text-theme-text-primary font-semibold">Historical Data Import</h2>
+                <p className="text-theme-text-secondary text-sm">
+                  Bring in shifts, on-call time and other hours members logged in a previous system.
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">External Integrations</h1>
-              <p className="text-theme-text-muted text-sm">
-                Connect with external tools like Google Calendar, Slack, and more
-              </p>
-            </div>
+            <RouterLink to="/integrations/historical-import" className="split-row-aside btn-secondary">
+              Open
+            </RouterLink>
           </div>
-        </div>
+        )}
 
         {/* Stats */}
         <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3" role="region" aria-label="Integration statistics">
@@ -2112,7 +2355,7 @@ const IntegrationsPage: React.FC = () => {
                   aria-pressed={categoryFilter === cat}
                   className={`touch-target-phone flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
                     categoryFilter === cat
-                      ? 'bg-indigo-600 text-white'
+                      ? 'bg-indigo-700 text-white'
                       : 'bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >
@@ -2239,6 +2482,8 @@ const IntegrationsPage: React.FC = () => {
                   {integration.status === ConnectionStatus.CONNECTED && canManage && (
                     <>
                       {(integration.integration_type === 'claude-mcp' ||
+                        integration.integration_type === 'ical' ||
+                        integration.integration_type === 'zeffy' ||
                         (isDirectory(integration.integration_type) && canChange(integration.integration_type))) && (
                         <button
                           onClick={() => {
@@ -2756,7 +3001,7 @@ const IntegrationsPage: React.FC = () => {
           )}
 
         {delegatedMcpError && !showDelegatedMcpCard && (
-          <div className="alert-error mt-6 flex items-start gap-2" role="alert" data-testid="mcp-delegated-error">
+          <div className="alert-danger mt-6 flex items-start gap-2" role="alert" data-testid="mcp-delegated-error">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-sm">
@@ -2855,7 +3100,11 @@ const IntegrationsPage: React.FC = () => {
                             {editingSettings
                               ? isDirectory(selectedIntegration.integration_type)
                                 ? 'Saved settings apply to the next member converted. Accounts already created are not changed.'
-                                : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
+                                : selectedIntegration.integration_type === 'ical'
+                                  ? 'Saved settings apply the next time a subscribed calendar refreshes. The feed link does not change.'
+                                  : selectedIntegration.integration_type === 'zeffy'
+                                    ? 'A new key or signing secret is used from the next sync or webhook message. Linked campaigns and the webhook address do not change.'
+                                    : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
                               : activation
                                 ? 'Activating turns this feature on for your organization. You can deactivate it at any time.'
                                 : 'Connecting turns this integration on for your organization. You can disconnect it at any time.'}

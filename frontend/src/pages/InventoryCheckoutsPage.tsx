@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import toast from 'react-hot-toast';
 import { Package, AlertTriangle, RefreshCw, ArrowDownToLine, Clock, Search, CalendarClock } from 'lucide-react';
@@ -30,7 +31,23 @@ interface CheckInModalState {
 export const InventoryCheckoutsPage: React.FC = () => {
   const tablist = useTablist();
   const tz = useTimezone();
-  const [activeTab, setActiveTab] = useState<TabView>('active');
+  // The dashboard's Overdue returns tile links here as ?status=overdue, so the
+  // tab it counted is the one that opens. Read once to seed the tab rather than
+  // derived on every render: the deep-linked check-in below also picks a tab,
+  // and it consumes its own parameter in the same pass.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<TabView>(() =>
+    searchParams.get('status') === 'overdue' ? 'overdue' : 'active'
+  );
+  // A tab chosen by hand is written back, so a refresh or a shared link keeps
+  // it, and leaving the Overdue tab clears the tile's filter from the URL.
+  const selectTab = (tab: TabView) => {
+    setActiveTab(tab);
+    const next = new URLSearchParams(searchParams);
+    if (tab === 'overdue') next.set('status', 'overdue');
+    else next.delete('status');
+    setSearchParams(next, { replace: true });
+  };
   const [activeCheckouts, setActiveCheckouts] = useState<UserCheckoutItem[]>([]);
   const [overdueCheckouts, setOverdueCheckouts] = useState<UserCheckoutItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -192,7 +209,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
         {/* Tabs */}
         <div className="tab-scroll mb-6" role="tablist" {...tablist} aria-label="Temporary loan views">
           <button
-            onClick={() => setActiveTab('active')}
+            onClick={() => selectTab('active')}
             role="tab"
             aria-selected={activeTab === 'active'}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium ${
@@ -210,7 +227,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
             )}
           </button>
           <button
-            onClick={() => setActiveTab('overdue')}
+            onClick={() => selectTab('overdue')}
             role="tab"
             aria-selected={activeTab === 'overdue'}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium ${

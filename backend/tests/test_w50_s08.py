@@ -7,26 +7,28 @@ SMTP outage that rejects every message leaves the election reporting
 ``remind_non_voters`` then stamps ``reminder_sent_at`` on top of an
 all-failed send, which starts the 60-minute cooldown against a retry and
 permanently disarms the automatic pre-close reminder (it fires only while
-``reminder_sent_at`` is NULL). And ``POST /{id}/send-ballot`` has no status
+``reminder_sent_at`` is NULL). And ``POST /{id}/send-ballot`` had no status
 precondition: a CLOSED election accepts a send, mints live-looking voting
 tokens and answers with a success message — and (W50-35) so does a DRAFT or
 NOMINATIONS one, mailing every member a "Vote Now" link that answers
 "Election is draft". Only the sender-only ``/send-test-ballot`` preview may
-go out before opening.
+go out before opening. (The synchronous send-ballot route was retired on
+2026-11-05; the same refusal is asserted on the queued
+``POST /{id}/ballot-send-jobs`` that replaced it.)
 """
 
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.endpoints.elections import send_ballot_emails as send_ballot_endpoint
+from app.api.v1.endpoints.elections import start_ballot_send_job_endpoint
 from app.models.election import Election
 from app.schemas.election import EmailBallot
 from app.services.election_service import ElectionService
@@ -34,6 +36,7 @@ from app.services.election_service import ElectionService
 pytestmark = [pytest.mark.integration]
 
 SEND_BATCH = "app.services.email_service.EmailService.send_batch"
+START_JOB = "app.services.ballot_send_jobs.start_ballot_send_job"
 
 
 def _uid() -> str:
@@ -183,19 +186,18 @@ async def test_nobody_to_remind_still_starts_the_cooldown(db_session: AsyncSessi
 @pytest.mark.parametrize(
     "election_status", ["closed", "cancelled", "draft", "nominations"]
 )
-async def test_send_ballot_endpoint_refuses_an_election_that_is_not_open(
+async def test_queued_send_refuses_an_election_that_is_not_open(
     db_session: AsyncSession, election_status: str
 ):
     # W50-35: a draft/nominations send mailed the whole department a "Vote
     # Now" link that answered "Election is draft"; only OPEN may send live.
     data = await _make_election(db_session, status=election_status)
-    send_batch = AsyncMock(side_effect=lambda b: [True] * len(b))
+    start = MagicMock()
 
-    with patch(SEND_BATCH, new=send_batch), pytest.raises(HTTPException) as exc:
-        await send_ballot_endpoint(
+    with patch(START_JOB, new=start), pytest.raises(HTTPException) as exc:
+        await start_ballot_send_job_endpoint(
             election_id=uuid.UUID(data["election_id"]),
             email_data=EmailBallot(),
-            request=SimpleNamespace(),
             db=db_session,
             current_user=SimpleNamespace(
                 id=data["users"][0], organization_id=data["org_id"]
@@ -204,8 +206,15 @@ async def test_send_ballot_endpoint_refuses_an_election_that_is_not_open(
 
     assert exc.value.status_code == 400
     assert (
-        send_batch.await_count == 0
-    ), f"no live ballot may leave for a {election_status} election"
+        not start.called
+    ), f"no live ballot may be queued for a {election_status} election"
+    jobs = (
+        await db_session.execute(
+            text("SELECT COUNT(*) FROM ballot_send_jobs WHERE election_id = :eid"),
+            {"eid": data["election_id"]},
+        )
+    ).scalar()
+    assert jobs == 0
     tokens = (
         await db_session.execute(
             text("SELECT COUNT(*) FROM voting_tokens WHERE election_id = :eid"),

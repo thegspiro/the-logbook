@@ -1,8 +1,339 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10, PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255) — corrected here from the "PR pending" placeholder pass 10's own write-up left unresolved after merge), 2026-10-18 (pass 11, PR [#3420](https://github.com/thegspiro/the-logbook/pull/3420)), 2026-10-23 (pass 12, PR [#3574](https://github.com/thegspiro/the-logbook/pull/3574)), 2026-10-25 (pass 13, PR [#3702](https://github.com/thegspiro/the-logbook/pull/3702) — not recorded here when pass 13 was written; added in pass 14's own commit), 2026-10-28 (pass 14) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), [#3255](https://github.com/thegspiro/the-logbook/pull/3255) (pass 10), [#3420](https://github.com/thegspiro/the-logbook/pull/3420) (pass 11), [#3574](https://github.com/thegspiro/the-logbook/pull/3574) (pass 12), [#3702](https://github.com/thegspiro/the-logbook/pull/3702) (pass 13)
+**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10, PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255) — corrected here from the "PR pending" placeholder pass 10's own write-up left unresolved after merge), 2026-10-18 (pass 11, PR [#3420](https://github.com/thegspiro/the-logbook/pull/3420)), 2026-10-23 (pass 12, PR [#3574](https://github.com/thegspiro/the-logbook/pull/3574)), 2026-10-25 (pass 13, PR [#3702](https://github.com/thegspiro/the-logbook/pull/3702) — not recorded here when pass 13 was written; added in pass 14's own commit), 2026-10-28 (pass 14, PR [#3811](https://github.com/thegspiro/the-logbook/pull/3811) — not recorded here when pass 14 was written; added in pass 15's own commit), 2026-11-01 (pass 15, PR [#3910](https://github.com/thegspiro/the-logbook/pull/3910) — not recorded here when pass 15 was written; added in pass 16's own commit), 2026-11-05 (pass 16) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), [#3255](https://github.com/thegspiro/the-logbook/pull/3255) (pass 10), [#3420](https://github.com/thegspiro/the-logbook/pull/3420) (pass 11), [#3574](https://github.com/thegspiro/the-logbook/pull/3574) (pass 12), [#3702](https://github.com/thegspiro/the-logbook/pull/3702) (pass 13), [#3811](https://github.com/thegspiro/the-logbook/pull/3811) (pass 14), [#3910](https://github.com/thegspiro/the-logbook/pull/3910) (pass 15)
 
 ---
+
+## Pass 16 (2026-11-05) — watchdog pickup: real delta (required interviewer positions on Interview Requirement stages, with an interview-position snapshot column; case-manager and interviewer "needs attention"/"interview requested" emails; My applicants narrowing extended to the stat header and the four archive tabs; a transferred prospect's screening records re-linked to the new member; the Convert dialog accepts the department's own membership tiers as a starting status; an interest-form double-escaping backfill), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged
+
+**Step 0/1** were done by the orchestrating session before this iteration
+started: no open PR with a `claude/security-review-*` head exists, and
+`docs/security-review/PROGRESS.md`'s rotation table has row 08 (Membership
+pipeline) as the next `⬜`, with row 07 (Users & organizations) already `✅`
+(PR #4069, merged). Re-confirmed directly against the rotation table on a
+freshly-read `main` before starting.
+
+**Scope confirmation.** Rotation table row 08 plus this feature's established
+additional scope: `models/membership_pipeline.py`,
+`schemas/membership_pipeline.py`, `app/services/prospect_access.py`,
+`app/api/prospect_access.py`, `app/services/prospect_assignment_service.py`,
+`app/api/public/follow_up_forms.py`, `app/services/follow_up_form_service.py`,
+`frontend/src/modules/prospective-members/`.
+
+**Last reviewed at:** `f57fd5a65` (pass 15's merge commit, PR #3910) to head
+`a02bdd96a`. `git log --no-merges f57fd5a65..HEAD` over the declared scope: 10
+non-merge commits, each read in full via `git show`/`git diff`, not sampled.
+One (`bfd506b9f`) is a pure CSS inset fix for the board's selection checkbox
+overlapping a card's avatar, plus a re-shot screenshot — no permission, query
+or data-shape change, confirmed by reading the diff — and is not discussed
+further below. One (`c6aa8aea5`) is a pure mypy-ratchet type-narrowing fix (an
+`Optional` narrowed before a helper call, `.rowcount` replaced with the
+repo's `rows_affected()` helper) with no behavior change, confirmed by reading
+the diff against the commit message's own claim.
+
+**The real delta, by area:**
+
+| Area                                                                                | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Commits                               |
+| ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Required interviewer positions on Interview Requirement stages                      | `PipelineStepUpdate`/`Create`'s `config.required_interviewer_positions` names offices/positions (e.g. Chief, Board of Directors) an interview must come from; a new `prospect_interviews.interviewer_positions` JSON column (nullable, migration `aefb58788235`) snapshots what the interviewer held _that day_, so a stage grades an interview by the office given at the time, not the interviewer's current one (a NULL snapshot, for an interview logged before the column existed, falls back to the interviewer's current positions — the only evidence left, and no stage named required positions before this landed, so no outcome changes on upgrade). `interview_requirement_progress()` is the single grading used by both `_validate_step_completion` (what blocks advancing) and the new `GET /prospects/{id}/interview-requirement` endpoint the applicant's page reads (CLAUDE.md #29: one computation, not two). `interviewer_id` on `create_interview` is always `current_user.id` (server-derived, traced in the endpoint — never client-supplied), so the new position snapshot carries no unvalidated FK.                                                                                                                                                                                                                | `5485f5fa8`, `943971063`, `7bbcce065` |
+| Case-manager and interviewer "needs attention" emails                               | `ProspectAssignmentService.notify_case_managers`/`notify_interviewers` fire on every stage arrival that already told the case managers of other events (interview/approval stages, a follow-up submission, a withdrawal), plus a dedicated ask to each assigned interviewer when the applicant reaches an Interview Requirement stage (skipping one who already logged an interview for that stage — the applicant-moved-back case). Both methods' recipient queries filter `ProspectAssignment.organization_id == str(prospect.organization_id)` **and** `User.organization_id == str(prospect.organization_id)` independently (traced in `prospect_assignment_service.py:300-370`, not assumed from the docstring) — CLAUDE.md Pitfall #14a/14c. Template variables (`applicant_name`, `stage_name`, `event_summary`, `recipient_name`) reach the client through `EmailService._render_with_fallback`'s `_replace()`, which `html.escape`s every substituted variable unless it is named in `_RAW_HTML_VARIABLES` (traced directly; none of these four names are in that allowlist) — no new injection surface. Two new enum-widening migrations (`aefb58788235` for `application_needs_attention`, `4f1f4921a052` for `application_interview_requested`) are both idempotent (check the enum before altering) and guarded by `_has_table`. | `5485f5fa8`, `545ee1b15`              |
+| My applicants narrows the stat header and the four archive tabs, not only the board | `GET /pipelines/{id}/stats` and `GET /prospects` (which also backs the four archive tabs via `status=`) both take `assigned_to_me`, routed through a new `_listed_prospect_ids()` helper that calls the already-reviewed `assigned_prospect_ids()`/`visible_prospect_ids()` (`prospect_access.py`, unchanged this pass, both filtering `organization_id == user.organization_id`). `get_pipeline_stats` still requires `require_view_all()` — the toggle narrows a view_all holder's own count, it does not loosen who may call the endpoint. For a `.view`/`.manage`-only (non-`view_all`) caller, `visible_prospect_ids` already narrows every list to their own assignments regardless of the toggle's value — unchanged, re-verified.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `13bc0e2d6`                           |
+| A transferred prospect's screening records follow them into membership              | `_do_transfer` now calls `_relink_screenings_to_member`, which re-points `ScreeningRecord.user_id` from NULL onto the new member's id, scoped to `ScreeningRecord.organization_id == prospect.organization_id` **and** `ScreeningRecord.prospect_id == prospect.id` — traced directly, not assumed. Migration `beedcad5b36a` backfills the same relink for prospects transferred before this landed, guarded by `_schema_ready()` (Pitfall #26) and scoped the same way via a correlated subquery joining `users.organization_id = prospective_members.organization_id` (so a deleted or cross-org `transferred_user_id` is never used); its downgrade is exact (clears `user_id` only where it equals that prospect's own `transferred_user_id`), not merely declared so — read in full.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `aa9ecb01a`, `c6aa8aea5`              |
+| Convert dialog accepts the department's own membership tiers                        | `TransferProspectRequest.member_status` widened from the `ConversionStatus` enum to a bounded (`min_length=1, max_length=50`) free string, because the Convert dialog now offers the department's own tier ids alongside the two built-in starting statuses. The service's new `_starting_status_or_none()` is the sole place a value is accepted: it canonicalizes the string and requires it to be either a built-in starting status or a match in `configured_tiers(org.settings)` (the organization row locked `with_for_update()` first, so a tier cannot be deleted between the check and the commit — Pitfall #27), rejecting anything else with a 400 before `outcome` is ever built from it. The 400's message echoes the rejected string back (`f"'{member_status}' is not a starting status..."`), bounded to 50 characters and never persisted or emailed — read and judged not a finding (React renders it as text; no HTML sink).                                                                                                                                                                                                                                                                                                                                                                                               | `e5fda67e8`, `c6aa8aea5`              |
+| Interest-form double-escaping backfill                                              | Unrelated to this pass's own code (the write-path fix landed in the Forms feature), but its migration (`67fac0bf1c09`) touches `prospective_members` columns in this feature's scope: it unescapes `first_name`/`last_name`/`interest_reason`/`referral_source` values that were HTML-escaped twice (once by `FormsService`, once by the old interest-form→prospect mapping). Read in full: the match requires one of the five `html.escape` entities, a successful escape round-trip, and no further entity in the unescaped result — so a name a coordinator typed with a literal `&amp;` is left alone, and an already-correct value is never touched. Guarded on table and column existence (Pitfall #26); irreversible by design, stated in the docstring (the escaped form carries no information the plain text does not). Not a security defect either way — over-escaping is not an injection risk — so this is a correctness fix, recorded for completeness.                                                                                                                                                                                                                                                                                                                                                                        | `e5fda67e8`                           |
+
+**Tenant isolation re-derived on every touched by-id/by-token site**, not
+assumed from the diff's framing: `notify_case_managers`/`notify_interviewers`
+(above), `_relink_screenings_to_member` (above), `_starting_status_or_none`
+(reads the caller's own `prospect.organization_id`, never a client-supplied
+org id), and `get_interview_requirement_progress` (resolves the prospect
+through the existing org-scoped `service.get_prospect(prospect_id,
+organization_id)`, 404s if it misses, then gates `recommendation_met` on
+`access.sees_all_interviews` the same way `list_interviews` already gated the
+interview list — an interviewer who is nothing more cannot read whether
+another interviewer recommended the applicant, though the aggregate
+`recorded_count` and per-position `satisfied` booleans are intentionally not
+gated the same way, since they report stage progress rather than another
+assessor's opinion, matching the docstring's own stated distinction).
+
+**Route enumeration (checklist §1/§2), done fresh via AST walk, not diffed:**
+**63 routes** in `membership_pipeline.py` (up from 62 at pass 15 — the one new
+route is `GET /prospects/{id}/interview-requirement`). Every route resolves to
+one of `get_current_user`, `require_permission(...)`,
+`require_prospect_access(...)`, `require_view_all(...)`,
+`require_pipeline_reader`, or `require_interview_access` — all six carried
+over unchanged from pass 15's walk; the new route uses
+`require_prospect_access(Level.SEE)`.
+`scripts/check_route_permissions.py --strict` (whole app): **301 routes**, 0
+errors, 0 warnings.
+
+**No new `.ilike()`/`.like()` without `escape=LIKE_ESCAPE_CHAR`, no raw
+`csv.writer`, no `window.confirm`/`alert`/`prompt`** introduced in this
+window's commits (grepped fresh over the full diff).
+
+### Standing items re-verified this pass
+
+- **MP-10 (listing half)** — `list_election_packages` does not appear
+  anywhere in this window's diff. **Still OPEN**, unchanged;
+  `docs/KNOWN_LIMITATIONS.md`'s entry still matches.
+- **MP-22** — `delete_prospect_document` and `_delete_inactive_prospects`
+  likewise do not appear in this window's diff. **Still OPEN**, unchanged;
+  owner-accepted tradeoff.
+
+Both re-confirmed by searching the actual diff text for the function names,
+not copied from the prior write-up.
+
+### Verified good ✅ (pass 16)
+
+- **The interview-position snapshot cannot be forged to claim an office the
+  interviewer did not hold**: `create_interview` computes
+  `interviewer_positions` server-side from the current user's own
+  `selectinload(User.positions)` at the moment of creation, never from
+  client input.
+- **The required-position grading and the stage's own completion check
+  cannot disagree**: both call `interview_requirement_progress()`, traced as
+  the only place either reads interview counts/positions for this stage type.
+- **The "needs attention" and "interview requested" emails cannot reach a
+  member outside the applicant's organization**: every recipient query
+  filters `organization_id` on both the assignment row and the `User` row
+  independently (not inherited from a single earlier check).
+- **A transferred prospect's screening relink cannot cross organizations or
+  pick up a different member**: both the service method and its backfill
+  migration scope by `organization_id` and match the specific prospect/user
+  pair, not a bare `user_id IS NULL` sweep.
+- **A Convert dialog starting status cannot be stored unless it is a real,
+  current rung on the department's own ladder**: `_starting_status_or_none`
+  locks the `Organization` row before checking, closing the same
+  read-then-write race Pitfall #27 describes for the profile's own status
+  field.
+- **No regression on any previously-closed finding** (MP-1 through MP-34) —
+  none of their call sites appear in this pass's diff.
+
+### Schema & migration notes
+
+Four new migrations since pass 15, all read in full and all guarded
+(`_has_table`/`_schema_ready`/`_has_column`, Pitfall #26):
+
+- `20261031_1900_aefb58788235_interviewer_positions_and_attention_email.py` —
+  adds `prospect_interviews.interviewer_positions` (JSON, nullable — no
+  `ondelete` concern, not a foreign key) and widens the
+  `email_templates`/`scheduled_emails` `template_type` enum with
+  `application_needs_attention`. Idempotent: checks the enum values before
+  altering.
+- `20261102_1623_beedcad5b36a_relink_transferred_prospect_screenings.py` —
+  data-only backfill, no column change. Org- and prospect-scoped via a
+  correlated subquery; downgrade is exact (reverses exactly the rows it, or
+  the equivalent application code, would have touched).
+- `20261104_0505_67fac0bf1c09_unescape_interest_form_applicant_names.py` —
+  data-only backfill on four plain-text `prospective_members` columns, with
+  a narrow, round-trip-verified match to avoid converting an ambiguous value.
+  Irreversible by design, stated in its own docstring.
+- `20261104_1200_4f1f4921a052_interview_requested_email.py` — widens the same
+  enum with `application_interview_requested`. Idempotent, same shape as
+  `aefb58788235`'s template-type step.
+
+None of this feature's own migrations are implicated in the finding below.
+
+**Unrelated, pre-existing tooling finding (not an MP defect): the Alembic
+chain is currently forked.** `validate_migrations.py --strict` reports **two
+heads** — `9446e373c7a3` (`chief_requirement_overrides`, Feature unrelated to
+this one) and `d1165a97b48e` (`inventory_sightings_created_and_barcode`,
+also unrelated) — both branching from the same parent `bd8fc0c4a941` because
+their two source PRs (#4051 and #4065) merged independently. Confirmed via
+GitHub that **PR #4078** (opened today, base `main` at this same commit
+`a02bdd96a`) already carries the fix — a no-op merge revision
+`41ebaa6317e8` with `down_revision = ("9446e373c7a3", "d1165a97b48e")` — so it
+is not duplicated here. This is the exact "Multiple head revisions" condition
+the task's own briefing anticipated; it does not touch any file in this
+feature's scope, and this feature's own four migrations above chain cleanly
+from their own ancestors. Recorded here only so a reader of this pass's gate
+table knows why `validate_migrations.py --strict` is red and does not
+mistake it for an MP regression.
+
+## Completion gate (pass 16)
+
+Run against CI's pinned toolchain (`flake8==7.4.1`, `black==26.10.1`,
+`isort==9.0.2`, confirmed installed at these exact versions) under
+`python3.13`; frontend after `npm ci` restored a `node_modules` this sandbox
+started without (a sandbox setup gap — `react-hot-toast` and other
+dependencies were simply absent, not an application defect; `npm ci` is the
+repo's own documented, lockfile-trusting restore command, not a
+regeneration).
+
+| Check                                                                                                                | Result                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                                        | ✅ 0 violations                                                                                                                                  |
+| `black --check app/ tests/ alembic/`                                                                                 | ✅ 2944 files unchanged                                                                                                                          |
+| `isort --check-only app/ tests/ alembic/`                                                                            | ✅ clean                                                                                                                                         |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                 | ❌ reports the pre-existing, unrelated two-head fork described above (PR #4078 already fixes it) — 0 of this feature's own migrations implicated |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                    | ✅ 301 routes, 0 errors, 0 warnings                                                                                                              |
+| scoped backend pytest, full (`-k "membership or prospect or pipeline or follow_up or assignment"`, no marker filter) | ✅ 1,734 passed, 1 skipped (environment-only, `py_vapid`)                                                                                        |
+| `cd frontend && npm run typecheck`                                                                                   | ✅ 0 errors                                                                                                                                      |
+| `cd frontend && npx eslint src/modules/prospective-members`                                                          | ✅ 0 errors, 0 warnings                                                                                                                          |
+| scoped frontend suite (`npx vitest run src/modules/prospective-members`)                                             | ✅ 404 passed (44 files)                                                                                                                         |
+
+No application source file changed this pass (0 fixes — the real changes
+already landed on `main` via the ten commits above, independently tested and
+already merged). Every check above verifies that the delta which landed since
+pass 15 is sound, not that a new patch applied cleanly.
+
+## Pass 15 (2026-11-01) — watchdog pickup: real delta (case managers/interviewers and `prospective_members.view_all`, the Follow-up Form pipeline stage, case-manager withdraw, coordinator-notes visibility, in-app bell copies for withdrawal/auto-purge notices), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged
+
+**Step 0/1.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (confirmed via
+`ListAgents`). `list_pull_requests` (state=open, all 15 open PRs) found 0
+with a head branch starting `claude/security-review-`. PR #3908 (Feature 07,
+Users & organizations, pass 14) had already merged (`c262792f`); row 07 was
+already `✅` from that PR's own commit. Row 08 (Membership pipeline) was the
+next `⬜`, confirmed fresh against the rotation table on a freshly fetched
+`main`.
+
+**Scope confirmation.** Rotation table row 08 plus this feature's established
+additional scope: `models/membership_pipeline.py`,
+`schemas/membership_pipeline.py`, `api/prospect_privacy.py`,
+`utils/prospect_fields.py`, `frontend/src/modules/prospective-members/`.
+
+**Last reviewed at:** `6e70e60` (pass 14's commit, PR #3811). `git log
+--no-merges 6e70e60..HEAD` over the declared scope: 8 non-merge commits, each
+read in full via `git show` (not sampled). Two of the eight
+(`ab879fc7`, `cf8fdae3`) are pure CSS layout refactors (`split-row`/
+`page-header` utilities) with no permission, query, or data-shape change —
+confirmed by reading their diffs, not assumed from the commit title — and
+are not discussed further below.
+
+**The real delta, by area:**
+
+| Area                                                                | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Commits                |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| Case managers, interviewers, `prospective_members.view_all`         | New `app/services/prospect_access.py` + `app/api/prospect_access.py`: an applicant is now visible either through `view_all` (org-wide) or through a per-applicant assignment (`prospect_assignments`, role `case_manager` or `interviewer`). `require_prospect_access(level)` is a per-route dependency (`SEE`/`FULL`/`WORK`/`MANAGE`/`INTERVIEW`); every route naming a `{prospect_id}` declares one, enforced by `tests/test_prospect_access_routes.py` so a new route cannot silently fall back to "any pipeline permission sees everyone." `ProspectAssignmentService.assign()` validates **both** the applicant and the assignee user belong to the caller's organization before inserting (CLAUDE.md Pitfall #14c, stated in the module's own docstring) — traced directly in `_prospect()` and the `User.organization_id == organization_id` filter, not taken on the docstring's word. Migration `c588f525fdbb` backfills `view_all` onto every position that already held `view`/`manage`, so no existing installation's visibility narrows on upgrade.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `92ec254c`             |
+| Case-manager withdraw; coordinators' notes hidden from interviewers | `set_prospect_status` admits `Level.WORK` (case managers included) but then explicitly refuses any status other than `withdrawn` for a non-manager (`if not access.can_manage and data.status != WITHDRAWN: 403`) — verified the branch, not the docstring. `get_prospect` nulls `response.notes` when `not access.can_see_full` (an interviewer's assignment is `SEE` only), matching the existing activity-log/election-package visibility line.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `183c4234`             |
+| Follow-up Form pipeline stage                                       | New public, token-scoped surface: `api/public/follow_up_forms.py` (`GET {token}`, `PUT {token}/draft`, `POST {token}/submit`) and `services/follow_up_form_service.py`. The token is a 43-char `secrets.token_urlsafe(32)` validated by `Path(..., min_length=43, max_length=43, pattern=...)` before any DB work, matched only by SHA-256 hash (`token_hash`, reusing the existing `hash_status_token` the already-reviewed status-page token uses), rate-limited via `validate_ip_rate_limit`, and every response carries `no-store`/`no-referrer`/`noindex`. `resolve()` re-derives the prospect, step and form each by **both** id and `organization_id` (`request.organization_id`, an internal, non-client-supplied value) — a cross-org token cannot exist since the request row itself is created org-scoped. Writeback to the applicant record (`_record_updates`) only ever touches a column named in `FormField.applicant_field`, which is itself validated server-side at form-save time against the fixed `APPLICANT_FIELDS` tuple (`first_name`, `email`, `phone`, address fields, …) via `_enum_check` — confirmed this allowlist contains no tenancy/identity/privilege column, so the public submission path cannot be used for mass assignment onto anything but the twelve safe columns. Sensitive answers (`is_sensitive` fields) are excluded from both the record-writeback path and the pre-fill the applicant sees on return, and the draft itself (which does carry raw sensitive text) is stored in an `EncryptedJSON` column, not plaintext. The reveal-to-staff endpoint (`GET .../follow-up-forms/{request_id}/answers`) returns a sensitive answer only to a `sensitive_answers.view` holder and audit-logs every such reveal (`form_sensitive_answers_viewed`) — traced in the handler, not assumed. An election package may include non-sensitive answers only when the stage explicitly opts in (`package_fields.get("include_follow_up_answers") is True`, with an explicit comment guarding against `None` defaulting to "everything" the way the pre-existing fields do) and `package_answers()` filters `is_sensitive` out regardless of the caller's permissions, because the package snapshot is stored unencrypted. The daily reminder sweep (`send_due_reminders`/`_remind_one`) row-locks (`with_for_update()`) and re-checks each request before sending, and sends before stamping (CLAUDE.md Pitfall #36's "at least once" branch, correctly chosen — a duplicate reminder is a nuisance, a missing one stalls an applicant indefinitely). Migration `f34e25e2c820` (`prospect_form_requests`): both `ondelete="SET NULL"` columns (`step_id`, `form_id`) are `nullable=True`. | `27a363f1`, `a36d27f1` |
+| In-app bell copies for withdrawal/auto-purge/other officer alerts   | `officer_alert_copies.add_in_app_copies` writes a bell entry alongside (not instead of) the existing org-scoped email path, for recipients resolved the same way the email's recipient list already was (`_withdrawal_notice_recipients`, itself org-scoped) — no new recipient-resolution logic to re-verify, and no behavior change to who may act on an applicant, only to who is told.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `31f39cf6`             |
+| Refusal message length cap                                          | Three more call sites (two in this feature, one shared MCP helper) adopt the pre-existing `list_within_detail_limit()` pattern already used elsewhere in this rotation (FIN, ELEC). No new information disclosed — truncates a list the caller's own data already comprised.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `bdf73eba`             |
+
+**Tenant isolation re-derived on every new by-id/by-token site**, not
+assumed from the diff's framing: `prospect_access.py`'s `assigned_roles`/
+`assigned_prospect_ids` (both filter `ProspectAssignment.organization_id ==
+user.organization_id`), `ProspectAssignmentService.assign`/`unassign`/
+`list_for_prospect`/`my_applicants` (all filter `organization_id` on both the
+prospect and the assignment row), and `FollowUpFormService.resolve`/
+`submitted_answers`/`_answers_for`/`package_answers` (each filters
+`organization_id` on the request, prospect, submission and form
+independently, not inherited from a single earlier check). One dependency,
+`require_interview_access`, loads `ProspectInterview` by id with no
+`organization_id` filter in the dependency itself; traced whether this is
+exploitable and confirmed it is not — `update_interview`/`delete_interview`
+in the service layer each re-resolve the interview through
+`get_interview(interview_id, organization_id)` (a join to
+`ProspectiveMember.organization_id`) before acting, so a cross-org
+`interview_id` always ends in the same 404 the dependency's own `_not_found()`
+would have produced, whether or not the dependency's own `can_see`/
+`can_manage` check (unscoped by design, since it only gates whether the
+_caller's own_ permissions/roles qualify) happened to pass first. Noted here
+as a verified non-issue, not a finding, since defense-in-depth belongs in the
+write-up either way.
+
+**Route enumeration (checklist §1/§2), done fresh via AST walk, not diffed:**
+**62 routes** in `membership_pipeline.py` (up from 53 at pass 14 — the 9 new
+routes are `/my-applicants`, `/my-access`, the three `/assignments`
+routes, `/report-settings`, and three follow-up-form routes under this
+router's prefix). Every route resolves to one of `get_current_user`,
+`require_permission(...)`, `require_prospect_access(...)`,
+`require_view_all(...)`, `require_pipeline_reader`, or
+`require_interview_access` — verified by walking each function's full source
+with a Python AST script, not a substring match on the decorator line alone
+(an earlier, cruder check flagged 14 false positives on routes whose
+`Depends(require_permission(...))` simply wraps onto a second line).
+
+**No new `.ilike()`/`.like()` without `escape=LIKE_ESCAPE_CHAR`, no raw
+`csv.writer`, no `window.confirm`/`alert`/`prompt`** introduced in this
+window's commits (grepped fresh over the full diff, not limited to the files
+listed above).
+
+### Standing items re-verified this pass
+
+- **MP-10 (listing half)** — `list_election_packages` does not appear
+  anywhere in this window's diff. **Still OPEN**, unchanged;
+  `docs/KNOWN_LIMITATIONS.md`'s entry still matches.
+- **MP-22** — `delete_prospect_document` and `_delete_inactive_prospects`
+  likewise do not appear in this window's diff. **Still OPEN**, unchanged;
+  owner-accepted tradeoff.
+
+Both re-confirmed by searching the actual diff text for the function names,
+not copied from the prior write-up.
+
+### Verified good ✅ (pass 15)
+
+- **The assignment grant cannot be used to plant a foreign-org user on a
+  local applicant, or a local user on a foreign-org applicant**:
+  `ProspectAssignmentService.assign()` resolves both the prospect and the
+  assignee `User` through a query filtered on the caller's own
+  `organization_id`, and raises before any row is inserted if either lookup
+  misses (CLAUDE.md Pitfall #14c).
+- **The public follow-up-form token cannot be replayed across organizations
+  or reused after submission**: `resolve()` re-derives prospect/step/form by
+  id **and** `organization_id` on every call, and a submitted request raises
+  `FollowUpAlreadySubmitted` rather than silently accepting a second
+  submission.
+- **Sensitive follow-up answers cannot reach the applicant record, an
+  unprivileged viewer, or an election package**: excluded from
+  `_record_updates`'s writeback (`field.is_sensitive` check), from
+  `public_view`'s pre-fill, from the plain answer list unless the viewer
+  holds `sensitive_answers.view` (and that reveal is audit-logged), and from
+  `package_answers()` regardless of the caller's permissions.
+- **The Follow-up Form writeback cannot be redirected onto a non-applicant
+  column**: `FormField.applicant_field` is validated against the fixed
+  `APPLICANT_FIELDS` allowlist at form-save time, server-side, not read from
+  the public submission payload.
+- **The daily follow-up-form reminder sweep is safe to run twice**: each
+  candidate row is locked and re-checked immediately before sending
+  (CLAUDE.md Pitfall #27's locking-read requirement, not just a row lock),
+  and `reminder_count`/`last_reminder_at` are capped and stamped so a second
+  concurrent run finds nothing due.
+- **No regression on any previously-closed finding** (MP-1 through MP-34) —
+  none of their call sites appear in this pass's diff.
+
+### Schema & migration notes
+
+Two new migrations since pass 14, both read in full:
+
+- `20261029_0322_f34e25e2c820_follow_up_form_requests.py` — creates
+  `prospect_form_requests`. Both `ondelete="SET NULL"` columns (`step_id`,
+  `form_id`) are `nullable=True` (Pitfall #2); guarded by `_has_table` checks
+  on every table it touches (Pitfall #26).
+- `20261031_1200_c588f525fdbb_prospect_assignments_and_view_all.py` —
+  creates `prospect_assignments` and backfills `view_all` onto every
+  position holding `view`/`manage`. The one `ondelete="SET NULL"` column
+  (`assigned_by`) is `nullable=True`; `ondelete="CASCADE"` columns
+  (`organization_id`, `prospect_id`, `user_id`) are `nullable=False`, as
+  required. Guarded by `_has_table` on `positions` and the new table itself.
+
+`validate_migrations.py --strict`: single head, both revisions chain
+correctly from pass 14's baseline.
+
+## Completion gate (pass 15)
+
+Run against CI's pinned toolchain (`flake8==7.4.1`, `black==26.10.1`,
+`isort==9.0.2`, confirmed installed at these exact versions) under
+`python3.13` (the sandbox's bare `python3` resolves to 3.11); frontend
+against the repo's existing `node_modules`.
+
+| Check                                                                                        | Result                                                    |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                | ✅ 0 violations                                           |
+| `black --check app/ tests/ alembic/`                                                         | ✅ 2776 files unchanged                                   |
+| `isort --check-only app/ tests/ alembic/`                                                    | ✅ clean                                                  |
+| `python3.13 scripts/validate_migrations.py --strict`                                         | ✅ 684 revisions, single head `5781476f2012`              |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                            | ✅ 283 routes, 0 errors, 0 warnings                       |
+| scoped backend pytest (`-k "membership or prospect or pipeline or follow_up or assignment"`) | ✅ 1,669 passed, 1 skipped (environment-only, `py_vapid`) |
+| `cd frontend && npx tsc --noEmit`                                                            | ✅ 0 errors                                               |
+| `cd frontend && npx eslint src/modules/prospective-members`                                  | ✅ 0 errors, 0 warnings                                   |
+| scoped frontend suite (`npx vitest run src/modules/prospective-members`)                     | ✅ 375 passed (42 files)                                  |
+
+No application source file changed this pass (0 fixes — the real changes
+already landed on `main` via the eight commits above, independently tested
+and already merged). Every check above verifies that the delta which landed
+since pass 14 is sound, not that a new patch applied cleanly.
 
 ## Pass 14 (2026-10-28) — watchdog pickup: real delta (phone/address encryption, email-by-fingerprint rewrite across the self-access guard and every SQL email match, stage-linked email templates, applicant-facing next-meeting card + ICS, stale-application coordinator/applicant emails), 0 fixed, 0 new findings; MP-10 (listing half) and MP-22 re-confirmed OPEN, unchanged
 

@@ -127,7 +127,7 @@ const TrainingOfficerDashboard: React.FC = () => {
       {showSettings && (
         <section className="card mb-6 p-6">
           <h2 className="mb-4 font-semibold">Customize this training dashboard</h2>
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+          <div className="field-grid gap-3">
             {(
               Object.entries(TRAINING_WIDGET_METADATA) as [
                 TrainingWidgetId,

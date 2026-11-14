@@ -7,7 +7,7 @@ Request and response schemas for training-related endpoints.
 import re
 from datetime import date, datetime
 from enum import Enum
-from typing import List, Optional, Sequence, Union
+from typing import List, Literal, Optional, Sequence, Union
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -57,6 +57,10 @@ class RequirementType(str, Enum):
     SKILLS_EVALUATION = "skills_evaluation"
     CHECKLIST = "checklist"
     KNOWLEDGE_TEST = "knowledge_test"
+    EVALUATED_SHIFTS = "evaluated_shifts"
+    TRANSPORTS = "transports"
+    REFUSALS = "refusals"
+    SESSION_ATTENDANCE = "session_attendance"
 
 
 # Training Category Schemas
@@ -399,6 +403,12 @@ class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+    # Response only, filled by the record lists (see
+    # app/services/training_record_source.py): "provider", "imported" or
+    # "logbook", and the label to show for it. None where a response does not
+    # work it out, such as the reply to a create or an edit.
+    source: Optional[str] = None
+    source_label: Optional[str] = None
 
     model_config = _response_config
 
@@ -419,6 +429,8 @@ class TrainingRequirementBase(BaseModel):
     # Opt-in: may imported/external training (e.g. Vector Solutions) auto-credit
     # this requirement by category? Off by default — in-house delivery only.
     allows_external_credit: bool = False
+    # SESSION_ATTENDANCE: may a Chief override it for a member?
+    allows_chief_override: bool = False
     # May shift attendance satisfy it on the Shift Compliance report? Omitted
     # on create, the model decides: on for a SHIFTS requirement, off otherwise.
     shift_credited: Optional[bool] = None
@@ -428,6 +440,12 @@ class TrainingRequirementBase(BaseModel):
     required_courses: Optional[List[str]] = None
     required_shifts: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     required_calls: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_transports: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_refusals: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    # SESSION_ATTENDANCE: the share of the linked sessions to attend. Zero
+    # would be met by attending nothing, so the floor is above it.
+    required_attendance_pct: Optional[float] = Field(None, gt=0, le=100)
+    evaluation_excludes_lowest_rating: bool = False
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
     checklist_items: Optional[List[ChecklistItem]] = None
@@ -493,6 +511,16 @@ _REQUIREMENT_QUANTITY_FIELDS = {
     RequirementType.SHIFTS: ("required_shifts", "no shift count is set"),
     RequirementType.CALLS: ("required_calls", "no call count is set"),
     RequirementType.KNOWLEDGE_TEST: ("passing_score", "no passing score is set"),
+    RequirementType.EVALUATED_SHIFTS: (
+        "required_shifts",
+        "no number of evaluated shifts is set",
+    ),
+    RequirementType.TRANSPORTS: ("required_transports", "no transport count is set"),
+    RequirementType.REFUSALS: ("required_refusals", "no refusal count is set"),
+    RequirementType.SESSION_ATTENDANCE: (
+        "required_attendance_pct",
+        "no attendance percentage is set",
+    ),
 }
 
 
@@ -627,12 +655,19 @@ class TrainingRequirementUpdate(RefusesNull):
     registry_code: Optional[str] = Field(None, max_length=50)
     is_editable: Optional[bool] = None
     allows_external_credit: Optional[bool] = None
+    allows_chief_override: Optional[bool] = None
     shift_credited: Optional[bool] = None
     training_type: Optional[str] = None
     required_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     required_courses: Optional[List[str]] = None
     required_shifts: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     required_calls: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_transports: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_refusals: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    # SESSION_ATTENDANCE: the share of the linked sessions to attend. Zero
+    # would be met by attending nothing, so the floor is above it.
+    required_attendance_pct: Optional[float] = Field(None, gt=0, le=100)
+    evaluation_excludes_lowest_rating: Optional[bool] = None
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
     checklist_items: Optional[List[ChecklistItem]] = None
@@ -691,9 +726,11 @@ class TrainingRequirementUpdate(RefusesNull):
     null_refused = frozenset(
         {
             "active",
+            "allows_chief_override",
             "allows_external_credit",
             "applies_to_all",
             "due_date_type",
+            "evaluation_excludes_lowest_rating",
             "frequency",
             "is_editable",
             "name",
@@ -703,6 +740,72 @@ class TrainingRequirementUpdate(RefusesNull):
             "source",
         }
     )
+
+
+class RequirementOverrideCreate(BaseModel):
+    """A Chief's override of a session-attendance requirement for one member.
+
+    The member counts as meeting the requirement whenever it is graded as of
+    a date from ``start_date`` to ``end_date``.
+    """
+
+    user_id: UUID
+    start_date: date
+    end_date: date
+    reason: str = Field(..., min_length=1, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("A reason is required")
+        return v.strip()
+
+    @model_validator(mode="after")
+    def _dates_in_order(self) -> "RequirementOverrideCreate":
+        if self.end_date < self.start_date:
+            raise ValueError("The end date must be on or after the start date")
+        return self
+
+
+class RequirementOverrideResponse(UTCResponseBase):
+    id: str
+    requirement_id: str
+    user_id: str
+    member_name: str
+    start_date: date
+    end_date: date
+    reason: str
+    granted_by_name: Optional[str] = None
+    granted_at: datetime
+    revoked_at: Optional[datetime] = None
+    revoked_by_name: Optional[str] = None
+
+
+class TrainingRequirementReference(BaseModel):
+    """One kind of record naming a requirement, as a delete dialog lists it."""
+
+    kind: str
+    label: str
+    count: int
+    # What a permanent delete does to these rows: "removed" (deleted with the
+    # requirement) or "unlinked" (kept, without the reference).
+    on_delete: Literal["removed", "unlinked"]
+
+
+class TrainingRequirementDeletionImpact(BaseModel):
+    """What uses a requirement, so an officer can choose how to delete it.
+
+    ``total`` of zero means an ordinary delete removes it outright; anything
+    else means an ordinary delete deactivates it, and only a permanent delete
+    removes it.
+    """
+
+    requirement_id: UUID
+    name: str
+    active: bool
+    total: int
+    references: List[TrainingRequirementReference]
 
 
 class TrainingRequirementResponse(TrainingRequirementBase, UTCResponseBase):
@@ -785,6 +888,9 @@ class RequirementProgress(BaseModel):
     # Set when an existing member is inside the requirement's catch-up period
     # and has not met it yet; due_date then carries the same date.
     catch_up_deadline: Optional[date] = None
+    # A session-attendance requirement no session of which has been held yet:
+    # neither complete nor incomplete (workflow review W80-9).
+    not_applicable: bool = False
 
 
 class ComplianceSummary(BaseModel):

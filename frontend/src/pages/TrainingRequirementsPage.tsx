@@ -23,6 +23,7 @@ import {
 import { trainingService, trainingProgramService } from '../services/api';
 import { RequirementModal } from '../components/training/RequirementModal';
 import { RegistryImportPanel } from '../components/training/RegistryImportPanel';
+import { RequirementDeleteDialog, type RequirementDeleteAction } from '../components/training/RequirementDeleteDialog';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import { isSafeExternalUrl } from '@/utils/safeUrl';
 import { toChecklistItems } from '../utils/checklistItems';
@@ -35,9 +36,9 @@ import type {
   RegistryInfo,
 } from '../types/training';
 import toast from 'react-hot-toast';
-import { useConfirm } from '../contexts/ConfirmContext';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { grandfatheringSummary } from '@/utils/requirementGrandfathering';
+import { ambiguousAttendanceWarning } from '@/utils/attendanceRequirementOverlap';
 
 type FilterSource = 'all' | 'department' | 'state' | 'national';
 
@@ -48,7 +49,6 @@ type FilterSource = 'all' | 'department' | 'state' | 'national';
  * Supports department, state, and national registry requirements.
  */
 const TrainingRequirementsPage: React.FC = () => {
-  const { confirm } = useConfirm();
   const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [registries, setRegistries] = useState<RegistryInfo[]>([]);
@@ -60,6 +60,10 @@ const TrainingRequirementsPage: React.FC = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSource, setFilterSource] = useState<FilterSource>('all');
+  // Inactive requirements no longer grade anyone; they stay reachable behind
+  // this toggle so one can be reactivated or permanently deleted.
+  const [showInactive, setShowInactive] = useState(false);
+  const [deleting, setDeleting] = useState<TrainingRequirement | null>(null);
 
   // Course catalog, so a requirement's linked course ids render as names.
   const { courses } = useCourseLibrary();
@@ -98,41 +102,49 @@ const TrainingRequirementsPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (requirement: TrainingRequirement) => {
-    if (
-      !(await confirm({
-        title: 'Delete requirement',
-        message:
-          `Delete "${requirement.name}"? If a pipeline, member progress, a skills or knowledge test, ` +
-          'a recertification pathway, a course class, a compliance profile or a waiver still uses it, ' +
-          'it is deactivated instead of deleted, so those records keep it. Otherwise it is deleted, ' +
-          'which cannot be undone.',
-        confirmLabel: 'Delete',
-        cancelLabel: 'Keep it',
-      }))
-    )
-      return;
-
+  const handleDelete = async (requirement: TrainingRequirement, action: RequirementDeleteAction) => {
     try {
-      await trainingService.deleteRequirement(requirement.id);
-    } catch (_error) {
-      toast.error('Failed to delete requirement');
+      if (action === 'deactivate') {
+        await trainingService.updateRequirement(requirement.id, { active: false });
+      } else {
+        await trainingService.deleteRequirement(
+          requirement.id,
+          action === 'permanent' ? { permanent: true } : undefined
+        );
+      }
+    } catch (error) {
+      toast.error(
+        getErrorMessage(
+          error,
+          action === 'deactivate' ? 'Failed to deactivate requirement' : 'Failed to delete requirement'
+        )
+      );
+      throw error;
+    }
+
+    if (action === 'deactivate') {
+      setRequirements((current) => current.map((r) => (r.id === requirement.id ? { ...r, active: false } : r)));
+      toast.success(`"${requirement.name}" was deactivated`);
       return;
     }
 
-    // The endpoint answers 204 either way, as the locations endpoint it
-    // follows does; whether the row survived (deactivated) is what says
-    // which of the two happened.
+    // The ordinary delete answers 204 whether it deleted or deactivated (it
+    // deactivates when something started using the requirement after the
+    // dialog checked), so whether the row survived says which happened.
     try {
       const fresh = await trainingService.getRequirements({ active_only: false });
       setRequirements(fresh);
       toast.success(
         fresh.some((r) => r.id === requirement.id)
           ? `"${requirement.name}" is still in use, so it was deactivated instead of deleted`
-          : 'Requirement deleted'
+          : action === 'permanent'
+            ? `"${requirement.name}" was permanently deleted`
+            : 'Requirement deleted'
       );
     } catch (_error) {
-      toast.success('Requirement deleted, or deactivated if it was still in use');
+      toast.success(
+        action === 'permanent' ? 'Requirement deleted' : 'Requirement deleted, or deactivated if it was still in use'
+      );
       void fetchData();
     }
   };
@@ -156,6 +168,9 @@ const TrainingRequirementsPage: React.FC = () => {
         required_courses: requirement.required_courses,
         required_shifts: requirement.required_shifts,
         required_calls: requirement.required_calls,
+        required_transports: requirement.required_transports,
+        required_refusals: requirement.required_refusals,
+        evaluation_excludes_lowest_rating: requirement.evaluation_excludes_lowest_rating,
         required_call_types: requirement.required_call_types,
         required_skills: requirement.required_skills,
         checklist_items: requirement.checklist_items,
@@ -204,6 +219,20 @@ const TrainingRequirementsPage: React.FC = () => {
     }
   };
 
+  // Non-blocking: the save has already gone through. Two session-attendance
+  // requirements over the same membership types leave the backend unable to
+  // pick the one that governs a member (governing_attendance_requirement), so
+  // the officer is told which ones collide.
+  // On a new-members-only save the original row (`replacedId`) was narrowed
+  // to existing members, so it is not a rival to its own copy.
+  const warnIfAmbiguous = (saved: TrainingRequirement, replacedId?: string) => {
+    const warning = ambiguousAttendanceWarning(
+      saved,
+      requirements.filter((r) => r.id !== replacedId)
+    );
+    if (warning) toast(warning, { icon: '⚠️', duration: 10000 });
+  };
+
   const handleSave = async (
     data: TrainingRequirementCreate | TrainingRequirementUpdate,
     isEdit: boolean,
@@ -221,10 +250,12 @@ const TrainingRequirementsPage: React.FC = () => {
           setRequirements(requirements.map((r) => (r.id === id ? updated : r)));
           toast.success('Requirement updated');
         }
+        warnIfAmbiguous(updated, id);
       } else {
         const created = await trainingService.createRequirement(data as TrainingRequirementCreate);
         setRequirements([...requirements, created]);
         toast.success('Requirement created');
+        warnIfAmbiguous(created);
       }
       setShowCreateModal(false);
       setSelectedRequirement(null);
@@ -241,8 +272,11 @@ const TrainingRequirementsPage: React.FC = () => {
       req.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       req.description?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSource = filterSource === 'all' || req.source === filterSource;
-    return matchesSearch && matchesSource;
+    const matchesActive = showInactive || req.active;
+    return matchesSearch && matchesSource && matchesActive;
   });
+  const inactiveCount = requirements.filter((req) => !req.active).length;
+  const hiddenInactive = !showInactive && inactiveCount > 0;
 
   if (loading) {
     return (
@@ -292,10 +326,6 @@ const TrainingRequirementsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* This page renders only inside the training.manage-gated hub, which
-            is what both registry calls require. */}
-        <RegistryImportPanel registries={registries} onImported={() => void fetchData()} />
-
         {/* Filters */}
         <div className="card mb-6 p-4" role="search" aria-label="Search and filter requirements">
           <div className="flex flex-col gap-4 md:flex-row">
@@ -342,6 +372,16 @@ const TrainingRequirementsPage: React.FC = () => {
                 <option value="national">National</option>
               </select>
             </div>
+
+            <label className="text-theme-text-secondary touch:min-h-11 flex items-center gap-2 text-sm whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+                className="form-checkbox"
+              />
+              Show inactive ({inactiveCount})
+            </label>
           </div>
         </div>
 
@@ -352,11 +392,21 @@ const TrainingRequirementsPage: React.FC = () => {
               <FileText className="text-theme-text-muted mx-auto mb-4 h-16 w-16" aria-hidden="true" />
               <h2 className="text-theme-text-primary mb-2 text-xl font-semibold">No Requirements Found</h2>
               <p className="text-theme-text-muted mb-6">
-                {searchTerm ? 'Try adjusting your search or filters' : 'Create a requirement, or start from a template'}
+                {searchTerm
+                  ? 'Try adjusting your search or filters'
+                  : hiddenInactive
+                    ? `${inactiveCount} inactive requirement${inactiveCount === 1 ? ' is' : 's are'} hidden. Select Show inactive to see ${inactiveCount === 1 ? 'it' : 'them'}.`
+                    : 'Create a requirement, or start from a template'}
               </p>
-              <button onClick={() => setShowCreateModal(true)} className="btn-success px-6 py-3 font-medium">
-                Create First Requirement
-              </button>
+              {hiddenInactive && !searchTerm ? (
+                <button onClick={() => setShowInactive(true)} className="btn-secondary px-6 py-3 font-medium">
+                  Show inactive
+                </button>
+              ) : (
+                <button onClick={() => setShowCreateModal(true)} className="btn-success px-6 py-3 font-medium">
+                  Create First Requirement
+                </button>
+              )}
             </div>
           ) : (
             filteredRequirements.map((requirement) => (
@@ -372,9 +422,7 @@ const TrainingRequirementsPage: React.FC = () => {
                   setSelectedRequirement(requirement);
                   setShowCreateModal(true);
                 }}
-                onDelete={() => {
-                  void handleDelete(requirement);
-                }}
+                onDelete={() => setDeleting(requirement)}
                 onDuplicate={() => {
                   void handleDuplicate(requirement);
                 }}
@@ -385,6 +433,14 @@ const TrainingRequirementsPage: React.FC = () => {
             ))
           )}
         </div>
+
+        {/* Below the list, not above it: the department's own requirements are
+            what an officer opens this page to see, and the import cards are an
+            occasional action. This page renders only inside the
+            training.manage-gated hub, which is what both registry calls require. */}
+        <RegistryImportPanel registries={registries} onImported={() => void fetchData()} />
+
+        <RequirementDeleteDialog requirement={deleting} onClose={() => setDeleting(null)} onConfirm={handleDelete} />
 
         {/* Create/Edit Modal */}
         {showCreateModal && (
@@ -465,6 +521,12 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
         return 'Checklist';
       case 'knowledge_test':
         return 'Knowledge Test';
+      case 'evaluated_shifts':
+        return 'Evaluated Shifts';
+      case 'transports':
+        return 'Transports';
+      case 'refusals':
+        return 'Refusals';
       default:
         return type;
     }
@@ -497,8 +559,8 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
     <div className="card overflow-hidden">
       {/* Header */}
       <div className="p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex-1">
+        <div className="split-row gap-4 sm:items-start">
+          <div className="split-row-main">
             <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
               <h2 className="text-theme-text-primary text-lg font-bold">{requirement.name}</h2>
               {requirement.requirement_type && (
@@ -609,7 +671,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
           </div>
 
           {/* Actions */}
-          <div className="flex flex-wrap items-center gap-2 sm:ml-4">
+          <div className="split-row-aside flex flex-wrap items-center gap-2 sm:ml-4">
             <button
               onClick={onToggleActive}
               className={`rounded-lg p-2 transition-colors ${
@@ -720,6 +782,22 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                 )}
                 {requirement.required_calls != null && (
                   <DetailRow label="Required Calls" value={String(requirement.required_calls)} />
+                )}
+                {requirement.required_transports != null && (
+                  <DetailRow label="Required Transports" value={String(requirement.required_transports)} />
+                )}
+                {requirement.required_refusals != null && (
+                  <DetailRow label="Required Refusals" value={String(requirement.required_refusals)} />
+                )}
+                {requirement.requirement_type === 'evaluated_shifts' && (
+                  <DetailRow
+                    label="Lowest Rating"
+                    value={
+                      requirement.evaluation_excludes_lowest_rating
+                        ? 'An evaluation with any item at the lowest rating does not count'
+                        : 'Every submitted evaluation counts'
+                    }
+                  />
                 )}
                 {requirement.required_courses && requirement.required_courses.length > 0 && (
                   <DetailRow

@@ -5,7 +5,11 @@
 # ============================================
 # Stage 1: Base
 # ============================================
-FROM python:3.14-slim as base
+# Pinned to the Python the test suites run on (actions/setup-python in
+# .github/workflows/ci.yml), owner decision 2026-11-01: an image must not run
+# an interpreter no test ever ran on. Move both together;
+# tests/test_image_runtime_versions.py fails when they differ.
+FROM python:3.13-slim as base
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -23,6 +27,14 @@ RUN apt-get update && apt-get install -y \
     libsasl2-dev \
     libmagic1 \
     pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# ffmpeg strips History audio and video of their metadata (a phone recording
+# carries where it was made) and makes a video's poster frame. Without it the
+# backend refuses audio and video uploads rather than keep them unstripped.
+# --no-install-recommends keeps out the X11, Vulkan and font packages the
+# Debian ffmpeg recommends and the server never uses.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app user

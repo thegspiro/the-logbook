@@ -11,21 +11,30 @@
 
 import React from 'react';
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from 'lucide-react';
+import { FormField } from '../../../components/ux/FormField';
 import { newAgendaItemKey } from '../utils/agendaItemKey';
+import { AGENDA_ITEM_LIMITS, agendaErrorKey } from '../utils/agendaItemFields';
 import { AgendaDocumentPicker } from './AgendaDocumentPicker';
 import type { AgendaItem } from '../../../services/api';
 
 export const MAX_AGENDA_ITEMS = 60;
 const MAX_ITEM_DOCUMENTS = 10;
-
 interface AgendaItemsEditorProps {
   idPrefix: string;
   items: AgendaItem[];
   onChange: (items: AgendaItem[]) => void;
   disabled?: boolean;
+  /** Refusals to show on item fields, keyed by `agendaErrorKey`. */
+  errors?: Partial<Record<string, string>> | undefined;
 }
 
-export const AgendaItemsEditor: React.FC<AgendaItemsEditorProps> = ({ idPrefix, items, onChange, disabled }) => {
+export const AgendaItemsEditor: React.FC<AgendaItemsEditorProps> = ({
+  idPrefix,
+  items,
+  onChange,
+  disabled,
+  errors = {},
+}) => {
   const patch = (key: string, change: Partial<AgendaItem>) =>
     onChange(items.map((item) => (item.key === key ? { ...item, ...change } : item)));
 
@@ -66,35 +75,44 @@ export const AgendaItemsEditor: React.FC<AgendaItemsEditorProps> = ({ idPrefix, 
           return (
             <li key={item.key} className="border-theme-surface-border rounded-md border p-3">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-[2fr_1fr_auto]">
-                <div>
-                  <label htmlFor={`${base}-title`} className="form-label">
-                    Item {index + 1}
-                  </label>
-                  <input
-                    id={`${base}-title`}
-                    type="text"
-                    maxLength={200}
-                    value={item.title}
-                    disabled={disabled}
-                    onChange={(e) => patch(item.key, { title: e.target.value })}
-                    placeholder="Treasurer's report"
-                    className="form-input"
-                  />
-                </div>
-                <div>
-                  <label htmlFor={`${base}-presenter`} className="form-label">
-                    Presented by
-                  </label>
-                  <input
-                    id={`${base}-presenter`}
-                    type="text"
-                    maxLength={200}
-                    value={item.presenter}
-                    disabled={disabled}
-                    onChange={(e) => patch(item.key, { presenter: e.target.value })}
-                    className="form-input"
-                  />
-                </div>
+                <FormField
+                  label={`Item ${index + 1}`}
+                  required
+                  id={`${base}-title`}
+                  error={errors[agendaErrorKey(item.key, 'title')]}
+                  maxLength={AGENDA_ITEM_LIMITS.title}
+                  count={item.title.length}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="text"
+                      value={item.title}
+                      disabled={disabled}
+                      onChange={(e) => patch(item.key, { title: e.target.value })}
+                      placeholder="Treasurer's report"
+                      className="form-input"
+                    />
+                  )}
+                </FormField>
+                <FormField
+                  label="Presented by"
+                  id={`${base}-presenter`}
+                  error={errors[agendaErrorKey(item.key, 'presenter')]}
+                  maxLength={AGENDA_ITEM_LIMITS.presenter}
+                  count={item.presenter.length}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="text"
+                      value={item.presenter}
+                      disabled={disabled}
+                      onChange={(e) => patch(item.key, { presenter: e.target.value })}
+                      className="form-input"
+                    />
+                  )}
+                </FormField>
                 <div className="flex items-end gap-1">
                   <button
                     type="button"
@@ -116,7 +134,7 @@ export const AgendaItemsEditor: React.FC<AgendaItemsEditorProps> = ({ idPrefix, 
                   </button>
                   <button
                     type="button"
-                    className="btn-icon text-red-600 hover:text-red-700"
+                    className="btn-icon text-red-800 hover:text-red-900 dark:text-red-300 dark:hover:text-red-200"
                     disabled={disabled}
                     onClick={() => onChange(items.filter((i) => i.key !== item.key))}
                     aria-label={`Remove item ${index + 1}`}
@@ -126,20 +144,25 @@ export const AgendaItemsEditor: React.FC<AgendaItemsEditorProps> = ({ idPrefix, 
                 </div>
               </div>
 
-              <div className="mt-3">
-                <label htmlFor={`${base}-notes`} className="form-label">
-                  Notes to start the section from
-                </label>
-                <textarea
-                  id={`${base}-notes`}
-                  rows={2}
-                  maxLength={2000}
-                  value={item.notes}
-                  disabled={disabled}
-                  onChange={(e) => patch(item.key, { notes: e.target.value })}
-                  className="form-input"
-                />
-              </div>
+              <FormField
+                className="mt-3"
+                label="Notes to start the section from"
+                id={`${base}-notes`}
+                error={errors[agendaErrorKey(item.key, 'notes')]}
+                maxLength={AGENDA_ITEM_LIMITS.notes}
+                count={item.notes.length}
+              >
+                {(field) => (
+                  <textarea
+                    {...field}
+                    rows={2}
+                    value={item.notes}
+                    disabled={disabled}
+                    onChange={(e) => patch(item.key, { notes: e.target.value })}
+                    className="form-input"
+                  />
+                )}
+              </FormField>
 
               <div className="mt-3">
                 <label className="flex items-center gap-2 text-sm">
@@ -153,20 +176,25 @@ export const AgendaItemsEditor: React.FC<AgendaItemsEditorProps> = ({ idPrefix, 
                   <span className="text-theme-text-primary">Needs a motion and a second</span>
                 </label>
                 {item.needs_motion && (
-                  <div className="mt-2">
-                    <label htmlFor={`${base}-motion`} className="form-label">
-                      Motion wording
-                    </label>
-                    <textarea
-                      id={`${base}-motion`}
-                      rows={2}
-                      maxLength={2000}
-                      value={item.motion_text}
-                      disabled={disabled}
-                      onChange={(e) => patch(item.key, { motion_text: e.target.value })}
-                      className="form-input"
-                    />
-                  </div>
+                  <FormField
+                    className="mt-2"
+                    label="Motion wording"
+                    id={`${base}-motion`}
+                    error={errors[agendaErrorKey(item.key, 'motion_text')]}
+                    maxLength={AGENDA_ITEM_LIMITS.motion_text}
+                    count={item.motion_text.length}
+                  >
+                    {(field) => (
+                      <textarea
+                        {...field}
+                        rows={2}
+                        value={item.motion_text}
+                        disabled={disabled}
+                        onChange={(e) => patch(item.key, { motion_text: e.target.value })}
+                        className="form-input"
+                      />
+                    )}
+                  </FormField>
                 )}
               </div>
 

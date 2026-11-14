@@ -103,8 +103,8 @@ describe('RunoffChain', () => {
     });
     const labels = screen.getAllByText(/^(Original|Runoff \d)$/).map((n) => n.textContent);
     expect(labels).toEqual(['Original', 'Runoff 1', 'Runoff 2']);
-    expect(screen.getAllByText(/closed · 18 votes/)).toHaveLength(2);
-    expect(screen.getByText(/closed · 19 votes/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Closed · 18 votes/)).toHaveLength(2);
+    expect(screen.getByText(/Closed · 19 votes/)).toBeInTheDocument();
   });
 
   it('renders nothing for an election with no runoffs', async () => {

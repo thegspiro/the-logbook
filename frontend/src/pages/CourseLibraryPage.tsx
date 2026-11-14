@@ -312,8 +312,8 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
                 aria-describedby="course-credit-hours-help"
               />
               <p id="course-credit-hours-help" className="text-theme-text-muted mt-1 text-xs">
-                The training hours a member is credited with. Left blank, a session from this course credits its
-                duration.
+                The training hours a member is credited with, by a session of this course or by a mapped provider
+                completion that reports no hours. Left blank, the course credits its duration.
               </p>
             </div>
           </div>
@@ -635,11 +635,11 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
             header, where a strip and trail would sit within the very hub the
             trail points at. */}
         {embedded ? (
-          <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-theme-text-muted text-sm">
+          <div className="split-row mb-8 gap-4 sm:items-center">
+            <p className="split-row-main text-theme-text-muted text-sm">
               Organization-wide training course catalog ({courses.length} course{courses.length !== 1 ? 's' : ''})
             </p>
-            {addCourseButton}
+            <div className="split-row-aside">{addCourseButton}</div>
           </div>
         ) : (
           <TrainingPageHeader

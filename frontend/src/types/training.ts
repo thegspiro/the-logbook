@@ -2,7 +2,12 @@
  * Training type definitions
  */
 
-import type { PracticalSkillsMethod, RequirementChangeScope } from '../constants/enums';
+import type {
+  LeaveMonthRule,
+  PracticalSkillsMethod,
+  RequirementChangeScope,
+  TrainingRecordSource,
+} from '../constants/enums';
 import type { Event } from './event';
 
 export type TrainingType =
@@ -111,6 +116,8 @@ export interface TrainingSessionCreate {
   program_id?: string | undefined; // Training program (Recruit School, Driver Training, etc.)
   phase_id?: string | undefined; // Program phase
   requirement_id?: string | undefined; // Specific requirement this satisfies
+  // Session-attendance requirements whose members are charged with attending
+  attendance_requirement_ids?: string[] | undefined;
 
   // Training details (for new course)
   course_name?: string | undefined;
@@ -601,6 +608,13 @@ export interface TrainingRecord {
   voided_at?: string | null;
   voided_by?: string | null;
   void_reason?: string | null;
+  /**
+   * Where the record came from, worked out by the server for record lists:
+   * a provider sync ("Target Solutions"), the Historical Data Import
+   * ("Imported") or The Logbook itself. Absent on a create or edit reply.
+   */
+  source?: TrainingRecordSource | null;
+  source_label?: string | null;
   notes?: string;
   attachments?: string[];
   rank_at_completion?: string;
@@ -741,6 +755,25 @@ export interface ChecklistItem {
   member_can_complete?: boolean;
 }
 
+/** One kind of record that names a requirement, as the delete dialog lists it. */
+export interface TrainingRequirementReference {
+  kind: string;
+  label: string;
+  count: number;
+  /** What a permanent delete does: deletes these rows, or keeps them without the link. */
+  on_delete: 'removed' | 'unlinked';
+}
+
+/** What uses a requirement — GET /training/requirements/{id}/deletion-impact. */
+export interface TrainingRequirementDeletionImpact {
+  requirement_id: string;
+  name: string;
+  active: boolean;
+  /** Zero means an ordinary delete removes it; otherwise an ordinary delete deactivates it. */
+  total: number;
+  references: TrainingRequirementReference[];
+}
+
 export interface TrainingRequirement {
   id: string;
   organization_id: string;
@@ -761,6 +794,14 @@ export interface TrainingRequirement {
   required_courses?: string[];
   required_shifts?: number;
   required_calls?: number;
+  required_transports?: number | null;
+  required_refusals?: number | null;
+  /** Session attendance: the share (1-100) of linked sessions to attend. */
+  required_attendance_pct?: number | null;
+  /** Session attendance: may the Chief override it for a member? */
+  allows_chief_override?: boolean;
+  /** Evaluated shifts: count only evaluations with no item at the form's lowest rating. */
+  evaluation_excludes_lowest_rating?: boolean;
   required_call_types?: string[];
   required_skills?: string[];
   checklist_items?: ChecklistItem[];
@@ -823,6 +864,11 @@ export interface TrainingRequirementCreate {
   required_courses?: string[] | undefined;
   required_shifts?: number | null | undefined;
   required_calls?: number | null | undefined;
+  required_transports?: number | null | undefined;
+  required_refusals?: number | null | undefined;
+  required_attendance_pct?: number | null | undefined;
+  allows_chief_override?: boolean | undefined;
+  evaluation_excludes_lowest_rating?: boolean | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
   checklist_items?: ChecklistItem[] | null | undefined;
@@ -874,6 +920,11 @@ export interface TrainingRequirementUpdate {
   required_courses?: string[] | undefined;
   required_shifts?: number | null | undefined;
   required_calls?: number | null | undefined;
+  required_transports?: number | null | undefined;
+  required_refusals?: number | null | undefined;
+  required_attendance_pct?: number | null | undefined;
+  allows_chief_override?: boolean | undefined;
+  evaluation_excludes_lowest_rating?: boolean | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
   checklist_items?: ChecklistItem[] | null | undefined;
@@ -944,12 +995,27 @@ export interface RequirementProgress {
   days_until_due?: number; // Negative if overdue
   /** Set while an existing member's catch-up period runs; due_date matches it. */
   catch_up_deadline?: string | null;
+  /** No session of a session-attendance requirement held yet: neither complete nor not. */
+  not_applicable?: boolean;
 }
 
 // ==================== Training Program Types ====================
 
 export type RequirementType =
-  'hours' | 'courses' | 'certification' | 'shifts' | 'calls' | 'skills_evaluation' | 'checklist' | 'knowledge_test';
+  | 'hours'
+  | 'courses'
+  | 'certification'
+  | 'shifts'
+  | 'calls'
+  | 'skills_evaluation'
+  | 'checklist'
+  | 'knowledge_test'
+  // Credited by submitted shift evaluations.
+  | 'evaluated_shifts'
+  | 'transports'
+  | 'refusals'
+  // Attend a share of the sessions linked to the requirement.
+  | 'session_attendance';
 
 export type RequirementSource = 'department' | 'state' | 'national';
 
@@ -1026,6 +1092,8 @@ export interface TrainingProgram {
   recert_interval_months?: number;
   recert_anchor_month?: number;
   recert_anchor_day?: number;
+  /** The shift evaluation form members enrolled in this program are evaluated on. */
+  shift_evaluation_template_id?: string | null;
   created_at: string;
   updated_at: string;
   created_by?: string;
@@ -1048,6 +1116,7 @@ export interface TrainingProgramCreate {
   recert_interval_months?: number | undefined;
   recert_anchor_month?: number | undefined;
   recert_anchor_day?: number | undefined;
+  shift_evaluation_template_id?: string | undefined;
 }
 
 export interface ProgramPhase {
@@ -1144,6 +1213,8 @@ export interface TrainingProgramUpdate {
   /** Omit to leave alone; `[]` or `null` clears every prerequisite. */
   prerequisite_program_ids?: string[] | null | undefined;
   allows_concurrent_enrollment?: boolean | undefined;
+  /** Omit to leave alone; `null` removes the program's evaluation form. */
+  shift_evaluation_template_id?: string | null | undefined;
 }
 
 export interface ProgramPhaseUpdate {
@@ -1155,11 +1226,77 @@ export interface ProgramPhaseUpdate {
   prerequisite_phase_ids?: string[] | undefined;
 }
 
+export type MilestoneItemType = 'course' | 'skill_test' | 'knowledge_test';
+export type MilestoneMatchMode = 'all' | 'any';
+
+/** A course, skills test (skill template) or knowledge test a milestone waits for. */
+export interface MilestoneItemInput {
+  item_type: MilestoneItemType;
+  item_id: string;
+}
+
+export interface MilestoneItem extends MilestoneItemInput {
+  id: string;
+  /** Null when the course or test can no longer be read. */
+  name?: string | null;
+}
+
+export interface MilestoneRecipientLabel {
+  id: string;
+  name?: string | null;
+}
+
 export interface ProgramMilestoneUpdate {
   name?: string | undefined;
   description?: string | null | undefined;
-  completion_percentage_threshold?: number | undefined;
+  /** null removes the percentage, leaving the milestone to its items. */
+  completion_percentage_threshold?: number | null | undefined;
   notification_message?: string | null | undefined;
+  /** Replaces the whole set when sent. */
+  items?: MilestoneItemInput[] | undefined;
+  item_match_mode?: MilestoneMatchMode | undefined;
+  counts_prior_completions?: boolean | undefined;
+  notify_member?: boolean | undefined;
+  notify_position_ids?: string[] | undefined;
+  notify_user_ids?: string[] | undefined;
+  officer_message?: string | null | undefined;
+}
+
+export interface MilestoneOption {
+  id: string;
+  name: string;
+  detail?: string | null;
+}
+
+/** Everything the milestone editor offers to pick from. */
+export interface MilestoneOptions {
+  courses: MilestoneOption[];
+  skill_tests: MilestoneOption[];
+  knowledge_tests: MilestoneOption[];
+  positions: MilestoneOption[];
+  members: MilestoneOption[];
+}
+
+export interface MilestoneItemStatus {
+  item_type: MilestoneItemType;
+  item_id: string;
+  name?: string | null;
+  completed: boolean;
+}
+
+/** Where a member stands on one milestone of their enrollment. */
+export interface MemberMilestoneStatus {
+  id: string;
+  name: string;
+  description?: string | null;
+  phase_id?: string | null;
+  completion_percentage_threshold?: number | null;
+  percentage_met: boolean;
+  item_match_mode: MilestoneMatchMode;
+  items: MilestoneItemStatus[];
+  /** Reached this cycle, whether or not anyone was told. */
+  reached: boolean;
+  reached_at?: string | null;
 }
 
 export type EligibilityStatus = 'eligible' | 'enrolled' | 'prerequisite' | 'concurrent';
@@ -1190,12 +1327,21 @@ export interface SampleTemplateSummary {
 export interface ProgramMilestone {
   id: string;
   program_id: string;
-  phase_id?: string;
+  phase_id?: string | null;
   name: string;
-  description?: string;
-  completion_percentage_threshold: number;
-  notification_message?: string;
+  description?: string | null;
+  /** Null for a milestone that waits only on its items. */
+  completion_percentage_threshold?: number | null;
+  notification_message?: string | null;
   created_at: string;
+  items?: MilestoneItem[];
+  item_match_mode?: MilestoneMatchMode;
+  counts_prior_completions?: boolean;
+  notify_member?: boolean;
+  /** Officer data: empty when a member views the program. */
+  notify_positions?: MilestoneRecipientLabel[];
+  notify_users?: MilestoneRecipientLabel[];
+  officer_message?: string | null;
 }
 
 export interface ProgramMilestoneCreate {
@@ -1203,8 +1349,15 @@ export interface ProgramMilestoneCreate {
   phase_id?: string | undefined;
   name: string;
   description?: string | undefined;
-  completion_percentage_threshold: number;
+  completion_percentage_threshold?: number | undefined;
   notification_message?: string | undefined;
+  items?: MilestoneItemInput[] | undefined;
+  item_match_mode?: MilestoneMatchMode | undefined;
+  counts_prior_completions?: boolean | undefined;
+  notify_member?: boolean | undefined;
+  notify_position_ids?: string[] | undefined;
+  notify_user_ids?: string[] | undefined;
+  officer_message?: string | undefined;
 }
 
 export interface ProgramEnrollment {
@@ -1325,6 +1478,8 @@ export interface MemberProgramProgress {
   completed_requirements: number;
   total_requirements: number;
   next_milestones: ProgramMilestone[];
+  /** Every milestone with the member's standing on it. */
+  milestones?: MemberMilestoneStatus[];
   time_remaining_days?: number;
   is_behind_schedule: boolean;
   /**
@@ -1370,6 +1525,8 @@ export interface ProgramImportSummary {
   requirements_created: string[];
   /** Existing department requirements the program will link to. */
   requirements_reused: string[];
+  /** Milestone items ("Milestone: item") with no match here; left off. */
+  unmatched_milestone_items?: string[];
 }
 
 export interface ProgramImportPreview {
@@ -1446,6 +1603,9 @@ export interface ProgramBuildRequirementInput {
   required_hours?: number | undefined;
   required_shifts?: number | undefined;
   required_calls?: number | undefined;
+  required_transports?: number | undefined;
+  required_refusals?: number | undefined;
+  evaluation_excludes_lowest_rating?: boolean | undefined;
   passing_score?: number | undefined;
   max_attempts?: number | undefined;
   checklist_items?: ChecklistItem[] | undefined;
@@ -1900,6 +2060,11 @@ export interface TrainingSubmissionCreate {
   attachments?: string[] | undefined;
   /** Park the submission in the member's own list instead of sending it for review. */
   save_as_draft?: boolean | undefined;
+  /**
+   * Repeated on every send of this one submission, so a resend after a lost
+   * answer is stored once. Set by trainingSubmissionService.createSubmission.
+   */
+  client_request_id?: string | undefined;
 }
 
 /**
@@ -2092,12 +2257,25 @@ export interface MonthlyShiftData {
   calls?: number;
 }
 
+/**
+ * A member's average on one shift evaluation form, on that form's own scale.
+ * Never pooled with the 1-5 shift report rating or with another form.
+ */
+export interface ShiftEvaluationAverage {
+  template_id: string | null;
+  form_name: string;
+  scale_max: number;
+  average: number;
+  evaluations: number;
+}
+
 export interface TraineeShiftStats {
   total_reports: number;
   total_hours: number | null;
   total_calls: number | null;
   avg_rating: number | null;
   monthly: MonthlyShiftData[];
+  evaluation_averages?: ShiftEvaluationAverage[];
 }
 
 export interface OfficerAnalyticsTrainee {
@@ -2212,6 +2390,8 @@ export interface RequirementDetail {
   id: string;
   name: string;
   description?: string;
+  /** What `completed_hours` / `required_hours` count — hours only for `hours`. */
+  requirement_type?: RequirementType;
   frequency: string;
   training_type?: string;
   required_hours: number;
@@ -2223,6 +2403,11 @@ export interface RequirementDetail {
   due_date?: string | null;
   days_until_due?: number | null;
   waived_months?: number;
+  /** Of `waived_months`, those a leave of absence and those a training waiver
+   * excused. A month both covered counts in both. */
+  leave_months?: number;
+  waiver_months?: number;
+  /** Fractional when a partial month was excused. */
   active_months?: number;
   cert_expired?: boolean;
   blocks_activity?: boolean;
@@ -2232,6 +2417,11 @@ export interface RequirementDetail {
    * the met/total summary until it passes.
    */
   catch_up_deadline?: string | null;
+  /**
+   * A session-attendance requirement no session of which has been held in the
+   * member's window yet: neither met nor unmet, and left out of met/total.
+   */
+  not_applicable?: boolean;
   /**
    * For a requirement whose completion window crosses the year (November to
    * January): the date the next window opens. Until then a class taken in the
@@ -2246,11 +2436,74 @@ export interface RequirementDetail {
   /**
    * Hours per calendar month over the window, zeros included, for an hours
    * requirement. These are the records the server counted, so they sum to
-   * `completed_hours`. `waived` marks a month covered by leave, the same
-   * months the requirement's target was prorated by. Null for every other
-   * requirement type.
+   * `completed_hours`, including hours earned while excused. `waived` marks a
+   * month leave or a waiver excused any of, the same months the requirement's
+   * target was prorated by. Null for every other requirement type.
    */
-  monthly_hours?: Array<{ month: string; hours: number; waived?: boolean }> | null;
+  monthly_hours?: RequirementMonth[] | null;
+  /**
+   * Shifts worked or calls run per calendar month, for a shift or call
+   * requirement: `monthly_hours`' counterpart, with `count` in place of
+   * `hours` and the same leave fields. Null for every other type.
+   */
+  monthly_counts?: RequirementCountMonth[] | null;
+  /**
+   * For a `courses` requirement: each required course, in the requirement's
+   * order, ticked by the same test the count uses. Null for every other type.
+   */
+  course_checklist?: RequirementCourseEntry[] | null;
+}
+
+export interface RequirementCourseEntry {
+  course_id: string;
+  /** Null when the course is no longer in the department's library. */
+  name: string | null;
+  code: string | null;
+  completed: boolean;
+  /** Latest completion inside the window; null when the record carries no date. */
+  completed_on: string | null;
+}
+
+/** A month of a shift or call requirement: `RequirementMonth` with a count. */
+export interface RequirementCountMonth extends Omit<RequirementMonth, 'hours'> {
+  count: number;
+}
+
+export interface RequirementMonth {
+  /** `YYYY-MM`. */
+  month: string;
+  hours: number;
+  waived?: boolean;
+  /** Share of the month's target excused, 0–1; under 1 for a partial month. */
+  waived_share?: number;
+  /** A leave of absence covered part or all of the month. */
+  on_leave?: boolean;
+  /** A training waiver covered part or all of the month. */
+  on_waiver?: boolean;
+}
+
+/** A member's leave of absence as the officer view shows it: dates and type only. */
+export interface MemberLeavePeriod {
+  id: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string | null;
+  /** False for a leave an officer marked exempt: training requirements stay in force. */
+  excuses_training?: boolean;
+}
+
+/** `/training/module-config/members/{id}/requirements`: one member, officer's view. */
+export interface MemberRequirementsResponse {
+  user_id: string;
+  as_of: string;
+  leave_month_rule: LeaveMonthRule;
+  requirements_summary: {
+    total_requirements: number;
+    met_requirements: number;
+    avg_compliance: number | null;
+  };
+  requirements_detail: RequirementDetail[];
+  leaves_of_absence: MemberLeavePeriod[];
 }
 
 /** One training record on the History tab, from `/my-training/records`. */
@@ -2267,12 +2520,28 @@ export interface MyTrainingHistoryRecord {
   instructor?: string | null;
   voided_at?: string | null;
   void_reason?: string | null;
+  source: TrainingRecordSource;
+  source_label: string;
 }
 
 export interface MyTrainingHistoryYear {
   /** Four digits, or `undated` for records still awaiting approval. */
   year: string;
   records: number;
+  hours?: number;
+  /**
+   * The year's totals per calendar month, newest first, counted the way the
+   * year is. Only months with a record; empty for the undated group. Absent
+   * from a server older than this field.
+   */
+  months?: MyTrainingHistoryMonth[];
+}
+
+export interface MyTrainingHistoryMonth {
+  /** `YYYY-MM`. */
+  month: string;
+  records: number;
+  /** Absent when the department hides training hours from members. */
   hours?: number;
 }
 
@@ -2287,6 +2556,9 @@ export interface MyTrainingHistoryPage {
 export interface MyTrainingSummary {
   visibility: MemberVisibility;
   requirements_detail?: RequirementDetail[];
+  /** Sent with `requirements_detail`: the leaves behind a reduced target. */
+  leaves_of_absence?: MemberLeavePeriod[];
+  leave_month_rule?: LeaveMonthRule;
   training_records?: Array<{
     id: string;
     course_name: string;
@@ -2383,6 +2655,7 @@ export interface MyTrainingSummary {
     hours_reported: number;
     total_calls: number;
     avg_rating: number | null;
+    evaluation_averages?: ShiftEvaluationAverage[];
   };
   submissions?: Array<{
     id: string;
@@ -3151,6 +3424,8 @@ export interface ComplianceConfigData {
   atRiskThreshold: number;
   gracePeriodDays: number;
   includeCurrentMonth: boolean;
+  /** Absent from a server that predates the setting; read as `full_month`. */
+  leaveMonthRule?: LeaveMonthRule;
   autoReportFrequency: string;
   // `| null`, not just `| undefined`: the backend schema field is
   // `Optional[List[...]] = None`, so a config an officer explicitly cleared
@@ -3173,6 +3448,7 @@ export interface ComplianceConfigUpdate {
   at_risk_threshold?: number | undefined;
   grace_period_days?: number | undefined;
   include_current_month?: boolean | undefined;
+  leave_month_rule?: LeaveMonthRule | undefined;
   auto_report_frequency?: string | undefined;
   // `| null`: this payload also serves `PUT /config` (a partial update, per
   // `exclude_unset` on the backend), where an omitted key leaves the stored
@@ -3189,6 +3465,12 @@ export interface AvailableRequirement {
   requirement_type: string;
   source: string | null;
   frequency: string | null;
+}
+
+/** A position a compliance profile can be scoped to (`role_ids` holds these ids). */
+export interface AvailablePosition {
+  id: string;
+  name: string;
 }
 
 export interface ComplianceReportGenerate {
@@ -3286,4 +3568,286 @@ export interface MemberPeriodStatusResponse {
   end_date: string;
   members: MemberPeriodStatusRow[];
   generated_at: string;
+}
+
+// ============================================
+// Shift Evaluation Templates
+// ============================================
+
+export const ShiftEvaluationStatistic = {
+  CALLS: 'calls',
+  TRANSPORTS: 'transports',
+  REFUSALS: 'refusals',
+} as const;
+export type ShiftEvaluationStatistic = (typeof ShiftEvaluationStatistic)[keyof typeof ShiftEvaluationStatistic];
+
+export const GeneralShiftEvaluationMode = {
+  OFF: 'off',
+  OPTIONAL: 'optional',
+  REQUIRED: 'required',
+} as const;
+export type GeneralShiftEvaluationMode = (typeof GeneralShiftEvaluationMode)[keyof typeof GeneralShiftEvaluationMode];
+
+export interface ShiftEvaluationScaleLevel {
+  value: number;
+  label: string;
+}
+
+export interface ShiftEvaluationHeaderField {
+  /** Kept across edits; omitted for a new field and minted by the server. */
+  key?: string | undefined;
+  label: string;
+  type: 'text' | 'choice';
+  options: string[];
+  required: boolean;
+}
+
+export interface ShiftEvaluationTemplateItem {
+  key?: string | undefined;
+  label: string;
+  description?: string | null | undefined;
+  comment_always_required: boolean;
+}
+
+export interface ShiftEvaluationTemplateSection {
+  key?: string | undefined;
+  title: string;
+  column_heading: string;
+  items: ShiftEvaluationTemplateItem[];
+}
+
+/** The whole template as the editor saves it (create and update take the same body). */
+export interface ShiftEvaluationTemplateWrite {
+  name: string;
+  description?: string | null | undefined;
+  is_active: boolean;
+  scale: ShiftEvaluationScaleLevel[];
+  allow_not_applicable: boolean;
+  not_applicable_label: string;
+  comment_required_at_or_below: number | null;
+  header_fields: ShiftEvaluationHeaderField[];
+  statistics: ShiftEvaluationStatistic[];
+  sections: ShiftEvaluationTemplateSection[];
+  closing_comments_label?: string | null | undefined;
+  closing_comments_hint?: string | null | undefined;
+  evaluator_rule: 'shift_officer';
+  /** Seat tokens; read only when this is the department's general form. */
+  evaluated_seats: string[];
+}
+
+export interface ShiftEvaluationTemplate extends ShiftEvaluationTemplateWrite {
+  id: string;
+  organization_id: string;
+  version: number;
+  /** Programs that use this form. */
+  program_names: string[];
+  is_general_form: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShiftEvaluationSettings {
+  general_shift_evaluation_template_id: string | null;
+  general_shift_evaluation_mode: GeneralShiftEvaluationMode;
+  one_shift_evaluation_for_multiple_programs: boolean;
+  /** Days after an outside shift ends that a preceptor link stays open. */
+  shift_evaluation_link_days: number;
+}
+
+export interface ShiftEvaluationSettingsUpdate {
+  general_shift_evaluation_template_id?: string | null | undefined;
+  general_shift_evaluation_mode?: GeneralShiftEvaluationMode | undefined;
+  one_shift_evaluation_for_multiple_programs?: boolean | undefined;
+  shift_evaluation_link_days?: number | undefined;
+}
+
+/** A no-login link an outside preceptor fills one evaluation out through. */
+export interface PreceptorLink {
+  id: string;
+  scope_key: string;
+  /** The link itself, a bearer credential: shown as a QR code and copied. */
+  url: string;
+  expires_at: string;
+  created_at: string;
+  created_by_member: boolean;
+  preceptor_email: string | null;
+  last_sent_at: string | null;
+  /** Whether this request's email went out. */
+  email_sent: boolean;
+}
+
+/** What the preceptor's page shows: the member, the shift and the form. */
+export interface PublicShiftEvaluationView {
+  organization_name: string;
+  member_name: string;
+  shift_date: string;
+  shift_start: string | null;
+  shift_end: string | null;
+  unit_label: string | null;
+  template: ShiftEvaluationFormSnapshot;
+  expires_at: string;
+}
+
+// ============================================
+// Shift Evaluations (filled out)
+// ============================================
+
+/** A copy of the form an evaluation was filled out on (the server's snapshot). */
+export interface ShiftEvaluationFormSnapshot {
+  id?: string | undefined;
+  version?: number | undefined;
+  name: string;
+  scale: ShiftEvaluationScaleLevel[];
+  allow_not_applicable: boolean;
+  not_applicable_label: string;
+  comment_required_at_or_below: number | null;
+  header_fields: ShiftEvaluationHeaderField[];
+  statistics: ShiftEvaluationStatistic[];
+  sections: ShiftEvaluationTemplateSection[];
+  closing_comments_label?: string | null | undefined;
+  closing_comments_hint?: string | null | undefined;
+}
+
+export interface ShiftEvaluationItemAnswer {
+  rating: number | null;
+  not_applicable: boolean;
+  comment?: string | null | undefined;
+}
+
+export interface ShiftEvaluationSummary {
+  id: string;
+  status: 'draft' | 'submitted';
+  average_rating: number | null;
+  rated_count: number;
+  low_rating_count: number;
+  evaluator_name: string | null;
+  submitted_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ShiftEvaluationRequirement {
+  member_id: string;
+  member_name: string;
+  seat: string | null;
+  /** An enrollment id, 'combined' or 'general'. */
+  scope_key: string;
+  program_names: string[];
+  required: boolean;
+  template_options: { id: string; name: string }[];
+  evaluation: ShiftEvaluationSummary | null;
+}
+
+/** What an evaluation is about: a department shift, or a shift logged on an outside agency's unit. */
+export type ShiftEvaluationOccasion = 'shift' | 'external';
+
+export interface ShiftEvaluationRoster {
+  occasion: ShiftEvaluationOccasion;
+  shift_id: string | null;
+  external_shift_id: string | null;
+  shift_date: string;
+  shift_start: string | null;
+  shift_end: string | null;
+  unit_label: string | null;
+  platoon: string | null;
+  requirements: ShiftEvaluationRequirement[];
+}
+
+export interface ShiftEvaluationDetail {
+  id: string;
+  member_id: string;
+  member_name: string | null;
+  evaluator_id: string | null;
+  evaluator_name: string | null;
+  occasion: ShiftEvaluationOccasion;
+  shift_id: string | null;
+  external_shift_id: string | null;
+  /** The outside preceptor named on an outside-shift evaluation. */
+  preceptor_name: string | null;
+  /** Submitted by the preceptor through a no-login link. */
+  via_preceptor_link?: boolean;
+  /** The evaluated member made that link themselves. */
+  link_created_by_member?: boolean;
+  shift_date: string;
+  shift_start: string | null;
+  shift_end: string | null;
+  unit_label: string | null;
+  scope_key: string;
+  program_names: string[];
+  template_id: string | null;
+  template_version: number;
+  template: ShiftEvaluationFormSnapshot;
+  status: 'draft' | 'submitted';
+  header_values: Record<string, string>;
+  statistics: Partial<Record<ShiftEvaluationStatistic, number>>;
+  responses: Record<string, ShiftEvaluationItemAnswer>;
+  closing_comments: string | null;
+  average_rating: number | null;
+  rated_count: number;
+  low_rating_count: number;
+  submitted_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ShiftEvaluationFormResponse {
+  requirement: ShiftEvaluationRequirement;
+  occasion: ShiftEvaluationOccasion;
+  shift_id: string | null;
+  external_shift_id: string | null;
+  shift_date: string;
+  shift_start: string | null;
+  shift_end: string | null;
+  unit_label: string | null;
+  platoon: string | null;
+  template: ShiftEvaluationFormSnapshot;
+  template_id: string | null;
+  evaluation: ShiftEvaluationDetail | null;
+  prefill_statistics: Partial<Record<ShiftEvaluationStatistic, number>>;
+}
+
+export interface ShiftEvaluationSaveBody {
+  template_id?: string | undefined;
+  header_values: Record<string, string>;
+  statistics: Partial<Record<ShiftEvaluationStatistic, number>>;
+  responses: Record<string, ShiftEvaluationItemAnswer>;
+  closing_comments?: string | null | undefined;
+  /** Outside shifts only: the preceptor who did the evaluating. */
+  preceptor_name?: string | null | undefined;
+  submit: boolean;
+}
+
+/** A logged outside shift still waiting on its evaluation. */
+export interface OutsideShiftAwaitingEvaluation {
+  entry_id: string;
+  member_id: string;
+  member_name: string | null;
+  shift_date: string;
+  start_at: string | null;
+  end_at: string | null;
+  agency_name: string;
+  apparatus_name: string;
+  evaluation_status: 'needed' | 'draft';
+  /** The evaluation to open first: the first one not yet submitted. */
+  scope_key: string;
+}
+
+/** A Chief's override of a session-attendance requirement for one member. */
+export interface RequirementOverride {
+  id: string;
+  requirement_id: string;
+  user_id: string;
+  member_name: string;
+  start_date: string;
+  end_date: string;
+  reason: string;
+  granted_by_name?: string | null;
+  granted_at: string;
+  revoked_at?: string | null;
+  revoked_by_name?: string | null;
+}
+
+export interface RequirementOverrideCreate {
+  user_id: string;
+  start_date: string;
+  end_date: string;
+  reason: string;
 }

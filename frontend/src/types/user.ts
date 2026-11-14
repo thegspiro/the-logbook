@@ -4,6 +4,8 @@
 
 import type {
   ConsentStatus,
+  MemberClass,
+  MemberStatus,
   EmailLinkDomainSource,
   FiscalYearLabel,
   GoogleAuthMethod,
@@ -38,6 +40,9 @@ export interface User {
   platoon?: string | undefined;
   status: UserStatus;
   membership_type?: string | undefined;
+  /** The pair `membership_type` fuses; see `UserProfileUpdate`. */
+  member_class?: string | null | undefined;
+  member_status?: string | null | undefined;
   compliance_exempt?: boolean | undefined;
   date_of_birth?: string | undefined;
   hire_date?: string | undefined;
@@ -210,7 +215,8 @@ export interface FileStorageSettings {
   s3_secret_access_key?: string;
   s3_bucket_name?: string;
   s3_region?: string;
-  s3_endpoint_url?: string;
+  /** Null clears it, meaning Amazon S3's own endpoint for the region. */
+  s3_endpoint_url?: string | null | undefined;
   // Local
   local_storage_path?: string;
 }
@@ -242,6 +248,12 @@ export interface FileStorageStatus {
   problem: string | null;
   s3_problem: string | null;
   private_endpoints_allowed: boolean;
+  /**
+   * The self-hosted S3/MinIO endpoints the installation operator listed
+   * (`S3_ALLOWED_ENDPOINTS`): the only custom endpoints a department may pick.
+   * Empty means Amazon S3 only.
+   */
+  allowed_s3_endpoints: string[];
 }
 
 /**
@@ -330,22 +342,30 @@ export interface EmergencyContact {
 
 export interface UserProfileUpdate {
   first_name?: string | undefined;
-  middle_name?: string | undefined;
+  middle_name?: string | null | undefined;
   last_name?: string | undefined;
   // `| null`: clearing a preferred name sends an explicit null (CLAUDE.md #1).
   preferred_name?: string | null | undefined;
-  phone?: string | undefined;
-  mobile?: string | undefined;
+  phone?: string | null | undefined;
+  mobile?: string | null | undefined;
   personal_email?: string | null | undefined;
-  membership_number?: string | undefined;
+  membership_number?: string | null | undefined;
   // `| null` on the two dates: this is an update payload, and the backend
   // rejects `''` for an `Optional[date]`. Clearing a date has to send an
   // explicit null, which `exclude_unset` then writes through as a clear.
   date_of_birth?: string | null | undefined;
   hire_date?: string | null | undefined;
   rank?: string | undefined;
-  station?: string | undefined;
-  platoon?: string | undefined;
+  station?: string | null | undefined;
+  platoon?: string | null | undefined;
+  /**
+   * The two independent facts the legacy `membership_type` fuses. Sent as a
+   * pair, always both: the backend treats a write to either as a statement
+   * about both, and the backend derives `membership_type` from them.
+   * `member_status` is a built-in status or one of the department's tier ids.
+   */
+  member_class?: MemberClass | undefined;
+  member_status?: string | undefined;
   address_street?: string | null | undefined;
   address_city?: string | null | undefined;
   address_state?: string | null | undefined;
@@ -427,12 +447,30 @@ export interface MembershipTierBenefits {
   [key: string]: unknown;
 }
 
+/**
+ * A rung of the department's ladder as every member may see it: the id and the
+ * department's own name, from `GET /users/membership-tiers/names`. No
+ * advancement years, benefits or occupancy — those stay with the officers'
+ * `MembershipTierConfig`.
+ */
+export interface MembershipTierName {
+  id: string;
+  name: string;
+}
+
 export interface MembershipTier {
   id: string;
   name: string;
   years_required: number;
   sort_order: number;
   benefits: MembershipTierBenefits;
+  /**
+   * "Counts as": the built-in status this tier stands in for wherever a rule
+   * is keyed on status (ballots restricted to regular members, the
+   * probationary account mirror). A tier whose id is itself a built-in status
+   * needs none; any other tier counts as nothing until this is set.
+   */
+  ranks_as?: MemberStatus | null | undefined;
 }
 
 export interface MembershipTierConfig {
@@ -467,14 +505,29 @@ export interface MembershipTierConfig {
   member_counts?: Record<string, number>;
 }
 
-export interface PropertyReturnReport {
-  user_id: string;
+/** One item a member would be asked to return, as the drop's letter lists it. */
+export interface PropertyReturnItem {
   name: string;
+  serial_number: string;
+  asset_tag: string;
+  condition: string;
+  value: number;
+  quantity: number;
+  type: 'assigned' | 'checked_out' | 'issued';
+  /** Already formatted on the department's calendar by the server. */
+  assigned_date: string;
+}
+
+/**
+ * GET /users/{id}/property-return-report — what dropping the member would
+ * ask them to return, built by the same code as the drop's letter. Read-only.
+ */
+export interface PropertyReturnReport {
   member_name: string;
   item_count: number;
   total_value: number;
-  html?: string;
-  items: unknown[];
+  items: PropertyReturnItem[];
+  html: string;
 }
 
 /**
@@ -528,6 +581,44 @@ export interface ServiceHistory {
   /** Separated with nothing recorded: the end of service is inferred. */
   is_estimated: boolean;
   default_rejoin_credit: RejoinServiceCredit;
+}
+
+/** One dated supervisor assignment; dates are inclusive. */
+export interface SupervisorAssignment {
+  id: string;
+  /** Null once the supervisor's account has been removed. */
+  supervisor_id: string | null;
+  supervisor_name: string | null;
+  starts_on: string;
+  /** Null for the assignment in effect now. */
+  ends_on: string | null;
+  created_at: string | null;
+}
+
+/** `GET /users/{id}/supervisor`: who the member reports to, and the history. */
+export interface MemberSupervisor {
+  member_id: string;
+  current: SupervisorAssignment | null;
+  /** Newest first, the current assignment included. */
+  history: SupervisorAssignment[];
+}
+
+/** `GET /users/me/crew`: a member the caller supervises today. Roster fields only. */
+export interface CrewMember {
+  id: string;
+  name: string;
+  rank: string | null;
+  station: string | null;
+  membership_number: string | null;
+  /** When the current assignment began. */
+  supervised_since: string;
+}
+
+/** A current member who may be named as a supervisor. */
+export interface SupervisorCandidate {
+  id: string;
+  name: string;
+  membership_number: string | null;
 }
 
 /** One stint in a full replacement (`PUT /users/{id}/service-periods`). */

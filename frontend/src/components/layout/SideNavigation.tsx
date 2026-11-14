@@ -4,6 +4,7 @@ import {
   Home,
   Users,
   UserPlus,
+  UserCheck,
   Calendar,
   FileText,
   Settings,
@@ -42,6 +43,7 @@ import {
   Stethoscope,
   Store,
   HandCoins,
+  Landmark,
   Wallet,
 } from 'lucide-react';
 import { Sun, Moon, Monitor, Contrast, WifiOff, RefreshCw, Loader2 } from 'lucide-react';
@@ -60,18 +62,24 @@ import { prefetchRoute } from '../../utils/routePrefetch';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
-import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
+import { triggerAllOfflineDrains } from '../../hooks/useOfflineSyncEngine';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 import { operationsNavItems } from './operationsNavigation';
 import { governanceNavItems } from './governanceNavigation';
 import { trainingNavItems } from './trainingNavigation';
+import { EVALUATIONS_AREA_PREFIX, EVALUATIONS_HOME_PATH } from './evaluationsNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
+import { useHasAssignedApplicants } from '../../modules/prospective-members/hooks/useHasAssignedApplicants';
+import { useHasCrew } from '../../hooks/useHasCrew';
 
 interface SideNavigationProps {
   departmentName: string;
   logoPreview: string | null;
   onLogout: () => void;
+  /** Reports the icon-rail state so the layout can size the content column to
+   *  the rail. Optional: the navigation keeps its own state either way. */
+  onCollapsedChange?: ((collapsed: boolean) => void) | undefined;
 }
 
 interface SubNavItem {
@@ -93,6 +101,25 @@ interface NavItem {
   subItems?: SubNavItem[];
   /** If true, this item is a visual section divider label */
   isSectionLabel?: boolean;
+  /**
+   * The URL prefix the entry stands for, when it is broader than the page the
+   * entry opens: Evaluations opens My evaluations but is current on every
+   * evaluation page.
+   */
+  activePrefix?: string;
+  /**
+   * Prefixes under this entry's URL that belong to another entry, so the two
+   * are never marked current together: `/reports/evaluations` is Evaluations,
+   * not Reports.
+   */
+  excludePrefixes?: string[];
+}
+
+/** What deciding whether an entry is current reads from it. */
+interface ActiveMatch {
+  path: string;
+  activePrefix?: string | undefined;
+  excludePrefixes?: string[] | undefined;
 }
 
 /**
@@ -107,7 +134,12 @@ interface NavItem {
  */
 const submenuId = (label: string) => `submenu-${label.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
 
-export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, logoPreview, onLogout }) => {
+export const SideNavigation: React.FC<SideNavigationProps> = ({
+  departmentName,
+  logoPreview,
+  onLogout,
+  onCollapsedChange,
+}) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, setTheme } = useTheme();
@@ -128,11 +160,16 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   const toggleFocusPending = useRef(false);
   const { canScrollUp, canScrollDown } = useScrollOverflow(navListRef);
   const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
-  const practicalSkillsMethod = usePracticalSkillsMethod();
+  const practicalSkillsMethod = usePracticalSkillsMethod(!modulesLoading && isModuleOn('training'));
   const { isConnected } = useConnectedIntegrations({ enabled: !modulesLoading && isModuleOn('integrations') });
   const isNfcCardsOn = isConnected(NFC_ID_CARDS_INTEGRATION);
   const ownsBudgets = useOwnsBudgets(currentUser?.id, !modulesLoading && isModuleOn('finance'));
   const plansNextYear = usePlansNextYear(currentUser?.id, !modulesLoading && isModuleOn('finance'));
+  const hasAssignedApplicants = useHasAssignedApplicants(
+    currentUser?.id,
+    !modulesLoading && isModuleOn('prospective_members')
+  );
+  const hasCrew = useHasCrew(currentUser?.id);
 
   // The mobile bottom bar's "More" button asks us to open the drawer.
   useEffect(() => {
@@ -203,6 +240,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     { label: 'Members', path: '/members', icon: Users },
     { label: 'Events', path: '/events', icon: Calendar },
     { label: 'Documents', path: '/documents', icon: FileText },
+    // Offered only to a member assigned to an applicant: the assignment, not a
+    // permission, is what opens the page (modules/prospective-members).
+    ...(hasAssignedApplicants
+      ? [{ label: 'My Applicants', path: '/prospective-members/my-applicants', icon: UserCheck } as NavItem]
+      : []),
+    // Offered only to a member who supervises someone today: the Reports To
+    // assignment, not a permission, opens the page (pages/MyCrewPage).
+    ...(hasCrew ? [{ label: 'My Crew', path: '/members/my-crew', icon: Users } as NavItem] : []),
     // The route requires `storefront.view` (modules/storefront/routes.tsx), so
     // the module toggle alone is not the gate: a member whose department was
     // seeded before the storefront module shipped holds no storefront grant
@@ -288,6 +333,22 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
           } as NavItem,
         ]
       : []),
+    // Published history is read by every signed-in member, so the entry has no
+    // permission of its own; the module switch is the gate.
+    ...(isModuleOn('history')
+      ? [
+          {
+            label: 'History',
+            path: '/history',
+            icon: Landmark,
+            subItems: [
+              { label: 'Overview', path: '/history', icon: Landmark },
+              { label: 'Past Members', path: '/history/people', icon: Landmark },
+              { label: 'Honor Roll', path: '/history/honor-roll', icon: Landmark },
+            ],
+          } as NavItem,
+        ]
+      : []),
     ...(isModuleOn('notifications')
       ? [{ label: 'Notifications', path: '/notifications?tab=inbox', icon: Bell } as NavItem]
       : []),
@@ -302,6 +363,19 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             label: 'My ID Card',
             path: `/members/${currentUser.id}/id-card`,
             icon: CreditCard,
+          } as NavItem,
+        ]
+      : []),
+    // One entry for the whole area, ungated because a member's own
+    // evaluations need no grant. Conducting and setup are reached from the
+    // strip at the top of the evaluation pages, gated there like their routes.
+    ...(isModuleOn('reports')
+      ? [
+          {
+            label: 'Evaluations',
+            path: EVALUATIONS_HOME_PATH,
+            icon: ClipboardCheck,
+            activePrefix: EVALUATIONS_AREA_PREFIX,
           } as NavItem,
         ]
       : []),
@@ -334,7 +408,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
               ...(isModuleOn('prospective_members')
                 ? [
                     {
-                      label: 'Prospective',
+                      label: 'Prospective Members',
                       path: '/prospective-members',
                       icon: UserPlus,
                       permission: 'prospective_members.manage',
@@ -400,7 +474,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
           } as NavItem,
           {
             label: 'Manage Events',
-            path: '/events',
+            path: '/events/admin',
             icon: Calendar,
             permission: 'events.manage',
           } as NavItem,
@@ -483,7 +557,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 anyPermission: ['settings.manage', 'organization.update_settings', 'notifications.manage'],
               },
               {
-                label: 'Messages',
+                // Not "Messages": the member inbox above already carries that
+                // name, and two rows reading the same lead to different pages.
+                label: 'Department Messages',
                 path: '/communications/messages',
                 icon: Megaphone,
                 permission: 'notifications.manage',
@@ -522,6 +598,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                   path: '/reports',
                   icon: BarChart3,
                   permission: 'reports.view',
+                  excludePrefixes: [EVALUATIONS_AREA_PREFIX],
                 } as NavItem,
               ]
             : []),
@@ -529,9 +606,13 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             label: 'Organization Settings',
             path: '/settings',
             icon: Settings,
-            permission: 'settings.manage',
+            // No group-level gate: each row carries its own. Audit Log,
+            // Security Alerts, QR Code Analytics and Role Management open to
+            // grants other than settings.manage, and a gate here hid them from
+            // exactly those officers while the top layout listed them. The
+            // group still hides when none of its rows is visible.
             subItems: [
-              { label: 'Organization', path: '/settings', icon: Building2 },
+              { label: 'Organization', path: '/settings', icon: Building2, permission: 'settings.manage' },
               {
                 label: 'Role Management',
                 path: '/settings/roles',
@@ -613,11 +694,15 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     );
   };
 
+  const matchedPath = (item: ActiveMatch) => item.activePrefix ?? item.path;
+  const isItemActive = (item: ActiveMatch) =>
+    isActive(matchedPath(item)) && !(item.excludePrefixes ?? []).some((prefix) => isActive(prefix));
+
   const isParentActive = (item: NavItem) => {
     if (item.subItems) {
       return item.subItems.some((sub) => isActive(sub.path));
     }
-    return isActive(item.path);
+    return isItemActive(item);
   };
 
   const toggleMenu = (label: string) => {
@@ -628,6 +713,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     toggleFocusPending.current = true;
     setCollapsed(next);
   };
+
+  useEffect(() => {
+    onCollapsedChange?.(collapsed);
+  }, [collapsed, onCollapsedChange]);
 
   useEffect(() => {
     if (!toggleFocusPending.current) return;
@@ -657,8 +746,8 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
 
   const activeDestination = navItems
     .flatMap((item) => (item.subItems?.length ? item.subItems : [item]))
-    .filter((item) => isActive(item.path))
-    .sort((a, b) => b.path.length - a.path.length)[0];
+    .filter(isItemActive)
+    .sort((a, b) => matchedPath(b).length - matchedPath(a).length)[0];
 
   return (
     <>
@@ -667,7 +756,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         className="bg-theme-nav-bg border-theme-surface-border safe-top fixed top-0 right-0 left-0 z-50 border-b md:hidden"
         role="banner"
       >
-        <div className="flex h-16 items-center px-4">
+        <div className="flex h-(--mobile-header-height) items-center px-4">
           <Link
             to="/dashboard"
             className="focus:ring-theme-focus-ring flex min-h-[44px] min-w-0 flex-1 items-center rounded-lg focus:ring-2 focus:outline-hidden"
@@ -708,6 +797,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         ref={sideNavRef}
         id="side-navigation"
         aria-label="Main navigation"
+        data-collapsed={collapsed ? 'true' : 'false'}
         className={`mobile-navigation-drawer safe-top bg-theme-nav-bg border-theme-surface-border fixed left-0 z-40 overscroll-contain border-r transition-all duration-300 md:top-0 md:h-full ${
           collapsed ? 'w-20' : 'w-64'
         } ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
@@ -1002,7 +1092,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             {isOnline && pendingSyncCount > 0 && (
               <button
                 onClick={() => {
-                  void triggerOfflineDrain();
+                  void triggerAllOfflineDrains();
                 }}
                 className={`focus:ring-theme-focus-ring touch:min-h-[44px] flex w-full items-center rounded-lg bg-blue-500/15 text-blue-700 transition-colors hover:bg-blue-500/25 focus:ring-2 focus:outline-hidden dark:text-blue-300 ${
                   collapsed ? 'justify-center p-2' : 'px-3 py-2'

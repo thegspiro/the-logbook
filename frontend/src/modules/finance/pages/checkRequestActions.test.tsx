@@ -50,6 +50,8 @@ vi.mock('@/stores/authStore', () => ({
 }));
 
 vi.mock('../services/api', () => ({
+  // The detail pages ask whether the payment went to QuickBooks Online; it did not.
+  quickBooksOnlineService: { postings: () => Promise.resolve([]) },
   checkRequestService: {
     issue: (...args: unknown[]) => issue(...args) as unknown,
     void: (...args: unknown[]) => voidCheck(...args) as unknown,
@@ -72,6 +74,10 @@ const renderPage = (status: string) => {
       amount: '612.40',
       status,
       requestedBy: 'u-treasurer',
+      // Issuing waits on the receipt (owner decision 2026-11-01); this one has it.
+      receiptDocumentId: 'doc-1',
+      receiptFileUrl: '/api/v1/finance/check-requests/cr-1/receipt',
+      receiptRequired: true,
       approvalSteps: [],
       createdAt: '2026-10-14T16:52:00Z',
       updatedAt: '2026-10-14T16:52:00Z',

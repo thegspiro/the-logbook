@@ -3,7 +3,8 @@
 **Prefix:** `CMP` · **Iteration:** 20 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8),
-2026-10-19 (pass 9), 2026-10-24 (pass 10), 2026-10-26 (pass 11) ·
+2026-10-19 (pass 9), 2026-10-24 (pass 10), 2026-10-26 (pass 11), 2026-10-30
+(pass 12), 2026-11-02 (pass 13), 2026-11-10 (pass 14) ·
 **PR:** #1902 (pass 1, merged),
 [#2059](https://github.com/thegspiro/the-logbook/pull/2059) (pass 2, merged),
 #2245 (pass 3, merged), [#2476](https://github.com/thegspiro/the-logbook/pull/2476)
@@ -13,7 +14,577 @@
 (pass 7, merged), [#3330](https://github.com/thegspiro/the-logbook/pull/3330)
 (pass 8, merged), [#3449](https://github.com/thegspiro/the-logbook/pull/3449)
 (pass 9, merged), [#3631](https://github.com/thegspiro/the-logbook/pull/3631)
-(pass 10, merged), pass 11 (this PR)
+(pass 10, merged), [#3761](https://github.com/thegspiro/the-logbook/pull/3761)
+(pass 11, merged), [#3845](https://github.com/thegspiro/the-logbook/pull/3845)
+(pass 12, merged), #3940 (pass 13, merged), pass 14 (this PR)
+
+## Pass 14 (2026-11-10) — watchdog pickup, real delta (session-attendance requirements), 0 new findings
+
+**Prefix:** `CMP14` · **PR:** see `PROGRESS.md`'s **Open PR** row
+
+**Watchdog note.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents` → "No
+reachable agents"). `gh api search/issues` for
+`is:pr is:open head:claude/security-review` returned 0 results. PR #4198
+(Feature 19, Skills testing, pass 14) had just merged (`878b64fb4`). Rotation
+row 20 (Compliance) was confirmed the next `⬜` by reading the rotation table
+directly on a freshly fetched `origin/main`.
+
+### Scope check — real delta since pass 13
+
+Baseline: `dffccc891` (pass 13's own merge, PR #3940). Across this feature's
+declared scope, five files changed (539 insertions, 97 deletions) — a real
+delta, not another cosmetic-sweep pass:
+
+- `backend/app/models/compliance_config.py` (+25) — a new `LeaveMonthRule`
+  enum (`full_month`/`proportional`/`half`) and
+  `ComplianceConfig.leave_month_rule` (`String(20)`, `nullable=False`,
+  `server_default="full_month"` — Pitfall #35 handled correctly: existing
+  rows get the prior fixed-rule behaviour via the server default, not an
+  implicit one).
+- `backend/app/schemas/compliance_config.py` (+12) — the mirrored
+  `LeaveMonthRuleValue` Literal on `ComplianceConfigBase`/`Update`.
+- `backend/app/services/compliance_member_notices.py` (+8/-7) — the
+  non-compliant-member notice's unmet-requirement filter now excludes
+  `UNGRADED_STATUSES` (catch-up **and** not-yet-held) instead of only
+  catch-up, so a session-attendance requirement with no session held yet is
+  not listed as an unmet item in the notice email.
+- `backend/app/services/compliance_officer_service.py` (+6) —
+  `AnnualComplianceReportService` now loads `held_sessions` once per report
+  and threads it into both of its own grading call sites.
+- `backend/app/services/training_compliance.py` (585 changed, the
+  feature's own core grading module) — the real work. See below.
+
+Two large cross-feature commits reached these files but were already
+reviewed under other features' own passes, re-confirmed rather than
+re-derived:
+
+- **Chief override of a session-attendance requirement** (`ba4c5f7bb`,
+  2026-11-05) adds three position-gated routes and
+  `requirement_override_service.py` in `training.py` (Feature 17's own
+  file) and the override plumbing in `training_waiver_service.py` — both
+  inside Feature 17 (Training core) pass 14's own reviewed window
+  (`740e7118`..`51e6e1b5`, merged as PR #4151) and named in that PR's own
+  summary ("Chief requirement overrides"). Re-verified only this feature's
+  own slice: `training_compliance.py`'s 30-line part of that commit (below)
+  and the `ComplianceMatrixTab.tsx` rendering of the resulting
+  `ChiefOverrideControl` (also Feature 17's own file, reviewed there).
+- **`training_match_key`** (part of `71a6fd75c`, "owner's 2026-11-01
+  decisions batch 4") replaces a case-insensitive substring match with a
+  normalized stored key for certification/fallback-type record matching.
+  Falls inside the same TR14 reviewed window. Read in full regardless
+  because `training_compliance.py` (this feature's own module) is its
+  heaviest caller: pure Unicode normalization (NFKC + casefold + alnum
+  filter, applied twice per the Unicode caseless-matching recipe), capped at
+  `MATCH_KEY_LENGTH` on both the record and the requirement so truncation
+  cannot make one side's key a prefix of the other's, no I/O, no new
+  surface.
+
+### The real work — `training_compliance.py`: a new SESSION_ATTENDANCE requirement type
+
+Three commits (`b07e8e51b`, `ba4c5f7bb`'s 30-line slice, `1100d368c`) add a
+requirement graded on attendance at its linked training sessions ("attend
+60% of company drills this year") and fix an empty-denominator bug in it.
+Read in full, not sampled:
+
+- **`load_held_sessions(db, org_id, requirements)`** is the one new query.
+  It filters `TrainingSessionRequirement.organization_id == str(org_id)`
+  **and** `TrainingSession.organization_id == str(org_id)` directly in the
+  query (not merely by trusting that `requirements` was already org-scoped
+  by its caller) — defense in depth, and the correct shape per Pitfall #14a.
+  `org_id` is never client-supplied at this layer: every caller
+  (`compute_org_compliance_tally`, `grade_org_members`,
+  `AnnualComplianceReportService`) receives it from a caller already scoped
+  to `current_user.organization_id` (unchanged call shape; only a new
+  parameter threaded through).
+- **`_require_held_sessions`** raises `ValueError` rather than defaulting to
+  an empty mapping when a caller grades a SESSION_ATTENDANCE requirement
+  without first loading sessions — the fail-loud shape Pitfall #19 asks for,
+  since silently reading `{}` would grade every member as owing nothing
+  (a department reading 100% compliant on a requirement nobody has sessions
+  loaded for).
+- **`tally_session_attendance`** is pure (no I/O): a Chief's override
+  (`overridden`) is only honoured when `req.allows_chief_override` is true
+  _and_ `override_covers(waivers, req_id, as_of)` finds a live override
+  covering the evaluation date (both already-reviewed, Feature 17's own
+  surface) _and_ only for a member who would otherwise fall short
+  (`len(attended) < needed`) — a member who already met it is never
+  mislabelled "met by override," matching the commit's own stated intent.
+- **`graded_records_clause`**'s new SESSION_ATTENDANCE branch selects
+  COMPLETED records by `source_event_id` resolved through a subquery scoped
+  to the same `attendance_ids` (requirement ids already drawn from the
+  caller's own org-scoped `requirements` list) joined through
+  `TrainingSessionRequirement`/`TrainingSession` — no new unscoped read.
+- **`_record_match_clause`**'s registry-code branch is the one `LIKE` built
+  in this delta: `TrainingRecord.certification_key.like(like_pattern(code_key,
+prefix=True), escape=LIKE_ESCAPE_CHAR)` — correctly through
+  `like_pattern`/`LIKE_ESCAPE_CHAR` (Pitfall #25), not a hand-built pattern.
+- **W80-9 fix (`1100d368c`, owner decision 2026-11-08):** a requirement with
+  no linked session held yet in the member's window used to read "0/0
+  sessions – Complete," the empty-denominator-as-success shape Pitfall #29
+  warns of. Now reports `NOT_YET_HELD_STATUS` ("not_applicable"), and
+  `UNGRADED_STATUSES` (`catch_up` ∪ `not_applicable`) is read consistently
+  by `tally_standing`, the at-risk/intervention tally, non-compliance
+  notices (this feature's own `compliance_member_notices.py`, confirmed
+  above), the competency matrix, the forecast and the report cells — one
+  definition, not a re-derivation per site (the exact discipline Pitfall #29
+  itself asks for). The commit's own tests are stated to have failed against
+  the unfixed code (Pitfall #37) and a fresh read of
+  `test_session_attendance_requirement.py` confirms the renamed/added cases
+  match that description.
+
+No tenancy, authorization, injection or data-exposure gap in any of the
+above: the one new query is org-scoped twice over, the one new `LIKE` uses
+the escaping helper, and the override/grading logic is pure computation
+over already-scoped inputs.
+
+### Frontend
+
+`ComplianceMatrixTab.tsx`/`complianceMatrixModel.ts` (this feature's own
+files) gained the `NOT_YET_HELD` tone/legend entry and the
+`ChiefOverrideControl` render slot, passing already-present
+`memberId`/`memberName`/`requirementId`/window dates from the matrix
+response — no new client input introduced at this call site; the control
+itself (own POST/DELETE calls) is Feature 17's file, reviewed there.
+`isGradedTone` now also excludes `NOT_YET_HELD`, keeping the matrix's
+graded/total count aligned with the backend's `tally_standing`. Grep-swept
+for `window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`/`date-fns` — zero hits in both files.
+
+### Route re-enumeration
+
+Both endpoint files (`compliance_config.py`, `compliance_officer.py`) are
+byte-identical to pass 13 — confirmed via `git diff --stat`, zero hunks.
+AST count: **21 routes** (13 + 8), unchanged.
+`python3 scripts/check_route_permissions.py --strict` (repo root): **305
+total application routes, 0 errors, 0 warnings** — up from pass 13's 289
+from other features' new pages in the interim.
+
+### Standing findings re-verified at their current citation
+
+- **CS-8 (attestation dual control / immutability) — OPEN by design,
+  unchanged.** `create_attestation`/`get_attestations`
+  (`compliance_officer.py:104-138`) remain the only two routes touching an
+  attestation.
+- **`grace_period_days` unwired — unchanged, OPEN by design.** Fresh
+  `grep -rn "grace_period_days" backend/app` hits only the declaration files
+  plus `dues_terms.py`/`my_dues.py`/`dues_reminders.py`'s own unrelated
+  `DuesSchedule.grace_period_days` (Finance feature) — confirmed by model,
+  not by name alone. Still no reader on `ComplianceConfig`'s own column.
+- **CS-8-b / CS-9 residual (self-attested percentage, monthly windowing,
+  recipient allow-list)** — all three unchanged since pass 13's zero-diff
+  confirmation on `compliance_officer_service.py`'s own report-generation
+  logic (this pass's only change to that file is the additive
+  `held_sessions` threading above).
+- **CMP2-1** (`compliance_member_notices`) — re-confirmed above, registered
+  and unchanged in `scheduled_tasks.py`.
+
+No OPEN or FLAGGED item exists beyond CS-8 and `grace_period_days` (both
+owner-accepted, by design); neither reopened by this pass's delta.
+
+### Findings
+
+**0 new findings.** A substantial real delta — a new requirement type graded
+on session attendance, a Chief-override path, and an empty-denominator bug
+fix — all traced end to end: the one new query is org-scoped directly (not
+merely inherited), the one new `LIKE` uses the project's escaping helper, the
+override path only ever turns a miss into a met (never the reverse), and the
+bug fix's own tests are stated to have failed pre-fix. Every standing CMP/CS
+item re-verified unchanged at its current citation.
+
+## Completion gate (pass 14)
+
+| Check                                                                                   | Result                                                                |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, CI's pin, installed this pass)          | ✅ 0 violations                                                       |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, CI's pin, already on `PATH`)    | ✅ 3083 files unchanged                                               |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, CI's pin, already on `PATH`) | ✅ clean                                                              |
+| `python3.13 scripts/validate_migrations.py --strict`                                    | ✅ 755 revisions, single head `67ad01c43434`                          |
+| `python3.13 scripts/generate_schema_docs.py --check`                                    | ✅ `DATABASE_SCHEMA.md` is up to date                                 |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                       | ✅ 305 routes, 0 errors, 0 warnings                                   |
+| `python3.13 -m pytest tests/ -q -k "compliance or attestation or session_attendance"`   | ✅ 723 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip) |
+| `cd frontend && npm run typecheck`                                                      | ✅ 0 errors                                                           |
+| `cd frontend && npm run lint`                                                           | ✅ 0 errors/warnings (`--max-warnings 10`)                            |
+| 14 compliance-scoped frontend test files                                                | ✅ 175 passed                                                         |
+
+**Environment note, not a finding:** this worktree's database was three
+migrations behind current `main` at the start of this pass (including
+`ac1687769b62`, encrypting medical screening's `screening_type` at rest),
+left over from an earlier worktree's schema. `python3.13 -m alembic upgrade
+head` resolved it; the 7 failures and 2 errors this caused on the first
+scoped-test run (all in `test_medical_screening_*`/`test_admin_hub_db.py`,
+none of them this feature's own files, surfaced only because they matched
+the `-k "compliance"` filter) all passed cleanly on re-run afterward and are
+not recorded as findings.
+
+**Final disposition: 0 fixed (none needed — the delta was already correct),
+0 newly flagged. CS-8 and `grace_period_days` (both owner-accepted, by
+design) remain the only standing OPEN items, re-verified unchanged.**
+
+## Pass 13 (2026-11-02) — watchdog pickup, near-zero delta, 0 new findings
+
+**Prefix:** `CMP13` · **PR:** see `PROGRESS.md`'s **Open PR** row
+
+**Watchdog note.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable. `gh api search/issues`
+for `is:pr is:open head:claude/security-review` returned 0 results (the only
+two open PRs, #3937/#3938, are unrelated feature work). Rotation row 20
+(Compliance) was confirmed the next `⬜` by reading the rotation table
+directly on a freshly fetched `origin/main` (row 19, Skills testing, had just
+been marked ✅ after PR #3935 merged). This worktree started on an unrelated,
+dirty local branch (`claude/friendly-babbage-g2e2fg`, carrying uncommitted-
+by-this-session work for the unrelated evaluations PR #3938); a fresh branch
+was cut from `origin/main` rather than building on it.
+
+### Scope check — real delta since pass 12
+
+Baseline: `c9d8be24` (pass 12's own merge, PR #3845). Across every file this
+feature declares in scope (both endpoint routers, both services,
+`compliance_member_notices.py`, `training_compliance.py`, the model, both
+schema files, and the five established frontend files), exactly one backend
+file changed and two frontend files changed:
+
+- **`83b20820`, "Find a member's tier by membership status; let the junior
+  chip match"** — touches `training_compliance.py`'s `_find_matching_profile`
+  (11 insertions, 2 deletions). Since membership class and status were split
+  (#3833), the legacy `membership_type` has no word for a junior member (it
+  derives to `"probationary"`), so a compliance profile's "junior" chip
+  matched nobody. The fix adds the member's canonical status to the match set
+  only when it is `MemberStatus.JUNIOR`, leaving every other chip matching
+  the legacy value exactly as before. Reviewed directly rather than trusted
+  from the commit message:
+  - **No tenancy surface of its own.** The function takes an already-loaded
+    `member` and an already org-scoped `profiles` list from its callers; it
+    performs no query. `MemberStatus` (`app/utils/membership.py`) is a plain
+    string-constant class, not an Enum, so `MemberStatus.JUNIOR` is the bare
+    string `"junior"` and the `set` intersection against
+    `profile.membership_types` (also plain strings) works by ordinary string
+    equality — no type mismatch that would silently never-match or
+    over-match.
+  - **Already reviewed once this rotation**, under Feature 17 (Training
+    core) pass 13 (PR #3932, merged), which named this exact commit
+    (`83b208201`) in its own findings. Re-verified independently here rather
+    than deferred to that review, since `training_compliance.py` is also in
+    this feature's own declared scope: no cross-tenant read, no new route,
+    no change to `_validate_profile_fks` or any by-id query. No new finding.
+- **`ab879fc7`, "Move card and list rows onto a wrapping split-row layout"**
+  — a repo-wide (87-site) Tailwind layout sweep; touches this feature's
+  `ComplianceMatrixTab.tsx` and `ComplianceOfficerDashboard.tsx` only by
+  replacing `flex flex-col sm:flex-row sm:justify-between` with the new
+  `split-row`/`split-row-main`/`split-row-aside` utility classes on five
+  header/card rows. Read every hunk directly: class-string substitutions
+  only, no handler, no data flow, no new element. Cosmetic, no finding.
+- `compliance_config.py`, `compliance_officer.py` (endpoints),
+  `compliance_config_service.py`, `compliance_officer_service.py`,
+  `compliance_member_notices.py`, `models/compliance_config.py`,
+  `schemas/compliance_config.py`, `schemas/compliance_officer.py`,
+  `ComplianceRequirementsConfigPage.tsx`, `complianceMatrixModel.ts`,
+  `CompliancePrintPage.tsx` — confirmed byte-identical since `c9d8be24` via
+  `git diff --stat`, zero hunks.
+
+`scheduled_tasks.py` grew by 131 lines in the interim, none of them this
+feature's own task: `compliance_member_notices` is re-grepped directly at
+its three registration sites (`TASK_RUNNERS:8170`,
+`TASK_INTERVALS_SECONDS:8265` = 86400, the cron `SCHEDULE:99`) and its
+function body is unchanged — the diff's own context lines confirm the added
+material (`zeffy_payment_sync`, `budget_request_reminders`, etc.) sits
+immediately beside it, not inside it.
+
+### Route re-enumeration
+
+Read both endpoint files in full (not grepped): **21 routes** (13 + 8),
+unchanged from pass 12 — no route added, removed, or re-permissioned.
+Every route carries `Depends(require_permission(...))`; no bare
+`get_current_user`. Every by-id operation
+(`update_compliance_profile`/`delete_compliance_profile` via `profile_id`;
+`delete_compliance_report`/`email_compliance_report`/`get_compliance_report`
+via `report_id`) still passes `organization_id=current_user.organization_id`
+into the service layer, and the service-layer queries
+(`update_profile`/`delete_profile`/`get_report`/`delete_report`, read in
+full this pass) all filter on it directly or via a join to
+`ComplianceConfig.organization_id`. `create_profile`/`update_profile` still
+call `_validate_profile_fks` before persisting client-supplied
+`required_requirement_ids`/`optional_requirement_ids`/`role_ids`/
+`admin_hours_requirements[].category_id` (XC-1).
+`python3 scripts/check_route_permissions.py --strict` (repo root): **289
+total application routes, 0 errors, 0 warnings** — up from pass 12's 280
+from other features' new pages in the interim.
+
+### Standing findings re-verified at their current citation
+
+- **CS-8 (attestation dual control / immutability) — OPEN by design,
+  unchanged.** `create_attestation`/`get_attestations`
+  (`compliance_officer.py:104-138`) remain the only two routes touching an
+  attestation; no update or delete route exists.
+- **CS-8-b (self-attested percentage) — ✅ still FIXED.** `AttestationCreate`
+  (`compliance_officer.py:39-66`) carries no `compliance_percentage` field;
+  `create_attestation` is server-computed (file unchanged since pass 7 per
+  the zero-diff confirmed above).
+- **CS-9 residual — monthly windowing, recipient allow-list — both still
+  ✅ FIXED, unchanged.** `_email_report` (`compliance_config_service.py:~572`)
+  still calls `audit_external_recipients` on every send (re-grepped
+  directly, file unchanged).
+- **`grace_period_days` unwired — unchanged, OPEN by design.** Fresh
+  `grep -rn "grace_period_days" backend/app` hits only the two declaration
+  files (`schemas/compliance_config.py:121,163`,
+  `models/compliance_config.py:100`) plus `training_enhancements.py`'s and
+  `medical_screening.py`'s own unrelated same-named columns on different
+  models, confirmed by model rather than by name alone. Still no reader.
+- **CMP2-1** (`compliance_member_notices`) — re-confirmed above, registered
+  and unchanged.
+
+No OPEN or FLAGGED item exists beyond CS-8 (original, by design) and
+`grace_period_days` (by design) as of pass 12; neither reopened by this
+pass's delta.
+
+### Findings
+
+**0 new findings.** The only backend change in scope
+(`_find_matching_profile`'s junior-status match) is logic-only with no query
+of its own, already independently reviewed by Feature 17's own pass 13, and
+re-verified clean here; the only frontend changes are a cosmetic class-name
+sweep. Every standing CMP/CS item re-verified unchanged at its current
+citation.
+
+## Completion gate (pass 13)
+
+| Check                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Result                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | ✅ 0 violations                                                       |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | ✅ 2836 files unchanged                                               |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, already on `PATH`, matching CI's pin)                                                                                                                                                                                                                                                                                                                                                                                                                                                   | ✅ clean                                                              |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | ✅ 698 revisions, single head `6b2f0c9d4e71`                          |
+| `python3.13 scripts/generate_schema_docs.py --check` (ambient `python3` lacks project deps; `python3.13` is the interpreter with them installed, as in pass 12)                                                                                                                                                                                                                                                                                                                                                                                    | ✅ `DATABASE_SCHEMA.md` is up to date                                 |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | ✅ 289 routes, 0 errors, 0 warnings                                   |
+| `python3.13 -m pytest tests/ -q -k "compliance"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | ✅ 663 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip) |
+| `python3.13 -m pytest tests/test_compliance_member_notices.py tests/test_compliance_grace_period_is_unwired.py tests/test_training_compliance.py tests/test_my_training_records.py tests/test_account_status_gates.py tests/test_compliance_auto_report_idempotency.py tests/test_saved_report_delivery.py tests/test_security_weekly_report.py tests/test_org_local_today.py tests/test_external_recipient_audit.py tests/test_compliance_config_service.py tests/test_compliance_config_permissions.py tests/test_compliance_matrix_endpoint.py` | ✅ 377 passed                                                         |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | ✅ 0 errors                                                           |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | ✅ 0 errors/warnings (`--max-warnings 10`)                            |
+| 11 compliance-scoped frontend test files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | ✅ 157 passed                                                         |
+
+**Final disposition: 0 fixed (none needed — the delta was already correct
+and independently reviewed), 0 newly flagged. CS-8 (original, by design) and
+`grace_period_days` (by design) remain the only standing OPEN items, both
+owner-accepted and re-verified unchanged.**
+
+## Pass 12 (2026-10-30) — watchdog pickup, real delta, 0 new findings, 1 doc correction
+
+**Prefix:** `CMP12` · **PR:** see `PROGRESS.md`'s **Open PR** row
+
+**Watchdog note.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0 results. PR #3844 (Feature 19, Skills testing, pass 12) had just
+merged (`ec634030`). Rotation row 20 (Compliance) confirmed the next `⬜` by
+reading the rotation table directly on a freshly fetched `main`. This
+worktree's own branch was one merge behind `origin/main` at the start (missing
+`ec634030`); fast-forwarded before starting so the review reflects the real
+current state, including PR #3844's own content.
+
+**Starting point, per this iteration's task framing.** The orchestrating task
+named `docs/module-audit/compliance-skills.md` / `docs/app-review/compliance-skills.md`'s
+open items — CS-8 attestation, monthly-windowing, recipient allow-list — as
+belonging to this feature. All three were re-checked against current code
+rather than assumed open: **monthly-windowing** was fixed pass 7 (2026-10-04,
+`e8ccba1bf`); **recipient allow-list** was fixed in the app-review rotation
+(2026-08-09, owner decision: allow + audit-log, `audit_external_recipients`);
+**CS-8 attestation**'s self-attested-percentage half was fixed 2026-10-05
+(`bd7833a78`, server-computed `compliance_as_of`) — this rotation's own pass 7
+already recorded all three as closed (labeling the recompute fix "CS-8-b" to
+avoid conflating it with the separate, still-open-by-design immutability
+point). Re-verified below under "Standing findings," with one genuine finding:
+`docs/module-audit/compliance-skills.md`'s own CS-8 section had gone stale —
+its header said "✅ FIXED (attestation half 2026-10-05)" but the bullet
+underneath still read "Still OPEN," unedited since the fix landed. Corrected
+in this pass (see "Documentation correction" below).
+
+### Scope check — real delta since pass 11
+
+Baseline: `be884b71` (pass 11's own merge, PR #3761, on `main`). Across the
+declared scope (both endpoint routers, both services, `training_compliance.py`,
+model, schema, `compliance_member_notices.py`, and the two established
+frontend files), three commits touched four files:
+
+- **`be6b9554`, "feat(compliance): scope compliance profiles by position from
+  the config page"** — a real feature addition, not cosmetic. Adds
+  `GET /compliance/config/positions` (`compliance_config.py:121-130`) so the
+  profile-editing UI can let an officer scope a profile by position, not only
+  by membership type (motivation: a Life member who still rides vs. one who
+  does not are both membership type "life," and changing class to
+  distinguish them would also move the member on class-keyed ballots).
+  Reviewed end to end:
+  - **Org-scoped.** `ComplianceConfigService.get_available_positions`
+    (`compliance_config_service.py:226-245`) filters
+    `Position.organization_id == organization_id`; returns only `id`/`name`.
+  - **Permission matches the existing sibling route.** Gated on
+    `require_permission("training.manage", "compliance.manage")` — the same
+    pair as `GET /config/requirements` immediately above it, not a broadened
+    grant. Served here rather than reusing `GET /roles` specifically because
+    that route needs `positions.view`, which a compliance officer need not
+    hold (the endpoint's own docstring says so); the new route exposes only
+    id/name, not a position's permission grants, so this does not widen what
+    a compliance-only officer can read.
+  - **The client-supplied `role_ids` this UI now lets an officer set were
+    already validated in-org** before this commit, on both create and update
+    — `_validate_profile_fks` (`compliance_config_service.py:88-133`,
+    pre-existing, CS-3) checks `role_ids` against `Position` scoped to
+    `organization_id` and raises if any id is not in-org. This commit adds
+    the UI and the id-lookup endpoint; it does not touch the validation path,
+    and a fresh read of `create_profile`/`update_profile`
+    (`:135-178`) confirms both still call it before persisting. No new XC-1
+    gap.
+  - **Frontend** (`ComplianceRequirementsConfigPage.tsx`): a `positions`
+    checkbox group feeding `profilePositionIds`, sent as `role_ids` on every
+    save (not only when non-empty) so unchecking the last position actually
+    clears the stored list on update — the same "always send the list"
+    pattern the file already uses for `membership_types`. A position deleted
+    after being selected is kept selectable (labeled "Deleted position") so
+    it can still be unchecked. Grep-swept for `window.confirm`/`alert`/
+    `prompt`, `dangerouslySetInnerHTML`, banned `.toLocale*`/`date-fns` —
+    zero hits.
+  - Backend tests added in the same commit
+    (`test_compliance_config_service.py`, `test_compliance_config_permissions.py`,
+    `test_compliance_matrix_endpoint.py`) and frontend
+    (`ComplianceRequirementsConfigPage.positions.test.tsx`, 181 lines) —
+    all read and all passing (see gate below).
+- **`b48d63f2`, "Encrypt email columns and add fingerprint columns to the
+  models"** — a repo-wide (20-model) encryption sweep, not this feature's own
+  work; touches this feature only via
+  `models/compliance_config.py:28,129,323` switching
+  `ComplianceConfig.report_email_recipients` and
+  `ComplianceReport.emailed_to` from `JSON` to `EncryptedJSON`
+  (`app/core/encrypted_types.py`). Positive for dimension 5 (data exposure):
+  two columns holding report-recipient email addresses are now AES-256-GCM
+  ciphertext at rest rather than plaintext JSON. Checked rather than assumed
+  safe given it touches a model this feature owns:
+  - Both columns stay `nullable=True`, unchanged from before (Pitfall #2
+    n/a — no `ondelete` relationship here; this is a scalar/JSON column
+    type change, not a FK).
+  - `EncryptedJSON` (`encrypted_types.py:62-105`) is a mature, pre-existing
+    `TypeDecorator` (used by other models already): encrypts on write,
+    decrypts on read, and on `InvalidToken` (a legacy plaintext row written
+    before the migration) falls back to parsing the stored value as plain
+    JSON text rather than raising — the correct backward-compatible shape,
+    and it fails closed on a genuine crypto error (only `InvalidToken` is
+    swallowed).
+  - The accompanying migration (`20261026_1211_b8236e29ec44_encrypt_email_addresses_at_rest.py`)
+    lists both compliance columns in its `_JSON` table (`nullable=True` for
+    both, matching the model), backfills every existing row in place
+    (idempotent — re-encrypting an already-ciphertext value is a no-op), and
+    refuses outright if `ENCRYPTION_KEY` is unset rather than writing
+    ciphertext nobody could read back (Pitfall #35 — existing rows are
+    handled, not left to an implicit default). Out of this feature's own
+    scope to re-review in full (it is a cross-cutting change across 20
+    tables, most belonging to other features), but the two compliance-owned
+    columns were read directly and are correctly handled.
+- **`f2ea7ba5`, "Stop the remaining pages jumping while they load"** — a
+  pure layout-shift (CLS) fix touching
+  `ComplianceRequirementsConfigPage.tsx`: the header and section-tab strip
+  are now rendered during the loading state too (previously only the
+  spinner showed), so the page does not jump ~220px once data arrives. No
+  data, no auth, no new API call — read in full, cosmetic only.
+
+No migration in this delta creates a new compliance-prefixed table or alters
+anything the service layer reads beyond the two encrypted columns above.
+
+### Standing findings re-verified at their current citation
+
+- **CS-8 original (attestation dual control / immutability) — OPEN by
+  design, unchanged.** Route re-enumeration below confirms
+  `create_attestation`/`get_attestations` remain the only two routes
+  touching an attestation; no update or delete route exists.
+- **CS-8-b (self-attested percentage) — ✅ still FIXED**, re-verified against
+  current code: `AttestationCreate` (`compliance_officer.py:39-66`) carries
+  no `compliance_percentage` field; `create_attestation`
+  (`compliance_officer_service.py`, unchanged since pass 7 per the zero-diff
+  on that file this pass) still computes `compute_org_compliance_pct`
+  server-side and stores `compliance_as_of`.
+- **CS-9 residual — monthly windowing, recipient allow-list — both still
+  ✅ FIXED, unchanged.** `generate_monthly_report`/`_generate_period_report`
+  (`compliance_officer_service.py`, zero-diff this pass) still share the
+  period-window logic with the annual report; `_email_report`
+  (`compliance_config_service.py:572-578`, read in full above) still calls
+  `audit_external_recipients` for every send.
+- **CS-9 residual — `grace_period_days` unwired — unchanged, OPEN by
+  design.** Fresh `grep -rn "grace_period_days" backend/app` hits only the
+  two declaration files (`schemas/compliance_config.py:121,163`,
+  `models/compliance_config.py:100`) plus two unrelated models'
+  (`medical_screening_service.py`, `training_enhancement_service.py`) own
+  same-named columns, confirmed by model rather than by name alone. Still no
+  reader.
+- **CMP2-1** (`compliance_member_notices`) — re-grepped directly in
+  `scheduled_tasks.py`: still registered in `TASK_RUNNERS` (`:8044`),
+  `TASK_INTERVALS_SECONDS` (`:8137`, 86400) and the cron `SCHEDULE`
+  (`:99`), unchanged function body.
+
+No OPEN or FLAGGED item exists beyond CS-8 (original, by design) and
+`grace_period_days` (by design) as of pass 11; neither reopened by this
+pass's delta.
+
+### Documentation correction
+
+`docs/module-audit/compliance-skills.md`'s own CS-8 section had drifted: its
+heading already read "✅ FIXED (attestation half 2026-10-05)," but the
+"Attestations" bullet directly underneath still read "**Still OPEN:**
+`compliance_officer_service.create_attestation` is unchanged..." — stale for
+over two months after the fix landed (the CS-9 section further down the same
+file had the correct, up-to-date description all along). Corrected in place
+to match the header and the CS-9 section, and the separate, still-open
+immutability/dual-control point (this file's own original CS-8, which is a
+narrower claim than the module-audit bullet's "no second approver") is now
+called out explicitly as distinct, rather than left implied by the stray
+"Still OPEN" text. No code change; a documentation-accuracy fix caught by
+re-reading the cited file rather than trusting its own section header.
+
+### Route re-enumeration
+
+AST-walked both endpoint files directly: **21 routes** (13 + 8), up from pass
+11's 20 — the one new route is `GET /compliance/config/positions`, added by
+`be6b9554` above. Every route carries a recognized `Depends(...)`.
+`python3 scripts/check_route_permissions.py --strict` (repo root): **280
+total application routes, 0 errors, 0 warnings** — unchanged from the count
+reported by PR #3844 (Feature 19)'s own pass, since the new route is a
+sub-resource of an existing page (not a new top-level page — Pitfall #30a
+n/a) and no other feature merged a new page in the interim.
+
+### Findings
+
+**0 new findings.** The one real feature commit in this delta
+(position-scoped compliance profiles) adds a new endpoint that follows the
+existing permission and org-scoping pattern exactly, and reuses FK validation
+that was already in place; the encryption-sweep commit improves this
+feature's own data-exposure posture on two columns; the CLS fix is cosmetic.
+One stale documentation inconsistency found and corrected (above); no new
+code-level finding. Every standing CMP/CS item re-verified unchanged.
+
+## Completion gate (pass 12)
+
+| Check                                                                                                                                                                                                                                                                                                                                                                                                   | Result                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, CI's pin)                                                                                                                                                                                                                                                                                                                                               | ✅ 0 violations                                                                              |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, CI's pin, installed this pass — ambient `black` resolved to 26.5.1)                                                                                                                                                                                                                                                                             | ✅ 2743 files unchanged                                                                      |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, CI's pin, already on `PATH`)                                                                                                                                                                                                                                                                                                                 | ✅ clean                                                                                     |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                                                                       | ✅ 678 revisions, single head `f90b1124e6f4`                                                 |
+| `python3 scripts/generate_schema_docs.py --check` (via `python3.13`, the interpreter with the project's deps installed)                                                                                                                                                                                                                                                                                 | ✅ `DATABASE_SCHEMA.md` is up to date                                                        |
+| `python3 scripts/check_route_permissions.py --strict` (root)                                                                                                                                                                                                                                                                                                                                            | ✅ 280 routes, 0 errors, 0 warnings                                                          |
+| `pytest tests/ -q -k "compliance or attestation"` (via `python3.13`)                                                                                                                                                                                                                                                                                                                                    | ✅ 676 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip), up from pass 11's 667 |
+| `pytest tests/test_compliance_member_notices.py tests/test_compliance_grace_period_is_unwired.py tests/test_training_compliance.py tests/test_my_training_records.py tests/test_account_status_gates.py tests/test_compliance_auto_report_idempotency.py tests/test_saved_report_delivery.py tests/test_security_weekly_report.py tests/test_org_local_today.py tests/test_external_recipient_audit.py` | ✅ 312 passed (unchanged from pass 11)                                                       |
+| `pytest tests/test_compliance_config_service.py tests/test_compliance_config_permissions.py tests/test_compliance_matrix_endpoint.py` (this pass's own delta's tests)                                                                                                                                                                                                                                   | ✅ 65 passed                                                                                 |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                                                                                                                                      | ✅ 0 errors                                                                                  |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                                                                                                                                           | ✅ 0 errors/warnings (`--max-warnings 10`)                                                   |
+| 8 compliance-scoped frontend test files                                                                                                                                                                                                                                                                                                                                                                 | ✅ 59 passed, up from pass 11's 55                                                           |
+
+**Environment note, not a finding:** this worktree had no `frontend/node_modules`
+at the start of this pass (fresh worktree); `npm ci` from the repo root
+resolved it cleanly, 673 packages added, no lockfile change (never
+`rm package-lock.json && npm install`, per CLAUDE.md). The backend's own
+ambient `python3`/`python3.11` has no project dependencies installed in this
+sandbox (`sqlalchemy` missing); `python3.13` (`/usr/bin/python3.13`) is the
+interpreter with the full dependency set and was used for every check that
+imports the application (pytest, `generate_schema_docs.py`). `check_route_permissions.py`
+and `validate_migrations.py` are pure-AST/text scripts with no such
+dependency and ran fine under the bare `python3`.
+
+**Final disposition: 0 fixed (none needed — the delta was already correct), 0
+newly flagged, 1 documentation correction (module-audit CS-8 staleness).**
 
 ## Pass 11 (2026-10-26) — watchdog pickup, real delta, 0 new findings, 1 ride-along fix
 

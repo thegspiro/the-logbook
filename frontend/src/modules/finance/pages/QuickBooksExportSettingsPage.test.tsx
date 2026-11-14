@@ -64,6 +64,17 @@ vi.mock('../services/api', () => ({
     confirmImported: (...args: unknown[]) => confirmImported(...args) as unknown,
     withdrawImported: (...args: unknown[]) => withdrawImported(...args) as unknown,
   },
+  // The connection card loads on its own; here the server has no Intuit app.
+  quickBooksOnlineService: {
+    connection: () =>
+      Promise.resolve({
+        configured: false,
+        status: 'disconnected',
+        environmentMismatch: false,
+        counts: { queued: 0, retrying: 0, posted: 0, failed: 0, superseded: 0 },
+      }),
+    postings: () => Promise.resolve([]),
+  },
 }));
 
 import QuickBooksExportSettingsPage from './QuickBooksExportSettingsPage';

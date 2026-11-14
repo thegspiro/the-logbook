@@ -204,7 +204,7 @@ still linked (`meeting_id`), so a backfill could recompute the date. But a
 secretary may have corrected the date by hand since, and a backfill cannot tell
 that apart. Owner decision, in `KNOWN_LIMITATIONS.md`.
 
-### W51-9 — LOW — A meeting's own status badge never moves — OPEN
+### W51-9 — LOW — A meeting's own status badge never moves — FIXED
 
 The meetings list badges each meeting "Draft". Nothing in the UI advances a
 meeting record's status, so it still read Draft beside approved, published

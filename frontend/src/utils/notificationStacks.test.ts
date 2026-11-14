@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { NotificationLogRecord } from '../services/adminServices';
-import { describeStack, groupNotificationsIntoStacks, stackUnreadCount } from './notificationStacks';
+import { describeStack, groupNotificationsIntoStacks, stackPreview, stackUnreadCount } from './notificationStacks';
 
 const row = (id: string, overrides: Partial<NotificationLogRecord> = {}): NotificationLogRecord => ({
   id,
@@ -99,5 +99,33 @@ describe('stackUnreadCount', () => {
   it('falls back to the loaded unread rows when the server count is missing or behind', () => {
     expect(stackUnreadCount(rows, undefined)).toBe(2);
     expect(stackUnreadCount(rows, 1)).toBe(2);
+  });
+});
+
+describe('stackPreview', () => {
+  it('shows the newest message when every row shares one subject', () => {
+    // Four "New Shift Assignment" rows previewed as "Latest: New Shift
+    // Assignment", which only repeated the stack's own title.
+    expect(
+      stackPreview([
+        row('a', { subject: 'New Shift Assignment', message: 'Firefighter on the Nov 09 shift.' }),
+        row('b', { subject: 'New Shift Assignment', message: 'Firefighter on the Nov 05 shift.' }),
+      ])
+    ).toBe('Firefighter on the Nov 09 shift.');
+  });
+
+  it('keeps the subject when subjects differ, since it names the item', () => {
+    expect(
+      stackPreview([
+        row('a', { subject: 'Validate attendance for Saturday Drill', message: 'Please review.' }),
+        row('b', { subject: 'Validate attendance for Sunday Drill', message: 'Please review.' }),
+      ])
+    ).toBe('Validate attendance for Saturday Drill');
+  });
+
+  it('falls back to the subject, then a generic word, when there is no message', () => {
+    expect(stackPreview([row('a', { subject: 'Same' }), row('b', { subject: 'Same', message: '  ' })])).toBe('Same');
+    expect(stackPreview([row('a', { subject: '' }), row('b', { subject: '' })])).toBe('Notification');
+    expect(stackPreview([])).toBe('');
   });
 });

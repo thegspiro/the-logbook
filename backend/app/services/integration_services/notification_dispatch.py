@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.integration import Integration
+from app.schemas.integration import WEBHOOK_EVENT_TYPES
 from app.services.integration_health import record_integration_run
 
 # integration_type values that are chat/messaging platforms.
@@ -250,10 +251,84 @@ async def dispatch_chat_summary(
     return sent
 
 
+async def dispatch_generic_webhooks(
+    db: AsyncSession,
+    organization_id: str,
+    kind: str,
+    payload: dict[str, Any],
+) -> int:
+    """Send ``kind`` to the department's enabled Generic Webhook, if it wants it.
+
+    The webhook's ``event_types`` setting picks which events it is sent; an
+    empty list means all of them, so a webhook connected before the setting
+    existed starts receiving every event rather than none. Returns how many
+    deliveries were accepted. Never raises.
+    """
+    from app.services.integration_services.webhook_service import send_webhook
+
+    event_type = WEBHOOK_EVENT_TYPES.get(kind)
+    if event_type is None:
+        return 0
+    try:
+        integrations = list(
+            (
+                await db.execute(
+                    select(Integration).where(
+                        Integration.organization_id == str(organization_id),
+                        Integration.enabled.is_(True),
+                        Integration.integration_type == "generic-webhook",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    except Exception as exc:
+        logger.warning("Could not load generic webhooks: {}", exc)
+        return 0
+
+    sent = 0
+    for integration in integrations:
+        config = integration.config or {}
+        chosen = [
+            e
+            for e in (config.get("event_types") or [])
+            if e in WEBHOOK_EVENT_TYPES.values()
+        ]
+        if chosen and event_type not in chosen:
+            continue
+        url = integration.get_secret("url") or config.get("url", "")
+        if not url:
+            continue
+        delivered = False
+        error: Exception | str = _NOT_ACCEPTED
+        try:
+            delivered = await send_webhook(
+                url,
+                event_type,
+                payload,
+                secret=integration.get_secret("secret") or None,
+            )
+        except Exception as exc:
+            error = exc
+            logger.warning("Generic webhook delivery failed: {}", exc)
+        if delivered:
+            sent += 1
+        await record_integration_run(
+            db,
+            integration,
+            operation="webhook_delivery",
+            trigger="event",
+            success=delivered,
+            error=None if delivered else error,
+        )
+    return sent
+
+
 async def notify_entity_created(
     organization_id: str, kind: str, payload: dict[str, Any]
 ) -> None:
-    """Background-task entrypoint for a per-entity chat notification.
+    """Background-task entrypoint for a per-entity chat and webhook notification.
 
     Intended for ``BackgroundTasks.add_task`` so it runs AFTER the HTTP response.
     It therefore must NOT reuse the request-scoped DB session (already closed by
@@ -264,6 +339,7 @@ async def notify_entity_created(
     try:
         async with async_session_factory() as db:
             await dispatch_chat_notifications(db, organization_id, kind, payload)
+            await dispatch_generic_webhooks(db, organization_id, kind, payload)
             # Persists the delivery outcomes recorded on each integration.
             await db.commit()
     except Exception as exc:

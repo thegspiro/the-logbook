@@ -5,13 +5,18 @@
  * 4 October as "10/3/2026" and counted it overdue; its "Open" filter found
  * nothing beside an Open tile reading 3; and its rows could not be reached by
  * keyboard.
+ *
+ * Since DASH-40 the Total / Open / Overdue tiles are the feed's own totals,
+ * counted on the server with the department's date (the backend's
+ * test_dashboard_action_items_paging.py); what stays on this page is the
+ * calendar-day display and colouring of each row's due date.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
-import type { ActionItemSummary } from '../services/api';
+import type { ActionItemPage, ActionItemSummary } from '../services/api';
 
 const mockGetActionItems = vi.fn();
 vi.mock('../services/api', () => ({
@@ -26,6 +31,15 @@ vi.mock('../services/api', () => ({
 vi.mock('../hooks/useTimezone', () => ({ useTimezone: () => 'America/Chicago' }));
 
 import ActionItemsPage from './ActionItemsPage';
+
+const pageOf = (items: ActionItemSummary[]): ActionItemPage => ({
+  items,
+  total: items.length,
+  open_total: 0,
+  overdue_total: 0,
+  limit: 25,
+  offset: 0,
+});
 
 const item = (overrides: Partial<ActionItemSummary>): ActionItemSummary => ({
   id: 'a1',
@@ -42,14 +56,15 @@ describe('ActionItemsPage on the department calendar (W52)', () => {
     // Only Date is faked: timers stay real so the page's fetch resolves.
     vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-04T00:50:00Z') });
     mockGetActionItems.mockReset();
-    mockGetActionItems.mockResolvedValue([
-      // Minutes items arrive as the UTC midnight of their calendar day.
-      item({ id: 'a1', due_date: '2026-10-04T00:00:00+00:00' }),
-      item({ id: 'a2', description: 'Schedule pump test', due_date: '2026-10-02T00:00:00+00:00' }),
-      // Meeting items arrive as a bare DATE.
-      item({ id: 'a3', source: 'meeting', status: 'open', description: 'Fix bay door', due_date: '2026-10-10' }),
-      item({ id: 'a4', status: 'completed', description: 'Wash rig', due_date: '2026-09-01T00:00:00+00:00' }),
-    ]);
+    mockGetActionItems.mockResolvedValue(
+      pageOf([
+        // Minutes items arrive as the UTC midnight of their calendar day.
+        item({ id: 'a1', due_date: '2026-10-04T00:00:00+00:00' }),
+        item({ id: 'a2', description: 'Schedule pump test', due_date: '2026-10-02T00:00:00+00:00' }),
+        // Meeting items arrive as a bare DATE.
+        item({ id: 'a3', source: 'meeting', status: 'open', description: 'Fix bay door', due_date: '2026-10-10' }),
+      ])
+    );
   });
 
   afterEach(() => {
@@ -63,32 +78,23 @@ describe('ActionItemsPage on the department calendar (W52)', () => {
     expect(screen.getByText('Oct 10, 2026')).toBeInTheDocument();
   });
 
-  it('counts overdue against today on the department calendar', async () => {
+  it('marks late only the item due before today on the department calendar', async () => {
     renderWithRouter(<ActionItemsPage />);
-    await screen.findByText('Oct 4, 2026');
 
-    // Four items, three open, and only the one due 2 Oct is late: 4 Oct is
-    // tomorrow in Chicago, and the completed item does not count. The three
-    // tiles therefore read 4, 3 and 1 — before the fix, Overdue read 2.
-    expect(screen.getByText('4')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByText('1')).toBeInTheDocument();
-    expect(screen.queryByText('2')).not.toBeInTheDocument();
+    // 4 October is tomorrow in Chicago: due soon, not late. Before the fix it
+    // was coloured as overdue.
+    expect((await screen.findByText('Oct 4, 2026')).className).toContain('text-orange-700');
+    expect(screen.getByText('Oct 2, 2026').className).toContain('text-red-700');
   });
 
-  it('filters "Open" to everything not done, from both sources', async () => {
+  it('asks the server for "Open" — everything not done, from both sources', async () => {
     const user = userEvent.setup({ advanceTimers: () => undefined });
     renderWithRouter(<ActionItemsPage />);
     await screen.findByText('Oct 4, 2026');
 
     await user.selectOptions(screen.getByLabelText('Filter action items by status'), 'open');
 
-    expect(mockGetActionItems).toHaveBeenLastCalledWith({});
-    expect(await screen.findByText('Fix bay door')).toBeInTheDocument();
-    expect(screen.getByText('Order replacement hose')).toBeInTheDocument();
-    expect(screen.queryByText('Wash rig')).not.toBeInTheDocument();
-    // Total and Open both read 3 once the closed item is filtered out.
-    expect(screen.getAllByText('3')).toHaveLength(2);
+    expect(mockGetActionItems).toHaveBeenLastCalledWith({ open_only: true, limit: 25, offset: 0 });
   });
 
   it('makes each row a link to its minutes', async () => {

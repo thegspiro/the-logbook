@@ -171,6 +171,33 @@ land already filtered.]**
 > lands filtered on exactly those members. It always sent the filter — the grid
 > just ignored it and dropped you in the full roster."
 
+**[SCREEN: Above the list, the member-class switch set to Administrative; the
+summary line reads "tracked administrative members". Then Print, with the switch
+back on All.]**
+
+> "Does your roster have more than one member class? Then there's a switch above
+> the list — **All**, **Operational**, **Administrative**, **Social**, only the
+> classes you have. Pick one and you see just those members, against just the
+> requirements that grade them, so an administrative member isn't read against a
+> column of operational drills. **Print** and the CSV follow the switch, and
+> printing with **All** gives one table per class."
+
+**[SCREEN: A member's detail with a reduced hours requirement; the note
+"Adjusted for 3 months on leave".]**
+
+> "And when a member has been on leave, the cell says so — 'Adjusted for three
+> months on leave', with the original and the adjusted target side by side. How
+> a month that's only partly covered by leave is treated is a department setting
+> called **Months on leave**. Part 2 shows where."
+
+**[PRODUCTION NOTE — 2026-11-05. Two new beats, about 35 seconds; re-time
+Chapter 2. The member-class switch (2026-10-27) and the class-split printout
+need a department with more than one member class. Leave beside the hours is
+2026-11-02: a reduced cell names its months "on leave" only where a leave of
+absence covered them, "waived months" where a training waiver did. Upgrade
+note: every department starts on **Full month (default)**, so a member with
+part of a month on leave may now owe less than before.]**
+
 **[EDITOR NOTE: two grading fixes shipped with this, both in the members'
 favour, so a department's percentages may **rise** after the upgrade. A member
 exempt from a requirement could never reach 100%, because the percentage divided
@@ -199,23 +226,27 @@ open item". Do not narrate a pre-upgrade percentage as the current one.]**
 
 ### CREATING A TRAINING PROGRAM (5:00 – 6:30)
 
-**[SCREEN: Navigate to Training Programs (TrainingProgramsPage). Click "Create
-Program."]**
+**[SCREEN: Navigate to Training Admin → Curriculum → Programs. The department's
+existing programs are listed; click "New Pipeline."]**
 
-> "Let's create an annual recertification program. Click 'Create Program.'"
+> "Programs live under **Curriculum**. That tab shows the programs you already
+> have, so you see what exists before you add another. Let's create an annual
+> recertification program. Click **New Pipeline** — the wizard opens right there."
 
-**[SCREEN: Fill in the program form]**
+**[SCREEN: Fill in the Program Info step]**
 
-> "**Program Name:** 'Annual Firefighter Recertification.'
-> **Description:** 'Required annual training and certification renewals for all
-> active firefighters.'
-> **Target Audience:** Select which positions or membership types this program
-> applies to — in this case, all active members."
+> "**Program Name:** 'Annual Firefighter Recertification.' That's the only
+> required field. **Description:** 'Required annual training and certification
+> renewals for all active firefighters.' There's also a **Program Code** if your
+> department uses short codes."
 
-**[SCREEN: Select target positions/groups]**
-
-> "**Deadline:** You can set a program-level deadline or let individual
+> "**Time Limit (days):** You can set a program-level deadline or let individual
 > requirement deadlines govern."
+
+**[PRODUCTION NOTE — 2026-11-05. Corrected against the screen. The previous take
+clicked "Create Program" and filled a Target Audience picker; neither exists.
+The Programs tab lists existing programs (2026-10-25) and **New Pipeline** opens
+the wizard. Script 11 walks the wizard in full; keep this beat short.]**
 
 ### ADDING REQUIREMENTS (6:30 – 7:30)
 
@@ -283,6 +314,44 @@ seconds; re-time Chapter 3 and re-record the form.]**
 > require."
 
 **[SCREEN: Show several requirements created in a list]**
+
+**[SCREEN: Open Create Requirement and choose the type "Session Attendance". The
+form shows "Sessions to Attend (%)" and no hours box.]**
+
+> "One more type, for drills. Not every requirement is about hours. 'Attend sixty
+> percent of the company drills this year' is about turning up. Choose
+> **Session Attendance**, and instead of hours you enter **Sessions to Attend**,
+> as a percentage."
+
+> "A drill counts toward it only if it's linked, so when you create a training
+> session, tick the requirement under **Connect to Requirements & Programs**.
+> You can change the links later from the event page, even after attendance is
+> finalized. Members see a **Counts toward attendance** badge beside
+> **Mandatory** on the event."
+
+**[CALLOUT: "Session Attendance = turn up, not hours logged"]**
+
+> "A member isn't charged for a drill held before they joined, and a leave or
+> waiver covering the day excuses it unless they came anyway. Missed one for a
+> good reason? That's a training waiver. The rare exception is the Chief's
+> override, which the Chief uses from the member in the Compliance Matrix — and
+> only if you ticked **Allow the Chief to override it for a member** on the
+> requirement."
+
+**[PRODUCTION NOTE — 2026-11-05. New beat, about 45 seconds; re-time Chapter 3
+and record the requirement form and the create-session checklist. The override
+is tied to holding a Chief position, not a permission, so no role reaches it.
+The cell reads "Met by the Chief's override". Details: docs/training/02-training.md,
+"Session attendance requirements".]**
+
+**[SCREEN: Scroll below the requirements list to the Import from Registry panel.]**
+
+> "And if you'd rather not type the standards in: below your list there's
+> **Import from Registry** — NFPA, Pro Board and the NREMT levels. It sits below
+> the list on purpose, so your own requirements are the first thing you see."
+
+**[PRODUCTION NOTE — 2026-11-05. Registry import moved to Curriculum →
+Requirements (2026-10-25) and below the list (2026-11-05). About 10 seconds.]**
 
 ### PICKING THE COURSE, NOT TYPING ITS NAME (7:00 – 7:20)
 
@@ -426,6 +495,19 @@ not `events.manage`. New footage needed; re-time Chapter 4.]**
 
 > "One click and everyone's records are updated. This is the fastest way to
 > process training after a class."
+
+**[SCREEN: Training Admin → Settings & Data → Import Past Training, the preview
+step.]**
+
+> "Moving over from another system? **Import Past Training**, under Settings and
+> Data, brings in years of records from a CSV. Match members by membership
+> number, check the preview, confirm. Every row needs a completion date. A row
+> without one is listed under Errors and isn't imported."
+
+**[PRODUCTION NOTE — 2026-11-05. New beat, about 20 seconds; re-time Chapter 4.
+The department's historical data import also turns training rows into completed
+records and company drills into held, finalized sessions, so session attendance
+grades past drills. That belongs to the IT Manager's script (03), not here.]**
 
 ### MEMBER SELF-SUBMISSION (11:00 – 11:30)
 

@@ -40,6 +40,8 @@ _SOURCE_LABELS = {
     "check_in": "Checked in",
     "issuance": "Issued",
     "issuance_return": "Issuance returned",
+    "barcode_put_away": "Barcode put-away",
+    "created": "Added to inventory",
 }
 
 

@@ -13,7 +13,6 @@
 
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router';
-import JsBarcode from 'jsbarcode';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   ArrowLeft,
@@ -58,10 +57,14 @@ import { MAX_LABEL_SETUPS, MAX_SETUP_NAME, usableSetupLines } from '../utils/lab
 import type { LabelSetup } from '../utils/labelSetups';
 import { Breadcrumbs, PromptDialog } from '../../../components/ux';
 import { BARCODE_SVG_PRINT_CSS } from '../../../components/labels/barcodePrintCss';
+import { drawCode128ForPrinter, horizontalPaddingInches } from '../../../components/labels/barcodeGeometry';
+import { PrinterDpiSelect } from '../../../components/labels/PrinterDpiSelect';
+import { usePrinterDpi } from '../../../components/labels/printerDpi';
 import { LABEL_FONT_FAMILY, labelNameStyle } from '../../../components/labels/labelText';
 import { PrintSetupChecklist } from '../../../components/labels/PrintSetupChecklist';
 import { isPrintChecklistSkipped } from '../../../components/labels/printChecklist';
 import { SheetStartPicker } from '../../../components/labels/SheetStartPicker';
+import { AVERY_5160_COLUMN_GAP, AVERY_5160_PAGE_MARGIN } from '../../../components/labels/labelPresets';
 import {
   buildLabelFilterPath,
   MAX_LABEL_BATCH,
@@ -393,6 +396,8 @@ interface BarcodeLabelProps {
   symbology: Symbology;
   labelLines: string[];
   names: LabelNames;
+  /** Printer resolution the Code 128 is sized for. */
+  dpi: number;
   /** Bumped by the page each time it resets its ready count; see below. */
   renderGeneration: number;
   onRendered?: () => void;
@@ -404,6 +409,7 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
   symbology,
   labelLines,
   names,
+  dpi,
   renderGeneration,
   onRendered,
 }) => {
@@ -418,22 +424,17 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
       return;
     }
     try {
-      // ISO/IEC 15417 requires a quiet zone of at least 10x the module
-      // (bar) width on each side of a Code128 barcode for reliable scanning.
-      const quietZone = Math.ceil(preset.barcodeWidth * 10);
-      JsBarcode(svgRef.current, barcodeValue, {
-        format: 'CODE128',
-        width: preset.barcodeWidth,
-        height: preset.barcodeHeight,
-        displayValue: true,
-        fontSize: preset.barcodeFontSize,
-        marginTop: 0,
-        marginBottom: 1,
-        marginLeft: quietZone,
-        marginRight: quietZone,
-        textMargin: 1,
-        font: 'monospace',
-      });
+      drawCode128ForPrinter(
+        svgRef.current,
+        barcodeValue,
+        {
+          moduleCssPx: preset.barcodeWidth,
+          barHeightCssPx: preset.barcodeHeight,
+          fontSizeCssPx: preset.barcodeFontSize,
+        },
+        parseFloat(preset.width) - horizontalPaddingInches(preset.padding),
+        dpi
+      );
     } catch {
       // Invalid barcode value — SVG stays empty
     }
@@ -444,6 +445,9 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
     preset.barcodeWidth,
     preset.barcodeHeight,
     preset.barcodeFontSize,
+    preset.width,
+    preset.padding,
+    dpi,
     renderGeneration,
     onRendered,
   ]);
@@ -628,6 +632,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
     ? buildCustomPreset(customValid ? customW : 2, customValid ? customH : 1)
     : (LABEL_PRESETS.find((p) => p.id === presetId) ?? firstPreset);
   const effectiveAutoRotate = autoRotateOverride ?? preset.autoRotate;
+  const printerDpi = usePrinterDpi(preset.id);
   const isLandscape = parseFloat(preset.width) > parseFloat(preset.height);
   const isThermal = preset.columns === 1;
   // A custom size is its own stock, so "don't show again" is per dimension.
@@ -1070,7 +1075,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
 <style>
   @page {
     size: ${preset.pageWidth} ${preset.pageHeight};
-    margin: ${isThermal ? '0' : '0.5in 0.19in'};
+    margin: ${isThermal ? '0' : AVERY_5160_PAGE_MARGIN};
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: white; }
@@ -1346,12 +1351,12 @@ const InventoryBarcodePrintPage: React.FC = () => {
   return (
     <>
       {/* Dynamic print styles */}
-      <style>
+      <style data-testid="label-page-css">
         {`
           /* @page must be top-level — browsers ignore size when nested in @media */
           @page {
             size: ${preset.pageWidth} ${preset.pageHeight};
-            margin: ${isThermal ? '0' : '0.5in 0.19in'};
+            margin: ${isThermal ? '0' : AVERY_5160_PAGE_MARGIN};
           }
 
           @media print {
@@ -1368,10 +1373,11 @@ const InventoryBarcodePrintPage: React.FC = () => {
               font-size: unset !important;
             }
 
-            /* Remove the sidebar left-margin offset so labels aren't
-               shifted off-center when the sidebar is hidden */
-            .md\\:ml-64 {
-              margin-left: 0 !important;
+            /* Remove the sidebar's width so labels aren't shifted
+               off-center when the sidebar is hidden: AppLayout offsets the
+               content column (and paints the nav strip) by this variable */
+            .has-side-nav {
+              --side-nav-width: 0px !important;
             }
 
             /* Remove the top padding added for the mobile top-bar */
@@ -1441,7 +1447,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
       </style>
 
       {/* Screen-only controls */}
-      <div className="print-controls min-h-screen">
+      <div className="print-controls" data-testid="label-print-controls">
         <div className="mx-auto max-w-4xl px-4 py-6">
           {/* Inside print-controls, so the trail never reaches the labels. */}
           <Breadcrumbs underHub="/inventory/admin" />
@@ -1885,6 +1891,15 @@ const InventoryBarcodePrintPage: React.FC = () => {
                 </div>
               </div>
 
+              {symbology === Symbology.CODE128 && (
+                <PrinterDpiSelect
+                  id="label-printer-dpi"
+                  value={printerDpi.override}
+                  autoDpi={printerDpi.autoDpi}
+                  onChange={printerDpi.setOverride}
+                />
+              )}
+
               <div>
                 <label
                   htmlFor="label-copies"
@@ -2081,13 +2096,15 @@ const InventoryBarcodePrintPage: React.FC = () => {
           <div className="overflow-x-auto print:overflow-visible">
             <div
               className="barcode-labels-container"
+              data-testid="label-sheet-grid"
               style={{
                 display: isThermal ? 'flex' : 'grid',
                 flexDirection: isThermal ? 'column' : undefined,
                 gridTemplateColumns: isThermal ? undefined : `repeat(${preset.columns}, ${preset.width})`,
-                gap: isThermal ? '8px' : '0',
+                gap: isThermal ? '8px' : undefined,
+                columnGap: isThermal ? undefined : AVERY_5160_COLUMN_GAP,
+                rowGap: isThermal ? undefined : 0,
                 alignItems: isThermal ? 'center' : undefined,
-                justifyContent: isThermal ? undefined : 'center',
               }}
             >
               {Array.from({ length: skippedPositions }, (_, index) => (
@@ -2107,6 +2124,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
                   symbology={symbology}
                   labelLines={labelLines}
                   names={labelNames}
+                  dpi={printerDpi.dpi}
                   renderGeneration={renderGeneration}
                   onRendered={handleLabelRendered}
                 />

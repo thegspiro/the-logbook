@@ -641,7 +641,7 @@ def count_waived_months(
 ) -> int
 ```
 
-Counts calendar months within the evaluation window covered by ≥15 days of waiver. Deduplicates overlapping waivers via a set of `(year, month)` tuples.
+Counts calendar months within the evaluation window that a waiver excuses any part of, by the department's `leave_month_rule` (`full_month` default, `proportional`, `half`; see `month_waivers`). Overlapping waivers are merged by day, so no day counts twice.
 
 ```python
 def adjust_required(
@@ -1462,7 +1462,14 @@ authenticated by `key` and `secret` query parameters, returning a CSV.
 
 - **Mapping.** `Transcript ID` is the external record id (a re-sync updates the
   same import in place); `Duration (hours)` fills both `credit_hours` and
-  `duration_minutes`; members are matched on the `Email` column against the
+  `duration_minutes`. A completion reported with no hours (a policy
+  acknowledgment arrives as 0) is credited its mapped library course's Credit
+  Hours, or the course's duration when Credit Hours is blank; hours the report
+  does carry always win. Mapping or re-mapping a course applies the same rule
+  to records already imported from it, leaving alone any record whose hours or
+  credit hours an officer changed — including when both courses credit the
+  same, so a record imported while its course credited nothing still catches
+  up. Members are matched on the `Email` column against the
   member's email, case- and whitespace-insensitive, skipping deleted members. An
   unmatched member stays in the user mappings and is auto-matched on a later
   sync unless an officer has set or cleared that mapping by hand.

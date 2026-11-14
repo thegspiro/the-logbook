@@ -23,10 +23,9 @@ from typing import Awaitable, Callable, Optional, Sequence
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from loguru import logger
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
 
 from app.api.dependencies import user_has_permission
 from app.models.admin_hub import DEPARTMENT_SCOPE, AdminHubMetricPreference
@@ -93,10 +92,12 @@ from app.schemas.admin_hub import (
     AdminMetricSettings,
     AdminMetricSettingsUpdate,
 )
+from app.schemas.medical_screening import ComplianceRosterRow
 from app.services.event_attendance_petition_service import (
     pending_petition_criteria,
 )
 from app.services.inventory_service import InventoryService
+from app.services.medical_screening_service import MedicalScreeningService
 from app.services.organization_service import OrganizationService
 from app.services.pre_shift_work_service import approved_pre_work_minutes
 from app.services.scheduling_service import (
@@ -305,13 +306,6 @@ def _attention_context(attention: list[AdminAttentionItem]) -> str:
 # ── Members ─────────────────────────────────────────────────────────────────
 
 
-#: Outer-query alias for the expired-screening lookup, so its correlated
-#: "is there still cover?" subquery can name the same table twice.
-_EXPIRED_ALIAS = aliased(ScreeningRecord)
-
-#: Outer-query alias for the missed-appointment lookup, for the same reason.
-_OVERDUE_ALIAS = aliased(ScreeningRecord)
-
 #: Statuses that mean the member turned up. A failed screening and one still
 #: under review are both *completed* appointments — they are somebody else's
 #: problem (compliance, the reviewer), not a booking nobody kept.
@@ -321,6 +315,69 @@ _ATTENDED_STATUSES = (
     ScreeningStatus.FAILED,
     ScreeningStatus.PENDING_REVIEW,
 )
+
+
+def _answers(other: ScreeningRecord, missed: ScreeningRecord, today: date) -> bool:
+    """Whether ``other`` answers the appointment ``missed`` records.
+
+    The member attended (a settled result dated on or after the missed day),
+    the requirement was waived, or a later booking has not come round yet. A
+    settled record with no completed date says nothing about *when*, so it
+    answers nothing.
+    """
+    if other.status == ScreeningStatus.WAIVED:
+        return True
+    if other.status in _ATTENDED_STATUSES:
+        return (
+            other.completed_date is not None
+            and missed.scheduled_date is not None
+            and other.completed_date >= missed.scheduled_date
+        )
+    return (
+        other.status == ScreeningStatus.SCHEDULED
+        and other.scheduled_date is not None
+        and other.scheduled_date >= today
+    )
+
+
+async def _missed_screening_appointments(
+    ctx: MetricContext,
+) -> tuple[int, Optional[date]]:
+    """(member-and-type pairs with an unanswered missed booking, oldest day)."""
+    rows = await ctx.db.execute(
+        select(ScreeningRecord)
+        .join(User, ScreeningRecord.user_id == User.id)
+        .where(
+            ScreeningRecord.organization_id == ctx.organization_id,
+            # An appointment somebody off the roster missed is history, not work.
+            User.organization_id == ctx.organization_id,
+            *_current_member_criteria(),
+        )
+    )
+    by_member_and_type: dict[tuple[str, str], list[ScreeningRecord]] = {}
+    for record in rows.scalars().all():
+        key = (str(record.user_id), str(record.screening_type))
+        by_member_and_type.setdefault(key, []).append(record)
+
+    missed_on: dict[tuple[str, str], date] = {}
+    for key, records in by_member_and_type.items():
+        for missed in records:
+            if (
+                missed.status != ScreeningStatus.SCHEDULED
+                or missed.scheduled_date is None
+                or missed.scheduled_date >= ctx.today
+            ):
+                continue
+            if any(
+                _answers(other, missed, ctx.today)
+                for other in records
+                if other.id != missed.id
+            ):
+                continue
+            first = missed_on.get(key)
+            if first is None or missed.scheduled_date < first:
+                missed_on[key] = missed.scheduled_date
+    return len(missed_on), min(missed_on.values(), default=None)
 
 
 def _current_member_criteria():
@@ -401,33 +458,39 @@ async def _members_prospective(ctx: MetricContext) -> tuple[str, str]:
     return _fmt_int(count), "in the pipeline"
 
 
+async def _member_screening_rows(
+    ctx: MetricContext,
+) -> tuple[int, list[ComplianceRosterRow]]:
+    """The Compliance tab's roster, members only: (active requirements, rows).
+
+    The hub reads screening standing from ``get_compliance_roster`` rather
+    than grading records itself (pitfall #29, W71b-3). Its own queries
+    disagreed with the tab: they ignored requirements, the frequency rule,
+    position scoping and failures, and called a member cleared the tab
+    called not compliant. Prospects are the pipeline's, not this page's.
+    """
+    roster = await MedicalScreeningService(ctx.db).get_compliance_roster(
+        ctx.organization_id
+    )
+    members = [row for row in roster.rows if row.subject_type == "user"]
+    return roster.total_requirements, members
+
+
 async def _members_screening_current(ctx: MetricContext) -> tuple[str, str]:
-    active = await _scalar(
-        ctx.db,
-        select(func.count(User.id)).where(
-            User.organization_id == ctx.organization_id, *_current_member_criteria()
-        ),
+    requirements, rows = await _member_screening_rows(ctx)
+    if requirements == 0:
+        return "—", "no screening requirements"
+    graded = [row for row in rows if row.standing != "not_applicable"]
+    if not graded:
+        return "—", "no members to grade"
+    # Expiring soon is still compliant today, as on the Compliance tab.
+    compliant = sum(
+        1 for row in graded if row.standing in ("compliant", "expiring_soon")
     )
-    if active == 0:
-        return "—", "no active members"
-    current = await _scalar(
-        ctx.db,
-        select(func.count(func.distinct(ScreeningRecord.user_id)))
-        .join(User, ScreeningRecord.user_id == User.id)
-        .where(
-            ScreeningRecord.organization_id == ctx.organization_id,
-            ScreeningRecord.status.in_(
-                [ScreeningStatus.PASSED, ScreeningStatus.COMPLETED]
-            ),
-            or_(
-                ScreeningRecord.expiration_date.is_(None),
-                ScreeningRecord.expiration_date >= ctx.today,
-            ),
-            User.organization_id == ctx.organization_id,
-            *_current_member_criteria(),
-        ),
+    return (
+        f"{round(compliant * 100 / len(graded))}%",
+        f"{compliant} of {len(graded)} compliant",
     )
-    return f"{round(current * 100 / active)}%", f"{current} of {active} cleared"
 
 
 async def _members_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
@@ -438,94 +501,30 @@ async def _members_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
     # medical_screening.view alone put lapsed-physical counts on the members
     # admin page for departments that track physicals somewhere else.
     if "medical_screening" in ctx.enabled_modules:
-        # One row per member and screening type, not per historical record.
-        # A screening is renewed by adding a record, never by editing the old one,
-        # so counting expired rows outright reports a member who renewed last week
-        # as lapsed — while the Screenings-current metric, which asks whether any
-        # valid record exists, calls the same member covered. Two numbers on one
-        # page disagreeing about one person is worse than either being absent.
-        #
-        # "Expired" therefore means: this member has no unexpired record of this
-        # type. A record with no expiry never lapses, and a waiver excuses the
-        # requirement, so both count as cover.
-        current_cover = (
-            select(ScreeningRecord.id)
-            .where(
-                ScreeningRecord.organization_id == ctx.organization_id,
-                ScreeningRecord.user_id == _EXPIRED_ALIAS.user_id,
-                ScreeningRecord.screening_type == _EXPIRED_ALIAS.screening_type,
-                ScreeningRecord.status.in_(
-                    [
-                        ScreeningStatus.PASSED,
-                        ScreeningStatus.COMPLETED,
-                        ScreeningStatus.WAIVED,
-                    ]
-                ),
-                or_(
-                    ScreeningRecord.expiration_date.is_(None),
-                    ScreeningRecord.expiration_date >= ctx.today,
-                ),
-            )
-            .exists()
-        )
-        lapsed = (
-            select(
-                _EXPIRED_ALIAS.user_id,
-                _EXPIRED_ALIAS.screening_type,
-                func.min(_EXPIRED_ALIAS.expiration_date).label("lapsed_on"),
-            )
-            .join(User, _EXPIRED_ALIAS.user_id == User.id)
-            .where(
-                _EXPIRED_ALIAS.organization_id == ctx.organization_id,
-                _EXPIRED_ALIAS.expiration_date.isnot(None),
-                _EXPIRED_ALIAS.expiration_date < ctx.today,
-                _EXPIRED_ALIAS.status != ScreeningStatus.WAIVED,
-                # A lapsed screening for someone off the roster is history, not work.
-                User.organization_id == ctx.organization_id,
-                *_current_member_criteria(),
-                ~current_cover,
-            )
-            .group_by(_EXPIRED_ALIAS.user_id, _EXPIRED_ALIAS.screening_type)
-            .subquery()
-        )
-        expired_row = (
-            await ctx.db.execute(
-                select(func.count(), func.min(lapsed.c.lapsed_on)).select_from(lapsed)
-            )
-        ).one()
-        expired_count, oldest_expiry = int(expired_row[0] or 0), expired_row[1]
-        if expired_count:
-            age = _age_days(oldest_expiry, ctx.today, ctx.timezone_name)
+        # The members the Compliance tab grades not compliant: a requirement
+        # expired (by date or by frequency), failed or never recorded. No age:
+        # the roster carries counts, and "never recorded" has no lapse date.
+        _, rows = await _member_screening_rows(ctx)
+        not_compliant = sum(1 for row in rows if row.standing == "not_compliant")
+        if not_compliant:
             items.append(
                 AdminAttentionItem(
-                    key="expired_screenings",
+                    key="screenings_not_compliant",
                     title=(
-                        f"{expired_count} medical "
-                        f"{_plural(expired_count, 'screening')} expired"
+                        f"{not_compliant} {_plural(not_compliant, 'member')} "
+                        "not compliant with medical screening"
                     ),
-                    detail=" · ".join(
-                        part
-                        for part in (
-                            (
-                                f"oldest lapsed {age} {_plural(age or 0, 'day')} ago"
-                                if age is not None
-                                else ""
-                            ),
-                            "blocks duty assignment",
-                        )
-                        if part
-                    ),
-                    action_label="Open records",
-                    href="/medical-screening",
+                    detail="a screening expired, failed or not yet recorded",
+                    action_label="Open compliance",
+                    href="/medical-screening?tab=compliance",
                     severity="critical",
-                    count=expired_count,
-                    oldest_age_days=age,
+                    count=not_compliant,
                 )
             )
 
-        # Same shape as the expired lookup above, and for the same reason: a missed
-        # appointment is never edited, it is answered by a *new* record. Counting
-        # stale SCHEDULED rows outright therefore reports the member who rebooked
+        # A missed appointment is never edited, it is answered by a *new*
+        # record, like a renewal. Counting stale SCHEDULED rows outright
+        # therefore reports the member who rebooked
         # and passed as one who "never completed" it, and keeps reporting them
         # forever — the row that says they missed a Tuesday in March is permanent.
         #
@@ -536,55 +535,10 @@ async def _members_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
         # *when* they attended, so it answers nothing — over-reporting a
         # "reschedule this" is the safer direction than hiding a member who never
         # had their physical.
-        answered = (
-            select(ScreeningRecord.id)
-            .where(
-                ScreeningRecord.organization_id == ctx.organization_id,
-                ScreeningRecord.user_id == _OVERDUE_ALIAS.user_id,
-                ScreeningRecord.screening_type == _OVERDUE_ALIAS.screening_type,
-                ScreeningRecord.id != _OVERDUE_ALIAS.id,
-                or_(
-                    ScreeningRecord.status == ScreeningStatus.WAIVED,
-                    and_(
-                        ScreeningRecord.status.in_(_ATTENDED_STATUSES),
-                        ScreeningRecord.completed_date.isnot(None),
-                        ScreeningRecord.completed_date >= _OVERDUE_ALIAS.scheduled_date,
-                    ),
-                    and_(
-                        ScreeningRecord.status == ScreeningStatus.SCHEDULED,
-                        ScreeningRecord.scheduled_date.isnot(None),
-                        ScreeningRecord.scheduled_date >= ctx.today,
-                    ),
-                ),
-            )
-            .exists()
-        )
-        missed = (
-            select(
-                _OVERDUE_ALIAS.user_id,
-                _OVERDUE_ALIAS.screening_type,
-                func.min(_OVERDUE_ALIAS.scheduled_date).label("missed_on"),
-            )
-            .join(User, _OVERDUE_ALIAS.user_id == User.id)
-            .where(
-                _OVERDUE_ALIAS.organization_id == ctx.organization_id,
-                _OVERDUE_ALIAS.status == ScreeningStatus.SCHEDULED,
-                _OVERDUE_ALIAS.scheduled_date.isnot(None),
-                _OVERDUE_ALIAS.scheduled_date < ctx.today,
-                # An appointment somebody off the roster missed is history, not work.
-                User.organization_id == ctx.organization_id,
-                *_current_member_criteria(),
-                ~answered,
-            )
-            .group_by(_OVERDUE_ALIAS.user_id, _OVERDUE_ALIAS.screening_type)
-            .subquery()
-        )
-        overdue_row = (
-            await ctx.db.execute(
-                select(func.count(), func.min(missed.c.missed_on)).select_from(missed)
-            )
-        ).one()
-        overdue_count, oldest_due = int(overdue_row[0] or 0), overdue_row[1]
+        #
+        # Decided in Python: the status is ciphertext (MS-18), so the database
+        # cannot tell a booking from a result. One row per member and type.
+        overdue_count, oldest_due = await _missed_screening_appointments(ctx)
         if overdue_count:
             age = _age_days(oldest_due, ctx.today, ctx.timezone_name)
             items.append(
@@ -2202,7 +2156,8 @@ MODULE_REGISTRY: dict[str, ModuleSpec] = {
                 key="screening_current",
                 label="Screenings current",
                 description=(
-                    "Share of active members with an unexpired medical screening"
+                    "Share of members meeting every screening requirement that "
+                    "applies to them, as the Compliance tab grades it"
                 ),
                 resolve=_members_screening_current,
                 permission="medical_screening.view",

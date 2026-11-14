@@ -2,7 +2,7 @@
  * ContactsSection — Emergency contacts for a single facility.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Users, Plus, Trash2, Loader2, Pencil, Save, Phone, Mail, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
@@ -14,8 +14,52 @@ import type {
 import { enumLabel } from '../types';
 import { inputCls, labelCls, CONTACT_TYPE_OPTIONS } from '../constants';
 import { blankToNull } from '../../../utils/formValues';
-
+import { FormField } from '../../../components/ux/FormField';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+
+interface ContactForm {
+  contact_type: string;
+  company_name: string;
+  contact_name: string;
+  phone: string;
+  alt_phone: string;
+  email: string;
+  service_contract_number: string;
+  priority: string;
+}
+
+type ContactField = keyof ContactForm;
+
+const EMPTY_FORM: ContactForm = {
+  contact_type: 'other',
+  company_name: '',
+  contact_name: '',
+  phone: '',
+  alt_phone: '',
+  email: '',
+  service_contract_number: '',
+  priority: '',
+};
+
+/**
+ * How the emergency-contact endpoints' field names land on this form (forms
+ * review F-2); `max_length`s from `FacilityEmergencyContactBase`. The schema
+ * takes camelCase and snake_case both. Ordered as on screen, so the first
+ * refusal takes focus.
+ */
+const CONTACT_FIELDS: Record<ContactField, ServerFieldSpec & { id: string }> = {
+  contact_type: { label: 'Type', id: 'facility-contact-type' },
+  company_name: { label: 'Company name', maxLength: 200, id: 'facility-contact-company' },
+  contact_name: { label: 'Contact name', maxLength: 200, id: 'facility-contact-name' },
+  phone: { label: 'Phone', maxLength: 50, id: 'facility-contact-phone' },
+  alt_phone: { label: 'Alternate phone', maxLength: 50, id: 'facility-contact-alt-phone' },
+  email: { label: 'Email', maxLength: 200, id: 'facility-contact-email' },
+  service_contract_number: { label: 'Contract #', maxLength: 100, id: 'facility-contact-contract' },
+  priority: { label: 'Priority', id: 'facility-contact-priority' },
+};
+
 interface Props {
   facilityId: string;
   canCreate: boolean;
@@ -30,16 +74,19 @@ export default function ContactsSection({ facilityId, canCreate, canEdit, canDel
   const [showForm, setShowForm] = useState(false);
   const [editingContact, setEditingContact] = useState<EmergencyContact | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    contact_type: 'other',
-    company_name: '',
-    contact_name: '',
-    phone: '',
-    alt_phone: '',
-    email: '',
-    service_contract_number: '',
-    priority: '',
-  });
+  const [formData, setFormData] = useState<ContactForm>(EMPTY_FORM);
+  const [errors, setErrors] = useState<Partial<Record<ContactField, string>>>({});
+
+  const up = (k: ContactField, v: string) => {
+    setFormData((p) => ({ ...p, [k]: v }));
+    setErrors((p) => ({ ...p, [k]: undefined }));
+  };
+
+  const showErrors = (next: Partial<Record<ContactField, string>>) => {
+    setErrors(next);
+    const first = (Object.keys(CONTACT_FIELDS) as ContactField[]).find((k) => next[k]);
+    if (first) window.setTimeout(() => document.getElementById(CONTACT_FIELDS[first].id)?.focus(), 0);
+  };
 
   const loadContacts = useCallback(async () => {
     setIsLoading(true);
@@ -58,16 +105,8 @@ export default function ContactsSection({ facilityId, canCreate, canEdit, canDel
   }, [loadContacts]);
 
   const resetForm = () => {
-    setFormData({
-      contact_type: 'other',
-      company_name: '',
-      contact_name: '',
-      phone: '',
-      alt_phone: '',
-      email: '',
-      service_contract_number: '',
-      priority: '',
-    });
+    setFormData(EMPTY_FORM);
+    setErrors({});
     setEditingContact(null);
     setShowForm(false);
   };
@@ -84,12 +123,21 @@ export default function ContactsSection({ facilityId, canCreate, canEdit, canDel
       service_contract_number: contact.serviceContractNumber || '',
       priority: contact.priority != null ? String(contact.priority) : '',
     });
+    setErrors({});
     setShowForm(true);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const missing: Partial<Record<ContactField, string>> = {};
     if (!formData.company_name.trim() && !formData.contact_name.trim()) {
-      toast.error('Enter a company name or a contact name');
+      missing.company_name = 'Enter a company name or a contact name.';
+    }
+    // A new contact is not added until it is fixed. An edit saves the rest
+    // and keeps the stored names (below); the backend re-checks the rule
+    // against the merged row.
+    if (!editingContact && Object.keys(missing).length > 0) {
+      showErrors(missing);
       return;
     }
     setIsSaving(true);
@@ -108,7 +156,41 @@ export default function ContactsSection({ facilityId, canCreate, canEdit, canDel
           service_contract_number: blankToNull(formData.service_contract_number),
         };
         if (formData.priority) payload.priority = Number(formData.priority);
-        await facilitiesService.updateEmergencyContact(editingContact.id, payload);
+        // Single-save rule (owner, 2026-11-05): a refused value's key is left
+        // out, which the backend reads as "leave alone", so its stored value
+        // is kept while the rest saves, and the field stays flagged.
+        let refused: Partial<Record<ContactField, string>> = { ...missing };
+        // Both names are cleared together or neither is: holding back one
+        // blank name alone would still send the other as null.
+        if (refused.company_name) refused.contact_name = refused.company_name;
+        const send = (skip: Partial<Record<ContactField, string>>) => {
+          const rest: Record<string, unknown> = { ...payload };
+          for (const key of Object.keys(skip)) delete rest[key];
+          return facilitiesService.updateEmergencyContact(editingContact.id, rest);
+        };
+        try {
+          await send(refused);
+        } catch (err) {
+          const mapped = mapServerFieldErrors(err, CONTACT_FIELDS);
+          if (!mapped || Object.keys(mapped.fieldErrors).length === 0 || mapped.unmatched.length > 0) throw err;
+          refused = { ...refused, ...mapped.fieldErrors };
+          await send(refused);
+        }
+        if (Object.keys(refused).length > 0) {
+          // The list refreshes behind the form, which stays open with the
+          // refused fields flagged.
+          void loadContacts();
+          const shown = { ...refused };
+          if (missing.company_name) delete shown.contact_name;
+          showErrors(shown);
+          const first = (Object.keys(CONTACT_FIELDS) as ContactField[]).find((k) => shown[k]);
+          if (first) {
+            toast.error(
+              `Contact saved, except ${CONTACT_FIELDS[first].label.toLowerCase()}: ${shown[first] ?? ''} Fix it and save again.`
+            );
+          }
+          return;
+        }
         toast.success('Contact updated');
       } else {
         // Create: omit the blanks so "" never reaches a Pydantic validator.
@@ -129,8 +211,16 @@ export default function ContactsSection({ facilityId, canCreate, canEdit, canDel
       }
       resetForm();
       void loadContacts();
-    } catch {
-      toast.error('Failed to save contact');
+    } catch (err: unknown) {
+      // A refused field is flagged on that field rather than named in a toast
+      // (forms review F-2); a new contact is not added until it is fixed.
+      const mapped = mapServerFieldErrors(err, CONTACT_FIELDS);
+      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
+        showErrors(mapped.fieldErrors);
+        toast.error(mapped.unmatched.join(' ') || 'Fix the fields marked below, then save again.');
+      } else {
+        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to save contact'));
+      }
     } finally {
       setIsSaving(false);
     }
@@ -176,95 +266,90 @@ export default function ContactsSection({ facilityId, canCreate, canEdit, canDel
 
       <div className="p-4">
         {showForm && (editingContact ? canEdit : canCreate) && (
-          <div className="bg-theme-surface-hover/50 mb-5 space-y-3 rounded-lg p-4">
+          <form
+            onSubmit={(e) => void handleSave(e)}
+            noValidate
+            className="bg-theme-surface-hover/50 mb-5 space-y-3 rounded-lg p-4"
+          >
             <h3 className="text-theme-text-primary text-sm font-medium">
               {editingContact ? 'Edit Contact' : 'Add Contact'}
             </h3>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <div>
-                <label className={labelCls}>Type</label>
-                <select
-                  value={formData.contact_type}
-                  onChange={(e) => setFormData((p) => ({ ...p, contact_type: e.target.value }))}
-                  className={inputCls}
+              <FormField
+                label="Type"
+                labelClassName={labelCls}
+                id={CONTACT_FIELDS.contact_type.id}
+                error={errors.contact_type}
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    value={formData.contact_type}
+                    onChange={(e) => up('contact_type', e.target.value)}
+                    className={inputCls}
+                  >
+                    {CONTACT_TYPE_OPTIONS.map((ct) => (
+                      <option key={ct} value={ct}>
+                        {enumLabel(ct)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
+              {(
+                [
+                  ['company_name', 'Company Name', 'text', 'off'],
+                  ['contact_name', 'Contact Name', 'text', 'off'],
+                  ['phone', 'Phone', 'tel', 'off'],
+                  ['alt_phone', 'Alternate Phone', 'tel', 'off'],
+                  ['email', 'Email', 'email', 'off'],
+                  ['service_contract_number', 'Contract #', 'text', 'off'],
+                ] as const
+              ).map(([key, label, type, autoComplete]) => (
+                <FormField
+                  key={key}
+                  label={label}
+                  labelClassName={labelCls}
+                  id={CONTACT_FIELDS[key].id}
+                  error={errors[key]}
+                  maxLength={CONTACT_FIELDS[key].maxLength}
+                  count={formData[key].length}
+                  hint={key === 'company_name' ? 'A company name or a contact name is needed.' : undefined}
                 >
-                  {CONTACT_TYPE_OPTIONS.map((ct) => (
-                    <option key={ct} value={ct}>
-                      {enumLabel(ct)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelCls}>Company Name</label>
-                <input
-                  type="text"
-                  value={formData.company_name}
-                  onChange={(e) => setFormData((p) => ({ ...p, company_name: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Contact Name</label>
-                <input
-                  type="text"
-                  value={formData.contact_name}
-                  onChange={(e) => setFormData((p) => ({ ...p, contact_name: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Phone</label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData((p) => ({ ...p, phone: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Alternate Phone</label>
-                <input
-                  type="tel"
-                  value={formData.alt_phone}
-                  onChange={(e) => setFormData((p) => ({ ...p, alt_phone: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Email</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Contract #</label>
-                <input
-                  type="text"
-                  value={formData.service_contract_number}
-                  onChange={(e) => setFormData((p) => ({ ...p, service_contract_number: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Priority (1 = highest)</label>
-                <input
-                  type="number"
-                  value={formData.priority}
-                  onChange={(e) => setFormData((p) => ({ ...p, priority: e.target.value }))}
-                  min="1"
-                  className={inputCls}
-                />
-              </div>
+                  {(field) => (
+                    <input
+                      {...field}
+                      type={type}
+                      autoComplete={autoComplete}
+                      value={formData[key]}
+                      onChange={(e) => up(key, e.target.value)}
+                      className={inputCls}
+                    />
+                  )}
+                </FormField>
+              ))}
+              <FormField
+                label="Priority (1 = highest)"
+                labelClassName={labelCls}
+                id={CONTACT_FIELDS.priority.id}
+                error={errors.priority}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    inputMode="numeric"
+                    value={formData.priority}
+                    onChange={(e) => up('priority', e.target.value)}
+                    min="1"
+                    className={inputCls}
+                  />
+                )}
+              </FormField>
             </div>
             <div className="flex gap-2 pt-1">
               <button
-                onClick={() => {
-                  void handleSave();
-                }}
+                type="submit"
                 disabled={isSaving}
                 className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
               >
@@ -272,13 +357,14 @@ export default function ContactsSection({ facilityId, canCreate, canEdit, canDel
                 {editingContact ? 'Save Changes' : 'Save Contact'}
               </button>
               <button
+                type="button"
                 onClick={resetForm}
                 className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1.5 text-xs transition-colors"
               >
                 Cancel
               </button>
             </div>
-          </div>
+          </form>
         )}
 
         {isLoading ? (

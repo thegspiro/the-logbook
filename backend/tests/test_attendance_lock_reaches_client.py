@@ -37,7 +37,7 @@ from app.schemas.course_cohort import (
     CohortClassReschedule,
     CohortShiftRequest,
 )
-from app.schemas.event import BulkAddAttendees, EventCancel, EventUpdate
+from app.schemas.event import BulkAddAttendees, EventCancel, EventPostpone, EventUpdate
 from app.services.event_service import (
     ATTENDANCE_LOCKED_PREFIX,
     ATTENDANCE_SENSITIVE_UPDATE_FIELDS,
@@ -120,6 +120,11 @@ def _event_route_calls():
     """(route name, service method, the call) for each ValueError route."""
     event_id = uuid4()
     cancel = EventCancel(cancellation_reason="Weather closed the drill ground")
+    postpone = EventPostpone(
+        new_start_datetime=datetime(2030, 5, 8, 23, 0),
+        new_end_datetime=datetime(2030, 5, 9, 1, 0),
+        reason="Ladder truck out of service",
+    )
     return [
         (
             "PATCH /events/{id}",
@@ -163,6 +168,13 @@ def _event_route_calls():
             "cancel_event",
             lambda db: events.cancel_event(
                 event_id=event_id, cancel_data=cancel, db=db, current_user=_user()
+            ),
+        ),
+        (
+            "POST /events/{id}/postpone",
+            "postpone_event",
+            lambda db: events.postpone_event(
+                event_id=event_id, postpone_data=postpone, db=db, current_user=_user()
             ),
         ),
         (

@@ -16,7 +16,7 @@ vi.mock('../services/shiftSettingsApi', () => ({
 }));
 
 // Imported after the mock is in place (store test pattern).
-import { positionLabel, rankEligibleSeatOptions } from './positionLabels';
+import { isDrivingSeat, positionLabel, rankEligibleSeatOptions } from './positionLabels';
 
 describe('positionLabel', () => {
   beforeEach(() => {
@@ -110,5 +110,29 @@ describe('rankEligibleSeatOptions', () => {
     });
 
     expect(rankEligibleSeatOptions().filter((o) => o.value === 'officer')).toHaveLength(1);
+  });
+});
+
+describe('isDrivingSeat', () => {
+  beforeEach(() => {
+    getCachedShiftSettings.mockReset();
+    getCachedShiftSettings.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      customPositions: [
+        { value: 'engineer', label: 'Engineer', drivesApparatus: true },
+        { value: 'tillerman', label: 'Tillerman' },
+      ],
+    });
+  });
+
+  it('counts the driver seat and a custom seat marked as driving', () => {
+    expect(isDrivingSeat('driver')).toBe(true);
+    expect(isDrivingSeat(' Engineer ')).toBe(true);
+  });
+
+  it('does not count an unmarked custom seat or an empty one', () => {
+    expect(isDrivingSeat('tillerman')).toBe(false);
+    expect(isDrivingSeat('firefighter')).toBe(false);
+    expect(isDrivingSeat(undefined)).toBe(false);
   });
 });

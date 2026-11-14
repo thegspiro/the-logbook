@@ -239,6 +239,8 @@ EXPECTED_GATES = {
     "/api/v1/apparatus": "apparatus",
     "/api/v1/elections": "elections",
     "/api/v1/equipment-checks": "inventory",
+    # Member evaluations live in the Reports area and follow its switch.
+    "/api/v1/evaluations": "reports",
     "/api/v1/facilities": "facilities",
     "/api/v1/finance": "finance",
     "/api/v1/grants": "grants",
@@ -246,6 +248,7 @@ EXPECTED_GATES = {
     "/api/v1/mcp-oauth": "integrations",
     "/api/v1/inventory": "inventory",
     "/api/v1/medical-screening": "medical_screening",
+    "/api/v1/history": "history",
     "/api/v1/medical-supplies": "medical_supplies",
     "/api/v1/meetings": "minutes",
     "/api/v1/minutes-records": "minutes",
@@ -462,6 +465,9 @@ ROUTES_OPEN_BY_DESIGN = {
     "/display/:code/events/:eventId/guest": "public kiosk display, no session",
     "/f/:slug": "public form submission; answers /api/public/v1/forms",
     "/application-status/:token": "an applicant checking their own application",
+    "/application-form/:token": (
+        "an applicant completing a follow-up form from their emailed link"
+    ),
     "/locations": "the stand-in served when Facilities is off",
     "/locations/:locationId/check-in": (
         "a room NFC tag's landing; must work in Locations and Facilities mode, "
@@ -537,6 +543,7 @@ MODULE_HOME_DIRECTORIES = {
     "integrations": "integrations",
     "inventory": "inventory",
     "medical-screening": "medical_screening",
+    "history": "history",
     "medical-supplies": "medical_supplies",
     "minutes": "minutes",
     "notifications": "notifications",

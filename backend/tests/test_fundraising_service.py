@@ -256,7 +256,11 @@ class TestDonationParentLockOrdering:
 
     async def test_update_locks_old_and_new_parents_before_flush(self):
         donation = SimpleNamespace(
-            id="dn1", organization_id="o", campaign_id="cOLD", donor_id=None
+            id="dn1",
+            organization_id="o",
+            campaign_id="cOLD",
+            donor_id=None,
+            pledge_id=None,
         )
         order = []
 
@@ -291,7 +295,11 @@ class TestUpdateDonationReassignment:
 
     async def test_reassigning_campaign_recomputes_old_and_new(self):
         donation = SimpleNamespace(
-            id="dn1", organization_id="o", campaign_id="cOLD", donor_id=None
+            id="dn1",
+            organization_id="o",
+            campaign_id="cOLD",
+            donor_id=None,
+            pledge_id=None,
         )
         # Donation fetch, the in-org check for the reassigned campaign, then
         # the old+new campaign locks (results discarded).
@@ -311,7 +319,11 @@ class TestUpdateDonationReassignment:
 
     async def test_reassigning_donor_recomputes_old_and_new(self):
         donation = SimpleNamespace(
-            id="dn1", organization_id="o", campaign_id=None, donor_id="dOLD"
+            id="dn1",
+            organization_id="o",
+            campaign_id=None,
+            donor_id="dOLD",
+            pledge_id=None,
         )
         # Donation fetch, the in-org check for the reassigned donor, then
         # the old+new donor locks (results discarded).

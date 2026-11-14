@@ -13,6 +13,7 @@ import { HISTORY_IMPORT_RESOLUTION_COLORS } from '../../../../constants/enums';
 import type {
   HistoryImportAnalysis,
   HistoryImportMappingsUpdate,
+  HistoryImportMember,
   MemberMapping,
 } from '../../../../modules/scheduling/types/historyImport';
 import { isSettled, memberSourceLabel, RESOLUTION_LABELS } from './historyImportLabels';
@@ -26,6 +27,71 @@ interface ReviewMembersProps {
 
 const CREATE = '__create__';
 const AUTOMATIC = '';
+
+/**
+ * A name for a former member the file names only by number. Optional: left
+ * blank, the record is named "Former member" and the number, and can be
+ * renamed on the member's profile later.
+ */
+const NewMemberName: React.FC<{
+  member: HistoryImportMember;
+  busy: boolean;
+  onMappings: (payload: HistoryImportMappingsUpdate) => void;
+}> = ({ member, busy, onMappings }) => {
+  const [first, setFirst] = useState(member.new_first_name ?? '');
+  const [last, setLast] = useState(member.new_last_name ?? '');
+  const idBase = `member-name-${member.key}`;
+  return (
+    <form
+      className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onMappings({
+          members: {
+            [member.key]: {
+              action: 'create',
+              first_name: first.trim() || undefined,
+              last_name: last.trim() || undefined,
+            },
+          },
+        });
+      }}
+    >
+      <div className="flex-1">
+        <label htmlFor={`${idBase}-first`} className="form-label">
+          First name
+        </label>
+        <input
+          id={`${idBase}-first`}
+          className="form-input"
+          maxLength={100}
+          value={first}
+          onChange={(e) => setFirst(e.target.value)}
+        />
+      </div>
+      <div className="flex-1">
+        <label htmlFor={`${idBase}-last`} className="form-label">
+          Last name
+        </label>
+        <input
+          id={`${idBase}-last`}
+          className="form-input"
+          maxLength={100}
+          value={last}
+          onChange={(e) => setLast(e.target.value)}
+        />
+      </div>
+      <button type="submit" className="btn-secondary" disabled={busy}>
+        Save name
+      </button>
+      <p className="text-theme-text-secondary text-xs sm:basis-full">
+        {member.new_first_name || member.new_last_name
+          ? `Will be created as ${[member.new_first_name, member.new_last_name].filter(Boolean).join(' ')}.`
+          : `The file has no name. Left blank, the record is named "Former member ${member.membership_number}".`}
+      </p>
+    </form>
+  );
+};
 
 const ReviewMembers: React.FC<ReviewMembersProps> = ({ analysis, busy, onMappings }) => {
   const [showSettled, setShowSettled] = useState(false);
@@ -53,8 +119,8 @@ const ReviewMembers: React.FC<ReviewMembersProps> = ({ analysis, busy, onMapping
 
   return (
     <section aria-labelledby="review-members-heading" className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 id="review-members-heading" className="text-theme-text-primary text-lg font-semibold">
             Members
           </h2>
@@ -64,7 +130,7 @@ const ReviewMembers: React.FC<ReviewMembersProps> = ({ analysis, busy, onMapping
               : `${unresolved.length} of ${members.length} people need a decision.`}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="split-row-aside flex flex-wrap gap-2">
           {creatable.length > 0 && (
             <button
               type="button"
@@ -105,8 +171,8 @@ const ReviewMembers: React.FC<ReviewMembersProps> = ({ analysis, busy, onMapping
                   : AUTOMATIC;
             const candidates = new Set(member.candidate_ids);
             return (
-              <li key={member.key} className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0">
+              <li key={member.key} className="split-row gap-3 p-4 sm:items-center">
+                <div className="split-row-main">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-theme-text-primary font-medium break-words">{memberSourceLabel(member)}</span>
                     <span className={`badge border ${HISTORY_IMPORT_RESOLUTION_COLORS[member.status] ?? ''}`}>
@@ -123,8 +189,11 @@ const ReviewMembers: React.FC<ReviewMembersProps> = ({ analysis, busy, onMapping
                       Recorded as {analysis.options.members.find((o) => o.id === member.user_id)?.name ?? 'a member'}
                     </p>
                   )}
+                  {member.status === 'create' && !member.first_name && !member.last_name && (
+                    <NewMemberName member={member} busy={busy} onMappings={onMappings} />
+                  )}
                 </div>
-                <div className="lg:w-80">
+                <div className="split-row-aside sm:w-80">
                   <label htmlFor={selectId} className="sr-only">
                     Who is {member.display_name || member.key}?
                   </label>

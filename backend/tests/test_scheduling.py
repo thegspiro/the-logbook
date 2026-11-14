@@ -20,6 +20,7 @@ import json
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import HTTPException
@@ -535,6 +536,96 @@ class TestShiftCRUD:
         assert refreshed.assignment_status == AssignmentStatus.CANCELLED
 
     @pytest.mark.asyncio
+    async def test_cancel_shift_emails_the_crew(self, db_session, setup_org_and_users):
+        """The crew is emailed as well as told in the app, under Shift notices."""
+        from app.models.notification import NotificationLog
+        from app.services.email_service import EmailService
+
+        org_id, user_id, user2_id = setup_org_and_users
+        svc = SchedulingService(db_session)
+        day = date.today() + timedelta(days=3)
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": day,
+                "start_time": datetime(day.year, day.month, day.day, 7),
+            },
+            uuid.UUID(user_id),
+        )
+        await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+        send = AsyncMock(return_value=(1, 0))
+
+        with patch.object(EmailService, "send_email", send):
+            _, err = await svc.cancel_shift(
+                uuid.UUID(shift.id),
+                uuid.UUID(org_id),
+                cancelled_by_user_id=user_id,
+                reason="Engine <1> out of service",
+            )
+
+        assert err is None
+        (call,) = send.await_args_list
+        assert call.kwargs["to_emails"] == ["ff1@test.com"]
+        assert (
+            call.kwargs["subject"] == f"Shift cancelled — {day.strftime('%b %d, %Y')}"
+        )
+        assert "Engine &lt;1&gt; out of service" in call.kwargs["html_body"]
+        bell = (
+            await db_session.execute(
+                select(NotificationLog).where(
+                    NotificationLog.recipient_id == user2_id,
+                    NotificationLog.category == "shift_cancelled",
+                )
+            )
+        ).scalar_one()
+        assert bell.action_url == "/scheduling"
+
+    @pytest.mark.asyncio
+    async def test_cancel_shift_respects_turned_off_shift_notices(
+        self, db_session, setup_org_and_users
+    ):
+        from app.services.email_service import EmailService
+
+        org_id, user_id, user2_id = setup_org_and_users
+        await db_session.execute(
+            text("UPDATE users SET notification_preferences = :p WHERE id = :id"),
+            {
+                "p": json.dumps({"email_kinds": {"shift_notices": False}}),
+                "id": user2_id,
+            },
+        )
+        svc = SchedulingService(db_session)
+        day = date.today() + timedelta(days=3)
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": day,
+                "start_time": datetime(day.year, day.month, day.day, 7),
+            },
+            uuid.UUID(user_id),
+        )
+        await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+        send = AsyncMock(return_value=(1, 0))
+
+        with patch.object(EmailService, "send_email", send):
+            _, err = await svc.cancel_shift(
+                uuid.UUID(shift.id), uuid.UUID(org_id), cancelled_by_user_id=user_id
+            )
+
+        assert err is None
+        send.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_cancel_shift_twice_blocked(self, db_session, setup_org_and_users):
         org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
@@ -793,11 +884,41 @@ class TestCalendarHelpers:
         assert len(shifts) >= 1
 
     @pytest.mark.asyncio
+    async def test_month_view_is_not_capped_at_500(
+        self, db_session, setup_org_and_users
+    ):
+        """A fixed cap of 500 silently dropped the end of a busy month."""
+        from app.models.training import Shift
+
+        org_id, user_id, _ = setup_org_and_users
+        year, month = 2031, 3
+        db_session.add_all(
+            Shift(
+                organization_id=org_id,
+                shift_date=date(year, month, 1 + i % 28),
+                start_time=datetime(year, month, 1 + i % 28, i % 24, 0),
+                created_by=user_id,
+            )
+            for i in range(510)
+        )
+        await db_session.flush()
+
+        shifts = await SchedulingService(db_session).get_month_shifts(
+            uuid.UUID(org_id), year, month
+        )
+
+        assert len(shifts) == 510
+        assert shifts[-1].shift_date == date(year, month, 28)
+
+    @pytest.mark.asyncio
     async def test_get_summary(self, db_session, setup_org_and_users):
         org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        # The department's date, which is what get_summary counts "this month"
+        # by; the container's UTC date is already tomorrow on a New York
+        # evening, and on the last day of a month that is next month.
+        today = datetime.now(ZoneInfo("America/New_York")).date()
         await svc.create_shift(
             uuid.UUID(org_id),
             {
@@ -1216,29 +1337,38 @@ class TestPatternGeneration:
             uuid.UUID(user_id),
         )
 
+        local = ZoneInfo("America/New_York")
+        start = datetime.now(local).date()
         pattern, _ = await svc.create_pattern(
             uuid.UUID(org_id),
             {
                 "name": "Nightly",
                 "pattern_type": PatternType.DAILY,
                 "template_id": template.id,
-                "start_date": date.today(),
+                "start_date": start,
             },
             uuid.UUID(user_id),
         )
 
-        start = date.today()
         shifts, err = await svc.generate_shifts_from_pattern(
             uuid.UUID(pattern.id), uuid.UUID(org_id), start, start, uuid.UUID(user_id)
         )
         assert err is None
         assert len(shifts) == 1
         shift = shifts[0]
-        # End time should be 07:00 the next day
+        # 07:00 the next day *in the department's timezone*. Compared in UTC,
+        # a 19:00 New York start is 23:00 UTC under daylight time but 00:00
+        # UTC the next day under standard time, so the start and end shared a
+        # UTC date all winter and the old day-arithmetic check failed.
         assert shift.end_time > shift.start_time
-        assert shift.end_time.day == shift.start_time.day + 1 or (
-            shift.start_time.month != shift.end_time.month
-        )
+        # 19:00 and 07:00 are the department's wall-clock times. In UTC the two
+        # fall on the same calendar day whenever New York is on standard time
+        # (19:00 EST is 00:00Z the next day), so compare in the department's
+        # zone, where "the next day" is what the template means.
+        local_start = shift.start_time.astimezone(local)
+        local_end = shift.end_time.astimezone(local)
+        assert (local_start.hour, local_end.hour) == (19, 7)
+        assert local_end.date() == local_start.date() + timedelta(days=1)
 
     @pytest.mark.asyncio
     async def test_pattern_auto_assigns_members(self, db_session, setup_template):

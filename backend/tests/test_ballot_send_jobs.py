@@ -22,10 +22,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.endpoints.elections import (
     RemindNonVotersRequest,
     get_ballot_send_job_endpoint,
-)
-from app.api.v1.endpoints.elections import remind_non_voters as remind_endpoint
-from app.api.v1.endpoints.elections import send_ballot_emails as send_ballot_endpoint
-from app.api.v1.endpoints.elections import (
     start_ballot_send_job_endpoint,
     start_package_send_job_endpoint,
     start_reminder_send_job_endpoint,
@@ -267,18 +263,6 @@ async def test_a_second_send_is_refused_while_one_is_in_progress(
     assert exc.value.detail == SEND_IN_PROGRESS_DETAIL
     start.assert_not_called()
 
-    send_batch = AsyncMock(side_effect=lambda b: [True] * len(b))
-    with patch(SEND_BATCH, new=send_batch), pytest.raises(HTTPException) as exc:
-        await send_ballot_endpoint(
-            election_id=uuid.UUID(data["election_id"]),
-            email_data=EmailBallot(),
-            request=SimpleNamespace(),
-            db=db_session,
-            current_user=_user(data),
-        )
-    assert exc.value.status_code == 409
-    assert send_batch.await_count == 0
-
 
 async def test_a_finished_send_does_not_block_the_next(db_session: AsyncSession):
     data = await _make_election(db_session)
@@ -470,17 +454,6 @@ async def test_ballots_and_reminders_cannot_run_over_each_other(
     assert exc.value.status_code == 409
     start.assert_not_called()
 
-    send_batch = AsyncMock(side_effect=lambda b: [True] * len(b))
-    with patch(SEND_BATCH, new=send_batch), pytest.raises(HTTPException) as exc:
-        await remind_endpoint(
-            election_id=uuid.UUID(data["election_id"]),
-            payload=None,
-            db=db_session,
-            current_user=_user(data),
-        )
-    assert exc.value.status_code == 409
-    assert send_batch.await_count == 0
-
     other = await _make_election(db_session)
     await _queue_reminder(db_session, other)
     with patch(START_JOB, new=MagicMock()), pytest.raises(HTTPException) as exc:
@@ -539,22 +512,6 @@ async def test_a_reminder_for_an_election_that_is_not_open_is_refused(
         )
     assert exc.value.status_code == 400
     start.assert_not_called()
-
-
-async def test_the_synchronous_reminder_reports_as_before(db_session: AsyncSession):
-    data = await _make_election(db_session)
-
-    with patch(SEND_BATCH, new=AsyncMock(side_effect=lambda b: [True] * len(b))):
-        response = await remind_endpoint(
-            election_id=uuid.UUID(data["election_id"]),
-            payload=None,
-            db=db_session,
-            current_user=_user(data),
-        )
-
-    assert response.success is True
-    assert response.recipients_count == 2
-    assert response.message == "Reminder sent to 2 non-voter(s)"
 
 
 async def test_tokens_are_saved_before_any_ballot_mail_goes_out(

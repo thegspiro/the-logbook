@@ -9,6 +9,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { Loader2, Users } from 'lucide-react';
 import { GovernancePageHeader } from '../../../components/governance/GovernancePageHeader';
 import { meetingsService } from '../../../services/meetingsServices';
@@ -18,6 +19,8 @@ import { formatDateTime } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { EmptyState } from '../../../components/ux';
 import type { MeetingType } from '../types/minutes';
+import { MEETING_WAIVER_SETTINGS_PATH, MEETING_WAIVER_WORKFLOW } from '../../../utils/attendanceWaiverWorkflows';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 const PERIOD_OPTIONS = [3, 6, 12, 24] as const;
 
@@ -66,6 +69,16 @@ const AttendanceDashboardPage: React.FC = () => {
         icon={Users}
         title="Meeting Attendance"
         breadcrumbLabel="Attendance"
+        actions={
+          <>
+            <Link to={MEETING_WAIVER_WORKFLOW.queuePath} className="btn-secondary text-sm font-medium">
+              Waiver requests
+            </Link>
+            <Link to={MEETING_WAIVER_SETTINGS_PATH} className="btn-secondary text-sm font-medium">
+              Waiver settings
+            </Link>
+          </>
+        }
         subtitle={
           <>
             Each active member&apos;s attendance since their service began, up to the period chosen. Waived meetings and
@@ -123,7 +136,7 @@ const AttendanceDashboardPage: React.FC = () => {
         </div>
       ) : data ? (
         <>
-          <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatGrid columns={4} gap={4} className="mb-6">
             <div className="card-secondary p-4">
               <p className="text-theme-text-muted text-sm">Meetings in period</p>
               <p className="text-theme-text-primary text-2xl font-bold">{data.total_meetings_in_period}</p>
@@ -144,7 +157,7 @@ const AttendanceDashboardPage: React.FC = () => {
                 {data.summary.voting_blocked_by_attendance}
               </p>
             </div>
-          </div>
+          </StatGrid>
 
           {data.members.length === 0 ? (
             <EmptyState
@@ -153,8 +166,8 @@ const AttendanceDashboardPage: React.FC = () => {
               description="Attendance is shown for active members only."
             />
           ) : (
-            <div className="card overflow-hidden">
-              <table className="rwd-table w-full text-sm">
+            <div className="card rwd-table-container overflow-hidden">
+              <table className="rwd-table rwd-table-wide w-full text-sm">
                 <thead>
                   <tr className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-secondary border-b text-left">
                     <th scope="col" className="px-4 py-3 font-medium">

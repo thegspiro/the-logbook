@@ -10,7 +10,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { Lightbulb, Pencil, Plus, Trash2 } from 'lucide-react';
-import { Breadcrumbs, EmptyState, SkeletonPage } from '../../../components/ux';
+import { EmptyState, SkeletonPage } from '../../../components/ux';
 import { SUGGESTION_ANONYMITY_LABELS } from '../../../constants/enums';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -18,6 +18,7 @@ import SuggestionBoxDeleteDialog from '../components/SuggestionBoxDeleteDialog';
 import SuggestionBoxFormModal from '../components/SuggestionBoxFormModal';
 import { suggestionsService } from '../services/suggestionsService';
 import type { ReviewerOptions, SuggestionBoxAdmin } from '../types/suggestions';
+import { AdminPageHeader } from '../../../components/admin/AdminPageHeader';
 
 /** The server's order: accepting boxes first, then by name. */
 const sortBoxes = (boxes: SuggestionBoxAdmin[]): SuggestionBoxAdmin[] =>
@@ -97,25 +98,26 @@ const SuggestionBoxesAdminPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6">
-      <Breadcrumbs items={[{ label: 'Communications' }, { label: 'Suggestion boxes' }]} />
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
-          <Lightbulb className="h-6 w-6" aria-hidden="true" />
-          Suggestion boxes
-        </h1>
-        <button type="button" className="btn-primary inline-flex items-center gap-2" onClick={() => openForm(null)}>
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          New box
-        </button>
-      </div>
-      <p className="text-theme-text-secondary mb-4 text-sm">
-        Each box has its own reviewers, anonymity rule and follow-up setting — a training-ideas box for the training
-        officer, a complaints box for compliance, an ideas box for the president. Members submit from{' '}
-        <Link to="/suggestions" className="underline">
-          Suggestions
-        </Link>
-        .
-      </p>
+      <AdminPageHeader
+        title="Suggestion Boxes"
+        description={
+          <>
+            Each box has its own reviewers, anonymity rule and follow-up setting — a training-ideas box for the training
+            officer, a complaints box for compliance, an ideas box for the president. Members submit from{' '}
+            <Link to="/suggestions" className="underline">
+              Suggestions
+            </Link>
+            .
+          </>
+        }
+        actions={
+          <button type="button" className="btn-primary inline-flex items-center gap-2" onClick={() => openForm(null)}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            New box
+          </button>
+        }
+        className="mb-4"
+      />
 
       {error && (
         <p role="alert" className="alert-danger mb-4 text-sm">

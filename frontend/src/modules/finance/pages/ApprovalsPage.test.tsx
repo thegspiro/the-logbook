@@ -8,6 +8,7 @@ const mockGetPending = vi.fn();
 const mockApprove = vi.fn();
 const mockDeny = vi.fn();
 const mockGetUnrouted = vi.fn();
+const mockResendEmail = vi.fn();
 
 vi.mock('../services/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/api')>()),
@@ -16,6 +17,7 @@ vi.mock('../services/api', async (importOriginal) => ({
     approve: (...args: unknown[]) => mockApprove(...args) as unknown,
     deny: (...args: unknown[]) => mockDeny(...args) as unknown,
     getUnrouted: (...args: unknown[]) => mockGetUnrouted(...args) as unknown,
+    resendEmail: (...args: unknown[]) => mockResendEmail(...args) as unknown,
   },
 }));
 
@@ -113,6 +115,7 @@ describe('ApprovalsPage', () => {
     mockDeny.mockReset();
     mockGetUnrouted.mockReset();
     mockGetUnrouted.mockResolvedValue([]);
+    mockResendEmail.mockReset();
     mockCheckPermission.mockReset();
     mockCheckPermission.mockImplementation((p: string) => p === 'finance.approve');
     mockGetPending.mockResolvedValue([hosePurchase, mileageClaim]);
@@ -258,8 +261,8 @@ describe('ApprovalsPage', () => {
     const cells = rowFor('Radio repair');
     expect(cells.getByText('Not assigned to you')).toBeInTheDocument();
     expect(cells.getByText('Trustee position')).toBeInTheDocument();
-    expect(cells.getByRole('button', { name: 'Approve Radio repair as approvals admin' })).toBeInTheDocument();
-    expect(cells.getByRole('button', { name: 'Deny Radio repair as approvals admin' })).toBeInTheDocument();
+    expect(cells.getByRole('button', { name: 'Approve as admin: Radio repair' })).toBeInTheDocument();
+    expect(cells.getByRole('button', { name: 'Deny as admin: Radio repair' })).toBeInTheDocument();
     expect(cells.queryByRole('button', { name: 'Approve Radio repair' })).not.toBeInTheDocument();
   });
 
@@ -268,7 +271,7 @@ describe('ApprovalsPage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: 'Approve Radio repair as approvals admin' }));
+    await user.click(await screen.findByRole('button', { name: 'Approve as admin: Radio repair' }));
     expect(within(dialog()).getByRole('heading', { name: 'Approve as approvals admin' })).toBeInTheDocument();
     expect(within(dialog()).getByText(/This step is assigned to/)).toHaveTextContent(
       'This step is assigned to Trustee position.'
@@ -292,7 +295,7 @@ describe('ApprovalsPage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: 'Deny Radio repair as approvals admin' }));
+    await user.click(await screen.findByRole('button', { name: 'Deny as admin: Radio repair' }));
     await user.type(within(dialog()).getByLabelText(/Override reason/), 'Trustee position is vacant');
     await user.click(within(dialog()).getByRole('button', { name: 'Deny as approvals admin' }));
     expect(within(dialog()).getByText('Reason is required.')).toBeInTheDocument();
@@ -306,19 +309,19 @@ describe('ApprovalsPage', () => {
     );
   });
 
-  it('refuses an override reason longer than 2000 characters', async () => {
+  it('holds an override reason to 2000 characters', async () => {
     mockGetPending.mockResolvedValue([radioRepair]);
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: 'Approve Radio repair as approvals admin' }));
+    await user.click(await screen.findByRole('button', { name: 'Approve as admin: Radio repair' }));
     const field = within(dialog()).getByLabelText(/Override reason/);
     await user.click(field);
     await user.paste('x'.repeat(2001));
-    await user.click(within(dialog()).getByRole('button', { name: 'Approve as approvals admin' }));
 
-    expect(within(dialog()).getByText('Override reason must be 2,000 characters or fewer.')).toBeInTheDocument();
-    expect(mockApprove).not.toHaveBeenCalled();
+    // The field takes the schema's limit, so the 2,001st character never lands.
+    expect(field).toHaveAttribute('maxlength', '2000');
+    expect(field).toHaveValue('x'.repeat(2000));
   });
 
   it('shows the API’s refusal when the step is assigned to someone else', async () => {
@@ -434,5 +437,131 @@ describe('ApprovalsPage requests decided on their own page', () => {
 
       await waitFor(() => expect(mockApprove).toHaveBeenCalledWith('sr-2', undefined, undefined, true));
     });
+  });
+});
+
+// What an approvals admin sees for a step that emails an outside approver.
+const emailStep = (overrides: Partial<PendingApproval>): PendingApproval => ({
+  stepRecordId: 'sr-9',
+  entityType: 'purchase_request',
+  entityId: 'pr-9',
+  entityTitle: 'Thermal camera',
+  entityAmount: '4200.00',
+  requesterName: 'Jamie Rivera',
+  stepName: 'CPA review',
+  stepOrder: 1,
+  submittedAt: '2026-10-28T15:00:00Z',
+  approverType: 'email',
+  approverValue: 'cpa@example.com',
+  assigneeLabel: 'cpa@example.com',
+  canAct: false,
+  requiresOverride: true,
+  emailDelivery: 'sent',
+  emailStatusAt: '2026-11-03T15:00:00Z',
+  emailLinkVersion: 1,
+  canResendEmail: true,
+  ...overrides,
+});
+
+describe('ApprovalsPage — emailed approval links', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetPending.mockReset();
+    mockGetUnrouted.mockReset();
+    mockGetUnrouted.mockResolvedValue([]);
+    mockResendEmail.mockReset();
+    mockResendEmail.mockResolvedValue({
+      stepRecordId: 'sr-9',
+      resent: true,
+      emailDelivery: 'sent',
+      emailStatusAt: '2026-11-04T15:00:00Z',
+      emailLinkVersion: 2,
+    });
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockImplementation(
+      (p: string) => p === 'finance.approve' || p === 'finance.configure_approvals'
+    );
+    useFinanceStore.setState({ pendingApprovals: [], error: null, isLoading: false });
+  });
+
+  it('says when the link was sent', async () => {
+    mockGetPending.mockResolvedValue([emailStep({})]);
+    renderPage();
+    await screen.findByRole('link', { name: 'Thermal camera' });
+    expect(rowFor('Thermal camera').getByText('Email sent Nov 3')).toBeInTheDocument();
+  });
+
+  it('says when the link could not be sent', async () => {
+    mockGetPending.mockResolvedValue([emailStep({ emailDelivery: 'failed' })]);
+    renderPage();
+    await screen.findByRole('link', { name: 'Thermal camera' });
+    expect(rowFor('Thermal camera').getByText('Email could not be sent')).toBeInTheDocument();
+  });
+
+  it('says when the link has expired', async () => {
+    mockGetPending.mockResolvedValue([emailStep({ emailDelivery: 'expired' })]);
+    renderPage();
+    await screen.findByRole('link', { name: 'Thermal camera' });
+    expect(rowFor('Thermal camera').getByText('Link expired')).toBeInTheDocument();
+  });
+
+  it('shows no link status on a step that emails nobody', async () => {
+    mockGetPending.mockResolvedValue([hosePurchase]);
+    renderPage();
+    await screen.findByRole('link', { name: 'New supply hose' });
+    expect(screen.queryByText(/Email sent|Link expired|could not be sent/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Re-send/ })).not.toBeInTheDocument();
+  });
+
+  it('offers no re-send to someone who may not re-send', async () => {
+    mockGetPending.mockResolvedValue([emailStep({ canResendEmail: false })]);
+    renderPage();
+    await screen.findByRole('link', { name: 'Thermal camera' });
+    expect(screen.queryByRole('button', { name: /Re-send/ })).not.toBeInTheDocument();
+  });
+
+  it('re-sends after confirming, naming the link version it saw, then refreshes', async () => {
+    const user = userEvent.setup();
+    mockGetPending.mockResolvedValue([emailStep({ emailDelivery: 'expired', emailLinkVersion: 3 })]);
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Re-send the approval link for Thermal camera' }));
+    expect(within(dialog()).getByText(/The link already sent will stop working/)).toBeInTheDocument();
+    mockGetPending.mockResolvedValue([emailStep({ emailLinkVersion: 4 })]);
+    await user.click(within(dialog()).getByRole('button', { name: 'Re-send link' }));
+
+    await waitFor(() => expect(mockResendEmail).toHaveBeenCalledWith('sr-9', 3));
+    expect(mockToastSuccess).toHaveBeenCalledWith('A new link was emailed.');
+    expect(await screen.findByText('Email sent Nov 3')).toBeInTheDocument();
+    expect(mockGetPending).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends nothing when the confirmation is declined', async () => {
+    const user = userEvent.setup();
+    mockGetPending.mockResolvedValue([emailStep({})]);
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Re-send the approval link for Thermal camera' }));
+    await user.click(within(dialog()).getByRole('button', { name: 'Keep the current link' }));
+
+    expect(mockResendEmail).not.toHaveBeenCalled();
+  });
+
+  it('reports a re-send whose email failed', async () => {
+    const user = userEvent.setup();
+    mockGetPending.mockResolvedValue([emailStep({})]);
+    mockResendEmail.mockResolvedValue({
+      stepRecordId: 'sr-9',
+      resent: true,
+      emailDelivery: 'failed',
+      emailStatusAt: '2026-11-04T15:00:00Z',
+      emailLinkVersion: 2,
+    });
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Re-send the approval link for Thermal camera' }));
+    await user.click(within(dialog()).getByRole('button', { name: 'Re-send link' }));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('The new link could not be emailed.'));
   });
 });

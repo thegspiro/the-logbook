@@ -3,6 +3,8 @@ import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import type { AxiosInstance } from 'axios';
 import type { SkillTest } from '../types/skillsTesting';
+import { OFFLINE_DRAIN_LOCK } from '../sw/backgroundSyncProtocol';
+import { purgeSkillsStores } from './skillsTestOfflineStore';
 
 let signedIn: string | null = 'examiner-1';
 vi.mock('../stores/authStore', () => ({
@@ -15,7 +17,6 @@ import {
   SKILLS_QUEUE_MAX_RETRIES,
   applyPending,
   cacheSkillTest,
-  clearAllSkillsOffline,
   discardSkillsPending,
   drainSkillsQueue,
   enqueueSkillsComplete,
@@ -196,6 +197,21 @@ describe('skillsTestOffline', () => {
     expect(kept?.baseVersion).toBe(4);
   });
 
+  it('drains under the lock the service worker takes for background sync', async () => {
+    await enqueueSkillsUpdate({ id: 't1', label: 'SCBA', version: 3 }, { elapsed_seconds: 1 });
+    const request = vi.fn(<T>(_name: string, fn: () => Promise<T>) => fn());
+    Object.defineProperty(navigator, 'locks', { value: { request }, configurable: true });
+    const { axios } = fakeAxios(() => test({ version: 4 }));
+
+    try {
+      await drainSkillsQueue(axios);
+    } finally {
+      Reflect.deleteProperty(navigator, 'locks');
+    }
+
+    expect(request).toHaveBeenCalledWith(OFFLINE_DRAIN_LOCK, expect.any(Function));
+  });
+
   describe('ownership (FE3-34-5)', () => {
     it("never sends or shows another member's entry or cached test", async () => {
       await enqueueSkillsUpdate({ id: 't1', label: 'SCBA', version: 3 }, { elapsed_seconds: 1 });
@@ -246,7 +262,9 @@ describe('skillsTestOffline', () => {
     await discardSkillsPending('t1');
     expect(await skillsPendingCount()).toBe(1);
     expect(await getCachedSkillTest('t1')).toBeNull();
-    expect(await clearAllSkillsOffline()).toBe(1);
+    // The examiner's own sign-out deletes what is left (clearAllSkillsOffline,
+    // which this called, was replaced by the examiner-aware purge).
+    expect(await purgeSkillsStores('examiner-1')).toEqual({ discarded: 1, held: 0 });
     expect(await skillsPendingCount()).toBe(0);
   });
 

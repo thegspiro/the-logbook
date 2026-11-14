@@ -1,6 +1,442 @@
 # Screenshot currency
 
+## Queued by the November 10 – 11 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-10--11-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 01 | Members Administration hub, Roster strip with **Member Management** and **Former Members**; roster without the Status column | Replace `01-22-member-lifecycle` |
+| 01 | Former Members page with its "moved back" line | Create |
+| 01 | Member Management row with the **More actions** menu open | Create |
+| 01 | A row reading **No other positions** | Create |
+| 04 | **Postpone Event** dialog | Create |
+| 04 | Event card with the **Postponed** badge; event page "Postponed from" line | Create |
+| 03 | Shift History Import **Rows** tab: an overlap row with **Save times** | Create |
+
+## Queued by the November 8 – 10 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-8--10-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 03 | My Shifts **Upcoming** under month headers | Replace `03-04` |
+| 03 | My Shifts **Past** with Year dropdown, hours chart, month headers | Create |
+| 04 | Event attendance **Check In** dialog with **Add a member** on a closed event | Create |
+| 02 | Training History records showing the source line | Create |
+| 02 | Requirement card reading **No sessions held yet** | Create |
+| 01 | Members roster as a table at a desktop width | Replace `01-01` |
+| 16 | Historical import members list with the collapsed "to be created" section | Create |
+
+The November 8 – 9 queue below also lists the My Shifts **Past** view; one capture covers both.
+
+## Queued by the November 8 – 9 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-8--9-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 03 | My Shifts **Past** view with the Year dropdown, hours chart and month headings | Replace |
+| 02 | Pipeline wizard with the resume-draft notice and **Save draft** | Create |
+| 10 | A reflowed table (audit log) as cards at 390px | Create |
+
+## Captured 2026-11-08 — Requests tab triage list and drawer (#4141)
+
+Taken on the demo department seeded from this branch, with malware scanning on.
+Nothing mocked. The seeder gained `seed_event_request_pipeline` so every group
+on the tab has a row: a new request (Dana Whitmore), one in progress with a
+coordinator and two checklist steps done, one scheduled with a signup sheet,
+and one postponed. It also corrects two field names the request seed had wrong
+(`timeframe_description`, `expected_attendees`), which the public endpoint had
+been silently dropping, so the audience and the timeframe were missing.
+
+| Image | Disposition | Notes |
+| --- | --- | --- |
+| `04-20-event-requests` | Re-shot | The grouped triage list. Now asserts it landed on the list (`expect: "Needs a reply"`) and has left the landing-assertion baseline |
+| `04-99-event-request-drawer` | New | Maple Street HOA open in the drawer: Schedule event / Email requester / More, "Next: Confirm Date", the checklist at 2/6 |
+
+## Queued by the November 4 – 5 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-4--5-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 03 | Shift list with the **Awaiting approval** filter and **Approve** | Create |
+| 02 | Session Attendance requirement form | Create |
+| 16 | Historical Data Import, **5. Training** | Create |
+| 01 | Member profile **Shift & Call History** | Create |
+| 02, 08 | Training Admin **Settings & Data** with the Compliance Settings card | Replace |
+| 00 | Dashboard Department pulse and Today's Staffing | Replace |
+| 13 | Medical Screening requirement with **Not linked to a requirement** | Replace |
+| 02 | Create-session step 2 with the attendance checklist; event card **Counts toward attendance** badge | Create |
+| 02 | Compliance Matrix cell: Chief override control and **Met by the Chief's override** | Create |
+| 02 | Evaluation builder **Graded by section** with grade ranges; evaluation page with a regraded section | Create |
+| 02 | `02-92` and any capture of the Requirements tab showing Import from Registry (now below the list) | Replace |
+| 05 | `05-127-items-not-seen` (items added today no longer first as Never) | Replace |
+| 04 | Event form location picker and Create Training Session picker (no repeated building); Public Requests Overview with an amber Handling step | Replace / Create |
+| Any | Every capture showing a toggle switch: the track is now a true pill and the accent is red, not purple | Replace |
+| 01, 10 | Wide tables at tablet width (roster, inventory items, dues, finance approvals) as cards | Replace |
+| 15 | Applicant board with selection on, card content inset | Replace (`15-46` was re-shot) |
+| 02 | `02-135` Operational members: the button now ticks Active, Probationary and Life, not Retired (2026-11-06) | Replace |
+
+## Queued by the November 6 – 8 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-6--8-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 02 | My Training with a Courses requirement and **Show required courses (n)** open | Create |
+| 02 | `02-40` member Training History as the compact record list | Replace |
+| 11 | **My Dues** page | Create |
+| 11 | **Pending Amendments** queue | Create |
+| 11 | Expense line with the mileage **Trips** list; **Mark Paid** dialog | Create |
+| 11 | Settings → Connecting QuickBooks Online | Create |
+| 08 | Audit Log row for an integration event showing the IP column | Create |
+
+## Queued by the November 5 – 6 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-5--6-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 04 | Minutes Settings → Quorum with the three switches | Create |
+| 04 | Roll call with **Represented by proxy**; Documents paperclip on published minutes | Create |
+| 02 | `02-40` member Training History: period list with **Last 12 Months** and period-scoped cards | Replace |
+| 08 | Admin-hours clock-in page naming the running session and **Clock out of** | Create |
+| 12 | Donations list pencil and **Edit Donation**; Budget tab with Edit and Delete | Create |
+| 05 | Items and reorder lists as cards at tablet width | Replace |
+| 08 | Any capture showing an Administration page header (eyebrow, one title) | Replace |
+
+## Captured 2026-11-05 — Event settings Public Requests (#4049)
+
+#4049 turned Event settings' **Outreach Types**, **Pipeline**, **Email** and
+**Public Form** sections into pages of one **Public Requests** section, with a
+new **Overview**. Taken on the demo department seeded from `main` at
+`a02bdd96`, with malware scanning on. Nothing mocked and nothing written to the
+demo beyond the seed.
+
+`main` at that commit carried two Alembic heads (#4051 and #4065 both branch
+from `bd8fc0c4a941`; #4078 rejoins them), so the demo database was brought up
+with `alembic upgrade heads`. Neither shot reads a table either migration
+touches.
+
+| Image | Disposition | Notes |
+| --- | --- | --- |
+| `19-24-outreach-form-section` | Re-shot | Now reached through Public Requests → Request form; the page rail sits beside the panel. Manifest entry reopened it through the rail, and its alt text now names the new path |
+| `04-98-public-requests-overview` | New | The Overview as seeded: intake on, 21-day lead time, and the four step cards. Handling reads amber ("No default coordinator"), because the seed sets no coordinator, which is the state a new department sees |
+
+## Queued by the November 3 – 4 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-3--4-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 16 | Historical Data Import: upload, column mapping, sorted rows, batch list | Create |
+| 02 | Evaluations strip and the Getting started checklist with the template preview | Create |
+| 01 | Members roster at tablet width (cards below 1024px); `01-22-member-lifecycle`; profile ID Cards empty state | Replace |
+
+## Captured 2026-11-04 — screens unblocked by #3988, #3997 and #4005
+
+Taken on the demo department seeded from `main` at `e850590f`, with malware
+scanning on. No seed step was added: the Volunteer Interest Night is already
+slid into its check-in window on every seed. Nothing was written to the demo.
+
+The follow-up form link reaches an applicant only by email, which the demo does
+not send, and is stored encrypted, so none of the guide 15 shots reads it. As
+`15-13`, `15-28` and `15-41` do, each answers only the requests its screen
+makes, from Mateo Alvarez's real record, his real follow-up request and the
+stage's real form; the answers he is pictured giving are written in the
+manifest. Every send, resend, review, draft and submit request is refused in
+the browser.
+
+| Image | Disposition | Notes |
+| --- | --- | --- |
+| `15-40-follow-up-form-page` | New | Mocked: the public form lookup, answered with the stage's form and the values the server pre-fills from his record. Fills the placeholder guide 15 carried since Oct 29 |
+| `15-43-interview-follow-up-answers` | New | Mocked: his request list (marked submitted) and its answers |
+| `15-44-follow-up-drawer-resend` | New | Mocked: his request read as sent; in the demo it is Not sent (`15-34`) |
+| `15-45-follow-up-drawer-contact-changed` | New | Mocked: his request read as submitted, with the mobile and street address changes. Resend and Mark reviewed never share one request (Resend is for an unsubmitted form, the flag is raised by a submission), so they are two images |
+| `15-46-card-contact-changed` | New | Mocked: the board's real applicant list with his `contact_change_pending` set. Re-shot 2026-11-05 once the card's selection checkbox stopped covering the flag's warning icon; see the list below |
+| `04-97-event-qr-page-guest-code` | New | The QR page of the Volunteer Interest Night while check-in is open: the member code with **Print QR Code** and the guest card with **Print Guest QR Code**. Nothing mocked |
+| `03-130-pattern-paused` | Re-shot | Now on Shift Patterns, card open; alt text corrected and the image moved to the guide's Shift Patterns section, replacing the sentence that pointed to the Templates section |
+| `01-22-member-lifecycle` | Re-shot | The roster's Actions column is no longer clipped. Taller frame, since a Needs attention card now sits above the area cards |
+| `02-126-shift-evaluation-settings` | Re-shot | The "Not in use on shifts yet" notice is gone; an **Outside shifts awaiting an evaluation** card now leads the tab. Alt text updated |
+
+`05-141-nfc-move-tag`, `06-36-card-readers` and `04-92-card-readers` were
+re-shot the same day, after #4035 merged: the Move tag dialog reads **Find an
+item**, and Card Readers counts **1 tap**. Their alt text quotes neither phrase,
+so the guides are unchanged.
+
+## Queued by the November 2 – 3 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-2--3-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 01 | History: **Department History** overview, **Past Members** list, a past-member page with **Publication**, the **Honor Roll** | Create |
+| 01 | History → **Titles and clearance** (clearance list and **Historical titles**); a clearance review with **Clear this step** / **Return for changes** | Create |
+| 02 | Compliance Configure → **Thresholds** with **Months on leave** | Create |
+| 02 | A member's Training History **Requirements** section with the **Leave of absence** box | Create |
+| 02 | `02-108-monthly-hours-leave`: an excused month now keeps its hours and reads **Leave** | Replace |
+| 03 | Outside Apparatus settings with **Evaluate shifts on _agency_'s units**; an **Evaluation needed** badge | Create |
+| 05 | The **Before you print** checklist with **Printer resolution** (Code 128) | Create |
+
+## Queued by the November 1 – 2 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-1--2-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 02 | Evaluations list (Conduct) with status filter and removed records | Create |
+| 02 | **Draft a review period** dialog (preview with exclusions) | Create |
+| 02 | Evaluation page: form with figures and suggested ratings, steps beside | Create |
+| 02 | Calibration dialog with flag checkboxes; "Flagged at calibration" mark | Create |
+| 02 | Sign / Acknowledge dialog | Create |
+| 02 | Response card and the two PDF download buttons | Create |
+| 02 | Amend dialog and Amendments panel; Delete dialog | Create |
+| 02 | My Evaluations | Create |
+| 02 | Email Templates, group Performance Evaluations | Create |
+| 00 | Top navigation menu (Medical Screening, My ID Card) | Re-check |
+
+## Queued by the November 2 Zeffy documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-zeffy-integration-november-2-2026).
+Captured 2026-11-13, on a demo department seeded from `main` at `9f73cec7`
+with malware scanning on.
+
+| Guide | Screen | Action | Captured |
+| --- | --- | --- | --- |
+| 16 | Integrations catalog with the **Zeffy** card, and its connect dialog (API key, signing secret, webhook address) | Create | `16-24-zeffy-connect` new; `16-01-integrations-catalog` re-shot, now carrying the Zeffy card |
+| 12 | **Grants & Fundraising → Zeffy**: connection panel, campaign cards and the payments list | Create | `12-19-zeffy-page` |
+| 12 | **Link Zeffy campaign** dialog | Create | `12-20-zeffy-link-dialog` |
+| 12 | Grants & Fundraising menu with the **Zeffy** entry | Replace | `12-18-grants-menu-zeffy` new; no earlier image pictured this menu |
+
+**The Zeffy page is pictured from a route mock.** Every row on it comes from
+Zeffy: campaigns are read live with the department's API key, and a payment
+exists only once Zeffy's webhook or the hourly sync reports it. The demo has no
+Zeffy account, so `mockZeffyConnected()` in `scripts/screenshots/manifest.mjs`
+answers the page's status, links, campaigns and payments reads, and nothing is
+written. The links point at the seeded Fill the Boot campaign and the year's
+Annual Member Dues. The link dialog's choice of campaign comes from the real
+API. A change to `app/schemas/zeffy.py` or to the page's statuses needs the mock
+updated before these three images are re-shot.
+
+**`16-24-zeffy-connect` re-shot the same day**, from `main` at `71bfff68`, after
+#4268 corrected the dialog's wording: the API Key box now reads "Paste the key
+from Zeffy", and the note beneath it says a blank box keeps the saved key only
+when connecting again after a disconnect. `16-25-zeffy-settings` is new: the **Settings** dialog
+on a connected Zeffy card (#4268). The demo cannot connect Zeffy, so the
+shot marks the Zeffy row connected in the integrations list the page
+receives; the dialog is opened and never saved.
+
+## The October 16 – November 1 queues, captured 2026-11-02
+
+Every queue from the October 16 – 18 pass to the October 31 – November 1 pass
+below was worked through on one demo department, seeded from `main` at
+`dffccc89`, with malware scanning on (ClamAV with current signatures), so no
+administrator shot carries the scanning banner. 107 images are new and 159
+were re-shot. An existing image whose re-capture showed only data or a date
+changing was put back rather than replaced. The queue sections below are left
+as written; each now opens with a line pointing here.
+
+**Pipeline changes this needed.** These are in `scripts/screenshots/`:
+
+- **The secretary is enrolled in two-factor.** It holds a position that requires
+  two-step sign-in. Every shot taken as it carried the grace-period banner, and
+  two weeks after a seed it would have reached nothing but the enrolment
+  screens. The seeder enrols the accounts in `ENROLLED_MEMBER_USERNAMES` and
+  keeps their secrets in `member-totp.env`, beside the administrator's.
+- **The grace banner has its own account.** It is pictured as
+  `auth: "mfagrace"`, an assistant chief left unenrolled on purpose.
+- **Shots that grant a role or delete permanently confirm first.**
+  `POST/DELETE /users/{id}/roles` and permanent deletes now require a step-up.
+  Those shots, and `holdQuartermaster`, confirm with `adminStepUp(page)`, which
+  submits the next time-step's code and tries twice.
+- **Seeder fixes:**
+  - Guide 08's two hours corrections overlapped in the first days of a month.
+  - The Rescue 7 tourniquet was dated before its checklist existed, so on a
+    fresh database it was never dated.
+  - The publish sweep tried to publish guide 03's deliberate draft.
+  - `seed_paused_scheduling` made a duplicate pattern on every re-seed.
+  - `seed_lot_recall` recalled a consumable-gear lot, which the medical recall
+    ignores, so nothing was ever recalled.
+- **New seed steps.** The `seed_backlog_*` methods, `seed_capture_member_two_factor`
+  and `seed_backlog_00_passkey_member` add the states the new shots picture.
+  Each one's docstring says what it creates.
+- **The onboarding steps were shot separately.** `08-116` and `08-117` were
+  re-shot with `wizard-extra.mjs` against a throwaway database and backend.
+
+**Shots answered by a mock.** Each manifest entry says what it mocks. These
+are what the demo cannot reach without a real external account or a real send:
+
+- **Guide 16:** `16-20` to `16-23`, the connected Microsoft 365, Google
+  Calendar and Outlook cards and the attention list. Nothing was connected.
+- **Guide 14:** `14-33` and `14-34`, a ballot send that never finishes and the
+  server's own 409. Nothing was sent.
+- **Guide 18:** `18-05`. Only the store's enabled flag is mocked; the real
+  switch was not touched.
+- **Guide 11:** `11-08` and `11-28` answer the autosave, so the demo gains no
+  draft.
+- **Guide 15:** `15-13` and `15-41` answer the status lookup from the
+  applicant's real record, as `15-28` already did.
+- **Guide 03:** `03-131` answers the generate call. Nothing was generated.
+
+### Images
+
+| Guide | New | Re-shot or replaced | Checked, old image kept |
+| --- | --- | --- | --- |
+| 00 | `00-33` passkeys card, `00-34` step-up code box, `00-35` password step-up (assistant chief), `00-36` grace banner (assistant chief) | `00-04`, `00-07`, `00-19`, `00-20`, `00-23` (Use your passkey), `00-32` | |
+| 01 | `01-53` to `01-56` Member ID Cards (Cards with the bulk bar, Coverage, Tap log, Settings), `01-57` leave badges, `01-58` Member class and Membership status | `01-01`, `01-02`, `01-05`, `01-07`, `01-22`, `01-23`, `01-24` (itemized Permanently Delete), `01-27` (thirteenth tile), `01-36`, `01-39`, `01-40`, `01-42` | `01-29` |
+| 02 | `02-126`, `02-127` Shift Evaluations settings and editor; `02-128`, `02-129` evaluation form picker; `02-130` report status lines; `02-131`, `02-132` evaluation page and print; `02-133` profile by position; `02-134` matrix member-class switch; `02-135` Operational members; `02-136` Curriculum → Programs; `02-137` registry import; `02-138` Show inactive / Reactivate; `02-139`, `02-140` Mark pipeline complete and Completed by hand; `02-141` No active requirements; `02-142` deactivate confirmation; `02-143` cohort Shift remaining | `02-02`, `02-16`, `02-64`, `02-65` (one table per class), `02-67`, `02-80`, `02-86`, `02-102`, `02-107` (No completion date) | `02-17`, `02-120`; captions of `02-62`, `02-63`, `02-74` confirmed; `02-71` alt corrected |
+| 03 | `03-129` template Reactivate, `03-130` paused pattern, `03-131` not-seated message, `03-132`, `03-133` inactive-template notice, `03-134` basic apparatus Show inactive, `03-135` builder publish list, `03-136` Present / Absent, `03-137` replacement date | `03-01`, `03-02` (alt corrected), `03-04`, `03-05`, `03-12`, `03-13`, `03-15`, `03-22`, `03-24`, `03-32`, `03-44`, `03-47`, `03-48`, `03-51`, `03-100`, `03-105`, `19-34` | `03-50`, `03-124`, `03-126` |
+| 04 | `04-90` Card taps, `04-91` Card Check-ins, `04-92` Card Readers, `04-93`, `04-94` guest code on the event page (open and before check-in opens), `04-95` Guests card, `04-96` organizer view | `04-02` (as a member), `04-03`, `04-14`, `04-32`, `04-33`, `04-39`, `04-42` (caption updated: one Cast Ballot for the whole ballot), `04-65`, `04-71` to `04-75`, `04-77`, `04-78` (full page, Minutes Settings has five sections); for the section header, area cards, borders or the wider minutes column: `04-01`, `04-04` to `04-06`, `04-08` (both), `04-09` (both), `04-10`, `04-11`, `04-15`, `04-20`, `04-31`, `04-35` (both), `04-36` to `04-38`, `04-40` to `04-41`, `04-43` to `04-48`, `04-50` to `04-52`, `04-58` to `04-64`, `04-66` to `04-70`, `04-76`, `04-79` to `04-81`, `04-86`, `04-87`, `19-10`, `19-24` | `04-12`, `04-30`, `04-34`, `04-53` to `04-57`, `04-82` to `04-85`, `04-88`, `04-89` |
+| 05 | `05-140`, `05-141` NFC Tag Register and Move tag; `05-142` to `05-144` find, recall and recalled lots; `05-145` Not yet counted; `05-146` Print Labels menu; `05-147` Before you print; `05-148`, `05-149` product Rename; `05-150`, `05-151` crew view; `05-152` low-stock notice; `05-153` checklist settings on a phone; `05-154` look ahead 90 days | `05-01`, `05-25`, `05-27`, `05-31`, `05-33`, `05-50`, `05-54`, `05-60` (now opens the Catalog area; it had been a copy of `05-25`), `05-66`, `05-69`, `05-85`, `05-88` to `05-90`, `05-95`, `05-97`, `05-128` to `05-134`, `05-137` | `05-98` |
+| 06 | `06-36` Card Readers | | `06-13`, `06-14` (fewer than 50 records, so no page controls) |
+| 07 | `07-40` Pre-fill from applicant, `07-41` Sensitive, `07-42` builder badges, `07-43` lock-icon answers, `07-44` Restricted note, `07-45` rule delete warning, `07-46` rule Edit, `07-47` embed code, `07-48` allowed sites | `07-05`, `07-08` | |
+| 08 | `08-118` Allow passkeys, `08-119` Reset MFA listing a passkey, `08-120` Off filter, `08-121` Always sent, `08-122` Gmail app password, `08-123` Gmail service account | `08-34`, `08-36`, `08-38`, `08-94`, `08-114`, `08-115`, `08-116`, `08-117` | |
+| 09 | `09-34` templates on a phone | | `09-09`, `09-14` |
+| 10 | | `10-21` | |
+| 11 | `11-27` category delete wording, `11-28` "(inactive category)", `11-29` min above max, `11-30` leave prompt, `11-31` overpayment as donation | `11-03` (Inactive through), `11-08` (Draft saved, Save Draft), `11-10`, `11-25`, `11-26` | `11-06` |
+| 12 | `12-16` edit opportunity, `12-17` Business donor | `12-03` (Show retired) | |
+| 13 | `13-09` by frequency and Waived | `13-05` (Applies to Positions), `13-06` | `13-04` |
+| 14 | `14-31` annual-meeting eligibility, `14-32` Voting eligibility card, `14-33`, `14-34` ballot send progress and refusal | `14-01`, `14-16` (six sections), `14-24` | `14-28`, `14-29`, `14-30` |
+| 15 | `15-30` duplicate applicant, `15-31` My Applicants, `15-32` case-manager dialog, `15-33` Assigned, `15-34` follow-up Send now, `15-35` follow-up stage, `15-36` include follow-up answers, `15-37` notify prospect, `15-38` next-meeting preview, `15-39` template picker, `15-41` Open the form card, `15-42` applicant email templates | `15-13` (Your next step) | `15-24`, `15-28` |
+| 16 | `16-19` Microsoft 365 connect form, `16-20` secret countdown, `16-21` accounts needing attention, `16-22` Google Calendar, `16-23` Outlook | | |
+| 17 | | `17-01` (Yes / No pairs), `17-05` (class and status) | |
+| 18 | `18-05` store offline, `18-06` catalog item Status | `18-02`, `18-03` | |
+
+### Still open
+
+| Queue | Screen | Why |
+| --- | --- | --- |
+| Oct 29, Oct 29 – 30 | Applicant follow-up form page with **Save and finish later**; Interview page **Follow-up Forms** panel; drawer **Resend** / **Mark reviewed**; **Contact details changed** | **Resolved**, [captured 2026-11-04](#captured-2026-11-04--screens-unblocked-by-3988-3997-and-4005): `15-40`, `15-43` to `15-46`. Was blocked until 2026-11-03 by `FieldRenderer` requesting `/operational-ranks` signed out (fixed in #3988) |
+| Oct 25 – 26 | Event QR page with the guest code and print-one-code choice | **Resolved**, [captured 2026-11-04](#captured-2026-11-04--screens-unblocked-by-3988-3997-and-4005): `04-97`. Was blocked until 2026-11-03 by `get_qr_check_in_data` omitting `allow_guest_check_in` (fixed in #3997) |
+| Oct 24 – 25 | Shift Patterns listing a paused pattern with **Resume** | **Resolved**, [captured 2026-11-04](#captured-2026-11-04--screens-unblocked-by-3988-3997-and-4005): `03-130` re-shot on Shift Patterns. Was blocked until 2026-11-04 by `PatternsTab.tsx` listing active patterns only (fixed in #4005) |
+| Oct 24 afternoon | NFC Tag Register, compartment-only view | Needs an account with `check_manage` and not `inventory.manage`. The demo has none |
+| Oct 21 – 22, Oct 16 – 18 | Import Queue; training Sync History | Both fill only from a live vendor sync, the reason `02-68` is held back |
+| Oct 21 – 22 | Requirement delete toast | A toast, and it needs a real delete |
+| Oct 16 – 18 | Printed blank ballot | The demo has no ranked-choice contest, and a PDF render is outside `capture.mjs` |
+| Oct 23 – 24 | Google Workspace retirement switch | Only the Microsoft side is pictured (`16-19`) |
+| Oct 20 – 21 | Phone shot of the checklist reports | None exists to re-check |
+| Oct 25 | `03-02`, `19-34` under 1280px | Re-shot at 1440px only |
+| Oct 24 – 25, Oct 30 – 31 | Tablet-width and mid-width re-checks across all guides | Swept only where a guide's own manifest takes a shot at that width |
+| — | `01-35-applicant-drawer-final-stage` | **CHECK**: no active applicant sits in the Volunteer pipeline's last stage after a seed |
+
+**Seen in the new images, not fixed here.** This change touches no application
+code:
+
+- Guide 02: the Shift Evaluations notice still says evaluations are not in use
+  on shifts. **Removed on main**; `02-126` re-shot 2026-11-04.
+- Guide 05: the Move tag dialog says "Find a item". **Fixed** by #4035;
+  `05-141` re-shot 2026-11-04.
+- Card Readers says "1 taps" and repeats a room's station in its name. "1 taps"
+  is **fixed** by #4035 (`06-36`, `04-92` re-shot 2026-11-04); the repeated
+  station is **fixed** by #4057, with the location pickers in #4062, and
+  `06-36`, `04-92` re-shot 2026-11-05.
+- The Members roster's Actions column is clipped at 1440px, and the explainer
+  above it still describes one "membership type". The Actions column is
+  **fixed on main** (#03f21141 and follow-ups; `01-22` re-shot 2026-11-04).
+  The explainer is **fixed**: it names the member class and membership status
+  the Membership column shows; `01-22` re-shot 2026-11-05.
+- An unchanged draft purchase request reads "Saving soon…" as soon as it opens.
+  **Fixed** by #4037. No guide image pictured the status line.
+- On the prospective-members board, each card's selection checkbox
+  (`PipelineKanban.tsx`, `absolute top-2 left-2`) sits over the card's top-left
+  corner: the avatar, or the warning icon of a **Contact details changed** or
+  inactivity banner (seen 2026-11-04 in `15-46`). **Fixed**: a card with the
+  box insets its content; `15-46` re-shot 2026-11-05.
+- A case manager without manage rights sees **Send now**, which guide 15 says
+  needs `prospective_members.manage`. **Guide corrected** 2026-11-05: the app
+  lets the applicant's case manager send and resend on purpose
+  (`ProspectAccess.can_work`); guide 15 now says so.
+
+## Queued by the October 31 – November 1 documentation pass
+
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-october-31--november-1-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 15 | **My Applicants** page | Create |
+| 15 | Status dialog as a case manager sees it (Withdraw only) | Create |
+| 02 | Training Admin → **Shift Evaluations** list and form editor | Create |
+| 02 | Edit-program dialog and create wizard with the evaluation form picker | Create |
+| 02 | Shift Completion Report with evaluation status lines | Replace |
+| 02 | Member evaluation page and its print view | Create |
+| 01 | Member profile leave section (Upcoming / Active / Ended badges) | Replace |
+| 00 | Onboarding IT Contacts step (recovery email refusal) | Re-check |
+| 03 | Scheduling Department Defaults card (overtime field removed) | Replace |
+
+## Queued by the October 30 – 31 documentation pass
+
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
+
+No new screens. **Re-check:** the member profile **Voting eligibility** card
+(fields now stack in one column), and any screenshot of a card or list row with
+buttons at its right edge at a mid-width window (sidebar open), since the
+buttons now wrap under the title.
+
+## Queued by the October 29 – 30 documentation pass
+
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29--30-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 14 | Election Settings → **Voter Eligibility**, with **Use different rules at the annual meeting** | Create |
+| 14 | A member profile's **Voting eligibility** card | Create |
+| 14 | Election Settings with all six sections in the sidebar | Replace |
+| 15 | The Interview page's **Follow-up Forms** panel; the status page's **Open the form** card | Create |
+| 15 | Election Vote stage with **Include follow-up form answers** | Create |
+| 02 | Compliance profile form with **Applies to Members Holding a Position** | Create |
+| 01 | Member edit page with **Member class** and **Membership status** | Create |
+| 17 | `17-05-dropped-member-anonymize`: the profile now shows class and status | Replace |
+
+## Queued by the October 29 documentation pass
+
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 15 | Stage settings for a **Follow-up Form** stage, with **Advance the applicant when they submit the form** | Create |
+| 15 | The applicant drawer's **Follow-up Forms** section with **Send now / Resend** and **Mark reviewed**; a card with **Contact details changed** | Create |
+| 15 | The applicant's form page with **Save and finish later** | Create |
+| 07 | Field editor with **Pre-fill from applicant (follow-up forms)** | Create |
+| 01 | `01-27-stage-type-picker`: the thirteenth tile, **Follow-up Form** | Replace |
+| 05 | `05-69-label-print-page`, `05-33-label-printing`: the preview now sits under the controls | Re-check |
+| 02 | The cohort **Shift remaining** dialog (limited to 14 days either way) | Re-check |
+| any | A shot showing a red error box on one of the twelve screens moved from `alert-error` to `alert-danger` | Re-check |
+
+## Queued by the October 28 – 29 documentation pass
+
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-28--29-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 11 | Record a dues payment above the amount owed: **Record the extra as a donation?** with **Record with donation** and **Change the amount** | Create |
+| 08 | `08-94-portal-data-control`: the stats fields' new descriptions | Re-check |
+
 ## Queued by the October 28 documentation pass
+
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-28-2026).
 Nothing was captured by this pass. The member-class matrix, its printout,
@@ -13,6 +449,8 @@ Nothing was captured by this pass. The member-class matrix, its printout,
 | 05 | `05-97-needs-attention-pending-return`, `05-132-departure-clearance-needs-attention`: heading is now **Waiting for action** | Replace |
 
 ## Queued by the October 26 – 27 documentation pass
+
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-26--27-2026).
 Nothing was captured by this pass.
@@ -34,6 +472,8 @@ Nothing was captured by this pass.
 
 ## Queued by the October 25 – 26 documentation pass
 
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
+
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-25--26-2026).
 Nothing was captured by this pass.
 
@@ -51,6 +491,8 @@ Nothing was captured by this pass.
 | All | Any form or toolbar shot on desktop or an iPad (input borders darker; toolbar buttons match field height) | Re-check |
 
 ## Queued by the October 25 documentation pass
+
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-25-2026).
 Nothing was captured by this pass. The Events Administration, Scheduling
@@ -76,6 +518,8 @@ it does not list.
 
 ## Queued by the October 24 – 25 documentation pass
 
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
+
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24--25-2026).
 Nothing was captured by this pass. Guides 01, 05 and 06 carry a
 "screenshot to create" note where the first picture goes.
@@ -94,6 +538,8 @@ Nothing was captured by this pass. Guides 01, 05 and 06 carry a
 
 ## Queued by the October 24 (afternoon) documentation pass
 
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
+
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-24-2026-afternoon).
 Nothing was captured by this pass.
 
@@ -110,6 +556,8 @@ Nothing was captured by this pass.
 | 15 | Add Applicant duplicate-applicant warning naming pipeline and stage | Create |
 
 ## Queued by the October 23 – 24 documentation pass
+
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-23--24-2026).
 Nothing was captured by this pass. Guide 02 carries a
@@ -131,6 +579,8 @@ visible "screenshot to be captured" note where the first picture goes.
 
 ## Queued by the October 22 – 23 documentation pass
 
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
+
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-22--23-2026).
 Nothing was captured by this pass.
 
@@ -144,6 +594,8 @@ Nothing was captured by this pass.
 | 02 | Historical Import format list: required columns now bold primary text, not red | Re-check the import page shot |
 
 ## Queued by the October 21 – 22 documentation pass
+
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-21--22-2026).
 Nothing was captured by this pass.
@@ -164,6 +616,8 @@ Nothing was captured by this pass.
 
 ## Queued by the October 20 – 21 documentation pass
 
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
+
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-20--21-2026).
 Nothing was captured by this pass.
 
@@ -180,6 +634,8 @@ Nothing was captured by this pass.
 | 03 | Scheduling weeks now begin on Sunday | Re-check any week-grid image that starts on Monday |
 
 ## Queued by the October 19 – 20 documentation pass
+
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-19--20-2026).
 Nothing was captured by this pass. It is a gap report: the screens below are the
@@ -245,6 +701,8 @@ full-page on a stack with scanning on if the app shell is wanted around them.
 
 ## Queued by the October 18 – 19 documentation pass
 
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
+
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-18--19-2026).
 Nothing was captured by this pass. Placeholders for the new screens are in the
 guides as `<!-- Screenshot needed: … -->` comments.
@@ -277,6 +735,8 @@ guides as `<!-- Screenshot needed: … -->` comments.
 | `04-*` roll panel on minutes | **REPLACE** | Gains the listing selector |
 
 ## Queued by the October 16 – 18 documentation pass
+
+**Worked 2026-11-02** — see [the October 16 – November 1 queues, captured 2026-11-02](#the-october-16--november-1-queues-captured-2026-11-02), which lists what each row resolved to and what is still open.
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-16--18-2026).
 Nothing was captured by this pass. The 2026-10-17 pipeline run (sections below)
@@ -362,7 +822,7 @@ integration, and an approval chain no request has used.
 
 | Image                                  | Disposition            | Notes                                                                                                                               |
 | -------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `16-01-integrations-catalog` (re-shot) | **CURRENT** 2026-10-17 | Google Calendar and Microsoft Outlook read **Coming Soon** with their one-way publishing chips; the iCalendar card is connected     |
+| `16-01-integrations-catalog` (re-shot) | **CURRENT** 2026-11-13 | Google Calendar and Microsoft Outlook read **Coming Soon** with their one-way publishing chips; the iCalendar card is connected; re-shot 2026-11-13 to add the Zeffy card |
 | `16-16-ical-department-feed`           | **CURRENT** 2026-10-17 | New: the connected iCalendar card with the department feed link, copy button and **Reset link**                                     |
 | `12-04-create-application` (re-shot)   | **CURRENT** 2026-10-17 | Funding Details carries **Amount Awarded**, and the form's subtitle is the "Only the program name and agency are required" line     |
 | `12-15-record-pledge-reminders`        | **CURRENT** 2026-10-17 | New: **Record pledge** with **Send reminders** ticked and its help text; filled in, never saved                                     |

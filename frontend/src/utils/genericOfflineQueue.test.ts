@@ -99,6 +99,29 @@ describe('genericOfflineQueue', () => {
       expect((await getGenericItem(item.id))?.retries).toBe(0);
     });
 
+    it.each([502, 503, 504, 429, 408])(
+      'keeps an item the server answers with a retryable %i, however often',
+      async (status) => {
+        // A deploy or a restart answers 502/503 for minutes, and every app
+        // open, reconnect and tap on "Click to retry" was a strike: five, and
+        // the member's only copy of the drill log was deleted.
+        const item = await enqueueGeneric('training-submission', '/training/submissions', {}, 'Drill');
+        const unavailable = axiosThat(() =>
+          Promise.reject(Object.assign(new Error('Request failed'), { response: { status }, request: {} }))
+        );
+
+        const sent: boolean[] = [];
+        for (let attempt = 0; attempt < GENERIC_QUEUE_MAX_RETRIES + 2; attempt += 1) {
+          const current = await getGenericItem(item.id);
+          sent.push(current ? await flushOne(current, unavailable) : true);
+        }
+
+        // `true` would mean sent or gone; every attempt must leave it queued.
+        expect(sent).toEqual(new Array<boolean>(GENERIC_QUEUE_MAX_RETRIES + 2).fill(false));
+        expect((await getGenericItem(item.id))?.retries).toBe(0);
+      }
+    );
+
     it('still gives up on a request the server keeps refusing', async () => {
       const item = await enqueueGeneric('training-submission', '/training/submissions', {}, 'Drill');
       const refused = axiosThat(() =>

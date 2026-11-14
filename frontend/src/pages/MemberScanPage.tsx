@@ -20,15 +20,15 @@
  */
 
 import React, { useRef, useState, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router';
-import { ScanLine, ArrowLeft, Camera, CameraOff, AlertCircle, Flashlight, FlashlightOff } from 'lucide-react';
+import { useNavigate } from 'react-router';
+import { Camera, CameraOff, AlertCircle, Flashlight, FlashlightOff } from 'lucide-react';
 import { memberBadgeService } from '../services/memberBadgeService';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
 import { useScanFeedback } from '../hooks/useScanFeedback';
 import { ScanSuccessFlash } from '../components/ux/ScanSuccessFlash';
 import { describeCameraError, QR_SCAN_CONFIG } from '../constants/camera';
-import { Breadcrumbs } from '../components/ux';
+import AdminPageHeader from '../components/admin/AdminPageHeader';
 
 export const MemberScanPage: React.FC = () => {
   const navigate = useNavigate();
@@ -92,25 +92,12 @@ export const MemberScanPage: React.FC = () => {
 
   return (
     <div className="mx-auto min-h-screen max-w-lg px-4 py-8">
-      <Breadcrumbs underHub="/members/admin" />
-
-      {/* Header */}
-      <div className="mb-6">
-        <Link
-          to="/members"
-          className="text-theme-text-muted hover:text-theme-text-secondary touch-target-phone mb-4 flex items-center gap-1 text-sm"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Members
-        </Link>
-        <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
-          <ScanLine className="h-6 w-6" />
-          Scan Member ID
-        </h1>
-        <p className="text-theme-text-muted mt-1 text-sm">
-          Point your camera at a member&apos;s QR code or barcode to look them up.
-        </p>
-      </div>
+      <AdminPageHeader
+        title="Scan Member ID"
+        description="Point your camera at a member’s QR code or barcode to look them up."
+        underHub="/members/admin"
+        className="mb-6"
+      />
 
       {/* Scanner Viewport */}
       <div className="card mb-6 overflow-hidden">

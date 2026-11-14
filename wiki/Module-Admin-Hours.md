@@ -35,11 +35,11 @@ The Admin Hours module tracks administrative work hours for department members v
 | URL                                           | Page                                                         | Permission           |
 | --------------------------------------------- | ------------------------------------------------------------ | -------------------- |
 | `/admin-hours`                                | My Admin Hours                                               | Authenticated        |
-| `/admin-hours/manage`                         | Admin Hours Management                                       | `admin_hours.manage` |
+| `/admin-hours/manage`                         | Admin Hours (management)                                     | `admin_hours.manage` |
 | `/admin-hours/categories/:categoryId/qr-code` | A category's QR code (and, for managers, its NFC tag writer) | Authenticated        |
 | `/admin-hours/:categoryId/clock-in`           | QR Clock-In Landing                                          | Authenticated        |
 
-Admin Hours Management has five tabs: Categories, Active Sessions, Pending
+The management page (titled **Admin Hours** under Administration) has five tabs: Categories, Active Sessions, Pending
 Review, All Entries and Summary.
 
 > **Corrected 2026-10-04.** This table previously listed `/admin-hours/qr-codes`

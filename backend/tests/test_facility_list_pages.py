@@ -13,12 +13,16 @@ applied in SQL.
 
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.api.v1.endpoints import facilities as endpoints
+from app.api.v1.endpoints.dashboard import get_asset_widgets
 from app.models.facilities import (
     Facility,
+    FacilityComplianceChecklist,
     FacilityInspection,
     FacilityMaintenance,
     FacilityMaintenanceType,
@@ -27,6 +31,7 @@ from app.models.facilities import (
 )
 from app.models.user import Organization
 from app.services.facilities_service import FacilitiesService
+from app.utils.org_timezone import resolve_org_today
 
 pytestmark = pytest.mark.integration
 
@@ -146,6 +151,7 @@ class TestMaintenancePage:
             occurred_after=None,
             occurred_before=None,
             search=None,
+            due_within_days=None,
             skip=0,
             limit=50,
             db=db_session,
@@ -207,6 +213,243 @@ class TestInspectionPage:
 
         assert total == 1
         assert [i.title for i in items] == ["Inspection 3"]
+
+
+class TestDashboardDueWindows:
+    """The dashboard's "Upcoming inspections" and "Compliance deadlines" tiles
+    link here with a 30-day window (DASH-37). Rows sit on both sides of every
+    edge the tiles' queries in dashboard.py draw: before today, today, the
+    thirtieth day, the day after, and a facility that has been archived."""
+
+    async def _archived_facility(self, db, org, beside):
+        fac = Facility(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            name="Old Station",
+            facility_type_id=beside.facility_type_id,
+            status_id=beside.status_id,
+            is_archived=True,
+        )
+        db.add(fac)
+        await db.flush()
+        return fac
+
+    async def test_inspections_due_within_the_window(self, db_session, scene):
+        org, fac, _ = scene
+        archived = await self._archived_facility(db_session, org, fac)
+        today = await resolve_org_today(db_session, org.id)
+        offsets = {"yesterday": -1, "today": 0, "day 30": 30, "day 31": 31}
+        for title, days in offsets.items():
+            db_session.add(
+                FacilityInspection(
+                    id=str(uuid.uuid4()),
+                    organization_id=org.id,
+                    facility_id=fac.id,
+                    inspection_type="fire",
+                    title=title,
+                    inspection_date=today - timedelta(days=365),
+                    next_inspection_date=today + timedelta(days=days),
+                )
+            )
+        db_session.add(
+            FacilityInspection(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                facility_id=archived.id,
+                inspection_type="fire",
+                title="archived facility",
+                inspection_date=today - timedelta(days=365),
+                next_inspection_date=today + timedelta(days=5),
+            )
+        )
+        await db_session.flush()
+
+        items, total = await FacilitiesService(db_session).page_inspections(
+            org.id, due_within_days=30
+        )
+
+        assert sorted(i.title for i in items) == ["day 30", "today"]
+        assert total == 2
+
+        _, unfiltered = await FacilitiesService(db_session).page_inspections(org.id)
+        assert unfiltered == 5
+
+    async def test_compliance_due_within_the_window(self, db_session, scene):
+        org, fac, _ = scene
+        archived = await self._archived_facility(db_session, org, fac)
+        today = await resolve_org_today(db_session, org.id)
+
+        def checklist(name, days, facility=fac, done=False):
+            return FacilityComplianceChecklist(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                facility_id=facility.id,
+                checklist_name=name,
+                compliance_type="fire_code",
+                due_date=today + timedelta(days=days),
+                is_completed=done,
+            )
+
+        db_session.add_all(
+            [
+                checklist("yesterday", -1),
+                checklist("today", 0),
+                checklist("day 30", 30),
+                checklist("day 31", 31),
+                checklist("completed", 5, done=True),
+                checklist("archived facility", 5, facility=archived),
+            ]
+        )
+        other = await _org(db_session, "Other")
+        other_fac = await _facility(db_session, other)
+        db_session.add(
+            FacilityComplianceChecklist(
+                id=str(uuid.uuid4()),
+                organization_id=other.id,
+                facility_id=other_fac.id,
+                checklist_name="other org",
+                compliance_type="fire_code",
+                due_date=today + timedelta(days=5),
+            )
+        )
+        await db_session.flush()
+
+        rows = await endpoints.list_facility_compliance_checklists(
+            facility_id=None,
+            compliance_type=None,
+            is_completed=False,
+            due_within_days=30,
+            skip=0,
+            limit=500,
+            db=db_session,
+            current_user=type("U", (), {"organization_id": org.id})(),
+        )
+
+        assert sorted(r.checklist_name for r in rows) == ["day 30", "today"]
+
+    async def _maintenance_page(self, db, org, **filters):
+        params = dict(
+            facility_id=None,
+            maintenance_type_id=None,
+            is_completed=None,
+            is_overdue=None,
+            is_historic=None,
+            occurred_after=None,
+            occurred_before=None,
+            search=None,
+            due_within_days=None,
+            skip=0,
+            limit=50,
+        )
+        params.update(filters)
+        return await endpoints.get_facility_maintenance_page(
+            **params,
+            db=db,
+            current_user=type("U", (), {"organization_id": org.id})(),
+        )
+
+    async def test_maintenance_tiles_partition_and_match_their_lists(
+        self, db_session, scene
+    ):
+        """DASH-39, and the overdue mismatch found while building it.
+
+        "Urgent work orders" links to ``?status=overdue`` and "Maintenance due"
+        to ``?status=due``. Each tile's number must be its list's total, and
+        the two must split the open work due by day 30 between them: every
+        record in exactly one. Overdue is the stored ``is_overdue`` verdict
+        every row badge, the facilities dashboard and the overdue filter
+        already read, at facilities that are not archived. The tile used to
+        count ``due_date <= today`` instead, so work due today, and work whose
+        flag the daily task had not yet flipped, was "urgent" on the tile and
+        absent from the list it opened.
+        """
+        org, fac, kind = scene
+        archived = await self._archived_facility(db_session, org, fac)
+        today = await resolve_org_today(db_session, org.id)
+
+        def job(name, days, facility=fac, done=False, flagged=False):
+            return FacilityMaintenance(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                facility_id=facility.id,
+                maintenance_type_id=kind.id,
+                description=name,
+                due_date=today + timedelta(days=days),
+                is_completed=done,
+                is_overdue=flagged,
+            )
+
+        db_session.add_all(
+            [
+                job("overdue", -1, flagged=True),
+                # Past due, but the daily task has not flipped it yet.
+                job("not yet flagged", -1),
+                job("today", 0),
+                job("day 1", 1),
+                job("day 30", 30),
+                job("day 31", 31),
+                job("completed", 5, done=True),
+                job("archived facility, due", 5, facility=archived),
+                job("archived facility, overdue", -3, facility=archived, flagged=True),
+            ]
+        )
+        other = await _org(db_session, "Other")
+        other_fac = await _facility(db_session, other)
+        db_session.add(
+            FacilityMaintenance(
+                id=str(uuid.uuid4()),
+                organization_id=other.id,
+                facility_id=other_fac.id,
+                maintenance_type_id=kind.id,
+                description="other org",
+                due_date=today - timedelta(days=5),
+                is_overdue=True,
+            )
+        )
+        await db_session.flush()
+
+        overdue = await self._maintenance_page(db_session, org, is_overdue=True)
+        due = await self._maintenance_page(db_session, org, due_within_days=30)
+
+        assert [r.description for r in overdue["items"]] == ["overdue"]
+        assert sorted(r.description for r in due["items"]) == [
+            "day 1",
+            "day 30",
+            "not yet flagged",
+            "today",
+        ]
+
+        with (
+            patch(
+                "app.api.v1.endpoints.dashboard.OrganizationService"
+                ".get_enabled_modules",
+                new=AsyncMock(
+                    return_value=SimpleNamespace(enabled_modules=["facilities"])
+                ),
+            ),
+            patch(
+                "app.api.v1.endpoints.dashboard.user_has_permission",
+                side_effect=lambda _user, permission: permission == "facilities.manage",
+            ),
+        ):
+            widgets = await get_asset_widgets(
+                db=db_session, current_user=SimpleNamespace(organization_id=org.id)
+            )
+        tiles = {w.id: w for w in widgets.widgets}
+        urgent = tiles["facilities-urgent-work-orders"]
+        upcoming = tiles["facilities-maintenance-due"]
+        assert urgent.count == overdue["total"]
+        assert urgent.href == "/facilities/maintenance?status=overdue"
+        assert upcoming.count == due["total"]
+        assert upcoming.href == "/facilities/maintenance?status=due"
+
+        # The facilities dashboard's own "Overdue Maintenance" card and preview
+        # link to the same list, so they count the same records.
+        summary = await FacilitiesService(db_session).get_dashboard_summary(org.id)
+        assert summary["overdue_maintenance"] == overdue["total"]
+        assert [r["description"] for r in summary["overdue_maintenance_records"]] == [
+            "overdue"
+        ]
 
 
 @pytest.mark.parametrize("prefix", ["/maintenance", "/inspections"])

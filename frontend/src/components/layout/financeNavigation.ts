@@ -20,6 +20,8 @@
  * "Next year's budget" is decided the same way, on `plansNextYear` (the member
  * owns a line in a draft fiscal year or has a budget request for one). The
  * Treasurer's "Budget requests" review screen is `finance.manage`'s.
+ * "Budget amendments" lists the amendments awaiting a second officer, for
+ * whoever may confirm one (`finance.manage` or `finance.budget_review`).
  */
 import { FINANCE_REQUEST_READ_PERMISSIONS } from '../../modules/finance/hooks/useFinanceRequestAccess';
 
@@ -52,9 +54,18 @@ export function financeNavItems(
     ...(options.plansNextYear
       ? [{ label: "Next year's budget", path: '/finance/budget-requests', anyPermission: [...FINANCE_NAV_PERMISSIONS] }]
       : []),
+    // Every member who sees the group: anyone may owe dues, and the page says
+    // so plainly when they owe none (owner decision 2026-11-01).
+    { label: 'My Dues', path: '/finance/my-dues', anyPermission: [...FINANCE_NAV_PERMISSIONS] },
     {
       label: 'Budget requests',
       path: '/finance/budget-requests/review',
+      anyPermission: ['finance.manage', 'finance.budget_review'],
+    },
+    {
+      // The confirmer's queue of pending amendments (owner decision, 2026-11-01).
+      label: 'Budget amendments',
+      path: '/finance/budget-amendments',
       anyPermission: ['finance.manage', 'finance.budget_review'],
     },
     {

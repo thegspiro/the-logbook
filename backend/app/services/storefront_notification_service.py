@@ -196,12 +196,19 @@ class StorefrontNotificationService:
 
         Admin-ness is a *position* slug, not a column on User — a member can
         hold several positions — so the roles relationship is eager-loaded and
-        matched against the shared ADMIN_NOTIFY_ROLE_SLUGS list.
+        matched against the shared ADMIN_NOTIFY_ROLE_SLUGS list. Scoped to
+        ``ACTIVE_ACCOUNT_STATUSES`` like its sibling ``get_member_recipients``
+        and ``get_admin_user_ids`` above/below it — a retired or dropped
+        quartermaster who still carries the position (nothing revokes it on
+        a status change) must not keep receiving every new order's customer
+        name, email and shipping address by mail indefinitely (CLAUDE.md
+        Pitfall #32).
         """
         result = await self.db.execute(
             select(User)
             .where(
                 User.organization_id == str(organization_id),
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.email.isnot(None),
                 User.deleted_at.is_(None),
             )
@@ -684,6 +691,23 @@ class StorefrontNotificationService:
             context=context,
         )
 
+    async def get_admin_user_ids(self, organization_id: str) -> List[str]:
+        """The store managers themselves, email address or not."""
+        result = await self.db.execute(
+            select(User)
+            .where(
+                User.organization_id == str(organization_id),
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                User.deleted_at.is_(None),
+            )
+            .options(selectinload(User.roles))
+        )
+        return sorted(
+            str(user.id)
+            for user in result.scalars().all()
+            if any(role.slug in ADMIN_NOTIFY_ROLE_SLUGS for role in (user.roles or []))
+        )
+
     async def send_admin_new_order(
         self,
         order: StoreOrder,
@@ -691,7 +715,32 @@ class StorefrontNotificationService:
         organization: Optional[Organization] = None,
         recipients: Optional[List[str]] = None,
     ) -> int:
-        """Heads-up to the quartermaster that an order landed."""
+        """Heads-up to the quartermaster that an order landed.
+
+        Every store manager also gets a bell entry, whatever their email
+        choices; the email is optional and was this notice's only copy. Keyed
+        on the order, so the re-send when a member reports a payment refreshes
+        an unread entry rather than adding a second one.
+        """
+        if self._capture is None:
+            from app.services.officer_alert_copies import add_in_app_copies
+
+            await add_in_app_copies(
+                self.db,
+                organization_id=str(order.organization_id),
+                recipient_ids=await self.get_admin_user_ids(order.organization_id),
+                category="storefront_admin",
+                subject=f"New store order {order.order_number}",
+                message=(
+                    f"{order.customer_name or 'A member'} placed order "
+                    f"{order.order_number}."
+                ),
+                action_url="/inventory/admin/store?tab=orders",
+                metadata={"order_id": str(order.id)},
+                replace_unread=True,
+                dedupe_key=str(order.id),
+            )
+            await self.db.commit()
         if recipients is None:
             recipients = await self.get_admin_recipients(
                 order.organization_id, settings

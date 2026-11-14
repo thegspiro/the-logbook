@@ -227,7 +227,11 @@ export function scrubSensitive(text: string): string {
  * kiosk display code, which is the bearer credential for the public guest
  * check-in flow; it requires a segment after the slash, so paths that merely
  * end in /display are untouched. The /event-guest/ pattern redacts an event's
- * own guest QR code token, the same credential for the same flow.
+ * own guest QR code token, the same credential for the same flow. The
+ * /application-form/ and /follow-up-forms/ patterns redact a follow-up
+ * form's personal link token: the page is singular, the API it calls plural.
+ * /shift-evaluation/ and /public/v1/shift-evaluations/ do the same for a
+ * preceptor link; the signed-in /training/shift-evaluations/{id} keeps its id.
  */
 export function sanitizePath(path: string): string {
   return path
@@ -236,7 +240,11 @@ export function sanitizePath(path: string): string {
     .replace(/(\/application-status\/)[^/?#]+/gi, '$1[REDACTED]')
     .replace(/(\/calendar\/)[^/?#]+(?=\.ics(?:[/\s?#]|$))/gi, '$1[REDACTED]')
     .replace(/(\/display\/)[^/?#]+/gi, '$1[REDACTED]')
-    .replace(/(\/event-guest\/)[^/?#]+/gi, '$1[REDACTED]');
+    .replace(/(\/event-guest\/)[^/?#]+/gi, '$1[REDACTED]')
+    .replace(/(\/application-form\/)[^/?#]+/gi, '$1[REDACTED]')
+    .replace(/(\/follow-up-forms\/)[^/?#]+/gi, '$1[REDACTED]')
+    .replace(/(\/shift-evaluation\/)[^/?#]+/gi, '$1[REDACTED]')
+    .replace(/(\/public\/v1\/shift-evaluations\/)[^/?#]+/gi, '$1[REDACTED]');
 }
 
 // ---------------------------------------------------------------------------
@@ -642,11 +650,18 @@ function flushOnHide(): void {
   // user switching apps, a tab restored from the back/forward cache — so
   // clearing the whole queue here would discard everything past the flush cap
   // in exactly the situation where it could still have been delivered.
+  // Nothing further to try if a flush fails: the page is going away. The
+  // rejection still has to be settled here. A try/catch around `void fetch()`
+  // catches only a synchronous throw, so a request that failed offline or was
+  // cancelled by the navigation became an unhandled rejection — which the
+  // `unhandledrejection` handler then reported, filing the log endpoint's own
+  // failure as one more report to it (see the header on routing reports).
   for (const item of queue.splice(0, MAX_KEEPALIVE_REPORTS)) {
     try {
-      void fetch(ERROR_LOG_ENDPOINT, buildRequestInit(item.payload, true));
+      fetch(ERROR_LOG_ENDPOINT, buildRequestInit(item.payload, true)).catch(() => undefined);
     } catch {
-      // Nothing further to try — the page is going away.
+      // fetch() reports failure by rejecting; this is for one that throws
+      // before returning a promise, as a stub or polyfill may.
     }
   }
 }

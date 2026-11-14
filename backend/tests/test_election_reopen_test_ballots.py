@@ -15,9 +15,10 @@ credentials remain blocked.
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import pytest
 from sqlalchemy.engine import CursorResult
 
 from app.models.election import ElectionStatus
@@ -69,6 +70,18 @@ def _rollback_service(db):
 
 
 class TestZeroVoteReopen:
+    @pytest.fixture(autouse=True)
+    def _no_filed_results(self):
+        # A CLOSED -> OPEN rollback also supersedes any result filed with
+        # minutes (ELEC-49), which issues its own queries. These tests mock
+        # the reopening's statements one by one, so that step is stubbed here;
+        # test_minutes_election_correction_integration covers it with rows.
+        with patch(
+            "app.services.minutes_election_filing.supersede_filed_results",
+            AsyncMock(return_value=[]),
+        ):
+            yield
+
     async def test_regenerates_salt_and_invalidates_issued_tokens(self):
         election = _closed_election(salt=None, anonymous=True)
         election_id = uuid4()

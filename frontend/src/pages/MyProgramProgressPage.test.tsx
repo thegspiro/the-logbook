@@ -603,7 +603,8 @@ describe('MyProgramProgressPage — no active requirements', () => {
     expect(screen.queryByText('100%')).not.toBeInTheDocument();
     expect(screen.queryByText(/0\/0 requirements complete/)).not.toBeInTheDocument();
     expect(screen.queryByText('Behind schedule')).not.toBeInTheDocument();
-    expect(screen.queryByText('Next milestones')).not.toBeInTheDocument();
+    // The heading was "Next milestones" until every milestone was listed.
+    expect(screen.queryByRole('heading', { name: 'Milestones' })).not.toBeInTheDocument();
     // The phase is not marked complete just because nothing in it counts.
     expect(screen.queryByLabelText('Phase complete')).not.toBeInTheDocument();
   });
@@ -623,5 +624,85 @@ describe('MyProgramProgressPage — no active requirements', () => {
     expect(await screen.findByText('Legacy Decon Drill')).toBeInTheDocument();
     expect(screen.getByText('Inactive — not currently required')).toBeInTheDocument();
     expect(screen.queryByText(/Due |was due|Overdue/)).not.toBeInTheDocument();
+  });
+});
+
+describe('MyProgramProgressPage — milestones', () => {
+  const base = {
+    enrollment: {
+      id: 'enr-1',
+      current_phase_id: null,
+      progress_percentage: 40,
+      enrolled_at: '2026-02-01T00:00:00Z',
+      status: 'active',
+    },
+    program: { id: 'prog-1', name: 'Recruit School' },
+    requirement_progress: [],
+    completed_requirements: 0,
+    total_requirements: 1,
+    next_milestones: [],
+    is_behind_schedule: false,
+  };
+
+  beforeEach(() => {
+    mockGetEnrollmentProgress.mockReset();
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([]);
+  });
+
+  it('lists every milestone with what is done and what is reached', async () => {
+    mockGetEnrollmentProgress.mockResolvedValue({
+      ...base,
+      milestones: [
+        {
+          id: 'ms-1',
+          name: 'Quarter way',
+          completion_percentage_threshold: 25,
+          percentage_met: true,
+          item_match_mode: 'all',
+          items: [],
+          reached: true,
+          reached_at: '2026-03-01T00:00:00Z',
+        },
+        {
+          id: 'ms-2',
+          name: 'Engine ready',
+          completion_percentage_threshold: null,
+          percentage_met: true,
+          item_match_mode: 'all',
+          items: [
+            { item_type: 'course', item_id: 'c-1', name: 'Pump Operations', completed: true },
+            { item_type: 'knowledge_test', item_id: 'k-1', name: 'Hydraulics Exam', completed: false },
+          ],
+          reached: false,
+          reached_at: null,
+        },
+      ],
+    });
+    renderWithRouter(<MyProgramProgressPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Milestones' })).toBeInTheDocument();
+    expect(screen.getByText('Reached 2026-03-01T00:00:00Z')).toBeInTheDocument();
+    expect(screen.getByText('After completing all of Pump Operations and Hydraulics Exam')).toBeInTheDocument();
+    const [pump, hydraulics] = within(
+      screen.getByRole('list', { name: 'Courses and tests for Engine ready' })
+    ).getAllByRole('listitem');
+    expect(pump).toHaveTextContent('Pump Operations');
+    expect(within(pump as HTMLElement).getByLabelText('Completed')).toBeInTheDocument();
+    expect(hydraulics).toHaveTextContent('Hydraulics Exam');
+    expect(within(hydraulics as HTMLElement).getByLabelText('Not completed')).toBeInTheDocument();
+  });
+
+  it('still lists upcoming percentage milestones from a response without the full list', async () => {
+    mockGetEnrollmentProgress.mockResolvedValue({
+      ...base,
+      next_milestones: [{ id: 'ms-1', name: 'Halfway', completion_percentage_threshold: 50, created_at: '' }],
+    });
+    renderWithRouter(<MyProgramProgressPage />);
+
+    expect(await screen.findByText('Halfway')).toBeInTheDocument();
+    expect(screen.getByText('At 50% complete')).toBeInTheDocument();
   });
 });

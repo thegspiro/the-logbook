@@ -140,6 +140,76 @@ class BodyAuthorizers(unittest.TestCase):
         assert enforced_permissions(fn, auth, const) == set()
 
 
+class ImportedAndWrappedAuthorizers(unittest.TestCase):
+    """A body authorizer shared between endpoint modules, or wrapped.
+
+    shift_evaluations.py imports `_authorize_report_filing` from
+    shift_completion.py and calls it through its own `_shift_for_filing`.
+    Resolving helpers only inside the calling module reported its four gated
+    routes as `undefended`, which took Backend Lint red on `main`.
+    """
+
+    @staticmethod
+    def _route(src: str, shared=None):
+        tree = ast.parse(src)
+        fn = next(
+            n
+            for n in ast.walk(tree)
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and n.name == "r"
+        )
+        return fn, authorizer_permissions(tree, shared), module_permission_constants(tree)
+
+    def test_a_wrapper_inherits_the_helper_it_calls(self):
+        fn, auth, const = self._route(
+            "async def _authorize_report_filing(db, u, i):\n"
+            "    if not user_has_permission(u, 'training.manage'):\n"
+            "        raise HTTPException(403)\n"
+            "async def _shift_for_filing(db, u, i, s):\n"
+            "    await _authorize_report_filing(db, u, i)\n"
+            "async def r(user=Depends(get_current_user)):\n"
+            "    await _shift_for_filing(db, user, i, s)\n"
+        )
+        assert enforced_permissions(fn, auth, const) == {"training.manage"}
+
+    def test_has_permission_inside_a_helper_is_read(self):
+        fn, auth, const = self._route(
+            "def _manages_training(user):\n"
+            "    return _has_permission('training.manage', perms(user))\n"
+            "async def r(user=Depends(get_current_user)):\n"
+            "    if not _manages_training(user):\n"
+            "        raise HTTPException(404)\n"
+        )
+        assert enforced_permissions(fn, auth, const) == {"training.manage"}
+
+    def test_a_helper_imported_from_another_module_is_resolved(self):
+        fn, auth, const = self._route(
+            "async def r(user=Depends(get_current_user)):\n"
+            "    await _authorize_report_filing(db, user, i)\n",
+            shared={"_authorize_report_filing": {"training.manage"}},
+        )
+        assert enforced_permissions(fn, auth, const) == {"training.manage"}
+
+    def test_a_local_definition_wins_over_a_shared_one(self):
+        _, auth, _const = self._route(
+            "async def _authorize_report_filing(db, u, i):\n"
+            "    user_has_permission(u, 'scheduling.manage')\n"
+            "async def r(): pass\n",
+            shared={"_authorize_report_filing": {"training.manage"}},
+        )
+        assert auth["_authorize_report_filing"] == {"scheduling.manage"}
+
+    def test_a_wrapper_that_authorizes_nothing_enforces_nothing(self):
+        """Being listed is not protection: the wrapper must call a check."""
+        fn, auth, const = self._route(
+            "async def _shift_for_filing(db, u, i, s):\n"
+            "    return await s.get_shift(i)\n"
+            "async def r(user=Depends(get_current_user)):\n"
+            "    await _shift_for_filing(db, user, i, s)\n"
+        )
+        assert enforced_permissions(fn, auth, const) == set()
+
+
 class StarredPermissionConstants(unittest.TestCase):
     """A permission set named once as a constant and unpacked at the call site.
 
@@ -195,3 +265,55 @@ class StarredPermissionConstants(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PerApplicantAccess(unittest.TestCase):
+    """Routes gated by backend/app/api/prospect_access.py.
+
+    They admit an assigned member as well as a permission holder, so they
+    carry no ``require_permission`` call at all; reading only that helper
+    reported every one of them as ``undefended``.
+    """
+
+    def _enforced(self, signature: str) -> set:
+        fn, authorizers, constants = route(
+            f"@router.get('/x')\nasync def handler({signature}):\n    pass\n"
+        )
+        return enforced_permissions(fn, authorizers, constants)
+
+    def test_a_read_level_enforces_view_all(self):
+        assert self._enforced(
+            "access=Depends(require_prospect_access(Level.SEE))"
+        ) == {"prospective_members.view_all"}
+
+    def test_a_write_level_defaults_to_the_manage_pair(self):
+        assert self._enforced(
+            "access=Depends(require_prospect_access(Level.WORK))"
+        ) == {"members.manage", "prospective_members.manage"}
+
+    def test_a_write_level_reads_its_own_manage_permissions(self):
+        assert self._enforced(
+            "access=Depends(require_prospect_access(Level.MANAGE, "
+            "manage_permissions=('prospective_members.manage',)))"
+        ) == {"prospective_members.manage"}
+
+    def test_bypass_permissions_are_added(self):
+        assert self._enforced(
+            "access=Depends(require_prospect_access(Level.FULL, "
+            "bypass_permissions=('elections.manage',)))"
+        ) == {"prospective_members.view_all", "elections.manage"}
+
+    def test_view_all_with_its_alternatives(self):
+        assert self._enforced(
+            "user=Depends(require_view_all('elections.manage'))"
+        ) == {"prospective_members.view_all", "elections.manage"}
+
+    def test_bare_dependencies_resolve_to_fixed_sets(self):
+        assert self._enforced("access=Depends(require_interview_access)") == {
+            "prospective_members.manage"
+        }
+        assert self._enforced("user=Depends(require_pipeline_reader)") == {
+            "prospective_members.view",
+            "prospective_members.manage",
+            "prospective_members.view_all",
+        }

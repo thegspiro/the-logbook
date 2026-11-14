@@ -19,7 +19,9 @@ docs/COMPLIANCE.md):
 - screening_records: medical content (results, notes, provider) scrubbed;
   status and dates retained as compliance-history proof.
 - free-text reason fields on leaves, training waivers, shift time-off, and
-  meeting-attendance waivers (frequently medical/family detail).
+  meeting-attendance waivers (frequently medical/family detail); the reason
+  on the member's attendance waiver requests and the decision notes on them.
+  The requests and their decision log are kept, as the waivers are.
 - event_rsvps: dietary restrictions, accessibility needs, notes.
 - external_user_mappings: duplicated name/email/username copies.
 - candidates.photo_url (second copy of the member photo). Candidate names
@@ -29,18 +31,24 @@ docs/COMPLIANCE.md):
   prospect-linked medical results, every linked source form submission
   (including later duplicate applications referenced only from step
   progress), and the mapped_data applicant copies that form-driven
-  pipeline steps store in prospect_step_progress.action_result.
+  pipeline steps store in prospect_step_progress.action_result, the
+  follow-up forms they were sent, and the applicant copy each election
+  package took (its ballot item, an official election record, is retained).
 
 What is deliberately NOT touched:
 - audit_logs — append-only and hash-chained; rewriting them is tampering.
 - votes/ballots — election integrity signatures must not change.
 - Operational history rows (training, attendance, hours, custody, dues,
   exposure records) — they now point at the anonymized shell.
+- membership_number and previous_membership_number — department-assigned
+  keys, not personal data: they are what rosters and paper records cite, and
+  the anonymized shell is identified by them.
 
 Preconditions: the member must already be departed (soft-deleted or in a
 departed/archived status). Anonymization is irreversible by design.
 """
 
+import copy
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -48,6 +56,10 @@ from typing import Any
 from sqlalchemy import case, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.attendance_waiver import (
+    AttendanceWaiverRequest,
+    AttendanceWaiverRequestAction,
+)
 from app.models.event import EventRSVP
 from app.models.forms import FormSubmission
 from app.models.inventory import MemberSizePreferences
@@ -55,6 +67,8 @@ from app.models.medical_screening import ScreeningRecord
 from app.models.meeting import MeetingAttendee
 from app.models.membership_pipeline import (
     ProspectDocument,
+    ProspectElectionPackage,
+    ProspectFormRequest,
     ProspectInterview,
     ProspectiveMember,
     ProspectStepProgress,
@@ -68,6 +82,7 @@ from app.models.user import (
     UserStatus,
 )
 from app.services import file_storage_service as file_storage
+from app.services.attendance_waiver_attachments import remove_member_attachments
 from app.services.membership_pipeline_service import prospect_document_path
 from app.services.passkey_service import delete_all_passkeys
 from app.utils.sql_results import rows_affected
@@ -144,6 +159,10 @@ class MemberAnonymizationService:
         user.emergency_contacts = None
         user.notification_preferences = None
         user.status_change_reason = None
+        # Free text a secretary wrote about the member when overriding their
+        # voting waiting period; the dates and the waiver flag beside it are
+        # standing, not personal, and are kept.
+        user.voting_wait_override_reason = None
         user.password_hash = None
         user.oauth_provider = None
         user.oauth_subject = None
@@ -210,6 +229,37 @@ class MemberAnonymizationService:
             .values(waiver_reason=None)
         )
         counts["meeting_waiver_reasons_scrubbed"] = rows_affected(result) or 0
+
+        # A waiver request's reason, and the deciders' notes answering it,
+        # are about the member and may be medical. The rows stay: they are
+        # the record that a session was excused, and grading reads them.
+        result = await self.db.execute(
+            update(AttendanceWaiverRequest)
+            .where(
+                AttendanceWaiverRequest.user_id == user.id,
+                AttendanceWaiverRequest.organization_id == user.organization_id,
+            )
+            .values(reason=None)
+        )
+        counts["attendance_waiver_reasons_scrubbed"] = rows_affected(result) or 0
+        result = await self.db.execute(
+            update(AttendanceWaiverRequestAction)
+            .where(
+                AttendanceWaiverRequestAction.organization_id == user.organization_id,
+                AttendanceWaiverRequestAction.request_id.in_(
+                    select(AttendanceWaiverRequest.id).where(
+                        AttendanceWaiverRequest.user_id == user.id
+                    )
+                ),
+            )
+            .values(note=None)
+        )
+        counts["attendance_waiver_notes_scrubbed"] = rows_affected(result) or 0
+        # The documents filed with those requests (doctor's notes, mostly):
+        # files and rows both go, the requests stay.
+        counts["attendance_waiver_attachments_deleted"] = (
+            await remove_member_attachments(self.db, user)
+        )
 
         # --- RSVP quasi-health fields ----------------------------------
         result = await self.db.execute(
@@ -313,6 +363,22 @@ class MemberAnonymizationService:
                     progress.action_result = {**action_result, "mapped_data": None}
                     step_progress_scrubbed += 1
 
+            # Follow-up forms: each one's submission is the applicant's own
+            # answers, its draft and change log hold their contact details,
+            # and its link would keep opening the form.
+            requests_result = await self.db.execute(
+                select(ProspectFormRequest).where(
+                    ProspectFormRequest.prospect_id == prospect.id,
+                    ProspectFormRequest.organization_id == user.organization_id,
+                )
+            )
+            for form_request in requests_result.scalars().all():
+                if form_request.submission_id:
+                    submission_ids.add(str(form_request.submission_id))
+                form_request.token = None
+                form_request.draft_data = None
+                form_request.changes = None
+
             if submission_ids:
                 result = await self.db.execute(
                     update(FormSubmission)
@@ -361,6 +427,40 @@ class MemberAnonymizationService:
                 .where(ProspectInterview.prospect_id == prospect.id)
                 .values(notes=None, recommendation_notes=None)
             )
+            # An election package keeps its own copy of the applicant's
+            # details -- contact details, notes, follow-up answers -- taken
+            # when it was assembled. Keep only what the package's ballot item
+            # and stage list need, under the anonymized name.
+            packages_result = await self.db.execute(
+                select(ProspectElectionPackage).where(
+                    ProspectElectionPackage.prospect_id == prospect.id
+                )
+            )
+            for package in packages_result.scalars().all():
+                old_snapshot = (
+                    package.applicant_snapshot
+                    if isinstance(package.applicant_snapshot, dict)
+                    else {}
+                )
+                package.applicant_snapshot = {
+                    "first_name": prospect.first_name,
+                    "last_name": prospect.last_name,
+                    "desired_membership_type": old_snapshot.get(
+                        "desired_membership_type"
+                    ),
+                    "stage_history": copy.deepcopy(
+                        old_snapshot.get("stage_history") or []
+                    ),
+                }
+                package.coordinator_notes = None
+                config = copy.deepcopy(
+                    package.package_config
+                    if isinstance(package.package_config, dict)
+                    else {}
+                )
+                for key in ("supporting_statement", "custom_fields", "documents"):
+                    config.pop(key, None)
+                package.package_config = config
             # Uploaded applicant documents (ID photos, background checks)
             # are pure PII: remove the files best-effort, then the rows.
             docs_result = await self.db.execute(

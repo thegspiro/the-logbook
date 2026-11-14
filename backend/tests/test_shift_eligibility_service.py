@@ -311,6 +311,39 @@ class TestGetEligiblePositions:
         out = await ShiftEligibilityService(db).get_eligible_positions(_user(), "org-1")
         assert out == ["driver", "ems", "officer"]
 
+    async def test_officer_in_charge_clears_the_officer_seats_without_a_rank(self):
+        """David: cleared to be the officer on a shift, no rank, Quartermaster."""
+        org = _org()
+        db = _db(
+            [
+                _one(org),
+                _rank_rows([]),
+                _held_rows(["quartermaster"]),
+                _qual_rows(["officer_in_charge"]),
+                _rows([]),
+            ]
+        )
+        out = await ShiftEligibilityService(db).get_eligible_positions(
+            _user(rank=None), "org-1"
+        )
+        assert out == ["captain", "lieutenant", "officer"]
+
+    async def test_officer_in_charge_lets_a_rankless_member_lead_a_shift(self):
+        org = _org()
+        db = _db(
+            [_one(org), _rank_rows([]), _qual_rows(["officer_in_charge"]), _rows([])]
+        )
+        assert await ShiftEligibilityService(db).can_serve_as_shift_officer(
+            _user(rank=None), "org-1"
+        )
+
+    async def test_without_the_card_a_rankless_member_cannot_lead(self):
+        org = _org()
+        db = _db([_one(org), _rank_rows([]), _qual_rows(["emt"]), _rows([])])
+        assert not await ShiftEligibilityService(db).can_serve_as_shift_officer(
+            _user(rank=None), "org-1"
+        )
+
     async def test_held_rbac_position_does_not_confer_operational_eligibility(self):
         # A role manager can assign an RBAC position, so its slug cannot be
         # trusted as evidence that the member holds the matching qualification.

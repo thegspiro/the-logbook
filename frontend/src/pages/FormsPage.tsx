@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { useFieldErrors, type FieldSpecs } from '@/hooks/useFieldErrors';
+import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
 import toast from 'react-hot-toast';
 import {
   FormInput,
@@ -29,7 +31,7 @@ import {
   ArrowLeft,
   BarChart3,
 } from 'lucide-react';
-import { EmptyState } from '../components/ux';
+import { EmptyState, SkeletonText } from '../components/ux';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuthStore } from '../stores/authStore';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -51,6 +53,8 @@ import {
   type StarterTemplate,
 } from './formConstants';
 import { useTablist } from '../hooks/useTablist';
+import { StatGrid } from '../components/ux/StatGrid';
+import { AdminPageHeader } from '../components/admin/AdminPageHeader';
 
 type FormCategory = 'all' | 'Safety' | 'Operations' | 'Administration' | 'Training';
 
@@ -60,6 +64,14 @@ const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slic
 // The server enforces this on both the in-app and the public submit path
 // (FORM-10), and refuses anonymous submissions for such a form, since "once
 // each" needs to know who is submitting.
+/** FormBase.name max_length (forms review F-2). */
+const FORM_NAME_MAX_LENGTH = 255;
+const CREATE_LABEL_CLASS = 'text-theme-text-secondary mb-1 block text-sm font-medium';
+const CREATE_FORM_FIELDS: FieldSpecs<'name' | 'description'> = {
+  name: { id: 'form-name', label: 'Form Name' },
+  description: { id: 'form-description', label: 'Description' },
+};
+
 const ONE_PER_PERSON_HINT =
   'Each member can submit once, whether in the app or through the public link. Submitting then requires signing in.';
 
@@ -79,6 +91,8 @@ const FormsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const createErrors = useFieldErrors(CREATE_FORM_FIELDS);
+  const clearCreateErrors = createErrors.clear;
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
 
   // Data
@@ -137,8 +151,22 @@ const FormsPage: React.FC = () => {
     void loadData();
   }, [loadData]);
 
+  // Each opening of Create Form starts without the last attempt's errors.
+  useEffect(() => {
+    if (showCreateModal) clearCreateErrors();
+  }, [showCreateModal, clearCreateErrors]);
+
   const handleCreateForm = async () => {
-    if (!formData.name.trim()) return;
+    // Checked here rather than by greying out Create Form, which told a
+    // member nothing about why it would not press (forms review F-3).
+    createErrors.setFormError(null);
+    if (!formData.name.trim()) {
+      const problems = { name: 'Enter a name for the form.' };
+      createErrors.setErrors(problems);
+      createErrors.focusFirst(problems);
+      return;
+    }
+    createErrors.setErrors({});
     setCreating(true);
     try {
       await formsService.createForm({
@@ -152,7 +180,9 @@ const FormsPage: React.FC = () => {
       setFormData({ name: '', description: '', category: 'Operations', is_public: false, one_per_person: false });
       await loadData();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to create form'));
+      // In the dialog, which stays open: the page-level banner this used to
+      // set sat behind the modal, out of sight.
+      createErrors.focusFirst(createErrors.setFromApiError(err, 'Failed to create form'));
     } finally {
       setCreating(false);
     }
@@ -496,62 +526,67 @@ const FormsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        {/* Page Header */}
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="shrink-0 rounded-lg bg-red-800 p-2">
-              <FormInput className="h-6 w-6 text-white" aria-hidden="true" />
-            </div>
-            <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">Custom Forms</h1>
-              <p className="text-theme-text-muted text-sm">
-                Build forms, share them publicly, and send responses to other modules
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => {
-                void loadData();
-              }}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover min-h-11 min-w-11 rounded-lg p-2 transition-colors"
-              aria-label="Refresh forms"
-            >
-              <RefreshCw className="h-5 w-5" aria-hidden="true" />
-            </button>
-            {canManage && (
-              <button onClick={() => setShowCreateModal(true)} className="btn-primary inline-flex items-center gap-2">
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                <span>Create Form</span>
+        <AdminPageHeader
+          title="Forms"
+          description="Build forms, share them publicly, and send responses to other modules"
+          actions={
+            <>
+              <button
+                onClick={() => {
+                  void loadData();
+                }}
+                className="btn-secondary btn-icon-sm"
+                aria-label="Refresh forms"
+              >
+                <RefreshCw className="h-5 w-5" aria-hidden="true" />
               </button>
-            )}
-          </div>
-        </div>
+              {canManage && (
+                <button onClick={() => setShowCreateModal(true)} className="btn-primary inline-flex items-center gap-2">
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  <span>Create Form</span>
+                </button>
+              )}
+            </>
+          }
+          className="mb-8"
+        />
 
-        {/* Stats */}
-        {summary && (
-          <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-5" role="region" aria-label="Forms statistics">
+        {/* Stats. Drawn while they load, placeholders where the figures go:
+            appearing with the figures pushed the tabs and the list ~330px down
+            on a phone. A failed summary drops the row and says so below. */}
+        {(summary || loading) && (
+          <StatGrid columns={5} gap={4} className="mb-8" role="region" aria-label="Forms statistics">
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Forms</p>
-              <p className="text-theme-text-primary mt-1 text-2xl font-bold">{summary.total_forms}</p>
+              <p className="text-theme-text-primary mt-1 text-2xl font-bold">
+                {summary ? summary.total_forms : <SkeletonText className="w-10" />}
+              </p>
             </div>
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Published</p>
-              <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-400">{summary.published_forms}</p>
+              <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-400">
+                {summary ? summary.published_forms : <SkeletonText className="w-10" />}
+              </p>
             </div>
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Drafts</p>
-              <p className="mt-1 text-2xl font-bold text-yellow-700 dark:text-yellow-400">{summary.draft_forms}</p>
+              <p className="mt-1 text-2xl font-bold text-yellow-700 dark:text-yellow-400">
+                {summary ? summary.draft_forms : <SkeletonText className="w-10" />}
+              </p>
             </div>
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Public Forms</p>
-              <p className="mt-1 text-2xl font-bold text-cyan-700 dark:text-cyan-400">{summary.public_forms}</p>
+              <p className="mt-1 text-2xl font-bold text-cyan-700 dark:text-cyan-400">
+                {summary ? summary.public_forms : <SkeletonText className="w-10" />}
+              </p>
             </div>
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Submissions This Month</p>
-              <p className="mt-1 text-2xl font-bold text-red-700 dark:text-red-400">{summary.submissions_this_month}</p>
+              <p className="mt-1 text-2xl font-bold text-red-700 dark:text-red-400">
+                {summary ? summary.submissions_this_month : <SkeletonText className="w-10" />}
+              </p>
             </div>
-          </div>
+          </StatGrid>
         )}
 
         {/* Error Banner */}
@@ -1034,8 +1069,8 @@ const FormsPage: React.FC = () => {
           >
             <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
               {/* Header */}
-              <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
+              <div className="split-row mb-6 gap-3 sm:items-center">
+                <div className="split-row-main flex items-center gap-3">
                   <button
                     onClick={handleCloseEditor}
                     className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
@@ -1050,7 +1085,7 @@ const FormsPage: React.FC = () => {
                     <p className="text-theme-text-muted text-sm">{editingForm.description || 'No description'}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="split-row-aside flex flex-wrap items-center gap-2">
                   <span className={`rounded-sm border px-2 py-0.5 text-xs ${statusColor(editingForm.status)}`}>
                     {capitalize(editingForm.status)}
                   </span>
@@ -1199,21 +1234,33 @@ const FormsPage: React.FC = () => {
                     </button>
                   </div>
                   <div className="space-y-4">
-                    <div>
-                      <label htmlFor="form-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                        Form Name <span aria-hidden="true">*</span>
-                      </label>
-                      <input
-                        id="form-name"
-                        type="text"
-                        required
-                        aria-required="true"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="form-input"
-                        placeholder="e.g., Monthly Safety Report"
-                      />
-                    </div>
+                    {createErrors.formError && (
+                      <p className={`text-sm ${FIELD_ERROR_CLASS}`} role="alert">
+                        {createErrors.formError}
+                      </p>
+                    )}
+                    <FormField
+                      id={CREATE_FORM_FIELDS.name.id}
+                      label="Form Name"
+                      required
+                      labelClassName={CREATE_LABEL_CLASS}
+                      error={createErrors.errors.name}
+                    >
+                      {(field) => (
+                        <input
+                          {...field}
+                          type="text"
+                          value={formData.name}
+                          maxLength={FORM_NAME_MAX_LENGTH}
+                          onChange={(e) => {
+                            setFormData({ ...formData, name: e.target.value });
+                            createErrors.setError('name', null);
+                          }}
+                          className="form-input"
+                          placeholder="e.g., Monthly Safety Report"
+                        />
+                      )}
+                    </FormField>
                     <div>
                       <label
                         htmlFor="form-category"
@@ -1233,22 +1280,26 @@ const FormsPage: React.FC = () => {
                         <option value="Training">Training</option>
                       </select>
                     </div>
-                    <div>
-                      <label
-                        htmlFor="form-description"
-                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                      >
-                        Description
-                      </label>
-                      <textarea
-                        id="form-description"
-                        rows={3}
-                        value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        className="form-input"
-                        placeholder="Describe the purpose of this form..."
-                      />
-                    </div>
+                    <FormField
+                      id={CREATE_FORM_FIELDS.description.id}
+                      label="Description"
+                      labelClassName={CREATE_LABEL_CLASS}
+                      error={createErrors.errors.description}
+                    >
+                      {(field) => (
+                        <textarea
+                          {...field}
+                          rows={3}
+                          value={formData.description}
+                          onChange={(e) => {
+                            setFormData({ ...formData, description: e.target.value });
+                            createErrors.setError('description', null);
+                          }}
+                          className="form-input"
+                          placeholder="Describe the purpose of this form..."
+                        />
+                      )}
+                    </FormField>
                     <div className="flex items-center space-x-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
                       <input
                         type="checkbox"
@@ -1291,7 +1342,7 @@ const FormsPage: React.FC = () => {
                     onClick={() => {
                       void handleCreateForm();
                     }}
-                    disabled={!formData.name.trim() || creating}
+                    disabled={creating}
                     className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {creating ? 'Creating...' : 'Create Form'}

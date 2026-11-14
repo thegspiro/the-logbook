@@ -85,4 +85,20 @@ describe('InventoryNotSeenPage', () => {
     );
     expect(createObjectURL).toHaveBeenCalled();
   });
+
+  // Creation and a barcode put-away count as seeing an item (owner decisions
+  // of 2026-11-01); the row says which it was.
+  it('names a creation or a barcode put-away as the last sighting', async () => {
+    service.getNotSeenReport.mockResolvedValue({
+      cutoff: '2026-03-28T12:00:00Z',
+      total: 2,
+      items: [
+        row({ id: 'item-3', name: 'Pike Pole', last_seen_source: 'created', days_since_seen: 200 }),
+        row({ id: 'item-4', name: 'Hose', last_seen_source: 'barcode_put_away', days_since_seen: 190 }),
+      ],
+    });
+    renderWithRouter(<InventoryNotSeenPage />);
+    expect(await screen.findByText(/Added to inventory · 200 days ago/)).toBeInTheDocument();
+    expect(screen.getByText(/Barcode put-away · 190 days ago/)).toBeInTheDocument();
+  });
 });

@@ -15,8 +15,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
+import { ConfirmProvider } from '../contexts/ConfirmContext';
 import { renderWithRouter } from '../test/utils';
 import type { User } from '../types/user';
 import { UserStatus } from '../constants/enums';
@@ -29,6 +31,8 @@ const mockGetDirectory = vi.fn();
 const mockCheckContactInfoEnabled = vi.fn();
 const mockReactivateMember = vi.fn();
 const mockGetServiceHistory = vi.fn();
+const mockGetTierConfig = vi.fn();
+const mockGetTierNames = vi.fn();
 
 vi.mock('../services/api', () => ({
   userService: {
@@ -42,6 +46,9 @@ vi.mock('../services/api', () => ({
   memberStatusService: {
     reactivateMember: (...args: unknown[]) => mockReactivateMember(...args) as unknown,
     getServiceHistory: (...args: unknown[]) => mockGetServiceHistory(...args) as unknown,
+    // The class/status filters offer the department's tiers; none here.
+    getTierConfig: (...args: unknown[]) => mockGetTierConfig(...args) as unknown,
+    getTierNames: (...args: unknown[]) => mockGetTierNames(...args) as unknown,
   },
 }));
 
@@ -172,6 +179,10 @@ function installDefaults(held: string[]): void {
     is_estimated: false,
     default_rejoin_credit: 'continue',
   });
+  mockGetTierConfig.mockReset();
+  mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
+  mockGetTierNames.mockReset();
+  mockGetTierNames.mockResolvedValue([]);
   mockRoster.mockResolvedValue(ROSTER);
   mockCheckContactInfoEnabled.mockResolvedValue({
     enabled: true,
@@ -190,6 +201,15 @@ describe('Members roster — regular member (no members.manage)', () => {
 
     await waitFor(() => expect(mockGetDirectory).toHaveBeenCalledTimes(1));
     expect(mockGetUsers).not.toHaveBeenCalled();
+  });
+
+  // The tier config answers members.manage only, so asking for it on a
+  // member's directory put a 403 in every member's console for nothing.
+  it('does not ask for the tier config it would be refused', async () => {
+    renderWithRouter(<Members />);
+
+    await waitFor(() => expect(mockGetDirectory).toHaveBeenCalledTimes(1));
+    expect(mockGetTierConfig).not.toHaveBeenCalled();
   });
 
   // W15-4: a member's directory opens on Active members; the server already
@@ -407,6 +427,15 @@ describe('Members roster — membership coordinator (members.manage)', () => {
 
     await waitFor(() => expect(mockGetUsers).toHaveBeenCalledTimes(1));
     expect(mockGetDirectory).not.toHaveBeenCalled();
+  });
+
+  // The filter's labels come from the members-visible tier names, the same
+  // source a member's directory uses, so officer and member read one label.
+  it('asks for the tier names, to label the membership-status filter', async () => {
+    renderWithRouter(<Members />);
+
+    await waitFor(() => expect(mockGetTierNames).toHaveBeenCalled());
+    expect(mockGetTierConfig).not.toHaveBeenCalled();
   });
 
   it('opens on All Current, which leaves archived members out', async () => {
@@ -643,5 +672,157 @@ describe('Members roster — preferred names', () => {
 
     expect(await within(table()).findByText('Terry Heather')).toBeInTheDocument();
     expect(within(table()).queryByText('Laura Adams')).not.toBeInTheDocument();
+  });
+});
+
+describe('Members roster — class and membership-status filters', () => {
+  const renderRoster = async () => {
+    renderWithRouter(<Members />);
+    await waitFor(() => expect(mockRoster).toHaveBeenCalled());
+    // Both layouts render the roster, so the name appears twice.
+    await screen.findAllByText('Laura Adams');
+  };
+  const table = () => screen.getByRole('table');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCheckPermission.mockReturnValue(false);
+    mockCheckContactInfoEnabled.mockResolvedValue({ enabled: false, fields: [] });
+    mockGetTierNames.mockReset();
+    mockGetTierNames.mockResolvedValue([]);
+    mockRoster.mockResolvedValue([
+      makeMember({
+        id: 'u1',
+        first_name: 'Laura',
+        last_name: 'Adams',
+        member_class: 'operational',
+        member_status: 'regular',
+      }),
+      makeMember({
+        id: 'u2',
+        username: 'jdoe',
+        email: 'jdoe@example.org',
+        first_name: 'Jane',
+        last_name: 'Doe',
+        member_class: 'administrative',
+        member_status: 'life',
+      }),
+      makeMember({
+        id: 'u3',
+        username: 'sold',
+        email: 'sold@example.org',
+        first_name: 'Sam',
+        last_name: 'Senior',
+        membership_type: 'senior',
+        member_class: null,
+        member_status: 'senior',
+      }),
+    ]);
+  });
+
+  it('narrows by class, and finds the members whose class was never set', async () => {
+    const user = userEvent.setup();
+    await renderRoster();
+
+    await user.selectOptions(screen.getByLabelText('Filter by member class'), 'administrative');
+    expect(within(table()).queryByText('Laura Adams')).not.toBeInTheDocument();
+    expect(within(table()).getByText('Jane Doe')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Filter by member class'), 'unset');
+    expect(within(table()).getByText('Sam Senior')).toBeInTheDocument();
+    expect(within(table()).queryByText('Jane Doe')).not.toBeInTheDocument();
+  });
+
+  it('narrows by membership status, offering a stored tier id beside the built-ins', async () => {
+    const user = userEvent.setup();
+    await renderRoster();
+
+    const filter = screen.getByLabelText('Filter by membership status');
+    expect(within(filter).getByRole('option', { name: 'Senior' })).toHaveValue('senior');
+
+    await user.selectOptions(filter, 'life');
+    expect(within(table()).getByText('Jane Doe')).toBeInTheDocument();
+    expect(within(table()).queryByText('Laura Adams')).not.toBeInTheDocument();
+
+    await user.selectOptions(filter, 'senior');
+    expect(within(table()).getByText('Sam Senior')).toBeInTheDocument();
+  });
+
+  // MR-3 (owner decision 2026-11-01): a member without members.manage sees the
+  // department's own tier names, not the built-in labels.
+  it("labels the filter with the department's tier names for a member", async () => {
+    mockGetTierNames.mockResolvedValue([
+      { id: 'active', name: 'Active Member' },
+      { id: 'senior', name: 'Senior Member' },
+      { id: 'life', name: 'Life Member' },
+    ]);
+    await renderRoster();
+
+    const filter = screen.getByLabelText('Filter by membership status');
+    await waitFor(() => expect(within(filter).getByRole('option', { name: 'Senior Member' })).toHaveValue('senior'));
+    expect(within(filter).getByRole('option', { name: 'Life Member' })).toHaveValue('life');
+    expect(within(filter).getByRole('option', { name: 'Active Member' })).toHaveValue('regular');
+  });
+});
+
+// DASH-37: the dashboard's Active members tile counts ACTIVE_ACCOUNT_STATUSES
+// (active and probationary, not deleted) and links here with ?status=active.
+describe('Members roster — opened from the Active members tile', () => {
+  beforeEach(() => {
+    installDefaults(['members.manage']);
+    mockRoster.mockResolvedValue([
+      makeMember(),
+      makeMember({
+        id: 'u2',
+        username: 'bprobie',
+        email: 'b@example.org',
+        first_name: 'Brian',
+        last_name: 'Probie',
+        status: UserStatus.PROBATIONARY,
+      }),
+      makeMember({
+        id: 'u3',
+        username: 'iidle',
+        email: 'i@example.org',
+        first_name: 'Ivan',
+        last_name: 'Idle',
+        status: UserStatus.INACTIVE,
+      }),
+    ]);
+  });
+
+  const renderAt = async (url: string) => {
+    render(
+      <MemoryRouter initialEntries={[url]}>
+        <ConfirmProvider>
+          <Members />
+        </ConfirmProvider>
+      </MemoryRouter>
+    );
+    await screen.findByRole('table');
+  };
+
+  it('shows the active and probationary members the tile counted, with Active selected', async () => {
+    await renderAt('/members?status=active');
+
+    expect(screen.getByLabelText('Filter by status')).toHaveValue('active');
+    expect(within(table()).getByText('Laura Adams')).toBeInTheDocument();
+    expect(within(table()).getByText('Brian Probie')).toBeInTheDocument();
+    expect(within(table()).queryByText('Ivan Idle')).not.toBeInTheDocument();
+  });
+
+  it('lets the filter be cleared from the select', async () => {
+    const user = userEvent.setup();
+    await renderAt('/members?status=active');
+
+    await user.selectOptions(screen.getByLabelText('Filter by status'), 'current');
+    expect(within(table()).getByText('Ivan Idle')).toBeInTheDocument();
+  });
+
+  it('opens on its usual filter without the parameter, or with one it does not offer', async () => {
+    await renderAt('/members?status=bogus');
+
+    expect(screen.getByLabelText('Filter by status')).toHaveValue('current');
+    expect(within(table()).getByText('Ivan Idle')).toBeInTheDocument();
   });
 });

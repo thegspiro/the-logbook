@@ -123,7 +123,8 @@ GET    /api/v1/training/category-hours/{user_id}           # Per-category hour b
 GET    /api/v1/training/requirements                       # List requirements (filterable by source, type)
 POST   /api/v1/training/requirements                       # Create requirement
 PATCH  /api/v1/training/requirements/{id}                  # Update requirement
-DELETE /api/v1/training/requirements/{id}                  # Permanently delete requirement
+GET    /api/v1/training/requirements/{id}/deletion-impact  # What references a requirement, per kind
+DELETE /api/v1/training/requirements/{id}                  # Delete; deactivates if in use (?permanent=true deletes anyway)
 GET    /api/v1/training/categories                         # List training categories
 GET    /api/v1/training/categories/{id}                    # Get single category
 POST   /api/v1/training/categories                         # Create category
@@ -139,7 +140,6 @@ PATCH  /api/v1/training/courses/{id}/classes/{class_id}    # Update one syllabus
 DELETE /api/v1/training/courses/{id}/classes/{class_id}    # Remove a class; generated cohorts keep their copy (training.manage)
 POST   /api/v1/training/courses/{id}/classes/reorder       # Set the syllabus order (order only, not the dates) (training.manage)
 POST   /api/v1/training/courses/{id}/classes/autofill      # Recompute every day offset from a meeting pattern (training.manage)
-POST   /api/v1/training/enrollments                        # Enroll a member into a training program (training.manage)
 GET    /api/v1/training/stats/user/{user_id}               # User training stats
 GET    /api/v1/training/reports/user/{user_id}             # User training report
 GET    /api/v1/training/requirements/progress/{user_id}    # User requirement progress
@@ -198,7 +198,7 @@ POST   /api/v1/training/programs/programs/{id}/requirements/reorder # Reorder pr
 POST   /api/v1/training/programs/programs/{id}/milestones  # Create milestone
 PATCH  /api/v1/training/programs/programs/{id}/milestones/{milestone_id}  # Update milestone
 DELETE /api/v1/training/programs/programs/{id}/milestones/{milestone_id}  # Delete milestone
-POST   /api/v1/training/programs/enrollments               # Enroll member
+POST   /api/v1/training/programs/enrollments               # Enroll member; body {user_id, program_id, target_completion_date?, notes?} (training.manage). The older POST /training/enrollments was removed 2026-11-04
 GET    /api/v1/training/programs/enrollments/me            # My enrollments
 GET    /api/v1/training/programs/enrollments/user/{user_id} # User enrollments (training.view_all)
 GET    /api/v1/training/programs/enrollments/{id}          # Enrollment detail (own; others need view_all/manage)
@@ -934,7 +934,7 @@ Daily scheduled task (06:00) → cert_expiration_alerts
 Leave of Absence created → auto-creates linked training waiver
   (unless exempt_from_training_waiver = true)
 Waiver active during evaluation period →
-  → Count months with ≥15 days covered as "waived"
+  → Count months the department's leave_month_rule excuses (any day under full_month)
   → active_months = MAX(total_months - waived_months, 1)
   → adjusted_required = base_required × (active_months / total_months)
   → Applies to hours, shifts, calls requirements

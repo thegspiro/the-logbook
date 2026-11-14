@@ -30,6 +30,7 @@ from app.api.public.calendar import router as public_calendar_router
 from app.api.public.display import router as public_display_router
 from app.api.public.event_guest import router as public_event_guest_router
 from app.api.public.finance_approvals import router as finance_approvals_router
+from app.api.public.follow_up_forms import router as public_follow_up_forms_router
 from app.api.public.forms import router as public_forms_router
 from app.api.public.integrations_webhook import router as integrations_webhook_router
 from app.api.public.legal import router as public_legal_router
@@ -39,6 +40,8 @@ from app.api.public.paypal_webhook import router as paypal_webhook_router
 from app.api.public.portal import router as public_portal_router
 from app.api.public.salesforce_webhook import router as sf_webhook_router
 from app.api.public.security_txt import router as security_txt_router
+from app.api.public.shift_evaluations import router as public_shift_evaluations_router
+from app.api.public.zeffy_webhook import router as zeffy_webhook_router
 from app.api.v1.api import api_router
 from app.core.cache import cache_manager
 from app.core.config import settings
@@ -200,9 +203,8 @@ def validate_schema(engine) -> tuple[bool, list[str]]:
     """
     Validate that all expected database tables exist.
 
-    Dynamically derives the expected table list from:
-    - Base.metadata (all SQLAlchemy model tables)
-    - MIGRATION_ONLY_TABLES (tables created by migration files without models)
+    Derives the expected table list from Base.metadata (all SQLAlchemy model
+    tables).
 
     Also spot-checks columns on critical tables to catch schema drift.
     Returns (is_valid, list_of_errors).
@@ -232,14 +234,7 @@ def validate_schema(engine) -> tuple[bool, list[str]]:
                 )
             )
 
-        # 2. Check migration-only tables exist
-        missing_migration = set(MIGRATION_ONLY_TABLES) - existing_tables
-        if missing_migration:
-            errors.append(
-                f"Missing migration-only table(s): {', '.join(sorted(missing_migration))}"
-            )
-
-        # 3. Spot-check columns on critical tables (catches schema drift)
+        # 2. Spot-check columns on critical tables (catches schema drift)
         critical_columns = {
             "organizations": ["id", "name", "slug", "active", "created_at"],
             "users": [
@@ -276,13 +271,12 @@ def validate_schema(engine) -> tuple[bool, list[str]]:
     return (len(errors) == 0, errors)
 
 
-def _attempt_schema_repair(engine, base_dir, original_errors) -> tuple[bool, list[str]]:
+def _attempt_schema_repair(engine, original_errors) -> tuple[bool, list[str]]:
     """
     Attempt to repair schema inconsistencies instead of immediately crashing.
 
     Uses create_all(checkfirst=True) to fill in any missing model-based tables,
-    then re-runs migration-only files (which use op.create_table and will fail
-    gracefully if tables already exist). Re-validates after repair.
+    then adds missing columns. Re-validates after repair.
 
     Returns (is_valid, errors) from the post-repair validation.
     """
@@ -309,20 +303,6 @@ def _attempt_schema_repair(engine, base_dir, original_errors) -> tuple[bool, lis
                     "Repair: running create_all(checkfirst=True) for missing tables..."
                 )
                 Base.metadata.create_all(conn, checkfirst=True)
-
-                # Re-run migration-only files for non-model tables
-                versions_dir = os.path.join(base_dir, "alembic", "versions")
-                for migration_file in MIGRATION_ONLY_FILES:
-                    migration_path = os.path.join(versions_dir, migration_file)
-                    if os.path.exists(migration_path):
-                        try:
-                            _run_migration_file(conn, migration_path)
-                        except Exception as mf_err:
-                            # "already exists" is expected if table was partially created
-                            if "already exists" not in str(mf_err).lower():
-                                logger.warning(
-                                    f"Repair: migration file failed: {mf_err}"
-                                )
             finally:
                 try:
                     conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
@@ -444,22 +424,10 @@ INITIAL_SQL_REVISION = "20260118_0001"
 # The init SQL now only creates alembic_version (no application tables).
 # The fast-path drops all non-alembic tables and creates everything fresh.
 
-# Migration files that create tables without corresponding SQLAlchemy models.
-# These must be run explicitly during fast-path initialization since
-# Base.metadata.create_all() won't know about them.
-MIGRATION_ONLY_FILES = [
-    "20260201_0016_create_compliance_tables.py",
-]
-
-# Tables created by migration-only files (used by validate_schema to check completeness).
-MIGRATION_ONLY_TABLES = [
-    # compliance module (20260201_0016)
-    "compliance_policies",
-    "policy_acknowledgments",
-    "compliance_checklists",
-    "checklist_submissions",
-    "compliance_incidents",
-]
+# Every table a fresh install needs has a model. The one exception,
+# 20260201_0016's compliance tables, used to be replayed here and by schema
+# repair; nothing read them and d75ecbc15bae retired them (owner, 2026-11-01).
+# A table without a model would have to be listed again for both paths.
 
 # Migration files that seed initial system data
 SEED_DATA_FILE = "20260203_0023_seed_apparatus_data.py"
@@ -788,15 +756,7 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
         conn.commit()
     logger.info(f"All {total_tables} model-based tables created")
 
-    # 4. Create tables that only exist in migration files (no SQLAlchemy models).
-    #    Each file gets its own connection via _run_migration_file(engine).
-    for migration_file in MIGRATION_ONLY_FILES:
-        migration_path = os.path.join(versions_dir, migration_file)
-        if os.path.exists(migration_path):
-            logger.info(f"Creating migration-only tables from {migration_file}...")
-            _run_migration_file(engine, migration_path)
-
-    # 5. Insert seed data (apparatus types, statuses, maintenance types, facilities).
+    # 4. Insert seed data (apparatus types, statuses, maintenance types, facilities).
     #    Each file gets its own connection via _run_migration_file(engine).
     for seed_file in SEED_DATA_FILES:
         seed_path = os.path.join(versions_dir, seed_file)
@@ -805,7 +765,7 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
             _run_migration_file(engine, seed_path)
             logger.info(f"Seed data from {seed_file} inserted")
 
-    # 6. Stamp alembic to head so future startups skip all migrations
+    # 5. Stamp alembic to head so future startups skip all migrations
     try:
         command.stamp(alembic_cfg, "head")
     except Exception as stamp_err:
@@ -1222,7 +1182,7 @@ def run_migrations():
             # where most tables were created but a few failed.
             if not schema_valid:
                 schema_valid, schema_errors = _attempt_schema_repair(
-                    engine, base_dir, schema_errors
+                    engine, schema_errors
                 )
 
             if not schema_valid:
@@ -1314,9 +1274,7 @@ def run_migrations():
 
         # Self-healing: attempt repair before crashing
         if not schema_valid:
-            schema_valid, schema_errors = _attempt_schema_repair(
-                engine, base_dir, schema_errors
-            )
+            schema_valid, schema_errors = _attempt_schema_repair(engine, schema_errors)
 
         if not schema_valid:
             error_msg = (
@@ -1420,6 +1378,36 @@ def validate_security_configuration():
             )
 
 
+async def connect_redis_at_startup() -> None:
+    """Connect the shared cache, honouring ``REDIS_REQUIRED``.
+
+    With ``REDIS_REQUIRED`` false, an unreachable Redis is logged and startup
+    continues in degraded mode: caching off, rate limiting per process. With it
+    true, the failure propagates so the backend refuses to start — a managed
+    Redis with a wrong port, CA or access key would otherwise leave that
+    degraded mode in place indefinitely, with nothing but a log line to say so.
+    """
+    try:
+        logger.info("Connecting to Redis...")
+        await cache_manager.connect()
+    except Exception as e:
+        if settings.REDIS_REQUIRED:
+            logger.error(
+                "Redis connection failed and REDIS_REQUIRED is true - "
+                "refusing to start: {}",
+                e,
+            )
+            raise
+        logger.warning("Redis connection failed: {}", e)
+        return
+    if cache_manager.is_connected:
+        logger.info("✓ Redis connected")
+    else:
+        logger.warning(
+            "Redis unavailable - running in degraded mode (caching disabled)"
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -1494,20 +1482,6 @@ async def lifespan(app: FastAPI):
     )
 
     import asyncio
-
-    async def connect_redis():
-        """Connect to Redis cache"""
-        try:
-            logger.info("Connecting to Redis...")
-            await cache_manager.connect()
-            if cache_manager.is_connected:
-                logger.info("✓ Redis connected")
-            else:
-                logger.warning(
-                    "Redis unavailable - running in degraded mode (caching disabled)"
-                )
-        except Exception as e:
-            logger.warning(f"Redis connection failed: {e}")
 
     async def initialize_geoip():
         """Initialize GeoIP service"""
@@ -1588,10 +1562,19 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Could not run startup validations: {e}")
             startup_status.add_error(f"Startup validation error: {str(e)}")
 
-    # Run Redis, GeoIP, and validations in parallel
-    await asyncio.gather(
-        connect_redis(), initialize_geoip(), validate_database(), return_exceptions=True
+    # Run Redis, GeoIP, and validations in parallel. return_exceptions keeps
+    # one task's failure from cancelling the others mid-flight; the Redis
+    # result is then checked, because with REDIS_REQUIRED set its failure is
+    # meant to stop startup rather than be collected and dropped.
+    startup_results = await asyncio.gather(
+        connect_redis_at_startup(),
+        initialize_geoip(),
+        validate_database(),
+        return_exceptions=True,
     )
+    redis_result: BaseException | None = startup_results[0]
+    if isinstance(redis_result, BaseException):
+        raise redis_result
 
     logger.info(
         f"✓ Parallel service initialization complete (worker PID {_worker_pid})"
@@ -2023,6 +2006,12 @@ async def lifespan(app: FastAPI):
     await ws_manager.stop_listener()
     await geoip_invalidation_listener.stop()
     await link_domain_listener.stop()
+    # Pushes queued by requests that have already answered. Bounded well inside
+    # Docker's default 10s stop grace period; whatever is left is dropped, which
+    # push has always been allowed to do — the notification itself is stored.
+    from app.services.push_dispatch import wait_for_queued_pushes
+
+    await wait_for_queued_pushes(timeout=5)
     await database_manager.disconnect()
     await cache_manager.disconnect()
     logger.info("Shutdown complete")
@@ -2444,6 +2433,30 @@ app.include_router(
     responses={**public_responses.TOKEN_ADDRESSED, **public_responses.BAD_REQUEST},
 )
 
+# Include the applicant follow-up form API (no auth — the path's token, emailed
+# by a Follow-up Form stage, is the credential; 409 once a form is submitted).
+app.include_router(
+    public_follow_up_forms_router,
+    prefix="/api",
+    responses={
+        **public_responses.TOKEN_ADDRESSED,
+        **public_responses.BAD_REQUEST,
+        **public_responses.CONFLICT,
+    },
+)
+
+# Include the preceptor shift evaluation API (no auth — the path's token, from
+# a preceptor link's QR code or email, is the credential; 409 once submitted).
+app.include_router(
+    public_shift_evaluations_router,
+    prefix="/api",
+    responses={
+        **public_responses.TOKEN_ADDRESSED,
+        **public_responses.BAD_REQUEST,
+        **public_responses.CONFLICT,
+    },
+)
+
 # Include public calendar ICS feeds (no auth — token-protected: the per-member
 # shifts feed at /api/public/v1/calendar/{token}.ics and the department events
 # feed at /api/public/v1/calendar/org/{token}.ics)
@@ -2454,6 +2467,9 @@ app.include_router(
 app.include_router(sf_webhook_router, prefix="/api", responses=public_responses.WEBHOOK)
 app.include_router(
     paypal_webhook_router, prefix="/api", responses=public_responses.WEBHOOK
+)
+app.include_router(
+    zeffy_webhook_router, prefix="/api", responses=public_responses.WEBHOOK
 )
 
 # Include Documenso & Cal.com inbound webhooks

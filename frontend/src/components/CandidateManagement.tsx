@@ -14,7 +14,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { blankToNull } from '../utils/formValues';
 import { UserStatus, ElectionStatus } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { ballotItemTitlesById, isBallotItemOption } from '../utils/electionHelpers';
+import { nomineesOf } from '../utils/electionHelpers';
 
 const inputClass = 'form-input mt-1 block shadow-xs px-3 text-sm';
 
@@ -30,6 +30,8 @@ const StatementHint: React.FC<{ value: string }> = ({ value }) => (
 interface CandidateManagementProps {
   electionId: string;
   election: Election;
+  /** Every row as loaded or changed here, so the page's tab count follows it. */
+  onCandidatesChange?: ((candidates: Candidate[]) => void) | undefined;
 }
 
 interface CandidateFormState {
@@ -48,9 +50,16 @@ const emptyCandidateForm: CandidateFormState = {
   is_write_in: false,
 };
 
-export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electionId, election }) => {
+export const CandidateManagement: React.FC<CandidateManagementProps> = ({
+  electionId,
+  election,
+  onCandidatesChange,
+}) => {
   const { confirm } = useConfirm();
   const [allCandidates, setCandidates] = useState<Candidate[]>([]);
+  // Set once a load succeeds: before that the empty list is not an answer,
+  // and reporting it would blank the tab's count on a failed fetch.
+  const [loaded, setLoaded] = useState(false);
   const [members, setMembers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +81,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
         userService.getUsers(),
       ]);
       setCandidates(candidateData);
+      setLoaded(true);
       setMembers(
         memberData.filter((m: User) => m.status === UserStatus.ACTIVE || m.status === UserStatus.PROBATIONARY)
       );
@@ -86,10 +96,13 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
   // Candidate rows on the item's first vote. They are options, not nominees:
   // an officer editing or removing one would rename or delete cast votes, so
   // they never reach this list (W50-24).
-  const itemTitles = useMemo(() => ballotItemTitlesById(election.ballot_items), [election.ballot_items]);
+  useEffect(() => {
+    if (loaded) onCandidatesChange?.(allCandidates);
+  }, [loaded, allCandidates, onCandidatesChange]);
+
   const candidates = useMemo(
-    () => allCandidates.filter((c) => !isBallotItemOption(c, itemTitles)),
-    [allCandidates, itemTitles]
+    () => nomineesOf(allCandidates, election.ballot_items),
+    [allCandidates, election.ballot_items]
   );
 
   // Members already added as candidates

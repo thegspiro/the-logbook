@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import require_permission, user_has_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail, sanitize_error_message
@@ -21,6 +21,7 @@ from app.schemas.meetings import (
     ActionItemCreate,
     ActionItemResponse,
     ActionItemUpdate,
+    MeetingAttendanceWaiverGrant,
     MeetingAttendeeCreate,
     MeetingAttendeeResponse,
     MeetingCreate,
@@ -44,6 +45,19 @@ router = APIRouter()
 # ============================================
 
 
+def _member_view_only(user: User) -> bool:
+    """True for a caller who may read only approved, non-executive meetings.
+
+    meetings.view and minutes.view are baseline member grants, so without this
+    every member read draft and executive-session notes, motions, attendance
+    and action items here while the Minutes API withheld the same content.
+    """
+    return not (
+        user_has_permission(user, "meetings.manage")
+        or user_has_permission(user, "minutes.manage")
+    )
+
+
 @router.get("", response_model=MeetingsListResponse)
 async def list_meetings(
     meeting_type: str | None = None,
@@ -65,6 +79,7 @@ async def list_meetings(
         from_date=from_date,
         skip=skip,
         limit=limit,
+        member_visible_only=_member_view_only(current_user),
     )
     # Fill in creator_name the response declares (else "Created by …" never shows).
     await service.attach_creator_names(current_user.organization_id, list(meetings))
@@ -142,7 +157,13 @@ async def get_meeting(
 ):
     """Get a meeting by ID with attendees and action items"""
     service = MeetingsService(db)
-    meeting = await service.get_meeting_by_id(meeting_id, current_user.organization_id)
+    # A meeting the caller may not read answers 404, not 403, so its id does
+    # not confirm that an executive session or draft exists.
+    meeting = await service.get_meeting_by_id(
+        meeting_id,
+        current_user.organization_id,
+        member_visible_only=_member_view_only(current_user),
+    )
     if not meeting:
         raise HTTPException(status_code=404, detail="Meeting not found")
     await service.attach_creator_names(current_user.organization_id, [meeting])
@@ -293,7 +314,10 @@ async def add_attendee(
     """Add an attendee to a meeting"""
     service = MeetingsService(db)
     result, error = await service.add_attendee(
-        meeting_id, current_user.organization_id, attendee.model_dump()
+        meeting_id,
+        current_user.organization_id,
+        attendee.model_dump(),
+        recorded_by=current_user.id,
     )
     if error:
         raise HTTPException(
@@ -458,7 +482,9 @@ async def get_open_action_items(
     """Get all open action items"""
     service = MeetingsService(db)
     items = await service.get_open_action_items(
-        current_user.organization_id, assigned_to
+        current_user.organization_id,
+        assigned_to,
+        member_visible_only=_member_view_only(current_user),
     )
     return items
 
@@ -475,7 +501,10 @@ async def get_meetings_summary(
 ):
     """Get meetings module summary statistics"""
     service = MeetingsService(db)
-    return await service.get_summary(current_user.organization_id)
+    return await service.get_summary(
+        current_user.organization_id,
+        member_visible_only=_member_view_only(current_user),
+    )
 
 
 # ============================================
@@ -516,22 +545,24 @@ async def get_attendance_dashboard(
 @router.post("/{meeting_id}/attendance-waiver")
 async def grant_attendance_waiver(
     meeting_id: UUID,
-    user_id: UUID = Query(..., description="Member to grant the waiver to"),
-    reason: str = Query(
-        ..., min_length=5, max_length=500, description="Reason for the waiver"
-    ),
+    body: MeetingAttendanceWaiverGrant,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("meetings.manage")),
 ):
     """
     Grant a meeting attendance waiver to a member.
 
-    The member will not be able to vote in this meeting, but their attendance
-    percentage will not be penalized. Only secretary, president, and chief
-    (via meetings.manage) can grant waivers.
+    The member and the reason are sent as a JSON body, so the reason never
+    appears in a URL; it is kept out of the audit log too, since it may be
+    medical. A meeting the member missed then does not count against their
+    attendance percentage; a meeting they were present at still counts as
+    attended (check-in wins). Only secretary, president, and chief (via
+    meetings.manage) can grant waivers.
 
     **Requires permission: meetings.manage**
     """
+    user_id = body.user_id
+    reason = body.reason
     # Verify the meeting belongs to this org
     from app.models.meeting import Meeting
     from app.services.attendance_dashboard_service import AttendanceDashboardService
@@ -573,11 +604,12 @@ async def grant_attendance_waiver(
         event_type="meeting_attendance_waiver_granted",
         event_category="meetings",
         severity="warning",
+        # Ids only: the reason may be medical, and the member's request, when
+        # there was one, keeps it encrypted (CLAUDE.md pitfall #33).
         event_data={
             "meeting_id": str(meeting_id),
             "meeting_title": meeting.title,
             "user_id": str(user_id),
-            "reason": reason,
         },
         user_id=str(current_user.id),
         username=current_user.username,

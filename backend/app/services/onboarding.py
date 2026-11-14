@@ -7,7 +7,7 @@ This module guides users through initial setup and can be disabled once complete
 
 import copy
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 from uuid import UUID
 
 from loguru import logger
@@ -33,9 +33,16 @@ from app.models.training import BasicApparatus
 from app.models.user import IdentifierType, Organization, OrganizationType, Role, User
 from app.schemas.organization import MembershipTierSettings
 from app.services.auth_service import AuthService
+from app.services.grant_federal_programs import seed_federal_program_opportunities
+from app.services.location_service import (
+    LocationService,
+    save_system_named_location,
+)
 from app.services.operational_rank_service import OperationalRankService
 from app.services.organization_service import OrganizationService
 from app.services.suggestion_service import SuggestionService
+from app.utils.minutes_attendance import NEW_DEPARTMENT_ATTENDANCE_LISTING
+from app.utils.minutes_settings import ATTENDANCE_LISTING_FLAG, MINUTES_SETTINGS_KEY
 from app.utils.positions import normalize_stored_positions
 
 # ── Modules the setup wizard offers ───────────────────────────────────────
@@ -49,6 +56,16 @@ from app.utils.positions import normalize_stored_positions
 # now named here and compared by tests/test_onboarding_module_parity.py.
 
 ONBOARDING_CORE_MODULES = ["members", "events", "documents", "forms"]
+
+# The core modules the server keeps on whatever is stored: the list
+# ModuleSettings.get_enabled_modules adds, and the cards the Modules step shows
+# as "Always on" (ALWAYS_ON_MODULE_IDS in the frontend registry). Custom Forms
+# is core (shown with the others) but not always on: the step offers Skip, it
+# is a stored ModuleSettings field, and Settings → Modules can turn it off.
+# configure_modules used to force the whole core list on, so it stored Forms on
+# where the completion step honoured the skip.
+# tests/test_onboarding_module_defaults.py holds it to both of those.
+ONBOARDING_ALWAYS_ON_MODULES = ["members", "events", "documents"]
 
 ONBOARDING_OFFERED_MODULES = [
     # Operations
@@ -65,7 +82,10 @@ ONBOARDING_OFFERED_MODULES = [
     "reports",
     # Communication
     "notifications",
-    "mobile",
+    # Owner decision 2026-11-01 (workflow review W01-24): asked during setup
+    # rather than left at its default, so the department decides whether it
+    # runs public pages.
+    "public_info",
     # Advanced
     "integrations",
     # Membership
@@ -82,12 +102,20 @@ ONBOARDING_SETTINGS_ONLY_MODULES = [
     "communications",
     "finance",
     "grants",
+    "history",
     "hr_payroll",
     "incidents",
     "medical_screening",
-    "public_info",
     "testing",
 ]
+
+# Storable module settings that no screen offers any more. Owner decision
+# 2026-11-01 (workflow review W01-23): Mobile App Access was offered by setup
+# and by Settings → Modules while nothing read the switch — the app installs
+# and works on a phone either way. The field stays on ModuleSettings so stored
+# settings and the modules API are unchanged, and the id stays accepted so a
+# setup session saved before the change still validates.
+ONBOARDING_RETIRED_MODULES = ["mobile"]
 
 # Accepted from older saved sessions but not presented by the wizard. These are
 # not ModuleSettings fields, so they are stored in OnboardingStatus and go no
@@ -124,6 +152,43 @@ def _with_hyphenated(ids: set[str]) -> set[str]:
     return ids | {module_id.replace("_", "-") for module_id in ids}
 
 
+def modules_from_setup_answers(enabled: Iterable[str]) -> dict[str, bool]:
+    """The ``Organization.settings.modules`` dict a set of setup answers means.
+
+    - A module named in the answers is on.
+    - A module setup asked about and the answers do not name is off: a real
+      "no".
+    - Every other module keeps its declared ``ModuleSettings`` default.
+
+    Writing False for a module the wizard never showed turns "nobody was asked"
+    into "the department said no", which is how Public Information came to be
+    stored off on every fresh install despite defaulting on. Setup now asks
+    about Public Information itself (owner decision 2026-11-01, confirmed
+    2026-11-04, workflow review W01-24), so its answer decides. A module the
+    answers do name stays on even if today's wizard no longer offers it, so a
+    choice recorded by an older setup is not dropped.
+
+    The one rule for every writer of setup answers:
+    ``OnboardingService.configure_modules``, the completion step's copy of the
+    session into the organization, and ``OrganizationService``'s one-time build
+    from the legacy onboarding record.
+    """
+    from app.schemas.organization import ModuleSettings
+
+    # Hyphenated ids ("hr-payroll") come from older saved sessions.
+    normalized = {module_id.replace("-", "_") for module_id in enabled}
+    asked_about = set(ONBOARDING_CORE_MODULES) | set(ONBOARDING_OFFERED_MODULES)
+    defaults = ModuleSettings()
+    return {
+        key: (
+            True
+            if key in normalized
+            else False if key in asked_about else getattr(defaults, key)
+        )
+        for key in ModuleSettings.model_fields
+    }
+
+
 # Every module ID the onboarding endpoints will accept, from any step.
 #
 # There were three of these lists — the wizard's, the session endpoint's, and
@@ -138,6 +203,7 @@ ONBOARDING_ACCEPTED_MODULE_IDS: frozenset[str] = frozenset(
             *ONBOARDING_CORE_MODULES,
             *ONBOARDING_OFFERED_MODULES,
             *ONBOARDING_SETTINGS_ONLY_MODULES,
+            *ONBOARDING_RETIRED_MODULES,
             *ONBOARDING_LEGACY_MODULES,
         }
     )
@@ -697,6 +763,18 @@ class OnboardingService:
         org_settings.setdefault(
             "membership_tiers", MembershipTierSettings().model_dump()
         )
+        # Owner decision 2026-11-01: a department set up from now on lists
+        # only who attended on its minutes. Written here, at creation, rather
+        # than by changing how an absent value reads, so a department that
+        # predates the decision keeps listing everyone across an upgrade.
+        minutes_section = org_settings.get(MINUTES_SETTINGS_KEY)
+        minutes_section = (
+            dict(minutes_section) if isinstance(minutes_section, dict) else {}
+        )
+        minutes_section.setdefault(
+            ATTENDANCE_LISTING_FLAG, NEW_DEPARTMENT_ATTENDANCE_LISTING
+        )
+        org_settings[MINUTES_SETTINGS_KEY] = minutes_section
 
         # Create organization with all fields
         org = Organization(
@@ -749,6 +827,10 @@ class OnboardingService:
 
         # After the positions: its reviewer is the seeded Compliance Officer.
         await SuggestionService(self.db).seed_compliance_box(org.id)
+
+        # The Federal Programs on the Grant Opportunities page are this
+        # department's own opportunity records (owner decision, 2026-11-01).
+        await seed_federal_program_opportunities(self.db, org.id)
 
         # Create headquarters facility from station address
         await self._create_headquarters_facility(org)
@@ -942,20 +1024,25 @@ class OnboardingService:
 
         display_code = await self._generate_unique_display_code()
 
-        location = Location(
-            id=generate_uuid(),
-            organization_id=org.id,
-            name=name,
-            address=address_line1,
-            city=city,
-            state=state,
-            zip=zip_code,
-            facility_id=facility.id,
-            is_active=True,
-            display_code=display_code,
+        # Two stations may be entered under one name; their locations (no
+        # building) may not share it (LOC-41), so the later is numbered.
+        await save_system_named_location(
+            self.db,
+            org.id,
+            name,
+            None,
+            None,
+            {
+                "id": generate_uuid(),
+                "address": address_line1,
+                "city": city,
+                "state": state,
+                "zip": zip_code,
+                "facility_id": facility.id,
+                "is_active": True,
+                "display_code": display_code,
+            },
         )
-        self.db.add(location)
-        await self.db.flush()
 
         return facility
 
@@ -1007,6 +1094,7 @@ class OnboardingService:
                 permissions=list(role_data["permissions"]),
                 is_system=role_data.get("is_system", True),
                 priority=role_data["priority"],
+                kind=role_data.get("kind", "office"),
             )
             self.db.add(role)
 
@@ -1040,12 +1128,20 @@ class OnboardingService:
 
         if previous_facility_ids:
             # Locations FK to facilities without a cascade, so they go first.
-            await self.db.execute(
-                delete(Location).where(
-                    Location.organization_id == organization_id,
-                    Location.facility_id.in_(previous_facility_ids),
+            # Through the shared rule: a station location something already
+            # names (an event, a meeting, training history) is deactivated and
+            # kept rather than tripping its ON DELETE RESTRICT key.
+            previous_locations = (
+                await self.db.execute(
+                    select(Location).where(
+                        Location.organization_id == organization_id,
+                        Location.facility_id.in_(previous_facility_ids),
+                    )
                 )
-            )
+            ).scalars()
+            location_service = LocationService(self.db)
+            for location in list(previous_locations):
+                await location_service.remove_location(location)
             await self.db.execute(
                 delete(Facility).where(
                     Facility.organization_id == organization_id,
@@ -1503,8 +1599,9 @@ class OnboardingService:
         Returns:
             Dictionary of module name to enabled status
         """
-        # Core modules are always enabled — they power cross-module features
-        core_modules = list(ONBOARDING_CORE_MODULES)
+        # Only the modules the server keeps on regardless are forced; a
+        # skipped Custom Forms stays skipped, as it does on completion.
+        always_on_modules = list(ONBOARDING_ALWAYS_ON_MODULES)
         available_modules = sorted(ONBOARDING_ACCEPTED_MODULE_IDS)
 
         # Validate modules
@@ -1514,8 +1611,7 @@ class OnboardingService:
                 list_within_detail_limit("Invalid modules: ", invalid_modules)
             )
 
-        # Ensure core modules are always included
-        final_modules = list(set(enabled_modules) | set(core_modules))
+        final_modules = list(set(enabled_modules) | set(always_on_modules))
 
         # Update onboarding status
         status = await self.get_onboarding_status()
@@ -1524,23 +1620,7 @@ class OnboardingService:
             await self._mark_step_completed(status, "modules")
 
         # ── Also persist to Organization.settings.modules (canonical store) ──
-        from app.schemas.organization import ModuleSettings
-
-        configurable_keys = list(ModuleSettings.model_fields.keys())
-        # Normalize hyphenated IDs (e.g. "hr-payroll") to snake_case
-        normalized = {mid.replace("-", "_") for mid in final_modules}
-        # Setup only decides the modules it actually put in front of somebody.
-        # Writing False for the rest turns "the wizard never asked" into "the
-        # department said no" — which is how public_info came to be stored off
-        # on every fresh install despite defaulting on, and would do the same
-        # to Finance and Medical Screening. Settings-only modules keep their
-        # declared default and are changed from Settings → Modules.
-        asked_about = set(ONBOARDING_CORE_MODULES) | set(ONBOARDING_OFFERED_MODULES)
-        defaults = ModuleSettings()
-        modules_dict = {
-            key: (key in normalized) if key in asked_about else getattr(defaults, key)
-            for key in configurable_keys
-        }
+        modules_dict = modules_from_setup_answers(final_modules)
 
         result = await self.db.execute(
             select(Organization).order_by(Organization.created_at.asc()).limit(1)

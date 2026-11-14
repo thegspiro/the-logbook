@@ -15,6 +15,12 @@ interface ApplicantCardProps {
   onClick: (applicant: ApplicantListItem) => void;
   onDragStart?: (e: React.DragEvent, applicant: ApplicantListItem) => void;
   isDragging?: boolean;
+  /**
+   * The board draws a selection checkbox over the card's top-left corner;
+   * the card then insets its content so the box does not cover the avatar
+   * or a banner's warning icon.
+   */
+  hasSelectControl?: boolean | undefined;
 }
 
 const ALERT_LEVEL_STYLES: Record<InactivityAlertLevel, { border: string; icon: string } | null> = {
@@ -23,7 +29,13 @@ const ALERT_LEVEL_STYLES: Record<InactivityAlertLevel, { border: string; icon: s
   critical: { border: 'border-red-500/40', icon: 'text-red-700 dark:text-red-400' },
 };
 
-export const ApplicantCard: React.FC<ApplicantCardProps> = ({ applicant, onClick, onDragStart, isDragging }) => {
+export const ApplicantCard: React.FC<ApplicantCardProps> = ({
+  applicant,
+  onClick,
+  onDragStart,
+  isDragging,
+  hasSelectControl,
+}) => {
   const initials = getInitials(applicant.first_name, applicant.last_name);
   const alertLevel = applicant.inactivity_alert_level ?? 'normal';
   const alertStyle = ALERT_LEVEL_STYLES[alertLevel];
@@ -42,7 +54,7 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({ applicant, onClick
           onClick(applicant);
         }
       }}
-      className={`bg-theme-surface-hover hover:border-theme-surface-border hover:bg-theme-surface-hover cursor-pointer rounded-lg border p-3.5 transition-all ${
+      className={`bg-theme-surface-hover hover:border-theme-surface-border hover:bg-theme-surface-hover cursor-pointer rounded-lg border p-3.5 transition-all ${hasSelectControl ? 'pl-11' : ''} ${
         isDragging ? 'opacity-50 ring-2 ring-red-500' : ''
       } ${alertStyle ? alertStyle.border : 'border-theme-surface-border'}`}
     >
@@ -60,6 +72,13 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({ applicant, onClick
             {alertLevel === 'critical' ? 'Approaching timeout' : 'Activity slowing'}
             {applicant.days_since_activity != null && ` — ${applicant.days_since_activity}d idle`}
           </span>
+        </div>
+      )}
+
+      {applicant.contact_change_pending && (
+        <div className="mb-2 flex items-center gap-1.5 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:text-amber-400">
+          <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <span>Contact details changed</span>
         </div>
       )}
 

@@ -17,12 +17,11 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router';
-import { AlertTriangle, ArrowLeft, CheckCircle, Pencil, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Pencil, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { SkeletonPage } from '@/components/ux/Skeleton';
-import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { exportMappingService } from '../services/api';
@@ -32,6 +31,7 @@ import { RunExportSection } from '../components/RunExportSection';
 import { DuesExportSection } from '../components/DuesExportSection';
 import { AdvanceExportSection } from '../components/AdvanceExportSection';
 import { ChartOfAccountsSection } from '../components/ChartOfAccountsSection';
+import { QuickBooksOnlineSection } from '../components/QuickBooksOnlineSection';
 import { notInChartHint, UNSAFE_ACCOUNT_NAME_HINT } from '../utils/qbAccountIssues';
 import { ExportReadinessStatus } from '../types';
 import type { ExportMapping, ExportReadiness, ExportReadinessCategory } from '../types';
@@ -143,22 +143,12 @@ const QuickBooksExportSettingsPage: React.FC = () => {
     }
   };
 
+  // The trail's "Settings" crumb is the way back to Finance Settings.
   const header = (
-    <>
-      <Link
-        to="/finance/settings"
-        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Settings
-      </Link>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">QuickBooks Export</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">
-            Give each budget category the QuickBooks account it posts to and the account it is paid from
-          </p>
-        </div>
+    <AdminPageHeader
+      title="QuickBooks Export"
+      description="Give each budget category the QuickBooks account it posts to and the account it is paid from"
+      actions={
         <button
           type="button"
           onClick={() => setDialog({ mode: 'create' })}
@@ -167,14 +157,13 @@ const QuickBooksExportSettingsPage: React.FC = () => {
           <Plus className="h-4 w-4" />
           Add mapping
         </button>
-      </div>
-    </>
+      }
+    />
   );
 
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <Breadcrumbs />
         {header}
         <SkeletonPage rows={4} showStats={false} />
       </div>
@@ -188,8 +177,9 @@ const QuickBooksExportSettingsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <Breadcrumbs />
       {header}
+
+      <QuickBooksOnlineSection />
 
       {error && (
         <div role="alert" className="alert-danger flex items-center gap-3 rounded-lg p-4 text-sm">
@@ -280,7 +270,7 @@ const QuickBooksExportSettingsPage: React.FC = () => {
                             <span className="text-theme-text-secondary mt-1 block text-xs">{statusHint(row)}</span>
                           )}
                         </td>
-                        <td className={`${CELL} text-right`}>
+                        <td data-label="Actions" className={`${CELL} text-right`}>
                           {onlyMapping ? (
                             <button
                               type="button"
@@ -369,7 +359,7 @@ const QuickBooksExportSettingsPage: React.FC = () => {
                       <td data-label="Type" className={`${CELL} capitalize`}>
                         {mapping.mappingType}
                       </td>
-                      <td className={`${CELL} text-right`}>
+                      <td data-label="Actions" className={`${CELL} text-right`}>
                         <div className="flex justify-end gap-2">
                           <button
                             type="button"

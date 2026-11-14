@@ -17,6 +17,7 @@ from app.api.dependencies import (
     get_current_user,
     require_permission,
 )
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.schemas.training_enhancements import (
@@ -605,6 +606,30 @@ async def process_xapi_statements(
 # ============================================
 
 
+async def _audit_training_export(
+    db: AsyncSession, current_user, data: ReportExportRequest
+) -> None:
+    """Record who exported which training report. These files carry member
+    names, contact details and certification numbers, so an export is a
+    disclosure the audit trail must show. Ids and parameters only; never the
+    report's content."""
+    await log_audit_event(
+        db=db,
+        event_type="training_report_exported",
+        event_category="training",
+        severity="info",
+        event_data={
+            "report_type": data.report_type,
+            "format": data.format,
+            "subject_user_id": str(data.user_id) if data.user_id else None,
+            "start_date": data.start_date.isoformat() if data.start_date else None,
+            "end_date": data.end_date.isoformat() if data.end_date else None,
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+
 @router.post("/reports/export")
 async def export_report(
     data: ReportExportRequest,
@@ -626,29 +651,33 @@ async def export_report(
                     current_user.organization_id,
                     start_date=data.start_date,
                     end_date=data.end_date,
+                    generated_by=current_user.full_name,
                 )
             elif data.report_type == "member_records":
                 pdf_buf = await service.generate_bulk_pdf(
                     current_user.organization_id,
                     start_date=data.start_date,
                     end_date=data.end_date,
+                    generated_by=current_user.full_name,
                 )
             elif data.report_type == "compliance":
                 pdf_buf = await service.generate_compliance_pdf(
                     current_user.organization_id,
                     start_date=data.start_date,
                     end_date=data.end_date,
+                    generated_by=current_user.full_name,
                 )
             else:
                 raise ValueError(
                     f"PDF export is not available for report type "
                     f"'{data.report_type}'."
                 )
+            await _audit_training_export(db, current_user, data)
             filename = f"training_report_{data.report_type}.pdf"
             return StreamingResponse(
                 pdf_buf,
                 media_type="application/pdf",
-                headers={"Content-Disposition": f"attachment; filename={filename}"},
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
             )
 
         # CSV format (default)
@@ -689,13 +718,16 @@ async def export_report(
                 f"Report type '{data.report_type}' is not supported for export."
             )
 
+        await _audit_training_export(db, current_user, data)
         # Streamed a member (or a batch of records) at a time (AH-16); the
         # request's session stays open until the body has been sent.
         return StreamingResponse(
             chunks,
             media_type="text/csv",
             headers={
-                "Content-Disposition": f"attachment; filename=training_report_{data.report_type}.csv"
+                "Content-Disposition": (
+                    f'attachment; filename="training_report_{data.report_type}.csv"'
+                )
             },
         )
     except ValueError as e:

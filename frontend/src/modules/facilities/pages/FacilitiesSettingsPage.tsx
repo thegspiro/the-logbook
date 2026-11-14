@@ -6,23 +6,34 @@ import { DialogPortal } from '@/components/DialogPortal';
 import { DialogPanel } from '@/components/ux/DialogPanel';
 import { facilitiesService } from '../../../services/facilitiesServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { useFieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
 import type { FacilityStatus, FacilityType, MaintenanceType } from '../types';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 type Lookup = FacilityType | FacilityStatus | MaintenanceType;
 type Kind = 'types' | 'statuses' | 'maintenance';
-const definitions: Record<Kind, { title: string; singular: string; offeredOn: string }> = {
-  types: { title: 'Facility Types', singular: 'facility type', offeredOn: 'when creating or editing a facility' },
+// nameMax mirrors each lookup's Create schema (forms review F-2).
+const definitions: Record<Kind, { title: string; singular: string; offeredOn: string; nameMax: number }> = {
+  types: {
+    title: 'Facility Types',
+    singular: 'facility type',
+    offeredOn: 'when creating or editing a facility',
+    nameMax: 100,
+  },
   statuses: {
     title: 'Facility Statuses',
     singular: 'facility status',
     offeredOn: 'when creating or editing a facility',
+    nameMax: 100,
   },
   maintenance: {
     title: 'Maintenance Types',
     singular: 'maintenance type',
     offeredOn: 'when logging a maintenance record',
+    nameMax: 200,
   },
 };
+const LOOKUP_FIELDS: FieldSpecs<'name'> = { name: { id: 'lookup-name', label: 'Name' } };
 const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 export default function FacilitiesSettingsPage() {
   const [data, setData] = useState<Record<Kind, Lookup[]>>({ types: [], statuses: [], maintenance: [] }),
@@ -75,6 +86,7 @@ export default function FacilitiesSettingsPage() {
       <OperationsPageHeader
         icon={Settings}
         title="Facility Settings"
+        adminHeader
         subtitle="Choose the types and statuses offered on facility and maintenance record forms."
       />
       {loading ? (
@@ -123,12 +135,15 @@ function LookupEditor({
 }) {
   return (
     <section className="card overflow-hidden">
-      <div className="border-theme-surface-border flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row border-theme-surface-border gap-3 border-b p-4 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary font-semibold">{definitions[kind].title}</h2>
           <p className="text-theme-text-muted text-xs">Offered {definitions[kind].offeredOn}.</p>
         </div>
-        <button className="btn-primary flex items-center gap-1 text-sm whitespace-nowrap" onClick={onAdd}>
+        <button
+          className="split-row-aside btn-primary flex items-center gap-1 text-sm whitespace-nowrap"
+          onClick={onAdd}
+        >
           <Plus className="h-4 w-4 shrink-0" /> Add {definitions[kind].singular}
         </button>
       </div>
@@ -208,8 +223,19 @@ function LookupDialog({
   const [name, setName] = useState(item?.name ?? ''),
     [active, setActive] = useState(item?.isActive !== false),
     [saving, setSaving] = useState(false);
+  const fieldErrors = useFieldErrors(LOOKUP_FIELDS);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    // Checked here rather than by greying out Save, which told an officer
+    // nothing about why it would not press (forms review F-3).
+    fieldErrors.setFormError(null);
+    if (!name.trim()) {
+      const problems = { name: `Enter a name for the ${definitions[kind].singular}.` };
+      fieldErrors.setErrors(problems);
+      fieldErrors.focusFirst(problems);
+      return;
+    }
+    fieldErrors.setErrors({});
     setSaving(true);
     // No sort_order: none of the three lookup models has that column and no
     // schema declares it, so Pydantic dropped it and the ordering the dialog
@@ -231,7 +257,7 @@ function LookupDialog({
       toast.success(`${capitalize(definitions[kind].singular)} saved`);
       await onSaved();
     } catch (error) {
-      toast.error(getErrorMessage(error, `Unable to save ${definitions[kind].singular}`));
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(error, `Unable to save ${definitions[kind].singular}`));
     } finally {
       setSaving(false);
     }
@@ -250,23 +276,24 @@ function LookupDialog({
           aria-modal="true"
           aria-labelledby="lookup-title"
         >
-          <form className="space-y-4" onSubmit={(event) => void submit(event)}>
+          <form className="space-y-4" noValidate onSubmit={(event) => void submit(event)}>
             <h2 id="lookup-title" className="text-lg font-semibold">
               {item ? 'Edit' : 'Add'} {definitions[kind].singular}
             </h2>
-            <label className="form-label block">
-              Name
-              {/* form-input, not "input": no such utility exists in this
-                  project or in Tailwind, so both controls rendered with
-                  browser default styling — no theme colours, no focus ring,
-                  and none of the 44px mobile floor. */}
-              <input
-                className="form-input mt-1 w-full"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </label>
+            <FormField id={LOOKUP_FIELDS.name.id} label="Name" required error={fieldErrors.errors.name}>
+              {(field) => (
+                <input
+                  {...field}
+                  className="form-input w-full"
+                  value={name}
+                  maxLength={definitions[kind].nameMax}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    fieldErrors.setError('name', null);
+                  }}
+                />
+              )}
+            </FormField>
             <label className="mobile-touch-target flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -276,11 +303,16 @@ function LookupDialog({
               />{' '}
               Active
             </label>
+            {fieldErrors.formError && (
+              <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                {fieldErrors.formError}
+              </p>
+            )}
             <div className="flex justify-end gap-2">
               <button type="button" className="btn-secondary" onClick={onClose}>
                 Cancel
               </button>
-              <button className="btn-primary" disabled={saving || !name.trim()}>
+              <button className="btn-primary" disabled={saving}>
                 {saving ? 'Saving…' : 'Save'}
               </button>
             </div>

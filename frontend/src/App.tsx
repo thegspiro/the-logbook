@@ -6,7 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import { clearLegacySensitiveData } from './modules/onboarding/utils/storage';
 
 // Dynamic import retry/reload for stale chunks after deployments
-import { clearChunkReloadFlag, lazyWithRetry } from './utils/lazyWithRetry';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 
 // Error Boundary
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -56,6 +56,7 @@ import { getGrantsFundraisingRoutes } from './modules/grants-fundraising/routes'
 import { getIPSecurityRoutes } from './modules/ip-security/routes';
 import { getFinanceRoutes } from './modules/finance/routes';
 import { getMedicalScreeningRoutes } from './modules/medical-screening/routes';
+import { getHistoryRoutes } from './modules/history/routes';
 import { getTestingRoutes } from './modules/testing/routes';
 
 // Loading fallback component
@@ -79,6 +80,7 @@ import { OAuthCallbackPage } from './pages/OAuthCallbackPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { FinanceApprovalPage } from './pages/FinanceApprovalPage';
+const PreceptorShiftEvaluationPage = lazyWithRetry(() => import('./pages/PreceptorShiftEvaluationPage'));
 
 const PublicMinutesPage = lazyWithRetry(() => import('./pages/PublicMinutesPage'));
 // Public legal pages (privacy policy / terms of service)
@@ -98,7 +100,6 @@ function App() {
   // Security: Clear any legacy sensitive data on app initialization
   useEffect(() => {
     clearLegacySensitiveData();
-    clearChunkReloadFlag();
   }, []);
 
   return (
@@ -161,6 +162,7 @@ function App() {
                       {getFormsRoutes()}
                       {getIntegrationsRoutes()}
                       {getMedicalScreeningRoutes()}
+                      {getHistoryRoutes()}
                       {getTestingRoutes()}
 
                       {/* Finance */}
@@ -213,6 +215,8 @@ function App() {
                     <Route path="/public/minutes/:copyId" element={<PublicMinutesPage />} />
                     {/* Public external-approver page (token-authenticated) */}
                     <Route path="/finance/approvals/:token" element={<FinanceApprovalPage />} />
+                    {/* Outside preceptor's shift evaluation (token-authenticated, no sign-in) */}
+                    <Route path="/shift-evaluation/:token" element={<PreceptorShiftEvaluationPage />} />
                   </Routes>
                 </Suspense>
 

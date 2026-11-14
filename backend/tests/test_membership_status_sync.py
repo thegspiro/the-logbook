@@ -40,9 +40,12 @@ class TestTheRule:
             ("life", UserStatus.PROBATIONARY, UserStatus.ACTIVE),
             ("administrative", UserStatus.PROBATIONARY, UserStatus.ACTIVE),
             # A custom tier id is "not probationary" too — the member advanced
-            # off the rung whatever the stale member_status column says.
+            # off the rung.
             ("senior", UserStatus.PROBATIONARY, UserStatus.ACTIVE),
             ("senior", "probationary", UserStatus.ACTIVE),
+            # The standing in its stored spelling, which is what the
+            # reconciler hands the helper after a flush.
+            ("regular", UserStatus.PROBATIONARY, UserStatus.ACTIVE),
         ],
     )
     def test_moves_between_active_and_probationary(
@@ -135,9 +138,35 @@ class TestTheFlushListener:
         member.membership_type = "senior"
         _reconcile_membership(None, None, member)
         assert member.status is UserStatus.ACTIVE
-        # The split refuses to guess a class for a tier id, so the stale
-        # ladder column stays — the status rule does not read it.
-        assert member.member_status == MemberStatus.PROBATIONARY
+        # The tier id is the standing now, and the status rule reads it.
+        assert member.member_status == "senior"
+
+    def test_a_tier_that_counts_as_probationary_puts_the_account_on_probation(
+        self,
+    ):
+        """A department's "cadet" rung that counts as probationary."""
+        member = _member()
+        moved = sync_account_status_with_membership(
+            member, member_status="cadet", ranks_as_by_tier={"cadet": "probationary"}
+        )
+        assert moved == ("active", "probationary")
+        assert member.status is UserStatus.PROBATIONARY
+
+    def test_an_administrative_probationer_is_on_probation(self):
+        """Probationary is a standing any class can hold.
+
+        The legacy word collapses an administrative probationer to plain
+        ``administrative`` -- "not probationary" -- so judging the account on
+        it kept every probationary member outside the operational class off
+        probation. Judged on the ladder column, the treasurer serving a
+        probationary year starts out on probation like anyone else.
+        """
+        member = _member()
+        member.member_class = MemberClass.ADMINISTRATIVE
+        member.member_status = MemberStatus.PROBATIONARY
+        _reconcile_membership(None, None, member)
+        assert member.membership_type == "administrative"
+        assert member.status is UserStatus.PROBATIONARY
 
     def test_a_member_on_leave_stays_on_leave(self):
         member = _member(status=UserStatus.LEAVE)
@@ -172,9 +201,14 @@ class TestTheFlushListener:
 
     def test_the_helper_is_idempotent(self):
         member = _member()
-        member.membership_type = "probationary"
-        first = sync_account_status_with_membership(member)
-        second = sync_account_status_with_membership(member)
+        # The standing is passed in, the way an endpoint that has written the
+        # legacy column and not yet flushed passes it.
+        first = sync_account_status_with_membership(
+            member, member_status="probationary"
+        )
+        second = sync_account_status_with_membership(
+            member, member_status="probationary"
+        )
         assert first == ("active", "probationary")
         assert second is None
 

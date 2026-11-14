@@ -223,7 +223,8 @@ describe("Next year's budget — a line's request", () => {
     await waitFor(() => expect(myLines).toHaveBeenCalledTimes(2));
   });
 
-  it('will not save without an amount or a justification', async () => {
+  // Owner decision, 2026-11-11: a draft saves blank; submitting needs both.
+  it('saves a blank draft, leaving out the fields not entered yet', async () => {
     setup(year(), [{ budget: line('b-1', 'Training'), request: null }]);
     renderPage();
     const user = userEvent.setup();
@@ -231,9 +232,83 @@ describe("Next year's budget — a line's request", () => {
       within(await card('Training · Department-wide')).getByRole('button', { name: 'Request an amount' })
     );
     await user.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(create).toHaveBeenCalledWith({ fiscalYearId: 'fy-27', budgetId: 'b-1' }));
+  });
+
+  it('still refuses an amount that is not a number of zero or more', async () => {
+    setup(year(), [{ budget: line('b-1', 'Training'), request: null }]);
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(
+      within(await card('Training · Department-wide')).getByRole('button', { name: 'Request an amount' })
+    );
+    await user.type(screen.getByLabelText('Amount requested'), '-5');
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
     expect(screen.getByText('Enter an amount of zero or more.')).toBeInTheDocument();
-    expect(screen.getByText('Say what the money is for.')).toBeInTheDocument();
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('clears a draft field with null, so the clear is saved', async () => {
+    setup(year(), [{ budget: line('b-1', 'Training'), request: request('r-1', 'draft') }]);
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(within(await card('Training · Department-wide')).getByRole('button', { name: 'Edit' }));
+    await user.clear(screen.getByLabelText('Amount requested'));
+    await user.clear(screen.getByLabelText('Justification'));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(update).toHaveBeenCalledWith('r-1', { requestedAmount: null, justification: null }));
+  });
+
+  it('keeps both fields required on a submitted request', async () => {
+    setup(year(), [{ budget: line('b-1', 'Training'), request: request('r-1', 'submitted') }]);
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(within(await card('Training · Department-wide')).getByRole('button', { name: 'Edit' }));
+    await user.clear(screen.getByLabelText('Amount requested'));
+    await user.clear(screen.getByLabelText('Justification'));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+    expect(screen.getByText('A submitted request needs the amount requested.')).toBeInTheDocument();
+    expect(screen.getByText('A submitted request needs to say what the money is for.')).toBeInTheDocument();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('shows a blank draft as not entered yet', async () => {
+    const blank = request('r-1', 'draft', { requestedAmount: null, justification: null });
+    setup(year(), [{ budget: line('b-1', 'Training'), request: blank }]);
+    renderPage();
+    expect(await card('Training · Department-wide')).toHaveTextContent('RequestedNot entered yet');
+  });
+
+  it('opens a blank draft on its missing fields instead of submitting it', async () => {
+    const blank = request('r-1', 'draft', { requestedAmount: null, justification: null });
+    setup(year(), [{ budget: line('b-1', 'Training'), request: blank }]);
+    renderPage();
+    await userEvent
+      .setup()
+      .click(within(await card('Training · Department-wide')).getByRole('button', { name: 'Submit' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit budget request' });
+    expect(within(dialog).getByText('Enter the amount you are requesting before you submit.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Say what the money is for before you submit.')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Amount requested')).toHaveFocus();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("opens the draft on the field the server's refusal names", async () => {
+    setup(year(), [{ budget: line('b-1', 'Training'), request: request('r-1', 'draft') }]);
+    submit.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'justification', message: 'Say what the money is for before you submit.' }] },
+      },
+    });
+    renderPage();
+    await userEvent
+      .setup()
+      .click(within(await card('Training · Department-wide')).getByRole('button', { name: 'Submit' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit budget request' });
+    expect(within(dialog).getByText('Say what the money is for before you submit.')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Justification')).toHaveFocus();
+    expect(toastError).not.toHaveBeenCalled();
   });
 
   it('edits a draft, sending both fields it owns', async () => {

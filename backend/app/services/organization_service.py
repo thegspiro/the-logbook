@@ -6,7 +6,7 @@ Business logic for organization-related operations.
 
 import copy
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 from uuid import UUID
 
 from loguru import logger
@@ -15,7 +15,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.onboarding import OnboardingStatus
-from app.models.user import Organization, User
+from app.models.user import Organization, Position, User
+from app.schemas.attendance_waiver import POLICY_LOCATIONS as WAIVER_POLICY_LOCATIONS
 from app.schemas.organization import (
     _LEGACY_EMAIL_OAUTH_FIELDS,
     ContactInfoSettings,
@@ -36,6 +37,11 @@ from app.services.file_storage_service import (
     ACTIVATION_KEY as FILE_STORAGE_ACTIVATION_KEY,
 )
 from app.services.file_storage_service import forget_org_storage
+from app.services.s3_storage import (
+    ENDPOINT_NOT_ALLOWED,
+    endpoint_allowed,
+    same_endpoint,
+)
 from app.utils import membership_numbers
 from app.utils.email_providers import (
     EMAIL_SECRET_FIELDS,
@@ -94,6 +100,29 @@ def _deep_merge_settings(
         else:
             result[key] = value
     return result
+
+
+def _refuse_unlisted_s3_endpoint(merged: Any, stored: Any) -> None:
+    """Refuse to save a custom S3 endpoint the operator has not listed in
+    S3_ALLOWED_ENDPOINTS (owner decision 2026-11-01; KNOWN_LIMITATIONS SCH-10).
+
+    Judged on the merged section, so neither the dedicated file-storage PATCH
+    nor the full-settings PATCH can slip one in. An endpoint already stored is
+    let through unchanged: it is refused wherever a client is built, and
+    refusing it here would stop the department saving anything else in the
+    section — including switching to local storage — until somebody cleared
+    a field the screen no longer offers as free text.
+    """
+    if not isinstance(merged, dict):
+        return
+    value = merged.get("s3_endpoint_url")
+    endpoint = value.strip() if isinstance(value, str) else ""
+    if not endpoint or endpoint_allowed(endpoint):
+        return
+    previous = stored.get("s3_endpoint_url") if isinstance(stored, dict) else None
+    if isinstance(previous, str) and same_endpoint(endpoint, previous):
+        return
+    raise ValueError(ENDPOINT_NOT_ALLOWED)
 
 
 def _membership_id_settings_from(stored: Any) -> MembershipIdSettings:
@@ -253,8 +282,21 @@ class OrganizationService:
                 if field:
                     enabled_fields.add(field)
 
-            kwargs = {f: f in enabled_fields for f in field_names}
-            migrated = ModuleSettings(**kwargs)
+            # The setup rule, not "everything unnamed is off": that stored
+            # Public Information off on every installation old enough to come
+            # through here, and the 289504a34d3c backfill runs once, before
+            # this does. Imported here because services.onboarding imports
+            # this module.
+            from app.services.onboarding import modules_from_setup_answers
+
+            answers = modules_from_setup_answers(enabled_fields)
+            # A legacy record was written by a setup that never asked about
+            # Public Information, so its absence there is not a "no": keep the
+            # module's declared default (owner decision 2026-11-04). Today's
+            # setup asks, and its answer is stored as given.
+            if "public_info" not in enabled_fields:
+                answers["public_info"] = ModuleSettings().public_info
+            migrated = ModuleSettings(**answers)
 
             # Persist to org.settings.modules so we never need the
             # fallback again — single source of truth going forward.
@@ -443,6 +485,7 @@ class OrganizationService:
         organization_id: UUID | str,
         settings_update: Dict[str, Any],
         may_configure_delegated_email: bool = False,
+        confirm_delegated_email_change: Optional[Callable[[], Awaitable[None]]] = None,
     ) -> OrganizationSettings:
         """
         Update organization settings
@@ -454,6 +497,11 @@ class OrganizationService:
                 so may set up or change Gmail sending through a domain-wide
                 delegated service account. Defaults to refusing, so a caller
                 that never thought about it fails closed.
+            confirm_delegated_email_change: Awaited when this save sets up or
+                changes that service account, before anything is written; the
+                endpoints pass the step-up check (USR-12). Required whenever
+                ``may_configure_delegated_email`` is true: without it such a
+                change is refused, again so a new caller fails closed.
 
         Returns:
             Updated OrganizationSettings
@@ -474,6 +522,19 @@ class OrganizationService:
             for k, v in settings_update.items()
             if k not in ("email_link_domain", FILE_STORAGE_ACTIVATION_KEY)
         }
+        # Likewise the waiver policies, training and business meeting: each
+        # has its own endpoint, which requires training.manage or
+        # meetings.manage, validates the policy and checks its positions are
+        # this department's. Written here it would skip all three, and a value
+        # the policy model cannot read turns the feature off for every member
+        # without a word (policy_from_settings reads it as the disabled
+        # default).
+        for policy_section, policy_key in WAIVER_POLICY_LOCATIONS:
+            section_update = settings_update.get(policy_section)
+            if isinstance(section_update, dict) and policy_key in section_update:
+                settings_update[policy_section] = {
+                    k: v for k, v in section_update.items() if k != policy_key
+                }
 
         # Deep copy to avoid mutating SQLAlchemy's committed state
         current_settings = copy.deepcopy(org.settings or {})
@@ -550,15 +611,23 @@ class OrganizationService:
             # email off — stays open to settings.manage, and so does switching
             # away from it, which narrows what the stored credential can do.
             fresh_key = email_submitted_secrets.get("google_service_account_key")
-            if (
-                uses_google_service_account(email_section)
-                and not may_configure_delegated_email
-                and (identity_changed or (fresh_key and fresh_key != REDACTED_SECRET))
+            if uses_google_service_account(email_section) and (
+                identity_changed or (fresh_key and fresh_key != REDACTED_SECRET)
             ):
-                raise PermissionError(
-                    "Only an organization administrator can set up or change "
-                    "Gmail sending with a service account"
-                )
+                if not may_configure_delegated_email:
+                    raise PermissionError(
+                        "Only an organization administrator can set up or change "
+                        "Gmail sending with a service account"
+                    )
+                # Owner decision 2026-11-01 (USR-12): the administrator also
+                # re-verifies, but only for this change, so an ordinary email
+                # save (a From name, turning email off) never prompts.
+                if confirm_delegated_email_change is None:
+                    raise PermissionError(
+                        "Setting up Gmail sending with a service account needs "
+                        "you to confirm your identity"
+                    )
+                await confirm_delegated_email_change()
             if identity_changed:
                 for field in EMAIL_SECRET_FIELDS:
                     fresh = email_submitted_secrets.get(field)
@@ -578,6 +647,18 @@ class OrganizationService:
             if invalid:
                 raise ValueError(invalid)
 
+        if "file_storage" in settings_update:
+            _refuse_unlisted_s3_endpoint(
+                updated_settings.get("file_storage"),
+                current_settings.get("file_storage"),
+            )
+
+        finance_incoming = settings_update.get("finance")
+        if isinstance(finance_incoming, dict):
+            await self._settle_second_approver_position(
+                organization_id, finance_incoming, updated_settings
+            )
+
         # SEC: Encrypt secret fields before persisting to the database
         updated_settings = encrypt_settings_secrets(updated_settings)
 
@@ -589,6 +670,42 @@ class OrganizationService:
 
         # Return updated settings
         return await self.get_organization_settings(organization_id)
+
+    async def _settle_second_approver_position(
+        self,
+        organization_id: UUID | str,
+        incoming: Dict[str, Any],
+        merged: Dict[str, Any],
+    ) -> None:
+        """Refuse a dual-approval office the department does not have.
+
+        ``app/utils/finance_settings.py`` reads a slug naming no position as
+        nobody, which holds every large request until the setting is fixed —
+        right for one that was deleted after it was chosen, wrong to accept
+        from a typo. A blank value is stored as null (any approver).
+        """
+        if "second_approver_position" not in incoming:
+            return
+        value = incoming.get("second_approver_position")
+        slug = value.strip() if isinstance(value, str) else ""
+        section = merged.get("finance")
+        if not isinstance(section, dict):
+            return
+        if not slug:
+            section["second_approver_position"] = None
+            return
+        result = await self.db.execute(
+            select(Position.slug).where(
+                Position.organization_id == str(organization_id),
+                func.lower(Position.slug) == slug.lower(),
+            )
+        )
+        stored = result.scalars().first()
+        if stored is None:
+            raise ValueError(
+                "The position chosen for the second approval does not exist"
+            )
+        section["second_approver_position"] = stored
 
     async def get_enabled_modules(
         self, organization_id: UUID | str

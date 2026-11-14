@@ -25,6 +25,7 @@ import type {
 import { pipelineService, applicantService, interviewService } from '../services/api';
 import { handleStoreError } from '../../../utils/storeHelpers';
 import { KANBAN_PAGE_SIZE } from '../constants';
+import { useAuthStore } from '../../../stores/authStore';
 
 export type PipelineTab = 'active' | 'inactive' | 'withdrawn' | 'rejected' | 'converted';
 
@@ -351,11 +352,18 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
   },
 
   fetchPipelineStats: async (id: string) => {
-    const { search, event_id } = get().filters;
+    // Pipeline-wide counts take prospective_members.view_all; without it a
+    // member sees only the applicants assigned to them, so there is nothing
+    // to count and asking would only answer 403.
+    if (!useAuthStore.getState().checkPermission('prospective_members.view_all')) {
+      set({ pipelineStats: null, isLoadingStats: false });
+      return;
+    }
+    const { search, event_id, assigned_to_me } = get().filters;
     const token = beginFetch('stats');
     set({ isLoadingStats: true });
     try {
-      const stats = await pipelineService.getPipelineStats(id, { search, event_id });
+      const stats = await pipelineService.getPipelineStats(id, { search, event_id, assigned_to_me });
       if (!isCurrentFetch('stats', token)) return;
       set({ pipelineStats: stats, isLoadingStats: false });
     } catch (error) {
@@ -727,6 +735,10 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
       const response = await applicantService.getInactiveApplicants({
         pipeline_id: state.filters.pipeline_id,
         search: state.filters.search,
+        // The tab badges count through these too; a list that ignored them
+        // would disagree with its own badge.
+        event_id: state.filters.event_id,
+        assigned_to_me: state.filters.assigned_to_me,
         page: pageToFetch,
         pageSize: state.pageSize,
       });
@@ -764,6 +776,10 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
       const response = await applicantService.getWithdrawnApplicants({
         pipeline_id: state.filters.pipeline_id,
         search: state.filters.search,
+        // The tab badges count through these too; a list that ignored them
+        // would disagree with its own badge.
+        event_id: state.filters.event_id,
+        assigned_to_me: state.filters.assigned_to_me,
         page: pageToFetch,
         pageSize: state.pageSize,
       });
@@ -801,6 +817,10 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
       const response = await applicantService.getRejectedApplicants({
         pipeline_id: state.filters.pipeline_id,
         search: state.filters.search,
+        // The tab badges count through these too; a list that ignored them
+        // would disagree with its own badge.
+        event_id: state.filters.event_id,
+        assigned_to_me: state.filters.assigned_to_me,
         page: pageToFetch,
         pageSize: state.pageSize,
       });
@@ -838,6 +858,10 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
       const response = await applicantService.getConvertedApplicants({
         pipeline_id: state.filters.pipeline_id,
         search: state.filters.search,
+        // The tab badges count through these too; a list that ignored them
+        // would disagree with its own badge.
+        event_id: state.filters.event_id,
+        assigned_to_me: state.filters.assigned_to_me,
         page: pageToFetch,
         pageSize: state.pageSize,
       });
@@ -1040,14 +1064,19 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     set({ filters: next, currentPage: 1 });
     void get().fetchApplicants(1);
 
-    // The header and the tab badges count through `search` and `event_id`, so
-    // either moving means the counts now describe a different population than
-    // the list and have to be recounted. No other filter key enters the count
-    // -- `status` narrows the open-pipeline view alone, and counting through
-    // it would zero the archive badges the same response feeds -- so nothing
-    // else here earns a round trip.
+    // The header and the tab badges count through `search`, `event_id` and
+    // `assigned_to_me`, so any of them moving means the counts now describe a
+    // different population than the list and have to be recounted. No other
+    // filter key enters the count -- `status` narrows the open-pipeline view
+    // alone, and counting through it would zero the archive badges the same
+    // response feeds -- so nothing else here earns a round trip.
     const pipelineId = next.pipeline_id;
-    if (pipelineId && (next.search !== previous.search || next.event_id !== previous.event_id)) {
+    if (
+      pipelineId &&
+      (next.search !== previous.search ||
+        next.event_id !== previous.event_id ||
+        next.assigned_to_me !== previous.assigned_to_me)
+    ) {
       void get().fetchPipelineStats(pipelineId);
     }
   },

@@ -23,6 +23,22 @@ from app.services import scheduled_tasks
 pytestmark = [pytest.mark.asyncio]
 
 
+def _latest_result(start, end, deadline=None):
+    """The latest occurrence, which the runner copies new ones from. Not a
+    Training event, so no session lookup follows it."""
+    occurrence = SimpleNamespace(
+        start_datetime=start,
+        end_datetime=end,
+        rsvp_deadline=deadline,
+        title="Drill",
+        event_type="business_meeting",
+        custom_fields=None,
+    )
+    result = MagicMock()
+    result.scalars.return_value.first.return_value = occurrence
+    return result
+
+
 def _parent(id_, pattern="weekly"):
     return SimpleNamespace(
         id=id_,
@@ -50,18 +66,13 @@ class TestRollingRecurrenceExtendIsolation:
         parents_result = MagicMock()
         parents_result.scalars.return_value.all.return_value = parents
 
-        def _latest_result():
-            r = MagicMock()
-            r.first.return_value = (latest_start, latest_end, None)
-            return r
-
         db = MagicMock()
         db.execute = AsyncMock(
             side_effect=[
                 parents_result,
-                _latest_result(),
-                _latest_result(),
-                _latest_result(),
+                _latest_result(latest_start, latest_end),
+                _latest_result(latest_start, latest_end),
+                _latest_result(latest_start, latest_end),
             ]
         )
         db.add = MagicMock()
@@ -126,18 +137,13 @@ class TestRollingRecurrenceExtendIsolation:
         parents_result = MagicMock()
         parents_result.scalars.return_value.all.return_value = parents
 
-        def _latest_result():
-            r = MagicMock()
-            r.first.return_value = (latest_start, latest_end, None)
-            return r
-
         db = MagicMock()
         db.execute = AsyncMock(
             side_effect=[
                 parents_result,
-                _latest_result(),
-                _latest_result(),
-                _latest_result(),
+                _latest_result(latest_start, latest_end),
+                _latest_result(latest_start, latest_end),
+                _latest_result(latest_start, latest_end),
             ]
         )
         db.add = MagicMock()
@@ -190,11 +196,13 @@ class TestRollingRecurrenceExtendRsvpDeadline:
 
         parents_result = MagicMock()
         parents_result.scalars.return_value.all.return_value = [_parent("A")]
-        latest_result = MagicMock()
-        latest_result.first.return_value = (latest_start, latest_end, latest_deadline)
-
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[parents_result, latest_result])
+        db.execute = AsyncMock(
+            side_effect=[
+                parents_result,
+                _latest_result(latest_start, latest_end, latest_deadline),
+            ]
+        )
         db.add = MagicMock()
         db.commit = AsyncMock()
         db.rollback = AsyncMock()

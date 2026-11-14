@@ -5,18 +5,26 @@ Business logic for location management.
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import Select, and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_display_code
 from app.models.apparatus import Apparatus, ApparatusLocationHistory
 from app.models.event import Event, EventTemplate
+from app.models.event_request import EventRequest
 from app.models.facilities import Facility, FacilityRoom
 from app.models.location import Location
+from app.models.meeting import Meeting
+from app.models.training import (
+    CourseClass,
+    CourseCohort,
+    CourseCohortClass,
+    TrainingRecord,
+)
 from app.models.user import Organization
 from app.schemas.location import LocationCreate, LocationUpdate
 from app.utils.org_locks import ROOM_BOOKING, lock_organization_scope
@@ -26,13 +34,190 @@ from app.utils.org_scoping import assert_in_org
 # location any of these reference cannot be hard-deleted, so removing it
 # deactivates it instead. A new RESTRICT reference to ``locations`` belongs
 # here, or deleting a location it points at goes back to failing at flush.
+#
+# Training history, meetings and event requests joined the events here by the
+# owner's decisions of 2026-11-01: where a class was held or a meeting met is
+# part of the record. Inventory items, storage areas and NFC tap logs stay
+# ON DELETE SET NULL — a missing location is an ordinary state for them.
 _RESTRICTING_LOCATION_REFERENCES = (
     Event.location_id,
     EventTemplate.default_location_id,
     Apparatus.primary_station_id,
     Apparatus.current_location_id,
     ApparatusLocationHistory.location_id,
+    TrainingRecord.location_id,
+    CourseClass.location_id,
+    CourseCohort.location_id,
+    CourseCohortClass.location_id,
+    Meeting.location_id,
+    EventRequest.event_location_id,
 )
+
+# Enforces (organization_id, name, building) — see Location.building_key.
+_NAME_CONSTRAINT = "uq_locations_org_name_building"
+
+# Longest a location name may be (``locations.name`` is String(200)).
+_NAME_MAX = 200
+
+
+def _duplicate_name_error(name: str) -> ValueError:
+    return ValueError(f"Location with name '{name}' already exists")
+
+
+def _violates_name_constraint(error: IntegrityError) -> bool:
+    return _NAME_CONSTRAINT in str(error.orig)
+
+
+def _numbered(base: str, number: int) -> str:
+    """``base (n)``, with the base cut so the whole fits ``locations.name``.
+
+    Migration 2bb7c963f351 numbered the duplicates it settled the same way,
+    so a room renamed there keeps its name on its next sync.
+    """
+    suffix = f" ({number})"
+    return base[: _NAME_MAX - len(suffix)] + suffix
+
+
+async def _name_taken(
+    db: AsyncSession,
+    organization_id: str,
+    name: str,
+    building: Optional[str],
+    exclude_id: Optional[str] = None,
+    current: bool = False,
+) -> bool:
+    """Whether another location already holds this name in this building.
+
+    Compares through ``building_key`` so that no building and an empty one are
+    the same scope, as the unique key sees them. Equality follows the column
+    collation, so case and trailing spaces are judged as the key judges them.
+    ``.limit(1)`` is load-bearing: rows stored before the key existed could
+    hold a duplicate pair, and uncapped, ``scalar_one_or_none()`` raises
+    MultipleResultsFound — not a ValueError, so a 500 on every later write
+    of that name.
+
+    ``current`` makes it a locking read. Under InnoDB's REPEATABLE READ a plain
+    SELECT answers from the transaction's snapshot, so after losing a race on
+    the unique key it would keep missing the row that won; a locking read sees
+    the latest committed rows.
+    """
+    query = (
+        select(Location.id)
+        .where(Location.organization_id == str(organization_id))
+        .where(Location.name == name)
+        .where(Location.building_key == (building or ""))
+    )
+    if exclude_id is not None:
+        query = query.where(Location.id != str(exclude_id))
+    query = query.limit(1)
+    if current:
+        query = query.with_for_update(read=True)
+    return (await db.execute(query)).scalar_one_or_none() is not None
+
+
+async def available_location_name(
+    db: AsyncSession,
+    organization_id: str,
+    base: str,
+    building: Optional[str],
+    location: Optional[Location] = None,
+    current: bool = False,
+) -> str:
+    """A name for a generated location that no other in its building holds.
+
+    For locations the system names itself (a facility room's), where refusing
+    the save would be wrong: two rooms called "Storage" in one building are
+    ordinary. Returns ``base`` when free, else the first free ``base (n)``.
+    An existing ``location`` keeps its current name when that is already one
+    of those and still free, so re-saving a room does not renumber it.
+
+    Call before assigning anything to ``location``: the lookup autoflushes,
+    and a pending clashing name would hit the unique key first.
+    """
+    exclude_id = location.id if location is not None else None
+    candidates = [base] + [_numbered(base, n) for n in range(2, 1000)]
+    if location is not None and location.name in candidates:
+        if not await _name_taken(
+            db, organization_id, location.name, building, exclude_id, current
+        ):
+            return location.name
+    for candidate in candidates:
+        if not await _name_taken(
+            db, organization_id, candidate, building, exclude_id, current
+        ):
+            return candidate
+    raise ValueError(f"Too many locations are named '{base}' in this building")
+
+
+async def save_system_named_location(
+    db: AsyncSession,
+    organization_id: str,
+    base: str,
+    building: Optional[str],
+    location: Optional[Location],
+    values: dict[str, Any],
+) -> Location:
+    """Create or update a location whose name the system chooses. Flushes.
+
+    For a facility room's or an onboarding station's location: the name is
+    ``base``, numbered by ``available_location_name`` when another location
+    in the building holds it, and ``values`` are the other columns. Two saves
+    racing for one name both pass that lookup, and the loser's flush hits
+    ``uq_locations_org_name_building``. The flush runs in a savepoint, so the
+    loss rolls back only this location; the name is then looked up again with
+    a locking read, which sees the winner, and the save retried once. Losing
+    twice in a row answers the same 400 a person naming it would get.
+    """
+    name = base
+    for attempt in range(2):
+        name = await available_location_name(
+            db, organization_id, base, building, location, current=attempt > 0
+        )
+        target = location if location is not None else Location(**values)
+        for field, value in values.items():
+            setattr(target, field, value)
+        target.organization_id = organization_id
+        target.name = name
+        try:
+            async with db.begin_nested():
+                db.add(target)
+                await db.flush()
+            return target
+        except IntegrityError as error:
+            if not _violates_name_constraint(error):
+                raise
+            if location is not None:
+                # The savepoint rollback expired it; reload before reuse,
+                # since an async session cannot lazy-load the attributes.
+                await db.refresh(location)
+    raise _duplicate_name_error(name)
+
+
+async def release_location_references(db: AsyncSession, location_ids: Select) -> None:
+    """Detach every blocking reference to the given locations. No commit.
+
+    Only for erasing a department wholesale (the onboarding reset), where the
+    rows that point at a location are about to go with their organization
+    and keeping where they happened has no one left to serve. Every other
+    removal goes through ``remove_location``, which keeps them. Nullable
+    references are cleared; a NOT NULL one (apparatus location history) has
+    its rows deleted, since they cannot outlive the location.
+    """
+    for column in _RESTRICTING_LOCATION_REFERENCES:
+        model = column.class_
+        if column.property.columns[0].nullable:
+            await db.execute(
+                update(model)
+                .where(column.in_(location_ids))
+                .values({column: None})
+                .execution_options(synchronize_session=False)
+            )
+        else:
+            await db.execute(
+                delete(model)
+                .where(column.in_(location_ids))
+                .execution_options(synchronize_session=False)
+            )
 
 
 class LocationInUseError(ValueError):
@@ -69,33 +254,14 @@ class LocationService:
             allow_none=True,
             label="facility",
         )
-        # Check if location with same name already exists within the same
-        # building/station.  Rooms at different stations may share a name
-        # (e.g. "Bunk Room" at Station 1 and Station 2).
-        dup_query = (
-            select(Location)
-            .where(Location.organization_id == str(organization_id))
-            .where(Location.name == location_data.name)
-        )
-        if location_data.building:
-            dup_query = dup_query.where(Location.building == location_data.building)
-        else:
-            dup_query = dup_query.where(Location.building.is_(None))
-        # `.limit(1)` is load-bearing, not an optimization. This rule has no
-        # unique constraint behind it (only a plain `ix_locations_name`) and it
-        # is a read-then-write, so two concurrent creates can both pass it and
-        # leave a duplicate pair behind. Unbounded, `scalar_one_or_none()` then
-        # raises MultipleResultsFound on every later create or update of that
-        # name — not a ValueError, so `handle_service_errors` renders it as a
-        # 500 with a generic message, and the one name nobody can save again is
-        # diagnosable only from the logs. Capped at one row, multiplicity is
-        # unrepresentable and the duplicate still reports as a clean 400.
-        result = await self.db.execute(dup_query.limit(1))
-        existing = result.scalar_one_or_none()
-        if existing:
-            raise ValueError(
-                f"Location with name '{location_data.name}' already exists"
-            )
+        # A name is unique within its building/station. Rooms at different
+        # stations may share a name (e.g. "Bunk Room" at Station 1 and 2).
+        # This check gives the friendly answer; the unique key behind it
+        # (LOC-41) is what holds when two creates race past it together.
+        if await self._name_taken(
+            organization_id, location_data.name, location_data.building
+        ):
+            raise _duplicate_name_error(location_data.name)
 
         # Generate a unique display code for public kiosk URLs
         display_code = await self._generate_unique_display_code()
@@ -109,10 +275,29 @@ class LocationService:
         )
 
         self.db.add(location)
-        await self.db.commit()
+        await self._commit_named(location_data.name)
         await self.db.refresh(location)
 
         return location
+
+    async def _name_taken(
+        self,
+        organization_id: str,
+        name: str,
+        building: Optional[str],
+        exclude_id: Optional[str] = None,
+    ) -> bool:
+        return await _name_taken(self.db, organization_id, name, building, exclude_id)
+
+    async def _commit_named(self, name: str) -> None:
+        """Commit, answering a lost race on the name as the check would have."""
+        try:
+            await self.db.commit()
+        except IntegrityError as error:
+            await self.db.rollback()
+            if _violates_name_constraint(error):
+                raise _duplicate_name_error(name) from error
+            raise
 
     async def get_location(
         self, location_id: UUID | str, organization_id: str
@@ -170,28 +355,21 @@ class LocationService:
         # null (LocationUpdate rejects it), so the same check is safe for it
         # too and keeps both fields on one rule.
         provided = location_data.model_fields_set
-        effective_name = location_data.name if "name" in provided else location.name
+        # LocationUpdate refuses an explicit null name, so a provided name is
+        # never None; the second test only narrows the type.
+        effective_name: str = (
+            location_data.name
+            if "name" in provided and location_data.name is not None
+            else location.name
+        )
         effective_building = (
             location_data.building if "building" in provided else location.building
         )
         if effective_name != location.name or effective_building != location.building:
-            dup_query = (
-                select(Location)
-                .where(Location.organization_id == str(organization_id))
-                .where(Location.name == effective_name)
-                .where(Location.id != str(location_id))
-            )
-            if effective_building:
-                dup_query = dup_query.where(Location.building == effective_building)
-            else:
-                dup_query = dup_query.where(Location.building.is_(None))
-            # Capped for the same reason as `create_location`'s — see there.
-            result = await self.db.execute(dup_query.limit(1))
-            existing = result.scalar_one_or_none()
-            if existing:
-                raise ValueError(
-                    f"Location with name '{effective_name}' already exists"
-                )
+            if await self._name_taken(
+                organization_id, effective_name, effective_building, location.id
+            ):
+                raise _duplicate_name_error(effective_name)
 
         # Update fields
         update_data = location_data.model_dump(exclude_unset=True)
@@ -231,7 +409,7 @@ class LocationService:
 
         location.updated_at = datetime.now(timezone.utc)
 
-        await self.db.commit()
+        await self._commit_named(effective_name)
         await self.db.refresh(location)
 
         return location
@@ -241,10 +419,11 @@ class LocationService:
         Delete a location
 
         Hard-deletes the location when nothing references it. When an event,
-        an event template, an apparatus (home station or current location) or
-        an apparatus location-history entry still points at it, the location
-        is deactivated (is_active=False) instead, so those records keep a
-        valid reference while the location leaves every picker.
+        an event template, an apparatus (home station or current location), an
+        apparatus location-history entry, training history (a record, a class,
+        a cohort or a cohort class), a meeting or an event request still points
+        at it, the location is deactivated (is_active=False) instead, so those
+        records keep a valid reference while the location leaves every picker.
 
         Returns True if deleted or deactivated, False if not found. Raises
         ``LocationInUseError`` if a reference appeared mid-delete.

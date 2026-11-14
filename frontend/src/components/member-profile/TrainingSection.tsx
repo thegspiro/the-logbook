@@ -180,6 +180,7 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
                       </span>
                     )}
                     {training.hours_completed > 0 && <span>{formatHours(training.hours_completed)} hrs</span>}
+                    {training.source_label && <span>Source: {training.source_label}</span>}
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1">

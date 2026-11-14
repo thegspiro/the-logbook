@@ -7,11 +7,14 @@ Includes per-integration-type config schemas with strict validation.
 
 import json
 import re
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
+
+from app.core.utils import list_within_detail_limit
+from app.models.event import EventType
 
 # ============================================
 # Shared response config (camelCase)
@@ -73,6 +76,12 @@ class NWSWeatherConfig(BaseModel):
 
     zone_id: str = Field(pattern=r"^[A-Z]{2}[CZ]\d{3}$")
     alert_types: List[str] = Field(default_factory=list)
+    # How members hear about a Severe or Extreme alert; the department chooses
+    # (owner decision 2026-10-29). A dashboard banner while it is active, a
+    # bell notice when it is issued, and an email when it is issued.
+    notify_banner: bool = True
+    notify_bell: bool = True
+    notify_email: bool = False
 
 
 class NFIRSConfig(BaseModel):
@@ -90,12 +99,34 @@ class NEMSISConfig(BaseModel):
     nemsis_version: str = "3.5.0"
 
 
+# The events a Generic Webhook can be sent, keyed by the chat dispatch ``kind``
+# that raises each one (notification_dispatch). Owner decision 2026-10-29: the
+# same three the chat integrations receive, each one pickable in the webhook's
+# settings.
+WEBHOOK_EVENT_TYPES: Dict[str, str] = {
+    "event": "event.created",
+    "shift": "shift.created",
+    "training": "training.recorded",
+}
+
+
 class GenericWebhookConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     url: str
     secret: str = ""
+    # Which events the webhook is sent; empty means all of them.
     event_types: List[str] = Field(default_factory=list)
+
+    @field_validator("event_types")
+    @classmethod
+    def known_event_types(cls, value: List[str]) -> List[str]:
+        unknown = sorted(set(value) - set(WEBHOOK_EVENT_TYPES.values()))
+        if unknown:
+            raise ValueError(
+                list_within_detail_limit("Unknown webhook event type(s): ", unknown)
+            )
+        return list(dict.fromkeys(value))
 
 
 class EPCRImportConfig(BaseModel):
@@ -106,6 +137,11 @@ class EPCRImportConfig(BaseModel):
     auto_match_members: bool = True
 
 
+# The event types a calendar integration's filter may name: the values the
+# publishing pass reads off Event.event_type.
+CALENDAR_PUBLISH_EVENT_TYPES = frozenset(t.value for t in EventType)
+
+
 # Calendar publishing is one way by design, and the tokens, the calendar and
 # the signed-in account come only from the provider's sign-in: the connect
 # flow writes them and the API refuses them (see
@@ -114,15 +150,29 @@ class _CalendarPublishConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     sync_direction: Literal["push"] = "push"
+    # The publishing pass (calendar_sync_service._type_filter) compares these
+    # with each event's EventType value, so a name outside that enum would
+    # match nothing and quietly empty the calendar. Empty means every type.
     event_types_to_sync: List[str] = Field(default_factory=list)
     # Event descriptions can carry internal notes, so they stay out of the
     # published calendar unless an administrator opts in.
     sync_descriptions: bool = False
+    # Bounds mirror calendar_sync_service.MAX_DAYS_AHEAD and its default.
     days_ahead: int = Field(default=180, ge=1, le=730)
     # A department's own OAuth client, overriding the deployment's sign-in
     # app. Both are stored encrypted (SECRET_CONFIG_KEYS).
     client_id: str = ""
     client_secret: str = ""
+
+    @field_validator("event_types_to_sync")
+    @classmethod
+    def _known_event_types(cls, value: List[str]) -> List[str]:
+        unknown = sorted(set(value) - CALENDAR_PUBLISH_EVENT_TYPES)
+        if unknown:
+            raise ValueError(
+                list_within_detail_limit("Unknown event type(s): ", unknown)
+            )
+        return list(dict.fromkeys(value))
 
 
 class GoogleCalendarConfig(_CalendarPublishConfig):
@@ -157,6 +207,18 @@ class ICalConfig(BaseModel):
     # on rotate (see the ical-feed endpoints), so a client cannot pick a
     # guessable one. Empty included_event_types means every event type.
     included_event_types: List[str] = Field(default_factory=list)
+    # Scheduled (non-cancelled) shifts are published alongside events only when
+    # this is on: off is what every feed connected before it existed served.
+    include_shifts: bool = False
+
+    @field_validator("included_event_types")
+    @classmethod
+    def _known_event_types(cls, value: List[str]) -> List[str]:
+        known = {t.value for t in EventType}
+        unknown = sorted({v for v in value if v not in known})
+        if unknown:
+            raise ValueError(f"Unknown event type(s): {', '.join(unknown)}")
+        return list(dict.fromkeys(value))
 
 
 class CSVImportConfig(BaseModel):
@@ -254,6 +316,21 @@ class PayPalConfig(BaseModel):
     # setup form always sends it; the default covers a config saved without
     # it, and the webhook reads the same constant (SF-auto-apply).
     auto_apply_payments: bool = PAYPAL_AUTO_APPLY_DEFAULT
+
+
+class ZeffyConfig(BaseModel):
+    """Zeffy API key plus the webhook signing secret.
+
+    Read-only: the key lists payments and campaigns, and nothing is ever
+    written to Zeffy. The signing secret (``whsec_...``) is optional — without
+    it the webhook refuses every delivery and payments arrive on the hourly
+    sync instead.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    api_key: str = ""
+    webhook_secret: str = ""
 
 
 class ClaudeMcpConfig(BaseModel):
@@ -523,6 +600,7 @@ INTEGRATION_CONFIG_SCHEMAS: Dict[str, type[BaseModel]] = {
     "documenso": DocumensoConfig,
     "calcom": CalcomConfig,
     "paypal": PayPalConfig,
+    "zeffy": ZeffyConfig,
     "claude-mcp": ClaudeMcpConfig,
     "google-workspace": GoogleWorkspaceConfig,
     "microsoft-365": Microsoft365Config,
@@ -562,12 +640,29 @@ SECRET_CONFIG_KEYS = frozenset(
 # ============================================
 
 
+class ActiveWeatherAlertResponse(BaseModel):
+    """An active alert as the dashboard banner shows it."""
+
+    id: str
+    event: str
+    severity: str
+    headline: Optional[str] = None
+    instruction: Optional[str] = None
+    area_desc: Optional[str] = None
+    onset: Optional[datetime] = None
+    expires: Optional[datetime] = None
+
+
 class WeatherAlertResponse(BaseModel):
     """Validated NWS weather alert — only trusted fields."""
 
     model_config = ConfigDict(extra="ignore")
 
+    # NWS's own identifier for the alert; the dedupe key.
+    id: str = ""
     event: str
+    # "Actual" for a real alert; "Exercise", "System", "Test" or "Draft" else.
+    status: str = ""
     severity: str = ""
     urgency: str = ""
     headline: str = ""

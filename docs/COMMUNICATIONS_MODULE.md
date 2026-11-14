@@ -316,7 +316,9 @@ questions keeps its single page.
 Accepted limits — server-side timing correlation (the reviewer email's send
 time, in-app `sent_at`, session activity), a reverse proxy the operator runs in
 front of the app (it logs these routes unless configured the same way;
-`docs/deployment/aws.md` shows how for its host nginx), unrecoverable keys,
+`docs/deployment/aws.md`, `docs/deployment/azure.md`,
+`docs/deployment/gcp.md` and `docs/deployment/digitalocean.md` show how for
+their host nginx), unrecoverable keys,
 screenshot content, and exact file `ctime` — are recorded in
 [`KNOWN_LIMITATIONS.md`](./KNOWN_LIMITATIONS.md) under "Suggestion Boxes — What
 Anonymity Does and Does Not Cover".
@@ -484,6 +486,20 @@ one; otherwise the kind's default. A malformed value counts as no choice.
   why, and `can_edit`, plus the alerts `SmsAlert` allows to be texted. It backs
   **Member Emails & Texts** at `/communications/member-emails` (Administration →
   Forms & Comms).
+- `GET /api/v1/email-templates/member-email-opt-outs` _(2026-11-05, owner
+  decision 2026-11-01)_ — same three permissions as the policy `GET` — lists the
+  department's current members (active and probationary) who have turned an
+  optional email off: each member's name, membership number, whether **Email
+  Notifications** is off, and the kinds their own setting turns off. `?kind=`
+  narrows it to the members who are not emailed that kind; only an optional
+  kind is accepted (400 otherwise). The response also counts, per optional
+  kind, the members not emailed it, and names the kinds the department
+  requires, which reach everyone whatever they chose. Who is "not emailed" is
+  decided by `email_policy.not_emailed`, which is tested to agree with
+  `member_receives_email`, so the view and the senders cannot drift. Paged with
+  `skip` / `limit` (at most 200), read-only, no contact fields, and never cached
+  by the frontend. It backs **Member Email Opt-Outs** at
+  `/communications/member-emails/opt-outs`, linked from Member Emails & Texts.
 - `GET /api/v1/users/me/email-choices` returns the member's switchable kinds and
   the labels of the ones always sent. Officer duty kinds are offered only to a
   member holding a management permission.

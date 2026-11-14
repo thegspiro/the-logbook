@@ -28,7 +28,10 @@ from app.models.event import (
 from app.schemas.base import UTCDateTime, UTCResponseBase, as_utc
 from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.schemas.reminder_limits import ReminderLeadDays, ReminderLeadHours
-from app.schemas.training_session import TrainingSessionAttach
+from app.schemas.training_session import (
+    TrainingSessionAttach,
+    TrainingSessionDetailsUpdate,
+)
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -437,6 +440,11 @@ class EventUpdate(BaseModel):
     # GET returned would 422 on the narrower type.
     attachments: Optional[List[Dict[str, Any]]] = None
     is_draft: Optional[bool] = None
+    # The event's training session, edited with the event in one save. Left
+    # out, the session is untouched; see TrainingSessionDetailsUpdate for what
+    # each field's null means. A Training event with no session gets one only
+    # when something here differs from what a session-less event credits.
+    training_details: Optional[TrainingSessionDetailsUpdate] = None
 
     @field_validator("start_datetime", "end_datetime", "rsvp_deadline")
     @classmethod
@@ -459,6 +467,35 @@ class EventCancel(BaseModel):
     send_notifications: bool = Field(
         default=False, description="Send cancellation notifications to RSVPs"
     )
+
+
+class EventPostpone(BaseModel):
+    """Schema for postponing an event to a new time (workflow review W80-11).
+
+    Unlike an edit of the schedule, a postponement clears the check-ins the
+    event already holds: a tap at the original slot must never be credited as
+    attendance at the new one.
+    """
+
+    new_start_datetime: datetime
+    new_end_datetime: datetime
+    reason: str = Field(..., min_length=10, max_length=500)
+    send_notifications: bool = Field(
+        default=True,
+        description="Tell members who RSVP'd Going or Maybe, in-app and by email",
+    )
+
+    @field_validator("new_start_datetime", "new_end_datetime")
+    @classmethod
+    def _normalize_utc(cls, v: datetime) -> datetime:
+        # Stored in DATETIME columns and compared by the service; see as_utc.
+        return as_utc(v)
+
+    @model_validator(mode="after")
+    def _ends_after_start(self) -> "EventPostpone":
+        if self.new_end_datetime <= self.new_start_datetime:
+            raise ValueError("The new end must be after the new start")
+        return self
 
 
 class EventTransferRequest(BaseModel):
@@ -521,8 +558,13 @@ class EventResponse(EventBase, UTCResponseBase):
     actual_end_time: Optional[datetime] = None
     is_draft: bool = False
     is_cancelled: bool = False
+    # As on EventListItem: a session-attendance requirement counts this event.
+    counts_toward_attendance: bool = False
     cancellation_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
+    postponed_at: Optional[datetime] = None
+    postponed_from_start: Optional[datetime] = None
+    postponement_reason: Optional[str] = None
     # Attendance lock. The UI reads attendance_finalized_at to decide which
     # actions to offer at all; the name is resolved for display because rows
     # backfilled from the pre-column marker have no actor recorded.
@@ -547,6 +589,10 @@ class EventResponse(EventBase, UTCResponseBase):
     # Decided here, not in the client (CLAUDE.md #29): may this caller decide
     # the event's attendance requests and transfer it. Detail endpoint only.
     can_manage_organizers: bool = False
+    # May this caller see and decide the event's attendance requests: the
+    # above, plus a fallback position holder a request was sent to, who may
+    # hold no events.manage. Detail endpoint only.
+    can_review_attendance_requests: bool = False
     # How this caller may use the attendance tools, or None: "events_manager"
     # (any event), "training_manager" (a Training event) or "organizer" (the
     # organizer pair, who may not write their own row). Detail endpoint only.
@@ -647,6 +693,9 @@ class EventListItem(UTCResponseBase):
     mandatory_membership_types: Optional[List[str]] = None
     is_draft: bool = False
     is_cancelled: bool
+    # The start before the first postponement, for the list's "Postponed"
+    # badge; None for an event never postponed.
+    postponed_from_start: Optional[datetime] = None
     is_recurring: bool = False
     recurrence_parent_id: Optional[UUID] = None
     rsvp_count: Optional[int] = None
@@ -665,6 +714,9 @@ class EventListItem(UTCResponseBase):
     # configured for "maybe" only rendered a button the API always rejected.
     allowed_rsvp_statuses: Optional[List[str]] = None
     user_rsvp_status: Optional[str] = None
+    # The event's training session counts toward a session-attendance
+    # requirement: members it grades are charged with attending it.
+    counts_toward_attendance: bool = False
 
     # Fields the member-facing list needs to tell an urgent event from a
     # routine one without a per-card round trip. The check-in window is
@@ -959,11 +1011,11 @@ class GuestLookupResponse(BaseModel):
     """What the kiosk may say about an email typed into it.
 
     The page is public, so this carries as little as recognition needs: a
-    prospect is named by first name and last initial only, and nothing at all
-    is returned about a member account beyond the fact that it is one.
+    prospect is named by first name and last initial only, and a member
+    account answers 'not_found', exactly as an unknown address does.
     """
 
-    status: str = Field(description="'prospect', 'member' or 'not_found'")
+    status: str = Field(description="'prospect' or 'not_found'")
     display_name: Optional[str] = Field(
         default=None, description="First name and last initial, for 'prospect'"
     )
@@ -1434,11 +1486,6 @@ class RecurringEventCreate(BaseModel):
             raise ValueError(
                 "recurrence_end_date is required unless rolling_recurrence is true"
             )
-        # The nightly job that extends a rolling series copies the event, not
-        # a session attached to it, so later occurrences would silently lose
-        # the details the first ones carry.
-        if self.rolling_recurrence and self.training_details is not None:
-            raise ValueError("Training details can't be added to a rolling series")
         if self.recurrence_pattern == "custom" and not self.recurrence_custom_days:
             raise ValueError(
                 "recurrence_custom_days is required when recurrence_pattern is 'custom'"

@@ -18,7 +18,7 @@ vi.mock('./apiClient', () => ({
   },
 }));
 
-import { LIST_ALL_PAGE_SIZE, integrationsService, memberStatusService } from './adminServices';
+import { LIST_ALL_PAGE_SIZE, dashboardService, integrationsService, memberStatusService } from './adminServices';
 
 const rows = (prefix: string, count: number) => Array.from({ length: count }, (_, i) => ({ id: `${prefix}-${i}` }));
 
@@ -108,5 +108,42 @@ describe('integrationsService.getGoogleWorkspaceAttention', () => {
     const items = await integrationsService.getGoogleWorkspaceAttention();
     expect(mockGet).toHaveBeenCalledWith('/integrations/google-workspace/attention');
     expect(items).toEqual([{ user_id: 'u1' }]);
+  });
+});
+
+// DASH-40: the Action Items screen reads the paged route; the bare-list
+// /dashboard/action-items stays, capped, for existing API clients.
+describe('dashboardService.getActionItems', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+  });
+
+  it('asks the paged route and returns its totals', async () => {
+    mockGet.mockResolvedValue({
+      data: { items: [{ id: 'a1' }], total: 40, open_total: 12, overdue_total: 3, limit: 25, offset: 25 },
+    });
+
+    const page = await dashboardService.getActionItems({ open_only: true, limit: 25, offset: 25 });
+
+    expect(mockGet).toHaveBeenCalledWith('/dashboard/action-items/page', {
+      params: { open_only: true, limit: 25, offset: 25 },
+    });
+    expect(page).toEqual({
+      items: [{ id: 'a1' }],
+      total: 40,
+      open_total: 12,
+      overdue_total: 3,
+      limit: 25,
+      offset: 25,
+    });
+  });
+
+  it('reads an unexpected body as an empty page', async () => {
+    mockGet.mockResolvedValue({ data: '<html>captive portal</html>' });
+
+    const page = await dashboardService.getActionItems();
+
+    expect(page.items).toEqual([]);
+    expect(page.total).toBe(0);
   });
 });

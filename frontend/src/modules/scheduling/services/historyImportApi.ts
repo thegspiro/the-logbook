@@ -18,6 +18,7 @@ import type {
   HistoryImportRowUpdate,
   HistoryImportSettingsUpdate,
   HistoryImportSummary,
+  MatchDecision,
 } from '../types/historyImport';
 
 const api = createApiClient();
@@ -61,6 +62,16 @@ export const historyImportService = {
     const response = await api.patch<HistoryImportDetail>(`${BASE}/${importId}/rows/${rowId}`, payload, {
       timeout: 0,
     });
+    return response.data;
+  },
+
+  /** Answer every probable crew match still waiting, at once. */
+  async decideProbableMatches(importId: string, decision: MatchDecision): Promise<HistoryImportDetail> {
+    const response = await api.post<HistoryImportDetail>(
+      `${BASE}/${importId}/probable-matches`,
+      { decision },
+      { timeout: 0 }
+    );
     return response.data;
   },
 

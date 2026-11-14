@@ -385,11 +385,12 @@ const SkillsTestingTemplatesTab: React.FC = () => {
         </div>
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            {/* Reflows to one card per template under 768px. Scrolled sideways,
-                the name was left a few characters wide and half the actions
-                sat off the edge of a phone. */}
-            <table className="rwd-table w-full">
+          <div className="rwd-table-container overflow-x-auto">
+            {/* Reflows to one card per template when this wrapper is under
+                64rem — a phone, or a tablet with the side navigation open.
+                Scrolled sideways, the name was left a few characters wide and
+                half the actions sat off the edge of the card. */}
+            <table className="rwd-table rwd-table-wide w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th

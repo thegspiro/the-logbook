@@ -41,6 +41,43 @@ describe('buildUpcomingItems', () => {
     expect(items[0]?.detail).toBe('19.5/72 hrs complete');
   });
 
+  it('does not list a session-attendance requirement with no session held yet', () => {
+    const items = buildUpcomingItems(
+      summary({
+        requirements_detail: [
+          requirement({
+            requirement_type: 'session_attendance',
+            required_hours: 0,
+            completed_hours: 0,
+            progress_percentage: 0,
+            not_applicable: true,
+          }),
+        ],
+      }),
+      TODAY
+    );
+    expect(items).toEqual([]);
+  });
+
+  it('counts a courses requirement in courses, and a certification with no unit', () => {
+    const items = buildUpcomingItems(
+      summary({
+        requirements_detail: [
+          requirement({ id: 'ops', requirement_type: 'courses', completed_hours: 2, required_hours: 6 }),
+          requirement({
+            id: 'cpr',
+            requirement_type: 'certification',
+            completed_hours: 0,
+            required_hours: 1,
+            days_until_due: 80,
+          }),
+        ],
+      }),
+      TODAY
+    );
+    expect(items.map((i) => i.detail)).toEqual(['2/6 courses complete', '0/1 complete']);
+  });
+
   it('marks a lapsed requirement overdue and sorts it first', () => {
     const items = buildUpcomingItems(
       summary({

@@ -31,6 +31,7 @@ from app.models.apparatus import (
     ApparatusStatus,
     ApparatusStatusHistory,
     ApparatusType,
+    DefaultApparatusStatus,
     EvocLevel,
 )
 from app.models.inventory import InventoryItem
@@ -67,6 +68,14 @@ from app.utils.org_timezone import resolve_org_today
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 NFPA_DUE_SOON_DAYS = 30
+
+# "Unavailable" is the dashboard's "Out of service" tile: the fleet summary's
+# out-of-service and in-maintenance counts added together. One definition, so
+# the tile's link lists the apparatus that tile counted.
+UNAVAILABLE_STATUS_CODES = (
+    DefaultApparatusStatus.OUT_OF_SERVICE.value,
+    DefaultApparatusStatus.IN_MAINTENANCE.value,
+)
 
 
 def _nfpa_next_due(mtype, last, last_date, records) -> Optional[date]:
@@ -643,6 +652,22 @@ class ApparatusService:
                         Apparatus.vin.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
                     )
                 )
+
+            if filters.service_status == "unavailable":
+                conditions.append(
+                    Apparatus.status_id.in_(
+                        select(ApparatusStatus.id).where(
+                            ApparatusStatus.code.in_(UNAVAILABLE_STATUS_CODES)
+                        )
+                    )
+                )
+            if filters.has_deficiency is not None:
+                conditions.append(Apparatus.has_deficiency.is_(filters.has_deficiency))
+            if filters.inspection == "overdue":
+                # The department's calendar day, as the dashboard's
+                # "Overdue checks" tile counts it, not the server's UTC date.
+                today = await resolve_org_today(self.db, organization_id)
+                conditions.append(Apparatus.inspection_expiration < today)
 
         # Count query
         count_query = select(func.count(Apparatus.id)).where(and_(*conditions))
@@ -2114,8 +2139,14 @@ class ApparatusService:
         return {
             "total_apparatus": total,
             "in_service_count": status_counts.get("in_service", 0),
-            "out_of_service_count": status_counts.get("out_of_service", 0),
-            "in_maintenance_count": status_counts.get("in_maintenance", 0),
+            # These two are summed by the dashboard's "Out of service" tile,
+            # whose link lists UNAVAILABLE_STATUS_CODES via list_apparatus.
+            "out_of_service_count": status_counts.get(
+                DefaultApparatusStatus.OUT_OF_SERVICE.value, 0
+            ),
+            "in_maintenance_count": status_counts.get(
+                DefaultApparatusStatus.IN_MAINTENANCE.value, 0
+            ),
             "reserve_count": status_counts.get("reserve", 0),
             "archived_count": archived,
             "by_type": type_counts,

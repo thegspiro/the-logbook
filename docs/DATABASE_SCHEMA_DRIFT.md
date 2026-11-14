@@ -23,8 +23,7 @@ The Logbook builds a database two different ways:
 | `alembic upgrade head`       | Pre-existing database                          | **203 tables** from the migration chain |
 
 A fresh install never replays the migration chain — it creates every table from
-the models, runs `MIGRATION_ONLY_FILES` and `SEED_DATA_FILES`, then stamps
-Alembic at head. **The models are the schema.** Migrations only patch databases
+the models, runs `SEED_DATA_FILES`, then stamps Alembic at head. **The models are the schema.** Migrations only patch databases
 that already exist.
 
 There is also a self-heal pass. On startup `validate_schema()` compares the live

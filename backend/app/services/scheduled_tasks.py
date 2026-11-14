@@ -13,6 +13,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 6:00 AM — certification expiration alerts
 0 6 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=cert_expiration_alerts
 
+# Daily at 6:15 AM — medical screening expiry reminders
+15 6 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=medical_screening_expiry_reminders
+
 # Weekly on Mondays at 7:00 AM — struggling member detection
 0 7 * * 1 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=struggling_member_check
 
@@ -27,6 +30,9 @@ Recommended crontab (add to host or container cron):
 
 # Daily at 7:15 AM — per-requirement due-date reminders and overdue notices
 15 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=program_requirement_deadlines
+
+# Every 30 minutes — announce training-program milestones met by courses and tests
+*/30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=program_milestones
 
 # Monthly on the 1st at 8:00 AM — membership tier auto-advancement
 0 8 1 * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=membership_tier_advance
@@ -123,11 +129,20 @@ Recommended crontab (add to host or container cron):
 # Daily at 4:45 AM — recover PayPal store payments the webhook never recorded
 45 4 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=paypal_capture_backfill
 
+# Hourly at :35 — read linked Zeffy campaigns' payments into donations, event revenue and dues
+35 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=zeffy_payment_sync
+
 # Daily at 8:10 AM — remind budget-line owners before a draft year's request deadline
 10 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=budget_request_reminders
 
+# Daily at 8:15 AM — email the Treasurer when a fiscal year's start or year-end close is due
+15 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=fiscal_year_due_reminders
+
 # Daily at 8:20 AM — remind about grant compliance tasks and pledges coming due
 20 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=grant_reminders
+
+# Daily at 8:25 AM — email quarterly statements for cash advances on the periodic method
+25 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=advance_statements
 -----------------------------------------------------
 """
 
@@ -142,6 +157,7 @@ from sqlalchemy import func, inspect, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_reporting import persist_task_error_log
+from app.core.utils import safe_error_detail
 from app.models.call_tracking import CallTrackingMode
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
@@ -157,10 +173,18 @@ from app.services.email_policy import (
     member_receives_email,
 )
 from app.services.email_service import _redact_email
+from app.services.scheduling_module_config_service import department_seat_labels
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.utils.email_providers import stored_email_section
 from app.utils.hours import hours_from_minutes
-from app.utils.org_timezone import org_today, resolve_scheduling_timezone, to_local
+from app.utils.org_timezone import (
+    local_day_start_utc,
+    org_today,
+    resolve_scheduling_timezone,
+    scheduling_timezone,
+    to_local,
+    today_in,
+)
 from app.utils.positions import position_label
 from app.utils.sql_results import rows_affected
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
@@ -186,6 +210,24 @@ def _resolve_event_reminder_target(event: Any) -> str:
     )
 
 
+def _rollup_call_types(call_types: List[str]) -> List[tuple[str, int]]:
+    """Group a member's per-call incident types into (type, count) pairs.
+
+    The end-of-shift summary receives one entry per call, so a shift of ten
+    EMS runs listed "EMS" ten times. Most frequent first; ties keep the order
+    the types were first seen, so the result is stable for a given shift.
+    """
+    counts: Dict[str, int] = {}
+    for call_type in call_types:
+        counts[call_type] = counts.get(call_type, 0) + 1
+    return sorted(counts.items(), key=lambda item: -item[1])
+
+
+def _format_call_type_rollup(rollup: List[tuple[str, int]]) -> str:
+    """Plain-text form of a call-type rollup, e.g. ``10 EMS, 2 Fire``."""
+    return ", ".join(f"{count} {name}" for name, count in rollup)
+
+
 # Schedule definitions (for documentation and frontend display)
 SCHEDULE = {
     "election_lifecycle": {
@@ -204,6 +246,15 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "06:00",
         "cron": "0 6 * * *",
+    },
+    "medical_screening_expiry_reminders": {
+        "description": (
+            "Email members before a medical screening falls due "
+            "(90/60/30/7-day tiers, once per tier per screening)"
+        ),
+        "frequency": "daily",
+        "recommended_time": "06:15",
+        "cron": "15 6 * * *",
     },
     "struggling_member_check": {
         "description": "Detect members falling behind on training programs and send notifications",
@@ -225,6 +276,17 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "07:15",
         "cron": "15 7 * * *",
+    },
+    "program_milestones": {
+        "description": (
+            "Announce training-program milestones that members have met — "
+            "chiefly ones waiting on a course, whose records arrive by paths "
+            "that do not check milestones themselves (once per milestone and "
+            "enrollment — safe to run at any frequency)"
+        ),
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30 * * * *",
+        "cron": "*/30 * * * *",
     },
     "enrollment_expiry": {
         "description": "Expire training-program enrollments whose completion deadline has passed",
@@ -277,7 +339,11 @@ SCHEDULE = {
         "cron": "0 8 1 * *",
     },
     "action_item_reminders": {
-        "description": "Send reminders for action items due within 3 days, 1 day, or overdue (from meetings and minutes)",
+        "description": (
+            "Send bell reminders for action items due within 3 days, 1 day, or "
+            "overdue (from meetings and minutes), and email them for items on "
+            "meeting records"
+        ),
         "frequency": "daily",
         "recommended_time": "07:00",
         "cron": "0 7 * * *",
@@ -330,13 +396,35 @@ SCHEDULE = {
     "budget_request_reminders": {
         "description": (
             "Email budget-line owners who still owe a request for a draft "
-            "fiscal year, 7 days and 1 day before its request deadline (once "
-            "per member, deadline and reminder — safe to run more than once a "
-            "day)"
+            "fiscal year, on the department's reminder days before its request "
+            "deadline (7 and 1 unless set), with a bell entry too if the "
+            "department turned those on (once per member, deadline and "
+            "reminder — safe to run more than once a day)"
         ),
         "frequency": "daily",
         "recommended_time": "08:10",
         "cron": "10 8 * * *",
+    },
+    "fiscal_year_due_reminders": {
+        "description": (
+            "Email the Treasurers when an adopted fiscal year reaches its "
+            "start date or the active one passes its end date (once per "
+            "Treasurer, year and date — safe to run more than once a day)"
+        ),
+        "frequency": "daily",
+        "recommended_time": "08:15",
+        "cron": "15 8 * * *",
+    },
+    "evaluation_due_notices": {
+        "description": (
+            "Email the people an open performance-evaluation step waits on "
+            "when it is due soon (the template's reminder days) and once it is "
+            "overdue, the overdue notice also to evaluation managers (once per "
+            "step and notice — safe to run more than once a day)"
+        ),
+        "frequency": "daily",
+        "recommended_time": "08:20",
+        "cron": "20 8 * * *",
     },
     "grant_reminders": {
         "description": (
@@ -350,6 +438,18 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "08:20",
         "cron": "20 8 * * *",
+    },
+    "advance_statements": {
+        "description": (
+            "Email the holder of each outstanding cash advance on the "
+            "periodic-statement method its quarterly statement, once the "
+            "quarter has ended on the department's calendar (once per advance "
+            "and quarter, unique in advance_statements — safe to run more "
+            "than once a day)"
+        ),
+        "frequency": "daily",
+        "recommended_time": "08:25",
+        "cron": "25 8 * * *",
     },
     "prospect_attendance_advance": {
         "description": (
@@ -423,6 +523,24 @@ SCHEDULE = {
         "recommended_time": "03:45",
         "cron": "45 3 * * *",
     },
+    "attendance_waiver_attachment_retention": {
+        "description": "Delete documents filed with attendance waiver requests once the request has been closed (decided, withdrawn or voided) for longer than the department's retention period (the waiver policy's attachment_retention_days, a year by default). The request and its decision log are kept.",
+        "frequency": "daily",
+        "recommended_time": "03:50",
+        "cron": "50 3 * * *",
+    },
+    "attendance_waiver_expiry": {
+        "description": "Close attendance waiver requests (training sessions and business meetings) still undecided seven days after the session (owner decision 2026-11-13): never before the latest submission deadline a department can choose. The member is notified in-app and by email; the session counts as missed.",
+        "frequency": "hourly",
+        "recommended_time": "every hour",
+        "cron": "35 * * * *",
+    },
+    "stored_file_malware_scan": {
+        "description": "Malware-scan files and images stored before upload scanning covered them (owner decision 2026-11-01), a bounded batch per run, until each has been scanned once. Does nothing while CLAMAV_ENABLED is false; an infected file is removed and audited as upload_malware_detected.",
+        "frequency": "hourly",
+        "recommended_time": "every hour",
+        "cron": "20 * * * *",
+    },
     "scheduled_emails": {
         "description": "Process pending scheduled emails that are due to be sent",
         "frequency": "every 1 minute",
@@ -447,6 +565,12 @@ SCHEDULE = {
         "recommended_time": "04:45",
         "cron": "45 4 * * *",
     },
+    "zeffy_payment_sync": {
+        "description": "Read the payments of every linked Zeffy campaign and apply them to their fundraising campaign, fundraising event or dues schedule",
+        "frequency": "hourly",
+        "recommended_time": "every hour at :35",
+        "cron": "35 * * * *",
+    },
     "inventory_low_stock_alerts": {
         "description": "Send email alerts to admins when inventory items fall below their reorder point",
         "frequency": "daily",
@@ -464,6 +588,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "03:30",
         "cron": "30 3 * * *",
+    },
+    "history_import_expiry": {
+        "description": "Delete the rows of History roster-import drafts nobody has worked on for 30 days (the import record stays, marked expired)",
+        "frequency": "daily",
+        "recommended_time": "03:45",
+        "cron": "45 3 * * *",
     },
     "inventory_audit_digest": {
         "description": "Email inventory managers a list of shelves overdue for an NFC shelf audit. Checked daily, sent at most once a week per department, and only when something is overdue",
@@ -567,6 +697,12 @@ SCHEDULE = {
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
     },
+    "quickbooks_sync": {
+        "description": "Post paid purchase requests, issued checks and paid expense reports to each connected QuickBooks Online company as Purchases, retrying failures with backoff (one posting per payment and Intuit's requestid, so a second run posts nothing twice; no-op unless QBO_CLIENT_ID, QBO_CLIENT_SECRET and QBO_REDIRECT_URI are set)",
+        "frequency": "every 5 minutes",
+        "recommended_time": "*/5 * * * *",
+        "cron": "*/5 * * * *",
+    },
     "calendar_sync": {
         "description": "Publish department events to each connected Google Calendar or Outlook integration's calendar: create, update and delete what changed, retrying failures with backoff (no-op unless CALENDAR_SYNC_ENABLED)",
         "frequency": "every 5 minutes",
@@ -578,6 +714,18 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "06:00",
         "cron": "0 6 * * *",
+    },
+    "dues_late_fees": {
+        "description": "Charge a dues schedule's late fee, once, on member dues still unpaid after the due date plus the grace period (schedules saved since 2026-11-01 only)",
+        "frequency": "daily",
+        "recommended_time": "06:00",
+        "cron": "0 6 * * *",
+    },
+    "dues_reminders": {
+        "description": "Email members whose dues fall due within a week, and once when they become overdue (optional 'Your dues' email kind; at most once per dues record and kind)",
+        "frequency": "daily",
+        "recommended_time": "09:00",
+        "cron": "0 9 * * *",
     },
     "mark_overdue_maintenance": {
         "description": "Flag incomplete apparatus/facility maintenance past its due date as overdue (the stored flag is otherwise never recomputed over time)",
@@ -606,11 +754,30 @@ SCHEDULE = {
         "recommended_time": "07:35",
         "cron": "35 7 * * *",
     },
+    "weather_alert_poll": {
+        "description": "Check each department's NWS weather zone for severe and extreme alerts, and show or send new ones as the department chose (dashboard banner, bell, email)",
+        "frequency": "every 15 minutes",
+        "recommended_time": "*/15 * * * *",
+        "cron": "*/15 * * * *",
+    },
     "google_workspace_suspension_sync": {
         "description": "Finish Google Workspace and Microsoft 365 suspensions (and their lifting) that a member's departure or return left unsettled, retry failed ones, and retry taking departed members out of their groups and passing on name changes",
         "frequency": "every 15 minutes",
         "recommended_time": "*/15 * * * *",
         "cron": "*/15 * * * *",
+    },
+    "prospect_follow_up_reminders": {
+        "description": (
+            "Remind applicants about an unsubmitted follow-up form every seven "
+            "days, up to three times, while they are still on its stage. Sent "
+            "between 09:00 and 20:00 in the department's timezone, so the task "
+            "runs hourly and each reminder goes out in the first run after "
+            "09:00 on its day (once per request and reminder — safe to run "
+            "more than once an hour)"
+        ),
+        "frequency": "hourly",
+        "recommended_time": "0 * * * *",
+        "cron": "0 * * * *",
     },
     "admin_hours_auto_close": {
         "description": "Auto-close admin-hours sessions that exceeded their category's max-hours limit (caps a forgotten clock-in and flags it for review)",
@@ -671,9 +838,8 @@ DOMAIN_MEDICAL = "medical"
 async def _stock_alert_audiences(
     db_session: AsyncSession,
     organization_id: str,
-    department_required: DepartmentRequired,
-) -> Dict[frozenset, List[str]]:
-    """Group recipient emails by the stock domains each may actually see.
+) -> Dict[frozenset, List[User]]:
+    """Group the officers by the stock domains each may actually see.
 
     An alert that spans both domains cannot simply widen its recipient list:
     the body is one rendered table, so adding medical-only officers to a
@@ -685,8 +851,9 @@ async def _stock_alert_audiences(
     [...]}`` so a caller can render one message per audience containing only
     that audience's rows. Someone holding both grants appears once, in the
     two-domain group, and so receives a single complete email rather than two
-    partial ones. Officers who turned off quartermaster duty emails are left
-    out; these alerts have no in-app copy for them to miss.
+    partial ones. Every officer is returned, whatever their email choices:
+    the bell copy reaches them all, and ``_quartermaster_emails`` picks out
+    who also receives the email.
     """
     from sqlalchemy.orm import selectinload
 
@@ -695,12 +862,11 @@ async def _stock_alert_audiences(
     result = await db_session.execute(
         select(User)
         .where(User.organization_id == organization_id)
-        .where(User.is_active == True)  # noqa: E712
-        .where(User.email.isnot(None))
+        .where(User.is_active.is_(True))
         .options(selectinload(User.roles))
     )
 
-    audiences: Dict[frozenset, List[str]] = {}
+    audiences: Dict[frozenset, List[User]] = {}
     for user in result.scalars().all():
         granted: set[str] = set()
         for role in user.roles or []:
@@ -715,22 +881,31 @@ async def _stock_alert_audiences(
             domains.add(DOMAIN_MEDICAL)
         if not domains:
             continue
-        if not member_receives_email(
+
+        audiences.setdefault(frozenset(domains), []).append(user)
+
+    return audiences
+
+
+def _quartermaster_emails(
+    users: List[User], department_required: DepartmentRequired
+) -> List[str]:
+    """The addresses among ``users`` that receive quartermaster duty email."""
+    return [
+        user.email
+        for user in users
+        if user.email
+        and member_receives_email(
             user.notification_preferences,
             EmailKind.INVENTORY_DUTIES,
             department_required,
-        ):
-            continue
-
-        audiences.setdefault(frozenset(domains), []).append(user.email)
-
-    return audiences
+        )
+    ]
 
 
 async def _stock_alert_recipients(
     db_session: AsyncSession,
     organization_id: str,
-    department_required: DepartmentRequired,
     permissions: tuple[str, ...] = GEAR_STOCK_PERMISSIONS,
 ) -> list[User]:
     """The members this department put in charge of the stock being alerted on.
@@ -753,8 +928,8 @@ async def _stock_alert_recipients(
     guard in ``_for_each_org``, which logged it and moved on. The alerts were
     silently undelivered rather than visibly broken.
 
-    Every caller only emails the result, so officers who turned off
-    quartermaster duty emails are left out here.
+    Every officer is returned, whatever their email choices: callers give
+    them all a bell copy and email only those ``_quartermaster_emails`` keeps.
     """
     from sqlalchemy.orm import selectinload
 
@@ -763,8 +938,7 @@ async def _stock_alert_recipients(
     result = await db_session.execute(
         select(User)
         .where(User.organization_id == organization_id)
-        .where(User.is_active == True)  # noqa: E712
-        .where(User.email.isnot(None))
+        .where(User.is_active.is_(True))
         .options(selectinload(User.roles))
     )
     recipients: list[User] = []
@@ -772,11 +946,7 @@ async def _stock_alert_recipients(
         granted: set[str] = set()
         for role in user.roles or []:
             granted.update(role.permissions or [])
-        if permission_matches_any(permissions, granted) and member_receives_email(
-            user.notification_preferences,
-            EmailKind.INVENTORY_DUTIES,
-            department_required,
-        ):
+        if permission_matches_any(permissions, granted):
             recipients.append(user)
     return recipients
 
@@ -893,7 +1063,7 @@ async def resolve_check_templates(
                 ShiftTemplateEquipmentCheck.organization_id == str(organization_id),
                 EquipmentCheckTemplate.organization_id == str(organization_id),
                 EquipmentCheckTemplate.check_timing == check_timing,
-                EquipmentCheckTemplate.is_active == True,  # noqa: E712
+                EquipmentCheckTemplate.is_active.is_(True),
             )
             .order_by(ShiftTemplateEquipmentCheck.sort_order)
         )
@@ -923,7 +1093,7 @@ async def resolve_check_templates(
         .where(EquipmentCheckTemplate.organization_id == str(organization_id))
         .where(EquipmentCheckTemplate.apparatus_id == str(apparatus_id))
         .where(EquipmentCheckTemplate.check_timing == check_timing)
-        .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
+        .where(EquipmentCheckTemplate.is_active.is_(True))
         .order_by(EquipmentCheckTemplate.sort_order)
     )
     templates = list(tmpl_result.scalars().all())
@@ -942,7 +1112,7 @@ async def resolve_check_templates(
         .where(EquipmentCheckTemplate.organization_id == str(organization_id))
         .where(EquipmentCheckTemplate.apparatus_id.is_(None))
         .where(EquipmentCheckTemplate.check_timing == check_timing)
-        .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
+        .where(EquipmentCheckTemplate.is_active.is_(True))
     )
     if app_type_id:
         at_result = await db.execute(
@@ -977,6 +1147,22 @@ async def run_cert_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
         return result.get("alerts_sent", 0)
 
     return await _for_each_org(db, "cert_expiration_alerts", _process)
+
+
+async def run_medical_screening_expiry_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Email members before a screening falls due (W71b-4).
+
+    The module switch and the MEDICAL_SCREENING_EXPIRY rule are checked in
+    ``ScreeningReminderService.process_reminders``; a second daily run is a
+    no-op through ``screening_reminder_sends``' unique key.
+    """
+    from app.services.screening_reminder_service import ScreeningReminderService
+
+    async def _process(db_session, org):
+        result = await ScreeningReminderService(db_session).process_reminders(org.id)
+        return result.get("reminders_sent", 0)
+
+    return await _for_each_org(db, "medical_screening_expiry_reminders", _process)
 
 
 async def run_struggling_member_check(db: AsyncSession) -> Dict[str, Any]:
@@ -1019,6 +1205,20 @@ async def run_program_requirement_deadlines(db: AsyncSession) -> Dict[str, Any]:
         return result.get("warnings_sent", 0) + result.get("overdue_sent", 0)
 
     return await _for_each_org(db, "program_requirement_deadlines", _process)
+
+
+async def run_program_milestones(db: AsyncSession) -> Dict[str, Any]:
+    """Record and announce milestones members now meet.
+
+    Idempotent per (milestone, enrollment): the achievement row is unique on
+    the pair and committed before anything is sent (program_milestones).
+    """
+    from app.services.program_milestones import sweep_organization
+
+    async def _process(db_session, org):
+        return await sweep_organization(db_session, org.id)
+
+    return await _for_each_org(db, "program_milestones", _process)
 
 
 async def run_enrollment_expiry(db: AsyncSession) -> Dict[str, Any]:
@@ -1234,6 +1434,11 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     Send reminders for action items approaching or past their due dates.
     Checks both meeting_action_items and minutes_action_items tables.
     Sends notifications at 3 days before, 1 day before, and on overdue.
+
+    A meeting-record item's reminder is also emailed (owner decision
+    2026-11-01); a minutes item's email comes from
+    ``run_minutes_action_item_reminders``. See
+    ``app/services/meeting_action_item_reminder_service.py``.
     """
     from datetime import timedelta
     from datetime import timezone as _tz_reminders
@@ -1243,6 +1448,10 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     from app.models.meeting import ActionItemStatus, MeetingActionItem
     from app.models.minute import ActionItem as MinutesActionItem
     from app.models.minute import MeetingMinutes, MinutesActionItemStatus
+    from app.services.meeting_action_item_reminder_service import (
+        OwedReminder,
+        send_meeting_action_item_emails,
+    )
 
     todays = await _org_todays(db)
     fallback_today = org_today(None)
@@ -1250,6 +1459,7 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     # department's date below. The latest calendar anywhere bounds them all.
     three_days = max(todays.values(), default=fallback_today) + timedelta(days=3)
     total_reminders = 0
+    owed_emails: List[OwedReminder] = []
 
     # Both sweeps run platform-wide, so each joins back to its organization
     # and skips a deactivated one, as the per-org jobs do (CRON2-31-12).
@@ -1292,6 +1502,14 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                     )
                     db.add(log)
                     total_reminders += 1
+                    owed_emails.append(
+                        OwedReminder(
+                            item_id=str(item.id),
+                            organization_id=str(item.organization_id),
+                            days_until=days_until,
+                            today=today,
+                        )
+                    )
                 except Exception as e:
                     logger.error(f"Failed to create action item notification: {e}")
 
@@ -1373,8 +1591,17 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                     )
 
     await db.commit()
-    logger.info(f"Action item reminders complete: {total_reminders} notifications sent")
-    return {"task": "action_item_reminders", "total_reminders": total_reminders}
+    emails_sent = await send_meeting_action_item_emails(db, owed_emails)
+    logger.info(
+        "Action item reminders complete: {} notifications, {} emails sent",
+        total_reminders,
+        emails_sent,
+    )
+    return {
+        "task": "action_item_reminders",
+        "total_reminders": total_reminders,
+        "emails_sent": emails_sent,
+    }
 
 
 async def run_inventory_notifications(db: AsyncSession) -> Dict[str, Any]:
@@ -1495,8 +1722,8 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                     selectinload(Event.location_obj),
                 )
                 .where(Event.organization_id == str(org.id))
-                .where(Event.send_reminders == True)  # noqa: E712
-                .where(Event.is_cancelled == False)  # noqa: E712
+                .where(Event.send_reminders.is_(True))
+                .where(Event.is_cancelled.is_(False))
                 # A draft is unpublished: nobody has been told about it, so
                 # nobody is reminded of it.
                 .where(Event.is_draft.isnot(True))
@@ -1550,7 +1777,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                     users_result = await db.execute(
                         select(User)
                         .where(User.organization_id == str(org.id))
-                        .where(User.is_active == True)  # noqa: E712
+                        .where(User.is_active.is_(True))
                     )
                     recipients = list(users_result.scalars().all())
                 elif reminder_target == "going":
@@ -1767,7 +1994,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                 select(Event)
                 .options(selectinload(Event.rsvps))
                 .where(Event.organization_id == str(org.id))
-                .where(Event.is_cancelled == False)  # noqa: E712
+                .where(Event.is_cancelled.is_(False))
                 .where(Event.end_datetime <= now)
                 .where(Event.end_datetime >= lookback)
             )
@@ -2046,7 +2273,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 ores = await db.execute(
                     select(User).where(
                         User.id.in_(officer_ids),
-                        User.is_active == True,  # noqa: E712
+                        User.is_active.is_(True),
                     )
                 )
                 officer_map = {str(u.id): u for u in ores.scalars().all()}
@@ -2473,6 +2700,10 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
             # Shifts frequently share an apparatus; resolve each apparatus's
             # start-of-shift templates once instead of once per shift.
             sos_template_cache: dict[tuple[str, str], list] = {}
+            # The department's own seat names, read once per department: the
+            # reminder and the roster it carries name a custom seat as Position
+            # Names does, not by its stored value.
+            seat_labels = await department_seat_labels(db, org_id)
 
             for shift in shifts:
                 activities = shift.activities or {}
@@ -2516,7 +2747,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     user_rows = await db.execute(
                         select(User)
                         .where(User.id.in_(member_ids))
-                        .where(User.is_active == True)  # noqa: E712
+                        .where(User.is_active.is_(True))
                     )
                     user_map = {str(u.id): u for u in user_rows.scalars().all()}
                 for assignment in assignments:
@@ -2535,7 +2766,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                             "first_name": user.preferred_name or user.first_name,
                             "email": user.email,
                             "position": pos_value,
-                            "position_label": position_label(pos_value),
+                            "position_label": position_label(pos_value, seat_labels),
                         }
                     )
 
@@ -3148,9 +3379,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                 .where(Shift.end_time >= lookback)
             )
             if require_finalized:
-                shifts_query = shifts_query.where(
-                    Shift.is_finalized == True  # noqa: E712
-                )
+                shifts_query = shifts_query.where(Shift.is_finalized.is_(True))
             shifts_result = await db.execute(shifts_query)
             shifts = list(shifts_result.scalars().all())
 
@@ -3295,6 +3524,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                     call_info = per_member_calls.get(uid, {"count": 0, "types": []})
                     call_count = call_info["count"]
                     call_types = call_info["types"]
+                    call_type_rollup = _rollup_call_types(call_types)
                     report_id = report_by_trainee.get(uid)
 
                     is_preliminary = not bool(shift.is_finalized)
@@ -3312,7 +3542,9 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                     if apparatus_name:
                         summary_lines.insert(1, f"Apparatus: {apparatus_name}")
                     if call_types:
-                        summary_lines.append("Call types: " + ", ".join(call_types[:5]))
+                        summary_lines.append(
+                            "Call types: " + _format_call_type_rollup(call_type_rollup)
+                        )
                     if is_preliminary:
                         summary_lines.append(
                             "These figures are preliminary — your hours "
@@ -3435,14 +3667,24 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                             )
 
                             call_types_html = ""
-                            if call_types:
-                                items = "".join(
-                                    f"<li>{_html.escape(t)}</li>"
-                                    for t in call_types[:10]
+                            if call_type_rollup:
+                                # width:1% + nowrap keeps the count column
+                                # snug against the type name even where the
+                                # email stylesheet stretches tables full-width.
+                                type_rows = "".join(
+                                    "<tr><td style='padding:2px 8px;"
+                                    "text-align:right;width:1%;"
+                                    "white-space:nowrap'><strong>"
+                                    f"{count}</strong></td>"
+                                    "<td style='padding:2px 8px'>"
+                                    f"{_html.escape(name)}</td></tr>"
+                                    for name, count in call_type_rollup
                                 )
                                 call_types_html = (
                                     "<p><strong>Call types:</strong></p>"
-                                    f"<ul>{items}</ul>"
+                                    "<table style='border-collapse:collapse;"
+                                    "margin:0 0 12px 0' role='presentation'>"
+                                    f"{type_rows}</table>"
                                 )
 
                             report_html = ""
@@ -3504,8 +3746,10 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                     + f"Hours recorded: {hours}\n"
                                     f"Calls responded: {call_count}\n"
                                     + (
-                                        "Call types: " + ", ".join(call_types) + "\n"
-                                        if call_types
+                                        "Call types: "
+                                        + _format_call_type_rollup(call_type_rollup)
+                                        + "\n"
+                                        if call_type_rollup
                                         else ""
                                     )
                                     + (
@@ -3662,7 +3906,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                     .join(user_roles, User.id == user_roles.c.user_id)
                     .where(user_roles.c.position_id == t_role.id)
                     .where(User.organization_id == str(org.id))
-                    .where(User.is_active == True)  # noqa: E712
+                    .where(User.is_active.is_(True))
                 )
                 training_officers = list(t_users.scalars().all())
 
@@ -4264,12 +4508,25 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 template, item.context or {}, organization=org
             )
 
-            # Merge template default CC/BCC with per-email overrides
-            cc = list(set((template.default_cc or []) + (item.cc_emails or []))) or None
-            bcc = (
-                list(set((template.default_bcc or []) + (item.bcc_emails or [])))
-                or None
+            # Merge template default CC/BCC with per-email overrides. The
+            # template here is the one the email was scheduled with (a custom
+            # template included), so its copies are merged here and the send
+            # layer is told not to look them up again by type. A credential
+            # template is never copied (NO_TEMPLATE_COPY_TYPES): only the
+            # addresses the scheduler typed for this one email are kept.
+            copies = not is_always_sent(template.template_type)
+            position_cc = (
+                await template_svc.position_holder_emails(
+                    str(item.organization_id),
+                    [str(p) for p in template.default_cc_position_ids or [] if p],
+                )
+                if copies and template.default_cc_position_ids
+                else []
             )
+            template_cc = (template.default_cc or []) if copies else []
+            template_bcc = (template.default_bcc or []) if copies else []
+            cc = list(set(template_cc + position_cc + (item.cc_emails or []))) or None
+            bcc = list(set(template_bcc + (item.bcc_emails or []))) or None
 
             # Check if email is actually enabled before attempting send
             from app.core.config import settings as _settings
@@ -4303,6 +4560,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 template_type=(
                     item.template_type.value if item.template_type else "scheduled"
                 ),
+                apply_template_copies=False,
             )
 
             if success_count > 0:
@@ -4327,7 +4585,12 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
             logger.error("Failed to send scheduled email {}: {}", item.id, e)
             try:
                 item.status = ScheduledEmailStatus.FAILED
-                item.error_message = str(e)[:500]
+                # error_message is returned to the client verbatim by
+                # ScheduledEmailResponse (GET /scheduled, settings.manage-
+                # gated but not a reason to leak SQL/driver internals to it)
+                # — sanitize the same way safe_error_detail() does elsewhere
+                # for this exact class of leak (see SEC13-1/SEC14-1).
+                item.error_message = safe_error_detail(e)[:500]
                 failed += 1
                 await db.commit()
             except Exception:
@@ -4383,6 +4646,49 @@ async def run_self_report_attachment_retention(db: AsyncSession) -> Dict[str, An
     result = await SelfReportAttachmentRetention(db).sweep()
     result["task"] = "self_report_attachment_retention"
     return result
+
+
+async def run_attendance_waiver_attachment_retention(
+    db: AsyncSession,
+) -> Dict[str, Any]:
+    """Expire waiver request documents per each department's waiver policy.
+
+    The reader of ``AttendanceWaiverPolicy.attachment_retention_days``; see
+    app/services/attendance_waiver_attachments.py. Commits per organization
+    itself, so one department's failure does not discard another's sweep, and
+    a second run finds nothing left to delete.
+    """
+    from app.services.attendance_waiver_attachments import (
+        AttendanceWaiverAttachmentService,
+    )
+
+    result = await AttendanceWaiverAttachmentService(db).sweep()
+    result["task"] = "attendance_waiver_attachment_retention"
+    return result
+
+
+async def run_attendance_waiver_expiry(db: AsyncSession) -> Dict[str, Any]:
+    """Expire waiver requests nobody decided within seven days of the session.
+
+    See app/services/attendance_waiver_expiry.py. Sweeps every department and
+    commits each request itself; a second run finds nothing left to expire.
+    """
+    from app.services.attendance_waiver_expiry import AttendanceWaiverExpiry
+
+    result = await AttendanceWaiverExpiry(db).sweep()
+    result["task"] = "attendance_waiver_expiry"
+    return result
+
+
+async def run_stored_file_malware_scan(db: AsyncSession) -> Dict[str, Any]:
+    """Scan stored files and images that never met the upload scanner.
+
+    See app/services/stored_file_rescan.py. Commits each verdict itself, and
+    returns without touching the database while scanning is disabled.
+    """
+    from app.services.stored_file_rescan import StoredFileRescan
+
+    return await StoredFileRescan(db).run()
 
 
 async def run_message_history_cleanup(db: AsyncSession) -> Dict[str, Any]:
@@ -5001,15 +5307,108 @@ async def run_paypal_capture_backfill(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_zeffy_payment_sync(db: AsyncSession) -> Dict[str, Any]:
+    """Read linked Zeffy campaigns' payments into the Logbook. Hourly.
+
+    The signed webhook is the fast path; this is what still records payments
+    when the department has not set the webhook up, or when Zeffy's three days
+    of retries ran out. Keyed on the integration like the PayPal backfill, and
+    each department is isolated: a refused API key is recorded on that
+    department's integration and the next one still runs. See
+    ``app/services/zeffy_sync_service.py``.
+    """
+    from app.models.integration import Integration
+    from app.services.integration_health import record_integration_run
+    from app.services.zeffy_sync_service import ZeffySyncService
+
+    result = await db.execute(
+        select(Integration)
+        .join(Organization, Organization.id == Integration.organization_id)
+        .where(
+            Integration.integration_type == "zeffy",
+            Integration.enabled.is_(True),
+            Integration.status == "connected",
+            Organization.active.isnot(False),
+        )
+    )
+    # Ids, not loaded rows: a rollback after one department fails expires
+    # every instance, and reading an expired one raises MissingGreenlet.
+    targets = [(str(i.id), str(i.organization_id)) for i in result.scalars().all()]
+
+    synced = 0
+    failed = 0
+    payments_read = 0
+    for integration_id, org_id in targets:
+        integration = (
+            await db.execute(
+                select(Integration).where(
+                    Integration.id == integration_id,
+                    Integration.organization_id == org_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if integration is None:
+            continue
+        started = time.monotonic()
+        try:
+            counts = await ZeffySyncService(db).sync_integration(integration)
+            payments_read += int(counts.get("payments_read", 0))
+            integration.last_sync_at = datetime.now(timezone.utc)
+            await record_integration_run(
+                db,
+                integration,
+                operation="zeffy_payment_sync",
+                trigger="scheduled",
+                success=True,
+                summary=counts,
+                started_monotonic=started,
+                mark_synced=True,
+            )
+            await db.commit()
+            synced += 1
+        except Exception as e:
+            await db.rollback()
+            logger.opt(exception=True).warning(
+                "Zeffy payment sync failed for org {}", org_id
+            )
+            await persist_task_error_log(org_id, "Zeffy payment sync", e)
+            try:
+                await db.refresh(integration)
+                await record_integration_run(
+                    db,
+                    integration,
+                    operation="zeffy_payment_sync",
+                    trigger="scheduled",
+                    success=False,
+                    error=e,
+                    started_monotonic=started,
+                )
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                logger.warning("Could not record Zeffy sync failure for org {}", org_id)
+            failed += 1
+
+    return {
+        "task": "zeffy_payment_sync",
+        "integrations": len(targets),
+        "synced": synced,
+        "payments_read": payments_read,
+        "failed": failed,
+    }
+
+
 async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
-    Send email alerts to admins when inventory items drop below reorder point.
-    Daily at 07:00.
+    Alert inventory officers when items drop below their reorder point.
+    Daily at 07:00: a bell entry for each officer, and the email to those who
+    receive quartermaster duty email.
     """
     from app.core.config import settings
     from app.services.email_service import EmailService
     from app.services.email_theme import WRAP_STYLE, with_subline
     from app.services.inventory_service import InventoryService
+    from app.services.officer_alert_copies import add_in_app_copies
 
     def _row_domain(item) -> str:
         """Which stock domain a low-stock row belongs to."""
@@ -5078,9 +5477,36 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
         for row in low_stock:
             by_domain[_row_domain(row[0])].append(row)
 
-        audiences = await _stock_alert_audiences(
-            db_session, str(org.id), department_required_kinds(org)
-        )
+        audiences = await _stock_alert_audiences(db_session, str(org.id))
+        required = department_required_kinds(org)
+
+        # A bell entry for every officer in each audience, emailed or not: the
+        # email can be turned off and this alert had no other copy. Counted per
+        # audience, for the same disclosure reason as the emails below.
+        for domains, users in audiences.items():
+            count = sum(len(by_domain[d]) for d in domains)
+            if not count:
+                continue
+            gear_rows = DOMAIN_GEAR in domains and bool(by_domain[DOMAIN_GEAR])
+            await add_in_app_copies(
+                db_session,
+                organization_id=str(org.id),
+                recipient_ids=[str(u.id) for u in users],
+                category="inventory_low_stock",
+                subject=f"Low stock — {count} item(s) at or below reorder point",
+                message=(
+                    f"{count} item(s) are at or below their reorder point. "
+                    "Review and reorder as needed."
+                ),
+                action_url=(
+                    "/inventory/admin/items?low_stock=true"
+                    if gear_rows
+                    else "/medical-supplies?tab=low"
+                ),
+                replace_unread=True,
+                dedupe_key="+".join(sorted(domains)),
+            )
+        await db_session.commit()
 
         alerts_sent = 0
         email_svc = EmailService(organization=org)
@@ -5088,8 +5514,9 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
         # single mixed table sent to everyone would put gear item names and
         # counts in front of a medical-only officer, who cannot reach them
         # through the API — mailing the data is the same disclosure.
-        for domains, emails in audiences.items():
+        for domains, users in audiences.items():
             rows = [r for d in sorted(domains) for r in by_domain[d]]
+            emails = _quartermaster_emails(users, required)
             if not rows or not emails:
                 continue
 
@@ -5165,7 +5592,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             if success_count > 0:
                 alerts_sent += 1
 
-        # Email only, deliberately. Reordering is a purchasing decision a
+        # No text, deliberately. Reordering is a purchasing decision a
         # quartermaster makes during business hours against the itemised,
         # audience-scoped table above — a text can carry neither the item list
         # nor the quantities, so it adds nothing but an out-of-hours
@@ -5188,9 +5615,11 @@ AUDIT_DIGEST_ROWS_SHOWN = 50
 
 async def run_inventory_audit_digest(db: AsyncSession) -> Dict[str, Any]:
     """
-    Email inventory managers the shelves overdue for an NFC shelf audit.
+    Tell inventory managers the shelves overdue for an NFC shelf audit.
 
-    Runs daily but sends at most once a week per organization: the in-process
+    Each manager gets a bell entry, and those who receive quartermaster duty
+    email also get the list by email. Runs daily but sends at most once a week
+    per organization: the in-process
     scheduler forgets its last run on every restart, so the week is measured
     from the last ``inventory_nfc_audit_digests`` row instead. Nothing is sent
     when nothing is overdue, when NFC tracking is switched off (an audit cannot
@@ -5202,6 +5631,7 @@ async def run_inventory_audit_digest(db: AsyncSession) -> Dict[str, Any]:
     from app.services.inventory_audit_schedule_service import (
         InventoryAuditScheduleService,
     )
+    from app.services.officer_alert_copies import add_in_app_copies
     from app.utils.inventory_nfc import nfc_tracking_enabled_in
     from app.utils.org_timezone import scheduling_timezone
 
@@ -5231,14 +5661,37 @@ async def run_inventory_audit_digest(db: AsyncSession) -> Dict[str, Any]:
             return 0
 
         recipients = await _stock_alert_recipients(
-            db_session,
-            org_id,
-            department_required_kinds(org),
-            permissions=GEAR_STOCK_PERMISSIONS,
+            db_session, org_id, permissions=GEAR_STOCK_PERMISSIONS
         )
-        emails = [u.email for u in recipients if u.email]
-        if not emails:
+        if not recipients:
             return 0
+        emails = _quartermaster_emails(recipients, department_required_kinds(org))
+
+        # Refreshed in place while unread, so a retry after a failed send
+        # (below) does not add a second entry.
+        await add_in_app_copies(
+            db_session,
+            organization_id=org_id,
+            recipient_ids=[str(u.id) for u in recipients],
+            category="inventory_shelf_audit",
+            subject=f"Shelf audits overdue — {len(due)} storage area(s)",
+            message=f"{len(due)} storage area(s) are due an NFC shelf audit.",
+            action_url="/inventory/shelf-audit",
+            replace_unread=True,
+        )
+        if not emails:
+            # Nobody to email; the bell entries are this week's digest.
+            db_session.add(
+                InventoryNfcAuditDigest(
+                    organization_id=org_id,
+                    sent_at=now,
+                    overdue_count=len(due),
+                    recipient_count=0,
+                )
+            )
+            await db_session.commit()
+            return 1
+        await db_session.commit()
 
         tz = scheduling_timezone(org)
         cell = "padding:6px 12px;border-bottom:1px solid #eee;"
@@ -5323,6 +5776,53 @@ async def run_nfc_card_tap_purge(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "nfc_card_tap_purge", process)
 
 
+async def run_history_import_expiry(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Delete the rows of History import drafts untouched for 30 days.
+
+    A draft holds a roster file's personal data, and an abandoned one should
+    not keep it indefinitely. Safe to run twice: an expired draft is no longer
+    a draft, so the second run finds nothing to do.
+    """
+    from app.services.history_import_service import HistoryImportService
+
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        expired = await HistoryImportService(db_session).expire_drafts(str(org.id))
+        await db_session.commit()
+        if expired:
+            logger.info(
+                "history_import_expiry: expired {} draft(s) for org {}",
+                expired,
+                org.id,
+            )
+        return expired
+
+    return await _for_each_org(db, "history_import_expiry", process)
+
+
+#: `NotificationLog.category` of the overdue-gear email, and so the key of its
+#: sent-log. See `run_inventory_overdue_alerts`.
+OVERDUE_CHECKOUT_LOG_CATEGORY = "inventory_overdue_checkout"
+
+
+async def _members_emailed_since(
+    db: AsyncSession, organization_id: str, category: str, since: datetime
+) -> set[str]:
+    """Ids of the members an email of ``category`` has already gone to since
+    ``since``, read from the email-channel `NotificationLog` sent-log."""
+    from app.models.notification import NotificationChannel, NotificationLog
+
+    result = await db.execute(
+        select(NotificationLog.recipient_id).where(
+            NotificationLog.organization_id == organization_id,
+            NotificationLog.channel == NotificationChannel.EMAIL,
+            NotificationLog.category == category,
+            NotificationLog.sent_at >= since,
+        )
+    )
+    return {str(member_id) for member_id in result.scalars().all() if member_id}
+
+
 async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
     Send email alerts for overdue checkouts. Daily at 07:30.
@@ -5330,6 +5830,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
     from zoneinfo import ZoneInfo
 
+    from app.models.notification import NotificationChannel, NotificationLog
     from app.services.email_service import EmailService
     from app.services.inventory_service import InventoryService
 
@@ -5359,9 +5860,24 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
         email_svc = EmailService(organization=org)
         alerts_sent = 0
 
+        # This task cannot assume it runs once a day: the scheduler keeps its
+        # last-run times in memory only, so every restart runs every task at
+        # once, and a deploy re-sent this email to everyone holding overdue
+        # gear. A member already emailed on the department's current calendar
+        # day is skipped; tomorrow's run reminds them again.
+        tz = scheduling_timezone(org)
+        emailed_today = await _members_emailed_since(
+            db_session,
+            str(org.id),
+            OVERDUE_CHECKOUT_LOG_CATEGORY,
+            local_day_start_utc(today_in(tz), tz),
+        )
+
         for uid, user_checkouts in by_user.items():
             user_obj = user_checkouts[0].user if user_checkouts[0].user else None
             if not user_obj or not user_obj.email:
+                continue
+            if uid in emailed_today:
                 continue
 
             items_list = ""
@@ -5400,6 +5916,21 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
             )
             if success_count > 0:
                 alerts_sent += 1
+                # Recorded after the send, so a crash between the two repeats
+                # the reminder rather than losing it (pitfall #36), and per
+                # member so the repeat covers one member, not the batch.
+                db_session.add(
+                    NotificationLog(
+                        organization_id=str(org.id),
+                        recipient_id=uid,
+                        recipient_email=user_obj.email,
+                        channel=NotificationChannel.EMAIL,
+                        category=OVERDUE_CHECKOUT_LOG_CATEGORY,
+                        subject=f"Overdue Equipment Reminder — {len(user_checkouts)} item(s)",
+                        delivered=True,
+                    )
+                )
+                await db_session.commit()
 
         return alerts_sent
 
@@ -5408,13 +5939,15 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
 
 async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
-    Send email alerts for PPE approaching NFPA 10-year retirement.
+    Alert gear officers to PPE approaching NFPA 10-year retirement: a bell
+    entry for each, and the itemised email for those who receive it.
     Weekly on Mondays at 08:00.
     Tiers: 180 days, 90 days, 30 days, past due.
     """
     from app.services.email_service import EmailService
     from app.services.email_theme import WRAP_STYLE, with_subline
     from app.services.inventory_service import InventoryService
+    from app.services.officer_alert_copies import add_in_app_copies
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
         service = InventoryService(db_session)
@@ -5486,12 +6019,25 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
         # NFPA 1851 retirement is structural firefighting PPE, which is
         # the gear officer's ledger and not the EMS supply officer's.
         admins = await _stock_alert_recipients(
-            db_session,
-            str(org.id),
-            department_required_kinds(org),
-            permissions=GEAR_STOCK_PERMISSIONS,
+            db_session, str(org.id), permissions=GEAR_STOCK_PERMISSIONS
         )
-        admin_emails = [a.email for a in admins if a.email]
+        await add_in_app_copies(
+            db_session,
+            organization_id=str(org.id),
+            recipient_ids=[str(a.id) for a in admins],
+            category="inventory_ppe_retirement",
+            subject=f"NFPA retirement — {len(items_due)} PPE item(s)",
+            message=(
+                f"{len(items_due)} PPE item(s) are approaching or past their NFPA "
+                "retirement date"
+                + (f", {len(past_due)} of them past due" if past_due else "")
+                + "."
+            ),
+            action_url="/inventory/admin/items",
+            replace_unread=True,
+        )
+        await db_session.commit()
+        admin_emails = _quartermaster_emails(admins, department_required_kinds(org))
 
         if admin_emails:
             email_svc = EmailService(organization=org)
@@ -5517,6 +6063,21 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
         return 0
 
     return await _for_each_org(db, "nfpa_retirement_alerts", process)
+
+
+async def run_weather_alert_poll(db: AsyncSession) -> Dict[str, Any]:
+    """Poll each department's NWS zone for Severe and Extreme alerts.
+
+    Every 15 minutes. A department without an enabled NWS Weather Alerts
+    integration costs one query. New alerts are announced as the department
+    chose; see app/services/weather_alert_service.
+    """
+    from app.services.weather_alert_service import poll_department
+
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        return await poll_department(db_session, org)
+
+    return await _for_each_org(db, "weather_alert_poll", process)
 
 
 def _supply_summary(
@@ -5561,6 +6122,7 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
     from app.services.email_service import EmailService, wrap_email_body
     from app.services.equipment_check_service import EquipmentCheckService
     from app.services.inventory_service import InventoryService
+    from app.services.officer_alert_copies import add_in_app_copies
 
     window_days = 30
 
@@ -5800,11 +6362,10 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 </table>
                 """
 
-        audiences = await _stock_alert_audiences(
-            db_session, str(org.id), department_required_kinds(org)
-        )
+        audiences = await _stock_alert_audiences(db_session, str(org.id))
         if not audiences:
             return 0
+        required = department_required_kinds(org)
 
         email_svc = EmailService(organization=org)
         sent_any = False
@@ -5812,11 +6373,11 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
         # checklist content, governed by equipment_check.* rather than by the
         # inventory domain, so every recipient sees them; the shelf-lot table
         # is inventory data and is filtered to the domains that audience holds.
-        for domains, emails in audiences.items():
+        for domains, users in audiences.items():
             rows = list(medical_lots) if DOMAIN_MEDICAL in domains else []
             if DOMAIN_GEAR in domains:
                 rows = list(gear_lots) + rows
-            if not emails or (not deployed and not rows):
+            if not deployed and not rows:
                 continue
             # Medical stock figures, so for the audiences that manage them,
             # as the shelf-lot table is.
@@ -5825,6 +6386,23 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
             summary = _supply_summary(
                 expiring_count, restock_count, len(rows), len(unseen)
             )
+            # Every officer in the audience, emailed or not; the summary is
+            # the same audience-scoped one the email opens with.
+            await add_in_app_copies(
+                db_session,
+                organization_id=str(org.id),
+                recipient_ids=[str(u.id) for u in users],
+                category="inventory_supply_expiration",
+                subject="Supplies to replace",
+                message=f"{summary} (expiring means within {window_days} days).",
+                action_url="/medical-supplies",
+                replace_unread=True,
+                dedupe_key="+".join(sorted(domains)),
+            )
+            await db_session.commit()
+            emails = _quartermaster_emails(users, required)
+            if not emails:
+                continue
             html_body = wrap_email_body(
                 org,
                 "Supplies to Replace",
@@ -6142,8 +6720,8 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                 select(Event)
                 .options(selectinload(Event.recurrence_children))
                 .where(Event.organization_id == str(org.id))
-                .where(Event.is_recurring == True)  # noqa: E712
-                .where(Event.is_cancelled == False)  # noqa: E712
+                .where(Event.is_recurring.is_(True))
+                .where(Event.is_cancelled.is_(False))
                 .where(Event.recurrence_parent_id.is_(None))
                 .where(Event.recurrence_end_date.isnot(None))
                 .where(Event.recurrence_end_date > now)
@@ -6337,22 +6915,70 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+# What a new occurrence of a rolling series copies from the latest one.
+# Not attachments: their metadata points at files owned by that occurrence.
+# (Sharing would not lose a file — delete_event_attachment removes a stored
+# file only once no event in the organization still names it, and
+# EventService.duplicate_event does copy attachments; see
+# test_event_duplicate_attachment_ownership.py.) Not the recurrence settings,
+# which stay on the series parent, nor anything an occurrence's own lifecycle
+# writes.
+ROLLING_OCCURRENCE_FIELDS = (
+    "title",
+    "description",
+    "event_type",
+    "custom_category",
+    "location_id",
+    "location",
+    "location_details",
+    "requires_rsvp",
+    "max_attendees",
+    "is_mandatory",
+    "mandatory_membership_types",
+    "allow_guests",
+    "attendee_visibility",
+    "send_reminders",
+    "reminder_schedule",
+    "reminder_target",
+    "check_in_window_type",
+    "check_in_minutes_before",
+    "check_in_minutes_after",
+    "require_checkout",
+    "allow_guest_check_in",
+    "guest_check_in_creates_prospect",
+    "allowed_rsvp_statuses",
+    "template_id",
+    "is_draft",
+    "organizer_id",
+    "alternate_organizer_id",
+)
+
+
+def _as_naive_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
     """
     Extend rolling recurring event series to maintain a 12-month horizon.
 
     For each parent event with rolling_recurrence=True, check the latest
     child occurrence. If the horizon is less than 12 months away, generate
-    new occurrences to fill the gap.
+    new occurrences to fill the gap, each a copy of that latest occurrence
+    (and, for a Training series, of its training session and attendance
+    links).
     """
     from datetime import timezone as dt_timezone
 
-    from app.models.event import Event, RecurrencePattern
+    from app.models.event import Event, EventType, RecurrencePattern
     from app.services.event_service import (
         EventService,
         rsvp_deadline_at,
         rsvp_deadline_lead,
     )
+    from app.services.training_session_service import TrainingSessionService
 
     # Naive-but-UTC, not naive-local-time: `latest_start`/`latest_end` below
     # come from DateTime(timezone=True) columns, which aiomysql returns
@@ -6422,9 +7048,14 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
             # aborting this exception handler before it reaches its own
             # db.rollback() and crashing the whole batch.
             parent_id = getattr(parent, "id", "?")
-            # Find the latest occurrence in this series
+            # The latest occurrence in this series is the template for the
+            # next ones. Not the parent: a "this and all future" edit reaches
+            # only the occurrences from the one edited onward, so an edit made
+            # anywhere after the first night never reaches the parent, and
+            # copying the parent reverted every new occurrence to the old
+            # values. The latest occurrence is the one every such edit reached.
             latest_result = await db.execute(
-                select(Event.start_datetime, Event.end_datetime, Event.rsvp_deadline)
+                select(Event)
                 .where(
                     (Event.id == parent.id) | (Event.recurrence_parent_id == parent.id),
                     Event.is_cancelled.is_(False),
@@ -6432,13 +7063,20 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                 .order_by(Event.start_datetime.desc())
                 .limit(1)
             )
-            latest = latest_result.first()
-            if not latest:
+            latest = latest_result.scalars().first()
+            if latest is None:
                 continue
 
-            latest_start = latest[0]
-            latest_end = latest[1]
-            latest_deadline = latest[2]
+            # Naive UTC, as `now` is above. A column select used to hand
+            # these back raw (naive); an ORM row already in the session
+            # carries the aware values it was written with.
+            latest_start = _as_naive_utc(latest.start_datetime)
+            latest_end = _as_naive_utc(latest.end_datetime)
+            latest_deadline = (
+                None
+                if latest.rsvp_deadline is None
+                else _as_naive_utc(latest.rsvp_deadline)
+            )
 
             # If the latest occurrence is already 12+ months out, skip
             if latest_start >= twelve_months:
@@ -6476,54 +7114,20 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
             if not new_occurrences:
                 continue
 
-            # Build a set of field values from the parent for child events.  Do
-            # not propagate attachments: their metadata points at files owned
-            # by the parent event, and each occurrence exposes an independent
-            # delete action that would otherwise remove the shared file.
             child_fields = {}
-            for field in (
-                "title",
-                "description",
-                "event_type",
-                "custom_category",
-                "location_id",
-                "location",
-                "location_details",
-                "requires_rsvp",
-                "max_attendees",
-                "is_mandatory",
-                "allow_guests",
-                "send_reminders",
-                "reminder_schedule",
-                "reminder_target",
-                "check_in_window_type",
-                "check_in_minutes_before",
-                "check_in_minutes_after",
-                "require_checkout",
-                "allow_guest_check_in",
-                "guest_check_in_creates_prospect",
-                "allowed_rsvp_statuses",
-                "template_id",
-                "is_draft",
-                # A handover with "this and future" lands on the parent, so a
-                # new occurrence carries whoever runs the series now rather
-                # than reverting to its creator.
-                "organizer_id",
-                "alternate_organizer_id",
-            ):
-                val = getattr(parent, field, None)
+            for field in ROLLING_OCCURRENCE_FIELDS:
+                val = getattr(latest, field, None)
                 if val is not None:
                     child_fields[field] = copy.deepcopy(val)
 
-            custom_fields = copy.deepcopy(parent.custom_fields)
+            custom_fields = copy.deepcopy(latest.custom_fields)
             if custom_fields:
                 for lifecycle_key in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS:
                     custom_fields.pop(lifecycle_key, None)
                 child_fields["custom_fields"] = custom_fields
 
             # Each new occurrence keeps the RSVP deadline lead of the latest
-            # one, the occurrence a "this and all future" edit last reached,
-            # rather than having none at all.
+            # one rather than having none at all.
             tz = org_zones[org_key]
             deadline_lead = (
                 None
@@ -6535,6 +7139,18 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                 )
             )
 
+            # A Training series carries its training session and the
+            # session's attendance links on to each new occurrence; without
+            # them a new drill would credit no course and count toward no
+            # attendance requirement.
+            training = None
+            source_session = None
+            link_ids: List[str] = []
+            if getattr(latest, "event_type", None) == EventType.TRAINING:
+                training = TrainingSessionService(db)
+                source_session, link_ids = await training.source_for_cloning(latest)
+
+            children = []
             for start, end in new_occurrences:
                 child = Event(
                     organization_id=parent.organization_id,
@@ -6552,6 +7168,19 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                     **child_fields,
                 )
                 db.add(child)
+                children.append(child)
+
+            # Idempotent across runs: only occurrences after the latest are
+            # generated, these sessions commit with their events below, and
+            # training_sessions.event_id is unique.
+            if training is not None and source_session is not None:
+                await training.clone_sessions_for_events(
+                    source_session,
+                    link_ids,
+                    latest.title,
+                    children,
+                    parent.created_by,
+                )
 
             # Update the parent's recurrence_end_date to the new horizon
             parent.recurrence_end_date = twelve_months
@@ -6963,6 +7592,31 @@ async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "mark_overdue_dues", "marked_overdue": count}
 
 
+async def run_dues_late_fees(db: AsyncSession) -> Dict[str, Any]:
+    """Charge each overdue dues record its schedule's late fee, once. Daily.
+
+    Owner decision 2026-11-01; the rule, and why a second run is a no-op, are
+    in ``app/services/dues_terms.py``.
+    """
+    from app.services.dues_terms import apply_late_fees
+
+    charged = await apply_late_fees(db)
+    return {"task": "dues_late_fees", "charged": charged}
+
+
+async def run_dues_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Email members whose dues are coming due or overdue. Daily.
+
+    Owner decision 2026-11-01; see ``app/services/dues_reminders.py``.
+    """
+    from app.services.dues_reminders import send_dues_reminders
+
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        return await send_dues_reminders(db_session, org)
+
+    return await _for_each_org(db, "dues_reminders", process)
+
+
 async def run_mark_overdue_maintenance(db: AsyncSession) -> Dict[str, Any]:
     """Flag incomplete maintenance records past their due date as overdue.
 
@@ -7284,6 +7938,20 @@ async def run_officer_directory_sync(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "officer_directory_sync", "organizations": synced}
 
 
+async def run_evaluation_due_notices(db: AsyncSession) -> Dict[str, Any]:
+    """Send performance-evaluation deadline reminders and overdue notices.
+
+    Email only (CLAUDE.md pitfall #18). The rules, and the per-step stamps
+    that make a second run send nothing, are in
+    EvaluationNoticeService.send_due_notices, which commits or rolls back each
+    step on its own.
+    """
+    from app.services.evaluation_notice_service import EvaluationNoticeService
+
+    counts = await EvaluationNoticeService(db).send_due_notices()
+    return {"task": "evaluation_due_notices", **counts}
+
+
 async def run_budget_request_reminders(db: AsyncSession) -> Dict[str, Any]:
     """Remind line owners before a draft year's budget request deadline.
 
@@ -7299,6 +7967,18 @@ async def run_budget_request_reminders(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "budget_request_reminders", send_deadline_reminders)
 
 
+async def run_fiscal_year_due_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Email the Treasurers when a fiscal year's start or close is due.
+
+    Email only (CLAUDE.md pitfall #18). Nothing is started or closed: each
+    is an officer's decision. The sent-log that makes a second run send
+    nothing is in ``finance_year_due_notifications.send_year_due_reminders``.
+    """
+    from app.services.finance_year_due_notifications import send_year_due_reminders
+
+    return await _for_each_org(db, "fiscal_year_due_reminders", send_year_due_reminders)
+
+
 async def run_grant_reminders(db: AsyncSession) -> Dict[str, Any]:
     """Remind about grant compliance tasks and pledges coming due.
 
@@ -7309,6 +7989,18 @@ async def run_grant_reminders(db: AsyncSession) -> Dict[str, Any]:
     from app.services.grant_reminder_notifications import send_grant_reminders
 
     return await _for_each_org(db, "grant_reminders", send_grant_reminders)
+
+
+async def run_advance_statements(db: AsyncSession) -> Dict[str, Any]:
+    """Email quarterly statements for cash advances on the periodic method.
+
+    Email only (CLAUDE.md pitfall #18). Which statement is due and the
+    unique row that makes a second run send nothing are in
+    ``cash_advance_statements.send_advance_statements``.
+    """
+    from app.services.cash_advance_statements import send_advance_statements
+
+    return await _for_each_org(db, "advance_statements", send_advance_statements)
 
 
 async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
@@ -7423,6 +8115,19 @@ async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
         "advanced": advanced,
         "rolled_forward": rolled_forward,
     }
+
+
+async def run_prospect_follow_up_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Send the follow-up form reminders that are due.
+
+    The rules live in FollowUpFormService.send_due_reminders, which commits or
+    rolls back each request on its own, so one failure cannot discard the
+    reminders already recorded.
+    """
+    from app.services.follow_up_form_service import FollowUpFormService
+
+    counts = await FollowUpFormService(db).send_due_reminders()
+    return {"task": "prospect_follow_up_reminders", **counts}
 
 
 async def run_admin_hours_auto_close(db: AsyncSession) -> Dict[str, Any]:
@@ -7841,6 +8546,52 @@ async def run_calendar_sync(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_quickbooks_sync(db: AsyncSession) -> Dict[str, Any]:
+    """Post due payments to each connected QuickBooks Online company.
+
+    Does nothing while the Intuit app is not configured. Each department runs
+    on its own (app.services.quickbooks_sync_service.run_for_organization),
+    so one department's failure neither undoes nor stops another's.
+    """
+    from app.models.finance import QuickBooksConnection
+    from app.services import quickbooks_online_client as qbo
+    from app.services.quickbooks_sync_service import (
+        CONNECTED,
+        run_for_organization,
+    )
+
+    if qbo.configured_credentials() is None:
+        return {"task": "quickbooks_sync", "skipped": "QuickBooks is not configured"}
+    result = await db.execute(
+        select(QuickBooksConnection.organization_id)
+        .join(Organization, Organization.id == QuickBooksConnection.organization_id)
+        .where(
+            QuickBooksConnection.status == CONNECTED,
+            Organization.active.isnot(False),
+        )
+    )
+    org_ids = [str(org_id) for org_id in result.scalars().all()]
+    posted = 0
+    failed_orgs = 0
+    for org_id in org_ids:
+        try:
+            counts = await run_for_organization(db, org_id)
+            posted += int(counts.get("posted", 0) or 0)
+        except Exception as e:
+            await db.rollback()
+            logger.opt(exception=True).warning(
+                "QuickBooks sync failed for org {}", org_id
+            )
+            await persist_task_error_log(org_id, "QuickBooks sync", e)
+            failed_orgs += 1
+    return {
+        "task": "quickbooks_sync",
+        "organizations": len(org_ids),
+        "posted": posted,
+        "failed": failed_orgs,
+    }
+
+
 # Task runner map
 async def run_election_lifecycle(db: AsyncSession) -> Dict[str, Any]:
     """Run election lifecycle transitions for every organization.
@@ -7866,11 +8617,13 @@ async def run_election_lifecycle(db: AsyncSession) -> Dict[str, Any]:
 
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
+    "medical_screening_expiry_reminders": run_medical_screening_expiry_reminders,
     "election_lifecycle": run_election_lifecycle,
     "struggling_member_check": run_struggling_member_check,
     "enrollment_deadline_warnings": run_enrollment_deadline_warnings,
     "enrollment_expiry": run_enrollment_expiry,
     "program_requirement_deadlines": run_program_requirement_deadlines,
+    "program_milestones": run_program_milestones,
     "recert_resets": run_recert_resets,
     "membership_tier_advance": run_membership_tier_advance,
     "property_return_reminders": run_property_return_reminders,
@@ -7891,16 +8644,24 @@ TASK_RUNNERS = {
     "audit_log_ship": run_audit_log_ship,
     "retention_enforcement": run_retention_enforcement,
     "self_report_attachment_retention": run_self_report_attachment_retention,
+    "attendance_waiver_attachment_retention": (
+        run_attendance_waiver_attachment_retention
+    ),
+    "attendance_waiver_expiry": run_attendance_waiver_expiry,
+    "stored_file_malware_scan": run_stored_file_malware_scan,
     "scheduled_emails": run_scheduled_emails,
     "storefront_window_lifecycle": run_storefront_window_lifecycle,
     "storefront_payment_reminders": run_storefront_payment_reminders,
     "paypal_capture_backfill": run_paypal_capture_backfill,
+    "zeffy_payment_sync": run_zeffy_payment_sync,
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
     "inventory_audit_digest": run_inventory_audit_digest,
     "nfc_card_tap_purge": run_nfc_card_tap_purge,
+    "history_import_expiry": run_history_import_expiry,
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
     "supply_expiration_alerts": run_supply_expiration_alerts,
+    "weather_alert_poll": run_weather_alert_poll,
     "compliance_auto_reports": run_compliance_auto_reports,
     "compliance_member_notices": run_compliance_member_notices,
     "saved_report_delivery": run_saved_report_delivery,
@@ -7914,7 +8675,10 @@ TASK_RUNNERS = {
     "external_training_auto_sync": run_external_training_auto_sync,
     "salesforce_auto_sync": run_salesforce_auto_sync,
     "calendar_sync": run_calendar_sync,
+    "quickbooks_sync": run_quickbooks_sync,
     "mark_overdue_dues": run_mark_overdue_dues,
+    "dues_late_fees": run_dues_late_fees,
+    "dues_reminders": run_dues_reminders,
     "directory_account_departure_check": run_directory_account_departure_check,
     "google_workspace_attention_digest": run_google_workspace_attention_digest,
     "google_workspace_suspension_sync": run_google_workspace_suspension_sync,
@@ -7931,8 +8695,12 @@ TASK_RUNNERS = {
     "officer_directory_sync": run_officer_directory_sync,
     "event_request_reminders": run_event_request_reminders,
     "prospect_attendance_advance": run_prospect_attendance_advance,
+    "prospect_follow_up_reminders": run_prospect_follow_up_reminders,
     "budget_request_reminders": run_budget_request_reminders,
+    "fiscal_year_due_reminders": run_fiscal_year_due_reminders,
+    "evaluation_due_notices": run_evaluation_due_notices,
     "grant_reminders": run_grant_reminders,
+    "advance_statements": run_advance_statements,
 }
 
 # Interval (in seconds) at which each task auto-runs in the in-process
@@ -7955,12 +8723,17 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Every 5 minutes: the first retry of a failed calendar push is due 5
     # minutes after it (calendar_sync_service.RETRY_DELAYS).
     "calendar_sync": 300,
+    # Every 5 minutes: the first retry of a QuickBooks posting is due 5
+    # minutes after it fails (quickbooks_sync_service.RETRY_DELAYS).
+    "quickbooks_sync": 300,
     # Every 15 minutes
     "inventory_notifications": 900,
     "election_lifecycle": 900,
     "shift_auto_checkout": 900,
     "publish_scheduled_messages": 900,
     "storefront_window_lifecycle": 900,
+    # Idempotent per (department, NWS alert id); see weather_alert_service.
+    "weather_alert_poll": 900,
     # Every 30 minutes
     "event_reminders": 1800,
     "post_event_validation": 1800,
@@ -7973,6 +8746,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "salesforce_auto_sync": 1800,
     # Daily (checked each loop tick; runs at most once per interval)
     "cert_expiration_alerts": 86400,
+    "medical_screening_expiry_reminders": 86400,
     "action_item_reminders": 86400,
     # Checked daily; the weekly list keeps its own last-sent day per org.
     "minutes_action_item_reminders": 86400,
@@ -7986,9 +8760,11 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Checked daily; sends at most weekly per org (see run_inventory_audit_digest).
     "inventory_audit_digest": 86400,
     "nfc_card_tap_purge": 86400,
+    "history_import_expiry": 86400,
     "property_return_reminders": 86400,
     "storefront_payment_reminders": 86400,
     "paypal_capture_backfill": 86400,
+    "zeffy_payment_sync": 3600,
     "compliance_auto_reports": 86400,
     # Daily; idempotent per (requirement, deadline, offset) and per unmet set
     # through a sent-log (compliance_member_notices).
@@ -8001,6 +8777,12 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "rolling_recurrence_extend": 86400,
     "trainee_report_escalation": 86400,
     "mark_overdue_dues": 86400,
+    # Daily; the UPDATE requires late_fee_applied IS NULL, so a second run
+    # charges nothing (dues_terms.apply_late_fees).
+    "dues_late_fees": 86400,
+    # Daily; idempotent per dues record and kind through due_reminder_sent_at
+    # and overdue_reminder_sent_at (dues_reminders.send_dues_reminders).
+    "dues_reminders": 86400,
     # Checked daily; sends at most once a day per org, only while overdue.
     "directory_account_departure_check": 86400,
     "google_workspace_attention_digest": 86400,
@@ -8017,15 +8799,28 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "enrollment_expiry": 86400,
     # Daily; idempotent per (requirement row, due date, ramp step).
     "program_requirement_deadlines": 86400,
+    # Every 30 minutes, so a milestone waiting on a course is announced soon
+    # after the record arrives; idempotent per (milestone, enrollment).
+    "program_milestones": 1800,
     "shift_pattern_generation": 86400,
     "swap_offer_expiry": 86400,
     "officer_directory_sync": 86400,
     "event_request_reminders": 86400,
     "prospect_attendance_advance": 86400,
+    # Hourly, so a reminder lands soon after 09:00 department time; each
+    # request is reminded at most once a day (FollowUpFormService.reminder_due).
+    "prospect_follow_up_reminders": 3600,
     # Daily; idempotent per (year, deadline, member, offset) through a sent-log.
     "budget_request_reminders": 86400,
+    # Daily; idempotent per (year, event, date, Treasurer) through a sent-log.
+    "fiscal_year_due_reminders": 86400,
+    # Daily; idempotent per step through reminder_sent_at and
+    # overdue_notice_sent_at (EvaluationNoticeService.send_due_notices).
+    "evaluation_due_notices": 86400,
     # Daily; idempotent per (item, due date, reminder, member) through a sent-log.
     "grant_reminders": 86400,
+    # Daily; idempotent per (advance, quarter) through a unique row.
+    "advance_statements": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,
@@ -8037,6 +8832,17 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Daily — org-configured records retention
     "retention_enforcement": 86400,
     "self_report_attachment_retention": 86400,
+    # Idempotent: the file goes first, then its row, and a missing file
+    # counts as deleted (attendance_waiver_attachments.sweep).
+    "attendance_waiver_attachment_retention": 86400,
+    # Hourly, so a request closes within the hour after the end of its
+    # seventh day on the department's calendar, which falls at a different UTC
+    # hour in each timezone. Idempotent: the expiry is guarded on status
+    # pending under the request's lock (attendance_waiver_expiry.sweep).
+    "attendance_waiver_expiry": 3600,
+    # Hourly, a bounded batch per run; once every stored object has a ledger
+    # row a run only compares references (stored_file_rescan).
+    "stored_file_malware_scan": 3600,
     # Monthly (approx — 30 days)
     "membership_tier_advance": 2592000,
 }

@@ -286,12 +286,18 @@ department. No count, no warning. The builder knows the type and could say
 "reaches 0 apparatus", or name them. With W46-4 fixed, the fleet board now
 reports it, but only after the officer thinks to look there.
 
-### W46-16 — NIT — The assignment notice names the checklist but opens the schedule, and prints an ISO date — OPEN
+### W46-16 — NIT — The assignment notice names the checklist but opens the schedule, and prints an ISO date — FIXED (date) / HELD (link)
 
 "You have been assigned to the Firefighter position on the 2026-09-30 shift
 (starts 07:00). Equipment checklists to complete: Engine Daily Check." It
 opens `/scheduling?view=week…`, not My Checklists. Belongs to the scheduling
 notification sender; left for W33/W34's owner.
+
+Fixed 2026-11-02: the date now reads `Sep 30, 2026`, in this notice and in
+the six other scheduling notices that printed ISO dates
+(`test_shift_notice_dates.py`). The link was kept on the shift: the notice
+announces an assignment, and the end-of-shift checklist reminder is the one
+that opens My Checklists.
 
 ### W46-17 — NIT — A draft in progress shows "Not Started 0/4" on its card — OPEN
 

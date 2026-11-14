@@ -65,16 +65,30 @@ class ShiftHistoryImportRowUpdate(BaseModel):
         return _check_keys(value)
 
 
+class ProbableMatchesDecision(BaseModel):
+    """Answer every probable crew match still waiting, at once."""
+
+    decision: Literal["accept", "separate"]
+
+
 class MemberMapping(BaseModel):
     action: Literal["map", "create"]
     user_id: Optional[str] = Field(None, max_length=36)
+    # ``create`` only: the new member's name, when the file does not give one.
+    first_name: Optional[str] = Field(None, max_length=100)
+    last_name: Optional[str] = Field(None, max_length=100)
 
 
 class UnitMapping(BaseModel):
     action: Literal["own", "external", "create_external"]
     id: Optional[str] = Field(None, max_length=36)
+    # ``create_external`` only: an existing agency for the new unit, picked
+    # rather than typed so a misspelling cannot create a second agency.
+    agency_id: Optional[str] = Field(None, max_length=36)
     agency_name: Optional[str] = Field(None, max_length=255)
     unit_name: Optional[str] = Field(None, max_length=100)
+    # Own units only: the seat a member takes when the file names no position.
+    default_seat: Optional[str] = Field(None, max_length=100)
 
 
 class PositionMapping(BaseModel):
@@ -115,6 +129,9 @@ class ShiftHistoryImportSummary(BaseModel):
     created_at: Optional[datetime] = None
     committed_at: Optional[datetime] = None
     summary: Optional[Dict[str, int]] = None
+    # Set when a historical data import created this draft as a review batch.
+    source_system: Optional[str] = None
+    historical_import_id: Optional[str] = None
 
 
 class ShiftHistoryImportListResponse(BaseModel):
@@ -144,6 +161,10 @@ class ImportRowView(BaseModel):
     end: Optional[datetime] = None
     local_date: Optional[date] = None
     minutes: Optional[int] = None
+    # Minutes from a mapped hours column; credited instead of ``minutes``.
+    stated_minutes: Optional[int] = None
+    duty_type: str = "in_station"
+    source_id: Optional[str] = None
     member_key: Optional[str] = None
     unit_key: Optional[str] = None
     position_key: Optional[str] = None
@@ -164,6 +185,9 @@ class ImportMemberView(BaseModel):
     username: str
     status: str
     user_id: Optional[str] = None
+    # A name the reviewer typed for a member the commit will create.
+    new_first_name: str = ""
+    new_last_name: str = ""
     candidate_ids: List[str]
     reason: str
     row_count: int
@@ -185,7 +209,9 @@ class ImportUnitView(BaseModel):
     target_id: Optional[str] = None
     candidates: List[UnitCandidate]
     new_agency_name: str
+    new_agency_id: Optional[str] = None
     new_unit_name: str
+    default_seat: Optional[str] = None
     row_count: int
     # Settled by a decision remembered from an earlier import.
     remembered: bool = False
@@ -214,8 +240,11 @@ class ImportAttendanceView(BaseModel):
     start: datetime
     end: datetime
     local_date: date
+    # Minutes credited: stated hours where the file gives them, else the span.
     minutes: int
     call_count: Optional[int] = None
+    call_counts: Dict[str, int] = Field(default_factory=dict)
+    duty_type: str = "in_station"
     joined: bool
     confidence: int
     needs_confirmation: bool
@@ -231,6 +260,7 @@ class ImportShiftView(BaseModel):
     existing_shift_id: Optional[str] = None
     existing_confidence: Optional[int] = None
     existing_status: str
+    duty_type: str = "in_station"
     attendances: List[ImportAttendanceView]
 
 
@@ -258,6 +288,23 @@ class OptionUnit(BaseModel):
     id: str
     name: str
     agency_name: Optional[str] = None
+    # Own units: the seats the apparatus record lists, for the default-seat
+    # picker.
+    seats: List[str] = Field(default_factory=list)
+    # Own units: False when archived or deactivated, so no longer scheduled.
+    # Outside units: False when the unit or its agency is hidden from members.
+    is_active: bool = True
+
+
+class OptionAgency(BaseModel):
+    id: str
+    name: str
+    is_active: bool
+
+
+class CallTypeOption(BaseModel):
+    slug: str
+    label: str
 
 
 class ImportOptions(BaseModel):
@@ -265,6 +312,7 @@ class ImportOptions(BaseModel):
 
     members: List[OptionMember]
     units: List[OptionUnit]
+    agencies: List[OptionAgency] = Field(default_factory=list)
     seats: List[str]
 
 
@@ -294,6 +342,8 @@ class ShiftHistoryImportDetail(BaseModel):
     headers: List[str]
     column_mapping: Dict[str, str]
     fields: List[str]
+    # The department's call types, for mapping ``calls:<slug>`` columns.
+    call_types: List[CallTypeOption] = Field(default_factory=list)
     member_mappings: Dict[str, Any]
     unit_mappings: Dict[str, Any]
     position_mappings: Dict[str, Any]

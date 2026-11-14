@@ -10,6 +10,7 @@ from datetime import date, datetime, timezone
 from typing import (
     AbstractSet,
     Any,
+    Callable,
     Dict,
     FrozenSet,
     Iterable,
@@ -18,6 +19,7 @@ from typing import (
     Sequence,
     Tuple,
 )
+from zoneinfo import ZoneInfo
 
 from dateutil.relativedelta import relativedelta
 from loguru import logger
@@ -27,11 +29,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_audit_event
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
     MemberLeaveOfAbsence,
     MemberServicePeriod,
     Organization,
     User,
-    UserStatus,
     sync_account_status_with_membership,
 )
 from app.services.member_service_history_service import (
@@ -39,8 +41,28 @@ from app.services.member_service_history_service import (
     summarize,
     whole_years,
 )
-from app.utils.membership import is_administrative
-from app.utils.org_timezone import resolve_org_today, scheduling_timezone, today_in
+from app.utils.membership import (
+    LEGACY_MEMBERSHIP_TYPES,
+    VOTER_TYPE_LABELS,
+    canonical_member_status,
+    configured_tiers,
+    derive_membership_type,
+    is_administrative,
+    member_standing,
+    ranks_as_from_tiers,
+    split_membership_type,
+    tier_for_member,
+    tier_for_status,
+    voter_type_decided_by_class,
+    voter_type_key,
+)
+from app.utils.org_timezone import (
+    local_date,
+    resolve_org_today,
+    resolve_scheduling_timezone,
+    scheduling_timezone,
+    today_in,
+)
 
 
 def current_stint_start(
@@ -122,6 +144,12 @@ def tally_attendance(
     percentage above 100%. Attendance is counted only within the eligible set
     for the same reason: a member marked present at a meeting during their
     leave must not count toward the percentage.
+
+    **Check-in wins** (owner decision, 2026-11-10): a meeting the member was
+    present at is attended even when they also hold a waiver for it, so a
+    waiver excuses only a meeting they missed. Callers therefore pass every
+    meeting the member was marked present at as ``present_ids``, waiver or
+    not; this is the one place the two are reconciled.
     """
     start, end = window
     dated = [(mid, md) for mid, md in meetings if start <= md <= end]
@@ -137,15 +165,267 @@ def tally_attendance(
                 on_leave.add(mid)
                 break
 
-    waived = in_window & frozenset(waived_ids)
+    present = frozenset(present_ids)
+    waived = (in_window & frozenset(waived_ids)) - present
     eligible = in_window - waived - on_leave
     return AttendanceTally(
         in_window=in_window,
         waived=waived,
         on_leave=frozenset(on_leave),
         eligible=eligible,
-        attended=eligible & frozenset(present_ids),
+        attended=eligible & present,
     )
+
+
+def stint_window(
+    member: Any, periods: Sequence[MemberServicePeriod], today: date
+) -> Tuple[date, date]:
+    """Every meeting since the member's current stint began, up to ``today``.
+
+    A member with no known start is judged on every meeting to date; the
+    count rule then looks only at the most recent of them.
+    """
+    stint_start = current_stint_start(member, periods)
+    return (stint_start or date.min), today
+
+
+def whole_months_between(start: date, end: date) -> int:
+    """Completed calendar months from ``start`` to ``end`` (0 if end <= start)."""
+    if end <= start:
+        return 0
+    delta = relativedelta(end, start)
+    return delta.years * 12 + delta.months
+
+
+@dataclass(frozen=True)
+class RecentAttendance:
+    """Attendance at a member's most recent meetings, for the count rule.
+
+    The window is the member's last ``of_last_meetings`` meetings, reaching
+    back past a meeting excused by leave but **not** past a waived one: a
+    waived meeting shortens the window instead (owner decision, 2026-11-13).
+    """
+
+    # Meetings attended among those counted.
+    attended: int
+    # Meetings counted: ``looked_back`` less the waived ones.
+    considered: int
+    # Meetings in the window: the requested look-back, or fewer when the
+    # member has not had that many since their stint began.
+    looked_back: int
+    # Waived meetings in the window that the member missed. A waived meeting
+    # they attended is attended (check-in wins) and is not counted here.
+    waived: int
+
+    def required(self, min_meetings: int, of_last_meetings: int) -> int:
+        """Meetings the member must have attended among those counted.
+
+        The requirement for ``looked_back`` meetings, pro-rated when the
+        member has had fewer than the look-back, then capped at the meetings
+        left once waivers are taken out: 6 of the last 12 with one waived is
+        6 of 11, and 6 of 12 with seven waived is 5 of 5. Judged over the
+        same window either way, so a waiver never pulls an older meeting in.
+        """
+        return min(
+            required_recent_meetings(min_meetings, of_last_meetings, self.looked_back),
+            self.considered,
+        )
+
+
+def tally_recent_attendance(
+    meetings: Iterable[Tuple[str, date]],
+    window: Tuple[date, date],
+    waived_ids: AbstractSet[str],
+    present_ids: AbstractSet[str],
+    leaves: Sequence[Any],
+    last_meetings: int,
+) -> RecentAttendance:
+    """Attendance at the member's ``last_meetings`` most recent meetings.
+
+    Classification (window, waivers, leave, check-in wins) comes from
+    ``tally_attendance``, so the count rule and the percentage rule agree on
+    what each meeting is. They differ only in the window: a meeting during a
+    leave is skipped and the window reaches back one more, while a waived
+    meeting stays in the window and is not counted (owner decision,
+    2026-11-13; before it, a waiver reached back too). Ties on a date are
+    broken by meeting id so the result is stable.
+    """
+    meetings = list(meetings)
+    tally = tally_attendance(meetings, window, waived_ids, present_ids, leaves)
+    reachable = tally.in_window - tally.on_leave
+    dated = sorted(
+        ((md, mid) for mid, md in meetings if mid in reachable),
+        reverse=True,
+    )
+    recent = {mid for _, mid in dated[:last_meetings]}
+    waived = recent & tally.waived
+    return RecentAttendance(
+        attended=len(recent & tally.attended),
+        considered=len(recent) - len(waived),
+        looked_back=len(recent),
+        waived=len(waived),
+    )
+
+
+def required_recent_meetings(
+    min_meetings: int, of_last_meetings: int, considered: int
+) -> int:
+    """Meetings a member must have attended among ``considered`` meetings.
+
+    The count rule calls this through ``RecentAttendance.required``, which
+    also caps it at the meetings left once waivers are taken out; use that.
+
+    A member who has had fewer meetings than the look-back -- a
+    recent joiner, or a department that has not met that often -- is held to
+    the same proportion rather than to a count they could not reach:
+    6 of 12 becomes 2 of 4. Rounded up, so the proportion is never relaxed.
+    """
+    if considered >= of_last_meetings:
+        return min_meetings
+    return -(-min_meetings * considered // of_last_meetings)
+
+
+def type_wait_start(
+    member: Any, periods: Sequence[MemberServicePeriod], tz: ZoneInfo
+) -> Optional[date]:
+    """The date a member's voting waiting period counts from, or None.
+
+    A secretary's ``voting_wait_from`` wins outright: it is a deliberate
+    correction, and clamping it to the current stint would undo the very
+    case it exists for (crediting a rejoined member's earlier standing).
+
+    Otherwise it is when the member became the type the wait is set for —
+    ``member_class_since`` for a type decided by class (administrative,
+    social), ``member_status_since`` for one decided by status — but never
+    before the current stint began, so a member who left and rejoined is not
+    credited with time from before they came back. With no stamp, the stint
+    start stands in; with neither, None, which the wait reads as "no wait":
+    a missing record is not evidence of a recent change.
+    """
+    type_key = voter_type_key(
+        getattr(member, "member_class", None),
+        getattr(member, "member_status", None),
+        getattr(member, "membership_type", None),
+    )
+    return wait_start_for(
+        member,
+        periods,
+        tz,
+        by_class=bool(type_key and voter_type_decided_by_class(type_key)),
+        counted_from="type",
+    )
+
+
+def wait_start_for(
+    member: Any,
+    periods: Sequence[MemberServicePeriod],
+    tz: ZoneInfo,
+    *,
+    by_class: bool,
+    counted_from: str,
+) -> Optional[date]:
+    """The date a wait set for one member type counts from, or None.
+
+    ``type_wait_start`` with the choices a per-type rule makes explicit:
+    ``by_class`` picks the class stamp over the status stamp, and
+    ``counted_from == "joined"`` counts from the current stint instead of
+    from when the member became the type. A secretary's ``voting_wait_from``
+    wins in every case.
+    """
+    override: Optional[date] = getattr(member, "voting_wait_from", None)
+    if override is not None:
+        return override
+    stint = current_stint_start(member, periods)
+    if counted_from == "joined":
+        return stint
+    stamp = (
+        getattr(member, "member_class_since", None)
+        if by_class
+        else getattr(member, "member_status_since", None)
+    )
+    became = local_date(stamp, tz) if stamp is not None else None
+    if became is None:
+        return stint
+    return max(became, stint) if stint is not None else became
+
+
+@dataclass(frozen=True)
+class WaitOutcome:
+    """Where one member stands against one waiting-period rule.
+
+    ``state`` is ``no_rule`` (no wait for their type, or no type), ``never``
+    (their type may not vote), ``waived`` (a secretary waived the wait),
+    ``eligible`` (the wait is over, or there is no date to wait from) or
+    ``waiting``. ``eligible_from`` is set for ``waiting`` and for an
+    ``eligible`` that had a date.
+    """
+
+    state: str
+    type_key: Optional[str]
+    months: Optional[int] = None
+    eligible_from: Optional[date] = None
+
+
+def evaluate_wait(
+    waiting_periods: Any,
+    type_key: Optional[str],
+    start: Optional[date],
+    waived: bool,
+    today: date,
+) -> WaitOutcome:
+    """Judge one member against an election's ``waiting_periods``.
+
+    The rules are free-form JSON once stored, so a malformed entry reads as
+    "no rule" rather than raising — an exception here would take down a whole
+    roster or ballot send, not one member. A waiver lifts the wait, never a
+    ``never``: that is a rule about the type, not about how long the member
+    has held it.
+    """
+    if not type_key or not isinstance(waiting_periods, dict):
+        return WaitOutcome("no_rule", type_key)
+    period = waiting_periods.get(type_key)
+    if not isinstance(period, dict):
+        return WaitOutcome("no_rule", type_key)
+    mode = period.get("mode")
+    if mode == "never":
+        return WaitOutcome("never", type_key)
+    months = period.get("months")
+    if (
+        mode != "months"
+        or isinstance(months, bool)
+        or not isinstance(months, int)
+        or months <= 0
+    ):
+        return WaitOutcome("no_rule", type_key)
+    if waived:
+        return WaitOutcome("waived", type_key, months)
+    if start is None:
+        return WaitOutcome("eligible", type_key, months)
+    eligible_from = start + relativedelta(months=months)
+    state = "eligible" if today >= eligible_from else "waiting"
+    return WaitOutcome(state, type_key, months, eligible_from)
+
+
+def wait_ineligibility_reason(outcome: WaitOutcome) -> Optional[str]:
+    """Why ``outcome`` keeps a member from voting, or None when it does not.
+
+    One wording for the ballot check, the roster and the member's profile, so
+    the three never describe one rule two ways (pitfall #29).
+    """
+    if outcome.type_key is None:
+        return None
+    label = VOTER_TYPE_LABELS.get(outcome.type_key, outcome.type_key.title())
+    if outcome.state == "never":
+        return f"{label} members are not eligible to vote"
+    if outcome.state == "waiting" and outcome.eligible_from is not None:
+        day = outcome.eligible_from
+        # Month first ("Apr 30, 2027"), as the profile card's
+        # formatCalendarDate shows the same date; %-d is not portable.
+        return (
+            f"{label} members may vote {outcome.months} months after becoming "
+            f"{label.lower()}; eligible from {day:%b} {day.day}, {day.year}"
+        )
+    return None
 
 
 class MembershipTierService:
@@ -163,6 +443,7 @@ class MembershipTierService:
         user_id: str,
         organization_id: str,
         period_months: int = 12,
+        meeting_types: Optional[Sequence[str]] = None,
     ) -> float:
         """
         Calculate a member's meeting attendance percentage over a look-back
@@ -171,9 +452,94 @@ class MembershipTierService:
         member's current stint began, and none that have not happened yet.
         Waived meetings and meetings that fall within an active Leave of Absence
         are excluded from both numerator and denominator so they don't penalise
-        the member's percentage.
+        the member's percentage. ``meeting_types`` limits the count to those
+        meeting types; None counts every meeting.
         Returns 100.0 if no eligible meetings occurred.
         """
+        loaded = await self._load_attendance(
+            user_id,
+            organization_id,
+            lambda member, periods, today: attendance_window(
+                member, periods, period_months, today
+            ),
+            meeting_types,
+        )
+        if loaded is None:
+            return 100.0  # No meetings held — don't penalise
+        return tally_attendance(*loaded).pct
+
+    async def get_recent_meeting_attendance(
+        self,
+        user_id: str,
+        organization_id: str,
+        last_meetings: int,
+        meeting_types: Optional[Sequence[str]] = None,
+    ) -> RecentAttendance:
+        """How many of the member's last ``last_meetings`` meetings they attended.
+
+        Meetings held since the member's current stint began, on or before
+        the department's today, and not during a leave of absence. A waived
+        meeting stays in the window and is not counted; see
+        ``tally_recent_attendance``.
+        """
+        loaded = await self._load_attendance(
+            user_id,
+            organization_id,
+            stint_window,
+            meeting_types,
+        )
+        if loaded is None:
+            return RecentAttendance(attended=0, considered=0, looked_back=0, waived=0)
+        return tally_recent_attendance(*loaded, last_meetings=last_meetings)
+
+    async def get_type_wait_start(
+        self, member: User, organization_id: str
+    ) -> Optional[date]:
+        """The date ``member``'s voting waiting period counts from, or None
+        when nothing records one. See ``type_wait_start``."""
+        periods = await MemberServiceHistoryService(self.db).list_periods(
+            organization_id, str(member.id)
+        )
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        return type_wait_start(member, periods, tz)
+
+    async def get_wait_start(
+        self,
+        member: User,
+        organization_id: str,
+        *,
+        by_class: bool,
+        counted_from: str,
+    ) -> Optional[date]:
+        """``wait_start_for`` with the member's stints and the department's
+        time zone looked up."""
+        periods = await MemberServiceHistoryService(self.db).list_periods(
+            organization_id, str(member.id)
+        )
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        return wait_start_for(
+            member, periods, tz, by_class=by_class, counted_from=counted_from
+        )
+
+    async def _load_attendance(
+        self,
+        user_id: str,
+        organization_id: str,
+        window_for: Callable[
+            [Any, Sequence[MemberServicePeriod], date], Tuple[date, date]
+        ],
+        meeting_types: Optional[Sequence[str]],
+    ) -> Optional[
+        Tuple[
+            List[Tuple[str, date]],
+            Tuple[date, date],
+            AbstractSet[str],
+            AbstractSet[str],
+            List[Any],
+        ]
+    ]:
+        """The inputs ``tally_attendance`` needs, or None when no meeting
+        falls inside the member's window."""
         today = await resolve_org_today(self.db, organization_id)
         member_result = await self.db.execute(
             select(User).where(
@@ -189,25 +555,22 @@ class MembershipTierService:
             if member is not None
             else []
         )
-        window_start, window_end = attendance_window(
-            member, periods, period_months, today
-        )
+        window_start, window_end = window_for(member, periods, today)
 
-        window_meetings_subq = select(Meeting.id).where(
+        meeting_filters = [
             Meeting.organization_id == organization_id,
             Meeting.meeting_date >= window_start,
             Meeting.meeting_date <= window_end,
-        )
+        ]
+        if meeting_types:
+            meeting_filters.append(Meeting.meeting_type.in_(list(meeting_types)))
+        window_meetings_subq = select(Meeting.id).where(*meeting_filters)
         meetings_result = await self.db.execute(
-            select(Meeting.id, Meeting.meeting_date).where(
-                Meeting.organization_id == organization_id,
-                Meeting.meeting_date >= window_start,
-                Meeting.meeting_date <= window_end,
-            )
+            select(Meeting.id, Meeting.meeting_date).where(*meeting_filters)
         )
         meetings = [(row[0], row[1]) for row in meetings_result.all()]
         if not meetings:
-            return 100.0  # No meetings held — don't penalise
+            return None
 
         waived_result = await self.db.execute(
             select(MeetingAttendee.meeting_id).where(
@@ -231,15 +594,12 @@ class MembershipTierService:
             select(MeetingAttendee.meeting_id).where(
                 MeetingAttendee.user_id == user_id,
                 MeetingAttendee.present.is_(True),
-                MeetingAttendee.waiver_reason.is_(None),
                 MeetingAttendee.meeting_id.in_(window_meetings_subq),
             )
         )
         present_ids = {row[0] for row in attended_result.all()}
 
-        return tally_attendance(
-            meetings, (window_start, window_end), waived_ids, present_ids, leaves
-        ).pct
+        return meetings, (window_start, window_end), waived_ids, present_ids, leaves
 
     # ------------------------------------------------------------------
     # Tier resolution helpers
@@ -248,10 +608,7 @@ class MembershipTierService:
     @staticmethod
     def _load_tiers(organization: Organization) -> List[Dict[str, Any]]:
         """Load and sort the tier list from org settings."""
-        settings = organization.settings or {}
-        tier_config = settings.get("membership_tiers", {})
-        tiers = tier_config.get("tiers", [])
-        return sorted(tiers, key=lambda t: t.get("sort_order", 0))
+        return configured_tiers(organization.settings)
 
     @staticmethod
     def years_of_service(hire_date: Optional[date], today: date) -> int:
@@ -283,6 +640,51 @@ class MembershipTierService:
             if tier.get("id") == tier_id:
                 return tier
         return None
+
+    # The lookups below are the canonical helpers in ``app.utils.membership``,
+    # kept here as names because the advancement code and its tests call them
+    # on the service. One definition, so a reader cannot drift (Pitfall #29).
+    tier_for_status = staticmethod(tier_for_status)
+    tier_for_member = staticmethod(tier_for_member)
+
+    @staticmethod
+    def ranks_as_by_tier(organization: Optional[Organization]) -> Dict[str, str]:
+        """tier id (canonical) -> the built-in status it counts as.
+
+        Only tiers that declare ``ranks_as`` appear; a tier without one counts
+        as nothing, which is what ``status_for_tier`` relies on.
+        """
+        return ranks_as_from_tiers(
+            configured_tiers(organization.settings if organization else None)
+        )
+
+    _current_standing = staticmethod(member_standing)
+
+    @staticmethod
+    def _move_to_tier(member: Any, tier_id: str) -> None:
+        """Put ``member`` on ``tier_id`` without touching their class.
+
+        The ladder is a statement about tenure, so every class climbs it: an
+        administrative member with twenty years reaches Life like anyone
+        else, and stays administrative. The one exception is a tier named
+        in the legacy vocabulary for a *class* (``administrative``,
+        ``honorary``): such a rung is a class change by construction, and is
+        written the way it always was, through the legacy column, so the
+        reconciler moves the class with it.
+        """
+        legacy = canonical_tier = canonical_member_status(tier_id)
+        if tier_id in LEGACY_MEMBERSHIP_TYPES:
+            cls, _status = split_membership_type(tier_id)
+            if cls != "operational":
+                member.membership_type = tier_id
+                return
+        member.member_status = canonical_tier
+        # Written as well as derived at flush so a caller reading the row
+        # before the flush -- the audit entry, a test double -- sees the
+        # legacy value the reconciler will settle on.
+        member.membership_type = derive_membership_type(
+            getattr(member, "member_class", None), legacy
+        )
 
     # ------------------------------------------------------------------
     # Batch auto-advance
@@ -421,7 +823,7 @@ class MembershipTierService:
         result = await self.db.execute(
             select(User).where(
                 User.organization_id == organization_id,
-                User.status.in_([UserStatus.ACTIVE, UserStatus.PROBATIONARY]),
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
         )
@@ -454,15 +856,18 @@ class MembershipTierService:
             if not target_tier:
                 continue
 
-            current_type = candidate.membership_type or "active"
-            if current_type == target_tier["id"]:
-                continue
-
-            # Only advance (don't demote), and only along this ladder
-            current_tier_def = self.get_tier_by_id(tiers, current_type)
+            current_tier_def = self.tier_for_status(
+                tiers, self._current_standing(candidate)
+            )
             if current_tier_def is None:
+                # Only advance along this ladder: a standing that is not a
+                # rung (administrative, honorary, retired, prospective in the
+                # shipped defaults) is left where it is.
                 off_ladder += 1
                 continue
+            if current_tier_def["id"] == target_tier["id"]:
+                continue
+            # Only advance (don't demote)
             if target_tier.get("sort_order", 0) <= current_tier_def.get(
                 "sort_order", 0
             ):
@@ -489,21 +894,22 @@ class MembershipTierService:
                 continue
             # Re-check eligibility under the lock: the batch read above may
             # now be stale (another transaction already advanced or changed
-            # this member's type since).
-            current_type = member.membership_type or "active"
-            if current_type == target_tier["id"]:
-                continue
-            current_tier_def = self.get_tier_by_id(tiers, current_type)
+            # this member's standing since).
+            current_tier_def = self.tier_for_status(
+                tiers, self._current_standing(member)
+            )
             if current_tier_def is None:
                 off_ladder += 1
+                continue
+            if current_tier_def["id"] == target_tier["id"]:
                 continue
             if target_tier.get("sort_order", 0) <= current_tier_def.get(
                 "sort_order", 0
             ):
                 continue
 
-            previous_type = current_type
-            member.membership_type = target_tier["id"]
+            previous_type = current_tier_def["id"]
+            self._move_to_tier(member, target_tier["id"])
             member.membership_type_changed_at = now
 
             # An administrative member holds no operational rank, and this is a
@@ -522,7 +928,12 @@ class MembershipTierService:
             # The account status follows the tier the same way it follows a
             # change made by hand: a member advanced off the probationary rung
             # becomes active. Applied here so the audit entry records it.
-            status_change = sync_account_status_with_membership(member, now=now)
+            status_change = sync_account_status_with_membership(
+                member,
+                now=now,
+                member_status=canonical_member_status(target_tier["id"]),
+                ranks_as_by_tier=self.ranks_as_by_tier(organization),
+            )
 
             advanced.append(
                 {

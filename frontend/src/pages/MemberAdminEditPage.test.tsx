@@ -20,6 +20,7 @@ const mockUpdateUserProfile = vi.fn();
 const mockChangeMembershipType = vi.fn();
 const mockSetComplianceExemption = vi.fn();
 const mockGetLocations = vi.fn();
+const mockGetTierConfig = vi.fn();
 
 vi.mock('../services/api', () => ({
   userService: {
@@ -27,6 +28,14 @@ vi.mock('../services/api', () => ({
     updateUserProfile: (...args: unknown[]) => mockUpdateUserProfile(...args) as unknown,
     changeMembershipType: (...args: unknown[]) => mockChangeMembershipType(...args) as unknown,
     setComplianceExemption: (...args: unknown[]) => mockSetComplianceExemption(...args) as unknown,
+  },
+  memberStatusService: {
+    // The status control reads the members-visible tier names; the fixtures
+    // below state a ladder, of which the names endpoint serves ids and names.
+    getTierNames: async (...args: unknown[]) => {
+      const config = (await mockGetTierConfig(...args)) as { tiers?: { id: string; name: string }[] } | undefined;
+      return (config?.tiers ?? []).map(({ id, name }) => ({ id, name }));
+    },
   },
   locationsService: {
     getLocations: (...args: unknown[]) => mockGetLocations(...args) as unknown,
@@ -67,12 +76,15 @@ const member = (overrides: Record<string, unknown> = {}) => ({
   platoon: '',
   membership_number: 'FF-001',
   membership_type: 'active',
+  member_class: 'operational',
+  member_status: 'regular',
   emergency_contacts: [],
   ...overrides,
 });
 
 const rankSelect = () => screen.getByRole('combobox', { name: /^rank$/i });
-const membershipSelect = () => screen.getByRole('combobox', { name: /membership type/i });
+const classSelect = () => screen.getByRole('combobox', { name: /member class/i });
+const statusSelect = () => screen.getByRole('combobox', { name: /membership status/i });
 
 const renderPage = async () => {
   renderWithRouter(<MemberAdminEditPage />);
@@ -86,6 +98,8 @@ describe('MemberAdminEditPage rank field', () => {
     mockGetLocations.mockResolvedValue([]);
     mockUpdateUserProfile.mockResolvedValue({});
     mockChangeMembershipType.mockResolvedValue({});
+    mockGetTierConfig.mockReset();
+    mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
     mockGetUserWithRoles.mockResolvedValue(member());
   });
 
@@ -97,7 +111,9 @@ describe('MemberAdminEditPage rank field', () => {
   });
 
   it('disables and explains the rank field for an administrative member', async () => {
-    mockGetUserWithRoles.mockResolvedValue(member({ membership_type: 'administrative', rank: '' }));
+    mockGetUserWithRoles.mockResolvedValue(
+      member({ membership_type: 'administrative', member_class: 'administrative', rank: '' })
+    );
     await renderPage();
 
     expect(rankSelect()).toBeDisabled();
@@ -105,55 +121,81 @@ describe('MemberAdminEditPage rank field', () => {
   });
 
   it('leaves the rank field alone for a member on a custom membership tier', async () => {
-    // `membership_type` doubles as an org-configurable tier id. A tier the
-    // vocabulary does not know is not administrative, and greying its rank
-    // would break every department that configured one.
-    mockGetUserWithRoles.mockResolvedValue(member({ membership_type: 'senior' }));
+    // A department tier (`senior`) is a standing, not a class. An operational
+    // member on one keeps their rank; the status control shows the tier.
+    mockGetUserWithRoles.mockResolvedValue(member({ membership_type: 'senior', member_status: 'senior' }));
     await renderPage();
 
     expect(rankSelect()).toBeEnabled();
+    expect(statusSelect()).toHaveValue('senior');
+  });
+
+  it('reads the pair from the legacy value for a row written before it existed', async () => {
+    mockGetUserWithRoles.mockResolvedValue(
+      member({ membership_type: 'life', member_class: null, member_status: null })
+    );
+    await renderPage();
+
+    expect(classSelect()).toHaveValue('operational');
+    expect(statusSelect()).toHaveValue('life');
+  });
+
+  it('can state an administrative life member, which one dropdown could not', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+
+    await user.selectOptions(classSelect(), 'administrative');
+    await user.selectOptions(statusSelect(), 'life');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalled());
+    const payload = mockUpdateUserProfile.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload.member_class).toBe('administrative');
+    expect(payload.member_status).toBe('life');
+    expect(mockChangeMembershipType).not.toHaveBeenCalled();
   });
 
   it('disables the rank field when the member is switched to administrative', async () => {
     const user = userEvent.setup();
     await renderPage();
 
-    await user.selectOptions(membershipSelect(), 'administrative');
+    await user.selectOptions(classSelect(), 'administrative');
 
     await waitFor(() => expect(rankSelect()).toBeDisabled());
     expect(screen.getByText(/do not hold an operational rank/i)).toBeInTheDocument();
   });
 
-  it('does not send the rank when only the membership type changed', async () => {
-    // The rank must not go out in the profile PATCH. That request lands first,
-    // and the membership-type PATCH behind it can legitimately fail — it
-    // rejects a tier the organization has not configured — which would leave
-    // the member operational and stripped of a rank nobody agreed to remove.
-    // The membership-type endpoint clears it in the same transaction instead.
+  it('sends class and status together, with the rank cleared, in the one profile save', async () => {
+    // One request, not two: the pair and the rank land in the same PATCH, so
+    // a refused pair (an unknown tier) leaves the rank exactly as it was, and
+    // the server never sees a rank on an administrative member.
     const user = userEvent.setup();
     await renderPage();
 
-    await user.selectOptions(membershipSelect(), 'administrative');
+    await user.selectOptions(classSelect(), 'administrative');
     await user.click(screen.getByRole('button', { name: /save/i }));
 
-    await waitFor(() => expect(mockChangeMembershipType).toHaveBeenCalled());
-    expect(mockChangeMembershipType).toHaveBeenCalledWith('u1', 'administrative');
-    expect(mockUpdateUserProfile).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalled());
+    const payload = mockUpdateUserProfile.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload.member_class).toBe('administrative');
+    expect(payload.member_status).toBe('regular');
+    expect(payload.rank).toBe('');
+    expect(mockChangeMembershipType).not.toHaveBeenCalled();
   });
 
-  it('keeps the rank when the membership-type change is rejected', async () => {
+  it('keeps the rank when the classification change is rejected', async () => {
     const user = userEvent.setup();
-    mockChangeMembershipType.mockRejectedValue({
-      response: { status: 400, data: { detail: "Invalid membership tier 'administrative'" } },
+    mockUpdateUserProfile.mockRejectedValue({
+      response: { status: 400, data: { detail: "Unknown member_status 'cadet'" } },
     });
     await renderPage();
 
-    await user.selectOptions(membershipSelect(), 'administrative');
+    await user.selectOptions(classSelect(), 'administrative');
     await user.click(screen.getByRole('button', { name: /save/i }));
 
-    expect(await screen.findByText(/invalid membership tier/i)).toBeInTheDocument();
-    // Nothing was persisted about the rank, so the member is still a Captain.
-    expect(mockUpdateUserProfile).not.toHaveBeenCalled();
+    expect(await screen.findByText(/unknown member_status/i)).toBeInTheDocument();
+    // The one request was refused whole, so nothing about the member changed.
+    expect(mockUpdateUserProfile).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -163,6 +205,8 @@ describe('MemberAdminEditPage — clearing a date', () => {
     mockGetLocations.mockResolvedValue([]);
     mockUpdateUserProfile.mockResolvedValue({});
     mockChangeMembershipType.mockResolvedValue({});
+    mockGetTierConfig.mockReset();
+    mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
     mockGetUserWithRoles.mockResolvedValue(member({ date_of_birth: '1980-01-01', hire_date: '2015-06-01' }));
   });
 
@@ -193,11 +237,12 @@ describe('MemberAdminEditPage — clearing a date', () => {
     expect(payload.hire_date).toBeNull();
   });
 
-  it('renders a 422 as a sentence instead of crashing the page', async () => {
+  it('puts a 422 on its field instead of crashing the page', async () => {
     // FastAPI's validation handler answers with an array. Assigned straight to
     // state typed `string | null` it reached the JSX as an array, and React
     // threw "Objects are not valid as a React child" — the ErrorBoundary
-    // replaced the whole page rather than showing the message.
+    // replaced the whole page rather than showing the message. It is now
+    // written under the field it belongs to (forms review F-2).
     const user = userEvent.setup();
     mockUpdateUserProfile.mockRejectedValue({
       response: { status: 422, data: { detail: [{ field: 'date_of_birth', message: 'Invalid date format.' }] } },
@@ -207,7 +252,75 @@ describe('MemberAdminEditPage — clearing a date', () => {
     await user.clear(screen.getByDisplayValue('1980-01-01'));
     await user.click(screen.getByRole('button', { name: /save/i }));
 
-    expect(await screen.findByText(/date_of_birth: Invalid date format\./)).toBeInTheDocument();
+    const dob = screen.getByLabelText(/^Date of Birth/);
+    await waitFor(() => expect(dob).toHaveAccessibleDescription(/Date of birth needs a valid date\./));
+    expect(dob).toHaveAttribute('aria-invalid', 'true');
+  });
+});
+
+// Update payloads are dumped with exclude_unset, so '' was written through
+// as an empty string rather than a clear: the street "cleared" in the
+// workflow re-check came back as "" while the dates beside it came back null
+// (MR-5). Each optional text field now sends null, as the dates do.
+describe('MemberAdminEditPage — clearing a text field', () => {
+  const filled = {
+    middle_name: 'Lee',
+    personal_email: 'dana@home.test',
+    membership_number: 'FF-001',
+    station: 'Station 1',
+    platoon: 'B',
+    phone: '703-555-0101',
+    mobile: '703-555-0102',
+    address_street: '12 Elm St',
+    address_city: 'Falls Church',
+    address_state: 'VA',
+    address_zip: '22046',
+    address_country: 'USA',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetLocations.mockReset();
+    mockGetLocations.mockResolvedValue([{ id: 's1', name: 'Station 1' }]);
+    mockUpdateUserProfile.mockReset();
+    mockUpdateUserProfile.mockResolvedValue({});
+    mockChangeMembershipType.mockResolvedValue({});
+    mockGetTierConfig.mockReset();
+    mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
+    mockGetUserWithRoles.mockReset();
+    mockGetUserWithRoles.mockResolvedValue(member(filled));
+  });
+
+  it('sends null for every optional text field that is emptied', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+
+    for (const [field, value] of Object.entries(filled)) {
+      if (field === 'station') continue;
+      await user.clear(screen.getByDisplayValue(value));
+    }
+    await user.selectOptions(screen.getByRole('combobox', { name: /^station$/i }), '');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalled());
+    const payload = mockUpdateUserProfile.mock.calls[0]?.[1] as Record<string, unknown>;
+    for (const field of Object.keys(filled)) {
+      expect(payload).toHaveProperty(field, null);
+    }
+  });
+
+  it('still sends a value that was changed, trimmed', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+
+    const platoon = screen.getByDisplayValue('B');
+    await user.clear(platoon);
+    await user.type(platoon, ' C ');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalled());
+    const payload = mockUpdateUserProfile.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload.platoon).toBe('C');
   });
 });
 
@@ -280,6 +393,8 @@ describe('MemberAdminEditPage — preferred name', () => {
     mockUpdateUserProfile.mockResolvedValue({});
     mockChangeMembershipType.mockReset();
     mockChangeMembershipType.mockResolvedValue({});
+    mockGetTierConfig.mockReset();
+    mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
     mockGetUserWithRoles.mockReset();
     mockGetUserWithRoles.mockResolvedValue(member({ preferred_name: 'Dee' }));
   });
@@ -327,5 +442,61 @@ describe('MemberAdminEditPage — preferred name', () => {
 
     await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalled());
     expect(JSON.parse(JSON.stringify(payload()))).toHaveProperty('preferred_name', null);
+  });
+});
+
+// Forms review F-1, with the owner's rule of 2026-11-05: an officer's save
+// goes through with a blank legal name, the stored name is kept, and the
+// blank field stays flagged until a name is entered.
+describe('MemberAdminEditPage — blank legal name', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetLocations.mockReset();
+    mockGetLocations.mockResolvedValue([]);
+    mockUpdateUserProfile.mockReset();
+    mockUpdateUserProfile.mockResolvedValue({});
+    mockChangeMembershipType.mockResolvedValue({});
+    mockGetTierConfig.mockReset();
+    mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
+    mockGetUserWithRoles.mockReset();
+    mockGetUserWithRoles.mockResolvedValue(member({ middle_name: 'Lee' }));
+  });
+
+  it('saves the other changes and keeps the stored name', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+
+    const first = screen.getByLabelText(/^First Name/);
+    await user.clear(first);
+    expect(first).toHaveAccessibleDescription('Enter a first name.');
+    const middle = screen.getByDisplayValue('Lee');
+    await user.clear(middle);
+    await user.type(middle, 'Quinn');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalledTimes(1));
+    const payload = mockUpdateUserProfile.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('first_name');
+    expect(payload).toHaveProperty('middle_name', 'Quinn');
+    expect(await screen.findByText(/saved first name was kept/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^First Name/)).toHaveValue('Dana');
+  });
+
+  it('flags a name that was never recorded and still saves', async () => {
+    mockGetUserWithRoles.mockResolvedValue(member({ middle_name: 'Lee', last_name: '' }));
+    const user = userEvent.setup();
+    await renderPage();
+
+    const last = screen.getByLabelText(/^Last Name/);
+    expect(last).toHaveAttribute('aria-invalid', 'true');
+    const middle = screen.getByDisplayValue('Lee');
+    await user.clear(middle);
+    await user.type(middle, 'Quinn');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalledTimes(1));
+    expect(mockUpdateUserProfile.mock.calls[0]?.[1]).not.toHaveProperty('last_name');
+    expect(await screen.findByText(/last name is still missing/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Last Name/)).toHaveAttribute('aria-invalid', 'true');
   });
 });

@@ -45,6 +45,24 @@ def _references_the_service_counts() -> set[tuple[str, str]]:
     }
 
 
+# Owner decisions of 2026-11-01: deleting a location that training history,
+# a meeting or an event request names deactivates it, as for an event. The
+# records where a missing location is an ordinary state keep clearing.
+_PROTECTED_BY_DECISION = {
+    ("training_records", "location_id"),
+    ("course_classes", "location_id"),
+    ("course_cohorts", "location_id"),
+    ("course_cohort_classes", "location_id"),
+    ("meetings", "location_id"),
+    ("event_requests", "event_location_id"),
+}
+_CLEARED_BY_DECISION = {
+    ("inventory_items", "location_id"),
+    ("storage_areas", "location_id"),
+    ("nfc_card_taps", "location_id"),
+}
+
+
 class TestRestrictingLocationReferences:
     def test_the_scan_sees_the_known_references(self):
         # An empty scan would make both checks below pass for the wrong reason.
@@ -52,6 +70,16 @@ class TestRestrictingLocationReferences:
 
         assert ("events", "location_id") in schema
         assert ("apparatus", "primary_station_id") in schema
+
+    def test_training_meetings_and_requests_keep_their_location(self):
+        schema = _blocking_references_in_the_schema()
+
+        assert _PROTECTED_BY_DECISION <= schema
+        assert _PROTECTED_BY_DECISION <= _references_the_service_counts()
+
+    def test_items_storage_areas_and_tag_taps_still_clear(self):
+        assert not _CLEARED_BY_DECISION & _blocking_references_in_the_schema()
+        assert not _CLEARED_BY_DECISION & _references_the_service_counts()
 
     def test_every_blocking_reference_is_counted(self):
         missing = (

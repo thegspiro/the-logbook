@@ -1,3 +1,64 @@
+# October 31 – November 1, 2026 workflow updates
+
+Audit: [`docs/CHANGE_AUDIT_2026-11.md`](../CHANGE_AUDIT_2026-11.md#change-audit-october-31--november-1-2026).
+Screenshots to create are in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md).
+
+| Topic                                                  | Now in                                                  |
+| ------------------------------------------------------ | ------------------------------------------------------- |
+| Case managers, interviewers, My Applicants, `view_all` | [15 — Prospective Members](./15-prospective-members.md) |
+| Shift evaluation forms and per-shift evaluations       | [02 — Training](./02-training.md)                       |
+| Leave badges by date                                   | [01 — Membership](./01-membership.md)                   |
+| Scheduling fixes (ledger, swap times, time off)        | [03 — Scheduling](./03-scheduling.md) (already written) |
+
+---
+
+# October 29–30, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-29--30-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                        | Now in                                                                               |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Member class and membership status; tier Counts as           | [01 — Membership](./01-membership.md), [08 — Admin & Reports](./08-admin-reports.md) |
+| Voter Eligibility settings; a member's voting waiting period | [14 — Elections](./14-elections.md)                                                  |
+| Follow-up form reminders, coordinator notice, answers        | [15 — Prospective Members](./15-prospective-members.md)                              |
+| Compliance profiles scoped by position                       | [02 — Training](./02-training.md), [08 — Admin & Reports](./08-admin-reports.md)     |
+| Class and status operator notes                              | Operator-facing: [`UPGRADING.md`](../UPGRADING.md)                                   |
+
+---
+
+# October 29, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                              | Now in                                                                                         |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Follow-up Form stage: sending, drafts, write-back, contact changes | [15 — Prospective Members](./15-prospective-members.md), [01 — Membership](./01-membership.md) |
+| Pre-fill from applicant on a form field                            | [07 — Documents & Forms](./07-documents-forms.md)                                              |
+| Shift remaining is limited to 14 days                              | [02 — Training](./02-training.md)                                                              |
+
+---
+
+# October 28–29, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-28--29-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                            | Now in                                        |
+| ------------------------------------------------ | --------------------------------------------- |
+| A dues overpayment recorded as a donation        | [11 — Finance](./11-finance.md)               |
+| Integrations need their keys before they connect | [16 — Integrations](./16-integrations.md)     |
+| Public portal statistics now carry figures       | [08 — Admin & Reports](./08-admin-reports.md) |
+
+---
+
 # October 28, 2026 workflow updates
 
 Audit:

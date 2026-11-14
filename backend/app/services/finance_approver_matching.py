@@ -24,9 +24,20 @@ The rule, per ``approver_type``:
                      (case-insensitive); an external approver uses the
                      emailed token instead
 
+Being named is itself the grant (owner decision 2026-11-01, "naming grants
+that step"): a member a position, member or email step names may approve or
+deny that step without holding ``finance.approve``. It reaches no further —
+not another step, not another request, not the approvals queue or a request
+no chain routes — because every one of those still asks for the permission or
+for a match against *its own* step. An unassigned step (no approver type)
+names nobody, so it still takes a ``finance.approve`` holder.
+
 A ``finance.configure_approvals`` holder who does not match may still act if
-they give an override reason. That is decided here too, so the 403 messages
-and the ``requires_override`` flag cannot drift apart.
+they give an override reason, provided they also hold ``finance.approve``:
+the override was always given at the ``finance.approve`` gate, and opening the
+gate to named members must not turn ``configure_approvals`` alone into a
+licence to decide requests. That is decided here too, so the 403 messages and
+the ``requires_override`` flag cannot drift apart.
 """
 
 from __future__ import annotations
@@ -250,6 +261,26 @@ def is_approvals_admin(user: User) -> bool:
     return user_has_permission(user, APPROVALS_ADMIN_PERMISSION)
 
 
+def may_override(user: User) -> bool:
+    """An approvals administrator who may also approve: the override holder."""
+    return is_approvals_admin(user) and user_has_permission(user, FINANCE_APPROVE)
+
+
+async def may_reach_step(
+    db: AsyncSession, user: User, step: Optional[ApprovalChainStep], org_id: str
+) -> bool:
+    """Whether ``user`` may call approve / deny on ``step`` at all.
+
+    A ``finance.approve`` holder may (the step's own rule then decides); a
+    member without it only for a step that names them. Checked before the
+    step's order and its request's state are looked at, so a member nobody
+    named learns nothing about either.
+    """
+    if user_has_permission(user, FINANCE_APPROVE):
+        return True
+    return step is not None and await user_matches_step(db, user, step, org_id)
+
+
 async def authorize_step_actor(
     db: AsyncSession,
     user: User,
@@ -280,7 +311,7 @@ async def authorize_step_actor(
         )
 
     reason = _clean(override_reason)
-    if not is_approvals_admin(user):
+    if not may_override(user):
         raise ApproverMismatchError(f"This step is waiting on {label}.")
     if not reason:
         raise ApproverMismatchError(

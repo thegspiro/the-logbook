@@ -35,6 +35,7 @@ const agencies: ExternalAgency[] = [
     id: 'a1',
     name: 'Township Fire Company',
     is_active: true,
+    evaluate_shifts: false,
     apparatus: [{ id: 'u1', agency_id: 'a1', name: 'Engine 42', apparatus_type: 'engine', is_active: true }],
   },
 ];
@@ -138,5 +139,16 @@ describe('OutsideApparatusSettings', () => {
     renderWithRouter(<OutsideApparatusSettings />);
 
     expect(await screen.findByText(/members can't log shifts with other departments/)).toBeInTheDocument();
+  });
+
+  it('turns shift evaluations on for a department', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<OutsideApparatusSettings />);
+
+    const toggle = await screen.findByRole('checkbox', { name: /Evaluate shifts on/ });
+    expect(toggle).not.toBeChecked();
+    await user.click(toggle);
+
+    await waitFor(() => expect(mockUpdateAgency).toHaveBeenCalledWith('a1', { evaluate_shifts: true }));
   });
 });

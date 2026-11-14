@@ -62,7 +62,14 @@ const EmailPlatformChoice: React.FC = () => {
       description: 'Google Workspace or Gmail',
       icon: <GmailIcon />,
       color: 'from-red-500 to-yellow-500',
-      features: ['App Password sign-in', 'Easy integration', 'Calendar sync available'],
+      // What this choice does, nothing more. "Calendar sync available" and
+      // "Teams integration" used to sit here: both are separate integrations
+      // under the Integrations module, available whatever sends the email.
+      features: [
+        'Sends through smtp.gmail.com',
+        'Signs in with a Google App Password',
+        'Google Workspace or a personal Gmail account',
+      ],
       setupInfo: "You'll need a Google account with 2-Step Verification and an App Password.",
     },
     {
@@ -71,8 +78,13 @@ const EmailPlatformChoice: React.FC = () => {
       description: 'Outlook, Exchange, or Microsoft 365',
       icon: <MicrosoftIcon />,
       color: 'from-blue-500 to-cyan-500',
-      features: ['Authenticated SMTP', 'Exchange support', 'Teams integration'],
-      setupInfo: "You'll need a mailbox with Authenticated SMTP enabled and, with MFA, an App Password.",
+      features: [
+        'Sends through smtp.office365.com',
+        'Signs in with an Entra ID app registration or an App Password',
+        'Exchange Online mailboxes',
+      ],
+      setupInfo:
+        "You'll need a mailbox with SMTP AUTH enabled, and an Entra ID app registration (recommended) or an App Password.",
     },
     {
       id: 'selfhosted',
@@ -94,7 +106,9 @@ const EmailPlatformChoice: React.FC = () => {
       description: 'Cloudflare Email Service (REST API)',
       icon: <Cloud aria-hidden="true" className="h-10 w-10" />,
       color: 'from-orange-500 to-amber-500',
-      features: ['REST API — no SMTP server needed', 'Automatic SPF/DKIM/DMARC', '$0.35 per 1,000 emails'],
+      // No price here: a vendor's rate quoted in the product goes stale
+      // without anything noticing.
+      features: ['REST API — no SMTP server needed', 'Billed by Cloudflare per message sent'],
       setupInfo: "You'll need your Cloudflare Account ID and an API token with email sending permission.",
     },
     {

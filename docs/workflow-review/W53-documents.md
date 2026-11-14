@@ -115,10 +115,14 @@ card.
 Documents is an essential module: always on, with no module gate. The comment
 now says that, and says where folder access is decided.
 
-### W53-6 — LOW — A document's type shows as a raw MIME type — OPEN
+### W53-6 — LOW — A document's type shows as a raw MIME type — FIXED
 
 The list shows "TEXT/PLAIN" and "APPLICATION/PDF". This is cosmetic and left
 as a lead.
+
+Fixed 2026-11-02: `utils/fileTypeLabel.ts` names the type ("Text", "PDF",
+"Word"), on the cards, in the list view and in the event form's attachment
+list, which printed the same raw string.
 
 ## Checklist
 

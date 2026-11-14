@@ -4,7 +4,7 @@
  * Shows detailed information about an election including results.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { electionService, eventService, meetingsService } from '../services/api';
@@ -18,22 +18,26 @@ import type {
   Candidate,
   ManualBallotBatch,
   ElectionUpdate,
+  ElectionSettings,
 } from '../types/election';
 import type { EventListItem } from '../types/event';
 import { ElectionResults } from '../components/ElectionResults';
+import { VerifyReceipt } from '../components/VerifyReceipt';
 import { CandidateManagement } from '../components/CandidateManagement';
 import { BallotBuilder } from '../components/BallotBuilder';
 import { MeetingAttendance } from '../components/MeetingAttendance';
 import { VoterOverrideManagement } from '../components/VoterOverrideManagement';
 import { ProxyVotingManagement } from '../components/ProxyVotingManagement';
 import { EligibilityRoster } from '../modules/elections/components/EligibilityRoster';
+import { ElectionEligibilityRulesPanel } from '../modules/elections/components/ElectionEligibilityRulesPanel';
+import { defaultsForKind } from '../modules/elections/eligibilityRules';
 import { RunoffChain } from '../modules/elections/components/RunoffChain';
 import { PublishResultsPanel } from '../modules/elections/components/PublishResultsPanel';
 import { NominationsAnnouncementStatus } from '../modules/elections/components/NominationsAnnouncementStatus';
 import { ElectionWorkflowTabs } from '../modules/elections/components/ElectionWorkflowTabs';
 import { useAuthStore } from '../stores/authStore';
 import { ElectionBallot } from '../components/ElectionBallot';
-import { ElectionStatus, VotingMethod } from '../constants/enums';
+import { ElectionStatus, MeetingKind, VotingMethod } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { Breadcrumbs, PromptDialog } from '../components/ux';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
@@ -47,9 +51,12 @@ import { groupVoidedVotes } from '../utils/electionForensics';
 import {
   getTimeRemaining,
   getStatusBadgeClass,
+  getStatusLabel,
+  titleNamesRunoffRound,
   getVictoryDescription,
   describePackageSendError,
   electionCanEmailBallots,
+  nomineesOf,
 } from '../utils/electionHelpers';
 import SendBallotEmailsModal from '../components/election-detail/SendBallotEmailsModal';
 import RemindNonVotersModal from '../components/election-detail/RemindNonVotersModal';
@@ -67,6 +74,7 @@ import EditDatesModal from '../components/election-detail/EditDatesModal';
 import PreMeetingPackageModal from '../components/election-detail/PreMeetingPackageModal';
 import BallotPreviewModal from '../components/election-detail/BallotPreviewModal';
 import RollbackElectionModal from '../components/election-detail/RollbackElectionModal';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 /** Floor the void-reason prompt already enforced, now stated to the user
  *  instead of silently rejecting anything shorter. */
@@ -181,6 +189,13 @@ export const ElectionDetailPage: React.FC = () => {
   // Upcoming events state
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
 
+  // Bumped when this election's voter rules change, so the roster refetches.
+  const [rosterVersion, setRosterVersion] = useState(0);
+  // The department's eligibility defaults, which seed new ballot items by
+  // the election's meeting kind. Undefined until loaded (or for a member
+  // without elections.manage), when the builder keeps its built-in defaults.
+  const [eligibilitySettings, setEligibilitySettings] = useState<ElectionSettings | undefined>(undefined);
+
   // Org-level feature toggles (default ON until settings load)
   const [featureFlags, setFeatureFlags] = useState({
     nominations_enabled: true,
@@ -234,11 +249,38 @@ export const ElectionDetailPage: React.FC = () => {
           auto_open_enabled: s.auto_open_enabled ?? true,
           paper_ballot_attestations_required: s.paper_ballot_attestations_required ?? 2,
         });
+        setEligibilitySettings(s);
       } catch {
         // Non-fatal: buttons stay visible; the backend gates enforcement.
       }
     })();
   }, [canManage]);
+
+  // The Candidates tab's count. Loaded here because the tab's own list loads
+  // only once the tab is opened; while it is open it reports its rows back
+  // (onCandidatesChange), so an add or a removal moves the count with it.
+  const [tabCandidates, setTabCandidates] = useState<Candidate[] | null>(null);
+  useEffect(() => {
+    setTabCandidates(null);
+    if (!canManage || !electionId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await electionService.getCandidates(electionId);
+        if (!cancelled) setTabCandidates(rows);
+      } catch {
+        // The count is a convenience: without it the tab shows no badge, and
+        // the tab's own load reports a failure where the officer will see it.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage, electionId]);
+  const candidateCount = useMemo(
+    () => (tabCandidates ? nomineesOf(tabCandidates, election?.ballot_items).length : undefined),
+    [tabCandidates, election?.ballot_items]
+  );
 
   useEffect(() => {
     if (electionId) {
@@ -365,7 +407,10 @@ export const ElectionDetailPage: React.FC = () => {
   };
 
   const handleImportMeetingAttendees = async () => {
-    if (!electionId || !election?.meeting_id) return;
+    // Same condition that shows the button: the backend imports from a linked
+    // meeting or a linked event, and an event-only guard made the event
+    // button a silent no-op.
+    if (!electionId || !(election?.meeting_id || election?.event_id)) return;
 
     try {
       setIsImportingAttendees(true);
@@ -807,7 +852,11 @@ export const ElectionDetailPage: React.FC = () => {
         setBallotsMustBeResent(true);
       }
 
-      toast.success(`Election rolled back. ${response.notifications_sent} leadership members notified.`);
+      toast.success(
+        `Election rolled back. ${response.notifications_sent} leadership ${
+          response.notifications_sent === 1 ? 'member' : 'members'
+        } notified.`
+      );
     } catch (err: unknown) {
       setRollbackError(getErrorMessage(err, 'Failed to roll back election'));
     } finally {
@@ -1124,7 +1173,7 @@ export const ElectionDetailPage: React.FC = () => {
           title={
             <span className="flex flex-wrap items-center gap-2">
               <span className="min-w-0 break-words">{election.title}</span>
-              {election.is_runoff && (
+              {election.is_runoff && !titleNamesRunoffRound(election.title, election.runoff_round) && (
                 <span className="rounded-sm bg-purple-100 px-2 py-1 text-xs font-semibold text-purple-800 dark:bg-purple-500/20 dark:text-purple-400">
                   Runoff Round {election.runoff_round}
                 </span>
@@ -1152,7 +1201,7 @@ export const ElectionDetailPage: React.FC = () => {
                 election.status
               )}`}
             >
-              {election.status}
+              {getStatusLabel(election.status)}
             </span>
           }
         />
@@ -1876,13 +1925,22 @@ export const ElectionDetailPage: React.FC = () => {
               canManage={canManage}
               activeTab={activeTab}
               onTabChange={setActiveTab}
+              candidateCount={candidateCount}
             />
 
             <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
               {/* Tab: Ballot Builder */}
               {activeTab === 'ballot' && canManage && election.status !== ElectionStatus.CANCELLED && (
                 <div className="mb-6 space-y-6">
-                  <BallotBuilder electionId={electionId} election={election} onUpdate={setElection} />
+                  <BallotBuilder
+                    electionId={electionId}
+                    election={election}
+                    onUpdate={setElection}
+                    eligibilityDefaults={
+                      eligibilitySettings &&
+                      defaultsForKind(eligibilitySettings, election.meeting_kind ?? MeetingKind.REGULAR)
+                    }
+                  />
 
                   {/* Pending Member Applications (draft only) */}
                   {election.status === ElectionStatus.DRAFT && (
@@ -1969,14 +2027,26 @@ export const ElectionDetailPage: React.FC = () => {
               {/* Tab: Candidates */}
               {activeTab === 'candidates' && canManage && (
                 <div className="mb-6">
-                  <CandidateManagement electionId={electionId} election={election} />
+                  <CandidateManagement
+                    electionId={electionId}
+                    election={election}
+                    onCandidatesChange={setTabCandidates}
+                  />
                 </div>
               )}
 
               {/* Tab: Eligibility Roster */}
               {activeTab === 'eligibility' && canManage && election.status !== ElectionStatus.CANCELLED && (
-                <div className="mb-6">
-                  <EligibilityRoster electionId={electionId} />
+                <div className="mb-6 space-y-6">
+                  <ElectionEligibilityRulesPanel
+                    key={`${election.status}:${election.meeting_kind ?? MeetingKind.REGULAR}:${JSON.stringify(election.eligibility_rules ?? null)}`}
+                    election={election}
+                    onUpdate={(updated) => {
+                      setElection(updated);
+                      setRosterVersion((v) => v + 1);
+                    }}
+                  />
+                  <EligibilityRoster key={rosterVersion} electionId={electionId} />
                 </div>
               )}
 
@@ -2018,6 +2088,14 @@ export const ElectionDetailPage: React.FC = () => {
               {activeTab === 'results' && resultsAvailable && (
                 <div className="mb-6">
                   <ElectionResults electionId={electionId} election={election} />
+                  {/* The Cast Vote tab, which carries the receipt form while
+                      voting is open, goes at close; a receipt saved during
+                      voting stays checkable here (W50-92). */}
+                  {election.status === ElectionStatus.CLOSED && (
+                    <div className="mt-6">
+                      <VerifyReceipt electionId={electionId} />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2025,7 +2103,9 @@ export const ElectionDetailPage: React.FC = () => {
         )}
 
         {/* Message if results not available (non-tabbed fallback for non-admin users) */}
-        {!canManage && !resultsAvailable && (
+        {/* Only while voting is open: a draft or a nominations phase has
+            nothing to vote on yet, so "when the election is closed" misled. */}
+        {!canManage && !resultsAvailable && election.status === ElectionStatus.OPEN && (
           <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
             <p className="text-sm text-blue-700 dark:text-blue-300">
               Results will be available when the election is closed.
@@ -2296,7 +2376,9 @@ export const ElectionDetailPage: React.FC = () => {
                             {Object.entries(forensicsReport.anomaly_detection.suspicious_ips).map(([ip, count]) => (
                               <div key={ip} className="flex justify-between py-1 text-sm">
                                 <code className="text-red-700 dark:text-red-300">{ip}</code>
-                                <span className="font-semibold text-red-700 dark:text-red-300">{count} votes</span>
+                                <span className="font-semibold text-red-700 dark:text-red-300">
+                                  {count} {count === 1 ? 'vote' : 'votes'}
+                                </span>
                               </div>
                             ))}
                           </div>
@@ -2349,7 +2431,7 @@ export const ElectionDetailPage: React.FC = () => {
                       {/* issued = live + superseded + used (+ expired); a
                           resent ballot's old token is superseded, not
                           "unused" (W50-65) */}
-                      <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-5">
+                      <StatGrid columns={5} className="text-sm">
                         <div className="bg-theme-surface-secondary rounded-sm p-3">
                           <div className="text-theme-text-muted">Issued</div>
                           <div className="text-theme-text-primary text-xl font-semibold">
@@ -2380,7 +2462,7 @@ export const ElectionDetailPage: React.FC = () => {
                             {forensicsReport.voting_tokens.total_expired}
                           </div>
                         </div>
-                      </div>
+                      </StatGrid>
                     </div>
 
                     {/* Audit Log Summary */}

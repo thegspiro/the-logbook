@@ -11,10 +11,13 @@
  * event stay API-only.
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { blankToNull, numberOrNull } from '../../../utils/formValues';
 import { formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -29,6 +32,48 @@ import type {
 import { FUNDRAISING_EVENT_STATUS_LABELS, FUNDRAISING_EVENT_TYPE_LABELS } from '../utils/labels';
 
 const MAX_AMOUNT = 99_999_999.99;
+
+type EventField =
+  | 'name'
+  | 'eventType'
+  | 'eventDate'
+  | 'location'
+  | 'campaignId'
+  | 'ticketPrice'
+  | 'maxAttendees'
+  | 'revenueGoal'
+  | 'registrationUrl'
+  | 'description'
+  | 'notes'
+  | 'status'
+  | 'actualRevenue'
+  | 'expenses'
+  | 'currentAttendees';
+
+/**
+ * Labels and `FundraisingEventCreate`'s max_length per field; each key is also
+ * its payload key. Grant request schemas report the camelCase alias, and the
+ * mapper reads both spellings.
+ */
+const SERVER_FIELDS: Record<EventField, ServerFieldSpec> = {
+  name: { label: 'Name', maxLength: 255 },
+  eventType: { label: 'Type' },
+  eventDate: { label: 'Date and time' },
+  location: { label: 'Location', maxLength: 300 },
+  campaignId: { label: 'Campaign' },
+  ticketPrice: { label: 'Ticket price' },
+  maxAttendees: { label: 'Capacity' },
+  revenueGoal: { label: 'Revenue goal' },
+  registrationUrl: { label: 'Registration link', maxLength: 500 },
+  description: { label: 'Description' },
+  notes: { label: 'Notes' },
+  status: { label: 'Status' },
+  actualRevenue: { label: 'Money raised' },
+  expenses: { label: 'Expenses' },
+  currentAttendees: { label: 'Attendance' },
+};
+
+const fieldId = (field: EventField) => `fr-event-field-${field}`;
 
 interface FundraisingEventDialogProps {
   event?: FundraisingEvent | undefined;
@@ -63,10 +108,49 @@ export const FundraisingEventDialog: React.FC<FundraisingEventDialogProps> = ({
   const [actualRevenue, setActualRevenue] = useState(moneyText(event?.actualRevenue ?? 0));
   const [expenses, setExpenses] = useState(moneyText(event?.expenses ?? 0));
   const [currentAttendees, setCurrentAttendees] = useState(moneyText(event?.currentAttendees ?? 0));
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Partial<Record<EventField, string>>>({});
   const [saving, setSaving] = useState(false);
+  // An edit that saved everything but a refused field stays open on that
+  // field; closing then still tells the caller something was saved.
+  const partlySaved = useRef(false);
 
-  const checkNumber = (next: Record<string, string>, field: string, value: string, whole = false) => {
+  const snapshot = JSON.stringify([
+    name,
+    eventType,
+    eventDate,
+    location,
+    campaignId,
+    ticketPrice,
+    maxAttendees,
+    revenueGoal,
+    registrationUrl,
+    description,
+    notes,
+    status,
+    actualRevenue,
+    expenses,
+    currentAttendees,
+  ]);
+  const initialSnapshot = useRef(snapshot);
+  const isDirty = snapshot !== initialSnapshot.current;
+  const close = () => (partlySaved.current ? onSaved() : onClose());
+  // Escape, the X and Cancel all ask before throwing away a changed form.
+  const requestClose = useDiscardGuard({ isDirty, onClose: close });
+  /** A field's change handler, which also clears the error it carried. */
+  const change = (field: EventField, set: (value: string) => void) => (value: string) => {
+    set(value);
+    setErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+  const focusField = (field: EventField | undefined) => {
+    if (field) document.getElementById(fieldId(field))?.focus();
+  };
+
+  const checkNumber = (next: Partial<Record<EventField, string>>, field: EventField, value: string, whole = false) => {
     if (value.trim() === '') return;
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed < 0 || (whole && !Number.isInteger(parsed))) {
@@ -77,7 +161,7 @@ export const FundraisingEventDialog: React.FC<FundraisingEventDialogProps> = ({
   };
 
   const validate = (): boolean => {
-    const next: Record<string, string> = {};
+    const next: Partial<Record<EventField, string>> = {};
     if (!name.trim()) next.name = 'Give the event a name.';
     if (!eventDate) next.eventDate = 'Enter when the event takes place.';
     checkNumber(next, 'ticketPrice', ticketPrice);
@@ -120,7 +204,32 @@ export const FundraisingEventDialog: React.FC<FundraisingEventDialogProps> = ({
           expenses: expenses.trim() || '0',
           currentAttendees: Number(currentAttendees || 0),
         };
-        await fundraisingService.updateFundraisingEvent(event.id, payload);
+        let refused: Partial<Record<EventField, string>> = {};
+        try {
+          await fundraisingService.updateFundraisingEvent(event.id, payload);
+        } catch (err: unknown) {
+          // Owner rule (2026-11-05) for a single-save form: a value the event
+          // cannot hold is not written, the rest saves, and the field keeps
+          // what was typed, flagged, until it is fixed. Anything the form has
+          // no field for is a real failure and is reported as one.
+          const mapped = mapServerFieldErrors(err, SERVER_FIELDS);
+          const keys = Object.keys(mapped?.fieldErrors ?? {}) as EventField[];
+          if (!mapped || keys.length === 0 || mapped.unmatched.length > 0) throw err;
+          refused = mapped.fieldErrors;
+          const rest: FundraisingEventUpdatePayload = { ...payload };
+          for (const key of keys) delete rest[key];
+          await fundraisingService.updateFundraisingEvent(event.id, rest);
+        }
+        const firstRefused = (Object.keys(refused) as EventField[])[0];
+        if (firstRefused) {
+          partlySaved.current = true;
+          setErrors(refused);
+          toast.error(
+            `Event saved, except ${SERVER_FIELDS[firstRefused].label.toLowerCase()}: ${refused[firstRefused] ?? ''} Fix it and save again.`
+          );
+          focusField(firstRefused);
+          return;
+        }
         toast.success('Event saved');
       } else {
         const payload: FundraisingEventCreatePayload = {
@@ -141,53 +250,91 @@ export const FundraisingEventDialog: React.FC<FundraisingEventDialogProps> = ({
       }
       onSaved();
     } catch (err: unknown) {
+      // A new event is added only once nothing is refused, so each refusal
+      // goes on its field (forms review F-2).
+      const mapped = event ? null : mapServerFieldErrors(err, SERVER_FIELDS);
+      const keys = Object.keys(mapped?.fieldErrors ?? {}) as EventField[];
+      if (mapped && keys[0]) {
+        setErrors(mapped.fieldErrors);
+        focusField(keys[0]);
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       toast.error(getErrorMessage(err, 'Could not save the event'));
     } finally {
       setSaving(false);
     }
   };
 
-  const errorText = (field: string) =>
-    errors[field] ? (
-      <p id={`fr-event-${field}-error`} className="mt-1 text-xs text-red-700 dark:text-red-400">
-        {errors[field]}
-      </p>
-    ) : null;
-  const describedBy = (field: string) => (errors[field] ? `fr-event-${field}-error` : undefined);
   const optional = <span className="text-theme-text-secondary font-normal">(optional)</span>;
 
+  /** A text, date or URL input bound to one field. */
+  const inputField = (
+    field: EventField,
+    label: React.ReactNode,
+    value: string,
+    onChange: (v: string) => void,
+    attrs: React.InputHTMLAttributes<HTMLInputElement> & { required?: boolean } = {},
+    className?: string
+  ) => {
+    const { required, ...rest } = attrs;
+    const { maxLength } = SERVER_FIELDS[field];
+    return (
+      <FormField
+        id={fieldId(field)}
+        className={className}
+        label={label}
+        required={required}
+        error={errors[field]}
+        maxLength={maxLength}
+        count={maxLength ? value.length : undefined}
+      >
+        {(control) => (
+          <input
+            type="text"
+            {...rest}
+            {...control}
+            className="form-input"
+            value={value}
+            onChange={(e) => change(field, onChange)(e.target.value)}
+          />
+        )}
+      </FormField>
+    );
+  };
+
   const numberField = (
-    id: string,
-    field: string,
+    field: EventField,
     label: React.ReactNode,
     value: string,
     onChange: (v: string) => void,
     whole = false
-  ) => (
-    <div>
-      <label htmlFor={id} className="form-label">
-        {label}
-      </label>
-      <input
-        id={id}
-        type="number"
-        inputMode={whole ? 'numeric' : 'decimal'}
-        min="0"
-        step={whole ? '1' : '0.01'}
-        className="form-input"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-invalid={Boolean(errors[field])}
-        aria-describedby={describedBy(field)}
-      />
-      {errorText(field)}
-    </div>
+  ) =>
+    inputField(field, label, value, onChange, {
+      type: 'number',
+      inputMode: whole ? 'numeric' : 'decimal',
+      min: '0',
+      step: whole ? '1' : '0.01',
+    });
+
+  const textareaField = (field: EventField, label: React.ReactNode, value: string, onChange: (v: string) => void) => (
+    <FormField id={fieldId(field)} label={label} error={errors[field]}>
+      {(control) => (
+        <textarea
+          {...control}
+          rows={2}
+          className="form-input"
+          value={value}
+          onChange={(e) => change(field, onChange)(e.target.value)}
+        />
+      )}
+    </FormField>
   );
 
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title={isEdit ? 'Edit fundraising event' : 'Add fundraising event'}
       titleId="fr-event-form-title"
       size="lg"
@@ -197,7 +344,7 @@ export const FundraisingEventDialog: React.FC<FundraisingEventDialogProps> = ({
           <button type="submit" disabled={saving} className="btn-primary">
             {isEdit ? 'Save event' : 'Add event'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={requestClose} className="btn-secondary">
             Cancel
           </button>
         </>
@@ -205,169 +352,83 @@ export const FundraisingEventDialog: React.FC<FundraisingEventDialogProps> = ({
     >
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label htmlFor="fr-event-name" className="form-label">
-              Name
-            </label>
-            <input
-              id="fr-event-name"
-              type="text"
-              maxLength={255}
-              className="form-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              aria-invalid={Boolean(errors.name)}
-              aria-describedby={describedBy('name')}
-            />
-            {errorText('name')}
-          </div>
-          <div>
-            <label htmlFor="fr-event-type" className="form-label">
-              Type
-            </label>
-            <select
-              id="fr-event-type"
-              className="form-input"
-              value={eventType}
-              onChange={(e) => setEventType(e.target.value)}
-            >
-              {Object.values(FundraisingEventType).map((value) => (
-                <option key={value} value={value}>
-                  {FUNDRAISING_EVENT_TYPE_LABELS[value]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="fr-event-date" className="form-label">
-              Date and time
-            </label>
-            <input
-              id="fr-event-date"
-              type="datetime-local"
-              className="form-input"
-              value={eventDate}
-              onChange={(e) => setEventDate(e.target.value)}
-              aria-invalid={Boolean(errors.eventDate)}
-              aria-describedby={describedBy('eventDate')}
-            />
-            {errorText('eventDate')}
-          </div>
-          <div>
-            <label htmlFor="fr-event-location" className="form-label">
-              Location {optional}
-            </label>
-            <input
-              id="fr-event-location"
-              type="text"
-              maxLength={300}
-              className="form-input"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="fr-event-campaign" className="form-label">
-              Campaign {optional}
-            </label>
-            <select
-              id="fr-event-campaign"
-              className="form-input"
-              value={campaignId}
-              onChange={(e) => setCampaignId(e.target.value)}
-            >
-              <option value="">No campaign</option>
-              {campaigns.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          {numberField('fr-event-ticket', 'ticketPrice', <>Ticket price {optional}</>, ticketPrice, setTicketPrice)}
-          {numberField(
-            'fr-event-capacity',
-            'maxAttendees',
-            <>Capacity {optional}</>,
-            maxAttendees,
-            setMaxAttendees,
-            true
-          )}
-          {numberField('fr-event-goal', 'revenueGoal', <>Revenue goal {optional}</>, revenueGoal, setRevenueGoal)}
-          <div>
-            <label htmlFor="fr-event-url" className="form-label">
-              Registration link {optional}
-            </label>
-            <input
-              id="fr-event-url"
-              type="url"
-              inputMode="url"
-              maxLength={500}
-              placeholder="https://"
-              className="form-input"
-              value={registrationUrl}
-              onChange={(e) => setRegistrationUrl(e.target.value)}
-            />
-          </div>
+          {inputField('name', 'Name', name, setName, { required: true, autoComplete: 'off' }, 'sm:col-span-2')}
+          <FormField id={fieldId('eventType')} label="Type" required error={errors.eventType}>
+            {(control) => (
+              <select
+                {...control}
+                className="form-input"
+                value={eventType}
+                onChange={(e) => change('eventType', setEventType)(e.target.value)}
+              >
+                {Object.values(FundraisingEventType).map((value) => (
+                  <option key={value} value={value}>
+                    {FUNDRAISING_EVENT_TYPE_LABELS[value]}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+          {inputField('eventDate', 'Date and time', eventDate, setEventDate, {
+            type: 'datetime-local',
+            required: true,
+          })}
+          {inputField('location', <>Location {optional}</>, location, setLocation, { autoComplete: 'off' })}
+          <FormField id={fieldId('campaignId')} label={<>Campaign {optional}</>} error={errors.campaignId}>
+            {(control) => (
+              <select
+                {...control}
+                className="form-input"
+                value={campaignId}
+                onChange={(e) => change('campaignId', setCampaignId)(e.target.value)}
+              >
+                <option value="">No campaign</option>
+                {campaigns.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+          {numberField('ticketPrice', <>Ticket price {optional}</>, ticketPrice, setTicketPrice)}
+          {numberField('maxAttendees', <>Capacity {optional}</>, maxAttendees, setMaxAttendees, true)}
+          {numberField('revenueGoal', <>Revenue goal {optional}</>, revenueGoal, setRevenueGoal)}
+          {inputField('registrationUrl', <>Registration link {optional}</>, registrationUrl, setRegistrationUrl, {
+            type: 'url',
+            inputMode: 'url',
+            placeholder: 'https://',
+            autoComplete: 'url',
+          })}
         </div>
 
         {isEdit && (
           <fieldset className="border-theme-surface-border grid grid-cols-1 gap-4 rounded-lg border p-4 sm:grid-cols-2">
             <legend className="text-theme-text-primary px-1 text-sm font-semibold">Results</legend>
-            <div>
-              <label htmlFor="fr-event-status" className="form-label">
-                Status
-              </label>
-              <select
-                id="fr-event-status"
-                className="form-input"
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-              >
-                {Object.values(FundraisingEventStatus).map((value) => (
-                  <option key={value} value={value}>
-                    {FUNDRAISING_EVENT_STATUS_LABELS[value]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {numberField(
-              'fr-event-attendees',
-              'currentAttendees',
-              'Attendance',
-              currentAttendees,
-              setCurrentAttendees,
-              true
-            )}
-            {numberField('fr-event-revenue', 'actualRevenue', 'Money raised', actualRevenue, setActualRevenue)}
-            {numberField('fr-event-expenses', 'expenses', 'Expenses', expenses, setExpenses)}
+            <FormField id={fieldId('status')} label="Status" error={errors.status}>
+              {(control) => (
+                <select
+                  {...control}
+                  className="form-input"
+                  value={status}
+                  onChange={(e) => change('status', setStatus)(e.target.value)}
+                >
+                  {Object.values(FundraisingEventStatus).map((value) => (
+                    <option key={value} value={value}>
+                      {FUNDRAISING_EVENT_STATUS_LABELS[value]}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+            {numberField('currentAttendees', 'Attendance', currentAttendees, setCurrentAttendees, true)}
+            {numberField('actualRevenue', 'Money raised', actualRevenue, setActualRevenue)}
+            {numberField('expenses', 'Expenses', expenses, setExpenses)}
           </fieldset>
         )}
 
-        <div>
-          <label htmlFor="fr-event-description" className="form-label">
-            Description {optional}
-          </label>
-          <textarea
-            id="fr-event-description"
-            rows={2}
-            className="form-input"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </div>
-        <div>
-          <label htmlFor="fr-event-notes" className="form-label">
-            Notes {optional}
-          </label>
-          <textarea
-            id="fr-event-notes"
-            rows={2}
-            className="form-input"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
+        {textareaField('description', <>Description {optional}</>, description, setDescription)}
+        {textareaField('notes', <>Notes {optional}</>, notes, setNotes)}
       </div>
     </Modal>
   );

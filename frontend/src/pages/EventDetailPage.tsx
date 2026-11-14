@@ -14,6 +14,7 @@ import type { ElectionListItem } from '../types/election';
 import { getStatusBadgeClass } from '../utils/electionHelpers';
 import type {
   Event,
+  EventAttachment,
   EventAttendee,
   EventListItem,
   RSVP,
@@ -71,6 +72,8 @@ import { EventRSVPSection } from '../components/event-detail/EventRSVPSection';
 import { EventAttendeesCard } from '../components/event-detail/EventAttendeesCard';
 import EventRSVPModal from '../components/event-detail/EventRSVPModal';
 import EventCancelModal from '../components/event-detail/EventCancelModal';
+import EventPostponeModal, { type PostponeEventPayload } from '../components/event-detail/EventPostponeModal';
+import EventLateAttendeeForm from '../components/event-detail/EventLateAttendeeForm';
 import EventCancelSeriesModal from '../components/event-detail/EventCancelSeriesModal';
 import EventCheckInModal from '../components/event-detail/EventCheckInModal';
 import EventRecordTimesModal from '../components/event-detail/EventRecordTimesModal';
@@ -84,6 +87,8 @@ import EventGuestsCard from '../components/event-detail/EventGuestsCard';
 import { GuestCheckInQRCard } from '../components/events/GuestCheckInQRCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
+import AttendanceWaiverCard from '../components/event-detail/AttendanceWaiverCard';
+import { MEETING_WAIVER_WORKFLOW } from '../utils/attendanceWaiverWorkflows';
 import EventTransferModal from '../components/event-detail/EventTransferModal';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { formatHoursExact } from '../utils/hoursFormatting';
@@ -229,6 +234,7 @@ export const EventDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showPostponeModal, setShowPostponeModal] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showRecordTimesModal, setShowRecordTimesModal] = useState(false);
   const [showCancelSeriesModal, setShowCancelSeriesModal] = useState(false);
@@ -379,6 +385,45 @@ export const EventDetailPage: React.FC = () => {
       setError(getErrorDetail(err) || 'Failed to load event');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Files are kept on the event row itself, so the list is re-read from the
+  // server after each change rather than patched locally.
+  const reloadAttachments = async () => {
+    if (!eventId) return;
+    const attachments = await eventService.getAttachments(eventId);
+    setEvent((prev) => (prev ? { ...prev, attachments } : prev));
+  };
+
+  const handleAttachmentUpload = async (file: File) => {
+    if (!eventId) return;
+    try {
+      await eventService.uploadAttachment(eventId, file);
+      await reloadAttachments();
+      toast.success(`${file.name} attached`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'The file could not be attached'));
+    }
+  };
+
+  const handleAttachmentDelete = async (attachment: EventAttachment) => {
+    if (!eventId) return;
+    if (
+      !(await confirm({
+        title: 'Remove attachment',
+        message: `Remove ${attachment.file_name} from this event? Members will no longer be able to download it.`,
+        confirmLabel: 'Remove',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
+    try {
+      await eventService.deleteAttachment(eventId, attachment.id);
+      await reloadAttachments();
+      toast.success('Attachment removed');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'The attachment could not be removed'));
     }
   };
 
@@ -620,6 +665,30 @@ export const EventDetailPage: React.FC = () => {
       await fetchEvent();
     } catch (err) {
       setSubmitError(getErrorDetail(err) || 'Failed to cancel event');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handlePostponeEvent = async (payload: PostponeEventPayload) => {
+    if (!eventId) return;
+
+    try {
+      setSubmitting(true);
+      setSubmitError(null);
+
+      await eventService.postponeEvent(eventId, {
+        new_start_datetime: payload.newStart,
+        new_end_datetime: payload.newEnd,
+        reason: payload.reason,
+        send_notifications: payload.sendNotifications,
+      });
+
+      setShowPostponeModal(false);
+      toast.success('Event postponed');
+      await fetchEvent();
+    } catch (err) {
+      setSubmitError(getErrorDetail(err) || 'Failed to postpone event');
     } finally {
       setSubmitting(false);
     }
@@ -925,6 +994,11 @@ export const EventDetailPage: React.FC = () => {
   const isTrainingEvent = event.event_type === EventTypeEnum.TRAINING;
   // The card has found a session, so it — not custom_fields — describes it.
   const trainingSessionReported = isTrainingEvent && trainingSession !== null;
+  // The session the card loaded is current after an officer changes its links
+  // there; the event's own flag answers until the card has loaded.
+  const countsTowardAttendance = trainingSession
+    ? (trainingSession.attendance_requirement_ids?.length ?? 0) > 0
+    : Boolean(event.counts_toward_attendance);
   // Seats taken, which is what max_attendees caps. Falls back to the member
   // count for payloads predating the aggregate.
   const occupiedSeats = event.occupied_seats ?? event.going_count ?? 0;
@@ -978,7 +1052,9 @@ export const EventDetailPage: React.FC = () => {
   // own eligibility (the 30-day window, already present) is the server's call;
   // the page only decides whether to ask.
   const attendancePetitionsOpen = checkInClosed && !event.is_cancelled && !event.is_draft;
-  const canReviewAttendancePetitions = canManageOrganizers;
+  // Adds a fallback position holder a request was sent to, who need not run
+  // the event; the server decides who that is, as for the pair above.
+  const canReviewAttendancePetitions = canManageOrganizers || Boolean(event.can_review_attendance_requests);
   const checkInMembersButton =
     canManageAttendance && !isAttendanceFinalized ? (
       <button
@@ -1101,9 +1177,20 @@ export const EventDetailPage: React.FC = () => {
                     Cancelled
                   </span>
                 )}
+                {event.postponed_at && !event.is_cancelled && (
+                  <span className="bg-theme-alert-warning-bg inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">
+                    Postponed
+                  </span>
+                )}
                 {event.is_mandatory && (
                   <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">
                     Mandatory
+                  </span>
+                )}
+                {countsTowardAttendance && (
+                  <span className="bg-theme-alert-info-bg text-theme-alert-info-title inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium">
+                    <ClipboardCheck className="h-3 w-3" aria-hidden="true" />
+                    Counts toward attendance
                   </span>
                 )}
                 {(event.is_recurring || event.recurrence_parent_id) && (
@@ -1201,7 +1288,7 @@ export const EventDetailPage: React.FC = () => {
                 {!isEventOver && (
                   <button
                     onClick={() => downloadICSFile(event)}
-                    className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
+                    className="btn-secondary inline-flex items-center gap-1.5 text-sm"
                   >
                     <CalendarPlus className="h-4 w-4" />
                     Add to Calendar
@@ -1364,6 +1451,18 @@ export const EventDetailPage: React.FC = () => {
                             {!isAttendanceFinalized && (
                               <>
                                 <div className="border-theme-surface-border my-1 border-t" />
+                                {!event.is_cancelled && (
+                                  <button
+                                    onClick={() => {
+                                      setShowActionsMenu(false);
+                                      setSubmitError(null);
+                                      setShowPostponeModal(true);
+                                    }}
+                                    className="text-theme-text-secondary hover:bg-theme-surface-hover w-full px-4 py-2.5 text-left text-sm"
+                                  >
+                                    Postpone Event
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => {
                                     setShowActionsMenu(false);
@@ -1465,6 +1564,12 @@ export const EventDetailPage: React.FC = () => {
                     <p className="text-theme-text-secondary text-sm font-medium">Date & Time</p>
                     <p className="text-theme-text-secondary text-sm">{formatDateTime(event.start_datetime, tz)}</p>
                     <p className="text-theme-text-secondary text-sm">to {formatTime(event.end_datetime, tz)}</p>
+                    {event.postponed_from_start && (
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        Postponed from {formatDateTime(event.postponed_from_start, tz)}
+                        {event.postponement_reason ? ` — ${event.postponement_reason}` : ''}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -1656,6 +1761,18 @@ export const EventDetailPage: React.FC = () => {
             {/* The training details the credit is filed under, and the approval
                 it waits on. With no session it says what the credit falls back
                 to, to those who can change that or approve it. */}
+            {/* Whether the session counts against this member is the server's
+                answer; the card renders nothing when it does not. */}
+            {isTrainingEvent && <AttendanceWaiverCard eventId={event.id} eventTitle={event.title} timezone={tz} />}
+            {event.event_type === EventTypeEnum.BUSINESS_MEETING && (
+              <AttendanceWaiverCard
+                eventId={event.id}
+                eventTitle={event.title}
+                timezone={tz}
+                workflow={MEETING_WAIVER_WORKFLOW}
+              />
+            )}
+
             {attendancePetitionsOpen && <EventAttendancePetitionPrompt eventId={event.id} timezone={tz} />}
 
             {attendancePetitionsOpen && canReviewAttendancePetitions && (
@@ -1714,12 +1831,15 @@ export const EventDetailPage: React.FC = () => {
               />
             )}
 
-            {/* Attachments */}
-            {event.attachments && event.attachments.length > 0 && (
+            {/* Attachments. Shown empty to someone who manages events, who
+                can attach the first file from here. */}
+            {((event.attachments?.length ?? 0) > 0 || canManage) && (
               <EventAttachmentsList
-                attachments={event.attachments}
+                attachments={event.attachments ?? []}
                 eventId={event.id}
                 getAttachmentDownloadUrl={(eid, aid) => eventService.getAttachmentDownloadUrl(eid, aid)}
+                onUpload={canManage ? handleAttachmentUpload : undefined}
+                onDelete={canManage ? handleAttachmentDelete : undefined}
               />
             )}
 
@@ -2030,6 +2150,24 @@ export const EventDetailPage: React.FC = () => {
           />
         )}
 
+        {showPostponeModal && (
+          <EventPostponeModal
+            currentStart={event.start_datetime}
+            currentEnd={event.end_datetime}
+            timezone={tz}
+            checkedInCount={rsvps.filter((r) => r.checked_in).length}
+            submitting={submitting}
+            submitError={submitError}
+            onSubmit={(payload) => {
+              void handlePostponeEvent(payload);
+            }}
+            onClose={() => {
+              setShowPostponeModal(false);
+              setSubmitError(null);
+            }}
+          />
+        )}
+
         {showCancelSeriesModal && (
           <EventCancelSeriesModal
             submitting={submitting}
@@ -2075,6 +2213,24 @@ export const EventDetailPage: React.FC = () => {
             }}
             onClose={() => setShowCheckInModal(false)}
             timezone={tz}
+            {...(checkInClosed && !isAttendanceFinalized && !event.is_cancelled && eventId
+              ? {
+                  lateEntry: (
+                    <EventLateAttendeeForm
+                      eventId={eventId}
+                      members={eligibleMembers}
+                      eventStart={event.actual_start_time ?? event.start_datetime}
+                      eventEnd={event.actual_end_time ?? event.end_datetime}
+                      timezone={tz}
+                      onRecorded={() => {
+                        void fetchRSVPs();
+                        void fetchStats();
+                        void fetchEligibleMembers();
+                      }}
+                    />
+                  ),
+                }
+              : {})}
           />
         )}
 

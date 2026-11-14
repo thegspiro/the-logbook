@@ -151,6 +151,53 @@ describe('TrainingLinkageFields', () => {
     expect(select).toHaveTextContent('CPR Renewal');
   });
 
+  describe('a session-attendance requirement', () => {
+    // Graded from the session's "Counts toward attendance" links, not from the
+    // requirement a session satisfies, so the picker does not offer one.
+    const DRILLS = requirement({
+      id: 'req-drills',
+      name: 'Company Drills',
+      requirement_type: 'session_attendance',
+      category_ids: ['cat-ems'],
+    });
+    const WITH_DRILLS: TrainingLinkageData = { ...DATA, requirements: [...DATA.requirements, DRILLS] };
+
+    const renderWithDrills = (value: TrainingLinkageValue = {}, selectedCourse?: TrainingCourse) => {
+      const onChange = vi.fn();
+      render(
+        <TrainingLinkageFields data={WITH_DRILLS} value={value} onChange={onChange} selectedCourse={selectedCourse} />
+      );
+      return { onChange };
+    };
+
+    it('is not offered in the dropdown', () => {
+      renderWithDrills();
+
+      const select = screen.getByLabelText('Requirement');
+      expect(select).toHaveTextContent('Hazmat Awareness');
+      expect(select).not.toHaveTextContent('Company Drills');
+    });
+
+    it('is not suggested as a chip, even when it shares the category', () => {
+      renderWithDrills({ category_id: 'cat-ems' });
+
+      expect(screen.getByRole('button', { name: /EMS Continuing Ed/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Company Drills/ })).not.toBeInTheDocument();
+    });
+
+    it('stays selected, and says so, on a session that already links it', () => {
+      // Saving re-sends every field, so dropping the stored value from the
+      // list would clear it on the next save.
+      renderWithDrills({ requirement_id: 'req-drills' });
+
+      const select = screen.getByLabelText<HTMLSelectElement>('Requirement');
+      expect(select.value).toBe('req-drills');
+      expect(
+        screen.getByRole('option', { name: 'Company Drills (currently linked, no longer offered)' })
+      ).toBeInTheDocument();
+    });
+  });
+
   it('clears the phase when the program changes, so a stale phase cannot survive', async () => {
     const user = userEvent.setup();
     const { onChange } = renderFields({ program_id: 'prog-1', phase_id: 'phase-1' });

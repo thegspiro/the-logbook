@@ -1416,9 +1416,9 @@ All permissions follow dot notation: `resource.action`
 
 ### Inventory WebSocket
 
-| Endpoint                  | Auth                            | Purpose                                  |
-| ------------------------- | ------------------------------- | ---------------------------------------- |
-| `WS /api/v1/inventory/ws` | Cookie or `?token=` query param | Real-time inventory change notifications |
+| Endpoint                  | Auth                                       | Purpose                                  |
+| ------------------------- | ------------------------------------------ | ---------------------------------------- |
+| `WS /api/v1/inventory/ws` | `access_token` cookie + `inventory.manage` | Real-time inventory change notifications |
 
 The `WebSocketManager` (`core/websocket_manager.py`) manages connections per organization. When inventory mutations occur (checkout, return, assignment), connected clients receive push updates.
 

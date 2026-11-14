@@ -8,6 +8,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
 
@@ -21,6 +23,8 @@ interface AssignTermsModalProps {
   memberName: string;
   itemName: string;
   submitting?: boolean;
+  /** The server's refusal of the return date on the last attempt, shown on that field. */
+  returnDateError?: string | undefined;
   onClose: () => void;
   onConfirm: (terms: AssignTerms) => void;
 }
@@ -30,12 +34,16 @@ export const AssignTermsModal: React.FC<AssignTermsModalProps> = ({
   memberName,
   itemName,
   submitting = false,
+  returnDateError,
   onClose,
   onConfirm,
 }) => {
   const tz = useTimezone();
   const [assignmentType, setAssignmentType] = useState<AssignTerms['assignment_type']>('permanent');
   const [returnAt, setReturnAt] = useState('');
+  const [dateError, setDateError] = useState<string | undefined>();
+  // Terms chosen are lost on close, so Escape, the X and Cancel ask first (forms review F-6).
+  const requestClose = useDiscardGuard({ isDirty: assignmentType !== 'permanent' || returnAt !== '', onClose });
 
   // Fresh terms on every opening, so a date chosen for one member is never
   // carried onto the next assignment.
@@ -43,8 +51,15 @@ export const AssignTermsModal: React.FC<AssignTermsModalProps> = ({
     if (isOpen) {
       setAssignmentType('permanent');
       setReturnAt('');
+      setDateError(undefined);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!returnDateError) return;
+    setDateError(returnDateError);
+    window.setTimeout(() => document.getElementById('assign-return-date')?.focus(), 0);
+  }, [returnDateError]);
 
   const needsDate = assignmentType === 'temporary' && !returnAt;
 
@@ -61,7 +76,7 @@ export const AssignTermsModal: React.FC<AssignTermsModalProps> = ({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title={`Assign ${itemName}`}
       size="sm"
       onSubmit={handleSubmit}
@@ -70,7 +85,7 @@ export const AssignTermsModal: React.FC<AssignTermsModalProps> = ({
           <button type="submit" className="btn-primary" disabled={submitting || needsDate}>
             Assign to {memberName}
           </button>
-          <button type="button" className="btn-secondary" onClick={onClose}>
+          <button type="button" className="btn-secondary" onClick={requestClose}>
             Cancel
           </button>
         </>
@@ -105,17 +120,30 @@ export const AssignTermsModal: React.FC<AssignTermsModalProps> = ({
         ))}
       </fieldset>
       {assignmentType === 'temporary' && (
-        <label className="form-label mt-3 block">
-          Return date
-          <input
-            type="datetime-local"
-            value={returnAt}
-            min={formatForDateTimeInput(new Date(), tz)}
-            onChange={(event) => setReturnAt(event.target.value)}
-            className="form-input mt-1 block w-full"
-            required
-          />
-        </label>
+        // The asterisk is left off: the submit stays disabled until a date is
+        // chosen, and the hint says it is needed.
+        <FormField
+          label="Return date"
+          id="assign-return-date"
+          className="mt-3"
+          error={dateError}
+          hint="Needed for a temporary assignment."
+        >
+          {(field) => (
+            <input
+              {...field}
+              aria-required
+              type="datetime-local"
+              value={returnAt}
+              min={formatForDateTimeInput(new Date(), tz)}
+              onChange={(event) => {
+                setReturnAt(event.target.value);
+                setDateError(undefined);
+              }}
+              className="form-input block w-full"
+            />
+          )}
+        </FormField>
       )}
     </Modal>
   );

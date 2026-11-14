@@ -7,7 +7,7 @@
  * Vice President, Secretary, Assistant Secretary
  *
  * Features:
- * - View by Member: See each member, their rank, membership type and positions
+ * - View by Member: See each member, their rank, member class and status, and positions
  * - View by Position: See each position and the members assigned to it
  * - Edit member contact information (admin)
  *
@@ -20,8 +20,10 @@
  *   offered or shown here — a rank is set in the Rank field — except that one
  *   a member already holds stays in Manage Positions so it can be taken off.
  * - Rank: the operational rank, with a few default permissions of its own.
- * - Membership Type: the class and ladder standing — probationary, active,
- *   life, administrative. No permissions; the tier ladder advances it.
+ * - Member class: operational, administrative or social. No permissions.
+ * - Membership status: the ladder standing — probationary, regular, life, or
+ *   one of the department's own tiers. No permissions; the tier ladder
+ *   advances it by years of service, and any class can hold any standing.
  * - Status: the account lifecycle — active, on leave, retired, dropped —
  *   changed from the member's profile.
  */
@@ -36,20 +38,79 @@ import { useAuthStore } from '../stores/authStore';
 import toast from 'react-hot-toast';
 import { PASSWORD_CHECKLIST, validatePasswordStrength } from '../utils/passwordValidation';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
-import { mirrorsRank, withoutRankMirrors } from '../utils/positions';
+import { isCommittee, mirrorsRank, withoutRankMirrors } from '../utils/positions';
 import { Modal } from '../components/Modal';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { useRanks } from '../hooks/useRanks';
-import { UserStatus } from '../constants/enums';
+import { UserStatus, userStatusLabel } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember, membershipTypeLabel } from '../utils/membership';
+import {
+  ADMINISTRATIVE_RANK_HINT,
+  effectiveMemberClass,
+  isAdministrativeMember,
+  memberClassLabel,
+  memberStatusLabel,
+  membershipTypeLabel,
+} from '../utils/membership';
 import { useTimezone } from '../hooks/useTimezone';
 import { OverduePropertyReturnsPanel } from '../components/members/OverduePropertyReturnsPanel';
+import { RowActionsMenu } from '../components/members/RowActionsMenu';
+import type { RowAction } from '../components/members/RowActionsMenu';
 import { formatDate, formatTime } from '../utils/dateFormatting';
 import type { PasskeyInfo } from '../types/auth';
 import { displayNameOf, givenName } from '../utils/memberName';
 
 type ViewMode = 'by-member' | 'by-role';
+
+/**
+ * Account statuses listed on the Former Members page rather than Member
+ * Management (owner decision 2026-11-10). The shift history import files every
+ * former member it meets as archived, so an older department's roster here was
+ * mostly people who left long ago. Retired and on-leave members stay on Member
+ * Management: officers still manage their records and positions.
+ */
+const FORMER_MEMBER_STATUSES: readonly string[] = [
+  UserStatus.ARCHIVED,
+  UserStatus.DROPPED_VOLUNTARY,
+  UserStatus.DROPPED_INVOLUNTARY,
+];
+
+function isFormerMember(status: string | null | undefined): boolean {
+  return !!status && FORMER_MEMBER_STATUSES.includes(status);
+}
+
+/** "Life Member", "life" and "Life member" all name the same standing. */
+function standingKey(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/\s+member$/, '');
+}
+
+/**
+ * A position named after the member's own membership status — a department's
+ * "Life Member" or "Probationary Member" office held by a life or probationary
+ * member. The Membership cell already says it, so the roster row leaves the
+ * chip out (owner decision 2026-11-10); Manage Positions still lists it.
+ */
+function repeatsMembershipStatus(roleName: string, memberStatus: string | null | undefined): boolean {
+  const standing = memberStatusLabel(memberStatus);
+  return !!standing && standingKey(roleName) === standingKey(standing);
+}
+
+/**
+ * A position named after the member's own member class — a department's
+ * "Administrative Member" office held by an administrative member. Same rule
+ * and reason as `repeatsMembershipStatus`, for the class half of the
+ * Membership cell (owner decision 2026-11-10).
+ */
+function repeatsMemberClass(
+  roleName: string,
+  member: { member_class?: string | null | undefined; membership_type?: string | undefined }
+): boolean {
+  const cls = memberClassLabel(effectiveMemberClass(member.member_class, member.membership_type));
+  return !!cls && standingKey(roleName) === standingKey(cls);
+}
 
 interface EditProfileForm {
   first_name: string;
@@ -62,7 +123,28 @@ interface EditProfileForm {
   station: string;
 }
 
-export const MembersAdminPage: React.FC = () => {
+/**
+ * "Administrative · Life member", or the legacy label for a row written before
+ * the pair existed. The class is omitted when it only repeats the status.
+ */
+function membershipSummary(user: {
+  member_class?: string | null | undefined;
+  member_status?: string | null | undefined;
+  membership_type?: string | undefined;
+}): string {
+  const cls = memberClassLabel(effectiveMemberClass(user.member_class, user.membership_type));
+  const status = user.member_status ? memberStatusLabel(user.member_status) : '';
+  if (!status) return cls || membershipTypeLabel(user.membership_type) || '-';
+  return cls ? `${cls} · ${status} member` : `${status} member`;
+}
+
+interface MembersAdminPageProps {
+  /** Current members (Member Management) or archived and dropped ones (Former Members). */
+  population?: 'current' | 'former';
+}
+
+export const MembersAdminPage: React.FC<MembersAdminPageProps> = ({ population = 'current' }) => {
+  const showingFormer = population === 'former';
   const { confirm } = useConfirm();
   const navigate = useNavigate();
   const { checkPermission, user: currentUser } = useAuthStore();
@@ -146,6 +228,39 @@ export const MembersAdminPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Only what is drawn is filtered. `users` stays the whole roster because the
+  // position saves diff against it: a member on the other page who holds a
+  // position keeps it when an officer saves that position's member list here.
+  const visibleUsers = users.filter((user) => isFormerMember(user.status) === showingFormer);
+
+  // The less frequent account actions, behind each row's "⋯" menu. None of
+  // them is offered on the caller's own row.
+  const rowMenuActions = (user: UserWithRoles): RowAction[] => {
+    if (currentUser?.id === user.id) return [];
+    const name = displayNameOf(user) || user.username;
+    const actions: RowAction[] = [
+      { label: 'Reset Password', ariaLabel: `Reset password for ${name}`, onSelect: () => setResetPasswordUser(user) },
+    ];
+    if (user.locked_until) {
+      actions.push({
+        label: unlockingUserId === user.id ? 'Unlocking…' : 'Unlock',
+        ariaLabel: `Unlock ${name}`,
+        disabled: unlockingUserId === user.id,
+        onSelect: () => void handleUnlock(user),
+      });
+    }
+    if (user.mfa_enabled || user.has_passkey) {
+      actions.push({ label: 'Reset MFA', ariaLabel: `Reset MFA for ${name}`, onSelect: () => setResetMfaUser(user) });
+    }
+    actions.push({
+      label: 'Delete',
+      ariaLabel: `Delete ${name}`,
+      tone: 'danger',
+      onSelect: () => handleDeleteUser(user),
+    });
+    return actions;
   };
 
   const handleEditRoles = (user: UserWithRoles) => {
@@ -316,9 +431,12 @@ export const MembersAdminPage: React.FC = () => {
   // is — but one a member already holds stays listed so it can be taken off.
   // Hidden assignments survive a save untouched: `selectedRoleIds` starts from
   // every position the member holds, and only the offered ones can be toggled.
-  const offeredPositions = roles.filter(
-    (role) => !mirrorsRank(role) || !!selectedUser?.roles.some((held) => held.id === role.id)
-  );
+  // Offices first, then committees, each in the server's priority order, so
+  // the dialog reads as two lists rather than one with committees scattered
+  // through it.
+  const offeredPositions = roles
+    .filter((role) => !mirrorsRank(role) || !!selectedUser?.roles.some((held) => held.id === role.id))
+    .sort((a, b) => Number(isCommittee(a)) - Number(isCommittee(b)));
 
   const handleToggleRole = (roleId: string) => {
     setSelectedRoleIds((prev) => (prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId]));
@@ -551,7 +669,7 @@ export const MembersAdminPage: React.FC = () => {
         {/* The hub's section nav already names this page, and its header carries
            the one red Add Member action; a second here broke the frame's
            one-primary rule. The title stays for heading navigation only. */}
-        <h2 className="sr-only">Member Management</h2>
+        <h2 className="sr-only">{showingFormer ? 'Former Members' : 'Member Management'}</h2>
 
         {/* Former members still holding property (member lifecycle): the
             same panel the Inventory Member Equipment page shows. */}
@@ -598,160 +716,193 @@ export const MembersAdminPage: React.FC = () => {
         </div>
 
         <p className="text-theme-text-muted mb-4 text-sm">
-          Each member has a <strong>rank</strong> (their place in the chain of command), a{' '}
-          <strong>membership type</strong> (probationary, active, life or administrative, which the Membership Tiers
-          ladder advances) and one or more <strong>positions</strong> (the offices held, managed under Roles, which
-          decide what they can do). Every member holds the base Member position. Positions named after a rank &mdash;
-          Chief, Captain, Firefighter &mdash; are not listed here: a rank is set in the Rank field and carries its own
-          access. A member&rsquo;s account <strong>status</strong> &mdash; on leave, retired, dropped &mdash; is changed
-          from their profile.
+          Each member has a <strong>rank</strong> (their place in the chain of command), a <strong>member class</strong>{' '}
+          (operational, administrative or social), a <strong>membership status</strong> (their standing: probationary,
+          regular, life or one of the department&rsquo;s own tiers, which the Membership Tiers ladder advances) and one
+          or more <strong>positions</strong> (the offices held, managed under Roles, which decide what they can do).
+          Class and status are shown together under Membership and grant nothing on their own. Every member holds the
+          base Member position. Positions named after a rank &mdash; Chief, Captain, Firefighter &mdash; are not listed
+          here: a rank is set in the Rank field and carries its own access. A member&rsquo;s account{' '}
+          <strong>status</strong> &mdash; on leave, retired, dropped &mdash; is changed from their profile.
         </p>
 
+        {showingFormer && (
+          <p className="text-theme-text-muted mb-4 text-sm">
+            Archived and dropped members. A member is moved back to the roster by changing their account status on their
+            profile.
+          </p>
+        )}
+
+        {viewMode === 'by-member' && visibleUsers.length === 0 && (
+          <p className="card text-theme-text-muted p-6 text-center text-sm">
+            {showingFormer ? 'No archived or dropped members.' : 'No current members.'}
+          </p>
+        )}
+
         {/* View by Member */}
-        {viewMode === 'by-member' && (
-          // A named, focusable scroll region: on a tablet the table is wider
-          // than its card, and with no member rows yet nothing inside it can
-          // take focus, so a keyboard could not scroll to the cut-off columns
+        {viewMode === 'by-member' && visibleUsers.length > 0 && (
+          // A named, focusable scroll region. The table reflows to cards when
+          // this wrapper is under 64rem (rwd-table-container / rwd-table-wide),
+          // so it should not need to scroll; if unusually long data still makes
+          // it wider, with no member rows yet nothing inside could take focus
+          // and a keyboard could not reach the cut-off columns
           // (axe scrollable-region-focusable).
           <div
-            className="bg-theme-surface overflow-x-auto shadow-sm backdrop-blur-xs sm:rounded-lg"
+            className="rwd-table-container bg-theme-surface overflow-x-auto shadow-sm backdrop-blur-xs sm:rounded-lg"
             role="region"
             aria-label="Members and their positions"
             tabIndex={0}
             data-mobile-scroll-region
           >
             <table
-              className="rwd-table divide-theme-surface-border min-w-full divide-y"
+              className="rwd-table rwd-table-wide divide-theme-surface-border min-w-full divide-y"
               aria-label="Members and their positions"
             >
               <thead className="bg-theme-surface-secondary">
                 <tr>
                   <th
                     scope="col"
-                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
                     Member
                   </th>
                   <th
                     scope="col"
-                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
                     Member #
                   </th>
                   <th
                     scope="col"
-                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
                     Rank
                   </th>
                   <th
                     scope="col"
-                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
-                    Membership Type
+                    Membership
                   </th>
                   <th
                     scope="col"
-                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
                   >
                     Positions
                   </th>
                   <th
                     scope="col"
-                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
-                  >
-                    Status
-                  </th>
-                  <th
-                    scope="col"
-                    className="text-theme-text-muted px-6 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                    className="text-theme-text-muted px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
                   >
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-theme-surface-border divide-y">
-                {users.map((user) => (
+                {visibleUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-theme-surface-hover">
-                    <td data-label="Member" className="px-6 py-4 whitespace-nowrap">
+                    <td data-label="Member" className="px-4 py-4">
                       <div className="flex items-center">
                         <div className="bg-theme-surface flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
                           <span className="text-theme-text-secondary font-medium">
                             {(givenName(user)[0] || user.username[0] || '').toUpperCase()}
                           </span>
                         </div>
-                        <div className="ml-4">
+                        <div className="ml-4 min-w-36">
                           <Link
                             to={`/members/${user.id}`}
                             className="text-theme-text-primary text-sm font-medium hover:underline"
                           >
                             {displayNameOf(user) || user.username}
                           </Link>
-                          <div className="text-theme-text-muted text-sm">@{user.username}</div>
+                          <div className="text-theme-text-muted text-sm break-all">@{user.username}</div>
                         </div>
                       </div>
                     </td>
-                    <td data-label="Member #" className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
+                    <td data-label="Member #" className="text-theme-text-muted px-4 py-4 text-sm whitespace-nowrap">
                       {user.membership_number || '-'}
                     </td>
-                    <td data-label="Rank" className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap">
+                    <td data-label="Rank" className="text-theme-text-secondary px-4 py-4 text-sm whitespace-nowrap">
                       {formatRank(user.rank) || '-'}
                     </td>
-                    <td
-                      data-label="Membership Type"
-                      className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap"
-                    >
-                      {membershipTypeLabel(user.membership_type) || '-'}
-                    </td>
-                    <td data-label="Positions" className="px-6 py-4">
-                      <div className="flex flex-wrap justify-end gap-1 md:justify-start">
-                        {withoutRankMirrors(user.roles).length === 0 ? (
-                          <span className="text-theme-text-muted text-sm">No positions</span>
-                        ) : (
-                          withoutRankMirrors(user.roles).map((role) => (
-                            <span
-                              key={role.id}
-                              className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${
-                                role.is_system
-                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
-                                  : 'bg-theme-surface text-theme-text-secondary'
-                              }`}
-                            >
-                              {role.name}
-                              {!isLockedBasePosition(user, role) && (
-                                <button
-                                  onClick={() => {
-                                    void handleQuickRemoveRole(user, role.id);
-                                  }}
-                                  className="touch-target-phone ml-1 hover:text-red-600"
-                                  aria-label={`Remove ${role.name} position from ${displayNameOf(user) || user.username}`}
-                                >
-                                  ×
-                                </button>
-                              )}
+                    <td data-label="Membership" className="text-theme-text-secondary px-4 py-4 text-sm">
+                      {/* One block, so on a phone — where each cell is a label
+                          and value side by side — the badge and the lock note
+                          stack under the membership text instead of beside it. */}
+                      <div className="flex flex-col items-start gap-1 @max-5xl/rwd-table:items-end @max-5xl/rwd-table:text-right">
+                        {membershipSummary(user)}
+                        {/* The account status, only when it is news: Active is
+                            the default, and "Probationary" beside "Probationary
+                            member" says nothing twice (owner decision 2026-11-10). */}
+                        {user.status !== UserStatus.ACTIVE &&
+                          !repeatsMembershipStatus(userStatusLabel(user.status), user.member_status) && (
+                            <span className="bg-theme-surface-secondary text-theme-text-secondary rounded-full px-2 text-xs leading-5 font-semibold">
+                              {userStatusLabel(user.status)}
                             </span>
-                          ))
+                          )}
+                        {user.locked_until && (
+                          <span className="text-xs font-semibold text-red-700 dark:text-red-400">
+                            Sign-in locked until {formatTime(user.locked_until, tz)}
+                          </span>
                         )}
                       </div>
                     </td>
-                    <td data-label="Status" className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex rounded-full px-2 text-xs leading-5 font-semibold ${
-                          user.status === UserStatus.ACTIVE
-                            ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-                            : 'bg-theme-surface-secondary text-theme-text-secondary'
-                        }`}
-                      >
-                        {user.status}
-                      </span>
-                      {user.locked_until && (
-                        <span className="mt-1 block text-xs font-semibold text-red-700 dark:text-red-400">
-                          Sign-in locked until {formatTime(user.locked_until, tz)}
-                        </span>
-                      )}
+                    <td data-label="Positions" className="px-4 py-4">
+                      {(() => {
+                        // Every member holds the base Member position, so a chip
+                        // for it on every row tells nobody anything; it stays
+                        // ticked and locked in Manage Positions. On an archived
+                        // member it is not locked, and its × is how the baseline
+                        // access is taken away, so there it stays.
+                        const shown = withoutRankMirrors(user.roles).filter(
+                          (role) =>
+                            (role.slug !== 'member' || !isLockedBasePosition(user, role)) &&
+                            !repeatsMembershipStatus(role.name, user.member_status) &&
+                            !repeatsMemberClass(role.name, user)
+                        );
+                        if (shown.length === 0) {
+                          return (
+                            <span className="text-theme-text-muted text-sm">
+                              {user.roles.some((role) => role.slug === 'member')
+                                ? 'No other positions'
+                                : 'No positions'}
+                            </span>
+                          );
+                        }
+                        return (
+                          <div className="flex flex-wrap justify-start gap-1 @max-5xl/rwd-table:justify-end">
+                            {shown.map((role) => (
+                              <span
+                                key={role.id}
+                                data-kind={isCommittee(role) ? 'committee' : 'office'}
+                                className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${
+                                  isCommittee(role)
+                                    ? 'bg-teal-100 text-teal-900 dark:bg-teal-500/20 dark:text-teal-300'
+                                    : role.is_system
+                                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
+                                      : 'bg-theme-surface text-theme-text-secondary'
+                                }`}
+                              >
+                                {role.name}
+                                {!isLockedBasePosition(user, role) && (
+                                  <button
+                                    onClick={() => {
+                                      void handleQuickRemoveRole(user, role.id);
+                                    }}
+                                    className="touch-target-phone ml-1 hover:text-red-600"
+                                    aria-label={`Remove ${role.name} position from ${displayNameOf(user) || user.username}`}
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </td>
-                    <td data-label="Actions" className="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
-                      <div className="flex flex-wrap justify-end gap-3">
+                    <td data-label="Actions" className="px-4 py-4 text-right text-sm font-medium whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-3">
                         <button
                           onClick={() => void navigate(`/members/admin/edit/${user.id}`)}
                           aria-label={`Edit ${displayNameOf(user) || user.username}`}
@@ -766,43 +917,10 @@ export const MembersAdminPage: React.FC = () => {
                         >
                           Manage Positions
                         </button>
-                        {currentUser?.id !== user.id && (
-                          <button
-                            onClick={() => setResetPasswordUser(user)}
-                            aria-label={`Reset password for ${displayNameOf(user) || user.username}`}
-                            className="touch-target-phone text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
-                          >
-                            Reset Password
-                          </button>
-                        )}
-                        {currentUser?.id !== user.id && user.locked_until && (
-                          <button
-                            onClick={() => void handleUnlock(user)}
-                            aria-label={`Unlock ${displayNameOf(user) || user.username}`}
-                            disabled={unlockingUserId === user.id}
-                            className="touch-target-phone text-yellow-700 hover:text-yellow-800 disabled:opacity-50 dark:text-yellow-400 dark:hover:text-yellow-300"
-                          >
-                            {unlockingUserId === user.id ? 'Unlocking…' : 'Unlock'}
-                          </button>
-                        )}
-                        {currentUser?.id !== user.id && (user.mfa_enabled || user.has_passkey) && (
-                          <button
-                            onClick={() => setResetMfaUser(user)}
-                            aria-label={`Reset MFA for ${displayNameOf(user) || user.username}`}
-                            className="touch-target-phone text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
-                          >
-                            Reset MFA
-                          </button>
-                        )}
-                        {currentUser?.id !== user.id && (
-                          <button
-                            onClick={() => handleDeleteUser(user)}
-                            aria-label={`Delete ${displayNameOf(user) || user.username}`}
-                            className="touch-target-phone text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                          >
-                            Delete
-                          </button>
-                        )}
+                        <RowActionsMenu
+                          label={`More actions for ${displayNameOf(user) || user.username}`}
+                          actions={rowMenuActions(user)}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -816,18 +934,23 @@ export const MembersAdminPage: React.FC = () => {
         {viewMode === 'by-role' && (
           <div className="space-y-4">
             {withoutRankMirrors(roles).map((role) => {
-              const usersWithRole = users.filter((user) => user.roles.some((r) => r.id === role.id));
+              const usersWithRole = visibleUsers.filter((user) => user.roles.some((r) => r.id === role.id));
 
               return (
                 <div key={role.id} className="bg-theme-surface shadow-sm backdrop-blur-xs sm:rounded-lg">
                   <div className="border-theme-surface-border border-b px-6 py-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
+                    <div className="split-row gap-3 sm:items-center">
+                      <div className="split-row-main">
                         <div className="flex items-center gap-3">
                           <h3 className="text-theme-text-primary text-lg font-medium">{role.name}</h3>
                           {role.is_system && (
                             <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                               System
+                            </span>
+                          )}
+                          {isCommittee(role) && (
+                            <span className="inline-flex items-center rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-900 dark:bg-teal-500/20 dark:text-teal-300">
+                              Committee
                             </span>
                           )}
                         </div>
@@ -839,7 +962,7 @@ export const MembersAdminPage: React.FC = () => {
                       </div>
                       <button
                         onClick={() => handleEditMembers(role)}
-                        className="hover:bg-theme-surface-hover touch-target-phone shrink-0 self-start rounded-md border border-blue-400 px-4 py-2 text-sm font-medium text-blue-700 hover:text-blue-800 sm:self-auto dark:text-blue-400 dark:hover:text-blue-300"
+                        className="split-row-aside hover:bg-theme-surface-hover touch-target-phone shrink-0 self-start rounded-md border border-blue-400 px-4 py-2 text-sm font-medium text-blue-700 hover:text-blue-800 sm:self-auto dark:text-blue-400 dark:hover:text-blue-300"
                       >
                         Manage Members
                       </button>
@@ -1307,6 +1430,11 @@ export const MembersAdminPage: React.FC = () => {
                         Rank
                       </span>
                     )}
+                    {isCommittee(role) && (
+                      <span className="rounded-sm bg-teal-100 px-2 py-0.5 text-xs text-teal-900 dark:bg-teal-500/20 dark:text-teal-300">
+                        Committee
+                      </span>
+                    )}
                   </div>
                   {mirrorsRank(role) ? (
                     <p className="text-theme-text-muted mt-1 text-xs">
@@ -1368,7 +1496,7 @@ export const MembersAdminPage: React.FC = () => {
           )}
 
           <div className="space-y-2">
-            {users.map((user) => (
+            {visibleUsers.map((user) => (
               <label
                 key={user.id}
                 className="hover:bg-theme-surface-hover flex cursor-pointer items-start rounded-lg p-3"

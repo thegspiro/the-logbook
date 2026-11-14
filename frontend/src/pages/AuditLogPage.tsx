@@ -19,8 +19,10 @@ import {
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
-import { Pagination, EmptyState } from '../components/ux';
+import { Pagination, EmptyState, SkeletonText } from '../components/ux';
+import { AdminPageHeader } from '../components/admin/AdminPageHeader';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../constants/config';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 const SEVERITY_BADGE: Record<AuditSeverity, string> = {
   info: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30',
@@ -137,52 +139,51 @@ const AuditLogPage: React.FC = () => {
 
   return (
     <div className="mx-auto min-h-screen max-w-7xl p-4 sm:p-6">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold sm:text-3xl">
-            <ShieldCheck className="h-7 w-7 text-red-600 dark:text-red-400" aria-hidden="true" />
-            Audit Log
-          </h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">
-            A tamper-evident record of administrative and security events in your organization.
-          </p>
-        </div>
-        <button
-          onClick={() => void load()}
-          className="btn-secondary btn-md inline-flex items-center gap-1.5 text-sm"
-          aria-label="Refresh audit log"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
-          Refresh
-        </button>
-      </div>
+      <AdminPageHeader
+        title="Audit Log"
+        description="A tamper-evident record of administrative and security events in your organization."
+        className="mb-6"
+        actions={
+          <button
+            onClick={() => void load()}
+            className="btn-secondary btn-md inline-flex items-center gap-1.5 text-sm"
+            aria-label="Refresh audit log"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+            Refresh
+          </button>
+        }
+      />
 
-      {/* Stats */}
-      {stats && (
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      {/* Stats. Drawn while they load, placeholders where the figures go:
+          appearing with them pushed the filters and the log ~190px down. */}
+      {(stats || loading) && (
+        <StatGrid columns={4} className="mb-6">
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Total events</p>
-            <p className="text-theme-text-primary mt-1 text-2xl font-bold sm:text-3xl">{stats.total}</p>
+            <p className="text-theme-text-primary mt-1 text-2xl font-bold sm:text-3xl">
+              {stats ? stats.total : <SkeletonText className="w-10" />}
+            </p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Critical</p>
             <p className="mt-1 text-2xl font-bold text-red-700 sm:text-3xl dark:text-red-400">
-              {stats.by_severity.critical ?? 0}
+              {stats ? (stats.by_severity.critical ?? 0) : <SkeletonText className="w-10" />}
             </p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Warnings</p>
             <p className="mt-1 text-2xl font-bold text-amber-700 sm:text-3xl dark:text-amber-400">
-              {stats.by_severity.warning ?? 0}
+              {stats ? (stats.by_severity.warning ?? 0) : <SkeletonText className="w-10" />}
             </p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Info</p>
             <p className="mt-1 text-2xl font-bold text-blue-700 sm:text-3xl dark:text-blue-400">
-              {stats.by_severity.info ?? 0}
+              {stats ? (stats.by_severity.info ?? 0) : <SkeletonText className="w-10" />}
             </p>
           </div>
-        </div>
+        </StatGrid>
       )}
 
       {/* Filters */}
@@ -319,12 +320,12 @@ const AuditLogPage: React.FC = () => {
             })}
           </div>
           <div
-            className="card hidden overflow-x-auto md:block"
+            className="card rwd-table-container hidden overflow-x-auto md:block"
             tabIndex={0}
             role="region"
             aria-label="Audit log entries"
           >
-            <table className="w-full">
+            <table className="rwd-table rwd-table-xwide w-full">
               <thead className="bg-theme-surface-secondary text-theme-text-muted text-left text-xs font-medium uppercase">
                 <tr>
                   <th scope="col" className="px-4 py-3">
@@ -360,7 +361,7 @@ const AuditLogPage: React.FC = () => {
                         className="hover:bg-theme-surface-hover cursor-pointer"
                         onClick={() => setExpandedId(expanded ? null : entry.id)}
                       >
-                        <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                        <td data-label="When" className="text-theme-text-secondary px-4 py-3 text-sm">
                           {/* The row click is a pointer convenience; this button is
                               what a keyboard or screen-reader user operates. */}
                           <button
@@ -376,7 +377,7 @@ const AuditLogPage: React.FC = () => {
                             {entry.timestamp ? formatDateTime(entry.timestamp, tz) : '—'}
                           </button>
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-label="Severity" className="px-4 py-3">
                           {sev && (
                             <span
                               className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium uppercase ${SEVERITY_BADGE[sev]}`}
@@ -386,7 +387,7 @@ const AuditLogPage: React.FC = () => {
                             </span>
                           )}
                         </td>
-                        <td className="text-theme-text-primary px-4 py-3 font-mono text-sm">
+                        <td data-label="Event" className="text-theme-text-primary px-4 py-3 font-mono text-sm">
                           <button
                             type="button"
                             aria-expanded={expanded}
@@ -400,19 +401,25 @@ const AuditLogPage: React.FC = () => {
                             {entry.event_type}
                           </button>
                         </td>
-                        <td className="text-theme-text-secondary hidden px-4 py-3 text-sm md:table-cell">
+                        <td
+                          data-label="Category"
+                          className="text-theme-text-secondary hidden px-4 py-3 text-sm md:table-cell"
+                        >
                           {entry.event_category}
                         </td>
-                        <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                        <td data-label="User" className="text-theme-text-secondary px-4 py-3 text-sm">
                           {entry.username || <span className="text-theme-text-muted italic">system</span>}
                         </td>
-                        <td className="text-theme-text-muted hidden px-4 py-3 font-mono text-sm lg:table-cell">
+                        <td
+                          data-label="IP"
+                          className="text-theme-text-muted hidden px-4 py-3 font-mono text-sm break-all lg:table-cell"
+                        >
                           {entry.ip_address || '—'}
                         </td>
                       </tr>
                       {expanded && (
                         <tr id={`audit-entry-${entry.id}`} className="bg-theme-surface-secondary">
-                          <td colSpan={6} className="px-4 py-3">
+                          <td colSpan={6} data-label="Details" className="rwd-table-lead px-4 py-3">
                             <pre className="text-theme-text-secondary font-mono text-xs whitespace-pre-wrap">
                               {JSON.stringify(entry.event_data, null, 2)}
                             </pre>

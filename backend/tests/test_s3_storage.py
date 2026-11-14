@@ -8,7 +8,8 @@ moto stands in for S3. What is pinned here:
 * new files go to the bucket only after a passed connection test with exactly
   the settings now saved, and an unreachable bucket refuses the upload rather
   than writing somewhere else;
-* the endpoint a department types is checked before any request is made.
+* the endpoint is checked before any request is made (that a custom one must
+  be operator-listed is pinned in ``test_s3_endpoint_allowlist.py``).
 """
 
 from types import SimpleNamespace
@@ -215,7 +216,10 @@ class TestEndpointCheck:
         with pytest.raises(ValueError, match="must use HTTPS"):
             s3_storage.check_endpoint("ftp://minio:9000")
 
-    def test_custom_endpoint_uses_path_addressing(self):
+    def test_custom_endpoint_uses_path_addressing(self, monkeypatch):
+        monkeypatch.setattr(
+            s3_storage.settings, "S3_ALLOWED_ENDPOINTS", "https://s3.example.com"
+        )
         backend = S3Backend(_config(s3_endpoint_url="https://s3.example.com"))
         assert backend._client.meta.config.s3["addressing_style"] == "path"
 
@@ -404,6 +408,11 @@ class TestWhereNewFilesGo:
     async def test_endpoint_refused_after_activation_refuses_the_upload(
         self, root, monkeypatch
     ):
+        # Listed by the operator, so what refuses it is the private-address
+        # check (the allowlist's own refusal: test_s3_endpoint_allowlist.py).
+        monkeypatch.setattr(
+            s3_storage.settings, "S3_ALLOWED_ENDPOINTS", "http://minio:9000"
+        )
         monkeypatch.setattr(s3_storage.settings, "S3_ALLOW_PRIVATE_ENDPOINT", False)
         settings_dict = _org_settings(
             activated=True, s3_endpoint_url="http://minio:9000"

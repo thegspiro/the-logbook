@@ -110,16 +110,20 @@ const FileStorageChoice: React.FC = () => {
     {
       id: 'onedrive',
       name: 'OneDrive / SharePoint',
-      description: 'Microsoft cloud storage',
+      description: 'Microsoft cloud storage — not connected yet',
       icon: <OneDriveIcon />,
       color: 'from-blue-600 to-blue-400',
+      // Nothing reads this choice yet (docs/KNOWN_LIMITATIONS.md, "File
+      // Storage — The Onboarding Platform Choice Has No Reader"). The card
+      // used to sell it as working, and a department that believed it would
+      // leave the server's upload folder out of its backups.
       features: [
-        '5 GB free storage (expandable)',
-        'Deep integration with Office 365',
-        'Advanced security features',
-        'SharePoint document libraries',
+        'Saves your app registration for when it is connected',
+        'Files stay in the server’s upload folder until then',
+        'Back that folder up in the meantime',
       ],
-      setupInfo: "You'll need your Microsoft 365 credentials and app registration details.",
+      setupInfo:
+        'OneDrive / SharePoint is not connected yet. Choosing it stores the details below, but every file is kept on the server until support is added.',
       recommended: emailPlatform === 'microsoft',
     },
     {

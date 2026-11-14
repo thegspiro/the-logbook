@@ -30,7 +30,9 @@ import {
   Info,
   Printer,
   Search,
+  ShieldCheck,
 } from 'lucide-react';
+import ChiefOverrideControl from '../components/training/ChiefOverrideControl';
 import { trainingService } from '../services/api';
 import type { ComplianceMatrix } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
@@ -112,6 +114,12 @@ const TONE_CLASSES: Record<CellTone, { pill: string; bar: string; pip: string }>
     bar: 'bg-blue-800 dark:bg-blue-400',
     pip: 'bg-blue-800 dark:bg-blue-400',
   },
+  // No session held yet: there is nothing to grade, so no colour of judgement.
+  [CellTone.NOT_YET_HELD]: {
+    pill: 'border-theme-surface-border bg-theme-surface-hover text-theme-text-secondary',
+    bar: 'bg-theme-surface-border',
+    pip: 'bg-theme-text-muted',
+  },
 };
 
 const TONE_LABELS: Record<CellTone, string> = {
@@ -121,6 +129,7 @@ const TONE_LABELS: Record<CellTone, string> = {
   [CellTone.LAPSED]: 'Lapsed',
   [CellTone.MISSING]: 'Nothing on file',
   [CellTone.CATCH_UP]: 'Catching up',
+  [CellTone.NOT_YET_HELD]: 'No sessions yet',
 };
 
 const STANDING_CLASSES: Record<Standing, { pill: string; dot: string; head: string }> = {
@@ -195,6 +204,10 @@ const ComplianceMatrixTab: React.FC = () => {
   const [onlyBehind, setOnlyBehind] = useState(() => searchParams.get('status') === 'noncompliant');
   const [classFilter, setClassFilter] = useState<ClassFilter>(() => parseClassFilter(searchParams.get('class')));
 
+  // Bumped after a Chief's override changes a member's standing.
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -212,7 +225,7 @@ const ComplianceMatrixTab: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   const clearStatusFilter = useCallback(() => {
     setOnlyBehind(false);
@@ -429,8 +442,12 @@ const ComplianceMatrixTab: React.FC = () => {
     cell: EvaluatedCell;
     /** Present only where there is a real page to open. */
     href?: string;
+    memberId: string;
+    memberName: string;
   }> = activeMember
     ? activeMember.cells.map((c) => ({
+        memberId: activeMember.member.user_id,
+        memberName: activeMember.member.member_name,
         key: c.cell.requirement_id,
         title: c.cell.requirement_name,
         // The date is the row's last column here, so it must not repeat in
@@ -443,6 +460,8 @@ const ComplianceMatrixTab: React.FC = () => {
         if (!c) return [];
         return [
           {
+            memberId: m.member.user_id,
+            memberName: m.member.member_name,
             key: m.member.user_id,
             title: m.member.member_name,
             sub: [m.member.membership_type, c.dateLabel].filter(Boolean).join(' · '),
@@ -464,8 +483,8 @@ const ComplianceMatrixTab: React.FC = () => {
     <div className="py-6">
       <div className="card overflow-hidden">
         {/* Header — what this is, and which way round it is being read */}
-        <div className="border-theme-surface-border flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <div className="split-row border-theme-surface-border gap-3 border-b p-4 sm:items-center">
+          <div className="split-row-main flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h2 className="text-theme-text-primary text-lg font-bold">Compliance</h2>
             <p className="text-theme-text-muted text-sm">
               {evaluated.length} tracked{' '}
@@ -475,7 +494,7 @@ const ComplianceMatrixTab: React.FC = () => {
               {notApplicable > 0 ? `, ${notApplicable} not applicable` : ''}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="split-row-aside flex flex-wrap items-center gap-2">
             {showClassFilter && (
               <div className="segmented-group-secondary hscroll flex" role="group" aria-label="Member class">
                 {(['all', ...classOptions] as const).map((value) => (
@@ -726,8 +745,8 @@ const ComplianceMatrixTab: React.FC = () => {
               </div>
             ) : (
               <div className="p-4 sm:p-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
+                <div className="split-row gap-3 sm:items-start">
+                  <div className="split-row-main">
                     <p className="text-theme-text-muted text-[11px] font-bold tracking-widest uppercase">
                       {activeMember
                         ? [activeMember.member.membership_type, 'member'].filter(Boolean).join(' ')
@@ -768,7 +787,7 @@ const ComplianceMatrixTab: React.FC = () => {
                   {activeMember && (
                     <Link
                       to={`/members/${activeMember.member.user_id}/training`}
-                      className="btn-secondary btn-sm inline-flex shrink-0 items-center gap-1.5"
+                      className="split-row-aside btn-secondary btn-sm inline-flex items-center gap-1.5"
                     >
                       <ExternalLink className="h-4 w-4" aria-hidden="true" />
                       Training record
@@ -860,6 +879,22 @@ const ComplianceMatrixTab: React.FC = () => {
                             {row.cell.waiverNote}
                           </p>
                         )}
+                        {row.cell.overrideNote && (
+                          <p className="alert-info mt-2 flex items-center gap-1.5 px-2.5 py-1.5 text-xs">
+                            <ShieldCheck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            {row.cell.overrideNote}
+                          </p>
+                        )}
+                        {row.cell.requirement?.can_override && (
+                          <ChiefOverrideControl
+                            requirementId={row.cell.cell.requirement_id}
+                            memberId={row.memberId}
+                            memberName={row.memberName}
+                            windowStart={row.cell.cell.window_start}
+                            windowEnd={row.cell.cell.window_end}
+                            onChanged={reload}
+                          />
+                        )}
                       </div>
                     ))
                   )}
@@ -871,7 +906,16 @@ const ComplianceMatrixTab: React.FC = () => {
 
         {/* Legend + provenance */}
         <div className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-4 py-2.5 text-xs">
-          {([CellTone.MET, CellTone.SHORT, CellTone.SOON, CellTone.LAPSED, CellTone.CATCH_UP] as const).map((tone) => (
+          {(
+            [
+              CellTone.MET,
+              CellTone.SHORT,
+              CellTone.SOON,
+              CellTone.LAPSED,
+              CellTone.CATCH_UP,
+              CellTone.NOT_YET_HELD,
+            ] as const
+          ).map((tone) => (
             <span key={tone} className="inline-flex items-center gap-1.5">
               <span className={`h-3 w-3 rounded-xs ${TONE_CLASSES[tone].pip}`} aria-hidden="true" />
               {TONE_LABELS[tone]}

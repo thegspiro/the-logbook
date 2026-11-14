@@ -64,6 +64,7 @@ import type {
   ParticipatingOrganization,
 } from '../types/training';
 import type { User } from '../types/user';
+import { StatGrid } from '../components/ux/StatGrid';
 
 const inputClass = 'form-input px-3 focus:ring-red-500/50 focus:border-red-500';
 const labelClass = 'form-label';
@@ -809,14 +810,14 @@ const RecertificationSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary text-lg font-semibold">Recertification Pathways</h2>
           <p className="text-theme-text-muted text-sm">
             Define renewal requirements for expiring certifications (NREMT, ACLS, etc.)
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="split-row-aside flex flex-col gap-2 sm:flex-row">
           <button
             disabled={generateBusy}
             onClick={() => {
@@ -927,8 +928,8 @@ const CompetencySection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary text-lg font-semibold">Competency Matrices</h2>
           <p className="text-theme-text-muted text-sm">
             Define required skill levels by position (Dreyfus model: novice to expert)
@@ -936,7 +937,7 @@ const CompetencySection: React.FC = () => {
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+          className="split-row-aside btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
         >
           <Plus className="h-4 w-4" />
           <span>Add Matrix</span>
@@ -996,14 +997,14 @@ const InstructorsSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary text-lg font-semibold">Instructor Qualifications</h2>
           <p className="text-theme-text-muted text-sm">Track who is qualified to instruct and evaluate per NFPA 1041</p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+          className="split-row-aside btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
         >
           <Plus className="h-4 w-4" />
           <span>Add Qualification</span>
@@ -1018,8 +1019,8 @@ const InstructorsSection: React.FC = () => {
           description="Add qualifications to track who can instruct which courses and evaluate which skills."
         />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="rwd-table-container overflow-x-auto">
+          <table className="rwd-table rwd-table-wide w-full text-sm">
             <thead>
               <tr className="text-theme-text-muted border-theme-surface-border border-b text-left text-xs">
                 <th scope="col" className="pr-4 pb-2">
@@ -1048,15 +1049,27 @@ const InstructorsSection: React.FC = () => {
             <tbody>
               {qualifications.map((qual) => (
                 <tr key={qual.id} className="border-theme-surface-border/50 border-b">
-                  <td className="text-theme-text-primary py-2 pr-4">{qual.user_name || qual.user_id}</td>
+                  <td data-label="Instructor" className="text-theme-text-primary py-2 pr-4">
+                    {qual.user_name || qual.user_id}
+                  </td>
                   {/* The stored values are snake_case (`lead_instructor`), so
                       `capitalize` alone leaves the underscore on screen. */}
-                  <td className="py-2 pr-4 capitalize">{qual.qualification_type.replace(/_/g, ' ')}</td>
-                  <td className="py-2 pr-4">{qual.course_name || qual.skill_name || '-'}</td>
-                  <td className="py-2 pr-4">{qual.certification_level || '-'}</td>
-                  <td className="py-2 pr-4">{qual.certification_number || '-'}</td>
-                  <td className="py-2 pr-4">{qual.expiration_date ? formatDate(qual.expiration_date, tz) : '-'}</td>
-                  <td className="py-2">
+                  <td data-label="Type" className="py-2 pr-4 capitalize">
+                    {qual.qualification_type.replace(/_/g, ' ')}
+                  </td>
+                  <td data-label="Qualifies for" className="py-2 pr-4">
+                    {qual.course_name || qual.skill_name || '-'}
+                  </td>
+                  <td data-label="Level" className="py-2 pr-4">
+                    {qual.certification_level || '-'}
+                  </td>
+                  <td data-label="Cert #" className="py-2 pr-4">
+                    {qual.certification_number || '-'}
+                  </td>
+                  <td data-label="Expires" className="py-2 pr-4">
+                    {qual.expiration_date ? formatDate(qual.expiration_date, tz) : '-'}
+                  </td>
+                  <td data-label="Status" className="py-2">
                     <span
                       className={`rounded-sm px-2 py-0.5 text-xs ${QUALIFICATION_STANDING[qualificationStanding(qual, today)].className}`}
                     >
@@ -1144,8 +1157,8 @@ const EffectivenessSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary text-lg font-semibold">Training Effectiveness</h2>
           <p className="text-theme-text-muted text-sm">
             Kirkpatrick Model evaluation: Reaction, Learning, Behavior, Results
@@ -1154,7 +1167,7 @@ const EffectivenessSection: React.FC = () => {
         <button
           type="button"
           onClick={() => setPickingMember(true)}
-          className="btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+          className="split-row-aside btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
         >
           <Plus className="h-4 w-4" />
           <span>Submit Evaluation</span>
@@ -1177,7 +1190,7 @@ const EffectivenessSection: React.FC = () => {
         member={evaluatedMember}
       />
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <StatGrid columns={4} gap={4}>
         {KIRKPATRICK_LEVELS.map((item) => {
           const Icon = item.icon;
           const count = countByLevel(item.key);
@@ -1195,7 +1208,7 @@ const EffectivenessSection: React.FC = () => {
             </div>
           );
         })}
-      </div>
+      </StatGrid>
 
       {evaluations.length === 0 ? (
         <EmptyState
@@ -1274,8 +1287,8 @@ const MultiAgencySection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="split-row gap-3 sm:items-center">
+        <div className="split-row-main">
           <h2 className="text-theme-text-primary text-lg font-semibold">Multi-Agency Training</h2>
           <p className="text-theme-text-muted text-sm">
             Joint exercises, mutual aid drills, and regional training per NFPA 1500 / NIMS
@@ -1283,7 +1296,7 @@ const MultiAgencySection: React.FC = () => {
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+          className="split-row-aside btn-primary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
         >
           <Plus className="h-4 w-4" />
           <span>Add Exercise</span>
@@ -1499,8 +1512,8 @@ const ReportsSection: React.FC = () => {
       </div>
 
       <div className="border-theme-surface-border border-t pt-6">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="split-row mb-4 gap-3 sm:items-center">
+          <div className="split-row-main">
             <h3 className="text-theme-text-primary text-sm font-medium">Compliance Forecast</h3>
             <p className="text-theme-text-muted text-xs">
               Predictive 30/60/90 day compliance based on expiring certifications
@@ -1511,7 +1524,7 @@ const ReportsSection: React.FC = () => {
               void handleLoadForecast();
             }}
             disabled={loading}
-            className="btn-secondary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+            className="split-row-aside btn-secondary flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
             <span>Load Forecast</span>
@@ -1520,7 +1533,7 @@ const ReportsSection: React.FC = () => {
 
         {forecasts.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="rwd-table w-full text-sm">
               <thead>
                 <tr className="text-theme-text-muted border-theme-surface-border border-b text-left text-xs">
                   <th scope="col" className="pr-4 pb-2">
@@ -1546,8 +1559,10 @@ const ReportsSection: React.FC = () => {
               <tbody>
                 {forecasts.map((f) => (
                   <tr key={f.user_id} className="border-theme-surface-border/50 border-b">
-                    <td className="text-theme-text-primary py-2 pr-4">{f.user_name || f.user_id}</td>
-                    <td className="py-2 pr-4">
+                    <td data-label="Member" className="text-theme-text-primary py-2 pr-4">
+                      {f.user_name || f.user_id}
+                    </td>
+                    <td data-label="Current" className="py-2 pr-4">
                       {f.current_compliance_percentage === null ? (
                         // No requirement grades this member.
                         <span className="text-theme-text-muted">N/A</span>
@@ -1565,10 +1580,16 @@ const ReportsSection: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td className="py-2 pr-4">{f.forecast_30_days === null ? 'N/A' : `${f.forecast_30_days}%`}</td>
-                    <td className="py-2 pr-4">{f.forecast_60_days === null ? 'N/A' : `${f.forecast_60_days}%`}</td>
-                    <td className="py-2 pr-4">{f.forecast_90_days === null ? 'N/A' : `${f.forecast_90_days}%`}</td>
-                    <td className="py-2">
+                    <td data-label="30 Days" className="py-2 pr-4">
+                      {f.forecast_30_days === null ? 'N/A' : `${f.forecast_30_days}%`}
+                    </td>
+                    <td data-label="60 Days" className="py-2 pr-4">
+                      {f.forecast_60_days === null ? 'N/A' : `${f.forecast_60_days}%`}
+                    </td>
+                    <td data-label="90 Days" className="py-2 pr-4">
+                      {f.forecast_90_days === null ? 'N/A' : `${f.forecast_90_days}%`}
+                    </td>
+                    <td data-label="At Risk" className="py-2">
                       {f.at_risk_requirements.length > 0 && (
                         <span className="text-xs text-red-500">
                           {f.at_risk_requirements.length} requirement{f.at_risk_requirements.length !== 1 ? 's' : ''}

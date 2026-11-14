@@ -12,7 +12,7 @@ vi.mock('react', async () => {
   };
 });
 
-import { lazyWithRetry, clearChunkReloadFlag } from './lazyWithRetry';
+import { lazyWithRetry } from './lazyWithRetry';
 
 // Helper: create a chunk-load error (matches isChunkLoadError patterns)
 function chunkError(msg = 'Failed to fetch dynamically imported module /assets/Page-abc123.js'): Error {
@@ -174,6 +174,8 @@ describe('lazyWithRetry', () => {
       'Loading chunk 42 failed',
       'Loading CSS chunk main-abc failed',
       'Importing a module script failed',
+      // Firefox's wording, which shares no phrase with Chrome's or Safari's.
+      'error loading dynamically imported module: https://example.test/assets/Page.js',
     ];
 
     for (const msg of errorMessages) {
@@ -201,23 +203,5 @@ describe('lazyWithRetry', () => {
     const factory = captureFactory(importFn);
     await expect(factory()).rejects.toBe('string error again');
     expect(window.location.reload).not.toHaveBeenCalled();
-  });
-});
-
-describe('clearChunkReloadFlag', () => {
-  beforeEach(() => {
-    sessionStorage.clear();
-  });
-
-  it('removes the chunk_reload key from sessionStorage', () => {
-    sessionStorage.setItem('chunk_reload', '/some-page');
-    clearChunkReloadFlag();
-    expect(sessionStorage.getItem('chunk_reload')).toBeNull();
-  });
-
-  it('does nothing when the flag is not set', () => {
-    // Should not throw
-    expect(() => clearChunkReloadFlag()).not.toThrow();
-    expect(sessionStorage.getItem('chunk_reload')).toBeNull();
   });
 });

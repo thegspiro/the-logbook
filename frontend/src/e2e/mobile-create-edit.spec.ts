@@ -91,12 +91,17 @@ async function expectMobileDialogUsable(page: Page) {
 test.describe('mobile create and edit surfaces', () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize(PHONE);
-    await signIn(page, { permissions: ['inventory.manage'] });
+    // Empty on purpose: a phone's only on-page "Add Item" is the empty state's
+    // (the header's is `hidden sm:inline-flex`, and with rows it moves into
+    // the floating action menu). helpers.ts serves a populated item list by
+    // default since the inventory screens joined the mobile sweeps, so this
+    // test now asks for the empty one rather than assuming it.
+    await signIn(page, { empty: true, permissions: ['inventory.manage'] });
   });
 
   test('inventory create form remains usable and releases the page mask', async ({ page }, testInfo) => {
     await page.goto('/inventory/items');
-    // Exact, because the mocked list is empty and its empty state's heading,
+    // Exact, because the list is mocked empty and its empty state's heading,
     // "Your department has no inventory items yet", also contains this name:
     // a substring match turns into a strict-mode violation whenever the
     // empty state renders before this assertion first polls.
@@ -111,7 +116,14 @@ test.describe('mobile create and edit surfaces', () => {
     expect(await name.evaluate((input) => parseFloat(getComputedStyle(input).fontSize))).toBeGreaterThanOrEqual(16);
 
     await page.screenshot({ path: testInfo.outputPath('inventory-create-mobile.png'), fullPage: true });
+    // A dialog with a typed name asks before it discards it (forms review F-6,
+    // owner decision 2026-11-06): keeping it leaves the name in place, and
+    // discarding closes the dialog and releases the mask as before.
     await (await visibleButton(page, 'Cancel')).click();
+    await page.getByRole('button', { name: 'Keep editing' }).click();
+    await expect(name).toHaveValue('Mobile test item');
+    await (await visibleButton(page, 'Cancel')).click();
+    await page.getByRole('button', { name: 'Discard changes' }).click();
 
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.locator('.modal-overlay')).toHaveCount(0);

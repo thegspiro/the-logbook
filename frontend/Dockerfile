@@ -9,8 +9,12 @@
 # Compose does this via `context: .` + `dockerfile: frontend/Dockerfile`.
 # See .dockerignore at the root for what the context excludes.
 
+# Both Node stages are pinned to the major CI tests on (actions/setup-node in
+# .github/workflows/ci.yml), owner decision 2026-11-01. Move them together;
+# backend/tests/test_image_runtime_versions.py fails when they differ.
+
 # Development stage
-FROM node:26-alpine AS development
+FROM node:22-alpine AS development
 
 # Upgrade to npm 11.9.0 (latest stable)
 RUN npm install -g npm@11.9.0
@@ -42,7 +46,7 @@ EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "--host"]
 
 # Build stage
-FROM node:26-alpine AS build
+FROM node:22-alpine AS build
 
 # Upgrade to npm 11.9.0 (latest stable)
 RUN npm install -g npm@11.9.0

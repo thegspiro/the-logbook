@@ -13,6 +13,10 @@ import { SkeletonPage } from '../../../components/ux';
 import { useOfficersStore } from '../store/officersStore';
 import type { DepartmentOfficer } from '../types';
 import { displayNameOf } from '../../../utils/memberName';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 
 interface OfficersPanelProps {
   /** Org members, used to populate the "who holds this office" picker. */
@@ -27,6 +31,22 @@ interface OfficersPanelProps {
   }[];
   isLoadingMembers: boolean;
 }
+
+type OfficerField = 'user_id' | 'display_name' | 'title' | 'email' | 'phone';
+
+/**
+ * `OfficerUpdate` in schemas/officer.py. An assignment replaces the office's
+ * whole override set on each save, so a refusal holds the save back rather
+ * than keeping part of it. Ordered as on screen.
+ */
+const OFFICER_FIELDS: Record<OfficerField, ServerFieldSpec> = {
+  user_id: { label: 'Member' },
+  display_name: { label: 'Name override', maxLength: 200 },
+  title: { label: 'Signature title', maxLength: 150 },
+  email: { label: 'Email override', maxLength: 320 },
+  phone: { label: 'Phone override', maxLength: 50 },
+};
+const OFFICER_ORDER = Object.keys(OFFICER_FIELDS) as OfficerField[];
 
 const CATEGORY_LABELS: Record<string, string> = {
   operational: 'Operational (Line) Officers',
@@ -70,15 +90,52 @@ interface OfficerRowProps {
     }
   ) => Promise<void>;
   onClear: (officeKey: string) => Promise<void>;
+  /** A refusal was shown on the row's own fields, so the panel's banner need not repeat it. */
+  onFieldRefusal: () => void;
 }
 
-const OfficerRow: React.FC<OfficerRowProps> = ({ office, members, isSaving, onSave, onClear }) => {
+const OfficerRow: React.FC<OfficerRowProps> = ({ office, members, isSaving, onSave, onClear, onFieldRefusal }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [userId, setUserId] = useState(office.user_id ?? '');
   const [displayName, setDisplayName] = useState('');
   const [title, setTitle] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [errors, setErrors] = useState<Partial<Record<OfficerField, string>>>({});
+  const values: Record<OfficerField, string> = { user_id: userId, display_name: displayName, title, email, phone };
+  const stored: Record<OfficerField, string> = {
+    user_id: office.user_id ?? '',
+    display_name: office.override_name ?? '',
+    title: office.override_title ?? '',
+    email: office.override_email ?? '',
+    phone: office.override_phone ?? '',
+  };
+  const fieldId = (field: OfficerField) =>
+    `officer-${field === 'user_id' ? 'member' : field === 'display_name' ? 'name' : field}-${office.office_key}`;
+  // Cancel asks before typed changes are thrown away (forms review F-6); with
+  // the form closed there is nothing to ask about.
+  const closeEditor = () => {
+    setIsEditing(false);
+    setErrors({});
+    setUserId(stored.user_id);
+    setDisplayName(stored.display_name);
+    setTitle(stored.title);
+    setEmail(stored.email);
+    setPhone(stored.phone);
+  };
+  const requestCancel = useDiscardGuard({
+    isDirty: isEditing ? OFFICER_ORDER.some((f) => values[f] !== stored[f]) : undefined,
+    onClose: closeEditor,
+  });
+  const edit = (field: OfficerField, setter: (v: string) => void) => (value: string) => {
+    setter(value);
+    setErrors((prev) => {
+      if (!(field in prev)) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
 
   // Reset the draft whenever the persisted office changes (including after a
   // save round-trip), so the form never shows values the server rejected.
@@ -95,17 +152,34 @@ const OfficerRow: React.FC<OfficerRowProps> = ({ office, members, isSaving, onSa
 
   const badge = SOURCE_BADGES[office.source];
 
-  const handleSave = async () => {
-    // `||` not `??`: an untouched field is '' and must be omitted from the
-    // payload entirely, which `??` would let through as an empty string.
-    await onSave(office.office_key, {
-      user_id: userId || undefined,
-      display_name: displayName.trim() || undefined,
-      title: title.trim() || undefined,
-      email: email.trim() || undefined,
-      phone: phone.trim() || undefined,
-    });
-    setIsEditing(false);
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      // `||` not `??`: an untouched field is '' and must be omitted from the
+      // payload entirely, which `??` would let through as an empty string.
+      await onSave(office.office_key, {
+        user_id: userId || undefined,
+        display_name: displayName.trim() || undefined,
+        title: title.trim() || undefined,
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
+      });
+      setErrors({});
+      setIsEditing(false);
+    } catch (err: unknown) {
+      // A refusal lands on its field and the form stays open with what was
+      // typed (forms review F-2); it used to close and drop the entries.
+      const mapped = mapServerFieldErrors(err, OFFICER_FIELDS);
+      const first = mapped ? OFFICER_ORDER.find((f) => mapped.fieldErrors[f]) : undefined;
+      if (mapped && first) {
+        setErrors(mapped.fieldErrors);
+        onFieldRefusal();
+        document.getElementById(fieldId(first))?.focus();
+      }
+      if (!first || (mapped && mapped.unmatched.length > 0)) {
+        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to save officer'));
+      }
+    }
   };
 
   return (
@@ -145,7 +219,8 @@ const OfficerRow: React.FC<OfficerRowProps> = ({ office, members, isSaving, onSa
             </button>
           )}
           <button
-            onClick={() => setIsEditing((v) => !v)}
+            type="button"
+            onClick={() => (isEditing ? requestCancel() : setIsEditing(true))}
             disabled={isSaving}
             className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50"
           >
@@ -156,89 +231,114 @@ const OfficerRow: React.FC<OfficerRowProps> = ({ office, members, isSaving, onSa
       </div>
 
       {isEditing && (
-        <div className="border-theme-surface-border mt-4 space-y-3 border-t pt-4">
+        <form
+          noValidate
+          onSubmit={(e) => void handleSave(e)}
+          className="border-theme-surface-border mt-4 space-y-3 border-t pt-4"
+        >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label htmlFor={`officer-member-${office.office_key}`} className="form-label">
-                Member
-              </label>
-              <select
-                id={`officer-member-${office.office_key}`}
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                className="form-input"
-              >
-                <option value="">— None (use the name below) —</option>
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {memberLabel(m)}
-                  </option>
-                ))}
-              </select>
-              <p className="text-theme-text-muted mt-1 text-xs">
-                Name, email, and phone follow this member&apos;s record.
-              </p>
-            </div>
+            <FormField
+              id={fieldId('user_id')}
+              label="Member"
+              error={errors.user_id}
+              hint="Name, email, and phone follow this member's record."
+            >
+              {(field) => (
+                <select
+                  {...field}
+                  value={userId}
+                  onChange={(e) => edit('user_id', setUserId)(e.target.value)}
+                  className="form-input"
+                >
+                  <option value="">— None (use the name below) —</option>
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {memberLabel(m)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
 
-            <div>
-              <label htmlFor={`officer-name-${office.office_key}`} className="form-label">
-                Name override
-              </label>
-              <input
-                id={`officer-name-${office.office_key}`}
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="form-input"
-                placeholder="For an officeholder without a member account"
-                maxLength={200}
-              />
-            </div>
+            <FormField
+              id={fieldId('display_name')}
+              label="Name override"
+              error={errors.display_name}
+              maxLength={OFFICER_FIELDS.display_name.maxLength}
+              count={displayName.length}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  autoComplete="off"
+                  value={displayName}
+                  onChange={(e) => edit('display_name', setDisplayName)(e.target.value)}
+                  className="form-input"
+                  placeholder="For an officeholder without a member account"
+                />
+              )}
+            </FormField>
 
-            <div>
-              <label htmlFor={`officer-title-${office.office_key}`} className="form-label">
-                Signature title
-              </label>
-              <input
-                id={`officer-title-${office.office_key}`}
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="form-input"
-                placeholder={office.default_title}
-                maxLength={150}
-              />
-            </div>
+            <FormField
+              id={fieldId('title')}
+              label="Signature title"
+              error={errors.title}
+              maxLength={OFFICER_FIELDS.title.maxLength}
+              count={title.length}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  autoComplete="off"
+                  value={title}
+                  onChange={(e) => edit('title', setTitle)(e.target.value)}
+                  className="form-input"
+                  placeholder={office.default_title}
+                />
+              )}
+            </FormField>
 
-            <div>
-              <label htmlFor={`officer-email-${office.office_key}`} className="form-label">
-                Email override
-              </label>
-              <input
-                id={`officer-email-${office.office_key}`}
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="form-input"
-                placeholder="Office address, if not the holder's own"
-                maxLength={320}
-              />
-            </div>
+            <FormField
+              id={fieldId('email')}
+              label="Email override"
+              error={errors.email}
+              maxLength={OFFICER_FIELDS.email.maxLength}
+              count={email.length}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="email"
+                  autoComplete="off"
+                  value={email}
+                  onChange={(e) => edit('email', setEmail)(e.target.value)}
+                  className="form-input"
+                  placeholder="Office address, if not the holder's own"
+                />
+              )}
+            </FormField>
 
-            <div>
-              <label htmlFor={`officer-phone-${office.office_key}`} className="form-label">
-                Phone override
-              </label>
-              <input
-                id={`officer-phone-${office.office_key}`}
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="form-input"
-                placeholder="Office phone, if not the holder's own"
-                maxLength={50}
-              />
-            </div>
+            <FormField
+              id={fieldId('phone')}
+              label="Phone override"
+              error={errors.phone}
+              maxLength={OFFICER_FIELDS.phone.maxLength}
+              count={phone.length}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="tel"
+                  autoComplete="off"
+                  value={phone}
+                  onChange={(e) => edit('phone', setPhone)(e.target.value)}
+                  className="form-input"
+                  placeholder="Office phone, if not the holder's own"
+                />
+              )}
+            </FormField>
           </div>
 
           {office.auto_candidates.length > 0 && (
@@ -253,9 +353,7 @@ const OfficerRow: React.FC<OfficerRowProps> = ({ office, members, isSaving, onSa
 
           <div className="flex justify-end">
             <button
-              onClick={() => {
-                void handleSave();
-              }}
+              type="submit"
               disabled={isSaving}
               className="btn-primary flex items-center gap-2 text-sm disabled:cursor-not-allowed"
             >
@@ -263,7 +361,7 @@ const OfficerRow: React.FC<OfficerRowProps> = ({ office, members, isSaving, onSa
               Save
             </button>
           </div>
-        </div>
+        </form>
       )}
     </div>
   );
@@ -308,12 +406,10 @@ const OfficersPanel: React.FC<OfficersPanelProps> = ({ members, isLoadingMembers
       phone?: string | undefined;
     }
   ) => {
-    try {
-      await setOfficer(officeKey, data);
-      toast.success('Officer saved');
-    } catch {
-      toast.error('Failed to save officer');
-    }
+    // A failure is the row's to report: it puts a refusal on the field that
+    // caused it and keeps the form open with what was typed.
+    await setOfficer(officeKey, data);
+    toast.success('Officer saved');
   };
 
   const handleClear = async (officeKey: string) => {
@@ -390,6 +486,7 @@ const OfficersPanel: React.FC<OfficersPanelProps> = ({ members, isLoadingMembers
                 isSaving={savingOfficeKey === office.office_key}
                 onSave={handleSave}
                 onClear={handleClear}
+                onFieldRefusal={clearError}
               />
             ))}
           </div>

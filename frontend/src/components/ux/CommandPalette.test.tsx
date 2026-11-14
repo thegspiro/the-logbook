@@ -20,8 +20,12 @@ vi.mock('../../stores/authStore', () => ({
 }));
 
 const practicalSkillsMethod = { current: null as 'skills_testing' | 'shift_signoffs' | null };
+const practicalSkillsAsked = vi.fn();
 vi.mock('../../stores/practicalSkillsStore', () => ({
-  usePracticalSkillsMethod: () => practicalSkillsMethod.current,
+  usePracticalSkillsMethod: (...args: unknown[]) => {
+    practicalSkillsAsked(...args);
+    return practicalSkillsMethod.current;
+  },
 }));
 
 vi.mock('../../hooks/useEnabledModules', () => ({
@@ -198,6 +202,31 @@ describe('CommandPalette hub destinations', () => {
     expect(screen.getByText('Payment methods, pricing and notices')).toBeInTheDocument();
   });
 
+  // Compliance Settings needs settings.manage or compliance.manage on top of
+  // the hub's training.manage, and the palette must not offer it without one.
+  it('offers Compliance Settings only with the permission it needs', async () => {
+    await search('compliance settings');
+    expect(screen.queryByRole('option', { name: /^Compliance.*Thresholds, profiles/ })).not.toBeInTheDocument();
+  });
+
+  it('opens Compliance Settings under Settings & Data for a compliance officer', async () => {
+    permissions.current.add('compliance.manage');
+    const user = await search('compliance settings');
+
+    await user.click(screen.getByRole('option', { name: /^Compliance.*Thresholds, profiles/ }));
+
+    expect(window.location.pathname).toBe('/training/admin');
+    expect(window.location.search).toBe('?page=settings&tab=compliance-settings');
+  });
+
+  // The Settings & Data tabs were shortened to fit one row; a search for the
+  // name they used to show must still find them.
+  it('finds a shortened Settings & Data tab by its full name', async () => {
+    await search('import past training');
+
+    expect(screen.getByRole('option', { name: /^Import History/ })).toBeInTheDocument();
+  });
+
   it('opens the store console at the chosen tab', async () => {
     const user = await search('payments that need');
 
@@ -255,5 +284,29 @@ describe('CommandPalette hub destinations', () => {
 
     expect(screen.getByRole('option', { name: /Skills Test Records/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Skill Evaluations/ })).not.toBeInTheDocument();
+  });
+});
+
+// The palette is on every page; asking for the Training module's setting while
+// that module is off drew a refused request on each one.
+describe('CommandPalette practical-skills lookup', () => {
+  beforeEach(() => {
+    practicalSkillsAsked.mockReset();
+    practicalSkillsMethod.current = null;
+  });
+
+  it('does not ask for the setting while Training is off', () => {
+    enabledModules.current = new Set(['members', 'events']);
+    renderWithRouter(<CommandPalette />);
+
+    expect(practicalSkillsAsked).toHaveBeenCalled();
+    expect(practicalSkillsAsked.mock.calls.every(([enabled]) => enabled === false)).toBe(true);
+  });
+
+  it('asks while Training is on', () => {
+    enabledModules.current = new Set(['members', 'training']);
+    renderWithRouter(<CommandPalette />);
+
+    expect(practicalSkillsAsked).toHaveBeenLastCalledWith(true);
   });
 });

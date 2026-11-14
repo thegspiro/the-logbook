@@ -273,6 +273,8 @@ export interface DocumentRecord {
   folder_name?: string;
   /** Set while the minutes this was published from are reopened for correction (MM-17). */
   under_correction_since?: string | null;
+  /** What generated the document; `meeting_minutes` for published minutes. */
+  source_type?: string | null;
 }
 
 export interface DocumentsSummary {

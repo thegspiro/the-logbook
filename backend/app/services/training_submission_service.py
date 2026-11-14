@@ -14,6 +14,7 @@ from loguru import logger
 from sqlalchemy import and_
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import ROLE_TRAINING_OFFICER
@@ -126,6 +127,7 @@ class TrainingSubmissionService:
         completion_date: date,
         hours_completed: float,
         save_as_draft: bool = False,
+        client_request_id: Optional[str] = None,
         **kwargs,
     ) -> TrainingSubmission:
         """Create a new self-reported training submission.
@@ -133,7 +135,20 @@ class TrainingSubmissionService:
         ``save_as_draft`` parks the submission in the member's own list without
         entering the review workflow; ``submit_draft`` is the only way out of
         that state, and it re-runs the approval routing below.
+
+        ``client_request_id`` makes a resend safe: a device repeats it on every
+        attempt at one submission, and a repeat returns the submission already
+        stored instead of filing — and, under auto-approval, crediting — a
+        second one. It is checked before anything else, because the first
+        attempt already passed every check below and notified reviewers.
         """
+        if client_request_id:
+            existing = await self._find_by_client_request(
+                organization_id, submitted_by, client_request_id
+            )
+            if existing is not None:
+                return existing
+
         config = await self.get_config(organization_id)
 
         if hours_completed <= 0:
@@ -168,6 +183,7 @@ class TrainingSubmissionService:
             completion_date=completion_date,
             hours_completed=hours_completed,
             status=status,
+            client_request_id=client_request_id or None,
             **{k: v for k, v in kwargs.items() if v is not None},
         )
         self.db.add(submission)
@@ -175,10 +191,23 @@ class TrainingSubmissionService:
         # One transaction for the submission and any record it spawns, so a
         # failed record insert cannot leave an approved submission that
         # credits nothing and can never be retried.
-        if status == SubmissionStatus.APPROVED:
-            await self._record_if_auto_approved(submission)
-        else:
-            await self.db.commit()
+        try:
+            if status == SubmissionStatus.APPROVED:
+                await self._record_if_auto_approved(submission)
+            else:
+                await self.db.commit()
+        except IntegrityError:
+            # Two attempts at the same submission raced past the lookup above;
+            # the unique key let one in. Its submission — and record — stand,
+            # and this attempt's are rolled back together.
+            await self.db.rollback()
+            if client_request_id:
+                existing = await self._find_by_client_request(
+                    organization_id, submitted_by, client_request_id
+                )
+                if existing is not None:
+                    return existing
+            raise
         await self.db.refresh(submission)
 
         logger.info(
@@ -190,6 +219,19 @@ class TrainingSubmissionService:
             await self._notify_reviewers(submission, triggered_by=submitted_by)
 
         return submission
+
+    async def _find_by_client_request(
+        self, organization_id: str, submitted_by: str, client_request_id: str
+    ) -> Optional[TrainingSubmission]:
+        """The member's submission made under ``client_request_id``, if any."""
+        result = await self.db.execute(
+            select(TrainingSubmission).where(
+                TrainingSubmission.organization_id == str(organization_id),
+                TrainingSubmission.submitted_by == str(submitted_by),
+                TrainingSubmission.client_request_id == client_request_id,
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def _record_if_auto_approved(self, submission: TrainingSubmission) -> None:
         """Create the training record immediately for an auto-approved submission.

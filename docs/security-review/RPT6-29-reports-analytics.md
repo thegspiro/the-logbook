@@ -1,6 +1,6 @@
-# Security Review — Feature 29: Reports & Analytics (pass 8)
+# Security Review — Feature 29: Reports & Analytics (pass 8; see later `## Pass N` sections for subsequent passes, most recently pass 15)
 
-**Prefix:** `RPT6` · **Rotation pass:** 8 · **Reviewed:** 2026-10-08 · **PR:** (this PR)
+**Prefix:** `RPT6` · **Rotation pass:** 15 (this file also carries passes 8–14) · **Reviewed:** 2026-11-11 · **PR:** (this PR)
 
 **Backend:** `api/v1/endpoints/reports.py` (7 routes), `analytics.py` (3),
 `platform_analytics.py` (1), `dashboard.py` (7), `labels.py` (12) — 30 routes
@@ -1076,3 +1076,531 @@ in-scope file has actually been read, not assumed byte-identical.
 Findings for the addendum: 0 fixes (nothing needed), 1 documentation
 completeness correction (RPT6-29-4). Combined with the rest of pass 12
 above: 0 fixes, 0 new unfixed findings, 1 completeness correction.
+
+## Pass 13 (2026-10-30) — watchdog pickup, zero-delta on all declared backend/frontend files; closes a frontend scope gap, 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable, confirmed via `ListAgents`,
+"No reachable agents"). PR #3854 (Feature 28, Security, audit & IP, pass 11)
+had already merged (`6e5ba65f`); `search_pull_requests` for
+`head:claude/security-review-` returned zero open results both before
+starting and again right before this push.
+
+**Baseline:** pass 12 + its addendum's merge, `65b566ee` (PR #3784).
+
+**Zero delta on every backend file and declared service.** Each of the
+thirteen backend files this rotation has carried since pass 12's addendum
+(`reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`,
+`labels.py`, `reports_service.py`, `dashboard_widget_service.py`,
+`attendance_dashboard_service.py`, `label_service.py`,
+`label_printer_service.py`, `schemas/reports.py`, `saved_report_schedule.py`,
+`external_recipients.py`) diffed individually against `65b566ee` with `git
+diff --stat` — all thirteen empty, despite 219 non-merge commits landing on
+`main` in that window. `frontend/src/modules/reports` is likewise empty.
+
+**The declared frontend scope was itself incomplete, and this pass closes
+that gap rather than carrying it forward unread.** Every prior pass's header
+line reads "Frontend: `modules/reports`" — but `dashboard.py` and
+`dashboard_widget_service.py` render through `frontend/src/pages/Dashboard.tsx`,
+`analytics.py`/`platform_analytics.py` render through
+`frontend/src/pages/AnalyticsDashboardPage.tsx` and
+`frontend/src/pages/PlatformAnalyticsPage.tsx`, and `labels.py` renders
+through the shared `frontend/src/components/labels/` tree (used by
+Apparatus/Facilities/Inventory/Prospective-members' own label-print pages,
+which wrap it) — none of which is under `modules/reports`. This is the same
+root cause as RPT6-29-4 (pass 12's own addendum): a declared scope line that
+undercounts the feature's real surface, left unnoticed because nothing in it
+had changed across the passes that would have caught it. Checked this pass,
+not deferred:
+
+- **`frontend/src/pages/Dashboard.tsx`** (+2/-0 since `65b566ee`) — adds one
+  `<WeatherAlertBanner />` render inside the page body. That component and
+  its backing route are Feature 27's (Integrations) own pass-11 scope,
+  already reviewed there (org-scoped NWS data, HTML-escaped free text); this
+  is a one-line inclusion, not a new finding here.
+- **`frontend/src/pages/AnalyticsDashboardPage.tsx`** (+90/-54) — a
+  loading-skeleton restructure (the repo-wide layout-shift sweep's shape:
+  `loading && !metrics` replaces a bare `loading` guard so the 10-second
+  auto-refresh no longer blanks the whole page each cycle; header and
+  export-button JSX hoisted into a `const` reused by both the loading and
+  loaded branches). No new request, no new field read, no change to
+  `analyticsService` calls. Cosmetic. **Verified good, no new finding.**
+- **`frontend/src/components/labels/LabelPrintPage.tsx`** (+30/-24 net) and
+  new **`frontend/src/components/labels/barcodeGeometry.ts`** (122 lines) —
+  replaces a direct `JsBarcode(svgRef.current, value, {...})` call with
+  `drawCode128ForPrinter(svg, value, style, availableWidthIn, dpi)`, a
+  wrapper that still calls the same `JsBarcode(svg, value, {...})`
+  internally (read in full: `barcodeGeometry.ts:87-99`) but renders twice to
+  snap the module width to a whole number of printer dots before fixing the
+  SVG's physical `width`/`height` attributes in inches. `value` (the encoded
+  label text) reaches `JsBarcode` exactly as it did before this refactor —
+  same library, same call shape, no new escaping surface introduced or
+  removed. Purely a print-fidelity fix (bar width was rounding differently at
+  203 dpi than at 96 CSS px, a scanner-readability bug, not a security one).
+  **Verified good, no new finding.**
+- **`frontend/src/pages/PlatformAnalyticsPage.tsx`** — confirmed unchanged
+  (`git diff --stat` empty).
+
+**For future passes, the frontend scope line above now reads correctly** (see
+the updated header); this does not change what any future pass must
+re-review, since all four files were read here, but it means the next pass's
+"byte-identical to pass N" claim can legitimately include them instead of
+silently omitting them the way "Frontend: `modules/reports`" did for twelve
+passes running.
+
+### Route inventory — re-enumerated by AST from source, 35 routes, unchanged from pass 12
+
+Counted every `@router.<method>(...)` decorator directly, not trusted from
+the prior table: 7 (`reports.py`) + 3 (`analytics.py`) + 1
+(`platform_analytics.py`) + 12 (`dashboard.py`) + 12 (`labels.py`) = **35**,
+identical to pass 12. Every route's auth dependency grepped individually
+(`require_permission(...)`, `get_current_user`, or `get_current_active_user`)
+— none bare. `list_label_printers` (`labels.py`) is the one route on
+`get_current_user` alone among the label-printer CRUD set — this is LBL-29-2
+below, unchanged. `print_labels`/`preview_labels`/`generate_labels` on
+`get_current_user` alone is the feature's established self-serve pattern
+(any authenticated member may render/print a label from data already visible
+to them), consistent with every prior pass's gate table, which this pass's
+route list reproduces exactly.
+
+### Still flagged — every open item re-checked against current code, not the doc
+
+- **LBL-29-2 (LOW/policy)** — `list_label_printers` still carries only
+  `get_current_user`, no permission string; re-grepped this pass, unchanged
+  (deliberate: LAN host/port/location only, no credentials).
+- **LBL-29-4 (Informational)** — `LabelService.generate()` still has no
+  count cap of its own, unlike `LabelPrinterService.MAX_LABELS_PER_JOB = 500`;
+  `label_service.py` has zero diff since pass 12, so unchanged by definition.
+- **RPT-5c / RPT-6 / RPT-7** — `reports_service.py` has zero diff since pass
+  12; all three unchanged by definition, not independently re-executed
+  beyond that diff check.
+- **DASH-2 (LOW)** — `grep -rn "dashboardService\.getStats" frontend/src/`
+  — 0 hits, re-checked this pass. Still zero callers.
+
+### No new findings this pass
+
+**0 fixes applied, 0 new security findings.** The only correction is the
+scope-line fix described above, which has no behavior change. No
+`KNOWN_LIMITATIONS.md` change needed — none of the four open items' status
+changed this pass.
+
+### Completion gate (Pass 13)
+
+| Check                                                                                                                                                                                                   | Result                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, CI's pin)                                                                                                                                               | ✅ 0 violations                                   |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, via `python3.13 -m`, CI's pin)                                                                                                                  | ✅ 2743 files unchanged                           |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, via `python3.13 -m`, CI's pin)                                                                                                               | ✅ clean                                          |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                    | ✅ 678 revisions, single head `f90b1124e6f4`      |
+| `python3.13 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                    | ✅ 280 routes, 0 errors, 0 warnings               |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline or dues_overdue or saved_report"`                       | ✅ 1513 passed, 1 pre-existing skip (`pywebpush`) |
+| `pytest tests/test_platform_analytics_w78.py tests/test_admin_monitoring_w75.py tests/test_saved_report_delivery.py tests/test_external_recipient_audit.py`                                             | ✅ 48 passed                                      |
+| `cd frontend && npm run typecheck`                                                                                                                                                                      | ✅ 0 errors                                       |
+| `cd frontend && npm run lint`                                                                                                                                                                           | ✅ 0 errors/warnings                              |
+| `npx vitest run src/modules/reports src/pages/AnalyticsDashboardPage.test.tsx src/pages/Dashboard.test.tsx src/components/labels/LabelPrintPage.test.tsx src/components/labels/barcodeGeometry.test.ts` | ✅ 236 passed (13 files)                          |
+
+Next in rotation: Feature 30 (Onboarding — `api/v1/onboarding.py`, 26 unauth
+bootstrap routes).
+
+## Pass 14 (2026-11-04) — watchdog pickup, real delta (dashboard overdue-count refactor, prospect-permission tightening carried over from Membership pipeline), 0 new findings
+
+Watchdog pickup (dedicated `/loop 30m /security-review` session
+`session_011T1ZyyLrD5HagusgK9uDw2` unreachable across many consecutive
+cycles, confirmed via `ListAgents`, "No reachable agents"). PR #3998
+(Feature 28, Security, audit & IP, pass 12) had already merged
+(`a6e04e49`); a GitHub search for `is:pr is:open head:claude/security-review`
+returned zero results both before starting and again just before this push.
+Row 29 confirmed the next `⬜` row on a freshly fetched `main`.
+
+**Baseline:** pass 13's merge, `37270a948` (PR #3855).
+
+**Four files carry a real diff**, each diffed individually against the
+baseline rather than trusted from `git log`: `dashboard.py` (+121/-89),
+`attendance_dashboard_service.py` (+9/-3), `label_service.py` (+4/-1),
+`saved_report_schedule.py` (+3/-1). Every other declared backend file
+(`reports.py`, `analytics.py`, `platform_analytics.py`, `labels.py`,
+`reports_service.py`, `dashboard_widget_service.py`,
+`label_printer_service.py`, `schemas/reports.py`,
+`utils/external_recipients.py`) is byte-identical to pass 13. On the
+frontend, `modules/reports` carries a large new surface (below);
+`frontend/src/pages/Dashboard.tsx` picked up the same cosmetic
+`split-row` layout sweep seen on other features' recent passes;
+`AnalyticsDashboardPage.tsx` and `PlatformAnalyticsPage.tsx` are
+byte-identical.
+
+### `dashboard.py` — overdue-count predicate extracted and reused, no gate weakened (DASH-37)
+
+Two module-level helpers, `meeting_action_item_overdue(local_today)` and
+`minutes_action_item_overdue(local_today)`, are extracted from inline
+`where()` clauses that were previously duplicated (with one copy using
+`now` — a UTC instant — instead of a UTC-midnight cutoff, undercounting
+overdue items for any department west of UTC). Read every call site in
+full:
+
+- `get_asset_widgets`'s overdue-checkout count now calls
+  `overdue_checkout_clause(datetime.now(timezone.utc))`, a same-module
+  import from `inventory_service.py` (Feature 11's own scope, already
+  reviewed) rather than a new predicate — same `is_overdue`/
+  `expected_return_at` logic, no behavior change.
+- `get_operations_dashboard` and `get_admin_summary` both now call the two
+  new helpers instead of their old inline clauses. `organization_id ==
+org_id` filtering is untouched in both; the helpers take only a `date`
+  argument, never anything client-supplied.
+- `get_unified_action_items` gains two new query parameters, `overdue:
+bool = False` and `source: Literal["meeting", "minutes"] | None = None`,
+  so the dashboard's overdue tiles can deep-link to the exact rows they
+  counted (previously `href="/action-items?status=overdue"` opened the
+  _unfiltered_ feed, which is not what the tile counted — the motivating
+  bug, not a security defect). Both parameters are read-side filters only:
+  `source` narrows which of the two already-permission-gated halves runs
+  (`can_view_meetings`/`can_view_minutes`/`assigned_to_caller` — all three
+  unchanged, still the same per-row gate the route's own comment
+  describes), and `overdue` adds the same date predicate the dashboard
+  tiles already use to the `WHERE` clause. Neither parameter can see a row
+  the un-parameterized call could not already return; both only remove
+  rows. **Verified good — real correctness fix (DASH-37), the permission
+  split this route's own comment describes is reproduced unchanged.**
+
+### Prospect-visibility tightening carried into this feature's files by other work, re-verified correctly enforced
+
+`label_service.py` and `saved_report_schedule.py` both narrow
+`prospective_members.view` (or `.view`/`.manage`) to
+`prospective_members.view_all` for, respectively, the prospect label
+module and the `pipeline_overview` saved-report type. This landed via
+`92ec254c3` ("Add case managers, interviewers and
+prospective_members.view_all") — Membership pipeline's (Feature 08,
+already ✅) own commit, which happens to touch these two Reports-owned
+files because both tables consult a Membership-pipeline permission
+constant. Re-verified this pass, from the call site, that each dict is
+actually enforced rather than decorative:
+
+- `label_service.py`'s `MODULE_LABELS["prospective_members"]` permission
+  tuple is read by `labels.py`'s `_authorize_module()`
+  (`backend/app/api/v1/endpoints/labels.py:63-74`), which 403s unless the
+  caller holds one of the tuple's permissions — confirmed by reading the
+  function, not assumed.
+- `saved_report_schedule.py`'s `PII_REPORT_PERMISSIONS["pipeline_overview"]`
+  is read by `reports.py`'s `_enforce_report_pii_permission` (generate) and
+  `disallowed_pii_recipients` (schedule-email validation) —
+  `backend/app/api/v1/endpoints/reports.py:105,201` — both call sites
+  confirmed live, not just declared.
+
+Before this tightening, a member holding only `prospective_members.view`
+(assigned-applicants-only visibility, per `prospect_access.py` — Feature
+08's own scope) could print a label sheet or run/schedule the
+`pipeline_overview` report naming every applicant in the organization,
+not just their own assigned ones — an over-exposure the `view`/`view_all`
+split exists to close. The fix is already live and already correctly
+wired on both of this feature's call sites. **Verified good, not a new
+finding — the fix belongs to Feature 08's commit, not this one, and
+nothing here weakens or duplicates it.**
+
+### Frontend — a large new Evaluations surface under `modules/reports`, reviewed in full
+
+`modules/reports` gained a full Evaluations UI (`EvaluationsPage`,
+`EvaluationTemplateBuilderPage`, `EvaluationListPage`,
+`EvaluationDetailPage`, `MyEvaluationsPage`, the `evaluations/` component
+tree, `evaluationsApi.ts`, `types/evaluations.ts`) — ~7,360 new lines.
+The backend it calls (`shift_evaluations.py`/`shift_evaluation_templates.py`)
+is Feature 17's (Training core) own declared scope, added at that
+feature's pass 13 and already reviewed there; this pass reviews only the
+new frontend surface, not re-deriving Feature 17's backend review (per
+the Pitfall #29 rule against re-deriving another feature's settled work).
+
+- **Routing (`routes.tsx`):** every route carries `ProtectedRoute` with a
+  permission appropriate to its action —
+  `/reports/evaluations` (setup) requires `evaluations.configure` or
+  `.manage`; `/reports/evaluations/templates/:templateId` requires
+  `evaluations.configure`; `/reports/evaluations/conduct` requires
+  `evaluations.conduct`, `.view_all` or `.manage`. `/reports/evaluations/mine`
+  and `/reports/evaluations/:evaluationId` carry no permission requirement
+  by design, each with an inline comment explaining why: the server scopes
+  `mine` to the caller and 404s a detail page the caller has no part in.
+  This matches the server-trusts-itself pattern already established
+  elsewhere in this feature (`/evaluations/mine`, `/evaluations/:id`) and
+  is consistent with how Feature 17 already reviewed the backend's own
+  authorization.
+- **Three-registry check (Pitfall #30a):** all five new routes are present
+  in `APPLICATION_PAGES.md` (lines 1301-1305), `testingRegistry.ts`
+  (lines 1269-1287) and `e2e/mobile-route-inventory.ts` (lines 1325-1349),
+  with matching permission strings in all three. No gap.
+- **Transport (`evaluationsApi.ts`):** uses the shared
+  `createApiClient()` factory (`utils/createApiClient.ts`) — httpOnly
+  cookie auth (`withCredentials: true`), CSRF double-submit header on
+  state-changing methods, no `Authorization` header, shared refresh-promise
+  on 401. This is the same already-reviewed mechanism every other module's
+  local axios instance uses (Pitfall #7); no new interceptor code was
+  added.
+- **No new client-side risk surface found:** grepped the entire new tree
+  for `dangerouslySetInnerHTML`, `localStorage`/`sessionStorage`,
+  `window.confirm`/`alert`/`prompt`, `eval(`, raw `innerHTML` — zero hits
+  outside a test file's `localStorage.clear()` in `beforeEach`. The
+  `sign()`/`remove()` methods route through the existing step-up
+  re-verification flow (`utils/stepUp.ts`, already reviewed elsewhere);
+  `document()` fetches a PDF as a `responseType: 'blob'` over the
+  cookie-authenticated client, never a bare URL with an embedded token.
+  **Verified good.**
+- **`frontend/src/components/labels/`** gained `PrinterDpiSelect.tsx` and
+  `printerDpi.ts` (a per-browser label-printer DPI override). The stored
+  value is validated against a fixed `[203, 300, 600]` allowlist on every
+  read (`printerDpi.ts:20`) before use, and `localStorage` here holds only
+  a print-density preference — no PII, no credential, no token.
+  **Verified good, not a finding** (distinct from CLAUDE.md's auth-token
+  localStorage ban, which this is not).
+
+### Route inventory — re-enumerated by AST, 35 routes, unchanged from pass 13
+
+7 (`reports.py`) + 3 (`analytics.py`) + 1 (`platform_analytics.py`) + 12
+(`dashboard.py`) + 12 (`labels.py`) = **35**. `dashboard.py`'s two new
+query parameters sit on an existing route (`get_unified_action_items`),
+not a new one, so the count is unchanged from pass 13.
+
+### Still flagged — every open item re-checked against current code, not the doc
+
+- **LBL-29-2 (LOW/policy)** — `list_label_printers` still carries only
+  `get_current_user`; `labels.py` has zero diff this pass (confirmed
+  byte-identical), so unchanged by definition.
+- **LBL-29-4 (Informational)** — `LabelService.generate()` still has no
+  count cap of its own; `label_service.py`'s diff this pass is the
+  permission-tuple change above only, which does not touch `generate()`.
+  Unchanged.
+- **RPT-5c / RPT-6 / RPT-7** — `reports_service.py` has zero diff since
+  pass 13; unchanged by definition.
+- **DASH-2 (LOW)** — `grep -rn "dashboardService\.getStats" frontend/src/`
+  — 0 hits, re-checked this pass. Still zero callers.
+
+### No new findings this pass
+
+**0 fixes applied, 0 new security findings.** The dashboard refactor and
+the prospect-permission tightening are both real deltas, both verified
+correct, neither introduced by or requiring a fix from this pass. No
+`KNOWN_LIMITATIONS.md` change needed.
+
+### Completion gate (Pass 14)
+
+| Check                                                                                                                                                                                                                                                                                        | Result                                            |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, via `python3.13 -m`, CI's pin)                                                                                                                                                                                                               | ✅ 0 violations                                   |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, via `python3.13 -m`, CI's pin)                                                                                                                                                                                                       | ✅ 2869 files unchanged                           |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, via `python3.13 -m`, CI's pin)                                                                                                                                                                                                    | ✅ clean                                          |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                         | ✅ 710 revisions, single head `6b81e95d4157`      |
+| `python3.13 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                                                                         | ✅ 298 routes, 0 errors, 0 warnings               |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline or dues_overdue or saved_report or evaluation"`                                                                                              | ✅ 2033 passed, 1 pre-existing skip (`pywebpush`) |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                           | ✅ 0 errors                                       |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                                | ✅ 0 errors/warnings                              |
+| `npx vitest run src/modules/reports src/pages/AnalyticsDashboardPage.test.tsx src/pages/Dashboard.test.tsx src/components/labels/LabelPrintPage.test.tsx src/components/labels/barcodeGeometry.test.ts src/components/labels/printerDpi.test.ts src/modules/testing/testingRegistry.test.ts` | ✅ 338 passed (25 files)                          |
+
+Next in rotation: Feature 30 (Onboarding — `api/v1/onboarding.py`, 26 unauth
+bootstrap routes).
+
+## Pass 15 (2026-11-11) — real delta carried over from Meetings & minutes pass 13, a sibling gap found by re-enumeration, 2 fixed (RPT6-29-5 MEDIUM, RPT6-29-6 MEDIUM), 0 new findings beyond those two
+
+**Step 0/1.** `list_pull_requests` (state `open`) returned zero PRs with a
+`claude/security-review-*` head, both before starting and again before this
+push — PR #4236 (Feature 28, Security, audit & IP, pass 13) had already
+merged (`7fb61d324`). Row 29 (Reports & analytics) was confirmed the next `⬜`
+row on a freshly fetched `main`.
+
+**Baseline:** pass 14's merge, `1cfde730f` (PR #4001).
+
+**Real delta, diffed file by file against that baseline:** `dashboard.py`
+(+480/-100 before this pass's own edits — the large diff is almost entirely
+DASH-37/38/39/40 UX/correctness fixes and the MM-21 meetings-visibility fix,
+all landed by other rotation/owner-decision work, not this pass);
+`platform_analytics.py` (timezone-correctness only, +14/-14); `reports.py`
+(a cosmetic `AdminPageHeader`-era header swap on the already-reviewed
+frontend, no backend change before this pass's own two added lines);
+`dashboard_widget_service.py` (a new `outreach_event_clause` shared helper,
++27/-0); `saved_report_schedule.py` and `attendance_dashboard_service.py`,
+`label_service.py`, `label_printer_service.py`, `schemas/reports.py`,
+`analytics.py`, `labels.py` — all byte-identical to pass 14 before this
+pass's own edit to the first.
+
+### RPT6-29-5 — MEDIUM — `department_overview`'s open-action-item counts read every meeting/minutes action item in the org, with no meetings/minutes visibility restriction — ✅ FIXED
+
+**What:** `ReportsService._generate_department_overview`'s two counts
+(`action_items.open_from_meetings`/`open_from_minutes`) counted every
+`MeetingActionItem`/minutes `ActionItem` in the organization filtered only by
+status — never by the owning meeting's or minutes' approval/executive state.
+MM-21 (Meetings & minutes, pass 13, merged 2026-11-08) closed the identical
+gap on the dashboard's unified action-items feed (`dashboard.py`'s
+`meeting_visibility_filter`/`minutes_visibility_filter`, confining a
+non-`meetings.manage`/`minutes.manage` holder to approved, non-executive
+items plus their own assignments) but did not reach this report, which lives
+in this feature's own declared scope (`reports_service.py`). That pass's own
+PROGRESS.md entry flagged the gap here by name rather than fixing it, since
+it is outside Meetings & minutes' file scope.
+
+**Where:** `backend/app/services/reports_service.py` — the `open_meeting_items`/
+`open_minutes_items` queries inside `_generate_department_overview` (around
+what was line 1813 before this fix).
+
+**Failure scenario:** a member holding only `reports.view` — the department
+overview report's own gate, well below `meetings.manage`/`minutes.manage` —
+runs `POST /reports/generate` with `report_type=department_overview`, or
+opens a saved report of that type, and the response's `action_items` block
+counts every open/overdue action item from draft and executive-session
+meetings and minutes in the department, not only the ones the Meetings and
+Minutes APIs themselves would show that caller. Only a count, never a
+description, reaches them — the same lesser severity MM-21's own writeup
+gave its sibling instance.
+
+**Impact:** a department-overview reader who should not know an executive
+session even has open action items learns, at minimum, that it does and how
+many — a confidentiality leak scoped to a number, not the content MM-3/MM-24
+protect.
+
+**Fix:** `_generate_department_overview` now takes an optional `current_user`
+and applies `meeting_visibility_filter`/`minutes_visibility_filter` — the
+same functions MM-21 already added and unit-tested in `dashboard.py` —
+reused rather than re-derived (Pitfall #29). `generate_report` threads it
+through for exactly this one generator, mirroring the existing
+`hidden_prospect_ids`-for-`pipeline_overview` asymmetry. All three real
+callers now pass an acting user: the two `reports.py` endpoints pass
+`current_user`, and the scheduled sender (`saved_report_schedule.py`, which
+has no live request) now has `_owner_may_run` return the verified schedule
+owner instead of a bare bool, and passes that owner through as the acting
+user. A `current_user=None` call (none exists in production; the pre-existing
+`test_report_range_timezone.py` test is the only caller that omits it) fails
+closed to the same restricted view a non-manage holder with nothing assigned
+to them would get, never to the unrestricted count — matching CLAUDE.md's
+"Attack Protection" fail-closed principle for access-control helpers.
+
+### RPT6-29-6 — MEDIUM — `GET /dashboard/admin-summary`'s same two counts have the identical gap, found by re-enumerating the route's own query shape rather than trusting "unchanged" — ✅ FIXED
+
+**What:** while implementing RPT6-29-5, re-reading `dashboard.py` end to end
+(not just its diff) for every place the two action-item models are counted
+turned up a second, sibling instance in this feature's **own** file:
+`get_admin_summary`'s `overdue_meeting`/`open_meeting`/`overdue_minutes`/
+`open_minutes` counts had the same unrestricted shape MM-21 fixed on the
+unified feed and RPT6-29-5 just fixed on the department-overview report.
+`get_admin_summary` is gated at `require_permission("settings.manage")` —
+a permission that does not imply `meetings.manage` or `minutes.manage` — so
+a chief or officer holding `settings.manage` without either sees the
+unrestricted department-wide total on this tile, the same count class
+RPT6-29-5 describes, in this feature's own route.
+
+**Where:** `backend/app/api/v1/endpoints/dashboard.py`, `get_admin_summary`'s
+action-items block (around what was line 1408 before this fix).
+
+**Failure scenario:** identical in shape to RPT6-29-5 — `GET
+/dashboard/admin-summary` for a `settings.manage`-only caller returns
+`open_action_items`/`overdue_action_items` inclusive of draft and
+executive-session items, where the tile's own linked drill-down
+(`GET /dashboard/action-items/page`) already withholds those same rows from
+that caller — so the tile and the list it is supposed to agree with
+(DASH-37/40's own invariant) silently disagreed, and the number itself
+disclosed what the drill-down correctly hid.
+
+**Fix:** built `meeting_restriction`/`minutes_restriction` once per request
+from `meeting_visibility_filter(current_user)`/
+`minutes_visibility_filter(current_user)` — already defined in this same
+file for MM-21 — and added them (plus the `Meeting` join the meeting-side
+restriction needs, matching the unified feed's own join shape) to both the
+overdue and the open query on each side. `current_user` is always a real,
+request-scoped user here (no scheduled-job caller exists for this route), so
+no fail-closed default was needed. Two pre-existing tests
+(`test_dashboard_module_gating.py`'s `_summary()` helper,
+`test_dashboard_action_items_paging.py`'s
+`test_the_dashboard_tile_counts_what_the_open_filter_lists`) called
+`get_admin_summary` with a fake caller that had no `.positions` and relied on
+`get_admin_summary` never calling `user_has_permission`; both now also patch
+it (the first by activating the `permission_patch` its own `_patches()`
+helper already built and had been discarding, the second by adding the same
+patch inline), which was necessary to keep them passing against the fix
+rather than to make them pass superficially.
+
+### Route inventory — re-enumerated by AST from source, 36 routes, up from pass 14's 35
+
+7 (`reports.py`) + 3 (`analytics.py`) + 1 (`platform_analytics.py`) + 13
+(`dashboard.py`) + 12 (`labels.py`) = **36**. The one new route,
+`GET /dashboard/action-items/page` (`get_action_items_page`), landed between
+pass 14 and this pass as part of DASH-40 ("page or cap," owner decision
+2026-11-01) — the bare-list route it sits beside is now capped at 200 instead
+of answering every matching row, and this route pages the same merged feed
+with totals. It carries no bare `Depends` of its own: like its sibling, it is
+gated only at `get_current_active_user` and self-gates per module/permission
+inside the shared `_read_action_items` helper, exactly as the already-reviewed
+bare-list route does — re-read in full and confirmed the same
+`can_view_meetings`/`can_view_minutes` + `meeting_visibility_filter`/
+`minutes_visibility_filter` shape applies to both routes identically, since
+they are now one function with two thin wrappers. Every other route's gate
+re-checked individually by grep against source: unchanged from the pass 13/14
+table.
+
+### Verified good ✅ (this pass's own checks, beyond the two findings above)
+
+- **`outreach_event_clause`** (`dashboard_widget_service.py`, new this pass)
+  org-scopes both halves of its `or_()` — the public-event-type branch and the
+  `EventRequest`-linked-event subquery both filter `organization_id ==
+organization_id` — and is consumed identically by the dashboard pulse card
+  and `community_engagement_service`, closing a Pitfall #29 risk before it
+  could open (one definition, not two independently drifting ones).
+- **`platform_analytics.py`'s timezone fix** (`month_since` replacing a mixed
+  `thirty_days_ago - timedelta`/local-midnight pair) touches no org filter;
+  every query it feeds still anchors on `organization_id == org_id`.
+- **The four facilities/apparatus asset-widget tile changes** (DASH-38,
+  DASH-39) reuse `FacilitiesService.maintenance_overdue_conditions`/
+  `maintenance_due_soon_conditions` (Feature 12's own org-scoped helpers,
+  called with this feature's `org_id`) rather than hand-rolling a new query —
+  verified both helpers filter `organization_id` directly.
+- **No new injection, CSV, upload, or secrets-exposure surface** anywhere in
+  the real delta: every new/changed query above is parameterized SQLAlchemy
+  construction: no `.like()`/`.ilike()`, no `csv.writer`, no raw SQL.
+- **Frontend:** `modules/reports`' large Evaluations surface and the labels
+  tree's DPI/geometry changes are unchanged since pass 14's own full read of
+  them; the new diff since then (`Dashboard.tsx`'s layout/notification-preview
+  tweaks, `AnalyticsDashboardPage.tsx`/`PlatformAnalyticsPage.tsx`'s
+  `AdminPageHeader` adoption, `LabelPrintPage.tsx`'s Avery-5160 geometry
+  constants) is cosmetic/correctness-only — read in full, no new
+  `dangerouslySetInnerHTML`, `localStorage`/`sessionStorage` of anything
+  sensitive, `window.confirm`/`alert`/`prompt`, or raw `innerHTML` beyond the
+  pre-existing print-iframe clone of already-React-escaped DOM content
+  (`LabelPrintPage.tsx`'s `printViaBrowser`, unchanged in shape this pass).
+
+### Still flagged — every open item re-checked against current code, not the doc
+
+- **LBL-29-2 (LOW/policy)** — `list_label_printers` still carries only
+  `get_current_user`; `labels.py` has zero diff since pass 14. Unchanged.
+- **LBL-29-4 (Informational)** — `LabelService.generate()` still has no
+  count cap of its own. Unchanged.
+- **RPT-5c / RPT-6 / RPT-7** — re-grepped directly rather than trusted from
+  the doc: `_generate_inventory_status`'s `float(item.current_value)` and
+  `_generate_apparatus_status`'s hardcoded `"last_inspection_date": None` are
+  both still present verbatim. Unchanged.
+- **DASH-2 (LOW)** — `grep -rn "dashboardService\.getStats" frontend/src/` —
+  0 hits, re-checked this pass. Still zero callers.
+
+### Guard tests added
+
+- `backend/tests/test_department_overview_action_item_visibility.py` (new) —
+  asserts a baseline `reports.view`-only caller's counts exclude draft/
+  executive items except their own assignments, a `meetings.manage`+
+  `minutes.manage` holder sees every item, and a `current_user=None` call
+  fails closed to the restricted view, never the unrestricted one. Verified
+  to fail against the pre-fix code (two `TypeError`s for the missing
+  parameter, and `4 == 1` on the no-caller case) before the fix, and pass
+  after (Pitfall #37).
+- `backend/tests/test_dashboard_action_items_paging.py::TestAdminSummaryRespectsVisibility`
+  (new) — asserts a `settings.manage`-only caller's `/admin-summary` counts
+  match only the visible items (restricted) while a `meetings.manage`+
+  `minutes.manage` holder still gets the full count. Verified to fail against
+  the pre-fix code (`4 == 2`) before the fix, and pass after.
+
+### Completion gate (Pass 15)
+
+| Check                                                                                                                                                                                                                                                                                     | Result                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, via `python3.13 -m`, CI's pin)                                                                                                                                                                                                            | ✅ 0 violations                                         |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, via `python3.13 -m`, CI's pin)                                                                                                                                                                                                    | ✅ clean (one test file auto-formatted and re-verified) |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, via `python3.13 -m`, CI's pin)                                                                                                                                                                                                 | ✅ clean                                                |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                      | ✅ 756 revisions, single head `8b1cf6f55425`            |
+| `python3.13 scripts/generate_schema_docs.py --check`                                                                                                                                                                                                                                      | ✅ up to date                                           |
+| `python3.13 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                                                                      | ✅ 305 routes, 0 errors, 0 warnings                     |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline or dues_overdue or saved_report or evaluation or meeting or minutes"`                                                                     | ✅ 3313 passed, 1 pre-existing skip (`pywebpush`)       |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                        | ✅ 0 errors                                             |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                             | ✅ 0 errors/warnings                                    |
+| `npx vitest run src/modules/reports src/pages/AnalyticsDashboardPage.test.tsx src/pages/Dashboard.test.tsx src/components/labels/LabelPrintPage.test.tsx src/components/labels/barcodeGeometry.test.ts src/components/labels/printerDpi.test.ts src/pages/PlatformAnalyticsPage.test.tsx` | ✅ 359 passed (27 files)                                |
+
+Next in rotation: Feature 30 (Onboarding — `api/v1/onboarding.py`, 26 unauth
+bootstrap routes).

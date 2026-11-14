@@ -459,6 +459,7 @@ export interface ModuleSettingsData {
   finance: boolean;
   medical_screening: boolean;
   testing: boolean;
+  history: boolean;
 }
 
 export interface OrganizationProfile {
@@ -836,6 +837,7 @@ export const roleService = {
     description?: string;
     permissions: string[];
     priority?: number;
+    kind?: 'office' | 'committee' | undefined;
   }): Promise<Role> {
     const response = await api.post<Role>('/roles', roleData);
     return response.data;
@@ -851,6 +853,7 @@ export const roleService = {
       description?: string | undefined;
       permissions?: string[];
       priority?: number | undefined;
+      kind?: 'office' | 'committee' | undefined;
     }
   ): Promise<Role> {
     const response = await api.patch<Role>(`/roles/${roleId}`, updates);

@@ -356,6 +356,29 @@ describe('EventSelfCheckInPage', () => {
       expect(eventService.selfCheckIn).toHaveBeenCalledWith('1', true);
     });
 
+    it('shows a zero-minute stay as a duration, not a bare "0"', async () => {
+      // Workflow review, training events: checking out within a minute rendered
+      // a lone "0" under "Checked Out At", because the duration was tested for
+      // truthiness and React prints a falsy number.
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue(checkedInData);
+      vi.mocked(eventService.selfCheckIn).mockResolvedValue({
+        ...mockRSVP,
+        checked_out_at: '2026-01-25T18:15:30Z',
+        attendance_duration_minutes: 0,
+      });
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventSelfCheckInPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Check Out of This Event' }));
+
+      expect(await screen.findByText("You're Checked Out")).toBeInTheDocument();
+      expect(
+        screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === 'Duration: 0h 0m')
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/^0$/)).not.toBeInTheDocument();
+    });
+
     it('shows the refusal when check-out is not accepted', async () => {
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(checkedInData);
       vi.mocked(eventService.selfCheckIn).mockRejectedValue(

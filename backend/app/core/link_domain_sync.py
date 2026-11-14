@@ -98,7 +98,7 @@ class LinkDomainListener:
         if self._pubsub:
             try:
                 await self._pubsub.unsubscribe()
-                await self._pubsub.close()
+                await self._pubsub.aclose()
             except Exception:  # pragma: no cover - shutdown best effort
                 pass
             self._pubsub = None

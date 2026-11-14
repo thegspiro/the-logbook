@@ -163,6 +163,7 @@ export const InventoryAdminLayout: React.FC<{ children: React.ReactNode }> = ({ 
               }
             : undefined
         }
+        navPending={modulesLoading}
         nav={
           modulesLoading ? undefined : (
             <InventoryAdminNav

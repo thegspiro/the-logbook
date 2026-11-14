@@ -118,6 +118,35 @@ describe('MinutesPage links meetings to their minutes (W51)', () => {
     expect(link).toHaveTextContent('Circulated for review');
   });
 
+  // A member sees only approved meetings, but may read minutes circulated
+  // for review while their meeting is still a draft. The link must not
+  // vanish with the meeting card it used to render inside.
+  it('lists circulated minutes whose meeting is not shown', async () => {
+    mockGetMeetings.mockResolvedValue({ meetings: [] });
+    renderWithRouter(<MinutesPage />);
+
+    const section = await screen.findByRole('region', { name: 'Minutes circulated for review' });
+    const link = within(section).getByRole('link', { name: /Minutes: October Business Meeting/ });
+    expect(link).toHaveAttribute('href', '/minutes/min-1');
+  });
+
+  it('does not list them again when their meeting is shown', async () => {
+    renderWithRouter(<MinutesPage />);
+
+    await screen.findByRole('link', { name: /Minutes: October Business Meeting/ });
+    expect(screen.queryByRole('region', { name: 'Minutes circulated for review' })).not.toBeInTheDocument();
+  });
+
+  it('leaves approved minutes to their meeting card', async () => {
+    mockGetMeetings.mockResolvedValue({ meetings: [] });
+    mockListAllMinutes.mockResolvedValue([minutesItem({ status: 'approved' })]);
+    renderWithRouter(<MinutesPage />);
+
+    // The empty state renders only once the lists have loaded.
+    await screen.findByText(/Structured templates for recording meeting minutes/);
+    expect(screen.queryByRole('region', { name: 'Minutes circulated for review' })).not.toBeInTheDocument();
+  });
+
   it('counts minutes awaiting approval from the minutes service', async () => {
     // Every other tile, and the meeting summary's own pending figure, holds a
     // different number, so "7" can only have come from the minutes stats.
@@ -146,6 +175,31 @@ describe('MinutesPage links meetings to their minutes (W51)', () => {
     renderWithRouter(<MinutesPage />);
 
     expect(await screen.findByText('8')).toBeInTheDocument();
+  });
+
+  // Owner decision 2026-11-01: action items are worked on the Action Items
+  // screen, so the Minutes page leads there.
+  it('opens the open action items from the tile', async () => {
+    mockGetSummary.mockResolvedValue({
+      total_meetings: 2,
+      meetings_this_month: 1,
+      open_action_items: 2,
+      pending_approval: 0,
+    });
+    renderWithRouter(<MinutesPage />);
+
+    const tile = await screen.findByRole('link', { name: /Open Action Items/ });
+    expect(tile).toHaveAttribute('href', '/action-items?status=open');
+  });
+
+  it("links a meeting's action items to that meeting's list", async () => {
+    mockGetMeetings.mockResolvedValue({
+      meetings: [{ ...meeting('meet-1', 'October Business Meeting'), action_item_count: 3 }],
+    });
+    renderWithRouter(<MinutesPage />);
+
+    const link = await screen.findByRole('link', { name: '3 action items' });
+    expect(link).toHaveAttribute('href', '/action-items?meeting=meet-1');
   });
 
   it('opens existing minutes instead of writing a second set', async () => {
@@ -228,6 +282,12 @@ describe('MinutesPage links meetings to their minutes (W51)', () => {
     const dialog = screen.getByRole('dialog', { name: 'Record Meeting Minutes' });
     await user.type(within(dialog).getByLabelText(/Meeting Title/), 'December Business Meeting');
 
-    expect(within(dialog).getByRole('button', { name: 'Start Recording' })).toBeDisabled();
+    // Said on the field, not by a button that stayed disabled with no reason
+    // given (forms review F-3).
+    await user.click(within(dialog).getByRole('button', { name: 'Start Recording' }));
+    const date = within(dialog).getByLabelText(/Meeting Date/);
+    expect(date).toHaveAccessibleDescription('Choose the date the meeting was held.');
+    expect(date).toHaveAttribute('aria-required', 'true');
+    expect(mockCreateMeeting).not.toHaveBeenCalled();
   });
 });

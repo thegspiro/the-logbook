@@ -7,12 +7,15 @@ import type { TrainingProgressReport } from '../../types';
 import { toDisplayString } from '../../../../utils/displayValue';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
+import { useTimezone } from '../../../../hooks/useTimezone';
+import { renderCalendarDate, renderInstantDate } from '../../utils/reportDates';
 
 interface Props {
   data: TrainingProgressReport;
 }
 
 export const TrainingProgressRenderer: React.FC<Props> = ({ data }) => {
+  const tz = useTimezone();
   const columns = [
     { key: 'member_name', header: 'Member' },
     { key: 'program_name', header: 'Program' },
@@ -60,8 +63,8 @@ export const TrainingProgressRenderer: React.FC<Props> = ({ data }) => {
         );
       },
     },
-    { key: 'enrolled_at', header: 'Enrolled' },
-    { key: 'target_completion', header: 'Target Date' },
+    { key: 'enrolled_at', header: 'Enrolled', render: renderInstantDate(tz) },
+    { key: 'target_completion', header: 'Target Date', render: renderCalendarDate },
   ];
 
   return (

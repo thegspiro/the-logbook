@@ -84,6 +84,7 @@ from app.schemas.scheduling import (
     SchedulingFeatureSettings,
     SchedulingSummary,
     SchedulingWidgetPreferences,
+    SchedulingWidgetPreferencesResponse,
     SchedulingWidgetSummary,
     ShiftAssignmentCreate,
     ShiftAssignmentResponse,
@@ -128,6 +129,7 @@ from app.schemas.scheduling import (
     StandingShiftPreviewResponse,
     StandingShiftResponse,
     TradeCandidateResponse,
+    TraineeReportRequirementResponse,
 )
 from app.services.call_tracking_service import CallTrackingService
 from app.services.event_request_service import (
@@ -135,10 +137,14 @@ from app.services.event_request_service import (
     outreach_role_label,
     resolve_outreach_signup_role,
 )
+from app.services.external_shift_hours_service import (
+    external_shifts_require_approval,
+)
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
     notify_summary,
 )
+from app.services.member_supervisor_service import MemberSupervisorService
 from app.services.pre_shift_work_service import (
     PreShiftWorkService,
     approved_pre_work_minutes,
@@ -147,6 +153,7 @@ from app.services.scheduling_module_config_service import (
     apparatus_type_defaults_for_org,
 )
 from app.services.scheduling_service import (
+    NOT_REQUESTERS_SUPERVISOR,
     SchedulingService,
     SignupActor,
     open_ended_cushion_hours,
@@ -157,6 +164,7 @@ from app.services.scheduling_widget_service import (
     SchedulingWidgetService,
 )
 from app.services.shift_eligibility_service import ShiftEligibilityService
+from app.services.shift_evaluation_service import ShiftEvaluationService
 from app.services.standing_shift_service import MAX_SERIES_DAYS, StandingShiftService
 from app.utils.delete_outcome import set_delete_outcome
 from app.utils.hours import hours_from_minutes
@@ -998,6 +1006,15 @@ async def finalize_shift(
     await _authorize_shift_management(
         service, current_user, shift_id, "scheduling.manage"
     )
+    # A shift officer may close out their own shift, but closing it without
+    # the trainee reports the department requires is a scheduling admin's call.
+    if body.override_missing_reports and not user_has_permission(
+        current_user, "scheduling.manage"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Only a scheduling admin can close out without the trainee reports",
+        )
     manual = None
     if body.manual_hours:
         manual = [
@@ -1022,11 +1039,26 @@ async def finalize_shift(
         attach_call_ids=(
             [str(c) for c in body.attach_call_ids] if body.attach_call_ids else None
         ),
+        override_missing_reports=body.override_missing_reports,
     )
     if not shift:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to finalize shift.", error),
+        )
+    if body.override_missing_reports:
+        await log_audit_event(
+            db=db,
+            event_type="shift_finalized_report_override",
+            event_category="scheduling",
+            severity="WARNING",
+            event_data={
+                "organization_id": str(current_user.organization_id),
+                "shift_id": str(shift_id),
+                "reason": (body.report_override_reason or "").strip(),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
         )
     if body.override_incomplete_checks:
         await log_audit_event(
@@ -1046,6 +1078,49 @@ async def finalize_shift(
     # prompt itself, so every finalize path clears it — not just this endpoint.
     enriched = await _enrich_shifts(service, current_user.organization_id, [shift])
     return enriched[0]
+
+
+@router.get(
+    "/shifts/{shift_id}/trainee-reports",
+    response_model=TraineeReportRequirementResponse,
+)
+async def get_shift_trainee_report_requirement(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Which trainee reports and shift evaluations close-out still needs.
+
+    **Permissions required:** scheduling.manage, or being the shift's officer.
+    """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
+    org = (
+        await db.execute(
+            select(Organization).where(
+                Organization.id == str(current_user.organization_id)
+            )
+        )
+    ).scalar_one_or_none()
+    required = service.trainee_reports_required(org)
+    missing = (
+        await service.missing_trainee_reports(shift_id, current_user.organization_id)
+        if required
+        else []
+    )
+    missing_evaluations = await ShiftEvaluationService(db).missing_required(
+        shift_id, current_user.organization_id
+    )
+    return {
+        "required": required,
+        "missing": [{"user_id": uid, "name": name} for uid, name in missing],
+        "missing_evaluations": [
+            {"user_id": uid, "name": label} for uid, label in missing_evaluations
+        ],
+        "can_override": user_has_permission(current_user, "scheduling.manage"),
+    }
 
 
 @router.get("/shifts/{shift_id}/closeout", response_model=CloseoutStateResponse)
@@ -1758,14 +1833,21 @@ async def get_my_attendance_history(
 
 @router.get(
     "/shifts/{shift_id}/my-attendance",
-    response_model=ShiftAttendanceResponse,
+    response_model=ShiftAttendanceResponse | None,
 )
 async def get_my_attendance(
     shift_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get the current member's attendance for a shift."""
+    """Get the current member's attendance for a shift.
+
+    ``null`` when they have none. Not having checked in is the normal state
+    before a shift, and the check-in page asks on every opening: a 404 here
+    logged a failed request on each ordinary visit. A shift the caller cannot
+    see answers ``null`` too, the same answer it gave as a 404 before, so
+    nothing is revealed about another department's shifts.
+    """
     service = SchedulingService(db)
     result = await service.get_my_attendance(
         shift_id=str(shift_id),
@@ -1773,10 +1855,7 @@ async def get_my_attendance(
         organization_id=current_user.organization_id,
     )
     if not result:
-        raise HTTPException(
-            status_code=404,
-            detail="No attendance record found",
-        )
+        return None
     enriched = await service.enrich_attendance_records([result])
     return enriched[0]
 
@@ -1935,7 +2014,10 @@ async def get_scheduling_widget_summary(
     )
 
 
-@router.get("/dashboard/widget-preferences", response_model=SchedulingWidgetPreferences)
+@router.get(
+    "/dashboard/widget-preferences",
+    response_model=SchedulingWidgetPreferencesResponse,
+)
 async def get_scheduling_widget_preferences(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.manage")),
@@ -1957,7 +2039,11 @@ async def get_scheduling_widget_preferences(
         if item.get("platoon") not in platoons:
             item.pop("platoon", None)
         clean[key] = item
-    return {"widgets": clean}
+    return {
+        "widgets": clean,
+        "available_station_ids": sorted(stations),
+        "available_platoons": sorted(platoons),
+    }
 
 
 @router.put("/dashboard/widget-preferences", response_model=SchedulingWidgetPreferences)
@@ -2542,6 +2628,54 @@ def _curated_refusal(exc: CodedValueError) -> CodedHTTPException:
     )
 
 
+def _seat_override_requested(
+    current_user: User, requested: bool, reason: str | None
+) -> bool:
+    """Whether this officer may seat somebody in an ungranted custom seat.
+
+    The answer the service is given: ``True`` waives eligibility for such a
+    seat, ``False`` makes the service refuse it with ``LB-SCHED-004`` so the
+    screen can offer the override. Only ``scheduling.manage`` may use it — a
+    delegated assigner or a shift officer can seat members in granted seats,
+    not decide that an ungranted one needs no grant — and a reason is
+    required, because the audit event is the only account of why.
+    """
+    if not requested:
+        return False
+    if not user_has_permission(current_user, "scheduling.manage"):
+        raise HTTPException(
+            status_code=403,
+            detail="Only a scheduling manager can seat a member by override.",
+        )
+    if not (reason or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Give a reason for seating this member by override.",
+        )
+    return True
+
+
+async def _audit_seat_override(
+    db: AsyncSession, current_user: User, assignment, reason: str | None
+) -> None:
+    await log_audit_event(
+        db=db,
+        event_type="shift_seat_eligibility_override",
+        event_category="scheduling",
+        severity="WARNING",
+        event_data={
+            "organization_id": str(current_user.organization_id),
+            "assignment_id": str(assignment.id),
+            "shift_id": str(assignment.shift_id),
+            "member_id": str(assignment.user_id),
+            "position": str(getattr(assignment.position, "value", assignment.position)),
+            "reason": (reason or "").strip() or None,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
 @router.post(
     "/shifts/{shift_id}/assignments",
     response_model=ShiftAssignmentResponse,
@@ -2566,6 +2700,11 @@ async def create_assignment(
         service, current_user, shift_id, "scheduling.assign"
     )
     assignment_data = assignment.model_dump(exclude_none=True)
+    seat_override = _seat_override_requested(
+        current_user,
+        assignment_data.pop("override_seat_eligibility", False),
+        assignment_data.pop("override_reason", None),
+    )
 
     # An officer seating somebody on an outreach sheet chooses the same roles
     # the member would have. Validated the same way, so a hand-made assignment
@@ -2593,6 +2732,8 @@ async def create_assignment(
             assignment_data,
             current_user.id,
             actor=_signup_actor(shift, current_user),
+            seat_override=seat_override,
+            override_reason=assignment.override_reason,
         )
     except CodedValueError as e:
         raise _curated_refusal(e)
@@ -2600,6 +2741,8 @@ async def create_assignment(
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to create assignment.", error)
         )
+    if service.last_assignment_overrode_seat:
+        await _audit_seat_override(db, current_user, result, assignment.override_reason)
     enriched = await service.enrich_assignments([result])
     response = enriched[0]
 
@@ -2631,12 +2774,19 @@ async def update_assignment(
     service = SchedulingService(db)
     await _authorize_assignment_management(service, current_user, assignment_id)
     update_data = assignment.model_dump(exclude_unset=True)
+    seat_override = _seat_override_requested(
+        current_user,
+        update_data.pop("override_seat_eligibility", False),
+        update_data.pop("override_reason", None),
+    )
     try:
         result, error = await service.update_assignment(
             assignment_id,
             current_user.organization_id,
             update_data,
             actor=_roster_actor(current_user),
+            seat_override=seat_override,
+            override_reason=assignment.override_reason,
         )
     except CodedValueError as e:
         raise _curated_refusal(e)
@@ -2644,6 +2794,8 @@ async def update_assignment(
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to update assignment.", error)
         )
+    if service.last_assignment_overrode_seat:
+        await _audit_seat_override(db, current_user, result, assignment.override_reason)
     enriched = await service.enrich_assignments([result])
     response = enriched[0]
 
@@ -3064,20 +3216,64 @@ async def list_time_off_requests(
         )
     else:
         # The authenticated identity, never a client-provided user_id, defines
-        # the member scope.
-        requests, total = await service.get_time_off_requests_for_user(
-            current_user.organization_id,
-            current_user.id,
-            status=time_off_status,
-            skip=pagination.skip,
-            limit=pagination.limit,
+        # the member scope: the caller's own requests, plus those of the
+        # members they supervise today, whose requests they may decide (owner
+        # decision 2026-11-01). A user_id narrows that scope and never widens
+        # it -- one outside it reads the caller's own, as it always has.
+        crew = await MemberSupervisorService(db).current_crew_ids(
+            str(current_user.organization_id), str(current_user.id)
         )
+        if user_id is not None and str(user_id) in crew:
+            scope = [str(user_id)]
+        elif user_id is None and crew:
+            scope = [str(current_user.id), *crew]
+        else:
+            scope = []
+        if scope:
+            requests, total = await service.get_time_off_requests(
+                current_user.organization_id,
+                status=time_off_status,
+                user_ids=scope,
+                skip=pagination.skip,
+                limit=pagination.limit,
+            )
+        else:
+            requests, total = await service.get_time_off_requests_for_user(
+                current_user.organization_id,
+                current_user.id,
+                status=time_off_status,
+                skip=pagination.skip,
+                limit=pagination.limit,
+            )
     return {
-        "items": await service.enrich_time_off_requests(requests),
+        "items": await _time_off_items(service, current_user, requests),
         "total": total,
         "skip": pagination.skip,
         "limit": pagination.limit,
     }
+
+
+async def _time_off_items(
+    service: SchedulingService, current_user: User, requests: list
+) -> list[dict]:
+    """Enriched time-off rows, each flagged with whether the caller may
+    decide it as the requester's supervisor.
+
+    A scheduling officer reviews every request whatever the flag says, so
+    their rows are left unflagged rather than looked up.
+    """
+    items = await service.enrich_time_off_requests(requests)
+    if user_has_permission(current_user, "scheduling.manage"):
+        return items
+    reviewable = await service.time_off_ids_reviewable_as_supervisor(
+        current_user.organization_id, current_user.id, requests
+    )
+    if reviewable:
+        # The response field defaults to False, so only the flagged rows
+        # need touching.
+        for item in items:
+            item["reviewable_as_supervisor"] = str(item.get("id")) in reviewable
+    return items
 
 
 @router.post(
@@ -3123,8 +3319,20 @@ async def get_time_off_request(
         result = await service.get_time_off_for_user_by_id(
             time_off_id, current_user.organization_id, current_user.id
         )
+        if result is None:
+            # Not the caller's own: their supervisor today may read it too.
+            # Anyone else is told it does not exist, as before.
+            crew = await MemberSupervisorService(db).current_crew_ids(
+                str(current_user.organization_id), str(current_user.id)
+            )
+            if crew:
+                candidate = await service.get_time_off_by_id(
+                    time_off_id, current_user.organization_id
+                )
+                if candidate is not None and str(candidate.user_id) in crew:
+                    result = candidate
     time_off = ensure_found(result, "Time-off request")
-    enriched = await service.enrich_time_off_requests([time_off])
+    enriched = await _time_off_items(service, current_user, [time_off])
     return enriched[0]
 
 
@@ -3133,23 +3341,33 @@ async def review_time_off_request(
     time_off_id: UUID,
     review: ShiftTimeOffReview,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.manage")),
+    current_user: User = Depends(get_current_user),
 ):
-    """Review (approve/deny) a time-off request"""
+    """Review (approve/deny) a time-off request.
+
+    **Requires** `scheduling.manage`, or being the requester's supervisor
+    today (owner decision 2026-11-01: approvals route to the supervisor). The
+    supervisor check is made by the service under the request's row lock, at
+    the moment of the decision.
+    """
     service = SchedulingService(db)
+    as_supervisor = not user_has_permission(current_user, "scheduling.manage")
     result, error = await service.review_time_off(
         time_off_id,
         current_user.organization_id,
         current_user.id,
         TimeOffStatus(review.status.value),
         review.reviewer_notes,
+        as_supervisor=as_supervisor,
     )
+    if error == NOT_REQUESTERS_SUPERVISOR:
+        raise HTTPException(status_code=403, detail=NOT_REQUESTERS_SUPERVISOR)
     if error or result is None:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to review time-off request.", error),
         )
-    enriched = await service.enrich_time_off_requests([result])
+    enriched = await _time_off_items(service, current_user, [result])
     return enriched[0]
 
 
@@ -3279,6 +3497,45 @@ async def get_my_hours_history(
     service = SchedulingService(db)
     return await service.get_my_hours_history(
         current_user.id, current_user.organization_id, year
+    )
+
+
+@router.get(
+    "/members/{user_id}/hours-history", response_model=MemberHoursHistoryResponse
+)
+async def get_member_hours_history(
+    user_id: UUID,
+    year: int | None = Query(None, ge=2000, le=2100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """One member's shift hours and call credit, month by month — the figures
+    ``/my-hours-history`` gives a member about themself, for their profile.
+
+    The member may read their own; anyone else needs ``scheduling.report``,
+    which already shows them every member's hours in the department's
+    member-hours report, so this discloses nothing that report does not.
+    The member must belong to the caller's organization: an id from another
+    one reads as not found, never as forbidden, so the response is no oracle
+    for which ids exist elsewhere (pitfall #14).
+    """
+    if str(user_id) != str(current_user.id) and not user_has_permission(
+        current_user, "scheduling.report"
+    ):
+        raise HTTPException(status_code=403, detail="Not permitted")
+    member = (
+        await db.execute(
+            select(User.id).where(
+                User.id == str(user_id),
+                User.organization_id == str(current_user.organization_id),
+            )
+        )
+    ).scalar_one_or_none()
+    if member is None:
+        raise HTTPException(status_code=404, detail="Member not found")
+    service = SchedulingService(db)
+    return await service.get_my_hours_history(
+        str(user_id), current_user.organization_id, year
     )
 
 
@@ -4364,6 +4621,7 @@ async def _feature_settings_response(
         late_signup_grace_minutes=window["late_signup_grace_minutes"],
         open_ended_shift_cushion_hours=open_ended_cushion_hours(org.settings or {}),
         enforce_evoc=service.get_evoc_enforcement(org),
+        external_shifts_require_approval=external_shifts_require_approval(org.settings),
         call_tracking=CallTrackingSettings(**service.get_call_tracking_settings(org)),
         call_type_usage=await _call_type_usage_for(db, current_user),
         call_type_locked=await _call_type_locked_for(db, current_user),
@@ -4457,6 +4715,11 @@ async def update_scheduling_feature_settings(
                 else None
             ),
             enforce_evoc=(data.enforce_evoc if "enforce_evoc" in fields_set else None),
+            external_shifts_require_approval=(
+                data.external_shifts_require_approval
+                if "external_shifts_require_approval" in fields_set
+                else None
+            ),
             # Guarded like every sibling field: a partial save from another
             # toggle sends only its own key, and passing the schema default
             # unconditionally would reset the department's call-type list.

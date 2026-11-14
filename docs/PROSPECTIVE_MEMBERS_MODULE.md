@@ -110,7 +110,7 @@ The `ApplicantDetailDialog` was decomposed into focused sub-components:
 
 ### Stage Types
 
-The twelve types offered by `StageConfigModal` (`StageType` in
+The thirteen types offered by `StageConfigModal` (`StageType` in
 `frontend/src/constants/enums.ts`; the backend `PipelineStepType` enum also
 keeps the legacy `action`, `checkbox` and `note` types):
 
@@ -128,6 +128,96 @@ keeps the legacy `action`, `checkbox` and `note` types):
 | `interview_requirement` | Interview Requirement | MessageSquare | Require a set number of interviews before advancing         | Interview records                                                                        |
 | `multi_approval`        | Multi-Signer Approval | Users         | Require multiple designated roles to all sign off           | Sign-offs page                                                                           |
 | `medical_screening`     | Medical Screening     | Stethoscope   | Require physical exam or medical clearance before advancing | Medical Screening module                                                                 |
+| `follow_up_form`        | Follow-up Form        | ClipboardPen  | Email the applicant a form, pre-filled with what is on file | Forms module; personal link page `/application-form/:token`                              |
+
+### Follow-up Form stages _(2026-10-29)_
+
+A Follow-up Form stage sends the applicant a form built in the Forms module, so
+the department can confirm what the interest form said and ask more probing
+questions. Everything below is in `app/services/follow_up_form_service.py`.
+
+- **The link.** When an applicant arrives on the stage — however they arrive:
+  advanced, placed, moved back, opened on it, or moved off a deleted stage —
+  they are emailed a personal link to `/application-form/<token>` (template
+  **Application Follow-up Form**). Only the first arrival sends; **Send now /
+  Resend** on the applicant's page sends it again, always the same link. One
+  `prospect_form_requests` row exists per applicant per stage, enforced by a
+  unique index, so a repeated send can never issue a second link.
+- **How long it works.** Until the form is submitted, and only while the
+  application is in progress or on hold. Rejecting, withdrawing, transferring
+  or deactivating the application stops the link; reactivating it brings it
+  back with the draft intact. It is a separate credential from the status-page
+  token, which lapses after 30 days unviewed and can be switched off.
+- **Pre-fill and write-back.** A form field's **Pre-fill from applicant**
+  setting (`form_fields.applicant_field`) names an applicant-record field. The
+  form opens with the record's value, and a changed answer is written back on
+  submission. Each change is kept, encrypted, as old → new on the request and
+  shown on the applicant's page; the activity log records field names only.
+  Values the interest form stored HTML-escaped are unescaped for display and
+  comparison.
+- **Contact changes.** A changed email, phone or mobile raises a **Contact
+  details changed** flag on the applicant's card and page until a coordinator
+  marks it reviewed. An email change is applied, so later pipeline email goes
+  to the new address, and a notice goes to the **old** address (template
+  **Application Contact Details Changed**), naming what changed but never the
+  new value. An email that another open application already uses is **not**
+  applied — it is recorded for the coordinator, and the applicant is not told
+  why, since that would confirm the address belongs to an applicant.
+- **Sensitive questions.** Answers to Sensitive fields are encrypted on the
+  submission as on any form. A Sensitive field cannot also pre-fill: the Forms
+  module refuses the pair, because write-back would copy a restricted answer
+  onto a record every pipeline viewer can read.
+- **Drafts.** The page saves a draft three seconds after the applicant stops
+  typing, and on **Save and finish later**. Drafts are encrypted, and cleared
+  once the form is submitted.
+- **Purging and anonymizing.** Purging an inactive application deletes its
+  follow-up submissions with it (they sit in the Forms module, linked only
+  through the request row). Anonymizing a converted member clears each
+  request's link, draft and change log, and empties its submission. It also
+  reduces each election package's applicant copy to the anonymized name, the
+  membership type and the stage list, and clears the package's coordinator
+  notes and supporting statement; the ballot item is an election record and
+  is kept.
+- **Completing the stage.** Submitting completes and advances the stage unless
+  **Advance the applicant when they submit the form** is unticked (new stages
+  store it ticked). The form is stored under `config.follow_up_form_id`, never
+  `form_id`: a stage's `form_id` creates an interest-form integration, and a
+  follow-up submission must never file a new applicant.
+
+- **Reminders.** The hourly task `prospect_follow_up_reminders` emails the
+  same link (template **Application Follow-up Form Reminder**) seven days
+  after the last contact, up to three times. The last contact is the latest of
+  the link email, a reminder and a saved draft, so a resend or a draft saved
+  this week moves the next reminder back; a resend never restarts the count of
+  three. Days are counted on the department's calendar and a reminder goes out
+  only between 09:00 and 20:00 in its timezone, so it lands soon after 09:00.
+  Reminders stop once the applicant moves off the stage, the application
+  closes (on hold still counts as open), or the form is submitted. Each row is
+  locked and re-checked before sending; the reminder is sent and then stamped,
+  so a crash between the two can repeat one reminder but never skip one. A
+  failed send is retried on the next run. The applicant's page shows
+  **Reminders: 2 of 3**.
+- **Coordinator notice.** A submission emails the membership coordinators
+  (template **Application Follow-up Form Submitted**), the same people the
+  withdrawal notice reaches. It carries a link to the applicant's Interview
+  page and says when their contact details changed. It never carries an
+  answer. It is sent after the submission commits, and a mail failure does not
+  undo the submission.
+- **On the Interview page.** A **Follow-up Forms** panel lists each submitted
+  form's answers, in the form's order, with choices shown by their labels.
+  A sensitive answer is shown only to holders of `sensitive_answers.view`, and
+  each such view is audit-logged as `form_sensitive_answers_viewed` (the event
+  the Forms module records); anyone else sees that it was withheld.
+- **In the election package.** An Election / Vote stage's **Include
+  follow-up form answers** package setting (`include_follow_up_answers`, off
+  by default, and off for a stage saved before the setting existed) copies the
+  submitted forms into the package. Sensitive answers are never copied: the
+  package snapshot is stored unencrypted.
+- **On the status page.** While the applicant is on the stage and has not
+  submitted, their status page shows **Complete your form**, with a button
+  that opens the same link, and a note when a draft is saved. The card follows
+  the status page's own rules: it appears only when the stage is shown to the
+  public.
 
 ### Quick Presets (StageConfigModal)
 
@@ -594,28 +684,149 @@ The leadership Pipeline Overview report additionally provides year-over-year app
 
 ## Permissions
 
-| Permission                   | Description                                                                                 |
-| ---------------------------- | ------------------------------------------------------------------------------------------- |
-| `prospective_members.view`   | View pipeline, applicant list, and details                                                  |
-| `prospective_members.manage` | Full CRUD: modify pipeline, advance/reject/reactivate applicants, configure settings, purge |
+| Permission                     | Description                                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `prospective_members.view`     | View the pipeline and the applicants the holder can see                                                             |
+| `prospective_members.manage`   | Full CRUD on the applicants the holder can see: advance/reject/reactivate, configure the pipeline, assign people    |
+| `prospective_members.view_all` | See **every** applicant, assigned or not, plus pipeline statistics, reports, labels and bulk actions _(2026-10-31)_ |
 
 ### Default Role Assignments
 
-| Position                                                 | Permission                                               |
-| -------------------------------------------------------- | -------------------------------------------------------- |
-| IT Manager                                               | Full access (wildcard)                                   |
-| Chief, Deputy Chief, Assistant Chief, Captain            | `prospective_members.view`, `prospective_members.manage` |
-| Lieutenant                                               | `prospective_members.view`                               |
-| President, Vice President, Secretary                     | `prospective_members.manage`                             |
-| Membership Coordinator, Assistant Membership Coordinator | `prospective_members.manage`                             |
+| Position                                                 | Permission                                         |
+| -------------------------------------------------------- | -------------------------------------------------- |
+| IT Manager                                               | Full access (wildcard)                             |
+| Chief, Deputy Chief, Assistant Chief, Captain            | `prospective_members.view`, `.manage`, `.view_all` |
+| Lieutenant                                               | `prospective_members.view`, `.view_all`            |
+| President, Vice President, Secretary                     | `prospective_members.manage`, `.view_all`          |
+| Membership Coordinator, Assistant Membership Coordinator | `prospective_members.manage`, `.view_all`          |
 
 The officer operational ranks (fire chief through lieutenant) also carry
-`prospective_members.view` by default. Source of truth: `DEFAULT_POSITIONS` and
-`OPERATIONAL_RANKS` in `backend/app/core/permissions.py`.
+`prospective_members.view` and `.view_all` by default. Source of truth:
+`DEFAULT_POSITIONS` and `OPERATIONAL_RANKS` in `backend/app/core/permissions.py`.
+
+### Case managers and interviewers _(2026-10-31)_
+
+A coordinator assigns members to an applicant from the applicant's **Assigned**
+section, as **case manager** or **interviewer** (`prospect_assignments`, one row
+per member per role per applicant, several of each allowed). Any current member
+can be assigned, whatever they hold, and is emailed a link (template
+**Applicant Assigned**). The assignment is itself the grant:
+
+- **Holders of `prospective_members.view_all`** see every applicant, as every
+  holder of view or manage did before. Migration `c588f525fdbb` gave
+  `view_all` to every position, seeded or department-created, that held view or
+  manage, so nobody's view narrowed on upgrade.
+- **Without `view_all`**, a holder of view or manage sees only the applicants
+  they are assigned to. A position created after the upgrade gets `view_all`
+  only if an administrator ticks it.
+- **A case manager** works their applicant: edit details and notes, upload and
+  remove documents, tick a checklist, send forms, advance, skip and move back a
+  stage, log interviews, and withdraw the application. Rejecting, holding,
+  reactivating, converting, moving to any stage, the election package and
+  assigning people stay with `prospective_members.manage`.
+- **An interviewer** sees the applicant's details and documents, opens their
+  Interview page, and logs and edits their own interview. They see only their
+  own interview, so each assessment is made without reading the others, and no
+  coordinators' notes, activity log, linked events or election package.
+- **Unassigned applicants** are visible only to `view_all` holders.
+
+Assigned members without the pipeline page's permission (a board member, a
+trustee) reach their applicants from **My Applicants**
+(`/prospective-members/my-applicants`), which the menu offers only to a member
+who has an assignment. The rules live in `app/services/prospect_access.py`;
+every route naming an applicant declares its level with
+`require_prospect_access` (`app/api/prospect_access.py`), which
+`tests/test_prospect_access_routes.py` enforces. A member who cannot see the
+applicant gets 404, one who can see but not act gets 403. The applicant's
+dialog asks `GET /prospects/{id}/my-access` and offers only what it reports.
+
+Pipeline-wide figures and anything that names applicants in bulk need
+`view_all`: statistics, the dashboard widget, the source-event list, the
+election package list (or `elections.manage`), the Pipeline Overview report,
+applicant labels, bulk advance and status, purge and the inactivity sweep.
+Anonymizing a converted member also reduces each of their election packages'
+applicant copy to the anonymized name, membership type and stage list.
+
+### Interviewer positions, case-manager notices and My applicants _(2026-10-31)_
+
+**Required interviewer positions.** An Interview Requirement stage can name
+the positions it needs an interview from (`required_interviewer_positions`,
+position slugs chosen from the department's positions in the stage editor, the
+Chief and committees such as the Board of Directors included). The stage
+completes only once each listed position has an interview logged against it by
+a member holding that position, on top of the required count and
+recommendation. A position counts by what the interviewer held **when the
+interview was logged**: `prospect_interviews.interviewer_positions` snapshots
+their position slugs, names and office keys at that moment (migration
+`aefb58788235`), so a chief who steps down still counts for the interview they
+gave as chief, and a member who takes an office later does not count for an
+interview given before. Interviews logged before the snapshot existed have
+none and count by the interviewer's current positions. Values are matched
+trimmed and case-blind; a blank entry keeps the stage closed rather than
+dropping a requirement, as with Multi-Signer approver roles. This replaces the
+frontend's `interviewer_roles` field, which nothing read.
+
+`GET /prospects/{id}/interview-requirement` reports the stage as the server
+grades it (count recorded, each position done or missing, and whether a
+required recommendation is met), and completion refuses on exactly what it
+reports. The Interview page and the applicant's dialog show it; the dialog's
+section previously read an `interview_count` nothing wrote, and showed "0 of
+N" whatever had been logged. A caller who sees only their own interview is not
+told whether the recommendation is met, since that is part of the other
+interviewers' assessments.
+
+**Interviewer title.** `my-access` reports `interviewer_title`, the caller's
+most senior position (an office or committee over a platform position, by
+priority; never the baseline Member). The Interview page offers it as the
+title for a new interview; it stays editable, and an edit keeps the title the
+interview was signed with.
+
+**Sensitive answers for interviewers.** An applicant's assigned interviewers see
+that applicant's sensitive follow-up answers on the applicant's Interview page.
+The grant covers that one applicant and only that page _(2026-11-05)_: the
+Interview page reads answers through
+`/prospects/{id}/interview/follow-up-forms/{request_id}/answers`, the only route
+that reveals them to an interviewer, while the general answers route reveals
+them to `sensitive_answers.view` holders alone. A case manager without the
+permission sees them withheld on both. Each reveal is audit-logged as
+`form_sensitive_answers_viewed` with `via` set to `permission` or
+`interviewer_assignment`, and `screen` set to `interview` or `applicant`. The
+split keeps a future screen that reuses the general route from revealing them
+by accident; it is not a boundary against an interviewer calling the interview
+route directly, which their assignment already entitles them to.
+
+**Case managers are told.** A case manager is emailed (template **Applicant
+Needs Your Attention**, link only) when their applicant submits a follow-up
+form, withdraws from the status page, or reaches an Interview Requirement or
+Multi-Signer Approval stage by any movement (advance, move back, placing a
+stageless applicant, a deleted stage's fallback). A coordinator who has just
+had the coordinators' notice for the same event is not sent it again. It is
+membership-admin email, so a member who has switched that off is not sent it.
+Like the stage's own emails, the stage-entry notice goes out within the move,
+best-effort.
+
+**Interviewers are asked** _(2026-11-04)_. When an applicant reaches an
+Interview Requirement stage, by any of the movements above, each assigned
+interviewer is emailed (template **Interview Requested**) with a link to the
+applicant's Interview page. An interviewer who has already logged an interview
+for that stage is not asked again, which matters when an applicant is moved
+back onto a stage they already passed. A member assigned as both interviewer
+and case manager gets the interview request only, not the case managers' notice
+for the same arrival. It is membership-admin email, like the case managers'
+notice, and goes out within the move, best-effort.
+
+**My applicants.** A `view_all` holder can narrow the pipeline board and table
+to the applicants they are assigned to with the **My applicants** toggle
+(`assigned_to_me` on the list, kanban and stats endpoints). The header counts,
+the archive tab badges and the archive tab lists follow it too _(2026-11-03)_,
+so every number on the page describes the applicants on screen; they counted
+the whole pipeline until then. The archive tab lists also follow a source-event
+filter now, which their badges already counted through. Without `view_all` the
+server already shows only assigned applicants, so the toggle is not offered.
 
 **Sign-offs need no module permission** _(2026-09-28)_. `GET /prospective-members/my-sign-offs` and `POST /prospective-members/prospects/{prospect_id}/approve-step` are reachable by any signed-in member with the module on: the officers a Multi-Signer Approval stage names rarely hold `prospective_members.*`. The service lists and accepts only stages asking for a role the caller holds, and returns the applicant's name and stage only — never the record. The last required signature completes the stage and advances the applicant.
 
-**Applicant labels** _(2026-09-28, W17-3/W17-4)_. `/prospective-members/print-labels` takes `prospective_members.view` **or** `.manage` (a manage-only coordinator used to get Access Denied), and labels print `_short_id(id)` — never the status token, which the label preview used to return to staff and every printed badge carried.
+**Applicant labels** _(2026-09-28, W17-3/W17-4)_. `/prospective-members/print-labels` takes `prospective_members.view_all` since 2026-10-31 (it took view **or** manage before), and labels print `_short_id(id)` — never the status token, which the label preview used to return to staff and every printed badge carried.
 
 ---
 
@@ -672,7 +883,11 @@ The `useProspectiveMembersStore` manages all module state:
 Every path below is under `/api/v1/prospective-members` (router in
 `backend/app/api/v1/endpoints/membership_pipeline.py`). Applicants are addressed
 as **prospects**. "view" means `prospective_members.view` **or**
-`prospective_members.manage`; permissions written with `|` are OR.
+`prospective_members.manage`; permissions written with `|` are OR. Since
+2026-10-31 every route naming an applicant also needs that applicant to be
+visible to the caller: `prospective_members.view_all`, or an assignment to them
+(see "Case managers and interviewers"). An assigned case manager or interviewer
+reaches the routes their role allows without the permission listed.
 
 ### Pipeline Endpoints
 
@@ -728,12 +943,36 @@ log, not in the coordinator notes.
 
 ### Interview Endpoints
 
-| Method   | Path                                  | Permission                   | Description      |
-| -------- | ------------------------------------- | ---------------------------- | ---------------- |
-| `GET`    | `/prospects/{prospect_id}/interviews` | view                         | List interviews  |
-| `POST`   | `/prospects/{prospect_id}/interviews` | `prospective_members.manage` | Record interview |
-| `PUT`    | `/interviews/{interview_id}`          | `prospective_members.manage` | Update interview |
-| `DELETE` | `/interviews/{interview_id}`          | `prospective_members.manage` | Delete interview |
+| Method   | Path                                             | Permission                   | Description                                                     |
+| -------- | ------------------------------------------------ | ---------------------------- | --------------------------------------------------------------- |
+| `GET`    | `/prospects/{prospect_id}/interviews`            | view                         | List interviews                                                 |
+| `POST`   | `/prospects/{prospect_id}/interviews`            | `prospective_members.manage` | Record interview                                                |
+| `PUT`    | `/interviews/{interview_id}`                     | `prospective_members.manage` | Update interview                                                |
+| `DELETE` | `/interviews/{interview_id}`                     | `prospective_members.manage` | Delete interview                                                |
+| `GET`    | `/prospects/{prospect_id}/interview-requirement` | `view_all`, or assigned      | The current Interview Requirement stage as graded; null off one |
+
+### Follow-up Form Endpoints
+
+| Method | Path                                                                          | Permission                   | Description                                                                               |
+| ------ | ----------------------------------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------- |
+| `GET`  | `/prospects/{prospect_id}/follow-up-forms`                                    | view                         | Forms sent, progress and record changes                                                   |
+| `POST` | `/prospects/{prospect_id}/follow-up-forms/{step_id}/send`                     | `prospective_members.manage` | Send or resend a stage's form (same link)                                                 |
+| `POST` | `/prospects/{prospect_id}/follow-up-forms/{request_id}/review-contact-change` | `prospective_members.manage` | Clear the contact-change flag                                                             |
+| `GET`  | `/prospects/{prospect_id}/follow-up-forms/{request_id}/answers`               | view                         | A submitted form's answers; 409 before submit                                             |
+| `GET`  | `/prospects/{prospect_id}/interview/follow-up-forms/{request_id}/answers`     | view                         | The same, for the Interview page; also reveals sensitive answers to assigned interviewers |
+
+### Assignment Endpoints
+
+| Method   | Path                                                   | Permission                                 | Description                                                      |
+| -------- | ------------------------------------------------------ | ------------------------------------------ | ---------------------------------------------------------------- |
+| `GET`    | `/my-applicants`                                       | Authenticated                              | The caller's assigned applicants, with their roles in `my_roles` |
+| `GET`    | `/prospects/{prospect_id}/my-access`                   | `view_all`, or assigned                    | What the caller may do with this applicant                       |
+| `GET`    | `/prospects/{prospect_id}/assignments`                 | `view_all`, or assigned                    | Who is assigned, and as what                                     |
+| `POST`   | `/prospects/{prospect_id}/assignments`                 | `prospective_members.manage` (and visible) | Assign a current member; emails them; assigning twice is a no-op |
+| `DELETE` | `/prospects/{prospect_id}/assignments/{assignment_id}` | `prospective_members.manage` (and visible) | Unassign; their access ends at once                              |
+| `GET`    | `/api/public/v1/follow-up-forms/{token}`               | None (link token)                          | The form with pre-fill or draft; 409 once sent                   |
+| `PUT`    | `/api/public/v1/follow-up-forms/{token}/draft`         | None (link token)                          | Save a draft                                                     |
+| `POST`   | `/api/public/v1/follow-up-forms/{token}/submit`        | None (link token)                          | Submit; 400 names an answer to correct                           |
 
 ### Event Link Endpoints
 
@@ -774,15 +1013,16 @@ Withdrawn / Converted figures the same response feeds.
 
 ### Query Parameters (Prospect List)
 
-| Parameter     | Type      | Description                                                                            |
-| ------------- | --------- | -------------------------------------------------------------------------------------- |
-| `pipeline_id` | `UUID`    | Filter by pipeline                                                                     |
-| `status`      | `string`  | Filter by one status (backend values — `transferred`, not `converted`)                 |
-| `search`      | `string`  | Search by name or email                                                                |
-| `event_id`    | `UUID`    | Only prospects produced by or linked to this event                                     |
-| `open_only`   | `boolean` | Drop closed applications (rejected, withdrawn, inactive, transferred); default `false` |
-| `limit`       | `number`  | Page size (default 50, max 200)                                                        |
-| `offset`      | `number`  | Rows to skip (default 0)                                                               |
+| Parameter        | Type      | Description                                                                                         |
+| ---------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| `pipeline_id`    | `UUID`    | Filter by pipeline                                                                                  |
+| `status`         | `string`  | Filter by one status (backend values — `transferred`, not `converted`)                              |
+| `search`         | `string`  | Search by name or email                                                                             |
+| `event_id`       | `UUID`    | Only prospects produced by or linked to this event                                                  |
+| `open_only`      | `boolean` | Drop closed applications (rejected, withdrawn, inactive, transferred); default `false`              |
+| `assigned_to_me` | `boolean` | Only applicants the caller is assigned to; default `false` (also on the kanban and stats endpoints) |
+| `limit`          | `number`  | Page size (default 50, max 200)                                                                     |
+| `offset`         | `number`  | Rows to skip (default 0)                                                                            |
 
 The response is `{items, total, limit, offset}`. The caller's own prospect
 record, if any, is omitted from both `items` and `total`.
@@ -794,7 +1034,8 @@ record, if any, is omitted from both `items` and `total`.
 ### The Kanban Board Endpoint
 
 `GET /api/v1/prospective-members/pipelines/{pipeline_id}/kanban`
-(`prospective_members.view` | `prospective_members.manage`)
+(`prospective_members.view` | `prospective_members.manage` |
+`prospective_members.view_all`; without `view_all`, assigned applicants only)
 
 **It now declares a response model.** It previously returned a bare `dict`, so
 FastAPI serialized **every column** of `ProspectiveMember` — which put

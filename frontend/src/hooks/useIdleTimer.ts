@@ -105,7 +105,10 @@ export function useIdleTimer() {
   const performLogout = useCallback(async () => {
     toast.dismiss();
     try {
-      await logoutRef.current();
+      // Automatic: nobody was asked, so unsent skills evaluations are kept on
+      // the device for this examiner rather than deleted (owner decision
+      // 2026-11-01).
+      await logoutRef.current({ automatic: true });
     } catch {
       // Logout may fail if session already expired
     }

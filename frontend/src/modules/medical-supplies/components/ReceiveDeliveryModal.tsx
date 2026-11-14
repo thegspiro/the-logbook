@@ -16,6 +16,9 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { MedicalSupplyItemPicker } from './MedicalSupplyItemPicker';
 
 interface ReceiveDeliveryModalProps {
@@ -41,15 +44,56 @@ const newLine = (): Line => ({
   expiration_date: '',
 });
 
+type LineField = 'item' | 'quantity' | 'lot' | 'expiration';
+const LINE_FIELDS: LineField[] = ['item', 'quantity', 'lot', 'expiration'];
+
+/** `InventoryLotBase.lot_number` max_length. */
+const LOT_NUMBER_MAX = 100;
+
+/** Errors are keyed per line, so a refusal lands on the line that caused it. */
+const errorKey = (lineKey: string, field: LineField) => `${lineKey}:${field}`;
+const controlId = (lineKey: string, field: LineField) =>
+  `${lineKey}-${({ item: 'item', quantity: 'qty', lot: 'lot', expiration: 'exp' } as const)[field]}`;
+
+const isBlank = (l: Line) => !l.inventory_item_id && l.quantity === '' && !l.lot_number && !l.expiration_date;
+
 export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ onClose, onSaved }) => {
   const tz = useTimezone();
   const [lines, setLines] = useState<Line[]>(() => [newLine()]);
   const [isSaving, setIsSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  // A half-entered shipment is lost on close, so Escape, the X and Cancel ask
+  // first (forms review F-6). A spare blank row is not a change.
+  const isDirty = lines.some((l) => !isBlank(l));
+  const requestClose = useDiscardGuard({ isDirty, onClose });
 
-  const updateLine = (key: string, patch: Partial<Line>) =>
+  const fieldOf = (patchKey: string): LineField =>
+    patchKey === 'quantity'
+      ? 'quantity'
+      : patchKey === 'lot_number'
+        ? 'lot'
+        : patchKey === 'expiration_date'
+          ? 'expiration'
+          : 'item';
+
+  const updateLine = (key: string, patch: Partial<Line>) => {
     setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+    const cleared = new Set(Object.keys(patch).map((k) => errorKey(key, fieldOf(k))));
+    setErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !cleared.has(k))));
+  };
 
-  const removeLine = (key: string) => setLines((ls) => (ls.length === 1 ? ls : ls.filter((l) => l.key !== key)));
+  const removeLine = (key: string) => {
+    setLines((ls) => (ls.length === 1 ? ls : ls.filter((l) => l.key !== key)));
+    setErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(`${key}:`))));
+  };
+
+  const showErrors = (next: Record<string, string>) => {
+    setErrors(next);
+    const first = lines.flatMap((l) =>
+      LINE_FIELDS.filter((f) => next[errorKey(l.key, f)]).map((f) => controlId(l.key, f))
+    )[0];
+    if (first) window.setTimeout(() => document.getElementById(first)?.focus(), 0);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,15 +103,25 @@ export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ onCl
     // went in short and still reported success — the officer only found out by
     // recounting. Blank rows are ignored (they are just spare slots); a row
     // with one field filled is a mistake worth stopping for.
-    const blank = (l: Line) => !l.inventory_item_id && l.quantity === '' && !l.lot_number && !l.expiration_date;
-    const touched = lines.filter((l) => !blank(l));
+    // Each problem is flagged on its own line's field; the toast says how
+    // many lines need attention, since a long shipment can scroll them away.
+    const touched = lines.filter((l) => !isBlank(l));
     const incomplete = touched.filter((l) => !l.inventory_item_id || l.quantity === '');
+    const found: Record<string, string> = {};
 
     if (touched.length === 0) {
+      const firstLine = lines[0];
+      if (firstLine) found[errorKey(firstLine.key, 'item')] = 'Choose an item and enter a quantity.';
+      showErrors(found);
       toast.error('Add at least one line with an item and a quantity');
       return;
     }
     if (incomplete.length > 0) {
+      for (const l of incomplete) {
+        if (!l.inventory_item_id) found[errorKey(l.key, 'item')] = 'Choose the item, or clear this row.';
+        if (l.quantity === '') found[errorKey(l.key, 'quantity')] = 'Enter a quantity, or clear this row.';
+      }
+      showErrors(found);
       toast.error(
         incomplete.length === 1
           ? 'One line is missing its item or quantity. Complete it or clear the row.'
@@ -75,7 +129,10 @@ export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ onCl
       );
       return;
     }
-    if (touched.some((l) => Number(l.quantity) < 1)) {
+    const tooFew = touched.filter((l) => Number(l.quantity) < 1);
+    if (tooFew.length > 0) {
+      for (const l of tooFew) found[errorKey(l.key, 'quantity')] = 'Enter 1 or more.';
+      showErrors(found);
       toast.error('Each line needs a quantity of 1 or more');
       return;
     }
@@ -97,7 +154,25 @@ export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ onCl
       toast.success(`Delivery recorded: ${entries.length} ${entries.length === 1 ? 'line' : 'lines'}`);
       onSaved();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to record the delivery'));
+      // The API answers per entry (`entries.2.lot_number`); each lands on its line.
+      const specs: Record<string, ServerFieldSpec> = {};
+      filled.forEach((l, i) => {
+        const at = `entries.${String(i)}`;
+        specs[errorKey(l.key, 'item')] = { label: 'Item', api: `${at}.inventory_item_id` };
+        specs[errorKey(l.key, 'quantity')] = { label: 'Qty', api: `${at}.quantity` };
+        specs[errorKey(l.key, 'lot')] = { label: 'Lot #', maxLength: LOT_NUMBER_MAX, api: `${at}.lot_number` };
+        specs[errorKey(l.key, 'expiration')] = { label: 'Expires', api: `${at}.expiration_date` };
+      });
+      const mapped = mapServerFieldErrors(err, specs);
+      const fieldErrors = Object.fromEntries(
+        Object.entries(mapped?.fieldErrors ?? {}).filter((entry): entry is [string, string] => Boolean(entry[1]))
+      );
+      if (Object.keys(fieldErrors).length > 0) {
+        showErrors(fieldErrors);
+        toast.error(mapped?.unmatched.join(' ') || 'Fix the fields marked below, then record again.');
+      } else {
+        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to record the delivery'));
+      }
     } finally {
       setIsSaving(false);
     }
@@ -106,10 +181,11 @@ export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ onCl
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title="Receive delivery"
       size="xl"
       onSubmit={(e) => void handleSubmit(e)}
+      noValidate
       footer={
         <>
           <button type="submit" className="btn-primary" disabled={isSaving}>
@@ -117,7 +193,7 @@ export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ onCl
           </button>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-md border px-4 py-2 text-sm font-medium"
           >
             Cancel
@@ -141,58 +217,82 @@ export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ onCl
                 aria-label={`Line ${index + 1}`}
                 className="border-theme-surface-border grid gap-2 rounded-md border p-3 sm:grid-cols-12"
               >
-                <div className="sm:col-span-5">
-                  <label htmlFor={`${line.key}-item`} className="form-label">
-                    Item {index === 0 && <span aria-hidden="true">*</span>}
-                  </label>
-                  <MedicalSupplyItemPicker
-                    id={`${line.key}-item`}
-                    value={line.inventory_item_id}
-                    selectedName={line.inventory_item_name}
-                    onChange={(itemId, name) =>
-                      updateLine(line.key, { inventory_item_id: itemId, inventory_item_name: name })
-                    }
-                  />
-                </div>
+                <FormField
+                  className="sm:col-span-5"
+                  label={<>Item {index === 0 && <span aria-hidden="true">*</span>}</>}
+                  id={controlId(line.key, 'item')}
+                  error={errors[errorKey(line.key, 'item')]}
+                >
+                  {(field) => (
+                    <MedicalSupplyItemPicker
+                      id={field.id}
+                      controlProps={field}
+                      value={line.inventory_item_id}
+                      selectedName={line.inventory_item_name}
+                      onChange={(itemId, name) =>
+                        updateLine(line.key, { inventory_item_id: itemId, inventory_item_name: name })
+                      }
+                    />
+                  )}
+                </FormField>
 
-                <div className="sm:col-span-2">
-                  <label htmlFor={`${line.key}-qty`} className="form-label">
-                    Qty
-                  </label>
-                  <input
-                    id={`${line.key}-qty`}
-                    type="number"
-                    min="1"
-                    className="form-input w-full"
-                    value={line.quantity}
-                    onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
-                  />
-                </div>
+                <FormField
+                  className="sm:col-span-2"
+                  label="Qty"
+                  id={controlId(line.key, 'quantity')}
+                  error={errors[errorKey(line.key, 'quantity')]}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      className="form-input w-full"
+                      value={line.quantity}
+                      onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
+                    />
+                  )}
+                </FormField>
 
-                <div className="sm:col-span-2">
-                  <label htmlFor={`${line.key}-lot`} className="form-label">
-                    Lot #
-                  </label>
-                  <input
-                    id={`${line.key}-lot`}
-                    className="form-input w-full"
-                    value={line.lot_number}
-                    onChange={(e) => updateLine(line.key, { lot_number: e.target.value })}
-                  />
-                </div>
+                <FormField
+                  className="sm:col-span-2"
+                  label="Lot #"
+                  id={controlId(line.key, 'lot')}
+                  error={errors[errorKey(line.key, 'lot')]}
+                  maxLength={LOT_NUMBER_MAX}
+                  count={line.lot_number.length}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="text"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      className="form-input w-full"
+                      value={line.lot_number}
+                      onChange={(e) => updateLine(line.key, { lot_number: e.target.value })}
+                    />
+                  )}
+                </FormField>
 
-                <div className="sm:col-span-2">
-                  <label htmlFor={`${line.key}-exp`} className="form-label">
-                    Expires
-                  </label>
-                  <input
-                    id={`${line.key}-exp`}
-                    type="date"
-                    className="form-input w-full"
-                    value={line.expiration_date}
-                    onChange={(e) => updateLine(line.key, { expiration_date: e.target.value })}
-                  />
-                </div>
+                <FormField
+                  className="sm:col-span-2"
+                  label="Expires"
+                  id={controlId(line.key, 'expiration')}
+                  error={errors[errorKey(line.key, 'expiration')]}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="date"
+                      className="form-input w-full"
+                      value={line.expiration_date}
+                      onChange={(e) => updateLine(line.key, { expiration_date: e.target.value })}
+                    />
+                  )}
+                </FormField>
 
                 <div className="flex items-end sm:col-span-1">
                   <button

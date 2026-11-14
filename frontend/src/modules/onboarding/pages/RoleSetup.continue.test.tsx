@@ -279,3 +279,23 @@ describe('an unsaved rank edit', () => {
     expect(toastError).toHaveBeenCalledWith(expect.stringContaining('rank you are editing'));
   });
 });
+
+// W01-13: the Remove buttons and the View / Manage toggles were 24px at phone
+// width. jsdom cannot measure, so this pins the utility that sizes them.
+describe('Ranks & Positions touch targets', () => {
+  it('gives the row and permission controls the phone touch minimum', async () => {
+    const user = userEvent.setup();
+    renderStep();
+
+    const removes = screen.getAllByRole('button', { name: /^remove .* position$/i });
+    expect(removes.length).toBeGreaterThan(10);
+    for (const button of removes) expect(button).toHaveClass('touch-target-phone');
+
+    await user.click(screen.getByRole('button', { name: /^captain - click to expand permissions$/i }));
+    const toggles = screen.getAllByRole('button', { name: /(view|manage) permission for/i });
+    expect(toggles.length).toBeGreaterThan(0);
+    for (const button of toggles) expect(button).toHaveClass('touch-target-phone');
+    expect(screen.getByRole('button', { name: /continue to stations/i })).toHaveClass('touch-target-phone');
+    expect(screen.getByRole('button', { name: /create custom position/i })).toHaveClass('touch-target-phone');
+  });
+});

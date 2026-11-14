@@ -6,7 +6,7 @@
  * each room's form carries a "Located inside" parent picker.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router';
 import { Check, Copy, CornerDownRight, DoorOpen, Plus, Trash2, Loader2, Pencil, QrCode, Save } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -22,8 +22,12 @@ import { buildRoomTree, collectSubtreeIds, orderRoomsByHierarchy } from '../room
 import { blankToNull, numberOrNull } from '../../../utils/formValues';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatNumber } from '../../../utils/dateFormatting';
-
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+
 interface Props {
   facilityId: string;
   canCreate: boolean;
@@ -80,6 +84,36 @@ const emptyForm = {
   equipment: '',
   parent_room_id: '',
 };
+type RoomForm = typeof emptyForm;
+type RoomField = Exclude<keyof RoomForm, 'equipment'>;
+
+// Ordered as on screen, so the first refusal takes focus. Limits mirror
+// FacilityRoomBase.
+const ROOM_FIELDS: FieldSpecs<RoomField> = {
+  name: { id: 'room-name', label: 'Name' },
+  room_number: { id: 'room-number', label: 'Room number' },
+  parent_room_id: { id: 'room-parent', label: 'Located inside' },
+  room_type: { id: 'room-type', label: 'Type' },
+  zone_classification: { id: 'room-zone', label: 'Zone' },
+  floor: { id: 'room-floor', label: 'Floor' },
+  capacity: { id: 'room-capacity', label: 'Capacity' },
+  square_footage: { id: 'room-sqft', label: 'Sq. footage' },
+  description: { id: 'room-description', label: 'Description' },
+};
+const ROOM_ORDER = Object.keys(ROOM_FIELDS) as RoomField[];
+const ROOM_LIMITS = { name: 200, room_number: 50 } as const;
+
+/** Whole-number checks the schema makes, said on the field before sending. */
+function numberProblem(text: string, min: number | null): string | null {
+  const t = text.trim();
+  if (!t) return null;
+  const n = Number(t);
+  if (!Number.isInteger(n) || (min != null && n < min))
+    return min != null
+      ? `Enter a whole number, ${min} or more, or leave it empty.`
+      : 'Enter a whole number, or leave it empty.';
+  return null;
+}
 
 export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete }: Props) {
   const { confirm } = useConfirm();
@@ -90,7 +124,15 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
   const [showForm, setShowForm] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [formData, setFormData] = useState(emptyForm);
+  const [formData, setFormData] = useState<RoomForm>(emptyForm);
+  // What the form held when it opened (or last saved), so Cancel asks before
+  // throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState<RoomForm>(emptyForm);
+  const roomErrors = useFieldErrors(ROOM_FIELDS);
+  const set = (patch: Partial<RoomForm>) => {
+    setFormData((p) => ({ ...p, ...patch }));
+    for (const key of Object.keys(patch)) roomErrors.setError(key as RoomField, null);
+  };
 
   const loadRooms = useCallback(async () => {
     setIsLoading(true);
@@ -136,19 +178,28 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
 
   const resetForm = () => {
     setFormData(emptyForm);
+    setBaseline(emptyForm);
+    roomErrors.clear();
     setEditingRoom(null);
     setShowForm(false);
   };
+  const requestCancel = useDiscardGuard({
+    isDirty: showForm && JSON.stringify(formData) !== JSON.stringify(baseline),
+    onClose: resetForm,
+  });
 
   const openCreate = (parentRoomId = '') => {
     setEditingRoom(null);
-    setFormData({ ...emptyForm, parent_room_id: parentRoomId });
+    const seeded = { ...emptyForm, parent_room_id: parentRoomId };
+    setFormData(seeded);
+    setBaseline(seeded);
+    roomErrors.clear();
     setShowForm(true);
   };
 
   const openEdit = (room: Room) => {
     setEditingRoom(room);
-    setFormData({
+    const seeded: RoomForm = {
       name: room.name || '',
       room_number: room.roomNumber || '',
       floor: room.floor != null ? String(room.floor) : '',
@@ -159,13 +210,30 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
       description: room.description || '',
       equipment: room.equipment || '',
       parent_room_id: room.parentRoomId || '',
-    });
+    };
+    setFormData(seeded);
+    setBaseline(seeded);
+    roomErrors.clear();
     setShowForm(true);
   };
 
-  const handleSave = async () => {
-    if (!formData.name.trim()) {
-      toast.error('Room name is required');
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // Named on the field rather than in a toast that vanished (forms review F-3).
+    const problems: FieldErrors<RoomField> = {};
+    if (!formData.name.trim()) problems.name = 'Enter a name for the room.';
+    const floor = numberProblem(formData.floor, null);
+    if (floor) problems.floor = floor;
+    const capacity = numberProblem(formData.capacity, 0);
+    if (capacity) problems.capacity = capacity;
+    const sqft = numberProblem(formData.square_footage, 0);
+    if (sqft) problems.square_footage = sqft;
+    roomErrors.setFormError(null);
+    roomErrors.setErrors(problems);
+    // A new room is not added until every field is fixed; an edit saves the
+    // rest and keeps a refused field's stored value (owner rule, 2026-11-05).
+    if (!editingRoom && Object.keys(problems).length > 0) {
+      roomErrors.focusFirst(problems);
       return;
     }
     setIsSaving(true);
@@ -185,7 +253,26 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
           description: blankToNull(formData.description),
           equipment: blankToNull(formData.equipment),
         };
-        await facilitiesService.updateRoom(editingRoom.id, payload);
+        const { refused } = await saveExceptRefused<RoomField, unknown>({
+          payload: { ...payload },
+          refused: problems,
+          send: (body) => facilitiesService.updateRoom(editingRoom.id, body),
+          place: (err) => placeApiError(ROOM_FIELDS, err),
+        });
+        const first = firstRefused(ROOM_ORDER, refused);
+        if (first) {
+          // The tree refreshes behind the form, which stays open with the
+          // refused field flagged; only that field still counts as unsaved.
+          void loadRooms();
+          roomErrors.setErrors(refused);
+          roomErrors.setFormError(
+            `Room saved, except ${ROOM_FIELDS[first].label.toLowerCase()}. Fix it and save again.`
+          );
+          roomErrors.focusFirst(refused);
+          const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, baseline[k as RoomField]]));
+          setBaseline({ ...formData, ...keep });
+          return;
+        }
         toast.success('Room updated');
       } else {
         // Create: omit the blanks so "" never reaches a Pydantic validator.
@@ -208,9 +295,11 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
       resetForm();
       void loadRooms();
     } catch (err: unknown) {
-      // Nesting rejections ("a room cannot be placed inside one of its own
-      // sub-rooms") only make sense if the reason survives the toast.
-      toast.error(getErrorMessage(err, 'Failed to save room'));
+      // A refused field is flagged on that field (forms review F-2). Nesting
+      // rejections ("a room cannot be placed inside one of its own sub-rooms")
+      // name no field, and are said in the form so the reason stays readable.
+      const placed = roomErrors.setFromApiError(err, 'Failed to save room');
+      roomErrors.focusFirst(placed);
     } finally {
       setIsSaving(false);
     }
@@ -418,145 +507,199 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
       <div className="p-4">
         {/* Add/Edit Form */}
         {showForm && (editingRoom ? canEdit : canCreate) && (
-          <div className="bg-theme-surface-hover/50 mb-5 space-y-3 rounded-lg p-4">
+          <form
+            onSubmit={(e) => void handleSave(e)}
+            noValidate
+            className="bg-theme-surface-hover/50 mb-5 space-y-3 rounded-lg p-4"
+          >
             <h3 className="text-theme-text-primary text-sm font-medium">{editingRoom ? 'Edit Room' : 'Add Room'}</h3>
+            {roomErrors.formError && (
+              <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                {roomErrors.formError}
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <div>
-                <label className={labelCls} htmlFor="room-name">
-                  Name *
-                </label>
-                <input
-                  id="room-name"
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="e.g., Engine Bay 1"
-                  className={inputCls}
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className={labelCls} htmlFor="room-number">
-                  Room Number
-                </label>
-                <input
-                  id="room-number"
-                  type="text"
-                  value={formData.room_number}
-                  onChange={(e) => setFormData((p) => ({ ...p, room_number: e.target.value }))}
-                  placeholder="e.g., 101"
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls} htmlFor="room-parent">
-                  Located Inside
-                </label>
-                <select
-                  id="room-parent"
-                  value={formData.parent_room_id}
-                  onChange={(e) => setFormData((p) => ({ ...p, parent_room_id: e.target.value }))}
-                  className={inputCls}
-                >
-                  <option value="">Facility (top level)</option>
-                  {parentOptions.map((node) => (
-                    <option key={node.room.id} value={node.room.id}>
-                      {/* Non-breaking spaces: a select collapses ordinary option indentation */}
-                      {`${'  '.repeat(node.depth)}${node.room.name}`}
-                      {node.room.roomNumber ? ` (#${node.room.roomNumber})` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelCls} htmlFor="room-type">
-                  Type
-                </label>
-                <select
-                  id="room-type"
-                  value={formData.room_type}
-                  onChange={(e) => setFormData((p) => ({ ...p, room_type: e.target.value }))}
-                  className={inputCls}
-                >
-                  {ROOM_TYPE_OPTIONS.map((rt) => (
-                    <option key={rt} value={rt}>
-                      {enumLabel(rt)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelCls} htmlFor="room-zone">
-                  Zone
-                </label>
-                <select
-                  id="room-zone"
-                  value={formData.zone_classification}
-                  onChange={(e) => setFormData((p) => ({ ...p, zone_classification: e.target.value }))}
-                  className={inputCls}
-                >
-                  {ZONE_OPTIONS.map((z) => (
-                    <option key={z} value={z}>
-                      {enumLabel(z)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelCls} htmlFor="room-floor">
-                  Floor
-                </label>
-                <input
-                  id="room-floor"
-                  type="number"
-                  value={formData.floor}
-                  onChange={(e) => setFormData((p) => ({ ...p, floor: e.target.value }))}
-                  placeholder="1"
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls} htmlFor="room-capacity">
-                  Capacity
-                </label>
-                <input
-                  id="room-capacity"
-                  type="number"
-                  value={formData.capacity}
-                  onChange={(e) => setFormData((p) => ({ ...p, capacity: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls} htmlFor="room-sqft">
-                  Sq. Footage
-                </label>
-                <input
-                  id="room-sqft"
-                  type="number"
-                  value={formData.square_footage}
-                  onChange={(e) => setFormData((p) => ({ ...p, square_footage: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div className="col-span-2">
-                <label className={labelCls} htmlFor="room-description">
-                  Description
-                </label>
-                <input
-                  id="room-description"
-                  type="text"
-                  value={formData.description}
-                  onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
+              <FormField
+                id={ROOM_FIELDS.name.id}
+                label="Name"
+                required
+                error={roomErrors.errors.name}
+                labelClassName={labelCls}
+                maxLength={ROOM_LIMITS.name}
+                count={formData.name.length}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => set({ name: e.target.value })}
+                    placeholder="e.g., Engine Bay 1"
+                    className={inputCls}
+                    autoFocus
+                  />
+                )}
+              </FormField>
+              <FormField
+                id={ROOM_FIELDS.room_number.id}
+                label="Room Number"
+                error={roomErrors.errors.room_number}
+                labelClassName={labelCls}
+                maxLength={ROOM_LIMITS.room_number}
+                count={formData.room_number.length}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="text"
+                    value={formData.room_number}
+                    onChange={(e) => set({ room_number: e.target.value })}
+                    placeholder="e.g., 101"
+                    className={inputCls}
+                  />
+                )}
+              </FormField>
+              <FormField
+                id={ROOM_FIELDS.parent_room_id.id}
+                label="Located Inside"
+                error={roomErrors.errors.parent_room_id}
+                labelClassName={labelCls}
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    value={formData.parent_room_id}
+                    onChange={(e) => set({ parent_room_id: e.target.value })}
+                    className={inputCls}
+                  >
+                    <option value="">Facility (top level)</option>
+                    {parentOptions.map((node) => (
+                      <option key={node.room.id} value={node.room.id}>
+                        {/* Non-breaking spaces: a select collapses ordinary option indentation */}
+                        {`${'  '.repeat(node.depth)}${node.room.name}`}
+                        {node.room.roomNumber ? ` (#${node.room.roomNumber})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
+              <FormField
+                id={ROOM_FIELDS.room_type.id}
+                label="Type"
+                error={roomErrors.errors.room_type}
+                labelClassName={labelCls}
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    value={formData.room_type}
+                    onChange={(e) => set({ room_type: e.target.value })}
+                    className={inputCls}
+                  >
+                    {ROOM_TYPE_OPTIONS.map((rt) => (
+                      <option key={rt} value={rt}>
+                        {enumLabel(rt)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
+              <FormField
+                id={ROOM_FIELDS.zone_classification.id}
+                label="Zone"
+                error={roomErrors.errors.zone_classification}
+                labelClassName={labelCls}
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    value={formData.zone_classification}
+                    onChange={(e) => set({ zone_classification: e.target.value })}
+                    className={inputCls}
+                  >
+                    {ZONE_OPTIONS.map((z) => (
+                      <option key={z} value={z}>
+                        {enumLabel(z)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
+              <FormField
+                id={ROOM_FIELDS.floor.id}
+                label="Floor"
+                error={roomErrors.errors.floor}
+                labelClassName={labelCls}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    step={1}
+                    value={formData.floor}
+                    onChange={(e) => set({ floor: e.target.value })}
+                    placeholder="1"
+                    className={inputCls}
+                  />
+                )}
+              </FormField>
+              <FormField
+                id={ROOM_FIELDS.capacity.id}
+                label="Capacity"
+                error={roomErrors.errors.capacity}
+                labelClassName={labelCls}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    step={1}
+                    min={0}
+                    value={formData.capacity}
+                    onChange={(e) => set({ capacity: e.target.value })}
+                    className={inputCls}
+                  />
+                )}
+              </FormField>
+              <FormField
+                id={ROOM_FIELDS.square_footage.id}
+                label="Sq. Footage"
+                error={roomErrors.errors.square_footage}
+                labelClassName={labelCls}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    step={1}
+                    min={0}
+                    value={formData.square_footage}
+                    onChange={(e) => set({ square_footage: e.target.value })}
+                    className={inputCls}
+                  />
+                )}
+              </FormField>
+              <FormField
+                id={ROOM_FIELDS.description.id}
+                label="Description"
+                error={roomErrors.errors.description}
+                labelClassName={labelCls}
+                className="col-span-2"
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="text"
+                    value={formData.description}
+                    onChange={(e) => set({ description: e.target.value })}
+                    className={inputCls}
+                  />
+                )}
+              </FormField>
             </div>
             <div className="flex gap-2 pt-1">
               <button
-                onClick={() => {
-                  void handleSave();
-                }}
+                type="submit"
                 disabled={isSaving}
                 className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
               >
@@ -564,13 +707,14 @@ export default function RoomsSection({ facilityId, canCreate, canEdit, canDelete
                 {editingRoom ? 'Save Changes' : 'Save Room'}
               </button>
               <button
-                onClick={resetForm}
-                className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1.5 text-xs transition-colors"
+                type="button"
+                onClick={requestCancel}
+                className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 px-3 py-1.5 text-xs transition-colors"
               >
                 Cancel
               </button>
             </div>
-          </div>
+          </form>
         )}
 
         {/* Rooms List */}

@@ -27,9 +27,9 @@ export const DashboardOrientation: React.FC = () => {
   return (
     <section
       aria-labelledby="orientation-heading"
-      className="flex flex-col gap-3 rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-4 sm:flex-row sm:items-center sm:justify-between"
+      className="split-row gap-3 rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-4 sm:items-center"
     >
-      <div className="flex items-start gap-3">
+      <div className="split-row-main flex items-start gap-3">
         <GraduationCap className="mt-0.5 h-5 w-5 shrink-0 text-cyan-700 dark:text-cyan-400" aria-hidden="true" />
         <div>
           <p id="orientation-heading" className="text-theme-text-primary text-sm font-medium">
@@ -42,7 +42,7 @@ export const DashboardOrientation: React.FC = () => {
           </p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="split-row-aside flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={dismissPrompt}

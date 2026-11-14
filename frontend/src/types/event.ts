@@ -26,6 +26,8 @@ export interface Event {
   max_attendees?: number;
   allowed_rsvp_statuses?: RSVPStatus[];
   is_mandatory: boolean;
+  /** A session-attendance requirement counts this event; absent from an older backend. */
+  counts_toward_attendance?: boolean;
   mandatory_membership_types?: string[];
 
   allow_guests: boolean;
@@ -58,6 +60,10 @@ export interface Event {
   is_cancelled: boolean;
   cancellation_reason?: string;
   cancelled_at?: string;
+  /** Set when the event was postponed; postponed_from_start is its start before the first postponement. */
+  postponed_at?: string | null;
+  postponed_from_start?: string | null;
+  postponement_reason?: string | null;
   /**
    * Attendance lock. Set means the event is closed: check-in, attendee edits,
    * time corrections and deletion are all refused by the API until someone
@@ -87,6 +93,10 @@ export interface Event {
   /** Server-decided: may this caller decide the event's attendance requests
    * and hand it over. Detail endpoint only; false elsewhere. */
   can_manage_organizers?: boolean;
+  /** Server-decided: may this caller see and decide the event's attendance
+   * requests — the above, plus a fallback position holder a request was
+   * sent to. Detail endpoint only; false elsewhere. */
+  can_review_attendance_requests?: boolean;
   /** Server-decided: how this caller may use the attendance tools — the
    * roster, adding, checking in and removing members — or null. An
    * `organizer` may not write their own row. Detail endpoint only. */
@@ -265,8 +275,12 @@ export interface EventListItem {
   location_name?: string;
   requires_rsvp: boolean;
   is_mandatory: boolean;
+  /** A session-attendance requirement counts this event; absent from an older backend. */
+  counts_toward_attendance?: boolean;
   is_draft?: boolean;
   is_cancelled: boolean;
+  /** The start before the first postponement; absent for an event never postponed. */
+  postponed_from_start?: string | null;
   is_recurring?: boolean;
   recurrence_parent_id?: string;
   rsvp_count?: number;
@@ -424,6 +438,13 @@ export interface EventUpdate {
 
 export interface EventCancel {
   cancellation_reason: string;
+  send_notifications?: boolean;
+}
+
+export interface EventPostpone {
+  new_start_datetime: string;
+  new_end_datetime: string;
+  reason: string;
   send_notifications?: boolean;
 }
 
@@ -594,7 +615,9 @@ export interface GuestCheckInResult {
  * event. A prospect is named by first name and last initial only.
  */
 export interface GuestLookupResult {
-  status: 'prospect' | 'member' | 'not_found';
+  // A member account answers 'not_found': the page is public, and a distinct
+  // answer told anyone holding the link which addresses belong to members.
+  status: 'prospect' | 'not_found';
   display_name?: string | null | undefined;
   confirm_token?: string | null | undefined;
   message: string;
@@ -768,7 +791,8 @@ export interface RecurringEventCreate {
   attachments?: EventAttachment[] | undefined;
   allowed_rsvp_statuses?: RSVPStatus[] | undefined;
   template_id?: string | undefined;
-  /** Attached to every occurrence; refused on a rolling series. */
+  /** Attached to every occurrence. A rolling series copies them on to the
+   *  occurrences it adds later. */
   training_details?: EventTrainingDetails | undefined;
 }
 
@@ -1029,6 +1053,11 @@ export interface EventRequestListItem {
   task_completions?: Record<string, TaskCompletion>;
   event_date?: string;
   staffing_shift_id?: string;
+  /** Intake flagged it as arriving inside the department's lead time. */
+  short_notice?: boolean;
+  /** Seats on the live signup sheet; both null when the request has none. */
+  staffing_slots_filled?: number | null;
+  staffing_slots_total?: number | null;
   created_at: string;
 }
 

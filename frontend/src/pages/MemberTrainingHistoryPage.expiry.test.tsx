@@ -34,7 +34,8 @@ const record = (expiration_date: string): TrainingRecord =>
     course_name: `Cert ${expiration_date}`,
     training_type: 'certification',
     status: 'completed',
-    completion_date: '2024-09-30',
+    // Inside "This Year" on the faked date, so the default period lists it.
+    completion_date: '2026-03-02',
     expiration_date,
     hours_completed: 8,
   }) as unknown as TrainingRecord;

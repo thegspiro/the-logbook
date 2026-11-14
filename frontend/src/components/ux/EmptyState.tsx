@@ -46,6 +46,16 @@ export interface EmptyStateProps {
    *   `4` — inside a section titled `h3`.
    */
   headingLevel?: 1 | 2 | 3 | 4;
+  /**
+   * Tighter spacing for an empty state nested inside a padded card section.
+   *
+   * The default `py-12` and 64px icon are sized for an empty state that is the
+   * page's whole body. Inside a `card p-6` section they stack on the card's own
+   * padding and leave the section mostly blank space. `className` cannot undo
+   * this: Tailwind v4 orders utilities by its own rules, not by their position
+   * in the class string, so a passed `py-6` does not reliably beat `py-12`.
+   */
+  compact?: boolean;
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
@@ -56,20 +66,37 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   children,
   className = '',
   headingLevel = 2,
+  compact = false,
 }) => {
   const Heading = `h${headingLevel}` as const;
+  const hasActions = !!actions && actions.length > 0;
+  // A compact description drops its bottom margin when nothing follows it, so
+  // the card's own padding is the only space under the text.
+  const descriptionMargin = compact ? (hasActions || children ? 'mb-4' : '') : 'mb-6';
   return (
-    <div className={`animate-fade-in px-4 py-12 text-center ${className}`}>
+    <div
+      data-testid="empty-state"
+      className={`animate-fade-in px-4 text-center ${compact ? 'py-4' : 'py-12'} ${className}`}
+    >
       {Icon && (
-        <div className="from-theme-surface-secondary to-theme-surface-hover animate-bounce-subtle mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br shadow-sm">
-          <Icon className="text-theme-text-muted h-8 w-8" aria-hidden="true" />
+        <div
+          data-testid="empty-state-icon"
+          className={`from-theme-surface-secondary to-theme-surface-hover animate-bounce-subtle mx-auto flex items-center justify-center rounded-full bg-gradient-to-br shadow-sm ${
+            compact ? 'mb-3 h-12 w-12' : 'mb-5 h-16 w-16'
+          }`}
+        >
+          <Icon className={`text-theme-text-muted ${compact ? 'h-6 w-6' : 'h-8 w-8'}`} aria-hidden="true" />
         </div>
       )}
-      <Heading className="text-theme-text-primary mb-2 text-lg font-semibold">{title}</Heading>
+      <Heading className={`text-theme-text-primary font-semibold ${compact ? 'mb-1 text-base' : 'mb-2 text-lg'}`}>
+        {title}
+      </Heading>
       {description && (
-        <p className="text-theme-text-muted mx-auto mb-6 max-w-sm text-sm leading-relaxed">{description}</p>
+        <p className={`text-theme-text-muted mx-auto max-w-sm text-sm leading-relaxed ${descriptionMargin}`}>
+          {description}
+        </p>
       )}
-      {actions && actions.length > 0 && (
+      {hasActions && (
         <div className="flex flex-wrap items-center justify-center gap-3">
           {actions.map((action, index) => {
             const ActionIcon = action.icon;

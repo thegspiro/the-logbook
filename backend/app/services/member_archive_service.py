@@ -201,16 +201,42 @@ async def check_and_auto_archive(
             .options(selectinload(User.roles))
         )
         admins = admin_result.scalars().all()
-        admin_emails = []
-        for u in admins:
-            role_slugs = [r.slug for r in (u.roles or [])]
-            if any(r in role_slugs for r in ADMIN_NOTIFY_ROLE_SLUGS):
-                if u.email and member_receives_email(
-                    u.notification_preferences,
-                    EmailKind.MEMBERSHIP_ADMIN,
-                    department_required_kinds(org),
-                ):
-                    admin_emails.append(u.email)
+        notified = [
+            u
+            for u in admins
+            if any(r.slug in ADMIN_NOTIFY_ROLE_SLUGS for r in (u.roles or []))
+        ]
+        admin_emails = [
+            u.email
+            for u in notified
+            if u.email
+            and member_receives_email(
+                u.notification_preferences,
+                EmailKind.MEMBERSHIP_ADMIN,
+                department_required_kinds(org),
+            )
+        ]
+
+        # Every officer above gets a bell entry, whatever their email choices
+        # or the template switch: the email is optional, and it was this
+        # notice's only copy.
+        from app.services.officer_alert_copies import add_in_app_copies
+
+        member_name = member.display_name or "A member"
+        await add_in_app_copies(
+            db,
+            organization_id=str(organization_id),
+            recipient_ids=[str(u.id) for u in notified],
+            category="member_archived",
+            subject=f"Member archived: {member_name}",
+            message=(
+                f"{member_name} was archived automatically after returning all "
+                "department property."
+            ),
+            action_url=f"/members/{member.id}",
+            metadata={"user_id": str(member.id)},
+        )
+        await db.commit()
 
         if admin_emails and not archived_email_off:
             subject, html_body, text_body = await template_svc.render_stored_or_default(
@@ -263,12 +289,19 @@ async def reactivate_member(
     Returns a dict with reactivation details.
     Raises ValueError if the member cannot be reactivated.
     """
+    # Locked: the archived-status check and record_rejoin's "no open stint"
+    # check are both read-then-write, so two reactivations at once (a
+    # double-click) each passed and the member got two open service stints,
+    # counting their length of service twice. A locking read also sees the
+    # ACTIVE the first request committed, so the second is refused.
     result = await db.execute(
-        select(User).where(
+        select(User)
+        .where(
             User.id == user_id,
             User.organization_id == organization_id,
             User.deleted_at.is_(None),
         )
+        .with_for_update()
     )
     member = result.scalar_one_or_none()
     if not member:

@@ -27,6 +27,7 @@ import {
   Building2,
   CalendarClock,
   CalendarDays,
+  CalendarX,
   ClipboardCheck,
   ClipboardList,
   FileBarChart,
@@ -50,6 +51,7 @@ import {
   Route,
   SearchCheck,
   Shield,
+  ShieldCheck,
   SlidersHorizontal,
   Target,
   Telescope,
@@ -67,6 +69,17 @@ export interface TrainingAdminDestination {
   label: string;
   hint: string;
   icon: LucideIcon;
+  /**
+   * Permissions, any one of which the viewer needs on top of the hub's own
+   * `training.manage` to be offered this destination. Absent means the hub's
+   * gate is enough.
+   */
+  anyPermission?: readonly string[];
+  /**
+   * Extra words the command palette matches this destination on, beyond its
+   * label and hint — a fuller name a short tab label leaves out.
+   */
+  keywords?: readonly string[];
 }
 
 export interface TrainingAdminArea {
@@ -76,6 +89,15 @@ export interface TrainingAdminArea {
   icon: LucideIcon;
   destinations: TrainingAdminDestination[];
 }
+
+/**
+ * Who may use the compliance configuration screen. Thresholds and profiles
+ * decide who reads as compliant, so saving them takes `settings.manage` or
+ * `compliance.manage`, not `training.manage` — `PUT /compliance/config` and
+ * the page's own route both say so. Every link to that screen from inside the
+ * hub is gated on this list, so none is offered to someone it would turn away.
+ */
+export const COMPLIANCE_CONFIG_PERMISSIONS: readonly string[] = ['settings.manage', 'compliance.manage'];
 
 export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
   {
@@ -98,6 +120,13 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
     icon: ClipboardList,
     destinations: [
       { id: 'submissions', label: 'Submissions to Review', hint: 'Member-submitted training to approve', icon: Inbox },
+      {
+        id: 'waiver-requests',
+        label: 'Waiver Requests',
+        hint: 'Members asking to be excused from a session',
+        icon: CalendarX,
+        keywords: ['attendance waiver requests', 'excused'],
+      },
       { id: 'sessions', label: 'Sessions', hint: 'Scheduled classes and their attendance', icon: CalendarDays },
       { id: 'cohorts', label: 'Course Cohorts', hint: 'Groups taking a course together', icon: Users },
       { id: 'shift-reports', label: 'Shift Reports', hint: 'Training logged on shift', icon: FileText },
@@ -175,9 +204,10 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
     destinations: [
       {
         id: 'manual-entry',
-        label: 'Manual Entry Rules',
+        label: 'Manual Entry',
         hint: 'What members may record themselves',
         icon: PencilRuler,
+        keywords: ['manual entry rules'],
       },
       {
         id: 'practical-skills',
@@ -185,12 +215,46 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
         hint: 'Skills Testing, or sign-offs on shift reports',
         icon: Award,
       },
+      {
+        id: 'session-waivers',
+        label: 'Session Waivers',
+        hint: 'Whether members may ask to be excused from a session',
+        icon: CalendarX,
+        keywords: ['session waiver requests', 'attendance waiver policy'],
+      },
+      {
+        id: 'shift-evaluations',
+        label: 'Shift Evaluations',
+        hint: 'Evaluation forms for trainees and crews',
+        icon: ClipboardList,
+      },
+      {
+        // A way in from Settings & Data, where officers look for setup; the
+        // requirements themselves stay under Curriculum, which this links to.
+        // Its id differs from Curriculum's `requirements` because destination
+        // ids must be unique across the hub for the flat `?tab=` links.
+        id: 'requirements-link',
+        label: 'Requirements',
+        hint: 'Hours, certifications and courses members owe — opens Curriculum',
+        icon: ListChecks,
+      },
+      {
+        id: 'compliance-settings',
+        // Short so all of Settings & Data fits a 1280px screen; the palette
+        // still finds it by its full name.
+        label: 'Compliance',
+        hint: 'Thresholds, profiles and scheduled compliance reports',
+        icon: ShieldCheck,
+        keywords: ['compliance settings'],
+        anyPermission: COMPLIANCE_CONFIG_PERMISSIONS,
+      },
       { id: 'integrations', label: 'Integrations', hint: 'Connections to outside training systems', icon: Plug },
       {
         id: 'import',
-        label: 'Import Past Training',
+        label: 'Import History',
         hint: 'Upload training completed before The Logbook',
         icon: History,
+        keywords: ['import past training'],
       },
       { id: 'metrics', label: 'Headline Metrics', hint: 'The figures shown at the top of this page', icon: Activity },
     ],
@@ -217,12 +281,24 @@ const EVALUATIONS_DESCRIPTION: Record<PracticalSkillsMethod, string> = {
   [PracticalSkillsMethod.SHIFT_SIGNOFFS]: 'Skill sign-offs and knowledge tests',
 };
 
-/** The hub as this department sees it. */
-export const trainingAdminAreasFor = (method: PracticalSkillsMethod | null): TrainingAdminArea[] =>
+/** Whether a viewer holding these permissions may be offered the destination. */
+export const isPermittedDestination = (
+  destination: TrainingAdminDestination,
+  checkPermission: (permission: string) => boolean
+): boolean => !destination.anyPermission || destination.anyPermission.some(checkPermission);
+
+/** The hub as this department and this viewer see it. */
+export const trainingAdminAreasFor = (
+  method: PracticalSkillsMethod | null,
+  checkPermission: (permission: string) => boolean
+): TrainingAdminArea[] =>
   TRAINING_ADMIN_AREAS.map((area) => ({
     ...area,
     description: area.id === 'evaluations' && method !== null ? EVALUATIONS_DESCRIPTION[method] : area.description,
-    destinations: area.destinations.filter((destination) => !isHiddenByPracticalSkills(destination.id, method)),
+    destinations: area.destinations.filter(
+      (destination) =>
+        !isHiddenByPracticalSkills(destination.id, method) && isPermittedDestination(destination, checkPermission)
+    ),
   }));
 
 /** Element ids shared by the nav's tabs and the panels the page renders for them. */
@@ -238,6 +314,12 @@ export const tabPanelId = (area: string, tab: string) => `training-admin-tabpane
  */
 export const PROGRAM_WIZARD_VIEW = 'new';
 export const NEW_PROGRAM_HREF = `/training/admin?page=curriculum&tab=pipelines&view=${PROGRAM_WIZARD_VIEW}`;
+
+/** Curriculum's Requirements destination, which Settings & Data links to. */
+export const REQUIREMENTS_HREF = '/training/admin?page=curriculum&tab=requirements';
+
+/** The compliance configuration screen, a route of its own outside the hub. */
+export const COMPLIANCE_CONFIG_HREF = '/training/compliance-config';
 
 const DEFAULT_LOCATION = { area: 'dashboard', tab: 'overview' } as const;
 

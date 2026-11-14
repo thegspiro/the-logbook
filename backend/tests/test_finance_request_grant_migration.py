@@ -31,6 +31,22 @@ def _migration():
     return module
 
 
+#: Registered after this migration was written, and created on existing
+#: departments by a revision of their own with the grant already in place:
+#: the four seeded committees (2026-10-29, revision ``d8f1a4c27b93``), each
+#: inserted with a copy of the baseline list. There is no stored row for this
+#: frozen migration to repair, and it cannot be widened (CLAUDE.md pitfall
+#: #20).
+_REGISTERED_AFTER_THIS_MIGRATION = frozenset(
+    {
+        "community_outreach_team",
+        "history_committee",
+        "fundraising_committee",
+        "membership_committee",
+    }
+)
+
+
 @pytest.mark.unit
 class TestWhatItTargets:
     def test_exactly_the_seeded_positions_that_hold_the_grant(self):
@@ -41,6 +57,7 @@ class TestWhatItTargets:
             slug
             for slug, spec in DEFAULT_POSITIONS.items()
             if "finance.request" in spec["permissions"]
+            and slug not in _REGISTERED_AFTER_THIS_MIGRATION
         }
         assert set(_migration()._SLUGS) == seeded
 

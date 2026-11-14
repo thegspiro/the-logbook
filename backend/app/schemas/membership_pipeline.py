@@ -561,6 +561,11 @@ class ProspectListResponse(UTCResponseBase):
     deactivated_at: Optional[datetime] = None
     withdrawn_at: Optional[datetime] = None
     withdrawal_reason: Optional[str] = None
+    # A follow-up form changed this applicant's email or phone and no
+    # coordinator has marked it reviewed yet.
+    contact_change_pending: bool = False
+    # The caller's roles on this applicant; filled only by /my-applicants.
+    my_roles: List[str] = []
 
     model_config = _response_config
 
@@ -876,8 +881,18 @@ class TransferProspectRequest(BaseModel):
             "pipeline's conversion outcome for this applicant"
         ),
     )
-    member_status: Optional[ConversionStatus] = Field(
-        None, description="Starting status for the new member"
+    # A plain string rather than ``ConversionStatus``: besides the two built-in
+    # starting statuses the Convert dialog offers the department's own tiers
+    # (owner decision 2026-11-01), and only the organization knows those, so
+    # the service checks the value against its ladder before storing it.
+    member_status: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=50,
+        description=(
+            "Starting status for the new member: probationary, regular, or "
+            "one of the organization's membership tier ids"
+        ),
     )
     notes: Optional[str] = Field(
         None,
@@ -1100,3 +1115,199 @@ class InterviewResponse(UTCResponseBase):
     updated_at: datetime
 
     model_config = _response_config
+
+
+# --- Follow-up Form Schemas ---
+
+# Bounds for what a public follow-up request may carry. The field-by-field
+# limits are FormsService's; these stop a request large enough to cost memory
+# before those checks run.
+_FOLLOW_UP_MAX_ANSWERS = 500
+
+
+def _bounded_answers(value: Dict[str, Any]) -> Dict[str, Any]:
+    if len(value) > _FOLLOW_UP_MAX_ANSWERS:
+        raise ValueError(f"A form has at most {_FOLLOW_UP_MAX_ANSWERS} answers")
+    return value
+
+
+class FollowUpChange(BaseModel):
+    """One applicant-record value a follow-up submission changed."""
+
+    field: str
+    label: str
+    old: Optional[str] = None
+    new: Optional[str] = None
+    # False when the record was left as it was: an email address another open
+    # application already uses is recorded here for a coordinator instead.
+    applied: bool = True
+
+
+class FollowUpFormRequestResponse(UTCResponseBase):
+    """A follow-up form sent to an applicant, as the pipeline screens show it.
+
+    ``status`` is derived: ``not_sent`` while no email has gone out (mail is
+    off, or the send failed), ``sent`` until a draft is saved, ``draft`` after,
+    ``submitted`` once the applicant submits.
+    """
+
+    id: UUID
+    prospect_id: UUID
+    step_id: Optional[UUID] = None
+    step_name: Optional[str] = None
+    form_id: Optional[UUID] = None
+    form_name: Optional[str] = None
+    status: Literal["not_sent", "sent", "draft", "submitted"]
+    first_sent_at: Optional[datetime] = None
+    last_sent_at: Optional[datetime] = None
+    draft_saved_at: Optional[datetime] = None
+    submitted_at: Optional[datetime] = None
+    submission_id: Optional[UUID] = None
+    reminder_count: int = 0
+    last_reminder_at: Optional[datetime] = None
+    changes: List[FollowUpChange] = []
+    contact_changed: bool = False
+    contact_change_reviewed_at: Optional[datetime] = None
+    contact_change_reviewed_by_name: Optional[str] = None
+
+
+class ProspectAssignmentCreate(BaseModel):
+    """Assign a member to an applicant."""
+
+    user_id: UUID
+    role: Literal["case_manager", "interviewer"]
+
+
+class ProspectAssignmentResponse(UTCResponseBase):
+    """A member assigned to an applicant."""
+
+    id: UUID
+    prospect_id: UUID
+    user_id: UUID
+    user_name: Optional[str] = None
+    role: str
+    assigned_by_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class ProspectAccessResponse(BaseModel):
+    """What the caller may do with one applicant (app/services/prospect_access.py),
+    so the screen offers exactly the actions the backend will accept."""
+
+    roles: List[str] = []
+    view_all: bool = False
+    can_work: bool = False
+    can_manage: bool = False
+    can_see_full: bool = False
+    can_log_interview: bool = False
+    # The caller's most senior position, offered as the title an interview
+    # they log is signed with. A suggestion only; the form keeps it editable.
+    interviewer_title: Optional[str] = None
+
+
+class InterviewPositionProgress(BaseModel):
+    """One required interviewer position of an Interview Requirement stage."""
+
+    position: str
+    label: str
+    satisfied: bool
+
+
+class InterviewRequirementProgress(BaseModel):
+    """Where the applicant's current Interview Requirement stage stands.
+
+    ``recommendation_met`` is None when the stage asks for no recommendation,
+    and also for a caller who sees only their own interview: whether another
+    interviewer recommended the applicant is part of their assessment.
+    """
+
+    step_id: str
+    required_count: int
+    recorded_count: int
+    required_recommendation: Optional[str] = None
+    recommendation_met: Optional[bool] = None
+    positions: List[InterviewPositionProgress] = []
+    complete: bool
+
+
+class FollowUpAnswer(BaseModel):
+    """One answer of a submitted follow-up form.
+
+    A sensitive answer reaches a client only for a viewer holding
+    ``sensitive_answers.view``; for anyone else ``answer`` is None and
+    ``withheld`` is set.
+    """
+
+    field_id: str
+    label: str
+    answer: Optional[str] = None
+    is_sensitive: bool = False
+    withheld: bool = False
+
+
+class FollowUpAnswersResponse(UTCResponseBase):
+    """A submitted follow-up form's answers, as the Interview page shows them."""
+
+    request_id: UUID
+    step_name: Optional[str] = None
+    form_id: Optional[UUID] = None
+    form_name: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    answers: List[FollowUpAnswer] = []
+
+
+class PublicFollowUpFormField(BaseModel):
+    """A field of a follow-up form, as the applicant's page renders it."""
+
+    id: UUID
+    label: str
+    field_type: str
+    placeholder: Optional[str] = None
+    help_text: Optional[str] = None
+    required: bool = False
+    min_length: Optional[int] = None
+    max_length: Optional[int] = None
+    min_value: Optional[int] = None
+    max_value: Optional[int] = None
+    options: Optional[List[Dict[str, str]]] = None
+    condition_field_id: Optional[str] = None
+    condition_operator: Optional[str] = None
+    condition_value: Optional[str] = None
+    sort_order: int = 0
+    width: str = "full"
+    is_sensitive: bool = False
+
+    model_config = _response_config
+
+
+class PublicFollowUpFormResponse(UTCResponseBase):
+    """What the applicant's link opens: the form, filled with what is known.
+
+    ``values`` is the saved draft where there is one, and otherwise what the
+    applicant record holds for each pre-filled field.
+    """
+
+    form_name: str
+    form_description: Optional[str] = None
+    organization_name: Optional[str] = None
+    applicant_first_name: str
+    fields: List[PublicFollowUpFormField]
+    values: Dict[str, Any]
+    draft_saved_at: Optional[datetime] = None
+
+
+class PublicFollowUpAnswers(BaseModel):
+    """Answers sent from the applicant's page, as a draft or to submit."""
+
+    data: Dict[str, Any]
+
+    _check_data = field_validator("data")(_bounded_answers)
+
+
+class PublicFollowUpDraftResponse(UTCResponseBase):
+    draft_saved_at: datetime
+
+
+class PublicFollowUpSubmitResponse(UTCResponseBase):
+    submitted_at: datetime
+    message: str = "Thank you. Your answers have been sent to the department."

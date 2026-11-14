@@ -157,6 +157,19 @@ class TestAutomaticReport:
         # departed president get nothing.
         assert mailed == [["sec@test.com"], ["chief@test.com"]]
 
+    async def test_the_report_names_the_type_in_words(self, db_session: AsyncSession):
+        """W50-76: the report printed the stored "ballot" as "Type: ballot"."""
+        dept = await _Department(db_session).create()
+        creator = await dept.member("sec", position="secretary")
+        election_id = await dept.closed_election(creator)
+
+        with patch(SEND_REPORT, new=AsyncMock(return_value=(1, 0))) as send_report:
+            await ElectionService(db_session).generate_and_send_election_report(
+                uuid.UUID(election_id), uuid.UUID(dept.org_id)
+            )
+
+        assert send_report.call_args.kwargs["election_type"] == "Ballot"
+
     async def test_a_creator_who_has_left_does_not_receive_it(
         self, db_session: AsyncSession
     ):

@@ -6,6 +6,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 import userEvent from '@testing-library/user-event';
 import type { StoreOrderWindow } from '../types';
 
@@ -42,7 +43,8 @@ const scheduled = {
 
 const openTheDialog = async (props: { storeIsLive?: boolean; onOpenSettings?: () => void }) => {
   const user = userEvent.setup();
-  render(<StoreWindowsTab onChanged={vi.fn()} {...props} />);
+  // The order-window dialog asks before discarding, which needs the app shell's ConfirmProvider.
+  render(<StoreWindowsTab onChanged={vi.fn()} {...props} />, { wrapper: ConfirmProvider });
   await user.click(await screen.findByRole('button', { name: /Open ordering/ }));
   return { user, dialog: screen.getByRole('dialog', { name: 'Open ordering' }) };
 };

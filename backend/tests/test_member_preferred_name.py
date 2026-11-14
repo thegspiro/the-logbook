@@ -15,6 +15,7 @@ from app.api.v1.endpoints.users import update_user_profile
 from app.models.user import Organization, User, UserStatus
 from app.schemas.user import AdminUserCreate, UserListResponse, UserUpdate
 from app.utils.member_names import format_display_name, format_legal_name
+from tests.fake_request import fake_request
 
 
 @pytest.mark.unit
@@ -120,7 +121,7 @@ class TestSelfServiceUpdate:
             "app.api.v1.endpoints.users.log_audit_event", new=AsyncMock()
         ) as audit:
             response = await update_user_profile(
-                uuid.UUID(member.id), body, db_session, member
+                uuid.UUID(member.id), body, db_session, member, request=fake_request()
             )
         return response, audit
 

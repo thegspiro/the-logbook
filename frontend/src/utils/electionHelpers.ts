@@ -42,6 +42,26 @@ export const getTimeRemaining = (endDate: string): string | null => {
  * Uses opacity-based backgrounds (e.g. `bg-green-500/10`) for consistent
  * appearance across light, dark, and high-contrast themes.
  */
+/** The word an election's status badge shows. The badge used to print the
+ * raw enum (`draft`, `open`) while the filter pills beside it capitalised it
+ * (W50-74); both now read from here. */
+const ELECTION_STATUS_LABELS: Record<string, string> = {
+  [ElectionStatus.DRAFT]: 'Draft',
+  [ElectionStatus.NOMINATIONS]: 'Nominations',
+  [ElectionStatus.OPEN]: 'Open',
+  [ElectionStatus.CLOSED]: 'Closed',
+  [ElectionStatus.CANCELLED]: 'Cancelled',
+};
+
+export const getStatusLabel = (status: string): string =>
+  ELECTION_STATUS_LABELS[status] ?? status.charAt(0).toUpperCase() + status.slice(1);
+
+/** Whether a runoff's title already ends in "- Runoff Round N", the form the
+ * backend generates (`_RUNOFF_SUFFIX` in election_service.py). The detail
+ * header then shows no separate round badge, which only repeated it. */
+export const titleNamesRunoffRound = (title: string, round: number | null | undefined): boolean =>
+  round != null && new RegExp(`-\\s*Runoff Round\\s+${round}\\s*$`, 'i').test(title);
+
 export const getStatusBadgeClass = (status: string): string => {
   switch (status) {
     case ElectionStatus.OPEN:
@@ -151,6 +171,19 @@ export const isBallotItemOption = (
   candidate: Pick<Candidate, 'position' | 'is_write_in'>,
   itemTitles: Map<string, string>
 ): boolean => !candidate.is_write_in && candidate.position !== undefined && itemTitles.has(candidate.position);
+
+/**
+ * The candidates the Candidates tab lists: every row but a ballot item's
+ * Approve/Deny options. The tab's badge counts this same list, so the two
+ * cannot disagree.
+ */
+export const nomineesOf = <T extends Pick<Candidate, 'position' | 'is_write_in'>>(
+  candidates: T[],
+  ballotItems: BallotItem[] | undefined
+): T[] => {
+  const itemTitles = ballotItemTitlesById(ballotItems);
+  return candidates.filter((c) => !isBallotItemOption(c, itemTitles));
+};
 
 interface RecipientValidationEntry {
   field?: string;

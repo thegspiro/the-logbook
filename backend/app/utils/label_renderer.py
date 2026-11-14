@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Any, Dict, Optional
 
+from app.utils.print_geometry import print_at_actual_size
+
 # 5 mil is the minimum X-dimension commonly readable by handheld scanners and
 # one dot at 203 dpi thermal resolution — narrower cannot be printed at all.
 # Public because the ZPL renderer sizes against the same physical floor; two
@@ -331,6 +333,15 @@ class LabelSpec:
 # Avery 5160: the only sheet format, and the one the print pages lay out.
 SHEET_COLUMNS = 3
 SHEET_LABELS_PER_PAGE = 30
+# Avery's published 5160 geometry, in inches. Columns sit 2.75" apart — a
+# 2.625" label plus a 0.125" gutter — from a 0.1875" side margin. Laying the
+# columns edge to edge instead (as this renderer did until 2026-11-09) centres
+# the middle column but prints the outer two 1/8" off their labels.
+SHEET_LABEL_WIDTH_IN = 2.625
+SHEET_LABEL_HEIGHT_IN = 1.0
+SHEET_COLUMN_PITCH_IN = 2.75
+SHEET_SIDE_MARGIN_IN = 0.1875
+SHEET_TOP_MARGIN_IN = 0.5
 
 
 def render_labels(
@@ -403,14 +414,16 @@ def _render_sheet(
 
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=letter)
-    page_w, page_h = letter
+    print_at_actual_size(c)
+    _, page_h = letter
 
     cols = SHEET_COLUMNS
     rows = SHEET_LABELS_PER_PAGE // SHEET_COLUMNS
-    label_w = 2.625 * inch
-    label_h = 1.0 * inch
-    margin_x = (page_w - cols * label_w) / 2
-    margin_y = 0.5 * inch
+    label_w = SHEET_LABEL_WIDTH_IN * inch
+    label_h = SHEET_LABEL_HEIGHT_IN * inch
+    pitch_x = SHEET_COLUMN_PITCH_IN * inch
+    margin_x = SHEET_SIDE_MARGIN_IN * inch
+    margin_y = SHEET_TOP_MARGIN_IN * inch
     labels_per_page = cols * rows
     padding = 0.06 * inch
 
@@ -422,7 +435,7 @@ def _render_sheet(
         col = pos % cols
         row = pos // cols
 
-        x = margin_x + col * label_w
+        x = margin_x + col * pitch_x
         y = page_h - margin_y - (row + 1) * label_h
 
         barcode_value = sanitize_barcode_value(spec.barcode_value)
@@ -498,6 +511,7 @@ def _render_thermal(
 
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=page_size)
+    print_at_actual_size(c)
     padding = 0.08 * inch
 
     for idx, spec in enumerate(specs):

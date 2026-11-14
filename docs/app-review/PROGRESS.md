@@ -25,8 +25,8 @@ been through a review pass.
 | A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ✅     |
 | A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ✅     |
 | A7  | Dashboard & action items       | `endpoints/dashboard.py` (1452 L, 7 routes), `services/attendance_dashboard_service.py` (329 L), `dashboard_widget_service.py`; `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`, `components/dashboard/`                                             | DASH   | ✅     |
-| A8  | Locations & kiosk              | `endpoints/locations.py` (434 L, 8 routes), `services/location_service.py` (394 L), `api/public/display.py` (550 L, 4 routes); `pages/LocationKioskPage.tsx`, `RoomCheckInPage.tsx`, `RoomQRCodesPage.tsx`                                                                | LOC    | ✅     |
-| A9  | Platform ops & data lifecycle  | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (165 L), `data_export_service.py` (192 L), `separation_of_duties.py` (70 L, 20 call sites in 8 modules)                                                                                           | OPS    | ✅     |
+| A8  | Locations & kiosk              | `endpoints/locations.py` (434 L, 8 routes), `services/location_service.py` (394 L), `api/public/display.py` (550 L, 4 routes); `pages/LocationKioskPage.tsx`, `RoomCheckInPage.tsx`, `RoomQRCodesPage.tsx`                                                                | LOC    | ⬜     |
+| A9  | Platform ops & data lifecycle  | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (165 L), `data_export_service.py` (192 L), `separation_of_duties.py` (70 L, 20 call sites in 8 modules)                                                                                           | OPS    | ⬜     |
 
 ## Tier B — second pass over the audited 27
 
@@ -39,35 +39,40 @@ from its open list.
 
 | #   | Feature                    | Prefix | Status |
 | --- | -------------------------- | ------ | ------ |
-| B1  | medical-screening          | MS2    | ✅     |
-| B2  | apparatus                  | AP2    | ✅     |
-| B3  | inventory                  | INV2   | ✅     |
-| B4  | facilities                 | FAC2   | ✅     |
-| B5  | elections                  | ELEC2  | ✅     |
-| B6  | meetings & minutes         | MM2    | ✅     |
-| B7  | equipment-check            | EC2    | ✅     |
-| B8  | documents                  | DOC2   | ✅     |
-| B9  | membership pipeline        | MP2    | ✅     |
-| B10 | messaging & communications | MSG2   | ✅     |
-| B11 | notifications              | NOTIF2 | ✅     |
-| B12 | integrations               | INT2   | ✅     |
-| B13 | forms                      | FORM2  | ✅     |
-| B14 | grants & fundraising       | GF2    | ✅     |
-| B15 | admin-hours                | AH2    | ✅     |
-| B16 | reports & analytics        | RPT2   | ✅     |
-| B17 | events                     | EV2    | ✅     |
-| B18 | training                   | TR2    | ✅     |
-| B19 | scheduling                 | SCH2   | ✅     |
-| B20 | finance                    | FIN2   | ✅     |
-| B21 | orgs, roles & users        | ORU2   | ✅     |
-| B22 | compliance & skills        | CS2    | ✅     |
-| B23 | security, audit & IP       | SEC2   | ✅     |
+| B1  | medical-screening          | MS2    | ⬜     |
+| B2  | apparatus                  | AP2    | ⬜     |
+| B3  | inventory                  | INV2   | ⬜     |
+| B4  | facilities                 | FAC2   | ⬜     |
+| B5  | elections                  | ELEC2  | ⬜     |
+| B6  | meetings & minutes         | MM2    | ⬜     |
+| B7  | equipment-check            | EC2    | ⬜     |
+| B8  | documents                  | DOC2   | ⬜     |
+| B9  | membership pipeline        | MP2    | ⬜     |
+| B10 | messaging & communications | MSG2   | ⬜     |
+| B11 | notifications              | NOTIF2 | ⬜     |
+| B12 | integrations               | INT2   | ⬜     |
+| B13 | forms                      | FORM2  | ⬜     |
+| B14 | grants & fundraising       | GF2    | ⬜     |
+| B15 | admin-hours                | AH2    | ⬜     |
+| B16 | reports & analytics        | RPT2   | ⬜     |
+| B17 | events                     | EV2    | ⬜     |
+| B18 | training                   | TR2    | ⬜     |
+| B19 | scheduling                 | SCH2   | ⬜     |
+| B20 | finance                    | FIN2   | ⬜     |
+| B21 | orgs, roles & users        | ORU2   | ⬜     |
+| B22 | compliance & skills        | CS2    | ⬜     |
+| B23 | security, audit & IP       | SEC2   | ⬜     |
 | B24 | core infra                 | CI2    | ⬜     |
 | B25 | onboarding                 | ONB2   | ⬜     |
 | B26 | public-portal              | PP2    | ⬜     |
 | B27 | frontend shared            | FE2    | ⬜     |
 
 **36 features total.** After B27 the rotation wraps to A1.
+
+**Pass 6 (fresh, opened 2026-11-02).** Both tiers reset to ⬜ at the owner's direction, Tier A first (its
+surfaces carry the most money and security risk), one feature per branch and per pull request. A pass-6
+iteration starts from the delta since that feature's last pass and from any entry still marked OPEN,
+not from a fresh sweep, and looks for the same defect class in neighbouring code.
 
 **Pass 2 (fresh, opened 2026-08-06).** Tier B reset to ⬜ at the owner's
 direction after the first full rotation completed. Tier A (A1–A9) stays ✅ —
@@ -3458,3 +3463,137 @@ secrets redacted for non-admins. See
   request from one member is not refused. **Not re-run:** the other five checklist dimensions; SEC-2's
   tail-truncation residual stays open. Gate: flake8 / black clean · 1,298 related tests pass · new file
   3 pass, unit-marked. See security-audit-ip.md → Pass 5. Next: B24 core infra.
+- **B24 core infra ✅ (pass 5) — the shared null-refusal base class had no test of its own
+  (CI2-1).** Foundation code with no endpoints, so the update-payload and state-machine lenses had
+  nothing to drive; the pass looked at what this rotation added to the foundation. **Closed** —
+  `RefusesNull`, now behind 17 schemas, was exercised only by other modules' integration tests, and
+  nothing checked that a subclass's `null_refused` names real fields (a typo refuses nothing and reads as
+  protection). `test_refuses_null.py` (42 unit tests, DB-free) covers the behaviour and sweeps every
+  subclass; it found no existing typo and fails when one is introduced. **Open (owner):**
+  `with_db_retry` / `retry_on_db_error` are used by no application code (only `is_transient_db_error` is);
+  pitfall #36 lists them, so they stay, with a docstring now saying reads only. **Verified good:** the six
+  in-memory caches are bounded; requirements pins. **Not re-run:** the other checklist dimensions; CI-9,
+  CI-4, CI-10 and CI-11 stay open. Gate: flake8 / black clean · 1,007 related tests pass · new file 42 pass,
+  unit-marked. See core-infra.md → Pass 5. Next: B25 onboarding.
+- **B25 onboarding ✅ (pass 5).** Pitfall #27/#36 lens on the steps that replace
+  their own earlier rows. **ONB2-3 FIXED:** `/session/stations` and
+  `/session/apparatus` read the previous pass's ids from the session and then
+  inserted, unlocked — a double-submit left both sets of rows, with only the last
+  recorded, so the duplicates could never be replaced. Now serialised by
+  `_lock_session_for_step` (status row, then session row, locking refresh) ahead
+  of the completion check. Race test red→green (2 rows → 1). Pass-1 LOW items
+  re-verified closed. `/session/roles` simultaneous double-submit noted, not
+  fixed. See onboarding.md. Next: B26 public-portal.
+- **B26 public-portal ✅ (pass 5).** Pitfall #27/#36 lens on the unauthenticated
+  writes. **PP2-2 FIXED:** `check_in_guest` was find-then-insert with no lock, so a
+  double scan of the guest QR (or a retried POST) inserted two attendee rows and
+  counted the guest twice; now serialized on the event row with a locking lookup,
+  covering both the guest-QR and room-kiosk paths. Race test red→green. Verified
+  fine: finance token approvals (already `FOR UPDATE`), Documenso/Cal.com/
+  Salesforce/PayPal webhooks. PP-6 and PP-7 residual unchanged. See
+  public-portal.md. Next: B27 frontend shared.
+- **B27 frontend shared ✅ (pass 5) — final row of the rotation.** Measured the
+  hand-maintained `UNCACHEABLE_PREFIXES` against the API: parsed the list, walked
+  every non-excluded GET route's response schema for member-identifying fields
+  (94 hits, nearly all an object's own `name` or a business contact). **FE2-1
+  FIXED:** `/reports/saved` (recipients' emails) and `/public-portal/access-logs`
+  (external IPs) added to the list, two tests red→green. **FE2-2 FLAGGED:**
+  `/inventory/items/{id}` names the holder and is cacheable, but FE9-34 decided
+  the item detail stays cacheable and pins it with a test — not reversed here;
+  owner decision recorded in KNOWN_LIMITATIONS.md. Suggested follow-up: a backend
+  guard test for the list. See frontend-shared.md. Rotation complete: all 27 Tier B
+  rows ✅.
+- **A1 storefront & payments ✅ (pass 6, 2026-11-02) — no code change.** Took the delta since pass 5
+  instead of re-sweeping. **Verified:** the email/phone encryption left no storefront query matching an
+  encrypted column (the order search uses `customer_email_hash`); order-number allocation is settled by
+  `uq_store_orders_org_number` plus a savepoint retry; a payment stranded between the event commit and
+  the apply reaches the reconciliation queue and admin hub because `MATCHED` is counted unresolved
+  (that dependency is now written down). **Corrected:** SF-3 was still marked OPEN, but the
+  `IntegrityError` handler it asked for landed 2026-10-06 and is guarded by
+  `test_a_concurrent_duplicate_returns_the_row_that_won` (fails with the handler disabled). Pass 6 reset
+  both tiers. See storefront.md → Pass 6. Next: A2 auth & session lifecycle.
+- **A2 auth & session lifecycle ✅ (pass 6, 2026-11-02) — 1 fixed.** The passkey, step-up and kiosk
+  features were not re-reviewed (security-review pass 13 read them in full). Took the single-use-secret
+  lens instead: TOTP, recovery codes, passkey challenges, training and finance approval links all have one
+  winner under concurrency. **AUTH-24 FIXED:** the password-reset link was not single-use when submitted
+  twice at once. Reproduced on MariaDB as a deadlock (error 1213), not a double success. The obvious
+  `.with_for_update()` on the token lookup still deadlocks, because `password_reset_token` is a non-unique
+  index and a locking read through it takes gap locks that the winner's `UPDATE` then blocks on; the fix
+  re-reads the user by primary key under a lock, as AUTH-9 and AUTH-13 do. Race test red→green, stable over
+  five runs. Auth/password/reset/MFA/passkey/login/session tests: 1,460 passed, 1 skipped. Worth a sentence
+  in pitfall #27's rule text (owner's call). See auth-session.md → Pass 6. Next: A3 scheduled tasks & cron.
+- **A3 scheduled tasks & cron ✅ (pass 6, 2026-11-02) — 1 fixed, 1 flagged.** Pass 5 had recorded the delta
+  as nil; it is now 28 more runners and 77 commits, 20 of the runners named in no review. Lens: pitfall #36,
+  _if the task runs twice does the member get two emails?_ — and the scheduler makes that routine, because
+  `last_run` is held in memory and seeded to zero, so every restart runs every task at once. Of the 11
+  runners that send from their own body, four are guarded by design and several delegate to services with a
+  sent-log. **CRON-41 FIXED (MED):** `run_inventory_overdue_alerts` re-sent the overdue-gear email to every
+  member holding gear on every deploy; it now keeps an email-channel `NotificationLog` sent-log, one email
+  per member per department calendar day, written after the send and per member, no migration. Real-database
+  test red→green (two runs sent two emails; now one), plus next-day-sends-again and failed-send-not-recorded.
+  **CRON-42 OPEN (LOW):** the low-stock, supply-expiry and NFPA officer digests have the same gap — their
+  `dedupe_key` guards the bell entry, not the email. Scheduled/overdue/inventory/notification/cron tests:
+  2,164 passed, 1 skipped. See scheduled-tasks.md → Pass 6. Next: A4 email templates & delivery.
+- **A4 email templates & delivery ✅ (pass 6, 2026-11-02) — 0 defects, 1 guard added.** Since pass 5 the
+  module's addresses and phones were encrypted at rest (91 columns, 59 names, three encrypted types), and the
+  failure that causes is silent: ciphertext is randomised, so `WHERE email = x` matches nothing and nothing
+  raises. Swept every file under `app/` for a comparison, `IN`, `LIKE`, `BETWEEN`, SQL function, `filter_by`,
+  `ORDER BY` or raw-SQL predicate on any of them: **none**. The first version of the sweep would have missed
+  `func.lower(User.email) == x`, the commonest real form, so it was widened and proven against a synthetic
+  tree before the zero was trusted. **Guard:** `tests/test_encrypted_column_predicates.py` makes the sweep
+  permanent (planting `User.email == "x"` in a real service turned it red naming the line; restoring turned
+  it green; eleven shapes it must flag and six safe ones it must not). **Verified:** the new Off switch sends
+  by default (pitfall #19) and cannot silence the member security notices, which are not template types;
+  delivery is a single attempt per recipient. MAIL-4, MAIL-22 unchanged. Email/template/notification/
+  fingerprint/encryption tests: 3,809 passed, 1 skipped. See email-templates.md → Pass 6. Next: A5 course
+  cohorts & syllabus.
+- **A5 course cohorts & syllabus ✅ (pass 6, 2026-11-03) — 1 fixed, 2 flagged.** The service grew from 1,544 to
+  2,283 lines after pass 3, mostly W27-3: a member added to a running cohort needs an officer to credit them for
+  each earlier class or schedule a make-up. **CC-8 (fixed):** the decision was an unlocked read-then-write. The
+  unique key stopped two first decisions only as a 500; after a cancelled make-up the row is updated rather than
+  inserted, so two officers acting together produced two training records for one class, or two make-up classes
+  with one orphaned. The decision path now locks the roster row and re-reads decisions with a locking read
+  (pitfall #27; roster row first to avoid the gap-lock deadlock found in A2). `TestADecisionIsSerialized` was
+  seen red, then green; it asserts the statements, not a live race. **Flagged:** CC-9 (a cancelled cohort still
+  takes decisions, make-ups and new classes), CC-10 (class sequence and cap are read-then-write; the unique key
+  makes it a 500, not corruption). Cohort, syllabus, late-joiner and capacity-locking tests pass. See
+  course-cohorts.md → Pass 6. Next: A6 member lifecycle & offboarding.
+- **A6 member lifecycle & offboarding ✅ (pass 6, 2026-11-10).** Started from the
+  delta since pass 3 and the open list. 26 routes enumerated, every one gated.
+  **Fixed:** LIFE-8 (MED) — marking a clearance line Returned unassigned the
+  item from whoever held it now, so a helmet reissued to another member was
+  taken off them; the resolve now passes the departing member as
+  `expected_user_id`. LIFE-9 (LOW) — two requests could open two clearances for
+  one member; the member row is locked and the open check is a locking read.
+  LIFE-10 (MED) — a double reactivation recorded two open service stints; the
+  member is read `FOR UPDATE`. All three pinned by
+  `test_member_lifecycle_races.py`, which failed before the fixes. Also: the
+  tier scan uses `ACTIVE_ACCOUNT_STATUSES`, a dead `if: pass` removed, the
+  anonymization docstring names the kept membership numbers, and
+  `COMPLIANCE.md`'s retention row corrected (six classes, `/organization/`
+  prefix). **Flagged:** LIFE-11 (MED) — anonymization leaves the separation
+  letter's home address and reason in Documents; and the pool-issuance
+  valuation item (LIFE-2), now with evidence that the clearance understates by
+  the pool's size. Both mirrored to KNOWN_LIMITATIONS. **Open:** LIFE-12 (LOW),
+  clearance audit rows lack IP/browser, left to the inventory module's pass.
+  Gate: typecheck, lint, flake8, black, isort and mypy clean; 664 tests across
+  the 21 files touching the changed functions pass. Next: A7 dashboard & action
+  items.
+- **A7 dashboard & action items ✅ (pass 4).** Reviewed the delta since pass 3:
+  `dashboard.py` grew from 7 routes to 13 (five `/pulse-layout` routes and
+  `/action-items/page`). All 13 are authenticated (AST check). The pulse
+  layout is self-scoped preference data: bounded, validated on write and read
+  defensively. The paged feed returns the rows a full merge would, with totals
+  counted under the same filters. **2 fixes:** DASH-41 (LOW), the
+  department-default audit rows now record the caller's IP and browser; DASH-42
+  (LOW), "Save as department default" is now offered for the same two
+  permissions the server accepts. Both tests failed before the fix. **Re-verified:**
+  DASH-37 resolved (all 22 tile links read their parameters; tile and list
+  counts compared where no shared helper ties them), DASH-38/39/40 resolved.
+  DASH-2 still open and now mirrored to KNOWN_LIMITATIONS, which no earlier
+  pass did. **Leads:** B6 (waiver audit row without origin), B18
+  (training-officer cards use `<a href>` and the browser's year). Gate:
+  typecheck, lint, flake8, black and isort clean; the dashboard Vitest file and
+  the backend dashboard/action-item/pulse selection pass. One setup error was
+  the sandbox's stale schema (behind MS-18), cleared by `alembic upgrade head`.
+  See dashboard.md → Pass 4. Next: A8 locations & kiosk.

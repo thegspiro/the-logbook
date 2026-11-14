@@ -5,7 +5,7 @@ Request and response schemas for role-related endpoints.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -29,6 +29,10 @@ class RoleCreate(RoleBase):
 
     permissions: List[str] = Field(default_factory=list)
     priority: int = Field(default=0, ge=0, le=100)
+    # An office carries permissions; a committee is a group a member serves on
+    # and is shown apart from the offices. "system" is the platform's own and
+    # cannot be minted by a client.
+    kind: Literal["office", "committee"] = "office"
 
     model_config = ConfigDict(extra="forbid")
 
@@ -40,10 +44,11 @@ class RoleUpdate(RefusesNull):
     description: Optional[str] = None
     permissions: Optional[List[str]] = None
     priority: Optional[int] = Field(None, ge=0, le=100)
+    kind: Optional[Literal["office", "committee"]] = None
 
     # The service reads None as "not provided", so a null here would answer 200
     # and change nothing. An emptied description is sent as an empty string.
-    null_refused = frozenset({"name", "description", "permissions", "priority"})
+    null_refused = frozenset({"name", "description", "permissions", "priority", "kind"})
 
     model_config = ConfigDict(extra="forbid")
 
@@ -64,6 +69,9 @@ class RoleResponse(UTCResponseBase):
     # is where a rank is set. Defaults False so a dict built without it is
     # still a valid response.
     mirrors_rank: bool = False
+    # office | committee | system. Defaults to office so a dict built without
+    # it is still a valid response.
+    kind: str = "office"
     created_at: datetime
     updated_at: datetime
 
@@ -72,6 +80,12 @@ class RoleResponse(UTCResponseBase):
     def coerce_null_permissions(cls, v: object) -> object:
         """Coerce NULL (from DB) to empty list so Pydantic doesn't reject it."""
         return v if v is not None else []
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def coerce_null_kind(cls, v: object) -> object:
+        """An unflushed ORM object carries None until the column default runs."""
+        return v if v else "office"
 
     model_config = ConfigDict(from_attributes=True)
 

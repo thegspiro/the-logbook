@@ -111,11 +111,13 @@ function application(overrides: Record<string, unknown> = {}) {
 
 function renderDetail() {
   return render(
-    <MemoryRouter initialEntries={['/grants/applications/app-1']}>
-      <Routes>
-        <Route path="/grants/applications/:id" element={<GrantDetailPage />} />
-      </Routes>
-    </MemoryRouter>
+    <ConfirmProvider>
+      <MemoryRouter initialEntries={['/grants/applications/app-1']}>
+        <Routes>
+          <Route path="/grants/applications/:id" element={<GrantDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    </ConfirmProvider>
   );
 }
 

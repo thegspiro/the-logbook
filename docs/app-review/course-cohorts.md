@@ -1,11 +1,96 @@
 # Application Review — Course Cohorts & Syllabus
 
 **Prefix:** `CC` · **Iteration:** A5 · **Reviewed:** 2026-08-05 (pass 1),
-2026-08-08 (pass 2), 2026-10-03 (pass 3)
+2026-08-08 (pass 2), 2026-10-03 (pass 3),
+2026-11-03 (pass 6)
 
-> **Finding ids continue at CC-5.** CC-1…CC-4 are taken by passes 1–2 below.
+> **Finding ids continue at CC-8.** CC-1…CC-7 are taken by the passes below.
 > Note the `CC-` prefix is shared with other review tracks — the same collision
 > recorded against `CRON-`, `SF-` and `AUTH-` elsewhere.
+
+## Pass 6 (2026-11-03) — the late-joiner decisions
+
+The module grew from 1,544 to 2,283 service lines since pass 3. Most of that is
+W27-3, which no earlier pass saw: a member added to a running cohort is RSVP'd
+only to classes still to come, so each earlier class needs an officer to either
+**credit** them for it (`credit_missed_class`) or **schedule a make-up**
+(`schedule_makeup_class`). Both are new endpoints, both write real records. The
+rest of the delta (prerequisite-aware roster sync, per-class rooms) was read
+through for the same defect classes and is clean. **1 fixed, 2 flagged.**
+
+### CC-8 — MED — Two officers deciding the same missed class could both succeed — ✅ FIXED
+
+**What:** `_missed_class_for_decision` read whether a decision existed, and the
+caller then wrote one. Nothing locked between the two (pitfall #27).
+
+**Where:** `course_cohort_service.py` `_missed_class_for_decision`, called by
+`credit_missed_class` and `schedule_makeup_class`.
+
+**Impact:** `uq_cohort_missed_class` on (member, class) catches two _first_
+decisions, but only by failing the second request with a bare 500 at commit.
+It does not catch the case that matters. When an officer cancels a make-up, the
+decision row stays and `_is_pending` reports the class pending again. Two
+officers then deciding at once both read "pending" and both **update that same
+row**, so nothing conflicts:
+
+| Race on a class whose make-up was cancelled | Result                                                                                                                                  |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| credit + credit                             | two completed `TrainingRecord`s for one class; the decision points at the second, so the first is real hours with nothing linking to it |
+| make-up + make-up                           | two make-up classes with their own events and RSVPs; the decision links only the second, leaving the first orphaned and still scheduled |
+
+Reachable from the UI: both are buttons on the roster, and a double click is
+enough for the first-decision form of it.
+
+**Fix:** the decision path locks the member's roster row (`FOR UPDATE`), then
+re-reads the decisions with a locking read. Both halves are needed: the row lock
+serializes the pair, and the locking read is what makes the second request see
+the first one's commit, because under REPEATABLE READ a plain `SELECT` answers
+from the snapshot taken before the lock was won. The roster row is locked first
+so the decision read cannot gap-lock against a rival (the A2 deadlock shape).
+The loser now reads the winner's decision and gets the existing 400, "already
+credited" or "make-up already scheduled", rather than a 500 or a second effect.
+
+**Guarded:** `TestADecisionIsSerialized` asserts, for both endpoints, that the
+roster row and then the decisions are read with `FOR UPDATE`. Seen red first
+(no locking read was issued) and green after. **Bound on the guard:** it asserts
+the statements, not a live race, because the DB fixture is one rolled-back
+transaction; the pitfall #27 reasoning above is what says those statements
+close the race.
+
+### CC-9 — LOW — A cancelled cohort still accepts decisions, make-ups and new classes — FLAGGED
+
+`cancel_cohort` cancels the future classes and sets the cohort cancelled, but
+leaves the roster active. No mutator in the service checks the cohort's status,
+so on a cancelled cohort an officer can still credit a missed class (writing a
+completed record), schedule a make-up (creating a class, event and session),
+add a class or add members. Consistent across the whole module rather than new
+to W27-3, which is why it is a flag: refusing mutation on a cancelled cohort
+changes behaviour for anyone who reopens one by adding a class. Owner's call.
+
+### CC-10 — LOW — Class sequence and the class cap are allocated read-then-write — FLAGGED
+
+`_insert_ad_hoc_class` counts the cohort's classes for `MAX_GENERATED_CLASSES`
+and takes `max(sequence) + 1` with plain reads. Two concurrent additions both
+compute the same sequence; `uq_cohort_class_sequence` makes the second fail as a
+500, so there is no duplicate or corrupted row, only an unfriendly error and a
+cap that can be overshot by the number of simultaneous requests. A lock on the
+cohort row would close it; `get_cohort` has no `for_update` yet, and this is not
+reachable in a way that harms data, so it is left.
+
+**Re-verified, no change:** all 22 endpoints are gated (`training.manage`, or
+`get_current_user` with a roster or permission check on `/mine` and the detail);
+`credit_missed_class` refuses a self-credit (TRX7-1) before writing anything and
+scopes every lookup by organization; the CC-1 catalog-join predicate is still
+open at `list_cohorts` and `list_member_cohorts` for the reason pass 3 gave.
+
+### Pass 6 completion gate
+
+| Check                                                                     | Result                                                         |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `flake8 app/ tests/`                                                      | ✅ 0 violations                                                |
+| `black --check app/ tests/`                                               | ✅ 2158 files unchanged                                        |
+| `pytest tests -k "cohort or syllabus or late_joiner or capacity_locking"` | ✅ passed                                                      |
+| Frontend                                                                  | no change, so `typecheck` and `lint` do not apply to this diff |
 
 ## Pass 3 (2026-10-03) — the shift endpoint
 

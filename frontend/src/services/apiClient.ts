@@ -17,6 +17,7 @@ import { API_TIMEOUT_MS } from '../constants/config';
 import { clearQueuedReports, reportApiError } from './errorReporting';
 import { holdDuringPasswordChange } from './passwordChangeGate';
 import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
+import { loginPathReturningTo } from '../utils/postLoginRedirect';
 import { isStepUpRequired, requestStepUp } from '../utils/stepUp';
 import {
   getCacheKey,
@@ -209,7 +210,12 @@ export async function handleExpiredSession(): Promise<void> {
   // draft. Every caller already awaits this function.
   await purgeLocalMemberData();
   if (!window.location.pathname.startsWith('/onboarding')) {
-    window.location.href = '/login';
+    // A full page load carries no router state, so the page goes in the URL
+    // for postLoginRedirect to read back (and vet) after sign-in. Without it a
+    // member whose session lapsed under a page — most often one who tapped a
+    // room's NFC tag on a phone with a stale session — signs in to the
+    // dashboard and has to walk back to the door (LOC-37).
+    window.location.href = loginPathReturningTo(window.location);
   }
 }
 

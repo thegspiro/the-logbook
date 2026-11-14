@@ -18,6 +18,7 @@ import {
 import { platformAnalyticsService } from '../services/api';
 import { formatTime, formatDate, formatCalendarDate, formatNumber, getTodayLocalDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { AdminPageHeader } from '../components/admin/AdminPageHeader';
 import type { PlatformAnalytics, DailyCount, ModuleUsage } from '../types/platformAnalytics';
 
 /**
@@ -109,36 +110,38 @@ const PlatformAnalyticsPage: React.FC = () => {
 
   return (
     <div className="mx-auto min-h-screen max-w-7xl p-6">
-      {/* Header */}
-      <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row">
-        <div>
-          <h1 className="text-theme-text-primary text-3xl font-bold">Platform Analytics</h1>
-          <p className="text-theme-text-secondary mt-1">Platform-wide usage and health metrics for IT administrators</p>
-          {lastRefreshed && (
-            <p className="text-theme-text-muted mt-1 text-xs">Last refreshed: {formatTime(lastRefreshed, tz)}</p>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              void loadData();
-            }}
-            className="btn-secondary text-theme-text-secondary flex items-center gap-2 text-sm font-medium"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </button>
-          <button
-            onClick={() => {
-              void exportData();
-            }}
-            className="btn-secondary flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400"
-          >
-            <Download className="h-4 w-4" />
-            Export
-          </button>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Platform Analytics"
+        className="mb-6"
+        description={
+          <>
+            <p>Platform-wide usage and health metrics for IT administrators</p>
+            {lastRefreshed && <p className="mt-1 text-xs">Last refreshed: {formatTime(lastRefreshed, tz)}</p>}
+          </>
+        }
+        actions={
+          <>
+            <button
+              onClick={() => {
+                void loadData();
+              }}
+              className="btn-secondary text-theme-text-secondary flex items-center gap-2 text-sm font-medium"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </button>
+            <button
+              onClick={() => {
+                void exportData();
+              }}
+              className="btn-secondary flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400"
+            >
+              <Download className="h-4 w-4" />
+              Export
+            </button>
+          </>
+        }
+      />
 
       {/* ── Section 1: User Adoption ── */}
       <SectionTitle>User Adoption</SectionTitle>

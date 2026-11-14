@@ -17,18 +17,38 @@ import type { TrainingAttachment } from '../services/trainingServices';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { EmptyState, PromptDialog } from '../components/ux';
 import { EditTrainingRecordModal } from '../components/training/EditTrainingRecordModal';
+import { MemberRequirementsSection } from '../components/training/MemberRequirementsSection';
 import { useAuthStore } from '../stores/authStore';
 import { Ban, GraduationCap, Download, Paperclip, Pencil, Upload, X } from 'lucide-react';
 import { formatDate } from '../utils/dateFormatting';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
-import { getTrainingPeriodWindow, TRAINING_PERIOD_LABELS, TrainingExportPeriod } from '../utils/trainingPeriods';
+import {
+  getTrainingPeriodWindow,
+  isDateInTrainingPeriod,
+  TRAINING_PERIOD_LABELS,
+  TrainingExportPeriod,
+} from '../utils/trainingPeriods';
 import { useTimezone } from '../hooks/useTimezone';
 import type { TrainingRecord } from '../types/training';
 import type { UserWithRoles } from '../types/role';
 import { useDialog } from '../hooks/useDialog';
 import { getTrainingStatusLabel } from '../utils/trainingColors';
+import { TRAINING_TYPE_LABELS } from '../constants/enums';
+import { StatGrid } from '../components/ux/StatGrid';
+
+/**
+ * Imported course names often end with their code — "CAPCE HIPAA Awareness
+ * (3088740)" — and repeating it beside the name added nothing.
+ */
+const showCourseCode = (name: string | undefined, code: string | undefined): code is string =>
+  !!code && !(name ?? '').includes(code);
+
+const formatHoursLabel = (hours: number | null | undefined): string => {
+  const text = formatHours(hours);
+  return `${text} ${text === '1' ? 'hr' : 'hrs'}`;
+};
 
 type FilterStatus = 'all' | 'completed' | 'scheduled' | 'in_progress' | 'expired' | 'expiring_soon';
 type SortField = 'date' | 'course' | 'hours' | 'status';
@@ -163,8 +183,10 @@ export const MemberTrainingHistoryPage: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Export
-  const [exportPeriod, setExportPeriod] = useState<TrainingExportPeriod>(TrainingExportPeriod.YEAR);
+  // The period scopes the record list, the record and hour totals, and the
+  // exports alike — a selector that changed only the export left "This Year"
+  // sitting above a lifetime hour total.
+  const [period, setPeriod] = useState<TrainingExportPeriod>(TrainingExportPeriod.YEAR);
   const [exporting, setExporting] = useState(false);
 
   // Attachments
@@ -196,7 +218,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
     if (!userId) return;
     try {
       setExporting(true);
-      const window = getTrainingPeriodWindow(exportPeriod, tz);
+      const window = getTrainingPeriodWindow(period, tz);
       const blob = await reportExportService.exportReport({
         report_type: 'individual',
         format,
@@ -209,7 +231,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `training_${safeName}_${exportPeriod}.${format}`;
+      a.download = `training_${safeName}_${period}.${format}`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -263,9 +285,23 @@ export const MemberTrainingHistoryPage: React.FC = () => {
     }
   };
 
+  // Records dated inside the selected period. Only the period's start applies
+  // here: the export window ends today, but an upcoming scheduled class still
+  // belongs on the page under every period.
+  const periodTrainings = useMemo(() => {
+    const { start_date } = getTrainingPeriodWindow(period, tz);
+    return trainings.filter((t) => isDateInTrainingPeriod(t.completion_date || t.scheduled_date, { start_date }));
+  }, [trainings, period, tz]);
+
+  // Expiry is a current state rather than an event in the period: a
+  // certificate earned three years ago can expire this week. Those two status
+  // filters therefore search every record, matching the Expiring Soon and
+  // Expired cards, which count every record.
+  const isExpiryFilter = filterStatus === 'expired' || filterStatus === 'expiring_soon';
+
   // Filter and sort training records
   const filteredTrainings = useMemo(() => {
-    let result = [...trainings];
+    let result = [...(isExpiryFilter ? trainings : periodTrainings)];
 
     // Apply search filter
     if (searchQuery) {
@@ -314,11 +350,12 @@ export const MemberTrainingHistoryPage: React.FC = () => {
     });
 
     return result;
-  }, [trainings, filterStatus, sortField, sortOrder, searchQuery, tz]);
+  }, [trainings, periodTrainings, isExpiryFilter, filterStatus, sortField, sortOrder, searchQuery, tz]);
 
-  // Calculate statistics
+  // Record and hour totals follow the period; Scheduled, Expiring Soon and
+  // Expired describe the member's standing today and count every record.
   const stats = useMemo(() => {
-    const completed = trainings.filter((t) => t.status === 'completed');
+    const completed = periodTrainings.filter((t) => t.status === 'completed');
     const totalHours = sumHoursToQuarter(completed.map((t) => t.hours_completed));
     const expiringSoon = trainings.filter(
       (t) => isCertificationExpiringSoon(t.expiration_date, tz) && !isCertificationExpired(t.expiration_date, tz)
@@ -327,14 +364,14 @@ export const MemberTrainingHistoryPage: React.FC = () => {
     const scheduled = trainings.filter((t) => t.status === 'scheduled');
 
     return {
-      total: trainings.length,
+      total: periodTrainings.length,
       completed: completed.length,
       totalHours,
       expiringSoon: expiringSoon.length,
       expired: expired.length,
       scheduled: scheduled.length,
     };
-  }, [trainings, tz]);
+  }, [trainings, periodTrainings, tz]);
 
   if (loading) {
     return (
@@ -377,16 +414,16 @@ export const MemberTrainingHistoryPage: React.FC = () => {
             ]}
           />
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+          <div className="page-header gap-3 sm:items-center">
+            <div className="page-header-title">
               <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Training History</h1>
               <p className="text-theme-text-muted mt-1">{user.full_name || user.username}</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <div className="page-header-actions flex flex-wrap items-center gap-2 print:hidden">
               <select
-                aria-label="Export period"
-                value={exportPeriod}
-                onChange={(e) => setExportPeriod(e.target.value as TrainingExportPeriod)}
+                aria-label="Training period"
+                value={period}
+                onChange={(e) => setPeriod(e.target.value as TrainingExportPeriod)}
                 className="form-input px-3 text-sm"
               >
                 {Object.values(TrainingExportPeriod).map((p) => (
@@ -398,7 +435,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               <button
                 onClick={() => void handleExport('csv')}
                 disabled={exporting}
-                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
+                className="btn-secondary inline-flex items-center gap-1.5 text-sm"
               >
                 <Download className="h-4 w-4" />
                 Export CSV
@@ -406,7 +443,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               <button
                 onClick={() => void handleExport('pdf')}
                 disabled={exporting}
-                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
+                className="btn-secondary inline-flex items-center gap-1.5 text-sm"
               >
                 <Download className="h-4 w-4" />
                 Export PDF
@@ -418,7 +455,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                     '_blank'
                   )
                 }
-                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors"
+                className="btn-secondary inline-flex items-center gap-1.5 text-sm"
               >
                 Print Record
               </button>
@@ -427,14 +464,19 @@ export const MemberTrainingHistoryPage: React.FC = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-6">
+        <StatGrid columns={6} gap={4} className="mb-6">
           <StatCard label="Total Records" value={stats.total} />
           <StatCard label="Completed" value={stats.completed} color="green" />
           <StatCard label="Total Hours" value={stats.totalHours} color="blue" />
           <StatCard label="Scheduled" value={stats.scheduled} color="yellow" />
           <StatCard label="Expiring Soon" value={stats.expiringSoon} color="orange" />
           <StatCard label="Expired" value={stats.expired} color="red" />
-        </div>
+        </StatGrid>
+
+        {/* The member's requirements, as on their own My Training page. The
+            endpoint is training.manage only; a member reading their own
+            history sees these on My Training instead. */}
+        {canManage && userId && <MemberRequirementsSection userId={userId} timezone={tz} />}
 
         {/* Filters */}
         <div className="card mb-6 p-4">
@@ -499,7 +541,9 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               description={
                 searchQuery || filterStatus !== 'all'
                   ? 'Try adjusting your search or filters.'
-                  : 'No training has been recorded for this member yet.'
+                  : trainings.length > 0
+                    ? `No training is recorded for ${TRAINING_PERIOD_LABELS[period].toLowerCase()}. Choose a longer period to see earlier records.`
+                    : 'No training has been recorded for this member yet.'
               }
               actions={
                 searchQuery || filterStatus !== 'all'
@@ -517,183 +561,150 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               }
             />
           ) : (
-            <div>
-              <table className="rwd-table divide-theme-surface-border min-w-full divide-y">
-                <thead className="bg-theme-surface-secondary">
-                  <tr>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Course
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Type
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Date
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Hours
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Expires
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Status
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Files
-                    </th>
-                    {canManage && (
-                      <th
-                        scope="col"
-                        className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase print:hidden"
-                      >
-                        Actions
-                      </th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-theme-surface-border divide-y">
-                  {filteredTrainings.map((training) => (
-                    <tr key={training.id} className="hover:bg-theme-surface-hover transition-colors">
-                      <td data-label="Course" className="px-6 py-4">
-                        <div>
-                          <div className="text-theme-text-primary font-medium">{training.course_name}</div>
-                          {training.course_code && (
-                            <div className="text-theme-text-muted text-sm">{training.course_code}</div>
-                          )}
-                          {training.certification_number && (
-                            <div className="text-theme-text-muted mt-1 text-xs">
-                              Cert #: {training.certification_number}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td data-label="Type" className="text-theme-text-secondary px-6 py-4 text-sm capitalize">
-                        {training.training_type?.replace('_', ' ') || '-'}
-                      </td>
-                      <td data-label="Date" className="text-theme-text-secondary px-6 py-4 text-sm">
-                        {formatDate(training.completion_date || training.scheduled_date, tz)}
-                      </td>
-                      <td data-label="Hours" className="text-theme-text-secondary px-6 py-4 text-sm">
-                        {formatHours(training.hours_completed)}
-                      </td>
-                      <td data-label="Expires" className="px-6 py-4 text-sm">
-                        <span
-                          className={
-                            isCertificationExpired(training.expiration_date, tz)
-                              ? 'text-red-700 dark:text-red-400'
-                              : isCertificationExpiringSoon(training.expiration_date, tz)
-                                ? 'text-yellow-700 dark:text-yellow-400'
-                                : 'text-theme-text-secondary'
-                          }
-                        >
-                          {formatDate(training.expiration_date, tz)}
-                        </span>
-                      </td>
-                      <td data-label="Status" className="px-6 py-4">
-                        <div className="flex flex-col gap-1">
-                          {training.voided_at ? (
-                            <>
-                              <span className="inline-flex w-fit rounded-full bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
-                                voided
-                              </span>
-                              {training.void_reason && (
-                                <span className="text-theme-text-secondary max-w-xs text-xs whitespace-pre-line">
-                                  Reason: {training.void_reason}
-                                </span>
-                              )}
-                            </>
-                          ) : (
+            // A list rather than a table: eight columns needed ~1000px, more
+            // than this card ever gets beside the sidebar, so every screen got
+            // the stacked fallback — eight label/value rows per course.
+            <ul aria-label="Training records" className="divide-theme-surface-border divide-y">
+              {filteredTrainings.map((training) => {
+                const expired = isCertificationExpired(training.expiration_date, tz);
+                const expiringSoon = !expired && isCertificationExpiringSoon(training.expiration_date, tz);
+                return (
+                  <li
+                    key={training.id}
+                    className="hover:bg-theme-surface-hover flex flex-col gap-2 px-4 py-3 transition-colors sm:flex-row sm:items-start sm:gap-4 sm:px-6"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-theme-text-primary font-medium break-words">
+                        {training.course_name}
+                        {showCourseCode(training.course_name, training.course_code) && (
+                          <span className="text-theme-text-muted ml-2 text-sm font-normal">{training.course_code}</span>
+                        )}
+                      </p>
+                      <p className="text-theme-text-secondary mt-0.5 text-sm">
+                        {/* Each item stays on one line; the row wraps between
+                            items, never inside "1 hr". */}
+                        {[
+                          (training.training_type &&
+                            (TRAINING_TYPE_LABELS[training.training_type] ??
+                              training.training_type.replace(/_/g, ' '))) ||
+                            null,
+                          formatDate(training.completion_date || training.scheduled_date, tz),
+                          formatHoursLabel(training.hours_completed),
+                          training.source_label || null,
+                        ]
+                          .filter(Boolean)
+                          .map((item, i) => (
+                            <React.Fragment key={i}>
+                              {i > 0 && ' · '}
+                              <span className="whitespace-nowrap">{item}</span>
+                            </React.Fragment>
+                          ))}
+                        {training.expiration_date && (
+                          <>
+                            {' · '}
                             <span
-                              className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(
+                              className={`whitespace-nowrap ${
+                                expired
+                                  ? 'text-red-700 dark:text-red-400'
+                                  : expiringSoon
+                                    ? 'text-yellow-700 dark:text-yellow-400'
+                                    : ''
+                              }`}
+                            >
+                              {expired ? 'Expired' : 'Expires'} {formatDate(training.expiration_date, tz)}
+                            </span>
+                          </>
+                        )}
+                      </p>
+                      {training.certification_number && (
+                        <p className="text-theme-text-muted mt-0.5 text-xs break-words">
+                          Cert #: {training.certification_number}
+                        </p>
+                      )}
+                      {training.voided_at && training.void_reason && (
+                        <p className="text-theme-text-secondary mt-1 text-xs break-words whitespace-pre-line">
+                          Reason: {training.void_reason}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:shrink-0 sm:justify-end">
+                      <div className="flex flex-wrap items-center gap-1">
+                        {training.voided_at ? (
+                          <span className="inline-flex rounded-full bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                            voided
+                          </span>
+                        ) : (
+                          <>
+                            <span
+                              className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(
                                 training.status
                               )}`}
                             >
                               {getTrainingStatusLabel(training.status)}
                             </span>
-                          )}
-                          {!training.voided_at && isCertificationExpired(training.expiration_date, tz) && (
-                            <span className="inline-flex w-fit rounded-full bg-red-500/10 px-2 py-1 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-400">
-                              expired
-                            </span>
-                          )}
-                          {!training.voided_at &&
-                            !isCertificationExpired(training.expiration_date, tz) &&
-                            isCertificationExpiringSoon(training.expiration_date, tz) && (
-                              <span className="inline-flex w-fit rounded-full bg-yellow-500/10 px-2 py-1 text-xs font-medium text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
+                            {expired && (
+                              <span className="inline-flex rounded-full bg-red-500/10 px-2 py-1 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-400">
+                                expired
+                              </span>
+                            )}
+                            {expiringSoon && (
+                              <span className="inline-flex rounded-full bg-yellow-500/10 px-2 py-1 text-xs font-medium text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
                                 expiring soon
                               </span>
                             )}
-                        </div>
-                      </td>
-                      <td data-label="Files" className="px-6 py-4">
+                          </>
+                        )}
+                      </div>
+                      {/* One group, so a narrow screen moves the buttons to
+                          their own row together instead of stranding one. */}
+                      <div className="flex items-center print:hidden">
                         <button
                           onClick={() => setAttachmentRecord(training)}
-                          className="text-theme-text-muted hover:text-theme-text-primary inline-flex min-h-11 items-center gap-1.5 px-2 text-sm print:hidden"
+                          aria-label={`Files for ${training.course_name}`}
+                          className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 inline-flex min-h-9 items-center gap-1.5 px-2 text-sm print:hidden"
                         >
-                          <Paperclip className="h-4 w-4" />
+                          <Paperclip className="h-4 w-4" aria-hidden="true" />
                           Files
                         </button>
-                      </td>
-                      {canManage && (
-                        <td data-label="Actions" className="px-6 py-4 print:hidden">
-                          {/* A voided record is final: editing it could hand
-                              back credit the department removed. */}
-                          {!training.voided_at && (
-                            <div className="flex flex-wrap gap-1">
-                              <button
-                                onClick={() => setEditRecord(training)}
-                                aria-label={`Edit ${training.course_name}`}
-                                className="text-theme-text-muted hover:text-theme-text-primary inline-flex min-h-11 items-center gap-1.5 px-2 text-sm"
-                              >
-                                <Pencil className="h-4 w-4" aria-hidden="true" />
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => setVoidTarget(training)}
-                                aria-label={`Void ${training.course_name}`}
-                                className="inline-flex min-h-11 items-center gap-1.5 px-2 text-sm text-amber-800 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200"
-                              >
-                                <Ban className="h-4 w-4" aria-hidden="true" />
-                                Void
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        {/* A voided record is final: editing it could hand back
+                          credit the department removed. */}
+                        {canManage && !training.voided_at && (
+                          <>
+                            <button
+                              onClick={() => setEditRecord(training)}
+                              aria-label={`Edit ${training.course_name}`}
+                              className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 inline-flex min-h-9 items-center gap-1.5 px-2 text-sm print:hidden"
+                            >
+                              <Pencil className="h-4 w-4" aria-hidden="true" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => setVoidTarget(training)}
+                              aria-label={`Void ${training.course_name}`}
+                              className="touch:min-h-11 inline-flex min-h-9 items-center gap-1.5 px-2 text-sm text-amber-800 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200 print:hidden"
+                            >
+                              <Ban className="h-4 w-4" aria-hidden="true" />
+                              Void
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
 
         {/* Summary */}
         {filteredTrainings.length > 0 && (
           <div className="text-theme-text-muted mt-4 text-right text-sm">
-            Showing {filteredTrainings.length} of {trainings.length} records
+            Showing {filteredTrainings.length} of {isExpiryFilter ? trainings.length : periodTrainings.length} records
+            {!isExpiryFilter && period !== TrainingExportPeriod.LIFETIME && (
+              <> ({TRAINING_PERIOD_LABELS[period].toLowerCase()})</>
+            )}
           </div>
         )}
       </div>

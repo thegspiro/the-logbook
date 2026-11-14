@@ -8,12 +8,14 @@ import type { ExternalShiftEntry } from '../../modules/scheduling/services/api';
 const mockList = vi.fn();
 const mockReject = vi.fn();
 const mockRestore = vi.fn();
+const mockApprove = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getExternalShifts: (...args: unknown[]) => mockList(...args) as unknown,
     rejectExternalShift: (...args: unknown[]) => mockReject(...args) as unknown,
     restoreExternalShift: (...args: unknown[]) => mockRestore(...args) as unknown,
+    approveExternalShift: (...args: unknown[]) => mockApprove(...args) as unknown,
   },
 }));
 
@@ -47,10 +49,12 @@ describe('ExternalShiftsReview', () => {
     mockList.mockReset();
     mockReject.mockReset();
     mockRestore.mockReset();
+    mockApprove.mockReset();
     onChanged.mockReset();
     mockList.mockResolvedValue({ items: [entry()], total: 1 });
     mockReject.mockResolvedValue(entry({ status: 'rejected' }));
     mockRestore.mockResolvedValue(entry());
+    mockApprove.mockResolvedValue(entry());
   });
 
   it('loads the report period', async () => {
@@ -101,6 +105,43 @@ describe('ExternalShiftsReview', () => {
 
     expect(await screen.findByText('Casey Reed')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
+  });
+
+  it('approves an entry awaiting approval, and can reject one instead', async () => {
+    const user = userEvent.setup();
+    mockList.mockResolvedValue({ items: [entry({ status: 'pending' })], total: 1 });
+    renderWithRouter(
+      <ExternalShiftsReview startDate="2026-03-01" endDate="2026-03-31" canManage onChanged={onChanged} />
+    );
+
+    expect(await screen.findByText('Awaiting approval')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Approve' }));
+
+    await waitFor(() => expect(mockApprove).toHaveBeenCalledWith('e1'));
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('offers no approval to a report-only viewer', async () => {
+    mockList.mockResolvedValue({ items: [entry({ status: 'pending' })], total: 1 });
+    renderWithRouter(
+      <ExternalShiftsReview startDate="2026-03-01" endDate="2026-03-31" canManage={false} onChanged={onChanged} />
+    );
+
+    expect(await screen.findByText('Awaiting approval')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+  });
+
+  it('lists everything awaiting approval, whatever the report period', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <ExternalShiftsReview startDate="2026-03-01" endDate="2026-03-31" canManage onChanged={onChanged} />
+    );
+    await screen.findByText('Casey Reed');
+
+    await user.selectOptions(screen.getByLabelText('Show'), 'pending');
+
+    await waitFor(() => expect(mockList).toHaveBeenLastCalledWith({ limit: 200, status: 'pending' }));
   });
 
   it('filters by status', async () => {

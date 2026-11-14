@@ -90,9 +90,9 @@ export const SkillSheetLibraryModal: React.FC<SkillSheetLibraryModalProps> = ({ 
             {sheets.map((sheet) => (
               <li
                 key={sheet.slug}
-                className="border-theme-surface-border flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                className="split-row border-theme-surface-border gap-3 rounded-lg border p-3 sm:items-center"
               >
-                <div className="min-w-0">
+                <div className="split-row-main">
                   <p className="text-theme-text-primary font-medium">{sheet.name}</p>
                   {sheet.description && <p className="text-theme-text-muted mt-0.5 text-sm">{sheet.description}</p>}
                   <div className="text-theme-text-muted mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
@@ -109,7 +109,7 @@ export const SkillSheetLibraryModal: React.FC<SkillSheetLibraryModalProps> = ({ 
                 </div>
 
                 {sheet.already_imported ? (
-                  <span className="text-theme-text-muted flex shrink-0 items-center gap-1.5 text-sm">
+                  <span className="split-row-aside text-theme-text-muted flex items-center gap-1.5 text-sm">
                     <Check className="h-4 w-4" aria-hidden="true" />
                     Already added
                   </span>
@@ -117,7 +117,7 @@ export const SkillSheetLibraryModal: React.FC<SkillSheetLibraryModalProps> = ({ 
                   <button
                     onClick={() => void handleImport(sheet)}
                     disabled={importingSlug !== null}
-                    className="mobile-touch-target flex shrink-0 items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="split-row-aside mobile-touch-target flex items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {importingSlug === sheet.slug ? (
                       'Adding…'

@@ -72,6 +72,7 @@ class EmailKind(str, enum.Enum):
     OVERDUE_EQUIPMENT = "overdue_equipment"
     TRAINING_RECORD_CHANGES = "training_record_changes"
     SECURITY_REPORT = "security_report"
+    PERFORMANCE_EVALUATIONS = "performance_evaluations"
 
     # Optional, about the member's own activity
     EVENT_REMINDERS = "event_reminders"
@@ -85,8 +86,11 @@ class EmailKind(str, enum.Enum):
     ELECTION_NOTICES = "election_notices"
     SUGGESTION_BOX = "suggestion_box"
     BUDGET_REQUESTS = "budget_requests"
+    FINANCE_REQUESTS = "finance_requests"
+    DUES_REMINDERS = "dues_reminders"
     MINUTES_ACTION_ITEMS = "minutes_action_items"
     MINUTES_CIRCULATED = "minutes_circulated"
+    WEATHER_ALERTS = "weather_alerts"
 
     # Optional, sent to officers because of a role they hold
     EVENT_DUTIES = "event_duties"
@@ -99,6 +103,8 @@ class EmailKind(str, enum.Enum):
     MINUTES_DUTIES = "minutes_duties"
     DOCUMENT_DUTIES = "document_duties"
     FUNDRAISING_DUTIES = "fundraising_duties"
+    EVALUATION_DUTIES = "evaluation_duties"
+    HISTORY_DUTIES = "history_duties"
 
 
 class EmailAudience(str, enum.Enum):
@@ -201,6 +207,23 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         includes=("Checked-out equipment past its return date",),
         rationale="Department property the member is responsible for.",
     ),
+    EmailKind.PERFORMANCE_EVALUATIONS: EmailPolicy(
+        label="Your performance evaluations",
+        required=True,
+        audience=_M,
+        includes=(
+            "Your self-evaluation is open",
+            "Your evaluation is ready for you to read and acknowledge",
+            "A step of yours is due soon, or overdue",
+            "Your evaluation is final",
+            "Your evaluation was amended",
+            "One of your evaluations was deleted",
+        ),
+        rationale=(
+            "A personnel record the member is asked to act on by a deadline, "
+            "and to which they may respond once it is final."
+        ),
+    ),
     EmailKind.TRAINING_RECORD_CHANGES: EmailPolicy(
         label="Changes to your training record",
         required=True,
@@ -208,6 +231,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         includes=(
             "An officer voided one of your training records, and why",
             "An officer edited one of your training records",
+            "A decision on your request to be excused from a training session",
         ),
         rationale=(
             "Changes to the member's official training record, which they "
@@ -271,8 +295,10 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         audience=_M,
         includes=(
             "Certifications expiring or expired",
+            "A medical screening due within 90 days",
             "Training requirement due soon",
             "Training requirements not met",
+            "Training pipeline milestones you reach",
         ),
         rationale=(
             "Officers are still copied on escalations when the department "
@@ -287,6 +313,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         includes=(
             "Shift reminders",
             "Shift assignments",
+            "A shift you were on was cancelled",
             "Shift swap expired",
             "End-of-shift summary",
             "Overdue trainee shift reports",
@@ -350,8 +377,47 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "or the deadline changed",
             "Reminders before the request deadline",
             "The Treasurer's decision on a budget request",
+            "Senior leadership changing the amount of a budget request",
         ),
         rationale="Finance > Next year's budget shows the same deadline and decisions.",
+    ),
+    EmailKind.FINANCE_REQUESTS: EmailPolicy(
+        label="Your purchase, expense and check requests",
+        required=False,
+        audience=_M,
+        includes=(
+            "A purchase request, expense report or check request you raised "
+            "was approved or denied",
+        ),
+        rationale="The request's own page shows the same decision.",
+    ),
+    # Owner decision 2026-11-01 ("My dues view + email reminders"); sent by
+    # app/services/dues_reminders.py.
+    EmailKind.DUES_REMINDERS: EmailPolicy(
+        label="Your dues",
+        required=False,
+        audience=_M,
+        includes=(
+            "Your dues fall due within a week",
+            "Your dues are overdue, with any late fee and when it is added",
+        ),
+        rationale="Finance > My Dues shows the same balances and due dates.",
+    ),
+    # Sent only when the department turned on email for its NWS weather
+    # integration (owner decision 2026-10-29); otherwise no member gets one.
+    EmailKind.WEATHER_ALERTS: EmailPolicy(
+        label="Severe weather alerts",
+        required=False,
+        audience=_M,
+        includes=(
+            "A severe or extreme National Weather Service alert for the "
+            "department's area, when the department sends these by email",
+        ),
+        rationale=(
+            "The dashboard banner and the bell carry the same alert when the "
+            "department has them on; the National Weather Service publishes "
+            "it too."
+        ),
     ),
     EmailKind.EVENT_DUTIES: EmailPolicy(
         label="Event officer duties",
@@ -373,8 +439,41 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "A member declined a shift",
             "Shift drafts finalized",
             "Attendance to validate after a shift",
+            "Seats automatic shift generation could not fill",
+            "An outside-department shift waiting for approval",
         ),
         rationale="The task also waits in the bell and on the schedule.",
+    ),
+    EmailKind.HISTORY_DUTIES: EmailPolicy(
+        label="History clearance",
+        required=False,
+        audience=_O,
+        includes=(
+            "A history record is waiting for your clearance",
+            "A record you submitted was cleared or returned",
+            "The History clearance list changed (administrators)",
+        ),
+        rationale=(
+            "History > Awaiting my clearance lists every record waiting on you, "
+            "and the bell shows each notice either way."
+        ),
+    ),
+    EmailKind.EVALUATION_DUTIES: EmailPolicy(
+        label="Evaluation duties",
+        required=False,
+        audience=_O,
+        includes=(
+            "An evaluation you conduct, calibrate or approve is waiting on you",
+            "A step you act on is due soon, or overdue",
+            "A step is overdue on any evaluation (evaluation managers)",
+            "An evaluation you conducted is final",
+            "An evaluation you signed was amended",
+            "A member responded to an evaluation you conducted, or as a manager",
+        ),
+        rationale=(
+            "Reports > Evaluations lists every evaluation waiting on you, "
+            "with its due date."
+        ),
     ),
     EmailKind.TRAINING_DUTIES: EmailPolicy(
         label="Training officer duties",
@@ -384,6 +483,9 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "Training sessions awaiting approval",
             "New provider course versions to map",
             "A new member not enrolled automatically for a missing prerequisite",
+            "A member reaching a pipeline milestone you are notified of",
+            "A member asking to be excused from a training session, or "
+            "withdrawing the request",
         ),
         rationale=(
             "Pending approvals are also listed in Training, and unmapped "
@@ -414,7 +516,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "Supplies expiring or to restock",
             "Failed equipment checks",
         ),
-        rationale="Inventory shows the same alerts.",
+        rationale="The bell carries the same alerts, and Inventory shows them.",
     ),
     EmailKind.MEMBERSHIP_ADMIN: EmailPolicy(
         label="Membership and store administration",
@@ -427,19 +529,23 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "New store orders",
             "Google Workspace accounts needing attention (administrators)",
         ),
-        rationale="The same records are kept in Membership and the store.",
+        rationale=(
+            "The bell carries the same notices, and the records are kept in "
+            "Membership and the store."
+        ),
     ),
     EmailKind.MINUTES_ACTION_ITEMS: EmailPolicy(
-        label="Action items from meeting minutes",
+        label="Action items from meetings and minutes",
         required=False,
         audience=_M,
         includes=(
             "Action items assigned to you when meeting minutes are approved",
             "Reminders before an action item is due and while it is overdue",
+            "Reminders for action items recorded on a meeting",
         ),
         rationale=(
-            "Minutes > Action Items lists everything assigned to you, and "
-            "due-date reminders continue in the app."
+            "Action Items lists everything assigned to you, and due-date "
+            "reminders continue on the bell."
         ),
     ),
     EmailKind.MINUTES_CIRCULATED: EmailPolicy(
@@ -463,11 +569,20 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         rationale="Minutes > Action Items lists every open item.",
     ),
     EmailKind.FINANCE_DUTIES: EmailPolicy(
-        label="Treasurer duties",
+        label="Finance duties",
         required=False,
         audience=_O,
-        includes=("A budget request submitted for your review",),
-        rationale="Finance > Budget requests lists every request waiting.",
+        includes=(
+            "A budget request submitted for your review",
+            "A purchase request, expense report or check request reaching an "
+            "approval step that names you",
+            "A large request waiting for a second approval you could give",
+            "A budget amendment or reversal waiting for your confirmation",
+        ),
+        rationale=(
+            "Finance > Budget requests and Finance > Approvals list every "
+            "request waiting."
+        ),
     ),
     EmailKind.DOCUMENT_DUTIES: EmailPolicy(
         label="Document folder access",
@@ -618,3 +733,53 @@ def clean_email_kind_choices(value: Any) -> dict:
         for key, choice in value.items()
         if key in optional and isinstance(choice, bool)
     }
+
+
+@dataclass(frozen=True)
+class MemberOptOuts:
+    """What one member has turned off, for the administrators' opt-out view."""
+
+    # The member's Email Notifications switch is off, which stops every
+    # optional kind the department has not made required.
+    email_notifications_off: bool
+    # Optional kinds the member's own setting turns off, in the order of
+    # EMAIL_POLICIES. Kept apart from the master switch because turning that
+    # back on restores exactly these choices.
+    turned_off: Sequence[EmailKind]
+
+    @property
+    def has_any(self) -> bool:
+        return self.email_notifications_off or bool(self.turned_off)
+
+
+def member_opt_outs(preferences: Optional[Mapping[str, Any]]) -> MemberOptOuts:
+    """The member's own opt-outs, read the way :func:`member_choice` reads them.
+
+    Department requirements are deliberately not applied: the view reports
+    what the member chose, and :func:`not_emailed` says what that costs.
+    """
+    prefs = preferences if isinstance(preferences, Mapping) else {}
+    return MemberOptOuts(
+        email_notifications_off=prefs.get(MASTER_SWITCH) is False,
+        turned_off=tuple(
+            kind
+            for kind in EMAIL_POLICIES
+            if kind in OPTIONAL_KINDS and not member_choice(prefs, kind)
+        ),
+    )
+
+
+def not_emailed(
+    opt_outs: MemberOptOuts,
+    kind: EmailKind,
+    department_required: DepartmentRequired,
+) -> bool:
+    """Whether a member with *opt_outs* misses *kind*.
+
+    The same answer as ``not member_receives_email`` for the preferences the
+    opt-outs were read from; the opt-out view filters on it, so its counts
+    agree with who the senders actually skip (CLAUDE.md pitfall #29).
+    """
+    if is_required(kind, department_required):
+        return False
+    return opt_outs.email_notifications_off or kind in opt_outs.turned_off

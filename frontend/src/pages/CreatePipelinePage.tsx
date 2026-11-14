@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CallTypeRequirementPicker } from '../components/training/CallTypeRequirementPicker';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
@@ -18,14 +18,22 @@ import {
   GripVertical,
   ChevronDown,
   ChevronUp,
+  Save,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { useTimezone } from '../hooks/useTimezone';
+import { useAuthStore } from '../stores/authStore';
+import { formatDateTime } from '../utils/dateFormatting';
+import { clearProgramWizardDraft, loadProgramWizardDraft, saveProgramWizardDraft } from '../utils/programWizardDraft';
 import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
 import { RecencyWindowField } from '../components/training/RecencyWindowField';
 import { RequirementLibraryPicker } from '../components/training/RequirementLibraryPicker';
 import { ChecklistItemsEditor } from '../components/training/ChecklistItemsEditor';
+import { EvaluationRequirementFields } from '../components/training/EvaluationRequirementFields';
 import { ProgramEnrollmentRulesFields } from '../components/training/ProgramEnrollmentRulesFields';
 import { ProgramRequirementSettingsFields } from '../components/training/ProgramRequirementSettingsFields';
+import { ShiftEvaluationTemplateSelect } from '../components/training/ShiftEvaluationTemplateSelect';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import { useRequirementLibrary } from '../hooks/useRequirementLibrary';
 import type {
@@ -38,11 +46,14 @@ import type {
   TrainingRequirementEnhanced,
 } from '../types/training';
 import { getErrorDetail } from '../utils/errorHandling';
+import { FormField } from '../components/ux/FormField';
+import { useFieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import {
   emptyProgramRequirementSettings,
   programRequirementSettingsError,
   toProgramRequirementSettingsCreate,
 } from '../utils/programRequirementSettings';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 // ==================== Types ====================
 
@@ -72,6 +83,10 @@ interface RequirementFormData {
   required_hours: string;
   required_shifts: string;
   required_calls: string;
+  required_transports: string;
+  required_refusals: string;
+  // Evaluated shifts: count only evaluations with no item at the form's lowest rating.
+  evaluation_excludes_lowest_rating: boolean;
   // Department call-type slugs a calls requirement counts; empty counts all.
   required_call_types: string[];
   passing_score: string;
@@ -165,6 +180,9 @@ const emptyRequirement = (sortOrder: number, source: 'library' | 'new' = 'new'):
   required_hours: '',
   required_shifts: '',
   required_calls: '',
+  required_transports: '',
+  required_refusals: '',
+  evaluation_excludes_lowest_rating: false,
   required_call_types: [],
   passing_score: '',
   max_attempts: '',
@@ -184,6 +202,123 @@ const emptyMilestone = (): MilestoneFormData => ({
   completion_percentage_threshold: '',
   notification_message: '',
 });
+
+const emptyInfo = () => ({
+  name: '',
+  description: '',
+  code: '',
+  target_position: '',
+  structure_type: 'phases' as ProgramStructureType,
+  time_limit_days: '',
+  warning_days_before: '30',
+  is_template: false,
+  prerequisite_program_ids: [] as string[],
+  allows_concurrent_enrollment: true,
+  shift_evaluation_template_id: '',
+});
+
+type ProgramInfoForm = ReturnType<typeof emptyInfo>;
+
+// ==================== Draft ====================
+
+/** Everything the wizard keeps in the browser between visits. */
+interface WizardDraft {
+  currentStep: WizardStep;
+  info: ProgramInfoForm;
+  phases: PhaseFormData[];
+  programRequirements: RequirementFormData[];
+  programMilestones: MilestoneFormData[];
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * `defaults` with each field replaced by the saved one where the saved one has
+ * the same type. A draft written by an older build can lack fields added since,
+ * and those keep their empty value instead of arriving as `undefined` in a
+ * controlled input.
+ */
+const mergeSaved = <T extends object>(defaults: T, saved: unknown): T => {
+  if (!isRecord(saved)) return defaults;
+  const merged: Record<string, unknown> = {};
+  for (const [key, fallback] of Object.entries(defaults)) {
+    merged[key] = fallback;
+    const value = saved[key];
+    if (Array.isArray(fallback)) {
+      if (Array.isArray(value)) merged[key] = value;
+    } else if (fallback === undefined) {
+      // Only `recency_days` starts undefined; it holds a number when set.
+      if (typeof value === 'number') merged[key] = value;
+    } else if (typeof value === typeof fallback) {
+      merged[key] = value;
+    }
+  }
+  return merged as T;
+};
+
+const savedList = (value: unknown): unknown[] => (Array.isArray(value) ? value.filter(isRecord) : []);
+
+// Every restored item gets a fresh client id. The counter behind `nextId`
+// restarts at zero on each page load, so ids carried over from the saved draft
+// would collide with the next phase or requirement the officer adds.
+const restoreRequirement = (saved: unknown, index: number): RequirementFormData => {
+  const source = isRecord(saved) && saved.source === 'library' ? 'library' : 'new';
+  const merged = mergeSaved(emptyRequirement(index, source), saved);
+  const strings = (values: unknown[]) => values.filter((v): v is string => typeof v === 'string');
+  return {
+    ...merged,
+    id: nextId(),
+    source,
+    required_courses: strings(merged.required_courses),
+    required_call_types: strings(merged.required_call_types),
+    checklist_items: merged.checklist_items.filter((item) => isRecord(item)),
+  };
+};
+
+const restoreMilestone = (saved: unknown): MilestoneFormData => ({
+  ...mergeSaved(emptyMilestone(), saved),
+  id: nextId(),
+});
+
+const restorePhase = (saved: unknown, index: number): PhaseFormData => {
+  const record = isRecord(saved) ? saved : {};
+  return {
+    ...mergeSaved(emptyPhase(index + 1), saved),
+    id: nextId(),
+    phase_number: index + 1,
+    requirements: savedList(record.requirements).map(restoreRequirement),
+    milestones: savedList(record.milestones).map(restoreMilestone),
+  };
+};
+
+/** The wizard state a stored draft describes, or null if it is not one. */
+const restoreDraft = (data: unknown): WizardDraft | null => {
+  if (!isRecord(data) || !isRecord(data.info)) return null;
+  const info = mergeSaved(emptyInfo(), data.info);
+  info.prerequisite_program_ids = info.prerequisite_program_ids.filter((id): id is string => typeof id === 'string');
+  const usesPhases = info.structure_type === 'phases';
+  const knownStep = ALL_WIZARD_STEPS.find((s) => s.key === data.currentStep)?.key ?? 'info';
+  return {
+    currentStep: knownStep === 'phases' && !usesPhases ? 'requirements' : knownStep,
+    info,
+    phases: savedList(data.phases).map(restorePhase),
+    programRequirements: savedList(data.programRequirements).map(restoreRequirement),
+    programMilestones: savedList(data.programMilestones).map(restoreMilestone),
+  };
+};
+
+/** Whether the officer has entered anything worth keeping. */
+const draftHasContent = (draft: WizardDraft): boolean =>
+  draft.info.name.trim() !== '' ||
+  draft.info.description.trim() !== '' ||
+  draft.info.code.trim() !== '' ||
+  draft.phases.length > 0 ||
+  draft.programRequirements.length > 0 ||
+  draft.programMilestones.length > 0;
+
+/** How long after the last edit the draft is written. */
+const DRAFT_SAVE_DELAY_MS = 1000;
 
 // A linked entry sends only the id, the Required toggle and the link's own
 // settings. The build payload
@@ -205,6 +340,10 @@ const toRequirementPayload = (reqData: RequirementFormData) =>
         required_hours: reqData.required_hours ? parseFloat(reqData.required_hours) : undefined,
         required_shifts: reqData.required_shifts ? parseInt(reqData.required_shifts) : undefined,
         required_calls: reqData.required_calls ? parseInt(reqData.required_calls) : undefined,
+        required_transports: reqData.required_transports ? parseInt(reqData.required_transports) : undefined,
+        required_refusals: reqData.required_refusals ? parseInt(reqData.required_refusals) : undefined,
+        evaluation_excludes_lowest_rating:
+          reqData.requirement_type === 'evaluated_shifts' && reqData.evaluation_excludes_lowest_rating,
         ...(reqData.requirement_type === 'calls' && reqData.required_call_types.length > 0
           ? { required_call_types: reqData.required_call_types }
           : {}),
@@ -257,7 +396,22 @@ const REQUIREMENT_TYPE_HELP: Record<string, string> = {
     'A certification. Link the library course that grants it, or leave it unlinked and an officer marks it earned.',
   shifts: 'A number of shifts. Accrue automatically from approved shift reports.',
   calls: 'A number of call responses. Accrue automatically from approved shift reports.',
+  evaluated_shifts:
+    'A number of shifts with a submitted shift evaluation. Accrue automatically once the member can see each evaluation.',
+  transports: 'A number of patient transports, totalled from submitted shift evaluations.',
+  refusals: 'A number of patient refusals, totalled from submitted shift evaluations.',
 };
+
+// Only the program's name is required to create it. The build request nests
+// the program under `program`, and the validation handler reports a nested
+// field by its dotted path.
+type ProgramField = 'name';
+
+const PROGRAM_FIELDS: FieldSpecs<ProgramField> = {
+  name: { id: 'prog-name', label: 'Program Name', apiKeys: ['program.name'] },
+};
+
+const PROGRAM_NAME_MISSING = 'Enter a name for the program.';
 
 // ==================== Step Components ====================
 
@@ -273,9 +427,11 @@ const StepInfo: React.FC<{
     is_template: boolean;
     prerequisite_program_ids: string[];
     allows_concurrent_enrollment: boolean;
+    shift_evaluation_template_id: string;
   };
   onChange: (field: string, value: string | boolean | string[]) => void;
-}> = ({ data, onChange }) => (
+  nameError?: string | undefined;
+}> = ({ data, onChange, nameError }) => (
   <div className="space-y-6">
     <div>
       <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">Program Information</h2>
@@ -296,20 +452,19 @@ const StepInfo: React.FC<{
       </p>
     </InfoCallout>
 
-    <div>
-      <label htmlFor="prog-name" className="form-label">
-        Program Name <span className="text-red-700 dark:text-red-400">*</span>
-      </label>
-      <input
-        id="prog-name"
-        type="text"
-        value={data.name}
-        onChange={(e) => onChange('name', e.target.value)}
-        className="form-input"
-        placeholder="e.g., Recruit / Probationary Firefighter"
-        required
-      />
-    </div>
+    <FormField id={PROGRAM_FIELDS.name.id} label="Program Name" required error={nameError}>
+      {(field) => (
+        <input
+          {...field}
+          type="text"
+          maxLength={255}
+          value={data.name}
+          onChange={(e) => onChange('name', e.target.value)}
+          className="form-input"
+          placeholder="e.g., Recruit / Probationary Firefighter"
+        />
+      )}
+    </FormField>
 
     <div>
       <label htmlFor="prog-desc" className="form-label">
@@ -437,6 +592,12 @@ const StepInfo: React.FC<{
       allowsConcurrent={data.allows_concurrent_enrollment}
       onAllowsConcurrentChange={(value) => onChange('allows_concurrent_enrollment', value)}
     />
+
+    <ShiftEvaluationTemplateSelect
+      id="prog-evaluation-template"
+      value={data.shift_evaluation_template_id}
+      onChange={(templateId) => onChange('shift_evaluation_template_id', templateId)}
+    />
   </div>
 );
 
@@ -448,8 +609,8 @@ const StepPhases: React.FC<{
   onToggleExpand: (id: string) => void;
 }> = ({ phases, onAdd, onRemove, onUpdate, onToggleExpand }) => (
   <div className="space-y-6">
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div>
+    <div className="split-row gap-3 sm:items-center">
+      <div className="split-row-main">
         <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">Program Phases</h2>
         <p className="text-theme-text-muted text-sm">
           Define the phases or stages of your training pipeline. Members progress through these in order.
@@ -457,7 +618,7 @@ const StepPhases: React.FC<{
       </div>
       <button
         onClick={onAdd}
-        className="btn-primary flex shrink-0 items-center space-x-1 self-start px-3 text-sm sm:self-auto"
+        className="split-row-aside btn-primary flex shrink-0 items-center space-x-1 self-start px-3 text-sm sm:self-auto"
       >
         <Plus className="h-4 w-4" />
         <span>Add Phase</span>
@@ -775,6 +936,9 @@ const StepRequirements: React.FC<{
                             <option value="certification">Certification</option>
                             <option value="shifts">Shifts Completed</option>
                             <option value="calls">Call Responses</option>
+                            <option value="evaluated_shifts">Evaluated Shifts</option>
+                            <option value="transports">Transports</option>
+                            <option value="refusals">Refusals</option>
                           </select>
                           {REQUIREMENT_TYPE_HELP[req.requirement_type] && (
                             <HelpText>{REQUIREMENT_TYPE_HELP[req.requirement_type]}</HelpText>
@@ -920,6 +1084,21 @@ const StepRequirements: React.FC<{
                         />
                       </div>
                     )}
+
+                    <EvaluationRequirementFields
+                      idPrefix={`pipeline-${req.id}`}
+                      type={req.requirement_type}
+                      shifts={req.required_shifts}
+                      transports={req.required_transports}
+                      refusals={req.required_refusals}
+                      excludesLowest={req.evaluation_excludes_lowest_rating}
+                      onShiftsChange={(v) => onUpdateRequirement(phase.key, req.id, 'required_shifts', v)}
+                      onTransportsChange={(v) => onUpdateRequirement(phase.key, req.id, 'required_transports', v)}
+                      onRefusalsChange={(v) => onUpdateRequirement(phase.key, req.id, 'required_refusals', v)}
+                      onExcludesLowestChange={(v) =>
+                        onUpdateRequirement(phase.key, req.id, 'evaluation_excludes_lowest_rating', v)
+                      }
+                    />
 
                     {req.requirement_type === 'calls' && (
                       <div>
@@ -1201,7 +1380,7 @@ const StepReview: React.FC<{
       </InfoCallout>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
+      <StatGrid columns={4} gap={4}>
         <div className="bg-theme-surface rounded-lg p-4 text-center">
           <p className="text-2xl font-bold text-red-700 dark:text-red-400">{phases.length}</p>
           <p className="text-theme-text-muted text-sm">Phases</p>
@@ -1218,7 +1397,7 @@ const StepReview: React.FC<{
           <p className="text-2xl font-bold text-green-700 dark:text-green-400">{info.time_limit_days || '\u2014'}</p>
           <p className="text-theme-text-muted text-sm">Days Limit</p>
         </div>
-      </div>
+      </StatGrid>
 
       {/* Program info */}
       <div className="bg-theme-surface rounded-lg p-4">
@@ -1353,29 +1532,144 @@ const StepReview: React.FC<{
 
 const CreatePipelinePage: React.FC = () => {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState<WizardStep>('info');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const { confirm } = useConfirm();
+  const tz = useTimezone();
+  const memberId = useAuthStore((s) => s.user?.id);
 
-  // Program info state
-  const [info, setInfo] = useState({
-    name: '',
-    description: '',
-    code: '',
-    target_position: '',
-    structure_type: 'phases' as ProgramStructureType,
-    time_limit_days: '',
-    warning_days_before: '30',
-    is_template: false,
-    prerequisite_program_ids: [] as string[],
-    allows_concurrent_enrollment: true,
+  // The draft this member left in this browser, read once on arrival. Without a
+  // signed-in member there is nobody to own a draft, so none is read or written.
+  const [restored] = useState(() => {
+    if (!memberId) return null;
+    const stored = loadProgramWizardDraft(memberId);
+    const draft = stored ? restoreDraft(stored.data) : null;
+    return draft && stored ? { draft, savedAt: stored.savedAt } : null;
   });
 
+  const [currentStep, setCurrentStep] = useState<WizardStep>(restored?.draft.currentStep ?? 'info');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const programErrors = useFieldErrors(PROGRAM_FIELDS);
+  // Set when the name is flagged from another step, so focus lands on the
+  // field once the Program Information step has rendered it.
+  const focusNamePending = useRef(false);
+
+  // Program info state
+  const [info, setInfo] = useState<ProgramInfoForm>(restored?.draft.info ?? emptyInfo);
+
   // Phases state
-  const [phases, setPhases] = useState<PhaseFormData[]>([]);
+  const [phases, setPhases] = useState<PhaseFormData[]>(restored?.draft.phases ?? []);
   // Requirements/milestones for a program that isn't split into phases.
-  const [programRequirements, setProgramRequirements] = useState<RequirementFormData[]>([]);
-  const [programMilestones, setProgramMilestones] = useState<MilestoneFormData[]>([]);
+  const [programRequirements, setProgramRequirements] = useState<RequirementFormData[]>(
+    restored?.draft.programRequirements ?? []
+  );
+  const [programMilestones, setProgramMilestones] = useState<MilestoneFormData[]>(
+    restored?.draft.programMilestones ?? []
+  );
+
+  // ---- Draft ----
+  // When the draft was last written, and whether the last write failed. Shown
+  // beside the navigation: a save the browser refused has no other way to reach
+  // the officer, who would otherwise believe their work was being kept.
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(restored?.savedAt ?? null);
+  const [draftSaveFailed, setDraftSaveFailed] = useState(false);
+  const [showRestoredNotice, setShowRestoredNotice] = useState(restored !== null);
+
+  const draft: WizardDraft = { currentStep, info, phases, programRequirements, programMilestones };
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const draftPendingRef = useRef(false);
+  // Set once the program is created, so a save still scheduled from the last
+  // edit cannot write the finished program back as a draft.
+  const draftClosedRef = useRef(false);
+
+  const writeDraft = useCallback((): boolean => {
+    draftPendingRef.current = false;
+    if (!memberId || draftClosedRef.current) return false;
+    const current = draftRef.current;
+    if (!draftHasContent(current)) {
+      clearProgramWizardDraft(memberId);
+      setDraftSavedAt(null);
+      setDraftSaveFailed(false);
+      return true;
+    }
+    const now = Date.now();
+    const ok = saveProgramWizardDraft(memberId, current, now);
+    setDraftSaveFailed(!ok);
+    if (ok) setDraftSavedAt(now);
+    return ok;
+  }, [memberId]);
+
+  // Written shortly after the officer stops typing rather than on every
+  // keystroke; a whole program's worth of JSON per character adds up.
+  const draftSignature = JSON.stringify(draft);
+  const lastWrittenSignature = useRef(draftSignature);
+  useEffect(() => {
+    if (!memberId || draftSignature === lastWrittenSignature.current) return;
+    draftPendingRef.current = true;
+    const timer = setTimeout(() => {
+      lastWrittenSignature.current = draftSignature;
+      writeDraft();
+    }, DRAFT_SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [draftSignature, memberId, writeDraft]);
+
+  // An edit made inside the delay is written on the way out, whether the
+  // officer switches tabs in the hub (unmount) or closes the browser tab.
+  useEffect(() => {
+    const flush = () => {
+      if (draftPendingRef.current) writeDraft();
+    };
+    window.addEventListener('beforeunload', flush);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      flush();
+    };
+  }, [writeDraft]);
+
+  const saveDraftNow = () => {
+    lastWrittenSignature.current = draftSignature;
+    if (!draftHasContent(draft)) {
+      toast.error('Enter a program name first — there is nothing to save yet.');
+      return;
+    }
+    if (writeDraft()) {
+      toast.success('Draft saved in this browser');
+    } else {
+      toast.error('This browser would not save the draft. Keep this page open until the program is created.');
+    }
+  };
+
+  const startOver = async () => {
+    const confirmed = await confirm({
+      title: 'Start over?',
+      message:
+        'This deletes the draft saved in this browser — the program info, phases, requirements and milestones entered so far. It cannot be undone.',
+      confirmLabel: 'Delete draft',
+      cancelLabel: 'Keep it',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    if (memberId) clearProgramWizardDraft(memberId);
+    const fresh: WizardDraft = {
+      currentStep: 'info',
+      info: emptyInfo(),
+      phases: [],
+      programRequirements: [],
+      programMilestones: [],
+    };
+    lastWrittenSignature.current = JSON.stringify(fresh);
+    draftPendingRef.current = false;
+    setCurrentStep(fresh.currentStep);
+    setInfo(fresh.info);
+    setPhases(fresh.phases);
+    setProgramRequirements(fresh.programRequirements);
+    setProgramMilestones(fresh.programMilestones);
+    setError('');
+    programErrors.clear();
+    setDraftSavedAt(null);
+    setDraftSaveFailed(false);
+    setShowRestoredNotice(false);
+  };
 
   // Course catalog backing the course/certification requirement pickers.
   const { courses, loading: coursesLoading, error: coursesError } = useCourseLibrary();
@@ -1412,12 +1706,32 @@ const CreatePipelinePage: React.FC = () => {
   // ---- Step navigation ----
   const stepIndex = wizardSteps.findIndex((s) => s.key === currentStep);
 
-  const canGoNext = () => {
-    if (currentStep === 'info') return info.name.trim().length > 0;
-    return true;
+  // Next and Create stay pressable without a name, and pressing one says what
+  // is missing under the field. A greyed-out Next told the officer nothing,
+  // and the native required bubble never fired outside a form (forms review
+  // F-3).
+  const flagMissingName = () => {
+    programErrors.setError('name', PROGRAM_NAME_MISSING);
+    if (currentStep === 'info') {
+      programErrors.focusFirst({ name: PROGRAM_NAME_MISSING });
+    } else {
+      focusNamePending.current = true;
+      setCurrentStep('info');
+    }
   };
 
+  useEffect(() => {
+    if (currentStep === 'info' && focusNamePending.current) {
+      focusNamePending.current = false;
+      document.getElementById(PROGRAM_FIELDS.name.id)?.focus();
+    }
+  }, [currentStep]);
+
   const goNext = () => {
+    if (currentStep === 'info' && !info.name.trim()) {
+      flagMissingName();
+      return;
+    }
     const idx = wizardSteps.findIndex((s) => s.key === currentStep);
     const next = wizardSteps[idx + 1];
     if (idx < wizardSteps.length - 1 && next) setCurrentStep(next.key);
@@ -1432,6 +1746,7 @@ const CreatePipelinePage: React.FC = () => {
   // ---- Info handlers ----
   const handleInfoChange = (field: string, value: string | boolean | string[]) => {
     setInfo((prev) => ({ ...prev, [field]: value }));
+    if (field === 'name') programErrors.setError('name', null);
     // Switching to a one-list program while sitting on the Phases step would
     // leave the wizard showing a step that no longer exists.
     if (field === 'structure_type' && value !== 'phases' && currentStep === 'phases') {
@@ -1554,7 +1869,10 @@ const CreatePipelinePage: React.FC = () => {
         const missingTarget =
           (req.requirement_type === 'hours' && !req.required_hours.trim()) ||
           (req.requirement_type === 'shifts' && !req.required_shifts.trim()) ||
-          (req.requirement_type === 'calls' && !req.required_calls.trim());
+          (req.requirement_type === 'calls' && !req.required_calls.trim()) ||
+          (req.requirement_type === 'evaluated_shifts' && !req.required_shifts.trim()) ||
+          (req.requirement_type === 'transports' && !req.required_transports.trim()) ||
+          (req.requirement_type === 'refusals' && !req.required_refusals.trim());
         if (req.source === 'new' && missingTarget) {
           return `"${req.name.trim()}" in ${group.title} needs a number to count toward, or nobody can ever complete it.`;
         }
@@ -1574,6 +1892,10 @@ const CreatePipelinePage: React.FC = () => {
 
   // ---- Submit ----
   const handleSubmit = async () => {
+    if (!info.name.trim()) {
+      flagMissingName();
+      return;
+    }
     const problem = firstProblem();
     if (problem) {
       setError(problem);
@@ -1601,6 +1923,7 @@ const CreatePipelinePage: React.FC = () => {
           is_template: info.is_template,
           prerequisite_program_ids: info.prerequisite_program_ids.length ? info.prerequisite_program_ids : undefined,
           allows_concurrent_enrollment: info.allows_concurrent_enrollment,
+          shift_evaluation_template_id: info.shift_evaluation_template_id || undefined,
         },
         phases: usesPhases
           ? phases.map((phaseData) => ({
@@ -1620,9 +1943,19 @@ const CreatePipelinePage: React.FC = () => {
 
       const program = await trainingProgramService.buildProgram(payload);
 
+      draftClosedRef.current = true;
+      if (memberId) clearProgramWizardDraft(memberId);
       toast.success('Training pipeline created');
       void navigate(`/training/programs/${program.id}`);
     } catch (err: unknown) {
+      // A 422 on the program's name belongs under that field, which is on the
+      // first step; anything else keeps the message box and toast below.
+      const fieldErrors = programErrors.setFromApiError(err, 'Failed to create pipeline');
+      if (fieldErrors.name) {
+        focusNamePending.current = true;
+        setCurrentStep('info');
+        return;
+      }
       const errorMessage = getErrorDetail(err) || 'Failed to create pipeline';
       setError(errorMessage);
       toast.error(errorMessage);
@@ -1644,6 +1977,33 @@ const CreatePipelinePage: React.FC = () => {
         <h2 className="sr-only">Create Training Pipeline</h2>
         <p className="text-theme-text-muted mb-6 text-sm">Step-by-step wizard to build your training program</p>
 
+        {showRestoredNotice && restored && (
+          <div role="status" className="alert-info mb-6 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm">
+              Picked up where you left off — this draft was saved in this browser{' '}
+              {formatDateTime(new Date(restored.savedAt), tz)}.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowRestoredNotice(false)}
+                className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover min-h-11 rounded-lg px-3 py-2 text-sm"
+              >
+                Dismiss
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void startOver();
+                }}
+                className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover min-h-11 rounded-lg px-3 py-2 text-sm"
+              >
+                Start over
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Step indicator */}
         {/* Five 44px steps and their connectors fit a 320px phone only with
             the spacing tightened below sm. The labels wait for lg rather than sm: the
@@ -1664,7 +2024,11 @@ const CreatePipelinePage: React.FC = () => {
                 )}
                 <button
                   onClick={() => {
-                    if (i <= stepIndex || canGoNext()) setCurrentStep(step.key);
+                    if (i > stepIndex && currentStep === 'info' && !info.name.trim()) {
+                      flagMissingName();
+                      return;
+                    }
+                    setCurrentStep(step.key);
                   }}
                   aria-current={isActive ? 'step' : undefined}
                   className={`touch-target-phone flex shrink-0 items-center space-x-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -1691,7 +2055,9 @@ const CreatePipelinePage: React.FC = () => {
             </div>
           )}
 
-          {currentStep === 'info' && <StepInfo data={info} onChange={handleInfoChange} />}
+          {currentStep === 'info' && (
+            <StepInfo data={info} onChange={handleInfoChange} nameError={programErrors.errors.name} />
+          )}
           {currentStep === 'phases' && (
             <StepPhases
               phases={phases}
@@ -1737,7 +2103,7 @@ const CreatePipelinePage: React.FC = () => {
         </div>
 
         {/* Navigation */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <button
             onClick={goBack}
             disabled={stepIndex === 0}
@@ -1747,12 +2113,35 @@ const CreatePipelinePage: React.FC = () => {
             <span>Back</span>
           </button>
 
+          {memberId && (
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+              <p
+                aria-live="polite"
+                className={`text-xs ${draftSaveFailed ? 'text-red-700 dark:text-red-400' : 'text-theme-text-muted'}`}
+              >
+                {draftSaveFailed
+                  ? 'Draft not saved — this browser refused it'
+                  : draftSavedAt !== null
+                    ? `Draft saved ${formatDateTime(new Date(draftSavedAt), tz)}`
+                    : 'Drafts save in this browser as you go'}
+              </p>
+              <button
+                type="button"
+                onClick={saveDraftNow}
+                className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2 text-sm"
+              >
+                <Save className="h-4 w-4" />
+                <span>Save draft</span>
+              </button>
+            </div>
+          )}
+
           {currentStep === 'review' ? (
             <button
               onClick={() => {
                 void handleSubmit();
               }}
-              disabled={isSubmitting || !info.name.trim()}
+              disabled={isSubmitting}
               className="btn-primary flex items-center space-x-2 px-6"
             >
               {isSubmitting ? (
@@ -1768,7 +2157,7 @@ const CreatePipelinePage: React.FC = () => {
               )}
             </button>
           ) : (
-            <button onClick={goNext} disabled={!canGoNext()} className="btn-primary flex items-center space-x-2">
+            <button onClick={goNext} className="btn-primary flex items-center space-x-2">
               <span>Next</span>
               <ArrowRight className="h-4 w-4" />
             </button>

@@ -323,11 +323,15 @@ the **[full Unraid guide](../docs/deployment/unraid.md)**:
 
 ## Unraid Community App
 
-The Logbook is **not yet published** to Unraid Community Applications —
-searching the Apps tab will not find it. The Docker Compose method on this
-page is the supported install path today. (The CA template and its
-[installation guide](./UNRAID-INSTALLATION.md) are ready in this directory,
-awaiting publication — see [README.md](./README.md) for status.)
+The Community Applications template ([the-logbook.xml](./the-logbook.xml))
+runs a single combined container (web interface and API) from
+`ghcr.io/thegspiro/the-logbook`, published by the `Release Image` workflow on
+each release tag. It is not yet listed in the Apps tab, and the image exists
+only once the first release has been published; MySQL and Redis are separate
+containers you install yourself. The Docker Compose method on this page runs
+the whole stack and remains the fuller install. See
+[UNRAID-INSTALLATION.md](./UNRAID-INSTALLATION.md) and
+[README.md](./README.md) for status.
 
 ---
 

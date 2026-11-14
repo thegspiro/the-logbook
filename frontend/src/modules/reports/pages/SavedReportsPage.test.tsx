@@ -144,8 +144,8 @@ describe('SavedReportsPage', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: /new saved report/i }));
     const dialog = await screen.findByRole('dialog');
-    await userEvent.type(within(dialog).getByLabelText('Name'), 'Fleet weekly');
-    await userEvent.selectOptions(within(dialog).getByLabelText('Report'), 'apparatus_status');
+    await userEvent.type(within(dialog).getByLabelText(/^Name/), 'Fleet weekly');
+    await userEvent.selectOptions(within(dialog).getByLabelText(/^Report \*/), 'apparatus_status');
     await userEvent.selectOptions(within(dialog).getByLabelText('Reporting period'), 'previous_month');
     await userEvent.click(within(dialog).getByLabelText('Email this report on a schedule'));
     await userEvent.selectOptions(within(dialog).getByLabelText('Day of the week'), '3');
@@ -184,6 +184,43 @@ describe('SavedReportsPage', () => {
       schedule_frequency: null,
       schedule_day: null,
     });
+  });
+
+  it('puts a 422 on its field, saves the rest of an edit and stays open', async () => {
+    update
+      .mockRejectedValueOnce({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'email_recipients.0', message: 'value is not a valid email address' }] },
+        },
+      })
+      .mockResolvedValue(saved());
+    renderWithRouter(<SavedReportsPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /edit/i }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+
+    const recipients = within(dialog).getByLabelText('Email to');
+    await waitFor(() =>
+      expect(recipients).toHaveAccessibleDescription(expect.stringContaining('value is not a valid email address'))
+    );
+    expect(recipients).toHaveAttribute('aria-invalid', 'true');
+    expect(update).toHaveBeenCalledTimes(2);
+    expect('email_recipients' in (update.mock.calls[1]?.[1] as object)).toBe(false);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('asks before Cancel throws an edit away', async () => {
+    renderWithRouter(<SavedReportsPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /edit/i }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.type(within(dialog).getByLabelText(/^Name/), ' (draft)');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Keep editing' }));
+
+    expect(within(dialog).getByLabelText(/^Name/)).toHaveValue('Monthly program progress (draft)');
   });
 
   it('switching monthly to weekly sends the weekday on screen, not the old day of the month', async () => {

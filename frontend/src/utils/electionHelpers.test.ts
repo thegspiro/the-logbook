@@ -5,6 +5,8 @@ import {
   getTimeRemaining,
   getStatusBadgeClass,
   getVictoryDescription,
+  getStatusLabel,
+  titleNamesRunoffRound,
 } from './electionHelpers';
 import { ElectionStatus, VictoryCondition } from '../constants/enums';
 import type { Election } from '../types/election';
@@ -138,5 +140,35 @@ describe('electionCanEmailBallots', () => {
   it('is true for ballot items or plain positions, false with neither', () => {
     expect(electionCanEmailBallots({ ballot_items: [], positions: ['Chief'] })).toBe(true);
     expect(electionCanEmailBallots({ positions: [] })).toBe(false);
+  });
+});
+
+// W50-74: the badge and the filter pills read the same word.
+describe('getStatusLabel', () => {
+  it('labels each status in words, not as the raw enum', () => {
+    expect(getStatusLabel(ElectionStatus.DRAFT)).toBe('Draft');
+    expect(getStatusLabel(ElectionStatus.NOMINATIONS)).toBe('Nominations');
+    expect(getStatusLabel(ElectionStatus.OPEN)).toBe('Open');
+    expect(getStatusLabel(ElectionStatus.CLOSED)).toBe('Closed');
+    expect(getStatusLabel(ElectionStatus.CANCELLED)).toBe('Cancelled');
+  });
+
+  it('capitalises a status it does not know rather than printing it raw', () => {
+    expect(getStatusLabel('archived')).toBe('Archived');
+  });
+});
+
+// W50-76: a generated runoff title already ends "- Runoff Round 1", so a
+// badge saying the same beside it is noise; a renamed runoff keeps it.
+describe('titleNamesRunoffRound', () => {
+  it('is true for the title the backend generates for that round', () => {
+    expect(titleNamesRunoffRound('Chief 2027 - Runoff Round 1', 1)).toBe(true);
+    expect(titleNamesRunoffRound('Chief 2027 - runoff round 2 ', 2)).toBe(true);
+  });
+
+  it('is false for a renamed runoff or another round', () => {
+    expect(titleNamesRunoffRound('Chief 2027 second vote', 1)).toBe(false);
+    expect(titleNamesRunoffRound('Chief 2027 - Runoff Round 1', 2)).toBe(false);
+    expect(titleNamesRunoffRound('Chief 2027 - Runoff Round 1', null)).toBe(false);
   });
 });

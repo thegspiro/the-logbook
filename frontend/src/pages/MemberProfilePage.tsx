@@ -32,13 +32,20 @@ import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
+import { useMembershipTierOptions } from '../hooks/useMembershipTierOptions';
 import { useProfileVisibility } from '../hooks/useProfileVisibility';
 import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
 import { NFC_ID_CARDS_INTEGRATION } from '../modules/membership/constants/idCards';
 import { formatCalendarDate, formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
-import { withoutRankMirrors } from '../utils/positions';
-import { isAdministrativeMember, membershipTypeLabel } from '../utils/membership';
+import { groupPositionsByKind } from '../utils/positions';
+import {
+  effectiveMemberClass,
+  isAdministrativeMember,
+  memberClassLabel,
+  memberStandingLabel,
+  membershipTypeLabel,
+} from '../utils/membership';
 import type { UserWithRoles } from '../types/role';
 import type {
   ContactInfoSettings,
@@ -58,6 +65,7 @@ import EmergencyContactsSection from '../components/member-profile/EmergencyCont
 import { VisibilityControl } from '../components/member-profile/VisibilityControl';
 import { useDialog } from '../hooks/useDialog';
 import { canViewMemberIdCard } from '../utils/memberIdCardAccess';
+import { MyHoursSummary } from './scheduling/MyHoursSummary';
 import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
 import { GoogleAccountPanel } from '../modules/membership/components/GoogleAccountPanel';
 import { DIRECTORY_INTEGRATIONS } from '../modules/membership/constants/googleAccount';
@@ -67,12 +75,17 @@ import { AnonymizeMemberModal } from '../components/AnonymizeMemberModal';
 import { RejoinServiceFields } from '../components/RejoinServiceFields';
 import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
+import { SupervisorSection } from '../components/member-profile/SupervisorSection';
+import { PastPositions } from '../components/member-profile/PastPositions';
 import { StatusChangeReason } from '../components/member-profile/StatusChangeReason';
 import { QualificationsSection } from '../components/member-profile/QualificationsSection';
+import { VotingEligibilitySection } from '../components/member-profile/VotingEligibilitySection';
 import { UndoDropControl } from '../components/member-profile/UndoDropControl';
+import { PropertyReturnPreview } from '../components/member-profile/PropertyReturnPreview';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { blankToNull } from '../utils/formValues';
 import { displayNameOf, givenName } from '../utils/memberName';
+import { getWaiverStatusBadge } from '../utils/waiverStatus';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 // Types for inventory data
@@ -88,6 +101,20 @@ interface InventoryItem {
 /** Check if a module is enabled by its id. */
 function statusLabel(status: string): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * The profile's write endpoints answer with the plain profile, which does not
+ * carry the computed `service_since` or `past_positions` that
+ * GET /users/{id}/with-roles sends; keep the values already on screen rather
+ * than blanking "Member since" and the earlier positions.
+ */
+function keepServiceSince(updated: UserWithRoles, previous: UserWithRoles | null): UserWithRoles {
+  return {
+    ...updated,
+    service_since: updated.service_since ?? previous?.service_since,
+    past_positions: updated.past_positions ?? previous?.past_positions,
+  };
 }
 
 function isModuleEnabled(moduleId: string): boolean {
@@ -182,6 +209,7 @@ export const MemberProfilePage: React.FC = () => {
 
   // Module enablement checks
   const trainingEnabled = isModuleEnabled('training');
+  const schedulingEnabled = isModuleEnabled('scheduling');
 
   const fetchInventoryItems = React.useCallback(async (uid: string) => {
     try {
@@ -281,6 +309,9 @@ export const MemberProfilePage: React.FC = () => {
   const isSelf = currentUser?.id === userId;
   const canViewTargetTraining = isSelf || checkPermission('training.manage');
   const canViewTargetAdminHours = isSelf || checkPermission('admin_hours.manage');
+  // Officers: `scheduling.report` already shows them every member's hours in
+  // the department's member-hours report, which is what the backend checks.
+  const canViewTargetShifts = isSelf || checkPermission('scheduling.report');
   // Which gear a colleague signed for is quartermaster business, not part of
   // the contact card every member may look up. inventory.view is baseline for
   // every member (it opens the catalog and their own kit), so it cannot be the
@@ -331,10 +362,13 @@ export const MemberProfilePage: React.FC = () => {
   }, [userId, inventoryModuleEnabled, canViewTargetInventory, fetchInventoryItems]);
 
   const canManageMembers = checkPermission('members.manage');
+  const canManageElections = checkPermission('elections.manage');
 
   // Rank codes are stored on the member; the display name lives on the org's
   // operational ranks, readable by any signed-in member.
   const { formatRank } = useRanks();
+  // The department's tier names, which every member may read (MR-3).
+  const { tiers: tierNames } = useMembershipTierOptions();
 
   // The member's own choice of what colleagues see. Seeded from the profile
   // payload (present for self and for members-managers) so no second request
@@ -483,7 +517,7 @@ export const MemberProfilePage: React.FC = () => {
       };
 
       const updatedUser = await userService.updateContactInfo(userId, payload);
-      setUser(updatedUser);
+      setUser((prev) => keepServiceSince(updatedUser, prev));
       setIsEditing(false);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to update contact information. Check your entries and try again.'));
@@ -602,7 +636,7 @@ export const MemberProfilePage: React.FC = () => {
         personal_email: blankToNull(addressForm.personal_email),
       };
       const updated = await userService.updateUserProfile(userId, updateData);
-      setUser(updated);
+      setUser((prev) => keepServiceSince(updated, prev));
       setEditingAddress(false);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to update address.'));
@@ -665,7 +699,7 @@ export const MemberProfilePage: React.FC = () => {
       const updated = await userService.updateUserProfile(userId, {
         emergency_contacts: contacts,
       });
-      setUser(updated);
+      setUser((prev) => keepServiceSince(updated, prev));
       setEditingContacts(false);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to update emergency contacts.'));
@@ -734,9 +768,11 @@ export const MemberProfilePage: React.FC = () => {
   const showAdminHours = Boolean(adminHoursSummary && adminHoursSummary.totalEntries > 0) || adminHoursLoading;
   const showIdCards = Boolean(canManageIdCards && userId && idCardsEnabled);
   const showGoogleAccount = Boolean(googleAccount.account && userId);
+  const showShiftHistory = Boolean(schedulingEnabled && canViewTargetShifts && userId);
   const hasLeftColumn =
     (trainingEnabled && canViewTargetTraining) ||
     showAdminHours ||
+    showShiftHistory ||
     showIdCards ||
     showGoogleAccount ||
     (inventoryModuleEnabled && canViewTargetInventory);
@@ -745,12 +781,17 @@ export const MemberProfilePage: React.FC = () => {
     (inventoryModuleEnabled && canViewTargetInventory) ||
     Boolean(adminHoursSummary && adminHoursSummary.totalEntries > 0);
 
+  const heldPositions = groupPositionsByKind(user?.roles || []);
   const rankLabel = user
-    ? isAdministrativeMember(undefined, user.membership_type)
+    ? isAdministrativeMember(user.member_class, user.membership_type)
       ? 'Administrative'
       : formatRank(user.rank)
     : '';
-  const memberTypeLabel = user ? membershipTypeLabel(user.membership_type) : '';
+  // Class and status are two facts; a row written before the pair existed
+  // falls back to the fused legacy label.
+  const classLabel = user ? memberClassLabel(effectiveMemberClass(user.member_class, user.membership_type)) : '';
+  const ladderLabel = user?.member_status ? memberStandingLabel(user.member_status, tierNames) : '';
+  const memberTypeLabel = ladderLabel || (user ? membershipTypeLabel(user.membership_type) : '');
   // "Administrative · Administrative" would be the class stated twice.
   const headerSubtitle = [rankLabel, memberTypeLabel === rankLabel ? '' : memberTypeLabel].filter(Boolean).join(' · ');
   // A member who goes by another name is headed by it, so the name on their
@@ -814,8 +855,8 @@ export const MemberProfilePage: React.FC = () => {
           </button>
 
           <div className="card p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-center gap-4">
+            <div className="page-header gap-3 sm:items-start">
+              <div className="page-header-title flex items-center gap-4">
                 {/* Profile Photo with Upload */}
                 <div className="group relative">
                   {user.photo_url ? (
@@ -880,8 +921,14 @@ export const MemberProfilePage: React.FC = () => {
                     @{user.username}
                     {user.membership_number && <> · #{user.membership_number}</>}
                   </p>
+                  {/* Offices and committees apart: a Treasurer who also
+                      serves on the History Committee holds two different
+                      kinds of thing, and one row of chips said otherwise. */}
+                  {heldPositions.committees.length > 0 && heldPositions.offices.length > 0 && (
+                    <p className="text-theme-text-muted mt-2 text-xs font-medium uppercase">Offices</p>
+                  )}
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {withoutRankMirrors(user.roles || []).map((role) => (
+                    {heldPositions.offices.map((role) => (
                       <span
                         key={role.id}
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -894,13 +941,29 @@ export const MemberProfilePage: React.FC = () => {
                       </span>
                     ))}
                   </div>
+                  {heldPositions.committees.length > 0 && (
+                    <>
+                      <p className="text-theme-text-muted mt-2 text-xs font-medium uppercase">Committees</p>
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        {heldPositions.committees.map((role) => (
+                          <span
+                            key={role.id}
+                            className="inline-flex items-center rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-900 dark:bg-teal-500/20 dark:text-teal-300"
+                          >
+                            {role.name}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  <PastPositions positions={user.past_positions ?? []} tz={tz} />
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="page-header-actions flex flex-wrap items-center gap-2">
                 {canViewIdCard && (
                   <Link
                     to={`/members/${userId}/id-card`}
-                    className="touch-target-phone inline-flex items-center gap-1.5 rounded-lg border border-blue-300 px-3 py-1 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500/40 dark:text-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+                    className="btn-secondary inline-flex items-center gap-1.5 text-sm"
                   >
                     <CreditCard className="h-4 w-4" />
                     ID Card
@@ -959,6 +1022,16 @@ export const MemberProfilePage: React.FC = () => {
                   complianceSummary={complianceSummary}
                   tz={tz}
                 />
+              )}
+
+              {/* Shift & call history: the same figures My Hours shows the
+                member, read for this member. Always the profile's view, even
+                on one's own profile, so the outside-shift editor that belongs
+                on My Hours is not repeated here. */}
+              {showShiftHistory && userId && (
+                <div className="card p-6">
+                  <MyHoursSummary memberId={userId} />
+                </div>
               )}
 
               {/* Admin Hours Summary */}
@@ -1313,9 +1386,21 @@ export const MemberProfilePage: React.FC = () => {
                     <p className="text-theme-text-primary mt-1 text-sm">{rankLabel}</p>
                   </div>
                 )}
+                {classLabel && (
+                  <div>
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Member class</p>
+                    <p className="text-theme-text-primary mt-1 text-sm">{classLabel}</p>
+                  </div>
+                )}
+                {!classLabel && user.member_status && (
+                  <div>
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Member class</p>
+                    <p className="text-theme-accent-red mt-1 text-sm">Not set — edit the member to choose one</p>
+                  </div>
+                )}
                 {memberTypeLabel && (
                   <div>
-                    <p className="text-theme-text-muted text-xs font-medium uppercase">Member type</p>
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Membership status</p>
                     <p className="text-theme-text-primary mt-1 text-sm">{memberTypeLabel}</p>
                   </div>
                 )}
@@ -1331,15 +1416,23 @@ export const MemberProfilePage: React.FC = () => {
                     <p className="text-theme-text-primary mt-1 text-sm">{user.platoon}</p>
                   </div>
                 )}
-                {user.hire_date && (
+                {/* Credited service, not the hire date (owner decision
+                    2026-11-01): the server computes it from the member's
+                    service stints, so a break in service is not counted. */}
+                {user.service_since && (
                   <div>
                     <p className="text-theme-text-muted text-xs font-medium uppercase">Member since</p>
-                    <p className="text-theme-text-primary mt-1 text-sm">{formatDate(user.hire_date, tz)}</p>
+                    <p className="text-theme-text-primary mt-1 text-sm">{formatDate(user.service_since, tz)}</p>
                   </div>
                 )}
-                {!rankLabel && !memberTypeLabel && !user.station && !user.platoon && !user.hire_date && (
-                  <p className="text-theme-text-muted text-sm">No membership details on file.</p>
-                )}
+                {!rankLabel &&
+                  !classLabel &&
+                  !memberTypeLabel &&
+                  !user.station &&
+                  !user.platoon &&
+                  !user.service_since && (
+                    <p className="text-theme-text-muted text-sm">No membership details on file.</p>
+                  )}
                 {canManageMembers && (
                   <div className="border-theme-surface-border border-t pt-3">
                     <p className="text-theme-text-muted text-xs font-medium uppercase">Status</p>
@@ -1374,6 +1467,11 @@ export const MemberProfilePage: React.FC = () => {
                           onUndone={() => fetchUserData(userId)}
                         />
                       )}
+                    {/* What a drop would ask the member to return, before the
+                        officer drops them; read-only, same grant as the drop. */}
+                    {!isSelf && userId && !(SEPARATED_STATUSES as readonly string[]).includes(user.status) && (
+                      <PropertyReturnPreview userId={userId} memberName={displayNameOf(user) || user.username} />
+                    )}
                     {/* Only a departed member can be anonymized; the backend
                         refuses every other status and the caller's own record. */}
                     {!isSelf && (ANONYMIZABLE_STATUSES as readonly string[]).includes(user.status) && (
@@ -1397,10 +1495,22 @@ export const MemberProfilePage: React.FC = () => {
               <ServiceHistorySection userId={userId} canEdit={canManageMembers} tz={tz} refreshKey={user.status} />
             )}
 
+            {/* Who the member reports to, for the member and leadership,
+                matching the endpoint; members.manage sets and ends it. */}
+            {userId && (isSelf || canManageMembers) && (
+              <SupervisorSection userId={userId} memberName={displayNameOf(user)} canEdit={canManageMembers} tz={tz} />
+            )}
+
             {/* What the member is certified to do, as shift eligibility reads
                 it. members.manage only, matching the endpoint. */}
             {userId && canManageMembers && (
               <QualificationsSection userId={userId} memberName={displayNameOf(user)} tz={tz} />
+            )}
+
+            {/* The member's voting waiting period and the secretary's
+                override of it. elections.manage only, matching the endpoint. */}
+            {userId && canManageElections && (
+              <VotingEligibilitySection userId={userId} memberName={displayNameOf(user)} />
             )}
 
             {/* Quick Stats — only when the viewer can see at least one of the
@@ -1454,34 +1564,41 @@ export const MemberProfilePage: React.FC = () => {
               <div className="card p-6">
                 <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Leave of Absence</h2>
                 <div className="space-y-3">
-                  {activeLeaves.map((leave) => (
-                    <div key={leave.id} className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3">
-                      <div className="mb-1 flex items-center justify-between">
-                        <span className="text-sm font-medium text-yellow-700 capitalize dark:text-yellow-400">
-                          {(leave.leave_type ?? '').replace(/_/g, ' ')}
-                        </span>
-                        <span className="text-theme-text-muted text-xs">Active</span>
-                      </div>
-                      <p className="text-theme-text-secondary text-xs">
-                        {/* Calendar dates, not instants — run through a
+                  {activeLeaves.map((leave) => {
+                    // "active" from the API means not cancelled; whether the
+                    // leave is in force today is a matter of its dates.
+                    const badge = getWaiverStatusBadge(leave, getTodayLocalDate(tz));
+                    return (
+                      <div key={leave.id} className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3">
+                        <div className="mb-1 flex items-center justify-between">
+                          <span className="text-sm font-medium text-yellow-700 capitalize dark:text-yellow-400">
+                            {(leave.leave_type ?? '').replace(/_/g, ' ')}
+                          </span>
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badge.color}`}>
+                            {badge.label}
+                          </span>
+                        </div>
+                        <p className="text-theme-text-secondary text-xs">
+                          {/* Calendar dates, not instants — run through a
                             timezone these render a day early. */}
-                        {formatCalendarDate(leave.start_date, {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                        })}{' '}
-                        &ndash;{' '}
-                        {leave.end_date
-                          ? formatCalendarDate(leave.end_date, {
-                              year: 'numeric',
-                              month: '2-digit',
-                              day: '2-digit',
-                            })
-                          : 'Permanent'}
-                      </p>
-                      {leave.reason && <p className="text-theme-text-muted mt-1 text-xs">{leave.reason}</p>}
-                    </div>
-                  ))}
+                          {formatCalendarDate(leave.start_date, {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                          })}{' '}
+                          &ndash;{' '}
+                          {leave.end_date
+                            ? formatCalendarDate(leave.end_date, {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                              })
+                            : 'Permanent'}
+                        </p>
+                        {leave.reason && <p className="text-theme-text-muted mt-1 text-xs">{leave.reason}</p>}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

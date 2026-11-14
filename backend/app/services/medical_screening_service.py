@@ -7,12 +7,11 @@ records, and compliance tracking.
 
 import re
 from datetime import date, datetime, timedelta, timezone
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import Select, and_, exists, func, or_, select
+from sqlalchemy import Select, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
 
 from app.core.utils import generate_uuid
 from app.models.medical_screening import (
@@ -126,54 +125,47 @@ _SATISFYING_STATUSES = (
     ScreeningStatus.WAIVED.value,
 )
 
+# The statuses that decide a requirement: a result. The latest of these wins,
+# so a failure revokes an earlier pass until a later pass, completion or waiver
+# supersedes it (W71b-1, owner decision 2026-11-02). Scheduled, pending review
+# and expired records carry no result and decide nothing either way.
+_DECIDING_STATUSES = _SATISFYING_STATUSES + (ScreeningStatus.FAILED.value,)
 
-def superseded_record_clause():
-    """SQL: a newer satisfying record of the same type, for the same subject, exists.
 
-    The compliance summary grades each requirement on the subject's most
-    recent satisfying record of that screening type: latest completed date,
-    an undated record ranking lowest, the newer-created winning a same-day
-    tie. A record something later supersedes is therefore not an impending
-    lapse however soon it expires, and a list of expiring screenings must
-    leave it out to agree with the count (pitfall #29). The one definition,
-    shared by ``get_expiring_soon`` and the MCP ``list_expiring_screenings``
-    tool. The subject is the member when the record names one, else the
-    prospect.
+def _subject_key(record: ScreeningRecord) -> Tuple[str, str]:
+    """Whose record this is: the member when it names one, else the prospect.
+
+    A record carried across a prospect's transfer names both and belongs to
+    the member (W71b-2).
     """
-    later = aliased(ScreeningRecord)
-    floor = date.min
-    completed = func.coalesce(ScreeningRecord.completed_date, floor)
-    later_completed = func.coalesce(later.completed_date, floor)
-    created_floor = datetime(1, 1, 1, tzinfo=timezone.utc)
-    created = func.coalesce(ScreeningRecord.created_at, created_floor)
-    later_created = func.coalesce(later.created_at, created_floor)
-    return exists(
-        select(later.id).where(
-            later.organization_id == ScreeningRecord.organization_id,
-            or_(
-                and_(
-                    ScreeningRecord.user_id.isnot(None),
-                    later.user_id == ScreeningRecord.user_id,
-                ),
-                and_(
-                    ScreeningRecord.user_id.is_(None),
-                    later.prospect_id == ScreeningRecord.prospect_id,
-                ),
-            ),
-            later.screening_type == ScreeningRecord.screening_type,
-            later.status.in_(_SATISFYING_STATUSES),
-            later.id != ScreeningRecord.id,
-            or_(
-                later_completed > completed,
-                and_(later_completed == completed, later_created > created),
-                and_(
-                    later_completed == completed,
-                    later_created == created,
-                    later.id > ScreeningRecord.id,
-                ),
-            ),
-        )
-    )
+    if record.user_id:
+        return ("user", str(record.user_id))
+    return ("prospect", str(record.prospect_id or ""))
+
+
+def deciding_records(
+    records: Iterable[ScreeningRecord],
+) -> Dict[Tuple[Tuple[str, str], str], ScreeningRecord]:
+    """The record that decides each (subject, requirement): its latest result.
+
+    The same partition and ordering ``_grade`` uses — a result (passed,
+    completed, waived or failed, ``_DECIDING_STATUSES``) linked to the
+    requirement, most recent by ``_recency`` — so the expiring list and the
+    grade agree (pitfall #29). A record any later result supersedes is not
+    an impending lapse, and a record linked to nothing decides nothing.
+
+    This replaces a correlated SQL ``EXISTS``: the status is ciphertext since
+    MS-18, so the database cannot tell a result from a booking.
+    """
+    latest: Dict[Tuple[Tuple[str, str], str], ScreeningRecord] = {}
+    for record in records:
+        if record.requirement_id is None or record.status not in _DECIDING_STATUSES:
+            continue
+        key = (_subject_key(record), str(record.requirement_id))
+        current = latest.get(key)
+        if current is None or _recency(record) > _recency(current):
+            latest[key] = record
+    return latest
 
 
 def _positive_months(months: Optional[int]) -> Optional[int]:
@@ -182,40 +174,102 @@ def _positive_months(months: Optional[int]) -> Optional[int]:
     return months if months and months > 0 else None
 
 
+def _grace_days(requirement: Optional[ScreeningRequirement]) -> int:
+    """The requirement's grace period in days; never negative.
+
+    The schema refuses a negative value, but the column is a plain int and a
+    row written another way must not move a due date *earlier*.
+    """
+    days = requirement.grace_period_days if requirement is not None else None
+    return days if isinstance(days, int) and days > 0 else 0
+
+
 def _effective_expiration(
     record: ScreeningRecord,
-    graded: Optional[ScreeningRequirement],
-    frequency_by_requirement: Dict[str, Optional[int]],
+    requirement: Optional[ScreeningRequirement],
 ) -> Tuple[Optional[date], bool]:
-    """When ``record`` lapses, and whether that date came from a frequency.
+    """When ``record`` falls due, and whether that date came from a frequency.
 
     A record's own expiration date always wins. A record saved without one
     falls due ``frequency_months`` after it was completed (W71-1, owner
-    decision): the frequency of the requirement the record is linked to, or,
-    when it is linked to none (or its requirement was deleted), of the
-    requirement it is being graded against. A record with no completed date,
-    or whose requirement has no frequency, stays compliant indefinitely, as
-    before. Months are calendar months, clamped to the month's last day, the
-    same rule as the record form's ``addCalendarMonths``.
+    decision), the frequency of ``requirement`` — the requirement the record
+    is linked to, the only one it can satisfy. A record with no completed
+    date, or whose requirement has no frequency, stays compliant indefinitely.
+    Months are calendar months, clamped to the month's last day, the same rule
+    as the record form's ``addCalendarMonths``.
     """
     if record.expiration_date:
         return record.expiration_date, False
     if not record.completed_date:
         return None, False
-    if record.requirement_id and record.requirement_id in frequency_by_requirement:
-        months = _positive_months(frequency_by_requirement[record.requirement_id])
-    else:
-        months = _positive_months(graded.frequency_months if graded else None)
+    months = _positive_months(requirement.frequency_months if requirement else None)
     if months is None:
         return None, False
     return record.completed_date + relativedelta(months=months), True
+
+
+class ScreeningDeadline(NamedTuple):
+    """When a satisfying record falls due and when it stops counting.
+
+    ``due`` is the record's expiration date, or the one its requirement's
+    frequency derives (``from_frequency``). ``lapses_on`` is the last day it
+    still counts: ``due`` plus the requirement's ``grace_period_days`` (MS-16,
+    owner decision 2026-11-01: a member is compliant during the grace period).
+    All three are ``None``/``False`` for a record that never falls due.
+    """
+
+    due: Optional[date]
+    from_frequency: bool
+    lapses_on: Optional[date]
+
+    def is_compliant(self, today: date) -> bool:
+        return self.lapses_on is None or self.lapses_on >= today
+
+    def in_grace(self, today: date) -> bool:
+        """Past its due date, still inside the grace period."""
+        return self.due is not None and self.due < today and self.is_compliant(today)
+
+
+def screening_deadline(
+    record: ScreeningRecord, requirement: Optional[ScreeningRequirement]
+) -> ScreeningDeadline:
+    """The one due-date rule for a record graded against its requirement.
+
+    Used by ``_grade`` (summary, roster, dashboard counts, admin hub) and by
+    ``get_expiring_soon`` (the expiring list, and the MCP tool built on it), so
+    no two screens can disagree about when a screening is due or lapses
+    (pitfall #29).
+    """
+    due, from_frequency = _effective_expiration(record, requirement)
+    if due is None:
+        return ScreeningDeadline(None, False, None)
+    return ScreeningDeadline(
+        due, from_frequency, due + timedelta(days=_grace_days(requirement))
+    )
+
+
+def _recency(record: ScreeningRecord) -> Tuple[date, datetime, str]:
+    """Sort key for "most recent": completed date, then entry time, then id.
+
+    An undated record ranks lowest; a same-day tie goes to the one entered
+    later. ``_grade`` and ``deciding_records`` both rank by it.
+    """
+    created = record.created_at or datetime(1, 1, 1, tzinfo=timezone.utc)
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return (record.completed_date or date.min, created, str(record.id))
+
+
+#: A satisfying screening due within this many days — or past due and inside
+#: its grace period — counts as "expiring soon". Shared by the summary count
+#: and the frontend's EXPIRING_SOON_DAYS.
+EXPIRING_SOON_DAYS = 30
 
 
 def _grade(
     requirements: List[ScreeningRequirement],
     records: List[ScreeningRecord],
     today: date,
-    frequency_by_requirement: Optional[Dict[str, Optional[int]]] = None,
 ) -> Tuple[List[ComplianceItem], int, int, int]:
     """Grade one subject's records against the active requirements.
 
@@ -225,51 +279,60 @@ def _grade(
     Returns ``(items, compliant_count, expiring_soon_count,
     self_recorded_count)``.
 
-    ``frequency_by_requirement`` maps every requirement id in the organization,
-    active or not, to its ``frequency_months``; see ``_effective_expiration``.
+    A record counts only toward the requirement it is linked to
+    (``requirement_id``, owner decision 2026-11-01). Before that it counted
+    toward every requirement of its screening type, so one physical satisfied
+    two physical requirements with different frequencies; a record linked to
+    nothing counts toward nothing.
     """
-    frequencies = frequency_by_requirement or {}
     items: List[ComplianceItem] = []
     compliant_count = 0
     expiring_soon_count = 0
     self_recorded_count = 0
 
     for req in requirements:
-        # Find the most recent passing/completed record for this requirement type
+        # The most recent result linked to this requirement decides — the
+        # same ordering and partition as `deciding_records`, so the
+        # expiring list and this grade agree. A failure therefore leaves the
+        # requirement unmet until a later satisfying record supersedes it.
         matching_records = [
             r
             for r in records
-            if r.screening_type == req.screening_type
-            and r.status in _SATISFYING_STATUSES
+            if r.requirement_id is not None
+            and str(r.requirement_id) == str(req.id)
+            and r.status in _DECIDING_STATUSES
         ]
-        matching_records.sort(key=lambda r: r.completed_date or date.min, reverse=True)
+        matching_records.sort(key=_recency, reverse=True)
 
         latest = matching_records[0] if matching_records else None
-        is_compliant = False
-        days_until_exp = None
-        expires, from_frequency = (
-            _effective_expiration(latest, req, frequencies) if latest else (None, False)
+        satisfying = (
+            latest
+            if latest is not None and latest.status in _SATISFYING_STATUSES
+            else None
         )
-
-        if latest:
-            if expires:
-                is_compliant = expires >= today
-                days_until_exp = (expires - today).days
-                # `0 <=`, not `0 <`: a screening expiring **today** is the
-                # one most in need of flagging, and `get_expiring_soon`
-                # below already returns it (`expiration_date >= today`).
-                # Excluding it here meant the summary count and the list it
-                # links to disagreed about the same member on that single
-                # day — the count said nothing was due, the list named it.
-                # Keep the two windows in step: this is the other half of
-                # the same "expiring soon" definition (see
-                # _SATISFYING_STATUSES for the statuses both share).
-                if 0 <= days_until_exp <= 30:
-                    expiring_soon_count += 1
-            else:
-                # No expiration and no frequency to derive one: compliant
-                # indefinitely.
-                is_compliant = True
+        # A failed result has no expiration to report, even when a row saved
+        # before W71b-7 carries one: a date beside it reads as a clearance.
+        deadline = (
+            screening_deadline(satisfying, req)
+            if satisfying is not None
+            else ScreeningDeadline(None, False, None)
+        )
+        is_compliant = satisfying is not None and deadline.is_compliant(today)
+        in_grace = satisfying is not None and deadline.in_grace(today)
+        days_until_exp = (
+            (deadline.due - today).days if deadline.due is not None else None
+        )
+        # `<=` with no lower bound on a compliant item: a screening due
+        # **today** is the one most in need of flagging, and one past due but
+        # inside its grace period (negative days) still counts as compliant
+        # and lapses soon. `get_expiring_soon` lists exactly these; keep the
+        # two in step.
+        if (
+            is_compliant
+            and days_until_exp is not None
+            and days_until_exp <= EXPIRING_SOON_DAYS
+        ):
+            expiring_soon_count += 1
 
         self_recorded = bool(latest and latest.self_recorded)
         if is_compliant:
@@ -284,9 +347,11 @@ def _grade(
                 screening_type=req.screening_type,
                 is_compliant=is_compliant,
                 last_screening_date=(latest.completed_date if latest else None),
-                expiration_date=expires,
-                expiration_from_frequency=from_frequency,
+                expiration_date=deadline.due,
+                expiration_from_frequency=deadline.from_frequency,
                 days_until_expiration=days_until_exp,
+                in_grace_period=in_grace,
+                grace_period_ends=deadline.lapses_on if in_grace else None,
                 status=latest.status if latest else None,
                 self_recorded=self_recorded,
             )
@@ -333,17 +398,18 @@ class MedicalScreeningService:
         return list(result.scalars().all())
 
     async def get_requirement(
-        self, requirement_id: str, organization_id: str
+        self, requirement_id: str, organization_id: str, for_update: bool = False
     ) -> Optional[ScreeningRequirement]:
         """Get a single screening requirement."""
-        result = await self.db.execute(
-            select(ScreeningRequirement).where(
-                and_(
-                    ScreeningRequirement.id == requirement_id,
-                    ScreeningRequirement.organization_id == organization_id,
-                )
+        query = select(ScreeningRequirement).where(
+            and_(
+                ScreeningRequirement.id == requirement_id,
+                ScreeningRequirement.organization_id == organization_id,
             )
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         screening_requirement: Optional[ScreeningRequirement] = (
             result.scalar_one_or_none()
         )
@@ -399,13 +465,53 @@ class MedicalScreeningService:
     async def delete_requirement(
         self, requirement_id: str, organization_id: str
     ) -> bool:
-        """Delete a screening requirement."""
-        requirement = await self.get_requirement(requirement_id, organization_id)
+        """Delete a screening requirement, keeping the records filed under it.
+
+        A record is a member's medical history and outlives its requirement:
+        its link is cleared, never the record deleted. The link is ciphertext
+        since MS-18, so there is no foreign key to do that with ON DELETE SET
+        NULL; this does it in code, over this organization's records only,
+        matching the decrypted id.
+        """
+        # Locked so a save linking a record to this requirement cannot commit
+        # between the unlink below and the delete (see _lock_linked_requirement).
+        requirement = await self.get_requirement(
+            requirement_id, organization_id, for_update=True
+        )
         if not requirement:
             return False
+        await self.unlink_records_from_requirement(str(requirement.id), organization_id)
         await self.db.delete(requirement)
         await self.db.flush()
         return True
+
+    async def unlink_records_from_requirement(
+        self, requirement_id: str, organization_id: str
+    ) -> int:
+        """Clear ``requirement_id`` on this org's records linked to it.
+
+        Returns how many records were unlinked. The records keep everything
+        else: type, status, dates and results stay as compliance proof.
+        """
+        # A locking read: under REPEATABLE READ a plain SELECT answers from the
+        # transaction's first snapshot, so a link committed by a save this
+        # delete waited on would be missed and left pointing at nothing.
+        rows = await self.db.execute(
+            select(ScreeningRecord)
+            .where(
+                ScreeningRecord.organization_id == organization_id,
+                ScreeningRecord.requirement_id.isnot(None),
+            )
+            .with_for_update()
+        )
+        unlinked = 0
+        for record in rows.scalars().all():
+            if str(record.requirement_id) == requirement_id:
+                record.requirement_id = None
+                unlinked += 1
+        if unlinked:
+            await self.db.flush()
+        return unlinked
 
     # --- Screening Records ---
 
@@ -432,16 +538,24 @@ class MedicalScreeningService:
             query = query.where(ScreeningRecord.user_id == user_id)
         if prospect_id:
             query = query.where(ScreeningRecord.prospect_id == prospect_id)
-        if screening_type:
-            query = query.where(ScreeningRecord.screening_type == screening_type)
-        if status:
-            query = query.where(ScreeningRecord.status == status)
         # created_at has one-second resolution, so a batch entered together
         # ties on it; id keeps the order stable across page requests.
         query = query.order_by(ScreeningRecord.created_at.desc(), ScreeningRecord.id)
-        query = _page(query, skip, limit)
+        if not status and not screening_type:
+            result = await self.db.execute(_page(query, skip, limit))
+            return list(result.scalars().all())
+        # The status and the type are ciphertext (MS-18): filter the decrypted
+        # values, then page, so a page is never short while matches lie
+        # further on.
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        matching = [
+            r
+            for r in result.scalars().all()
+            if (not status or r.status == status)
+            and (not screening_type or r.screening_type == screening_type)
+        ]
+        end = None if limit is None else skip + limit
+        return matching[skip:end]
 
     async def get_record(
         self, record_id: str, organization_id: str
@@ -503,6 +617,29 @@ class MedicalScreeningService:
             ],
         )
 
+    async def _lock_linked_requirement(
+        self, requirement_id: str, organization_id: str
+    ) -> None:
+        """Hold the requirement a record is being linked to until commit.
+
+        The link has had no foreign key since MS-18 (it is ciphertext), so the
+        database no longer stops a record linking to a requirement deleted in
+        the same moment. ``delete_requirement`` locks the same row, so the two
+        serialize: the delete waits for this save, then its locking scan sees
+        the new link and clears it; or this save waits for the delete and its
+        in-org check has already passed, so the lock finds no row and refuses.
+        """
+        locked = await self.db.execute(
+            select(ScreeningRequirement.id)
+            .where(
+                ScreeningRequirement.id == requirement_id,
+                ScreeningRequirement.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+        if locked.scalar_one_or_none() is None:
+            raise ValueError("Screening requirement not found")
+
     async def create_record(
         self,
         organization_id: str,
@@ -544,6 +681,8 @@ class MedicalScreeningService:
             allow_none=True,
             label="screening requirement",
         )
+        if data.requirement_id:
+            await self._lock_linked_requirement(data.requirement_id, organization_id)
         record = ScreeningRecord(
             id=generate_uuid(),
             organization_id=organization_id,
@@ -585,6 +724,21 @@ class MedicalScreeningService:
         # either used to reach db.flush() unguarded and 500 as a raw
         # IntegrityError instead of the clean 400 apply_updates raises.
         changes = data.model_dump(exclude_unset=True)
+        # The link decides which requirement the record satisfies (owner
+        # decision 2026-11-01), so an officer can now set or correct it on an
+        # existing record — the way to file a record the upgrade could not link
+        # unambiguously. Same in-org check as on create (MS-3 / XC-1).
+        if changes.get("requirement_id"):
+            await assert_in_org(
+                self.db,
+                ScreeningRequirement,
+                changes["requirement_id"],
+                organization_id,
+                label="screening requirement",
+            )
+            await self._lock_linked_requirement(
+                changes["requirement_id"], organization_id
+            )
         apply_updates(record, changes)
         if reviewed_by and data.status in ("passed", "failed", "waived"):
             from datetime import datetime, timezone
@@ -687,21 +841,6 @@ class MedicalScreeningService:
             )
         return held
 
-    async def _requirement_frequencies(
-        self, organization_id: str
-    ) -> Dict[str, Optional[int]]:
-        """Every requirement's ``frequency_months``, inactive ones included.
-
-        Inactive ones too: a record linked to a requirement that has since been
-        switched off still falls due by that requirement's frequency.
-        """
-        rows = await self.db.execute(
-            select(
-                ScreeningRequirement.id, ScreeningRequirement.frequency_months
-            ).where(ScreeningRequirement.organization_id == organization_id)
-        )
-        return {str(rid): months for rid, months in rows.all()}
-
     async def get_compliance_status(
         self,
         organization_id: str,
@@ -733,9 +872,8 @@ class MedicalScreeningService:
         )
 
         today = await resolve_org_today(self.db, organization_id)
-        frequencies = await self._requirement_frequencies(organization_id)
         items, compliant_count, expiring_soon_count, self_recorded_count = _grade(
-            requirements, records, today, frequencies
+            requirements, records, today
         )
 
         subject_type = "user" if user_id else "prospect"
@@ -800,7 +938,6 @@ class MedicalScreeningService:
         subjects = await self.list_subjects(organization_id)
         records = await self.list_records(organization_id)
         today = await resolve_org_today(self.db, organization_id)
-        frequencies = await self._requirement_frequencies(organization_id)
 
         by_user: Dict[str, List[ScreeningRecord]] = {}
         by_prospect: Dict[str, List[ScreeningRecord]] = {}
@@ -826,7 +963,7 @@ class MedicalScreeningService:
                     else requirements
                 )
                 _, compliant, expiring, _ = _grade(
-                    applicable, held.get(str(person.id), []), today, frequencies
+                    applicable, held.get(str(person.id), []), today
                 )
                 not_met = len(applicable) - compliant
                 rows.append(
@@ -878,15 +1015,14 @@ class MedicalScreeningService:
             user_id=user_id,
         )
 
-        # Soonest lapse among screenings that are still valid. Anything already
-        # lapsed is reported by non_compliant_count, so a negative number never
-        # reaches the caller and cannot be rendered as "expires in -3 days".
+        # Soonest due date among screenings that still count. Anything already
+        # lapsed is reported by non_compliant_count. One past due but inside
+        # its grace period still counts (MS-16) and is due now, so it reads 0
+        # rather than a negative number "expires in -3 days" would render.
         upcoming = [
-            item.days_until_expiration
+            max(item.days_until_expiration, 0)
             for item in full.items
-            if item.is_compliant
-            and item.days_until_expiration is not None
-            and item.days_until_expiration >= 0
+            if item.is_compliant and item.days_until_expiration is not None
         ]
 
         return MyComplianceSummary(
@@ -902,34 +1038,27 @@ class MedicalScreeningService:
         self,
         organization_id: str,
         days: int = 30,
+        members_only: bool = False,
     ) -> List[ExpiringScreening]:
-        """Find screening records expiring within the given number of days."""
+        """Screenings falling due within ``days`` days, or in their grace period.
+
+        Lists exactly the records ``_grade`` counts as expiring soon, by the
+        same rule (``screening_deadline``), so the count and the list agree
+        (pitfall #29): the subject's current satisfying record for an active
+        requirement it is linked to, due on or before the cutoff and not yet
+        past its grace period. That covers a record with its own expiration
+        date and one falling due by its requirement's frequency alike. A record
+        past due but inside its grace period is listed with a negative
+        ``days_until_expiration`` and ``in_grace_period`` set.
+
+        ``members_only`` leaves prospects out — the MCP tool's scope, since
+        applicants belong to the prospective-members module.
+        """
         today = await resolve_org_today(self.db, organization_id)
         cutoff = today + timedelta(days=days)
+        due = await self._due_in_window(organization_id, today, cutoff, members_only)
 
-        query = (
-            select(ScreeningRecord)
-            .where(
-                and_(
-                    ScreeningRecord.organization_id == organization_id,
-                    ScreeningRecord.expiration_date.isnot(None),
-                    ScreeningRecord.expiration_date >= today,
-                    ScreeningRecord.expiration_date <= cutoff,
-                    ScreeningRecord.status.in_(_SATISFYING_STATUSES),
-                    ~superseded_record_clause(),
-                )
-            )
-            .order_by(ScreeningRecord.expiration_date.asc())
-        )
-        result = await self.db.execute(query)
-        dated = list(result.scalars().all())
-        due: List[Tuple[ScreeningRecord, date, bool]] = [
-            (r, r.expiration_date, False) for r in dated if r.expiration_date
-        ]
-        due.extend(await self._due_by_frequency(organization_id, today, cutoff))
-        due.sort(key=lambda item: item[1])
         records = [record for record, _, _ in due]
-
         # MS-2: resolve subject and requirement names in one batch each. The
         # response schema carries these fields and the dashboard renders
         # "Unknown" without them; a per-row lookup would be an N+1 over the
@@ -938,75 +1067,129 @@ class MedicalScreeningService:
             organization_id,
             user_ids={r.user_id for r in records if r.user_id},
             prospect_ids={r.prospect_id for r in records if r.prospect_id},
-            requirement_ids={r.requirement_id for r in records if r.requirement_id},
+            requirement_ids=set(),
         )
 
         expiring: List[ExpiringScreening] = []
-        for record, expires, from_frequency in due:
-            days_left = (expires - today).days
+        for record, requirement, deadline in due:
+            if deadline.due is None:  # never: _due_in_window keeps dated ones
+                continue
+            in_grace = deadline.in_grace(today)
             expiring.append(
                 ExpiringScreening(
                     record_id=record.id,
                     screening_type=record.screening_type,
-                    requirement_name=names["requirements"].get(record.requirement_id),
+                    requirement_id=requirement.id,
+                    requirement_name=requirement.name,
                     user_id=record.user_id,
                     user_name=names["users"].get(record.user_id),
                     prospect_id=record.prospect_id,
                     prospect_name=names["prospects"].get(record.prospect_id),
-                    expiration_date=expires,
-                    days_until_expiration=days_left,
+                    expiration_date=deadline.due,
+                    days_until_expiration=(deadline.due - today).days,
                     self_recorded=bool(record.self_recorded),
                     status=record.status,
-                    expiration_from_frequency=from_frequency,
+                    expiration_from_frequency=deadline.from_frequency,
+                    in_grace_period=in_grace,
+                    grace_period_ends=deadline.lapses_on if in_grace else None,
                 )
             )
 
         return expiring
 
-    async def _due_by_frequency(
-        self, organization_id: str, today: date, cutoff: date
-    ) -> List[Tuple[ScreeningRecord, date, bool]]:
-        """Records with no expiration date that fall due by frequency in the window.
+    async def get_reminder_candidates(
+        self,
+        organization_id: str,
+        today: date,
+        horizon_days: int,
+    ) -> List[Tuple[ScreeningRecord, ScreeningRequirement, ScreeningDeadline]]:
+        """Members' current screenings falling due within ``horizon_days``.
 
-        The list's half of ``_effective_expiration``, so the expiring count the
-        summary reports and this list agree about a record saved without an
-        expiration (pitfall #29). A record linked to no requirement is measured
-        against the active requirement of its type with the shortest frequency:
-        the first one it falls due for.
+        Feeds the expiry reminders (W71b-4). The records are the expiring
+        list's own (``_due_in_window``, so the reminder and the Compliance tab
+        agree on which screening is due and when, pitfall #29), narrowed to
+        what a reminder is for:
+
+        * members only — applicants are screened through the pipeline;
+        * not yet due — a screening past its due date is the Compliance tab's
+          business, not a "due soon" email;
+        * a requirement the member is graded on — a position-scoped
+          requirement the member no longer holds is not theirs to renew.
+
+        Whether the member is a current one is the caller's check, alongside
+        the email address it needs from the same row.
         """
-        frequencies = await self._requirement_frequencies(organization_id)
-        positive = [m for m in map(_positive_months, frequencies.values()) if m]
-        if not positive:
-            return []
-        shortest_by_type: Dict[str, ScreeningRequirement] = {}
-        for req in await self.list_requirements(organization_id, is_active=True):
-            months = _positive_months(req.frequency_months)
-            if months is None:
-                continue
-            current = shortest_by_type.get(req.screening_type)
-            if current is None or months < (current.frequency_months or 0):
-                shortest_by_type[req.screening_type] = req
+        cutoff = today + timedelta(days=horizon_days)
+        due = [
+            item
+            for item in await self._due_in_window(
+                organization_id, today, cutoff, members_only=True
+            )
+            if item[2].due is not None and item[2].due >= today
+        ]
+        if not any(_requirement_roles(req) for _, req, _ in due):
+            return due
+        held = await self._position_keys(organization_id)
+        return [
+            (record, req, deadline)
+            for record, req, deadline in due
+            if _applicable_requirements([req], held.get(str(record.user_id), set()))
+        ]
 
-        # Completed longer ago than the longest frequency has lapsed under any
-        # of them, so the query never reads the whole history.
-        earliest = today - relativedelta(months=max(positive))
-        rows = await self.db.execute(
-            select(ScreeningRecord).where(
-                ScreeningRecord.organization_id == organization_id,
-                ScreeningRecord.expiration_date.is_(None),
-                ScreeningRecord.completed_date.isnot(None),
-                ScreeningRecord.completed_date >= earliest,
-                ScreeningRecord.status.in_(_SATISFYING_STATUSES),
-                ~superseded_record_clause(),
-            )
-        )
-        due: List[Tuple[ScreeningRecord, date, bool]] = []
-        for record in rows.scalars().all():
-            expires, from_frequency = _effective_expiration(
-                record, shortest_by_type.get(record.screening_type), frequencies
-            )
-            if expires and today <= expires <= cutoff:
-                due.append((record, expires, from_frequency))
+    async def _due_in_window(
+        self,
+        organization_id: str,
+        today: date,
+        cutoff: date,
+        members_only: bool,
+    ) -> List[Tuple[ScreeningRecord, ScreeningRequirement, ScreeningDeadline]]:
+        """Current records for active requirements, due by ``cutoff``, still counting.
+
+        Soonest due first, then by record id so a paged caller sees a stable
+        order. Every record linked to an active requirement is loaded and the
+        deciding one per subject and requirement is picked in Python
+        (``deciding_records``): the status is ciphertext since MS-18, so SQL
+        can neither keep only satisfying results nor drop superseded ones. The
+        window is ``screening_deadline``'s, applied per record, so the date
+        rule lives in one place.
+        """
+        requirements = {
+            str(req.id): req
+            for req in await self.list_requirements(organization_id, is_active=True)
+        }
+        if not requirements:
+            return []
+        # The link is ciphertext (MS-18), so the records linked to an active
+        # requirement are picked after decryption, not by an IN in SQL.
+        criteria = [
+            ScreeningRecord.organization_id == organization_id,
+            ScreeningRecord.requirement_id.isnot(None),
+        ]
+        if members_only:
+            criteria.append(ScreeningRecord.user_id.isnot(None))
+        rows = await self.db.execute(select(ScreeningRecord).where(*criteria))
+        linked = [
+            record
+            for record in rows.scalars().all()
+            if str(record.requirement_id) in requirements
+        ]
+        current = [
+            record
+            for record in deciding_records(linked).values()
+            if record.status in _SATISFYING_STATUSES
+        ]
+
+        due: List[Tuple[ScreeningRecord, ScreeningRequirement, ScreeningDeadline]] = []
+        for record in current:
+            requirement = requirements[str(record.requirement_id)]
+            deadline = screening_deadline(record, requirement)
+            if (
+                deadline.due is not None
+                and deadline.due <= cutoff
+                and deadline.is_compliant(today)
+            ):
+                due.append((record, requirement, deadline))
+        due.sort(key=lambda item: (item[2].due, str(item[0].id)))
         return due
 
     async def _resolve_names(

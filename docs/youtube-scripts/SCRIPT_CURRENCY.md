@@ -1,5 +1,182 @@
 # Script currency
 
+## Flagged 2026-11-11 (not edited)
+
+Worth a beat or a re-record note when next touched: 03 IT and 04 Chief
+(Former Members page; Reset Password, Unlock, Reset MFA and Delete now in a
+row's **More actions** menu); 04 Chief and 07 Secretary (**Postpone Event**,
+which keeps RSVPs and clears check-ins); 04 Chief, 05 and 09 (the evaluation's
+training-session attendance figure follows the attendance requirement). No
+script quotes these labels today, so nothing on screen is wrong yet. See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-10--11-2026).
+
+## Flagged 2026-11-09 (not edited)
+
+Worth a beat or a re-record note when next touched: 03 and 06 (My Shifts Past
+by year and month); 05, 09 and 16 (pipeline wizard browser draft, milestones on
+courses and tests); 06 (end-of-shift summary call-type counts); 10 mobile
+segments (table cards, header buttons). See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-8--9-2026).
+
+## Written into the scripts 2026-11-05
+
+Every row below this one, from **2026-10-24 → 10-25 through 2026-11-04 → 11-05**,
+was worked into the script text in a single pass; those tables are kept as the
+record of what changed and no longer mean "waiting to be written". **Nothing was
+re-recorded or re-timed.** Each new beat carries a SCREEN cue and a production
+note, and 03, 04 and 07 end with an `EDITOR` log of what was added, so the
+re-record list can be read straight from the scripts.
+
+| Script                          | What was applied                                                                                                                                                                                                                                                                               |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 00, 01, 02                      | Series note; `REDIS_REQUIRED`, cloud-deployment guides and the combined Unraid image; Public Information in setup and the lapsed-setup banner                                                                                                                                                  |
+| 03 IT                           | Historical import (training, drills), Compliance Settings, Months on leave, email-template Off, integration keys first, Gmail service account, passkeys, voter eligibility, member class and status, ID cards and Card Readers, database and Redis TLS, encrypted-at-rest and upload migration |
+| 04 Chief, 07 Secretary          | Session attendance and Chief override, evaluations graded by section, History module, Adopt Minutes, second-person approvals, event QR guest code, forms Sensitive fields and embed code, area-card hubs, recruitment follow-up and My Applicants                                              |
+| 05, 09, 11, 14, 16 Training     | Session attendance, Months on leave, compliance profiles by position and member-class switch, shift evaluation forms, registry import, Shift remaining cap, cohort wizard extras, historical drills                                                                                            |
+| 06, 10, 12 Member and elections | Dashboard and notification stack, My Evaluations, passkeys, privacy Yes/No, leave beside hours, Shift & Call History, My Crew, open-swap bell entry, offline sync, five-layer voter eligibility                                                                                                |
+| 08, 13, 15                      | Passkeys short, labels "Before you print", Items Not Seen, store cart kept, offline skills evaluations kept 7 days                                                                                                                                                                             |
+
+**Corrected on the way:** script 03 said `SECURITY_REQUIRE_TLS` defaults to off;
+it defaults to on. The "five emails that cannot be switched off" in the
+2026-10-28 row is **seven** (`ALWAYS_SENT_TYPES`), and 03 and 07 say seven.
+
+**Closed 2026-11-05 (second pass):**
+
+- The label checks ran against `frontend/src` and the backend: the seven
+  Evaluation email template types match script 03; the budget-request refusal
+  ("Another finance manager has to decide it") matches script 04; the passkey
+  "Remove passkey" dialog exists. Cal.com, Documenso and Salesforce key-first
+  behaviour is still from guide 16 only.
+- Added the Recall lot beat (Short 8AE, now about 70 seconds), the Target
+  Solutions **Import matching pending records** beat (script 16), and the
+  department pulse and **All clear** beat (script 04).
+
+**Still open:**
+
+- Screens and footage for every new beat; the production notes flag them. None
+  of this can be recorded from a scheduled session.
+- Run times for added beats are estimates (04 about +7.5 minutes, 07 about +4,
+  03 about +6); Short 8AS still says about 47 seconds and gained roughly 8.
+- The member script (06) leaves out the leader-only dashboard changes by design.
+
+## Flagged by the 2026-11-08 → 11-10 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-8--10-2026).
+Rows are **Open**; nothing was re-recorded or rewritten.
+
+| Script                                             | Beat                            | Now                                                                                                                         |
+| -------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Member (06)**                                    | My Shifts                       | Upcoming under month headers; Past by year with a Year dropdown and chart                                                   |
+| **Training Officer (05, 16)**, **Member (06)**     | Training History                | Each record shows its source                                                                                                |
+| **Training Officer (05, 16)**, **Fire Chief (04)** | Drill attendance, missed drills | Attendance requirement with no session held is not graded; a waiver excuses a drill; **Add a member** after check-in closes |
+| **Fire Chief (04)**                                | Members roster                  | Table on desktop, cards below                                                                                               |
+| **IT (03)**                                        | Historical import               | Members list shows real names; decided members folded away                                                                  |
+
+## Flagged by the 2026-11-06 → 11-08 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-6--8-2026).
+Rows are **Open**; nothing was re-recorded or rewritten.
+
+| Script                                             | Beat                         | Now                                                                                                                            |
+| -------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Member (06)**, **Training Officer (05, 16)**     | My Training requirement card | Courses requirements count in courses and open a **Show required courses** checklist; certifications show no "hrs"             |
+| **Training Officer (05, 16, 09)**, **Member (06)** | Member Training History      | Records are a compact list, not a table                                                                                        |
+| **Training Officer (16)**, **IT (03)**             | Provider import hours        | Zero-hour completions take the mapped course's Credit Hours                                                                    |
+| **Fire Chief (04)**                                | Finance beats                | Pending Amendments queue, per-type dual approval, mileage trip log, My Dues and live QuickBooks Online replace file-only steps |
+
+## Flagged by the 2026-11-05 → 11-06 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-5--6-2026).
+Rows are **Open**; nothing was re-recorded or rewritten.
+
+| Script                                                           | Beat                                   | Now                                                                                                                  |
+| ---------------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Secretary (07)**, **Chief (04)**                               | Minutes roll call and quorum           | Quorum counting is a department setting; **Use proxies** adds a roll-call status; published minutes list attachments |
+| **Elections deep dive (12)**                                     | Closing by mistake                     | Roll Back files a dated correction on filed minutes                                                                  |
+| **Training Officer (05, 16, 09)**, **Member (06)**, **Short 08** | Member Training History                | Period list scopes the cards and list, not only exports; **Last 12 Months**                                          |
+| **Fire Chief (04)**                                              | Operational members button             | Ticks Active, Probationary and Life, not Retired                                                                     |
+| **Any admin-hours or sign-in beat**                              | Clock-in conflict; failed sign-in wait | Names the running session; wait is per account                                                                       |
+
+## Flagged by the 2026-11-04 → 11-05 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-4--5-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                                         | Beat                          | Was                                                           | Now                                                                                    |
+| ---------------------------------------------- | ----------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Training Officer (05, 16), Fire Chief (04)** | Drill attendance              | Hours only; waivers for a missed drill                        | **Session Attendance** requirement, **Counts toward attendance** badge; Chief override |
+| **Training Officer (05, 16)**                  | Evaluation scoring            | One weighted percentage                                       | **Graded by section** with grade ranges and an evaluator regrade                       |
+| **Member guide (06)**                          | Dashboard                     | Money and outreach cards on Personal                          | On **My Department**; All clear line; notification stack previews the newest message   |
+| **IT Manager (03)**                            | Historical import, compliance | No training or drills; Configure only in Compliance Reporting | Training rows and drill sessions; **Settings & Data → Compliance Settings**            |
+| **Any medical-screening beat**                 | Grace period                  | Saved but not applied                                         | Applied; clinical detail needs `medical_screening.view_details`                        |
+| **Any phone or tablet beat**                   | Tables and switches           | Tables scroll; oval switches on touch                         | Wide tables become cards by card width; switches are pills                             |
+
+## Flagged by the 2026-11-02 → 11-03 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-2--3-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                  | Beat                   | Was                                       | Now                                                                       |
+| ----------------------- | ---------------------- | ----------------------------------------- | ------------------------------------------------------------------------- |
+| **Any membership beat** | Departed members       | No archive                                | The **History** module keeps past members, the Honor Roll and titles      |
+| **Any training beat**   | Leave and requirements | A month excused only at 15+ days of leave | **Months on leave** rule, Full month by default; leave shown beside hours |
+| **Any meetings beat**   | Adopting minutes       | The meeting stayed a draft                | **Adopt Minutes** approves the meeting too                                |
+| **Any offline beat**    | Sending saved work     | Open the page to send                     | Chrome and Edge send queued checks by themselves                          |
+
+## Flagged by the 2026-11-01 → 11-02 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-1--2-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                                          | Beat                           | Was                      | Now                                                                                                  |
+| ----------------------------------------------- | ------------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| **Fire Chief (04) / Training Officer (05, 16)** | Yearly or probationary reviews | Done outside the Logbook | Member performance evaluations: draft, calibrate, sign, PDF, member response (Reports → Evaluations) |
+| **Member guide (06)**                           | Your own reviews               | Not covered              | **My Evaluations**: read yours, respond within 30 days                                               |
+| **IT Manager (03)**                             | Email templates                | No evaluation emails     | Group "Performance Evaluations" in Communications                                                    |
+
+## Flagged by the 2026-10-31 → 11-01 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-october-31--november-1-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                                          | Beat                | Was                                 | Now                                                                      |
+| ----------------------------------------------- | ------------------- | ----------------------------------- | ------------------------------------------------------------------------ |
+| **Any recruitment beat**                        | Who sees applicants | Anyone with view or manage sees all | `view_all` sees all; others see assigned applicants (My Applicants)      |
+| **Training Officer, Part 1 (05) / Part 2 (16)** | After a shift       | Generic rating panel in the report  | Department evaluation form per member; build it under Shift Evaluations  |
+| **Any scheduling beat**                         | Department Defaults | Overtime field on the card          | Overtime lives in the Overtime advisory; defaults pre-fill new templates |
+
+## Flagged by the 2026-10-29 → 10-30 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29--30-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                   | Beat                | Was                         | Now                                                                                |
+| ------------------------ | ------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
+| **Any membership beat**  | Editing a member    | One **Membership Type**     | **Member class** and **Membership status**                                         |
+| **Any elections beat**   | Who may vote        | Per-ballot eligibility only | Election Settings → **Voter Eligibility** sets attendance and waiting-period rules |
+| **Any recruitment beat** | Follow-up forms     | Link only                   | Reminders, a coordinator notice, answers on the Interview page                     |
+| **Any training beat**    | Compliance profiles | By membership type          | Also by position held                                                              |
+
+## Flagged by the 2026-10-29 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-29-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                   | Beat              | Was                | Now                                                                           |
+| ------------------------ | ----------------- | ------------------ | ----------------------------------------------------------------------------- |
+| **Any recruitment beat** | Pipeline stages   | Twelve stage types | A **Follow-up Form** stage sends a pre-filled form; answers update the record |
+| **Any training beat**    | Shifting a course | Up to a year       | **Shift remaining** moves classes at most 14 days                             |
+
+## Flagged by the 2026-10-28 → 10-29 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-28--29-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script               | Beat                      | Was                         | Now                                                                |
+| -------------------- | ------------------------- | --------------------------- | ------------------------------------------------------------------ |
+| **Any finance beat** | Recording dues            | An overpayment was all dues | The extra can be recorded as a donation from the member            |
+| **03** (IT)          | Connecting an integration | Connected with blank keys   | PayPal, Documenso, Cal.com and Salesforce ask for their keys first |
+
 ## Flagged by the 2026-10-28 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-28-2026).

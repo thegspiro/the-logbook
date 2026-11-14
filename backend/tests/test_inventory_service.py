@@ -23,7 +23,14 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from app.models.inventory import ItemCondition, ItemStatus, TrackingType
+from app.models.inventory import (
+    InventoryItem,
+    InventoryNfcScan,
+    InventoryNfcScanAction,
+    ItemCondition,
+    ItemStatus,
+    TrackingType,
+)
 from app.services.inventory_service import InventoryService
 
 # ============================================
@@ -340,7 +347,13 @@ class TestCreateItem:
             created_by=user_id,
         )
         assert error is None
-        mock_db.add.assert_called_once()
+        # The item, then its creation sighting (owner decision W44-2,
+        # 2026-11-01: a new item starts as seen).
+        added = [c.args[0] for c in mock_db.add.call_args_list]
+        assert [type(a) for a in added] == [InventoryItem, InventoryNfcScan]
+        assert added[0].name == "Halligan Bar"
+        assert added[1].action == InventoryNfcScanAction.CREATED
+        assert added[1].scanned_by == str(user_id)
         mock_db.commit.assert_called_once()
 
     @pytest.mark.asyncio
@@ -483,6 +496,13 @@ class TestCreateItem:
 
 class TestCreateCategory:
 
+    @pytest.fixture(autouse=True)
+    def _no_siblings(self, mock_db):
+        """create_category now reads the parent's active children for a name
+        clash (owner decision 2026-11-01); here there are none. The name rule
+        itself is tested against a database in test_inventory_input_rules.py."""
+        mock_db.execute.return_value = MagicMock(all=MagicMock(return_value=[]))
+
     @pytest.mark.asyncio
     async def test_create_category_success(self, service, mock_db, org_id, user_id):
         """Successfully creating a category."""
@@ -557,6 +577,8 @@ class TestUpdateCategory:
         mock_category = MagicMock()
         mock_category.name = "Old Name"
         service.get_category_by_id = AsyncMock(return_value=mock_category)
+        # A rename now checks the siblings for the new name; there are none.
+        mock_db.execute.return_value = MagicMock(all=MagicMock(return_value=[]))
 
         category, error = await service.update_category(
             category_id=str(uuid4()),
@@ -1756,7 +1778,10 @@ class TestPoolIssuanceValidation:
             created_by=user_id,
         )
         assert err is None
-        mock_db.add.assert_called_once()
+        added = [c.args[0] for c in mock_db.add.call_args_list]
+        # The item, then its creation sighting (W44-2).
+        assert [type(a) for a in added] == [InventoryItem, InventoryNfcScan]
+        assert added[0].quantity == 100
 
 
 # ============================================

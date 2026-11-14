@@ -165,6 +165,9 @@ async def list_medical_categories(
     # never persisted.
     for category in categories:
         category.item_count = counts.get(str(category.id), 0)
+    await service.flag_duplicate_category_names(
+        current_user.organization_id, categories
+    )
     return categories
 
 

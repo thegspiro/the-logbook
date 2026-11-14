@@ -25,6 +25,7 @@ from app.api.v1.endpoints import medical_screening as ep
 from app.models.audit import AuditLog
 from app.models.medical_screening import (
     ScreeningRecord,
+    ScreeningRequirement,
     ScreeningStatus,
     ScreeningType,
 )
@@ -63,11 +64,22 @@ async def scene(db_session: AsyncSession, setup_org_and_admin):
         {"id": prospect_id, "org": org_id, "em": f"p-{prospect_id[:8]}@test.com"},
     )
     soon = date.today() + timedelta(days=10)
+    # A record is listed as expiring only for the requirement it is linked to
+    # (owner decision 2026-11-01).
+    drug, psych = (
+        ScreeningRequirement(
+            id=_uid(), organization_id=org_id, name=kind.value, screening_type=kind
+        )
+        for kind in (ScreeningType.DRUG_SCREENING, ScreeningType.PSYCHOLOGICAL)
+    )
+    db_session.add_all([drug, psych])
+    await db_session.flush()
     records = [
         ScreeningRecord(
             id=_uid(),
             organization_id=org_id,
             user_id=member_id,
+            requirement_id=drug.id,
             screening_type=ScreeningType.DRUG_SCREENING,
             status=ScreeningStatus.PASSED,
             expiration_date=soon,
@@ -83,6 +95,7 @@ async def scene(db_session: AsyncSession, setup_org_and_admin):
             id=_uid(),
             organization_id=org_id,
             prospect_id=prospect_id,
+            requirement_id=psych.id,
             screening_type=ScreeningType.PSYCHOLOGICAL,
             status=ScreeningStatus.PASSED,
             expiration_date=soon,
@@ -90,7 +103,15 @@ async def scene(db_session: AsyncSession, setup_org_and_admin):
     ]
     db_session.add_all(records)
     await db_session.flush()
-    officer = SimpleNamespace(id=officer_id, organization_id=org_id, username="cpt")
+    # The endpoints read the caller's grants to decide whether a record's
+    # narrative is returned (MS-14).
+    officer = SimpleNamespace(
+        id=officer_id,
+        organization_id=org_id,
+        username="cpt",
+        positions=[SimpleNamespace(permissions=["medical_screening.view_details"])],
+        rank=None,
+    )
     return SimpleNamespace(
         officer=officer,
         member_id=member_id,
@@ -145,7 +166,10 @@ class TestListReadsLogOncePerRequest:
             db_session, scene.officer.id, "medical_screening.records_viewed"
         )
         assert event.event_data["filters"]["user_id"] == scene.member_id
-        assert event.event_data["filters"]["screening_type"] == "drug_screening"
+        # MS-18 (2026-11-06): the log says the list was narrowed by type, not
+        # which type; the type is encrypted on the record itself.
+        assert "screening_type" not in event.event_data["filters"]
+        assert event.event_data["filters"]["screening_type_filtered"] is True
         assert event.event_data["record_count"] == 1
 
     async def test_expiring_list(self, db_session, scene):
@@ -175,6 +199,7 @@ class TestSubjectReadsNameTheSubject:
             "record_id": record.id,
             "record_user_id": scene.member_id,
             "record_prospect_id": None,
+            "narrative_included": True,
         }
 
     async def test_missing_record_is_not_logged_as_a_view(self, db_session, scene):

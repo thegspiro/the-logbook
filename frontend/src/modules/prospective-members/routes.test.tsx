@@ -34,14 +34,22 @@ function guardOf(path: string): Guard | undefined {
 }
 
 describe('getProspectiveMembersRoutes', () => {
-  // The label API accepts view or manage; the page required view alone, so a
-  // membership coordinator (manage only) was refused the page their own
-  // pipeline's Print Labels button opens.
-  it('opens applicant labels to view or manage, as the label API does', () => {
+  // The page asks what the label API accepts, so the pipeline's Print Badges
+  // button never opens a page the API then refuses. Since per-applicant access
+  // that is view_all alone: a label names applicants by id, and without it a
+  // member sees only the applicants assigned to them.
+  it('opens applicant labels to view_all, as the label API does', () => {
     expect(guardOf('/prospective-members/print-labels')).toEqual(
-      expect.objectContaining({
-        requiredAnyPermission: ['prospective_members.view', 'prospective_members.manage'],
-      })
+      expect.objectContaining({ requiredPermission: 'prospective_members.view_all' })
     );
+  });
+
+  // An interviewer assigned to the applicant (a board member, a trustee) holds
+  // no pipeline permission; the backend admits them per applicant.
+  it('leaves the interview and My Applicants pages to the server to admit', () => {
+    for (const path of ['/prospective-members/:applicantId/interview', '/prospective-members/my-applicants']) {
+      // guardOf finds only a guard that names a permission.
+      expect(guardOf(path)).toBeUndefined();
+    }
   });
 });

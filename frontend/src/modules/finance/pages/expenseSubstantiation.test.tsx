@@ -37,7 +37,9 @@ const formOptions = {
   budgetOptions: [],
   fiscalYearsLoaded: true,
 };
-vi.mock('../hooks/useRequestFormOptions', () => ({
+// The hook alone is replaced; the picker's label helpers are the real ones.
+vi.mock('../hooks/useRequestFormOptions', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../hooks/useRequestFormOptions')>()),
   useRequestFormOptions: () => formOptions,
 }));
 
@@ -61,6 +63,9 @@ const rules = (substantiationMode: string, substantiationDays = 60) => ({
 });
 
 beforeEach(() => {
+  // The expense form keeps a local draft (forms review F-6); one test's lines
+  // must not come back as the next test's restored draft.
+  sessionStorage.clear();
   mockGetSettings.mockReset();
   mockGetSettings.mockResolvedValue(rules('warn'));
   storeState = { createExpenseReport: vi.fn() };

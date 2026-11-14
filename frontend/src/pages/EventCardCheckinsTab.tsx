@@ -167,6 +167,7 @@ const EventCardCheckinsTab: React.FC = () => {
       {!loading && !error && taps.length === 0 && (
         <div className="card p-4">
           <EmptyState
+            compact
             headingLevel={3}
             icon={Nfc}
             title="No card check-ins match"

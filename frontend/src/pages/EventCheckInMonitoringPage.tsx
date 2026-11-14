@@ -5,10 +5,11 @@ import { eventService } from '../services/api';
 import type { CheckInMonitoringStats } from '../types/event';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
-import { Breadcrumbs } from '../components/ux';
+import { Breadcrumbs, SkeletonText } from '../components/ux';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { formatShortDateTime, formatTime } from '../utils/dateFormatting';
 import { getRSVPStatusLabel } from '../utils/eventHelpers';
+import { StatGrid } from '../components/ux/StatGrid';
 
 /**
  * Event Check-In Monitoring Dashboard
@@ -150,13 +151,46 @@ const EventCheckInMonitoringPage: React.FC = () => {
     { label: 'Check-In Monitoring' },
   ];
 
+  // Loading draws the page it will become — the header and the four metric
+  // cards, with placeholders where the figures go. A line of text in a narrower
+  // column was replaced by them wholesale, and the cards landed ~290px lower.
   if (loading) {
     return (
-      <div className="mx-auto max-w-4xl p-6">
-        <Breadcrumbs items={trail} />
-        <div className="flex items-center justify-center py-24">
-          <div className="text-theme-text-secondary">Loading monitoring dashboard...</div>
-        </div>
+      <div className="mx-auto min-h-screen max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <EventsPageHeader
+          icon={Activity}
+          title="Check-In Monitoring"
+          parentCrumbs={[{ label: 'Event', path: `/events/${eventId ?? ''}` }]}
+          subtitle={
+            <p className="text-theme-text-secondary text-xl">
+              <SkeletonText className="w-48" />
+            </p>
+          }
+          actions={
+            <div className="sm:text-right">
+              <div className="text-sm">
+                <SkeletonText className="w-36" />
+              </div>
+              <div className="mt-1 inline-flex px-3 py-1 text-sm">
+                <SkeletonText className="w-24" />
+              </div>
+            </div>
+          }
+        />
+        <StatGrid columns={4} gap={4} className="mb-6">
+          <span className="sr-only">Loading monitoring dashboard...</span>
+          {['Checked In', 'Check-In Rate', 'Total RSVPs', 'Avg Check-In Time'].map((label) => (
+            <div key={label} className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+              <div className="text-theme-text-muted mb-1 text-sm font-medium">{label}</div>
+              <div className="text-3xl font-bold">
+                <SkeletonText className="w-16" />
+              </div>
+              <div className="mt-1 text-sm">
+                <SkeletonText className="w-24" />
+              </div>
+            </div>
+          ))}
+        </StatGrid>
       </div>
     );
   }
@@ -222,7 +256,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
             <div className="text-theme-text-muted text-sm">Last updated: {formatTime(lastUpdated, tz)}</div>
             <div className="mt-1">
               {stats.is_check_in_active ? (
-                <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
+                <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-900 dark:bg-green-500/20 dark:text-green-300">
                   <span className="mr-2 h-2 w-2 animate-pulse rounded-full bg-green-600"></span>
                   Check-In Active
                 </span>
@@ -237,7 +271,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
       />
 
       {/* Key Metrics */}
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+      <StatGrid columns={4} gap={4} className="mb-6">
         {/* Total Checked In */}
         <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
           <div className="text-theme-text-muted mb-1 text-sm font-medium">Checked In</div>
@@ -280,7 +314,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
               : 'before event start'}
           </div>
         </div>
-      </div>
+      </StatGrid>
 
       {/* Early check-ins — members who tapped in before the event started. */}
       {stats.early_check_in_count > 0 && (

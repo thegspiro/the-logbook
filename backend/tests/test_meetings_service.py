@@ -68,8 +68,19 @@ def _event():
     )
 
 
-def _rsvp(user_id, checked_in, status):
-    return SimpleNamespace(user_id=user_id, checked_in=checked_in, status=status)
+CHECK_IN = datetime(2026, 6, 1, 18, 55, tzinfo=timezone.utc)
+
+
+def _rsvp(user_id, checked_in, status, checked_in_at=None):
+    # checked_in_at as an EventRSVP row carries it: set with the check-in.
+    return SimpleNamespace(
+        user_id=user_id,
+        checked_in=checked_in,
+        status=status,
+        checked_in_at=(
+            checked_in_at if checked_in_at else (CHECK_IN if checked_in else None)
+        ),
+    )
 
 
 class TestCreateFromEvent:
@@ -91,7 +102,9 @@ class TestCreateFromEvent:
             _rsvp("u2", False, RSVPStatus.NOT_GOING),  # absent, excused
             _rsvp("u3", False, RSVPStatus.GOING),  # absent, not excused
         ]
-        db = _db([_one(_event()), _one(None), _scalars(rsvps)])
+        # The event, the existing-meeting check, the RSVPs, then the approved
+        # waiver requests carried over (none).
+        db = _db([_one(_event()), _one(None), _scalars(rsvps), _scalars([])])
         meeting, err = await MeetingsService(db).create_from_event("e1", "org-1", "u1")
         assert err is None
 
@@ -108,6 +121,29 @@ class TestCreateFromEvent:
         assert attendees["u2"].excused is True
         assert attendees["u3"].present is False
         assert attendees["u3"].excused is False
+
+        # Where each record came from: the import, by the member who ran it,
+        # with the check-in moment only where there was a check-in.
+        assert attendees["u1"].checked_in_at == CHECK_IN
+        assert attendees["u1"].recorded_via == "event_check_in"
+        assert attendees["u2"].checked_in_at is None
+        assert attendees["u2"].recorded_via == "event_rsvp"
+        assert {a.recorded_by for a in attendees.values()} == {"u1"}
+
+    async def test_a_second_rsvp_keeps_the_earliest_check_in(self):
+        later = datetime(2026, 6, 1, 19, 30, tzinfo=timezone.utc)
+        rsvps = [
+            _rsvp("u1", False, RSVPStatus.GOING),
+            _rsvp("u1", True, RSVPStatus.GOING, checked_in_at=later),
+            _rsvp("u1", True, RSVPStatus.GOING),  # CHECK_IN, earlier
+        ]
+        db = _db([_one(_event()), _one(None), _scalars(rsvps), _scalars([])])
+        _, err = await MeetingsService(db).create_from_event("e1", "org-1", "sec")
+        assert err is None
+        [attendee] = [c.args[0] for c in db.add.call_args_list][1:]
+        assert attendee.present is True
+        assert attendee.checked_in_at == CHECK_IN
+        assert attendee.recorded_via == "event_check_in"
 
 
 class TestCreateFromEventLocking:
@@ -169,13 +205,37 @@ class TestAddAttendee:
         assert err == "User not found in organization"
 
     async def test_success(self):
-        db = _db([_one(SimpleNamespace(id="m1")), _one(SimpleNamespace(id="u1"))])
+        # The meeting, the member, then the duplicate check (no row yet).
+        db = _db(
+            [
+                _one(SimpleNamespace(id="m1")),
+                _one(SimpleNamespace(id="u1")),
+                _one(None),
+            ]
+        )
         attendee, err = await MeetingsService(db).add_attendee(
             "m1", "org-1", {"user_id": "u1", "present": True}
         )
         assert err is None
         assert attendee.user_id == "u1"
         db.commit.assert_awaited()
+
+    async def test_a_member_already_on_the_meeting_is_refused(self):
+        """meeting_attendees is unique on (meeting, member): a second row is
+        refused with a sentence rather than an IntegrityError."""
+        db = _db(
+            [
+                _one(SimpleNamespace(id="m1")),
+                _one(SimpleNamespace(id="u1")),
+                _one("att-1"),
+            ]
+        )
+        attendee, err = await MeetingsService(db).add_attendee(
+            "m1", "org-1", {"user_id": "u1"}
+        )
+        assert attendee is None
+        assert err == "This member is already an attendee of this meeting"
+        db.add.assert_not_called()
 
 
 class TestRemoveAttendee:

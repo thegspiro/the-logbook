@@ -265,6 +265,7 @@ export const CardRosterTab: React.FC<CardRosterTabProps> = ({ onShowTaps, refres
       {!loading && !loadError && visible.length === 0 && (
         <div className="card p-4">
           <EmptyState
+            compact
             headingLevel={3}
             icon={Search}
             title={cards.length === 0 ? 'No ID cards issued yet' : 'No cards match these filters'}

@@ -24,10 +24,12 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.models.notification import NotificationCategory, NotificationChannel
+from app.models.shift_evaluation import ShiftEvaluationTemplate
 from app.models.training import (
     EnrollmentStatus,
     ProgramEnrollment,
     ProgramMilestone,
+    ProgramMilestoneItem,
     ProgramPhase,
     ProgramRequirement,
     ProgramStructureType,
@@ -68,6 +70,7 @@ from app.services.training_compliance import (
     get_org_include_current_month,
     load_credited_shift_dates,
     load_graded_records,
+    load_held_sessions,
     member_join_date,
     recency_cutoff,
 )
@@ -86,7 +89,7 @@ from app.utils.checklist import (
 from app.utils.json_ids import json_array_contains, normalize_id_list
 from app.utils.model_updates import apply_updates
 from app.utils.org_locks import PROGRAM_ENROLLMENT, lock_organization_scope
-from app.utils.org_scoping import assert_all_in_org
+from app.utils.org_scoping import assert_all_in_org, is_in_org
 from app.utils.org_timezone import (
     local_date,
     resolve_org_today,
@@ -148,6 +151,25 @@ def prerequisite_refusal(missing_names: Sequence[str]) -> str:
     """The refusal for a member missing these prerequisite pipelines — the
     one wording every enrollment path and the eligibility picker give."""
     return f"Must first complete: {', '.join(missing_names)}"
+
+
+# Requirement types credited only by submitted shift evaluations, and the
+# column each one's target lives in. An evaluated-shift count reuses
+# required_shifts, as the form beside it does.
+EVALUATION_REQUIREMENT_TARGETS = {
+    RequirementType.EVALUATED_SHIFTS: "required_shifts",
+    RequirementType.TRANSPORTS: "required_transports",
+    RequirementType.REFUSALS: "required_refusals",
+}
+
+
+def _evaluation_requirement_target(requirement: Any) -> Optional[float]:
+    """The numeric target of a shift-evaluation requirement, else None."""
+    requirement_type = getattr(requirement, "requirement_type", None)
+    if requirement_type not in EVALUATION_REQUIREMENT_TARGETS:
+        return None
+    column = EVALUATION_REQUIREMENT_TARGETS[requirement_type]
+    return getattr(requirement, column, None) or None
 
 
 def _counts_as_prerequisite(program_active: Optional[bool]) -> bool:
@@ -320,53 +342,6 @@ class TrainingProgramService:
                 "sent_at": datetime.now(timezone.utc),
             },
         )
-
-    async def _notify_milestones_reached(
-        self,
-        enrollment: ProgramEnrollment,
-        previous_percentage: float,
-        new_percentage: float,
-    ) -> None:
-        """Notify the member for every milestone their progress just crossed.
-
-        Milestones are pure encouragement — they gate nothing — so this fires on
-        the half-open band ``(previous, new]``. Bounding it that way is what
-        keeps a member from being re-congratulated on every subsequent progress
-        edit; a cycle reset drops progress back to 0, so the next climb
-        legitimately re-announces them for the new cycle.
-        """
-        result = await self.db.execute(
-            select(ProgramMilestone)
-            .where(
-                ProgramMilestone.program_id == str(enrollment.program_id),
-                ProgramMilestone.completion_percentage_threshold > previous_percentage,
-                ProgramMilestone.completion_percentage_threshold <= new_percentage,
-            )
-            .order_by(ProgramMilestone.completion_percentage_threshold)
-        )
-        milestones = result.scalars().all()
-        if not milestones:
-            return
-
-        notif_service = NotificationsService(self.db)
-        for milestone in milestones:
-            message = milestone.notification_message or (
-                f"You've reached {round(milestone.completion_percentage_threshold or 0)}% "
-                f"of this training program. Keep going!"
-            )
-            await notif_service.log_notification(
-                organization_id=enrollment.organization_id,
-                log_data={
-                    "recipient_id": str(enrollment.user_id),
-                    "channel": NotificationChannel.IN_APP,
-                    "subject": f"Milestone reached: {milestone.name}",
-                    "message": message,
-                    "category": NotificationCategory.TRAINING,
-                    "action_url": f"/training/my-progress/{enrollment.id}",
-                    "delivered": True,
-                    "sent_at": datetime.now(timezone.utc),
-                },
-            )
 
     async def _notify_enrollment_expired(
         self,
@@ -624,6 +599,22 @@ class TrainingProgramService:
             )
         except ValueError as exc:
             return str(exc)
+        return None
+
+    async def _validate_evaluation_template(
+        self, template_id: Any, organization_id: UUID | str
+    ) -> Optional[str]:
+        """Refuse an evaluation template that is not this department's.
+
+        None is "no form" and always allowed. The message does not say whether
+        the id exists elsewhere, so it is no cross-tenant oracle (XC-1).
+        """
+        if template_id is None:
+            return None
+        if not await is_in_org(
+            self.db, ShiftEvaluationTemplate, template_id, organization_id
+        ):
+            return "Invalid shift evaluation template"
         return None
 
     async def _validate_target_roles(
@@ -891,6 +882,11 @@ class TrainingProgramService:
             required_courses=requirement_data.required_courses,
             required_shifts=requirement_data.required_shifts,
             required_calls=requirement_data.required_calls,
+            required_transports=getattr(requirement_data, "required_transports", None),
+            required_refusals=getattr(requirement_data, "required_refusals", None),
+            evaluation_excludes_lowest_rating=bool(
+                getattr(requirement_data, "evaluation_excludes_lowest_rating", False)
+            ),
             required_call_types=requirement_data.required_call_types,
             required_skills=requirement_data.required_skills,
             checklist_items=to_storage(requirement_data.checklist_items),
@@ -992,6 +988,8 @@ class TrainingProgramService:
             "required_hours",
             "required_shifts",
             "required_calls",
+            "required_transports",
+            "required_refusals",
             "required_courses",
             "checklist_items",
         }
@@ -1056,6 +1054,11 @@ class TrainingProgramService:
         )
         if prereq_error:
             return None, prereq_error
+        template_error = await self._validate_evaluation_template(
+            program_data.shift_evaluation_template_id, organization_id
+        )
+        if template_error:
+            return None, template_error
 
         # Create program
         program = TrainingProgram(
@@ -1081,6 +1084,11 @@ class TrainingProgramService:
             recert_anchor_day=program_data.recert_anchor_day,
             prerequisite_program_ids=prerequisite_ids or None,
             allows_concurrent_enrollment=program_data.allows_concurrent_enrollment,
+            shift_evaluation_template_id=(
+                str(program_data.shift_evaluation_template_id)
+                if program_data.shift_evaluation_template_id
+                else None
+            ),
             created_by=created_by,
         )
 
@@ -1148,6 +1156,12 @@ class TrainingProgramService:
         )
         if prereq_error:
             return None, prereq_error
+        build_template_id = getattr(prog, "shift_evaluation_template_id", None)
+        template_error = await self._validate_evaluation_template(
+            build_template_id, organization_id
+        )
+        if template_error:
+            return None, template_error
 
         program = TrainingProgram(
             organization_id=organization_id,
@@ -1167,6 +1181,9 @@ class TrainingProgramService:
             prerequisite_program_ids=prerequisite_ids or None,
             allows_concurrent_enrollment=getattr(
                 prog, "allows_concurrent_enrollment", True
+            ),
+            shift_evaluation_template_id=(
+                str(build_template_id) if build_template_id else None
             ),
             created_by=created_by,
         )
@@ -1291,6 +1308,11 @@ class TrainingProgramService:
                 required_hours=req_input.required_hours,
                 required_shifts=req_input.required_shifts,
                 required_calls=req_input.required_calls,
+                required_transports=getattr(req_input, "required_transports", None),
+                required_refusals=getattr(req_input, "required_refusals", None),
+                evaluation_excludes_lowest_rating=bool(
+                    getattr(req_input, "evaluation_excludes_lowest_rating", False)
+                ),
                 required_call_types=getattr(req_input, "required_call_types", None),
                 passing_score=req_input.passing_score,
                 max_attempts=req_input.max_attempts,
@@ -1457,6 +1479,16 @@ class TrainingProgramService:
             if prereq_error:
                 return None, prereq_error
             data["prerequisite_program_ids"] = list(prerequisite_ids) or None
+        if "shift_evaluation_template_id" in data:
+            template_error = await self._validate_evaluation_template(
+                data["shift_evaluation_template_id"], organization_id
+            )
+            if template_error:
+                return None, template_error
+            if data["shift_evaluation_template_id"] is not None:
+                data["shift_evaluation_template_id"] = str(
+                    data["shift_evaluation_template_id"]
+                )
         # Null would hide the program from every list (they match
         # ``active IS TRUE``) without being a deactivation anyone can undo.
         if "active" in data and data["active"] is None:
@@ -1729,7 +1761,7 @@ class TrainingProgramService:
                 if getattr(requirement, "required_courses", None)
                 else None
             ),
-        }.get(requirement_type)
+        }.get(requirement_type) or _evaluation_requirement_target(requirement)
         if not target:
             # Status-based type (skills evaluation, certification, knowledge
             # test): nothing accrues, so it is worth nothing until marked done.
@@ -1769,7 +1801,9 @@ class TrainingProgramService:
                 else None
             ),
         }
-        target = numeric_targets.get(requirement.requirement_type)
+        target = numeric_targets.get(
+            requirement.requirement_type
+        ) or _evaluation_requirement_target(requirement)
         if not target:
             return  # status-based type, or no target set — nothing to recompute
 
@@ -1818,6 +1852,20 @@ class TrainingProgramService:
         A COMPLETED enrollment is never reopened by a reactivation: it is not
         in scope, as it is not for the ``is_required`` toggle.
         """
+        enrollment_ids = await self.live_enrollment_ids_for_requirement(
+            requirement_id, organization_id
+        )
+        await self.recalculate_enrollments(enrollment_ids)
+        return len(enrollment_ids)
+
+    async def live_enrollment_ids_for_requirement(
+        self, requirement_id: UUID | str, organization_id: UUID | str
+    ) -> List[str]:
+        """ACTIVE / ON_HOLD enrollments whose program links this requirement.
+
+        A permanent requirement delete reads these before the links go, since
+        afterwards nothing connects the enrollments to the requirement.
+        """
         rows = await self.db.execute(
             select(ProgramEnrollment.id)
             .join(TrainingProgram, TrainingProgram.id == ProgramEnrollment.program_id)
@@ -1832,11 +1880,13 @@ class TrainingProgramService:
             )
             .distinct()
         )
-        enrollment_ids = [str(row[0]) for row in rows.all()]
+        return [str(row[0]) for row in rows.all()]
+
+    async def recalculate_enrollments(self, enrollment_ids: List[str]) -> None:
+        """Recalculate each enrollment and re-check it for phase advancement."""
         for eid in enrollment_ids:
             await self._recalculate_enrollment_progress(UUID(eid))
             await self._maybe_auto_advance_phase(UUID(eid))
-        return len(enrollment_ids)
 
     async def _validate_phase_prerequisites(
         self,
@@ -2609,18 +2659,46 @@ class TrainingProgramService:
             if not phase_result.scalar_one_or_none():
                 return None, "Program phase not found"
 
-        # Create milestone
+        from app.services import program_milestones
+
+        try:
+            items = await program_milestones.validate_items(
+                self.db,
+                str(organization_id),
+                [(i.item_type, str(i.item_id)) for i in milestone_data.items],
+            )
+            position_ids = await program_milestones.validate_positions(
+                self.db, str(organization_id), milestone_data.notify_position_ids
+            )
+            user_ids = await program_milestones.validate_users(
+                self.db, str(organization_id), milestone_data.notify_user_ids
+            )
+        except ValueError as exc:
+            return None, str(exc)
+
         milestone = ProgramMilestone(
-            program_id=milestone_data.program_id,
-            phase_id=milestone_data.phase_id,
+            program_id=str(milestone_data.program_id),
+            phase_id=str(milestone_data.phase_id) if milestone_data.phase_id else None,
             name=milestone_data.name,
             description=milestone_data.description,
             completion_percentage_threshold=milestone_data.completion_percentage_threshold,
             notification_message=milestone_data.notification_message,
+            item_match_mode=milestone_data.item_match_mode,
+            counts_prior_completions=milestone_data.counts_prior_completions,
+            notify_member=milestone_data.notify_member,
+            notify_position_ids=position_ids or None,
+            notify_user_ids=user_ids or None,
+            officer_message=milestone_data.officer_message,
         )
+        milestone.items = [
+            program_milestones.build_item(item_type, target_id, index)
+            for index, (item_type, target_id) in enumerate(items)
+        ]
 
         self.db.add(milestone)
         await self.db.commit()
+        # Members who already meet it are not told: it is not news to them.
+        await program_milestones.baseline_milestone(self.db, str(milestone.id))
         await self.db.refresh(milestone)
 
         return milestone, None
@@ -2647,17 +2725,108 @@ class TrainingProgramService:
         organization_id: UUID | str,
         updates: ProgramMilestoneUpdate,
     ) -> Tuple[Optional[ProgramMilestone], Optional[str]]:
-        """Update a milestone's name/description/threshold/message."""
+        """Update a milestone.
+
+        Raises ``ValueError`` for an item or recipient outside the department
+        and for an edit that would leave the milestone with no trigger. An
+        edit that changes a trigger re-baselines the milestone: members who
+        now meet it are recorded as skipped and not told (the editor warns
+        about this before saving).
+        """
+        from app.services import program_milestones
+
         milestone = await self._get_program_milestone(
             milestone_id, program_id, organization_id
         )
         if not milestone:
             return None, "Program milestone not found"
+        milestone = (
+            await program_milestones.load_milestones_by_id(self.db, [str(milestone.id)])
+        )[0]
 
-        for field, value in updates.model_dump(exclude_unset=True).items():
-            setattr(milestone, field, value)
+        changes = updates.model_dump(exclude_unset=True)
+        new_items = changes.pop("items", None)
+        # Absent: untouched. Null or empty: cleared.
+        position_ids = (
+            changes.pop("notify_position_ids") or []
+            if "notify_position_ids" in changes
+            else None
+        )
+        user_ids = (
+            changes.pop("notify_user_ids") or []
+            if "notify_user_ids" in changes
+            else None
+        )
 
+        validated_items = None
+        if new_items is not None:
+            validated_items = await program_milestones.validate_items(
+                self.db,
+                str(organization_id),
+                [(i["item_type"], str(i["item_id"])) for i in new_items],
+            )
+        # Every id is checked before anything is changed, so a refused edit
+        # leaves nothing half-applied in the session.
+        validated_positions = (
+            await program_milestones.validate_positions(
+                self.db, str(organization_id), position_ids
+            )
+            if position_ids is not None
+            else None
+        )
+        validated_users = (
+            await program_milestones.validate_users(
+                self.db, str(organization_id), user_ids
+            )
+            if user_ids is not None
+            else None
+        )
+
+        old_items = [
+            (i.item_type, str(program_milestones.item_target_id(i)))
+            for i in milestone.items
+        ]
+        trigger_before = (
+            milestone.completion_percentage_threshold,
+            milestone.item_match_mode,
+            bool(milestone.counts_prior_completions),
+            sorted(old_items),
+        )
+
+        apply_updates(milestone, changes, skip={"id", "program_id", "phase_id"})
+        if validated_positions is not None:
+            milestone.notify_position_ids = validated_positions or None
+        if validated_users is not None:
+            milestone.notify_user_ids = validated_users or None
+
+        if validated_items is not None and validated_items != old_items:
+            milestone.items.clear()
+            await self.db.flush()
+            milestone.items.extend(
+                program_milestones.build_item(item_type, target_id, index)
+                for index, (item_type, target_id) in enumerate(validated_items)
+            )
+        current_items = validated_items if validated_items is not None else old_items
+        trigger_after = (
+            milestone.completion_percentage_threshold,
+            milestone.item_match_mode,
+            bool(milestone.counts_prior_completions),
+            sorted(current_items),
+        )
+        # Refused only when this edit is what removes the last trigger. A row
+        # stored without one before triggers existed (an old import could
+        # write a NULL percentage) still takes a rename; it simply never fires.
+        if trigger_after != trigger_before and not program_milestones.has_trigger(
+            milestone, current_items
+        ):
+            await self.db.rollback()
+            raise ValueError(
+                "A milestone needs a percentage, at least one course or test, "
+                "or both"
+            )
         await self.db.commit()
+        if trigger_after != trigger_before:
+            await program_milestones.baseline_milestone(self.db, str(milestone.id))
         await self.db.refresh(milestone)
         return milestone, None
 
@@ -3372,6 +3541,9 @@ class TrainingProgramService:
                 today,
                 include_current,
             )
+            held_sessions = await load_held_sessions(
+                self.db, str(org_id), list(requirements.values())
+            )
             waivers_by_user = await fetch_org_waivers(self.db, org_id)
 
             for row in org_rows:
@@ -3388,6 +3560,7 @@ class TrainingProgramService:
                     org_include_current_month=include_current,
                     join_date=member_join_date(member),
                     shift_dates=shifts_by_user.get(str(member.id), []),
+                    held_sessions=held_sessions,
                 )
                 status, value, pct = compliance_projection(ev)
                 if (
@@ -3833,12 +4006,20 @@ class TrainingProgramService:
                         user_waivers,
                         str(requirement.id),
                         period_months=get_rolling_period_months(requirement),
+                        whole_units=True,
                     )
                     if user_waivers
                     else (requirement.required_shifts, 0, 0)
                 )
                 progress.progress_percentage = min(
-                    100.0, (updates.progress_value / adj_required) * 100
+                    100.0,
+                    (
+                        (updates.progress_value / adj_required) * 100
+                        # A prorated shift or call target can round down to
+                        # zero, which the member has already met.
+                        if adj_required > 0
+                        else 100.0
+                    ),
                 )
             elif (
                 requirement.requirement_type == RequirementType.CALLS
@@ -3852,12 +4033,46 @@ class TrainingProgramService:
                         user_waivers,
                         str(requirement.id),
                         period_months=get_rolling_period_months(requirement),
+                        whole_units=True,
                     )
                     if user_waivers
                     else (requirement.required_calls, 0, 0)
                 )
                 progress.progress_percentage = min(
-                    100.0, (updates.progress_value / adj_required) * 100
+                    100.0,
+                    (
+                        (updates.progress_value / adj_required) * 100
+                        # A prorated shift or call target can round down to
+                        # zero, which the member has already met.
+                        if adj_required > 0
+                        else 100.0
+                    ),
+                )
+            elif evaluation_target := _evaluation_requirement_target(requirement):
+                adj_required, _, _ = (
+                    adjust_required(
+                        evaluation_target,
+                        enroll_start,
+                        enroll_end,
+                        user_waivers,
+                        str(requirement.id),
+                        period_months=get_rolling_period_months(requirement),
+                        # Evaluated shifts, transports and refusals are counts,
+                        # prorated like shifts and calls: never part of one.
+                        whole_units=True,
+                    )
+                    if user_waivers
+                    else (evaluation_target, 0, 0)
+                )
+                progress.progress_percentage = min(
+                    100.0,
+                    (
+                        (updates.progress_value / adj_required) * 100
+                        # A prorated count can round down to zero, which the
+                        # member has already met.
+                        if adj_required > 0
+                        else 100.0
+                    ),
                 )
             elif (
                 requirement.requirement_type == RequirementType.COURSES
@@ -4561,6 +4776,14 @@ class TrainingProgramService:
         # quietly defeat it. An undated completion must fail closed when a
         # window is configured because its freshness cannot be verified.
         _, requirement = row
+        if requirement.requirement_type in EVALUATION_REQUIREMENT_TARGETS:
+            # Counted from submitted shift evaluations; a training record is
+            # neither an evaluated shift nor a transport, and the status
+            # sign-off path below would otherwise mark it complete outright.
+            return None, (
+                "That requirement is credited by shift evaluations, not by "
+                "training records"
+            )
         # The department's date: a completion from exactly N days ago is still
         # inside the window for the evening hours when UTC has moved on.
         cutoff = recency_cutoff(
@@ -4838,6 +5061,11 @@ class TrainingProgramService:
             .limit(1)
         )
         first_phase_id = first_phase_result.scalar_one_or_none()
+
+        # The new cycle earns its milestones again.
+        from app.services.program_milestones import clear_for_new_cycle
+
+        await clear_for_new_cycle(self.db, enrollment.id)
 
         now = datetime.now(timezone.utc)
         enrollment.status = EnrollmentStatus.ACTIVE
@@ -5466,17 +5694,21 @@ class TrainingProgramService:
 
         await self.db.commit()
 
-        # Milestones the member just passed. Only for an enrollment that was
+        # Milestones the member now meets. Only for an enrollment that was
         # actually running — congratulating someone who has withdrawn or failed
-        # out because an officer corrected a number would be worse than silence.
-        # Best-effort: a notification failure must not undo committed progress.
-        if was_active and avg_percentage > previous_percentage:
+        # out because an officer corrected a number would be worse than silence
+        # — but including one this very write completed, so the 100% milestone
+        # is still announced. Not gated on the percentage rising: a milestone
+        # can wait on courses and tests as well. Best-effort: a notification
+        # failure must not undo committed progress.
+        if was_active:
             try:
-                await self._notify_milestones_reached(
-                    enrollment, previous_percentage, avg_percentage
-                )
+                from app.services.program_milestones import process_enrollments
+
+                await process_enrollments(self.db, [enrollment_id], any_status=True)
             except Exception as e:
-                logger.error(f"Failed to send milestone notification: {e}")
+                logger.error("Failed to process milestones: {}", e)
+                await self.db.rollback()
 
         if newly_completed:
             await self._after_enrollment_completed(enrollment, completion_credit_id)
@@ -5873,6 +6105,7 @@ class TrainingProgramService:
             structure_type=source_program.structure_type,
             prerequisite_program_ids=source_program.prerequisite_program_ids,
             allows_concurrent_enrollment=source_program.allows_concurrent_enrollment,
+            shift_evaluation_template_id=source_program.shift_evaluation_template_id,
             time_limit_days=source_program.time_limit_days,
             warning_days_before=source_program.warning_days_before,
             reminder_conditions=source_program.reminder_conditions,
@@ -5886,6 +6119,7 @@ class TrainingProgramService:
 
         # Map old phase IDs to new phase IDs
         phase_id_map = {}
+        milestone_items = await self._milestone_items_by_id(source_program_id)
 
         # Get all phases sorted by phase_number
         phases = sorted(source_program.phases, key=lambda p: p.phase_number)
@@ -5925,17 +6159,14 @@ class TrainingProgramService:
 
             # Duplicate phase milestones
             for source_milestone in source_phase.milestones:
-                new_milestone = ProgramMilestone(
-                    program_id=new_program.id,
-                    phase_id=new_phase.id,
-                    name=source_milestone.name,
-                    description=source_milestone.description,
-                    completion_percentage_threshold=source_milestone.completion_percentage_threshold,
-                    notification_message=source_milestone.notification_message,
-                    requires_verification=source_milestone.requires_verification,
-                    verification_notes=source_milestone.verification_notes,
+                self.db.add(
+                    self._copy_milestone(
+                        source_milestone,
+                        milestone_items,
+                        new_program.id,
+                        new_phase.id,
+                    )
                 )
-                self.db.add(new_milestone)
 
         # Update prerequisite phase IDs with new phase IDs
         for source_phase in phases:
@@ -5989,22 +6220,228 @@ class TrainingProgramService:
 
         # Duplicate program-level milestones
         for source_milestone in program_milestones:
-            new_milestone = ProgramMilestone(
-                program_id=new_program.id,
-                phase_id=None,
-                name=source_milestone.name,
-                description=source_milestone.description,
-                completion_percentage_threshold=source_milestone.completion_percentage_threshold,
-                notification_message=source_milestone.notification_message,
-                requires_verification=source_milestone.requires_verification,
-                verification_notes=source_milestone.verification_notes,
+            self.db.add(
+                self._copy_milestone(
+                    source_milestone, milestone_items, new_program.id, None
+                )
             )
-            self.db.add(new_milestone)
 
         await self.db.commit()
         await self.db.refresh(new_program)
 
         return new_program, None
+
+    async def _milestone_items_by_id(
+        self, program_id: Any
+    ) -> Dict[str, List[ProgramMilestoneItem]]:
+        """Every milestone's items in a program, by milestone id — loaded once,
+        since the phases' milestones are loaded without them."""
+        from app.services.program_milestones import load_milestones
+
+        return {
+            str(m.id): list(m.items)
+            for m in await load_milestones(self.db, str(program_id))
+        }
+
+    @staticmethod
+    def _copy_milestone(
+        source: ProgramMilestone,
+        items_by_id: Dict[str, List[ProgramMilestoneItem]],
+        program_id: Any,
+        phase_id: Any,
+    ) -> ProgramMilestone:
+        """A copy of a milestone for a duplicated program in the same
+        department: items and recipients carry over as they are."""
+        from app.services.program_milestones import build_item, item_target_id
+
+        copy_ = ProgramMilestone(
+            program_id=program_id,
+            phase_id=phase_id,
+            name=source.name,
+            description=source.description,
+            completion_percentage_threshold=source.completion_percentage_threshold,
+            notification_message=source.notification_message,
+            requires_verification=source.requires_verification,
+            verification_notes=source.verification_notes,
+            item_match_mode=source.item_match_mode,
+            counts_prior_completions=source.counts_prior_completions,
+            notify_member=source.notify_member,
+            notify_position_ids=list(source.notify_position_ids or []) or None,
+            notify_user_ids=list(source.notify_user_ids or []) or None,
+            officer_message=source.officer_message,
+        )
+        copy_.items = [
+            build_item(item.item_type, str(item_target_id(item)), index)
+            for index, item in enumerate(items_by_id.get(str(source.id), []))
+            if item_target_id(item)
+        ]
+        return copy_
+
+    async def _milestone_export_context(
+        self, program_id: Any, organization_id: Any
+    ) -> Tuple[
+        Dict[str, List[ProgramMilestoneItem]],
+        Dict[Tuple[str, str], str],
+        Dict[str, str],
+    ]:
+        from app.models.user import Position
+        from app.services.program_milestones import item_names
+
+        items_by_id = await self._milestone_items_by_id(program_id)
+        names = await item_names(
+            self.db,
+            str(organization_id),
+            [item for items in items_by_id.values() for item in items],
+        )
+        slugs = {
+            str(i): slug
+            for i, slug in (
+                await self.db.execute(
+                    select(Position.id, Position.slug).where(
+                        Position.organization_id == str(organization_id)
+                    )
+                )
+            ).all()
+        }
+        return items_by_id, names, slugs
+
+    @staticmethod
+    def _export_milestone(
+        ms: ProgramMilestone,
+        items_by_id: Dict[str, List[ProgramMilestoneItem]],
+        names: Dict[Tuple[str, str], str],
+        position_slugs: Dict[str, str],
+    ) -> Dict[str, Any]:
+        """A milestone for an export file.
+
+        Items travel by type and name, and positions by slug, since ids mean
+        nothing in another department. Chosen members are not exported: a
+        person is not part of a program's definition.
+        """
+        from app.services.program_milestones import item_target_id
+
+        return {
+            "name": ms.name,
+            "description": ms.description,
+            "completion_percentage_threshold": ms.completion_percentage_threshold,
+            "notification_message": ms.notification_message,
+            "requires_verification": ms.requires_verification,
+            "verification_notes": ms.verification_notes,
+            "item_match_mode": ms.item_match_mode,
+            "counts_prior_completions": bool(ms.counts_prior_completions),
+            "notify_member": ms.notify_member is not False,
+            "officer_message": ms.officer_message,
+            "items": [
+                {
+                    "item_type": item.item_type,
+                    "name": names.get((item.item_type, str(item_target_id(item)))),
+                }
+                for item in items_by_id.get(str(ms.id), [])
+                if names.get((item.item_type, str(item_target_id(item))))
+            ],
+            "notify_position_slugs": [
+                position_slugs[str(p)]
+                for p in (ms.notify_position_ids or [])
+                if str(p) in position_slugs
+            ],
+        }
+
+    async def _import_milestone(
+        self,
+        ms_data: Dict[str, Any],
+        program_id: Any,
+        phase_id: Any,
+        organization_id: Any,
+        unmatched: List[str],
+    ) -> ProgramMilestone:
+        """A milestone from an export file, its items matched by name and its
+        positions by slug in this department.
+
+        An item with no match is left off and named in ``unmatched`` so the
+        summary can say so. Files written before items existed import as the
+        percentage milestones they were.
+        """
+        from app.models.knowledge_test import KnowledgeTest
+        from app.models.skills_testing import SkillTemplate
+        from app.models.user import Position
+        from app.services.program_milestones import build_item
+
+        models: Dict[str, Any] = {
+            "course": TrainingCourse,
+            "skill_test": SkillTemplate,
+            "knowledge_test": KnowledgeTest,
+        }
+        items: List[ProgramMilestoneItem] = []
+        for entry in ms_data.get("items") or []:
+            if not isinstance(entry, dict):
+                continue
+            item_type = entry.get("item_type")
+            name = entry.get("name")
+            if not isinstance(item_type, str) or item_type not in models:
+                continue
+            if not isinstance(name, str) or not name.strip():
+                continue
+            model = models[item_type]
+            target = (
+                await self.db.execute(
+                    select(model.id)
+                    .where(
+                        model.organization_id == str(organization_id),
+                        func.lower(model.name) == name.strip().lower(),
+                    )
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if target is None:
+                unmatched.append(f"{ms_data.get('name', '')}: {name.strip()}")
+                continue
+            items.append(build_item(item_type, str(target), len(items)))
+
+        slugs = [
+            s
+            for s in (ms_data.get("notify_position_slugs") or [])
+            if isinstance(s, str)
+        ]
+        position_ids: List[str] = []
+        if slugs:
+            position_ids = [
+                str(p)
+                for p in (
+                    await self.db.execute(
+                        select(Position.id).where(
+                            Position.organization_id == str(organization_id),
+                            Position.slug.in_(slugs),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            ]
+
+        mode = ms_data.get("item_match_mode")
+        threshold = ms_data.get("completion_percentage_threshold")
+        if threshold is None and not items:
+            # Every one of its items failed to match: without them the
+            # milestone has no trigger, and an unconditional one would fire
+            # for every member at once. Fall back to program completion.
+            threshold = 100.0
+        milestone = ProgramMilestone(
+            program_id=program_id,
+            phase_id=phase_id,
+            name=ms_data.get("name", ""),
+            description=ms_data.get("description"),
+            completion_percentage_threshold=threshold,
+            notification_message=ms_data.get("notification_message"),
+            requires_verification=ms_data.get("requires_verification", False),
+            verification_notes=ms_data.get("verification_notes"),
+            item_match_mode=mode if mode in ("all", "any") else "all",
+            counts_prior_completions=bool(ms_data.get("counts_prior_completions")),
+            notify_member=ms_data.get("notify_member") is not False,
+            notify_position_ids=position_ids or None,
+            officer_message=ms_data.get("officer_message"),
+        )
+        milestone.items = items
+        return milestone
 
     # ==================== Export / Import ====================
 
@@ -6036,6 +6473,10 @@ class TrainingProgramService:
         if not program:
             raise ValueError("Program not found")
 
+        ms_items, ms_names, ms_slugs = await self._milestone_export_context(
+            program_id, organization_id
+        )
+
         # Serialize phases
         phases = []
         by_id = {str(p.id): p for p in program.phases}
@@ -6056,18 +6497,10 @@ class TrainingProgramService:
                         ),
                     }
                 )
-            phase_milestones = []
-            for ms in sorted(phase.milestones, key=lambda m: m.created_at or ""):
-                phase_milestones.append(
-                    {
-                        "name": ms.name,
-                        "description": ms.description,
-                        "completion_percentage_threshold": ms.completion_percentage_threshold,
-                        "notification_message": ms.notification_message,
-                        "requires_verification": ms.requires_verification,
-                        "verification_notes": ms.verification_notes,
-                    }
-                )
+            phase_milestones = [
+                self._export_milestone(ms, ms_items, ms_names, ms_slugs)
+                for ms in sorted(phase.milestones, key=lambda m: m.created_at or "")
+            ]
             phases.append(
                 {
                     "phase_number": phase.phase_number,
@@ -6119,18 +6552,10 @@ class TrainingProgramService:
                 ProgramMilestone.phase_id.is_(None),
             )
         )
-        program_milestones = []
-        for ms in prog_ms_result.scalars().all():
-            program_milestones.append(
-                {
-                    "name": ms.name,
-                    "description": ms.description,
-                    "completion_percentage_threshold": ms.completion_percentage_threshold,
-                    "notification_message": ms.notification_message,
-                    "requires_verification": ms.requires_verification,
-                    "verification_notes": ms.verification_notes,
-                }
-            )
+        program_milestones = [
+            self._export_milestone(ms, ms_items, ms_names, ms_slugs)
+            for ms in prog_ms_result.scalars().all()
+        ]
 
         return {
             "export_version": "1.0",
@@ -6252,6 +6677,7 @@ class TrainingProgramService:
         requirements_reused: List[str] = []
         phase_summaries: List[Dict[str, Any]] = []
         milestone_count = 0
+        unmatched_milestone_items: List[str] = []
 
         async def _resolve(req_data: dict) -> Tuple[Optional[str], bool]:
             req_id, req_created = await self._resolve_or_create_requirement(
@@ -6367,19 +6793,12 @@ class TrainingProgramService:
 
             for ms_data in phase_data.get("milestones", []):
                 self.db.add(
-                    ProgramMilestone(
-                        program_id=program.id,
-                        phase_id=phase.id,
-                        name=ms_data.get("name", ""),
-                        description=ms_data.get("description"),
-                        completion_percentage_threshold=ms_data.get(
-                            "completion_percentage_threshold"
-                        ),
-                        notification_message=ms_data.get("notification_message"),
-                        requires_verification=ms_data.get(
-                            "requires_verification", False
-                        ),
-                        verification_notes=ms_data.get("verification_notes"),
+                    await self._import_milestone(
+                        ms_data,
+                        program.id,
+                        phase.id,
+                        organization_id,
+                        unmatched_milestone_items,
                     )
                 )
 
@@ -6424,17 +6843,12 @@ class TrainingProgramService:
         # Program-level milestones
         for ms_data in data.get("program_milestones", []):
             self.db.add(
-                ProgramMilestone(
-                    program_id=program.id,
-                    phase_id=None,
-                    name=ms_data.get("name", ""),
-                    description=ms_data.get("description"),
-                    completion_percentage_threshold=ms_data.get(
-                        "completion_percentage_threshold"
-                    ),
-                    notification_message=ms_data.get("notification_message"),
-                    requires_verification=ms_data.get("requires_verification", False),
-                    verification_notes=ms_data.get("verification_notes"),
+                await self._import_milestone(
+                    ms_data,
+                    program.id,
+                    None,
+                    organization_id,
+                    unmatched_milestone_items,
                 )
             )
 
@@ -6446,6 +6860,7 @@ class TrainingProgramService:
             "phases": phase_summaries,
             "program_requirement_count": program_requirement_count,
             "milestone_count": milestone_count,
+            "unmatched_milestone_items": unmatched_milestone_items,
             "requirements_created": requirements_created,
             "requirements_reused": requirements_reused,
         }

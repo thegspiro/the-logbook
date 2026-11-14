@@ -15,6 +15,7 @@ from app.api.dependencies import (
     _has_permission,
     get_current_user,
     require_permission,
+    require_stepup,
 )
 from app.api.v1.endpoints.users import _enforce_rank_grant_ceiling
 from app.core.database import get_db
@@ -121,6 +122,7 @@ async def create_rank(
     current_user: User = Depends(
         require_permission("settings.manage", "members.manage")
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Create a new operational rank.
@@ -216,6 +218,7 @@ async def update_rank(
     current_user: User = Depends(
         require_permission("settings.manage", "members.manage")
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Update an operational rank.
@@ -287,6 +290,7 @@ async def delete_rank(
     current_user: User = Depends(
         require_permission("settings.manage", "members.manage")
     ),
+    _stepup: User = Depends(require_stepup),
 ):
     """
     Delete an operational rank.

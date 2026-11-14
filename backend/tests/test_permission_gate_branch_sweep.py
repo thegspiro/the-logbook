@@ -78,6 +78,22 @@ ALLOWED = {
     # without a settings grant has no business editing settings at all.
     ("organizations.py", "PATCH", "/settings", "admin.access"),
     ("organizations.py", "PATCH", "/settings/email", "admin.access"),
+    # `evaluations.view_all` decides whether a template preview may use a
+    # real member's figures or only sample ones (owner decision, 2026-11-03);
+    # building the form is `evaluations.configure`. A view_all holder who
+    # cannot build forms has no business in the builder's preview.
+    (
+        "evaluations.py",
+        "GET",
+        "/templates/preview-options",
+        "evaluations.view_all",
+    ),
+    ("evaluations.py", "POST", "/templates/preview", "evaluations.view_all"),
+    # `*` narrows which templates a settings.manage holder may rewrite: the
+    # ones carrying a temporary password, a reset or ballot token or an
+    # applicant's private link need a full administrator (ADV-3). It cannot
+    # be locked out by the gate, since `*` satisfies settings.manage.
+    ("email_templates.py", "PUT", "/{template_id}", "*"),
 }
 
 

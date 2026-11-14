@@ -143,6 +143,15 @@ def test_migration_snapshot_matches_the_registry_it_was_written_against():
             "_suggestions_manage",
         )._PERMISSION
     )
+    # The history permissions reached the historian with the History module,
+    # again through a backfill revision of their own.
+    later_grants.update(
+        _load_module(
+            versions
+            / "20261103_0200_02c94bb742d6_grant_history_permissions_to_historian.py",
+            "_history_grants",
+        )._PERMISSIONS
+    )
     for slug, expected in migration._PRIOR_DEFAULTS.items():
         current = set(DEFAULT_POSITIONS[slug]["permissions"]) - later_grants
         assert current == expected | {PERMISSION}, (

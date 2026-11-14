@@ -48,6 +48,19 @@ class ReportFrequency(str, PyEnum):
     NONE = "none"
 
 
+class LeaveMonthRule(str, PyEnum):
+    """How a month that leave or a waiver only partly covers reduces a target.
+
+    Every proration of a training, shift or call requirement reads this through
+    ``training_waiver_service``, so the member's card, the compliance matrix
+    and the shift report cannot disagree about what a month owes.
+    """
+
+    FULL_MONTH = "full_month"
+    PROPORTIONAL = "proportional"
+    HALF = "half"
+
+
 class ReportStatus(str, PyEnum):
     """Status of a generated compliance report."""
 
@@ -115,6 +128,18 @@ class ComplianceConfig(Base):
             "When false, compliance calculations evaluate as of the last day "
             "of the previous month so the in-progress month does not yet "
             "count against members (e.g. departments that drill end-of-month)."
+        ),
+    )
+
+    # -- Leave and waiver proration --
+    leave_month_rule: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=LeaveMonthRule.FULL_MONTH.value,
+        server_default="full_month",
+        comment=(
+            "How a partly-covered month reduces a target: full_month, "
+            "proportional or half"
         ),
     )
 

@@ -2,12 +2,14 @@
  * Events Page
  *
  * Lists all events with filtering by type, search, pagination,
- * and a toggle between upcoming and past events.
+ * and a toggle between upcoming and past events. `?range=next-30-days` opens
+ * it on the next 30 department days, which is what the operations dashboard's
+ * "Next 30 days" card counts and links to (DASH-37).
  */
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import {
   Calendar,
@@ -39,7 +41,7 @@ import { EventListCard } from '../components/events/EventListCard';
 import { NeedsYouBand } from '../components/events/NeedsYouBand';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatShortDateTime, getTodayLocalDate } from '../utils/dateFormatting';
+import { addCalendarDays, formatShortDateTime, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { errorTracker } from '../services/errorTracking';
 import { buildCsv, downloadCsv } from '../utils/csv';
@@ -98,6 +100,24 @@ const ALL_EVENT_TYPES: EventType[] = [
    watching for it will not notice up to 60s of lag. */
 const URGENCY_TICK_MS = 60_000;
 
+const NEXT_30_DAYS = 'next-30-days';
+
+/**
+ * The window the dashboard's "Next 30 days" card counts: from midnight today
+ * to midnight 30 days later, both on the department's calendar, so a DST
+ * change inside the window moves neither end by an hour. Mirrors
+ * get_operations_dashboard's `local_midnight` and `boundary`; the end is
+ * exclusive there, and the list endpoint's `start_before` is inclusive, so the
+ * caller drops an event starting exactly on it.
+ */
+const nextThirtyDaysWindow = (timezone: string): { start: string; end: string } => {
+  const today = getTodayLocalDate(timezone);
+  return {
+    start: localToUTC(`${today}T00:00`, timezone),
+    end: localToUTC(`${addCalendarDays(today, 30)}T00:00`, timezone),
+  };
+};
+
 /* One row of the overflow menu. `max-md` grows it to the 44px touch minimum
    without inflating the same menu on a desktop pointer. */
 const MENU_ITEM_CLASS =
@@ -114,6 +134,8 @@ export const EventsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [showPastEvents, setShowPastEvents] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [nextThirtyDays, setNextThirtyDays] = useState(() => searchParams.get('range') === NEXT_30_DAYS);
   const [showMyEventsOnly, setShowMyEventsOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'date' | 'title' | 'rsvp_count'>('date');
   const [rsvpLoading, setRsvpLoading] = useState<Record<string, boolean>>({});
@@ -358,6 +380,22 @@ export const EventsPage: React.FC = () => {
           setLoading(true);
           setError(null);
         }
+        if (nextThirtyDays) {
+          // By start, not by end: the card counts an event that began this
+          // morning and is already over, which Upcoming's end_after leaves
+          // out. The endpoint's maximum page, because the default 100 could
+          // stop short of a busy month the card counted in full.
+          const range = nextThirtyDaysWindow(tz);
+          const data = await eventService.getEvents({
+            start_after: range.start,
+            start_before: range.end,
+            include_drafts: canManage,
+            limit: 500,
+          });
+          const end = new Date(range.end).getTime();
+          setEvents(data.filter((e) => new Date(e.start_datetime).getTime() < end));
+          return;
+        }
         const params = showPastEvents
           ? { end_before: new Date().toISOString(), include_drafts: canManage }
           : { end_after: new Date().toISOString(), include_drafts: canManage };
@@ -376,8 +414,18 @@ export const EventsPage: React.FC = () => {
         if (!background) setLoading(false);
       }
     },
-    [showPastEvents, canManage]
+    [showPastEvents, canManage, nextThirtyDays, tz]
   );
+
+  /** Upcoming, Past and the chip's clear all leave the dashboard's window. */
+  const clearNextThirtyDays = useCallback(() => {
+    setNextThirtyDays(false);
+    if (searchParams.has('range')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('range');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Pull-to-refresh is a deliberate reload, so it keeps the full-load UI.
   useRegisterPullToRefresh(() => fetchEvents());
@@ -559,7 +607,7 @@ export const EventsPage: React.FC = () => {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [typeFilter, searchQuery, showPastEvents, showMyEventsOnly, sortBy]);
+  }, [typeFilter, searchQuery, showPastEvents, showMyEventsOnly, sortBy, nextThirtyDays]);
 
   // #48: CSV export for events
   /** One builder for both export paths, so a fix to either cannot miss the other. */
@@ -603,7 +651,8 @@ export const EventsPage: React.FC = () => {
   // to do something they cannot. An empty result that follows from a search, a
   // filter or the Past toggle is still reported to everyone — that is feedback
   // on what they asked for, not an invitation.
-  const listIsNarrowed = searchQuery !== '' || typeFilter !== 'all' || showPastEvents || showMyEventsOnly;
+  const listIsNarrowed =
+    searchQuery !== '' || typeFilter !== 'all' || showPastEvents || showMyEventsOnly || nextThirtyDays;
   const showEmptyState = canManage || listIsNarrowed;
 
   const handleDuplicate = useCallback(
@@ -736,7 +785,7 @@ export const EventsPage: React.FC = () => {
   // Clear selection when filters change
   useEffect(() => {
     setSelectedEvents(new Set());
-  }, [typeFilter, searchQuery, showPastEvents, showMyEventsOnly, sortBy]);
+  }, [typeFilter, searchQuery, showPastEvents, showMyEventsOnly, sortBy, nextThirtyDays]);
 
   if (loading) {
     return (
@@ -929,7 +978,10 @@ export const EventsPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <div className="segmented-group inline-flex shrink-0 items-center">
               <button
-                onClick={() => setShowPastEvents(false)}
+                onClick={() => {
+                  setShowPastEvents(false);
+                  clearNextThirtyDays();
+                }}
                 className={`touch:min-h-[44px] rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
                   !showPastEvents
                     ? 'bg-red-800 text-white shadow-sm'
@@ -939,7 +991,10 @@ export const EventsPage: React.FC = () => {
                 Upcoming
               </button>
               <button
-                onClick={() => setShowPastEvents(true)}
+                onClick={() => {
+                  setShowPastEvents(true);
+                  clearNextThirtyDays();
+                }}
                 className={`touch:min-h-[44px] rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
                   showPastEvents
                     ? 'bg-red-800 text-white shadow-sm'
@@ -949,6 +1004,17 @@ export const EventsPage: React.FC = () => {
                 Past
               </button>
             </div>
+            {nextThirtyDays && (
+              <button
+                type="button"
+                onClick={clearNextThirtyDays}
+                aria-label="Clear filter: next 30 days"
+                className="touch:min-h-[44px] inline-flex shrink-0 items-center gap-1 rounded-full border border-red-600 bg-red-800 px-3 py-1 text-sm font-medium whitespace-nowrap text-white"
+              >
+                Next 30 days
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            )}
             <div className="segmented-group inline-flex shrink-0 items-center">
               <button
                 onClick={() => setViewMode('list')}
@@ -1179,12 +1245,14 @@ export const EventsPage: React.FC = () => {
                   : typeFilter === 'all'
                     ? showPastEvents
                       ? 'No past events found.'
-                      : // An instruction to create, so only for someone who can.
-                        // Reachable by a member with "my events only" on, which
-                        // narrows the list without changing this branch.
-                        canManage
-                        ? 'Get started by creating a new event.'
-                        : undefined
+                      : nextThirtyDays
+                        ? 'No events in the next 30 days.'
+                        : // An instruction to create, so only for someone who can.
+                          // Reachable by a member with "my events only" on, which
+                          // narrows the list without changing this branch.
+                          canManage
+                          ? 'Get started by creating a new event.'
+                          : undefined
                     : typeFilter.startsWith('cat:')
                       ? `No events in "${customCategories.find((c) => c.value === typeFilter.slice(4))?.label || typeFilter.slice(4)}" category.`
                       : `No ${getEventTypeLabel(typeFilter).toLowerCase()} events found.`

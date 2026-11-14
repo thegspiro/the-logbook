@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import {
   Truck,
   Plus,
@@ -30,9 +30,49 @@ import { useAuthStore } from '../../../stores/authStore';
 import { NfpaDepartmentSwitch } from '../components/NfpaDepartmentSwitch';
 import { useApparatusNfpaSettings } from '../hooks/useApparatusNfpaSettings';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
+import { StatGrid } from '../../../components/ux';
+import { APPARATUS_MAINTENANCE_DUE_DAYS, MaintenanceDueList } from '../components/MaintenanceDueList';
+
+// The dashboard's fleet-readiness tiles link here with one of these in the
+// query string. Only the exact value a tile sends turns its filter on; anything
+// else is unrecognized and degrades to the full list rather than an error.
+const DASHBOARD_FILTERS = [
+  {
+    param: 'serviceStatus',
+    value: 'unavailable',
+    name: 'Out of service or in maintenance',
+    label: 'Showing only apparatus that are out of service or in maintenance.',
+  },
+  {
+    param: 'hasDeficiency',
+    value: 'true',
+    name: 'Unresolved deficiency',
+    label: 'Showing only apparatus with an unresolved equipment deficiency.',
+  },
+  {
+    param: 'inspection',
+    value: 'overdue',
+    name: 'Inspection overdue',
+    label: 'Showing only apparatus whose inspection has expired.',
+  },
+  {
+    // DASH-38: the dashboard's "Maintenance due" tile. It counts maintenance
+    // items, not apparatus, so the board lists the items in place of the fleet.
+    param: 'maintenance',
+    value: 'due',
+    name: 'Maintenance due',
+    label: `Showing maintenance due in the next ${APPARATUS_MAINTENANCE_DUE_DAYS} days, overdue work included, in place of the fleet list.`,
+  },
+] as const;
 
 export const ApparatusListPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeDashboardFilters = DASHBOARD_FILTERS.filter((f) => searchParams.get(f.param) === f.value);
+  const unavailableOnly = searchParams.get('serviceStatus') === 'unavailable';
+  const deficiencyOnly = searchParams.get('hasDeficiency') === 'true';
+  const inspectionOverdueOnly = searchParams.get('inspection') === 'overdue';
+  const maintenanceDueOnly = searchParams.get('maintenance') === 'due';
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filterType, setFilterType] = useState<string>('');
@@ -40,7 +80,9 @@ export const ApparatusListPage: React.FC = () => {
   const [showArchived, setShowArchived] = useState(false);
   // An empty list under a search or filter says nothing about whether the
   // department has any apparatus, so it must not read as a first-run screen.
-  const isNarrowed = Boolean(searchQuery || filterType || filterStatus || showArchived);
+  const isNarrowed = Boolean(
+    searchQuery || filterType || filterStatus || showArchived || activeDashboardFilters.length > 0
+  );
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canManage = checkPermission('apparatus.manage');
   const canCreate = canManage || checkPermission('apparatus.create');
@@ -78,31 +120,43 @@ export const ApparatusListPage: React.FC = () => {
       return;
     }
 
-    // Load initial data
+    // Load initial data. The list itself is fetched by the filter effect
+    // below, which also runs on mount: a second fetch here would race it with
+    // whatever filters the store kept from the last visit.
     void fetchTypes();
     void fetchStatuses();
     if (canManage) void fetchFleetSummary();
-    void fetchApparatusList(1);
-  }, [navigate, canManage, fetchTypes, fetchStatuses, fetchFleetSummary, fetchApparatusList]);
+  }, [navigate, canManage, fetchTypes, fetchStatuses, fetchFleetSummary]);
 
-  // Apply filters when they change
+  // Apply filters when they change. Every key is sent, cleared ones as
+  // undefined, because the store merges into the filters it already holds and
+  // an omitted key would keep the previous value.
   useEffect(() => {
-    const filters: Record<string, unknown> = {
+    setFilters({
       isArchived: showArchived,
-    };
+      apparatusTypeId: filterType || undefined,
+      statusId: filterStatus || undefined,
+      search: searchQuery || undefined,
+      serviceStatus: unavailableOnly ? 'unavailable' : undefined,
+      hasDeficiency: deficiencyOnly || undefined,
+      inspection: inspectionOverdueOnly ? 'overdue' : undefined,
+    });
+  }, [
+    filterType,
+    filterStatus,
+    showArchived,
+    searchQuery,
+    unavailableOnly,
+    deficiencyOnly,
+    inspectionOverdueOnly,
+    setFilters,
+  ]);
 
-    if (filterType) {
-      filters.apparatusTypeId = filterType;
-    }
-    if (filterStatus) {
-      filters.statusId = filterStatus;
-    }
-    if (searchQuery) {
-      filters.search = searchQuery;
-    }
-
-    setFilters(filters);
-  }, [filterType, filterStatus, showArchived, searchQuery, setFilters]);
+  const clearDashboardFilters = (params: readonly string[]) => {
+    const next = new URLSearchParams(searchParams);
+    params.forEach((param) => next.delete(param));
+    setSearchParams(next, { replace: true });
+  };
 
   const handlePageChange = (page: number) => {
     void fetchApparatusList(page);
@@ -137,9 +191,11 @@ export const ApparatusListPage: React.FC = () => {
           </div>
         )}
 
-        {/* Fleet Summary Cards */}
+        {/* Fleet Summary Cards. Columns follow the row's own width: at 1024px
+            the sidebar leaves six tiles ~110px each, and "In Maintenance" and
+            "Maintenance Due" ran out of their boxes. */}
         {canManage && (
-          <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
+          <StatGrid columns={6} className="mb-8">
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Fleet</p>
               <p className="text-theme-text-primary mt-1 text-2xl font-bold">
@@ -170,15 +226,24 @@ export const ApparatusListPage: React.FC = () => {
                 {isLoadingSummary ? '...' : (fleetSummary?.reserveCount ?? 0)}
               </p>
             </div>
-            <div className="card p-4">
+            {/* The dashboard's "Maintenance due" tile shows this same figure.
+                maintenanceDueSoon already includes the overdue items, so
+                adding maintenanceOverdue to it counted those twice. */}
+            {/* Named by its visible text, with where it goes added for a
+                screen reader: an aria-label that replaced the visible words
+                broke voice control ("click Maintenance Due" matched nothing). */}
+            <Link
+              to="/apparatus?maintenance=due"
+              className="card hover:bg-theme-surface-hover block p-4 transition-colors"
+            >
               <p className="text-theme-text-muted text-xs font-medium uppercase">Maintenance Due</p>
               <p className="mt-1 text-2xl font-bold text-orange-700 dark:text-orange-400">
-                {isLoadingSummary
-                  ? '...'
-                  : (fleetSummary?.maintenanceDueSoon ?? 0) + (fleetSummary?.maintenanceOverdue ?? 0)}
+                {isLoadingSummary ? '...' : (fleetSummary?.maintenanceDueSoon ?? 0)}
               </p>
-            </div>
-          </div>
+              <p className="text-theme-text-muted mt-1 text-xs">{APPARATUS_MAINTENANCE_DUE_DAYS} days, incl. overdue</p>
+              <span className="sr-only">Show the maintenance due</span>
+            </Link>
+          </StatGrid>
         )}
 
         {canManageSettings && nfpaSettings && (
@@ -291,6 +356,7 @@ export const ApparatusListPage: React.FC = () => {
                     setFilterStatus('');
                     setShowArchived(false);
                     setSearchQuery('');
+                    clearDashboardFilters(DASHBOARD_FILTERS.map((f) => f.param));
                   }}
                   className="text-theme-text-muted hover:text-theme-text-primary px-4 py-2 transition-colors"
                 >
@@ -301,8 +367,29 @@ export const ApparatusListPage: React.FC = () => {
           )}
         </div>
 
+        {/* Readiness filters, arrived at from the dashboard tiles */}
+        {activeDashboardFilters.map((filter) => (
+          <div
+            key={filter.param}
+            className="alert-warning mb-4 flex flex-wrap items-center justify-between gap-2 text-sm"
+            role="status"
+          >
+            <span>{filter.label}</span>
+            <button
+              type="button"
+              onClick={() => clearDashboardFilters([filter.param])}
+              aria-label={`Clear filter: ${filter.name}`}
+              className="touch-target-phone font-medium underline"
+            >
+              Clear filter
+            </button>
+          </div>
+        ))}
+
         {/* Apparatus Table */}
-        {isLoading ? (
+        {maintenanceDueOnly ? (
+          <MaintenanceDueList />
+        ) : isLoading ? (
           <div className="card p-12 text-center" role="status" aria-live="polite">
             <div className="border-theme-text-primary mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2"></div>
             <p className="text-theme-text-secondary">Loading apparatus...</p>
@@ -333,8 +420,8 @@ export const ApparatusListPage: React.FC = () => {
         ) : (
           <>
             <div className="card overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="rwd-table-container overflow-x-auto">
+                <table className="rwd-table rwd-table-xwide w-full">
                   <thead className="bg-theme-input-bg border-theme-surface-border border-b">
                     <tr>
                       <th
@@ -402,7 +489,7 @@ export const ApparatusListPage: React.FC = () => {
                             apparatus.isArchived ? 'opacity-60' : ''
                           }`}
                         >
-                          <td className="px-3 py-4 whitespace-nowrap sm:px-6">
+                          <td data-label="Unit" className="px-3 py-4 sm:px-6">
                             <div className="flex items-center">
                               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-800 font-bold text-white">
                                 {/* Unit numbers are hyphenated ("E-1", "B-5"), so a
@@ -416,15 +503,15 @@ export const ApparatusListPage: React.FC = () => {
                                   {apparatus.unitNumber}
                                 </div>
                                 {apparatus.name && (
-                                  <div className="text-theme-text-muted truncate text-sm">{apparatus.name}</div>
+                                  <div className="text-theme-text-muted text-sm">{apparatus.name}</div>
                                 )}
                               </div>
                             </div>
                           </td>
-                          <td className="table-col-secondary px-3 py-4 whitespace-nowrap sm:px-6">
+                          <td data-label="Type" className="table-col-secondary px-3 py-4 sm:px-6">
                             {apparatusType && <ApparatusTypeBadge type={apparatusType} />}
                           </td>
-                          <td className="table-col-secondary px-3 py-4 sm:px-6">
+                          <td data-label="Vehicle" className="table-col-secondary px-3 py-4 sm:px-6">
                             <div className="text-theme-text-primary text-sm">
                               {apparatus.year && apparatus.make && apparatus.model
                                 ? `${apparatus.year} ${apparatus.make} ${apparatus.model}`
@@ -433,8 +520,8 @@ export const ApparatusListPage: React.FC = () => {
                                   : '-'}
                             </div>
                           </td>
-                          <td className="px-3 py-4 whitespace-nowrap sm:px-6">
-                            <div className="flex items-center gap-2">
+                          <td data-label="Status" className="px-3 py-4 sm:px-6">
+                            <div className="flex flex-wrap items-center gap-2">
                               {status && <StatusBadge status={status} />}
                               {apparatus.hasDeficiency && (
                                 <span
@@ -447,20 +534,20 @@ export const ApparatusListPage: React.FC = () => {
                               )}
                             </div>
                           </td>
-                          <td className="table-col-secondary px-3 py-4 whitespace-nowrap sm:px-6">
+                          <td data-label="Min Crew" className="table-col-secondary px-3 py-4 whitespace-nowrap sm:px-6">
                             <div className="text-theme-text-secondary text-sm">{apparatus.minStaffing}</div>
                           </td>
-                          <td className="table-col-tertiary px-3 py-4 whitespace-nowrap sm:px-6">
+                          <td data-label="Mileage" className="table-col-tertiary px-3 py-4 whitespace-nowrap sm:px-6">
                             <div className="text-theme-text-secondary text-sm">
                               {apparatus.currentMileage ? formatNumber(apparatus.currentMileage) : '-'}
                             </div>
                           </td>
-                          <td className="table-col-tertiary px-3 py-4 whitespace-nowrap sm:px-6">
+                          <td data-label="Hours" className="table-col-tertiary px-3 py-4 whitespace-nowrap sm:px-6">
                             <div className="text-theme-text-secondary text-sm">
                               {apparatus.currentHours ? formatNumber(apparatus.currentHours) : '-'}
                             </div>
                           </td>
-                          <td className="px-3 py-4 text-right whitespace-nowrap sm:px-6">
+                          <td data-label="Actions" className="px-3 py-4 text-right whitespace-nowrap sm:px-6">
                             <div className="flex items-center justify-end space-x-1 sm:space-x-2">
                               <button
                                 onClick={() => void navigate(`/apparatus/print-labels?ids=${apparatus.id}`)}

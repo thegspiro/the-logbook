@@ -42,6 +42,8 @@ const cellMark = (status: string | undefined): string => {
   // An existing member inside the requirement's catch-up period: not yet held
   // against them, so it must not print as a failure.
   if (status === 'catch_up') return 'Due';
+  // No session held yet: nothing to have attended, so not a failure either.
+  if (status === 'not_applicable') return 'None held';
   return '✗';
 };
 

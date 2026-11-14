@@ -125,7 +125,9 @@ class TestWaiverRequirementIdsScoping:
         )
         result = await create_training_waiver(data, db, _user())
         assert result.requirement_ids == [req_id]
-        db.add.assert_called_once()
+        # The audit entry is added in the same transaction, so count waivers.
+        added = [call.args[0] for call in db.add.call_args_list]
+        assert [type(obj).__name__ for obj in added].count("TrainingWaiver") == 1
 
 
 class TestSubmissionCategoryScoping:

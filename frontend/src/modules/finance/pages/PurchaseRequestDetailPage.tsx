@@ -30,6 +30,7 @@ import { FunctionalClassControl } from '../components/FunctionalClassControl';
 import { FundNameItem, FundShortfallNotice } from '../components/FundShortfallNotice';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { ReceiptControl } from '../components/ReceiptControl';
+import { MarkPaidDialog } from '../components/MarkPaidDialog';
 import { ReimbursementClaimDialog } from '../components/ReimbursementClaimDialog';
 import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
 import { Skeleton } from '@/components/ux/Skeleton';
@@ -42,13 +43,16 @@ import { useConfirm } from '@/contexts/ConfirmContext';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import {
+  type MonetaryAmount,
   ApprovalEntityType,
   ExpenseReportStatus,
   PurchaseRequestStatus,
   PURCHASE_REQUEST_STATUS_COLORS,
   APPROVAL_STEP_STATUS_COLORS,
+  QuickBooksPaymentType,
 } from '../types';
 import { ApprovalStepActions } from '../components/ApprovalStepActions';
+import { QuickBooksPostingNote } from '../components/QuickBooksPostingNote';
 
 // =============================================================================
 // Status Labels
@@ -201,6 +205,16 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ isDraft, steps }) =
   );
 };
 
+/**
+ * The server's paid-less-approved figure, in words: "$30.00 over", "$14.50
+ * under" or "None". The sign is the server's; only the wording is chosen here.
+ */
+const describePaidDifference = (difference: MonetaryAmount): string => {
+  const value = Number(difference);
+  if (value === 0) return 'None';
+  return `${formatCurrency(Math.abs(value))} ${value > 0 ? 'over' : 'under'}`;
+};
+
 // =============================================================================
 // Main Page Component
 // =============================================================================
@@ -220,6 +234,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
   const access = useFinanceRequestAccess();
   const { confirm } = useConfirm();
   const [claiming, setClaiming] = useState(false);
+  const [payingOpen, setPayingOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -257,17 +272,6 @@ const PurchaseRequestDetailPage: React.FC = () => {
       void fetchPurchaseRequest(id);
     } catch {
       toast.error('Failed to mark as received');
-    }
-  };
-
-  const handleMarkPaid = async () => {
-    if (!id) return;
-    try {
-      await purchaseRequestService.markPaid(id);
-      toast.success('Marked as paid');
-      void fetchPurchaseRequest(id);
-    } catch {
-      toast.error('Failed to mark as paid');
     }
   };
 
@@ -347,6 +351,10 @@ const PurchaseRequestDetailPage: React.FC = () => {
   const canMarkOrdered = access.canManage && pr.status === PurchaseRequestStatus.APPROVED;
   const canMarkReceived = access.canManage && pr.status === PurchaseRequestStatus.ORDERED;
   const canMarkPaid = access.canManage && pr.status === PurchaseRequestStatus.RECEIVED && !heldByClaim;
+  // No payment without an uploaded receipt (owner decision 2026-11-01;
+  // FinanceService.mark_pr_paid refuses it too). The button stays visible,
+  // disabled, with the reason beside it, so the office knows what is missing.
+  const awaitingReceipt = canMarkPaid && !pr.receiptDocumentId;
   // A requester may withdraw only a draft; past that it is the finance
   // office's to cancel (FinanceService.cancel_purchase_request).
   const canCancel = access.canManage
@@ -388,8 +396,8 @@ const PurchaseRequestDetailPage: React.FC = () => {
 
       {/* Request Header */}
       <div className="card p-6">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="page-header mb-4 gap-3 sm:items-center">
+          <div className="page-header-title">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-theme-text-primary text-xl font-bold">{pr.title}</h1>
               <span
@@ -400,12 +408,12 @@ const PurchaseRequestDetailPage: React.FC = () => {
             </div>
             <p className="text-theme-text-secondary mt-1 text-sm">{pr.requestNumber}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="page-header-actions flex flex-wrap items-center gap-2">
             {canEdit && (
               <button
                 type="button"
                 onClick={() => void navigate(`/finance/purchase-requests/${pr.id}/edit`)}
-                className="touch:min-h-11 border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium"
+                className="btn-secondary inline-flex items-center gap-1.5 text-sm"
               >
                 <Edit className="h-3.5 w-3.5" />
                 Edit
@@ -416,7 +424,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
                 type="button"
                 disabled={busy}
                 onClick={() => void handleSubmit()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-primary inline-flex items-center gap-1.5 text-sm disabled:cursor-not-allowed"
               >
                 <Send className="h-3.5 w-3.5" />
                 Submit for Approval
@@ -426,7 +434,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setClaiming(true)}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900"
+                className="btn-primary inline-flex items-center gap-1.5 text-sm"
               >
                 <Receipt className="h-3.5 w-3.5" />
                 Request Reimbursement
@@ -436,7 +444,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleMarkOrdered()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+                className="btn-primary inline-flex items-center gap-1.5 text-sm"
               >
                 <Package className="h-3.5 w-3.5" />
                 Mark Ordered
@@ -446,7 +454,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleMarkReceived()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800"
+                className="btn-primary inline-flex items-center gap-1.5 text-sm"
               >
                 <Truck className="h-3.5 w-3.5" />
                 Mark Received
@@ -455,8 +463,10 @@ const PurchaseRequestDetailPage: React.FC = () => {
             {canMarkPaid && (
               <button
                 type="button"
-                onClick={() => void handleMarkPaid()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800"
+                disabled={awaitingReceipt}
+                onClick={() => setPayingOpen(true)}
+                aria-describedby={awaitingReceipt ? 'pr-receipt-needed' : undefined}
+                className="btn-success inline-flex items-center gap-1.5 text-sm disabled:cursor-not-allowed"
               >
                 <CreditCard className="h-3.5 w-3.5" />
                 Mark Paid
@@ -466,7 +476,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleCancel()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                className="btn-secondary inline-flex items-center gap-1.5 text-sm"
               >
                 <XCircle className="h-3.5 w-3.5" />
                 Cancel Request
@@ -481,10 +491,18 @@ const PurchaseRequestDetailPage: React.FC = () => {
             <p className="text-theme-text-secondary text-xs">Estimated Amount</p>
             <p className="text-theme-text-primary text-sm font-semibold">{formatCurrency(pr.estimatedAmount)}</p>
           </div>
-          {pr.actualAmount != null && (
+          {pr.status === PurchaseRequestStatus.PAID && pr.actualAmount != null && (
             <div>
-              <p className="text-theme-text-secondary text-xs">Actual Amount</p>
+              <p className="text-theme-text-secondary text-xs">Amount Paid</p>
               <p className="text-theme-text-primary text-sm font-semibold">{formatCurrency(pr.actualAmount)}</p>
+            </div>
+          )}
+          {pr.paidDifference != null && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Difference from Approved</p>
+              <p className="text-theme-text-primary text-sm font-semibold">
+                {describePaidDifference(pr.paidDifference)}
+              </p>
             </div>
           )}
           <div>
@@ -558,6 +576,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(pr.qbExportedAt, tz)}</p>
             </div>
           )}
+          <QuickBooksPostingNote paymentType={QuickBooksPaymentType.PURCHASE_REQUEST} paymentId={pr.id} />
           {(canAttachReceipt || pr.receiptFileUrl || pr.receiptUrl) && (
             <div>
               <p className="text-theme-text-secondary text-xs">Receipt</p>
@@ -575,6 +594,15 @@ const PurchaseRequestDetailPage: React.FC = () => {
             </div>
           )}
         </div>
+
+        {awaitingReceipt && (
+          <div id="pr-receipt-needed" className="alert-warning mt-4">
+            <p className="text-theme-alert-warning-text text-sm">
+              Attach the receipt or invoice below before marking this request paid. It is the record of what the
+              department paid for.
+            </p>
+          </div>
+        )}
 
         {/* Description */}
         {pr.description && (
@@ -626,6 +654,17 @@ const PurchaseRequestDetailPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {payingOpen && (
+        <MarkPaidDialog
+          purchase={pr}
+          onClose={() => setPayingOpen(false)}
+          onPaid={() => {
+            setPayingOpen(false);
+            void fetchPurchaseRequest(pr.id);
+          }}
+        />
+      )}
 
       {claiming && (
         <ReimbursementClaimDialog

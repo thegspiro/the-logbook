@@ -32,6 +32,10 @@ vi.mock('../services/api', () => ({
   },
   budgetService: { options: () => Promise.resolve([]) },
   purchaseRequestService: {},
+  // The request form's approval-route panel asks for a preview 400ms after an
+  // amount changes; under load that lands after a test has finished, and an
+  // export missing from this mock was an unhandled error then.
+  approvalChainService: { routePreview: () => Promise.resolve(null) },
   fundService: { list: () => listFunds() as unknown },
   financeSettingsService: {
     get: () =>

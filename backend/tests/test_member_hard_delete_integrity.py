@@ -44,6 +44,7 @@ from app.models.training import (
 from app.schemas.shift_completion import ShiftCompletionReportResponse
 from app.services.inventory_service import InventoryService
 from app.services.user_deletion_service import _cascading_references
+from tests.fake_request import fake_request
 
 pytestmark = [pytest.mark.integration]
 
@@ -110,7 +111,11 @@ def _admin(dept) -> SimpleNamespace:
 
 async def _hard_delete(db, dept, user_id: str) -> None:
     await users_endpoint.delete_user(
-        user_id=UUID(user_id), hard=True, db=db, current_user=_admin(dept)
+        user_id=UUID(user_id),
+        hard=True,
+        db=db,
+        current_user=_admin(dept),
+        request=fake_request(),
     )
 
 

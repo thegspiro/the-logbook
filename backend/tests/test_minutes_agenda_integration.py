@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
@@ -21,6 +22,7 @@ from app.api.v1.endpoints import minutes as minutes_endpoints
 from app.api.v1.endpoints import minutes_records as records_endpoints
 from app.core.database import get_db
 from app.models.document import Document, DocumentFolder, FolderVisibility
+from app.models.meeting import Meeting, MeetingStatus
 from app.models.user import User
 from tests.minutes_support import _client, _user, _World, build_world
 
@@ -599,6 +601,14 @@ class TestLinkedDocumentNamesReachOnlyThoseWhoCanOpenThem:
 
     async def test_a_viewer_without_access_is_not_shown_the_name(self, world):
         _, _, meeting = await self._linked(world)
+        # A member reads only approved meetings, so the meeting is published
+        # first; what this test checks is the document narrowing, not status.
+        await world.db.execute(
+            update(Meeting)
+            .where(Meeting.id == meeting["id"])
+            .values(status=MeetingStatus.APPROVED)
+        )
+        await world.db.flush()
         viewer = await _user(
             world.db, world.org_id, "Viewer", ["meetings.view", "minutes.view"]
         )

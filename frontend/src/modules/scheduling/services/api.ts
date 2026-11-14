@@ -8,6 +8,7 @@ import { AxiosError, type AxiosRequestConfig } from 'axios';
 import { createApiClient } from '../../../utils/createApiClient';
 import { asArray, expectArray } from '../../../utils/asArray';
 import { readDeleteOutcome, type DeleteOutcome } from '../../../utils/deleteOutcome';
+import type { ShiftDutyType } from '../../../constants/enums';
 import type {
   Assignment,
   SwapRequest as SchedulingSwapRequest,
@@ -30,6 +31,7 @@ import type {
   TimeOffFilters,
   CallTypeOption,
   CloseoutState,
+  TraineeReportRequirement,
   CloseoutAttendanceEntry,
   CloseoutCallsPayload,
   MemberCallCredit,
@@ -130,6 +132,8 @@ export interface ShiftRecord {
    */
   is_outreach?: boolean;
   outreach_roles?: OutreachRoleSlot[];
+  /** `on_call` for a recall shift (crew at home). Absent on older responses. */
+  duty_type?: ShiftDutyType;
   attendee_count: number;
   /** Occupied seats. Empty on responses served before the roster existed. */
   roster?: ShiftRosterSeat[];
@@ -204,6 +208,12 @@ export interface SchedulingFeatureSettings {
   open_ended_shift_cushion_hours?: number;
   /** Block seating a driver who lacks the apparatus's required EVOC level. */
   enforce_evoc: boolean;
+  /**
+   * Outside-department shifts wait for an officer's approval before they
+   * count. Optional because a backend that predates the field omits it, and
+   * absent means off — an entry counts as soon as it is logged.
+   */
+  external_shifts_require_approval?: boolean;
   /**
    * How the department records call volume. Absent means `detailed` — the
    * behaviour every existing organisation already has.
@@ -354,6 +364,11 @@ export interface MemberHoursMonth {
    */
   external_shifts?: number;
   external_hours?: number;
+  /** Calls credited on outside units (recorded only by a historical import). */
+  external_calls?: number;
+  /** How much of `shifts` / `hours` was on recall shifts — part of them, not added. */
+  on_call_shifts?: number;
+  on_call_hours?: number;
 }
 
 export interface MemberHoursTotals {
@@ -364,6 +379,9 @@ export interface MemberHoursTotals {
   pending_hours: number;
   external_shifts?: number;
   external_hours?: number;
+  external_calls?: number;
+  on_call_shifts?: number;
+  on_call_hours?: number;
 }
 
 export interface MemberHoursHistory {
@@ -404,6 +422,13 @@ export interface SchedulingWidgetFilters {
 
 export interface SchedulingWidgetPreferences {
   widgets: Record<string, SchedulingWidgetFilters>;
+}
+
+/** Saved defaults plus the station and platoon values a save would accept. */
+export interface SchedulingWidgetPreferencesResponse extends SchedulingWidgetPreferences {
+  // Optional because a backend older than the field omits them.
+  available_station_ids?: string[] | undefined;
+  available_platoons?: string[] | undefined;
 }
 
 /** Event template metadata stored in the positions field for event-category templates. */
@@ -571,7 +596,7 @@ export interface RequirementComplianceSummary {
   compliance_rate: number;
 }
 
-export type ExternalShiftStatus = 'counted' | 'rejected';
+export type ExternalShiftStatus = 'pending' | 'counted' | 'rejected';
 
 /** A shift a member worked outside the department's own schedule. */
 export interface ExternalShiftEntry {
@@ -595,6 +620,12 @@ export interface ExternalShiftEntry {
   role: string | null;
   notes: string | null;
   status: ExternalShiftStatus;
+  /**
+   * Whether the shift calls for a shift evaluation: ``needed`` until one is
+   * started, ``draft`` while it is, ``submitted`` once it is in; null when it
+   * calls for none.
+   */
+  evaluation_status?: 'needed' | 'draft' | 'submitted' | null;
   reviewed_by: string | null;
   reviewer_name: string | null;
   reviewed_at: string | null;
@@ -649,6 +680,8 @@ export interface ExternalAgency {
   id: string;
   name: string;
   is_active: boolean;
+  /** Shifts members log on its units call for a shift evaluation. */
+  evaluate_shifts: boolean;
   apparatus: ExternalApparatus[];
 }
 
@@ -663,6 +696,7 @@ export interface ExternalAgencyCreate {
 export interface ExternalAgencyUpdate {
   name?: string;
   is_active?: boolean;
+  evaluate_shifts?: boolean;
 }
 
 export interface ExternalApparatusCreate {
@@ -816,6 +850,8 @@ export const schedulingService = {
     opts?: {
       override_incomplete_checks?: boolean;
       override_reason?: string;
+      override_missing_reports?: boolean;
+      report_override_reason?: string;
       pass_down_notes?: string;
       member_call_counts?: MemberCallCredit[];
     }
@@ -826,10 +862,19 @@ export const schedulingService = {
       body.override_incomplete_checks = true;
       if (opts.override_reason) body.override_reason = opts.override_reason;
     }
+    if (opts?.override_missing_reports) {
+      body.override_missing_reports = true;
+      body.report_override_reason = opts.report_override_reason;
+    }
     if (opts?.pass_down_notes) body.pass_down_notes = opts.pass_down_notes;
     if (opts?.member_call_counts?.length) body.member_call_counts = opts.member_call_counts;
     const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/finalize`, body);
     return normalizeShift(response.data);
+  },
+
+  async getTraineeReportRequirement(shiftId: string): Promise<TraineeReportRequirement> {
+    const response = await api.get<TraineeReportRequirement>(`/scheduling/shifts/${shiftId}/trainee-reports`);
+    return response.data;
   },
 
   // -- Resumable close-out -------------------------------------------------
@@ -917,6 +962,11 @@ export const schedulingService = {
     const response = await api.post<ExternalShiftEntry>(`/scheduling/external-hours/${id}/reject`, { reason });
     return response.data;
   },
+  /** Let an entry awaiting approval count. Needs scheduling.manage. */
+  async approveExternalShift(id: string): Promise<ExternalShiftEntry> {
+    const response = await api.post<ExternalShiftEntry>(`/scheduling/external-hours/${id}/approve`);
+    return response.data;
+  },
   async restoreExternalShift(id: string): Promise<ExternalShiftEntry> {
     const response = await api.post<ExternalShiftEntry>(`/scheduling/external-hours/${id}/restore`);
     return response.data;
@@ -971,6 +1021,14 @@ export const schedulingService = {
     });
     return response.data;
   },
+  /** Another member's history, for their profile: theirs, or `scheduling.report`. */
+  async getMemberHoursHistory(userId: string, year?: number): Promise<MemberHoursHistory> {
+    const response = await api.get<MemberHoursHistory>(
+      `/scheduling/members/${encodeURIComponent(userId)}/hours-history`,
+      { params: year ? { year } : {} }
+    );
+    return response.data;
+  },
   async getWidgetSummary(params: {
     start_date: string;
     end_date: string;
@@ -982,8 +1040,8 @@ export const schedulingService = {
     const response = await api.get<SchedulingWidgetSummary>('/scheduling/dashboard/widgets', { params });
     return response.data;
   },
-  async getWidgetPreferences(): Promise<SchedulingWidgetPreferences> {
-    const response = await api.get<SchedulingWidgetPreferences>('/scheduling/dashboard/widget-preferences');
+  async getWidgetPreferences(): Promise<SchedulingWidgetPreferencesResponse> {
+    const response = await api.get<SchedulingWidgetPreferencesResponse>('/scheduling/dashboard/widget-preferences');
     return response.data;
   },
   async saveWidgetPreferences(preferences: SchedulingWidgetPreferences): Promise<SchedulingWidgetPreferences> {
@@ -1086,9 +1144,14 @@ export const schedulingService = {
   },
   async getMyAttendance(shiftId: string): Promise<ShiftAttendanceRecord | null> {
     try {
-      const response = await api.get<ShiftAttendanceRecord>(`/scheduling/shifts/${shiftId}/my-attendance`);
-      return response.data;
+      // The endpoint answers 200 with a null body for a member not yet
+      // checked in. It used to answer 404, which logged a failed request on
+      // every ordinary opening of the check-in page.
+      const response = await api.get<ShiftAttendanceRecord | null>(`/scheduling/shifts/${shiftId}/my-attendance`);
+      return response.data ?? null;
     } catch (err: unknown) {
+      // Still read as "not checked in": a backend from before the change
+      // answers 404, and a frontend can reach one during a rolling upgrade.
       if (err instanceof AxiosError && err.response?.status === 404) return null;
       throw err;
     }
@@ -1185,6 +1248,25 @@ export const schedulingService = {
   async getTimeOffRequests(params?: TimeOffFilters): Promise<PaginatedResponse<SchedulingTimeOffRequest>> {
     const response = await api.get<PaginatedResponse<SchedulingTimeOffRequest>>('/scheduling/time-off', { params });
     return response.data;
+  },
+  /**
+   * Every approved time-off span of one member. `user_id` scopes an officer's
+   * read to that member; a member's own read is scoped server-side to them
+   * whatever is passed. Pages until the total is reached, because the list is
+   * ordered by creation and a cut-off page could drop a span still ahead.
+   */
+  async getApprovedTimeOffFor(userId: string, config?: AxiosRequestConfig): Promise<SchedulingTimeOffRequest[]> {
+    const pageSize = 1000;
+    const collected: SchedulingTimeOffRequest[] = [];
+    for (;;) {
+      const response = await api.get<PaginatedResponse<SchedulingTimeOffRequest>>('/scheduling/time-off', {
+        params: { status: 'approved', user_id: userId, skip: collected.length, limit: pageSize },
+        ...config,
+      });
+      const page = asArray(response.data?.items);
+      collected.push(...page);
+      if (page.length < pageSize || collected.length >= (response.data?.total ?? 0)) return collected;
+    }
   },
   async createTimeOff(data: TimeOffCreate): Promise<SchedulingTimeOffRequest> {
     const response = await api.post<SchedulingTimeOffRequest>('/scheduling/time-off', data);

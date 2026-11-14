@@ -106,6 +106,16 @@ describe('MemberEmailsPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('boom');
   });
 
+  it('links to the list of members who have turned these emails off', async () => {
+    renderWithRouter(<MemberEmailsPage />);
+
+    const optional = await screen.findByRole('region', { name: 'Members can turn off' });
+    expect(within(optional).getByRole('link', { name: 'See which members have turned these off' })).toHaveAttribute(
+      'href',
+      '/communications/member-emails/opt-outs'
+    );
+  });
+
   it('offers no department switch to someone who cannot change settings', async () => {
     renderWithRouter(<MemberEmailsPage />);
 

@@ -7,6 +7,7 @@ import type { CertExpirationReport } from '../../types';
 import { toStr } from '../../utils/export';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
+import { renderCalendarDate } from '../../utils/reportDates';
 
 interface Props {
   data: CertExpirationReport;
@@ -33,8 +34,8 @@ export const CertExpirationRenderer: React.FC<Props> = ({ data }) => {
     { key: 'course_name', header: 'Certification' },
     { key: 'certification_number', header: 'Cert #' },
     { key: 'issuing_agency', header: 'Issuing Agency' },
-    { key: 'completion_date', header: 'Completed' },
-    { key: 'expiration_date', header: 'Expires' },
+    { key: 'completion_date', header: 'Completed', render: renderCalendarDate },
+    { key: 'expiration_date', header: 'Expires', render: renderCalendarDate },
     {
       key: 'days_until_expiry',
       header: 'Days Left',

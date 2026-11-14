@@ -7,6 +7,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router';
 import { useAdminHoursStore } from '../store/adminHoursStore';
 import CategoriesTab from '../components/CategoriesTab';
 import ActiveSessionsTab from '../components/ActiveSessionsTab';
@@ -15,6 +16,7 @@ import AllEntriesTab from '../components/AllEntriesTab';
 import SummaryTab from '../components/SummaryTab';
 import ReviewRulesTab from '../components/ReviewRulesTab';
 import toast from 'react-hot-toast';
+import { AdminPageHeader } from '../../../components/admin/AdminPageHeader';
 
 type TabKey = 'categories' | 'active' | 'pending' | 'all' | 'summary' | 'rules';
 
@@ -38,7 +40,30 @@ const AdminHoursManagePage: React.FC = () => {
   const fetchActiveSessions = useAdminHoursStore((s) => s.fetchActiveSessions);
   const clearError = useAdminHoursStore((s) => s.clearError);
 
-  const [activeTab, setActiveTab] = useState<TabKey>('categories');
+  // The operations dashboard's Admin hours tile counts pending entries and
+  // links here as ?status=pending; Pending Review lists exactly those, so that
+  // tab is the one that opens. Any other value keeps today's default.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<TabKey>(() =>
+    searchParams.get('status') === 'pending' ? 'pending' : 'categories'
+  );
+  // Written back so a refresh keeps the tab, and leaving Pending Review drops
+  // the tile's filter from the URL rather than leaving it to contradict the tab.
+  const selectTab = useCallback(
+    (tab: TabKey) => {
+      setActiveTab(tab);
+      setSearchParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+          if (tab === 'pending') next.set('status', 'pending');
+          else next.delete('status');
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
 
   const loadData = useCallback(() => {
     void fetchCategories(true);
@@ -59,17 +84,19 @@ const AdminHoursManagePage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-6xl p-6">
-      <div className="mb-6">
-        <h1 className="text-theme-text-primary text-3xl font-bold">Admin Hours Management</h1>
-        <p className="text-theme-text-secondary mt-1">Manage categories, review entries, and view summaries</p>
-      </div>
+      <AdminPageHeader
+        title="Admin Hours"
+        description="Manage categories, review entries, and view summaries"
+        className="mb-6"
+      />
 
       {/* Tabs */}
       <div className="bg-theme-surface hscroll mb-6 flex gap-1 rounded-lg p-1">
         {TAB_KEYS.map((tab) => (
           <button
             key={tab}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => selectTab(tab)}
+            aria-pressed={activeTab === tab}
             className={`relative flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${
               activeTab === tab
                 ? 'bg-red-800 text-white'
@@ -96,7 +123,7 @@ const AdminHoursManagePage: React.FC = () => {
       {activeTab === 'active' && <ActiveSessionsTab />}
       {activeTab === 'pending' && <PendingReviewTab />}
       {activeTab === 'all' && <AllEntriesTab />}
-      {activeTab === 'summary' && <SummaryTab onNavigate={setActiveTab} />}
+      {activeTab === 'summary' && <SummaryTab onNavigate={selectTab} />}
       {activeTab === 'rules' && <ReviewRulesTab />}
     </div>
   );

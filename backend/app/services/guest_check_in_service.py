@@ -98,16 +98,16 @@ class GuestCheckInService:
         organization_name: Optional[str] = None,
         interest_reason: Optional[str] = None,
         source: str = SOURCE_KIOSK_QR,
-    ) -> Tuple[Optional[EventExternalAttendee], Optional[str], bool]:
+    ) -> Tuple[Optional[EventExternalAttendee], Optional[str], bool, bool]:
         """Record a guest's attendance at *event*.
 
-        Returns ``(attendee, error, prospect_created)``. The event is expected
-        to have been resolved and gated by the caller (org scope, guest opt-in
-        and check-in window); this method owns only what gets written.
-        ``source`` says which QR code the guest scanned.
+        Returns ``(attendee, error, prospect_created, already_checked_in)``.
+        The event is expected to have been resolved and gated by the caller
+        (org scope, guest opt-in and check-in window); this method owns only
+        what gets written. ``source`` says which QR code the guest scanned.
         """
         if not event.allow_guest_check_in:
-            return None, "Guest check-in is not enabled for this event.", False
+            return None, "Guest check-in is not enabled for this event.", False, False
 
         # This is an unauthenticated write reached from a room tablet, so it
         # gets the same lock the member paths do — the sentence, not the
@@ -117,16 +117,26 @@ class GuestCheckInService:
                 None,
                 "Attendance for this event has been closed.",
                 False,
+                False,
             )
 
         normalized_email = (email or "").strip().lower() or None
         full_name = f"{first_name.strip()} {last_name.strip()}".strip()
 
+        # Find-then-insert: two taps of the QR code at once (a double-tap, or a
+        # retry of a POST that timed out after it was processed) would both
+        # find nobody and both insert, counting the guest twice. The attendee
+        # that would conflict does not exist yet, so the event row is what is
+        # locked, and the lookup is a locking read so it answers from the
+        # committed state rather than the snapshot taken when the caller
+        # resolved the event. The lock is released by the commit below.
+        await self._lock_event(str(event.id), organization_id)
         attendee = await self._find_existing_attendee(
             event_id=str(event.id),
             organization_id=organization_id,
             email=normalized_email,
             full_name=full_name,
+            for_update=True,
         )
 
         already_checked_in = bool(attendee and attendee.checked_in)
@@ -187,7 +197,18 @@ class GuestCheckInService:
         # GuestCheckInService.advance_prospects_for_settled_event, which
         # finalize calls, and run_prospect_attendance_advance for the events
         # nobody closes out.
-        return attendee, None, prospect_created
+        return attendee, None, prospect_created, already_checked_in
+
+    async def _lock_event(self, event_id: str, organization_id: str) -> None:
+        """Take the event row's lock to serialize a guest sign-in on it."""
+        await self.db.execute(
+            select(Event.id)
+            .where(
+                Event.id == event_id,
+                Event.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
 
     async def _find_existing_attendee(
         self,
@@ -195,6 +216,7 @@ class GuestCheckInService:
         organization_id: str,
         email: Optional[str],
         full_name: str,
+        for_update: bool = False,
     ) -> Optional[EventExternalAttendee]:
         """Find a prior attendance row for this person at this event.
 
@@ -219,7 +241,10 @@ class GuestCheckInService:
                 EventExternalAttendee.email.is_(None),
             )
 
-        result = await self.db.execute(query.limit(1))
+        query = query.limit(1)
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         event_external_attendee: Optional[EventExternalAttendee] = (
             result.scalars().first()
         )
@@ -632,8 +657,11 @@ class GuestCheckInService:
         again rather than trusted from the lookup: it may have been withdrawn
         in the minutes between the two taps, and an applicant who is no longer
         active is not one the kiosk recognises. The attendance itself goes
-        through :meth:`check_in_guest` with the details already on file, so a
-        repeat confirm is the same idempotent re-scan a typed sign-in is.
+        through :meth:`check_in_guest`, which is where ``already_checked_in``
+        comes from — it decides the same value under the event row's lock, so
+        a second confirm tapped concurrently with the first cannot see the
+        pre-lock "not yet checked in" snapshot this method used to read for
+        itself and report the first-time status to both.
         """
         prospect = (
             await self.db.execute(
@@ -652,15 +680,7 @@ class GuestCheckInService:
             )
 
         email = (prospect.email or "").strip().lower()
-        existing = await self._find_existing_attendee(
-            event_id=str(event.id),
-            organization_id=organization_id,
-            email=email or None,
-            full_name=f"{prospect.first_name} {prospect.last_name}".strip(),
-        )
-        already_checked_in = bool(existing and existing.checked_in)
-
-        attendee, error, _created = await self.check_in_guest(
+        attendee, error, _created, already_checked_in = await self.check_in_guest(
             event=event,
             organization_id=organization_id,
             first_name=prospect.first_name,

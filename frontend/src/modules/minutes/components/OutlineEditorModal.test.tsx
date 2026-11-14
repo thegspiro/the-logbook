@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockCreate = vi.fn();
@@ -60,8 +60,8 @@ describe('OutlineEditorModal', () => {
 
   it('starts a new outline with the two sections every meeting has', () => {
     open();
-    expect(screen.getByLabelText('Section 1 title')).toHaveValue('Call to Order');
-    expect(screen.getByLabelText('Section 2 title')).toHaveValue('Adjournment');
+    expect(screen.getByLabelText(/^Section 1 title/)).toHaveValue('Call to Order');
+    expect(screen.getByLabelText(/^Section 2 title/)).toHaveValue('Adjournment');
   });
 
   it('shows an existing outline in its order of business', () => {
@@ -71,7 +71,7 @@ describe('OutlineEditorModal', () => {
       'Roll Call',
       'Adjournment',
     ]);
-    expect(screen.getByLabelText('Name')).toHaveValue('Our order');
+    expect(screen.getByLabelText(/^Name/)).toHaveValue('Our order');
     expect(screen.getByLabelText('Heading under the department name')).toHaveValue('Official Minutes');
   });
 
@@ -79,9 +79,9 @@ describe('OutlineEditorModal', () => {
     const user = userEvent.setup();
     open();
 
-    await user.type(screen.getByLabelText('Name'), 'Short form');
+    await user.type(screen.getByLabelText(/^Name/), 'Short form');
     await user.click(screen.getByRole('button', { name: 'Add section' }));
-    await user.type(screen.getByLabelText('Section 3 title'), "Chief's Report");
+    await user.type(screen.getByLabelText(/^Section 3 title/), "Chief's Report");
     await user.click(screen.getByRole('button', { name: "Move Chief's Report up" }));
     await user.click(screen.getByRole('button', { name: 'Save outline' }));
 
@@ -136,7 +136,7 @@ describe('OutlineEditorModal', () => {
     const user = userEvent.setup();
     open({ outline });
 
-    const title = screen.getByLabelText('Section 2 title');
+    const title = screen.getByLabelText(/^Section 2 title/);
     await user.clear(title);
     await user.type(title, 'Attendance');
     await user.click(screen.getByRole('button', { name: 'Save outline' }));
@@ -154,11 +154,11 @@ describe('OutlineEditorModal', () => {
     const user = userEvent.setup();
     open();
 
-    await user.type(screen.getByLabelText('Name'), 'Doubled');
+    await user.type(screen.getByLabelText(/^Name/), 'Doubled');
     await user.click(screen.getByRole('button', { name: 'Add section' }));
     await user.click(screen.getByRole('button', { name: 'Add section' }));
-    await user.type(screen.getByLabelText('Section 3 title'), 'Old Business');
-    await user.type(screen.getByLabelText('Section 4 title'), 'Old Business');
+    await user.type(screen.getByLabelText(/^Section 3 title/), 'Old Business');
+    await user.type(screen.getByLabelText(/^Section 4 title/), 'Old Business');
     await user.click(screen.getByRole('button', { name: 'Save outline' }));
 
     const sent = mockCreate.mock.calls[0]?.[0] as { sections: Array<{ key: string }> };
@@ -189,31 +189,71 @@ describe('OutlineEditorModal', () => {
     const user = userEvent.setup();
     open({ copyFrom: outline });
 
-    expect(screen.getByLabelText('Name')).toHaveValue('Our order (copy)');
+    expect(screen.getByLabelText(/^Name/)).toHaveValue('Our order (copy)');
     expect(screen.getByRole('checkbox', { name: /Use this for new minutes/ })).not.toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Save outline' }));
 
     expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ name: 'Our order (copy)', is_default: false }));
   });
 
-  it('refuses a missing name, an untitled section, and an empty outline', async () => {
+  it('refuses a missing name, an untitled section, and an empty outline, each on its field', async () => {
     const user = userEvent.setup();
     open();
 
-    await user.click(screen.getByRole('button', { name: 'Save outline' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Give the outline a name');
-
-    await user.type(screen.getByLabelText('Name'), 'X');
     await user.click(screen.getByRole('button', { name: 'Add section' }));
     await user.click(screen.getByRole('button', { name: 'Save outline' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Every section needs a title');
+    expect(screen.getByLabelText(/^Name/)).toHaveAccessibleDescription('Give the outline a name.');
+    expect(screen.getByLabelText(/^Section 3 title/)).toHaveAccessibleDescription('Give this section a title.');
 
+    await user.type(screen.getByLabelText(/^Name/), 'X');
     await user.click(screen.getByRole('button', { name: 'Remove section 3' }));
     await user.click(screen.getByRole('button', { name: 'Remove Call to Order' }));
     await user.click(screen.getByRole('button', { name: 'Remove Adjournment' }));
     await user.click(screen.getByRole('button', { name: 'Save outline' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('at least one section');
+    expect(screen.getByRole('group', { name: 'Order of business' })).toHaveAccessibleDescription(
+      'An outline needs at least one section.'
+    );
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 on its field, saves the rest of an edit and stays open', async () => {
+    mockUpdate
+      .mockRejectedValueOnce({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'header_config.subtitle', message: 'String should have at most 300 characters' }] },
+        },
+      })
+      .mockResolvedValue({});
+    const user = userEvent.setup();
+    open({ outline });
+
+    await user.click(screen.getByRole('button', { name: 'Save outline' }));
+
+    const subtitle = screen.getByLabelText('Heading under the department name');
+    await waitFor(() =>
+      expect(subtitle).toHaveAccessibleDescription(
+        'Heading under the department name is too long — keep it to 300 characters.'
+      )
+    );
+    expect(subtitle).toHaveAttribute('aria-invalid', 'true');
+    expect(mockUpdate).toHaveBeenCalledTimes(2);
+    const retried = mockUpdate.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect('header_config' in retried).toBe(false);
+    expect(retried.name).toBe('Our order');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('asks before Cancel throws an edit away', async () => {
+    const user = userEvent.setup();
+    open({ outline });
+
+    await user.type(screen.getByLabelText(/^Name/), ' revised');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/^Name/)).toHaveValue('Our order revised');
   });
 
   it('disables moving a section past either end', () => {
@@ -232,7 +272,7 @@ describe('OutlineEditorModal', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByLabelText('Name')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/^Name/)).toBeInTheDocument();
   });
 
   describe('sections that need a motion and a second', () => {
@@ -242,7 +282,7 @@ describe('OutlineEditorModal', () => {
     it('starts a new outline with adjournment flagged and its wording written', async () => {
       const user = userEvent.setup();
       open();
-      await user.type(screen.getByLabelText('Name'), 'Short form');
+      await user.type(screen.getByLabelText(/^Name/), 'Short form');
       await user.click(screen.getByRole('button', { name: 'Save outline' }));
 
       const sent = (mockCreate.mock.calls[0]?.[0] as Sent).sections;

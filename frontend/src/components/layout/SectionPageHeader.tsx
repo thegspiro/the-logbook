@@ -1,26 +1,13 @@
 import React, { useId } from 'react';
 import { Link, useLocation } from 'react-router';
 import { Breadcrumbs } from '../ux/Breadcrumbs';
+import AdminPageHeader from '../admin/AdminPageHeader';
 import type { BreadcrumbItem } from '../ux/Breadcrumbs';
 import { ScrollCueRow } from '../ux/ScrollCueRow';
 import { BREADCRUMB_ROUTES, canLinkCrumb } from '../ux/breadcrumbRoutes';
-import { useAuthStore } from '../../stores/authStore';
+import { useSectionPermission } from './useSectionPermission';
 import type { SectionNavItem } from './sectionNavigation';
 import { activeSection, isSectionPage, visibleSectionNavItems } from './sectionNavigation';
-
-const DENY_ALL = (): boolean => false;
-
-/**
- * The viewer's permission predicate, denying everything when the store hands
- * back no function — as `Breadcrumbs` does and for the same reason: page suites
- * stub `useAuthStore` with only the slice the page reads, some ignoring the
- * selector and returning the whole stub, and a navigation strip must never be
- * what stops a page rendering.
- */
-function useSectionPermission(): (permission: string) => boolean {
-  const storePredicate: unknown = useAuthStore((state) => state.checkPermission);
-  return typeof storePredicate === 'function' ? (storePredicate as (permission: string) => boolean) : DENY_ALL;
-}
 
 /**
  * The strip's accent. Red is the house colour; Scheduling keeps the violet it
@@ -86,6 +73,22 @@ const SectionNav: React.FC<SectionNavProps> = ({ items, active, label, accent })
               >
                 <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                 {item.label}
+                {item.count ? (
+                  <>
+                    {/* The visual number is hidden from screen readers, which
+                        hear the phrase instead: run together, the label and the
+                        badge read as "My evaluations2". */}
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-800 px-1.5 py-0.5 text-xs leading-none font-semibold text-white"
+                    >
+                      {item.count}
+                    </span>
+                    <span className="sr-only">
+                      , {item.count} {item.countLabel ?? 'need attention'}
+                    </span>
+                  </>
+                ) : null}
               </Link>
             );
           })}
@@ -125,6 +128,25 @@ export interface PageHeaderProps {
    * cannot open that section.
    */
   section?: string | undefined;
+  /**
+   * Draw the heading for screen readers only while the strip shows, on a
+   * section's own page, from the sm breakpoint up: the strip's selected link
+   * already names the page, and the same words again in large type above the
+   * content said it twice. On a phone the strip scrolls and its selected link
+   * can sit half behind the scroll arrow, so the heading stays visible there.
+   * Where the strip is hidden — a viewer with one section — or on a page
+   * below a section, the heading shows as usual.
+   */
+  titleInStrip?: boolean | undefined;
+  /**
+   * Draw the title the way every Administration page does — the
+   * "Administration" eyebrow, a 2xl heading, no icon, the trail ending at the
+   * parent — while keeping this group's section strip above it. For the
+   * officer-only settings screens inside a section group (Election, Minutes and
+   * Facility Settings), so they read as the admin pages they are rather than as
+   * one more member-facing section page. `title` must then be a string.
+   */
+  adminHeader?: boolean | undefined;
 }
 
 interface SectionPageHeaderProps extends PageHeaderProps {
@@ -160,6 +182,8 @@ export const SectionPageHeader: React.FC<SectionPageHeaderProps> = ({
   parentCrumbs,
   underHub,
   section,
+  titleInStrip = false,
+  adminHeader = false,
 }) => {
   const { pathname } = useLocation();
   const checkPermission = useSectionPermission();
@@ -179,21 +203,45 @@ export const SectionPageHeader: React.FC<SectionPageHeaderProps> = ({
   const leading = hubInsideSection ? [...sectionCrumbs, ...hubCrumbs] : [...hubCrumbs, ...sectionCrumbs];
   const trail: BreadcrumbItem[] =
     leading.length > 0 ? [...leading, ...(parentCrumbs ?? []), ...(pageLabel ? [{ label: pageLabel }] : [])] : [];
+  const hideTitle = titleInStrip && items.length >= 2 && active !== undefined && isSectionPage(active, pathname);
+
+  if (adminHeader && typeof title === 'string') {
+    return (
+      <div>
+        {/* The URL-generated trail, ending at the parent as on every admin
+            page: the <h1> below already names this one. An explicit trail
+            cannot do that (its last crumb is always the current page), and
+            these settings screens sit directly under their module's registered
+            route, so the generated trail links back to it.
+
+            Drawn here, above the section strip, rather than by AdminPageHeader
+            below it: every other admin page opens with its trail, and between
+            the strip and the title it read as part of the module's own nav. */}
+        <Breadcrumbs omitCurrentPage />
+        <SectionNav items={items} active={active} label={stripLabel} accent={accent} />
+        <AdminPageHeader title={title} description={subtitle} actions={actions} breadcrumbs={[]} className="mb-8" />
+      </div>
+    );
+  }
 
   return (
     <div>
       <SectionNav items={items} active={active} label={stripLabel} accent={accent} />
       {trail.length > 0 && <Breadcrumbs items={trail} />}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 sm:flex-[1_1_16rem]">
-          <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">
+      <div className="page-header mb-8 gap-4 sm:items-center">
+        <div className="page-header-title">
+          <h1
+            className={`text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl ${
+              hideTitle ? 'sm:sr-only' : ''
+            }`}
+          >
             <Icon className="h-8 w-8 shrink-0 text-red-700 dark:text-red-500" aria-hidden="true" />
             <span className="min-w-0">{title}</span>
           </h1>
-          {subtitle && <div className="text-theme-text-muted mt-2">{subtitle}</div>}
+          {subtitle && <div className={`text-theme-text-muted mt-2 ${hideTitle ? 'sm:mt-0' : ''}`}>{subtitle}</div>}
         </div>
         {actions && (
-          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-[0_1_auto] sm:justify-end">{actions}</div>
+          <div className="page-header-actions flex flex-wrap items-center gap-2 sm:justify-end">{actions}</div>
         )}
       </div>
     </div>

@@ -23,14 +23,17 @@ from sqlalchemy import (
     Time,
     TypeDecorator,
     UniqueConstraint,
+    event,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import false as sa_false
 from sqlalchemy.sql import func
 from sqlalchemy.sql import true as sa_true
 
 from app.core.database import Base
 from app.core.encrypted_types import EncryptedText
 from app.core.utils import generate_uuid
+from app.utils.training_match_key import MATCH_KEY_LENGTH, training_match_key
 
 if TYPE_CHECKING:
     from app.models.event import Event
@@ -95,6 +98,13 @@ class RequirementType(str, enum.Enum):
     SKILLS_EVALUATION = "skills_evaluation"  # Skills checkoff/evaluation
     CHECKLIST = "checklist"  # Checklist items to complete
     KNOWLEDGE_TEST = "knowledge_test"  # Written/paper-based knowledge test
+    # Credited by submitted shift evaluations (app/services/shift_evaluation_service.py).
+    EVALUATED_SHIFTS = "evaluated_shifts"  # Shifts with a submitted evaluation
+    TRANSPORTS = "transports"  # Patient transports recorded on evaluations
+    REFUSALS = "refusals"  # Patient refusals recorded on evaluations
+    # Attend a share of the sessions linked to the requirement
+    # (training_session_requirements), graded by training_compliance.
+    SESSION_ATTENDANCE = "session_attendance"
 
 
 class RequirementSource(str, enum.Enum):
@@ -132,6 +142,32 @@ class RequirementProgressStatus(str, enum.Enum):
     COMPLETED = "completed"
     VERIFIED = "verified"  # Completed and verified by officer
     WAIVED = "waived"  # Requirement waived for this member
+
+
+class MilestoneItemType(str, enum.Enum):
+    """What a milestone completion item points at."""
+
+    COURSE = "course"
+    SKILL_TEST = "skill_test"
+    KNOWLEDGE_TEST = "knowledge_test"
+
+
+class MilestoneItemMatchMode(str, enum.Enum):
+    """How a milestone's completion items combine among themselves."""
+
+    ALL = "all"
+    ANY = "any"
+
+
+class MilestoneAchievementOutcome(str, enum.Enum):
+    """What happened when an enrollment was found to meet a milestone."""
+
+    # Reached while the milestone existed; the chosen recipients were told.
+    NOTIFIED = "notified"
+    # Already met when the milestone was created or its triggers edited, so
+    # nobody is told: announcing an old accomplishment as news confuses the
+    # member and the officers alike.
+    SKIPPED = "skipped"
 
 
 class TrainingCategory(Base):
@@ -389,6 +425,19 @@ class TrainingRecord(Base):
     certification_number: Mapped[Optional[str]] = mapped_column(String(100))
     issuing_agency: Mapped[Optional[str]] = mapped_column(String(255))
 
+    # The normalized keys certification and fallback requirements match by
+    # (app/utils/training_match_key.py), set from course_name and
+    # certification_number by the listeners below on every ORM write — never
+    # from a request. NULL when the text has no letters or digits, or for a row
+    # written around the ORM; such a record matches only by linked course or
+    # training type.
+    match_key: Mapped[Optional[str]] = mapped_column(
+        String(MATCH_KEY_LENGTH), nullable=True
+    )
+    certification_key: Mapped[Optional[str]] = mapped_column(
+        String(MATCH_KEY_LENGTH), nullable=True
+    )
+
     # Status and Scores
     status: Mapped[Optional[TrainingStatus]] = mapped_column(
         Enum(TrainingStatus, values_callable=lambda x: [e.value for e in x]),
@@ -401,9 +450,12 @@ class TrainingRecord(Base):
 
     # Instructor and Location
     instructor: Mapped[Optional[str]] = mapped_column(String(255))
+    # RESTRICT: where training took place is part of the history the record
+    # keeps, so deleting the location deactivates it instead (owner decision
+    # 2026-11-01; LocationService._RESTRICTING_LOCATION_REFERENCES).
     location_id: Mapped[Optional[str]] = mapped_column(
         String(36),
-        ForeignKey("locations.id", ondelete="SET NULL"),
+        ForeignKey("locations.id", ondelete="RESTRICT"),
         nullable=True,
     )
     location: Mapped[Optional[str]] = mapped_column(
@@ -515,6 +567,10 @@ class TrainingRecord(Base):
         Index("idx_record_location", "location_id"),
         Index("idx_record_category", "category_id"),
         Index("idx_record_external", "external_provider_id", "external_record_id"),
+        # A member's records by key: the department-wide grading load asks for
+        # user_id IN (...) AND a key, instead of every completed record.
+        Index("idx_record_user_match_key", "user_id", "match_key"),
+        Index("idx_record_user_certification_key", "user_id", "certification_key"),
         # One credit per member per event. Any number of NULL sources coexist
         # under a unique index on MySQL and MariaDB, so records that did not
         # come from event attendance are unconstrained.
@@ -528,6 +584,16 @@ class TrainingRecord(Base):
 
     def __repr__(self):
         return f"<TrainingRecord(user_id={self.user_id}, course={self.course_name}, status={self.status})>"
+
+
+@event.listens_for(TrainingRecord.course_name, "set")
+def _key_course_name(target, value, oldvalue, initiator):
+    target.match_key = training_match_key(value)
+
+
+@event.listens_for(TrainingRecord.certification_number, "set")
+def _key_certification_number(target, value, oldvalue, initiator):
+    target.certification_key = training_match_key(value)
 
 
 def _default_shift_credited(context) -> bool:
@@ -577,12 +643,16 @@ class TrainingRequirement(Base):
     registry_code: Mapped[Optional[str]] = mapped_column(
         String(50)
     )  # e.g., "NFPA 1001", "EMR"
-    # CERTIFICATION only: a record completed on or before this date may still
-    # satisfy the requirement because its course name contains the
-    # requirement's name; a later one needs a linked course, the training type
-    # or the registry code. Set by migration 60aaf273de27 to the day it ran,
-    # for the requirements that existed then; NULL (every requirement created
-    # since) means no name matching. See certification_record_matches.
+    # CERTIFICATION and the fallback types (skills evaluation, checklist,
+    # knowledge test and the rest the grader's last branch handles): a record
+    # dated on or before this may still satisfy the requirement by name — its
+    # match_key equal to the requirement name's key; a later one needs a
+    # linked course, the training type or (certifications) the registry code.
+    # Set to the day the rule changed for the requirements that existed then:
+    # by migration 60aaf273de27 for certifications, and again by the
+    # match-key migration for the fallback types, whose rule changed that day.
+    # NULL (every requirement created since) means no name matching. See
+    # record_name_matches.
     name_match_until: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     is_editable: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=True
@@ -620,6 +690,16 @@ class TrainingRequirement(Base):
     )  # For COURSES type - list of course IDs
     required_shifts: Mapped[Optional[int]] = mapped_column(Integer)  # For SHIFTS type
     required_calls: Mapped[Optional[int]] = mapped_column(Integer)  # For CALLS type
+    # EVALUATED_SHIFTS counts against required_shifts. TRANSPORTS and REFUSALS
+    # have targets of their own rather than borrowing required_calls, which
+    # the call-matching and grading code reads as a number of calls.
+    required_transports: Mapped[Optional[int]] = mapped_column(Integer)
+    required_refusals: Mapped[Optional[int]] = mapped_column(Integer)
+    # EVALUATED_SHIFTS only: count a shift only when no item on its evaluation
+    # was given the form's lowest rating ("Unsatisfactory" on a 1-4 form).
+    evaluation_excludes_lowest_rating: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", nullable=False
+    )
     required_call_types: Mapped[Optional[list[str]]] = mapped_column(
         JSON
     )  # Specific incident types required
@@ -635,6 +715,16 @@ class TrainingRequirement(Base):
     max_attempts: Mapped[Optional[int]] = mapped_column(
         Integer
     )  # For KNOWLEDGE_TEST type - max number of attempts
+    # SESSION_ATTENDANCE: the share (1-100) of the linked sessions held in the
+    # window a member must attend.
+    required_attendance_pct: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
+    # SESSION_ATTENDANCE: may a Chief record an override that counts a member
+    # as meeting it (TrainingRequirementOverride)? Off unless an officer opts in.
+    allows_chief_override: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # Frequency
     frequency: Mapped[RequirementFrequency] = mapped_column(
@@ -915,6 +1005,47 @@ class TrainingSession(Base):
         return f"<TrainingSession(course_name={self.course_name}, event_id={self.event_id})>"
 
 
+class TrainingSessionRequirement(Base):
+    """A session that counts toward a SESSION_ATTENDANCE requirement.
+
+    A link table rather than ``TrainingSession.requirement_id``: that column
+    credits one requirement with the session's training, while one drill
+    usually belongs to several attendance requirements at once (the same
+    drills graded at 60% for active members and 30% for senior members).
+    A session linked to none is optional and counts against nobody.
+    """
+
+    __tablename__ = "training_session_requirements"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    session_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("training_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    requirement_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("training_requirements.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id", "requirement_id", name="uq_training_session_requirement"
+        ),
+        Index("idx_training_session_requirement_org", "organization_id"),
+    )
+
+
 class CohortStatus(str, enum.Enum):
     """Lifecycle of a course cohort (one scheduled run of a multi-class course)"""
 
@@ -1020,8 +1151,9 @@ class CourseClass(Base):
     instructor: Mapped[Optional[str]] = mapped_column(
         String(255)
     )  # free-text fallback, matches TrainingSession
+    # RESTRICT, as on TrainingRecord.location_id.
     location_id: Mapped[Optional[str]] = mapped_column(
-        String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
+        String(36), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True
     )
     location: Mapped[Optional[str]] = mapped_column(String(300))
 
@@ -1134,8 +1266,9 @@ class CourseCohort(Base):
     # are pre-filled from the US federal holiday helper in the wizard.
     blackout_dates: Mapped[Optional[list[str]]] = mapped_column(JSON)
 
+    # RESTRICT, as on TrainingRecord.location_id.
     location_id: Mapped[Optional[str]] = mapped_column(
-        String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
+        String(36), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True
     )
     location: Mapped[Optional[str]] = mapped_column(String(300))
     requires_rsvp: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -1259,8 +1392,9 @@ class CourseCohortClass(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     instructor: Mapped[Optional[str]] = mapped_column(String(255))
+    # RESTRICT, as on TrainingRecord.location_id.
     location_id: Mapped[Optional[str]] = mapped_column(
-        String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
+        String(36), ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True
     )
     location: Mapped[Optional[str]] = mapped_column(String(300))
     category_id: Mapped[Optional[str]] = mapped_column(
@@ -1603,6 +1737,19 @@ class TrainingProgram(Base):
     )  # Conditional reminder rules
     # Example: {"milestone_threshold": 50, "days_before_deadline": 90, "send_if_below_percentage": 40}
 
+    # The evaluation form a member enrolled in this program is evaluated on
+    # after a shift (a driver candidate gets the driver evaluation). SET NULL:
+    # deleting a template leaves the program, now with no form (Pitfall #2).
+    shift_evaluation_template_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey(
+            "shift_evaluation_templates.id",
+            ondelete="SET NULL",
+            name="fk_training_programs_shift_evaluation_template",
+        ),
+        nullable=True,
+    )
+
     # Recertification Cycle (auto-reset)
     # When enabled, an enrolled member's accumulated progress is cleared on a
     # recurring deadline so a fresh certification cycle can begin — e.g. NREMT's
@@ -1886,6 +2033,38 @@ class ProgramMilestone(Base):
     )  # Officer must verify
     verification_notes: Mapped[Optional[str]] = mapped_column(Text)
 
+    # Completion items (``items``) are joined to the percentage by AND, always.
+    # This only says how the items combine among themselves: every one of them
+    # ("all") or at least one ("any"). A department wanting "A or B" as two
+    # separate notices creates two milestones.
+    item_match_mode: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+        default=MilestoneItemMatchMode.ALL.value,
+        server_default=MilestoneItemMatchMode.ALL.value,
+    )
+    # False: an item counts only when completed on or after the start of the
+    # member's current cycle (their enrollment, or the latest reset), so a
+    # re-enrolled or reset member earns the milestone again. True: a
+    # completion from any time counts.
+    counts_prior_completions: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=sa_false()
+    )
+
+    # Recipients. The member is notified by default, which is the behavior
+    # every milestone had before recipients could be chosen.
+    notify_member: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=sa_true()
+    )
+    # Position ids (Chief, Training Officer, Quartermaster, ...): everyone
+    # holding one is told. Resolved when the milestone is reached, so a new
+    # holder of the position is included and a former one is not.
+    notify_position_ids: Mapped[Optional[list[str]]] = mapped_column(JSON)
+    notify_user_ids: Mapped[Optional[list[str]]] = mapped_column(JSON)
+    # Added to the officers' notice, which names the member; the member's own
+    # notice uses notification_message instead.
+    officer_message: Mapped[Optional[str]] = mapped_column(Text)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -1895,11 +2074,116 @@ class ProgramMilestone(Base):
     phase: Mapped[Optional["ProgramPhase"]] = relationship(
         "ProgramPhase", back_populates="milestones"
     )
+    items: Mapped[list["ProgramMilestoneItem"]] = relationship(
+        "ProgramMilestoneItem",
+        back_populates="milestone",
+        cascade="all, delete-orphan",
+        order_by="ProgramMilestoneItem.sort_order",
+    )
 
     __table_args__ = (Index("idx_milestone_program", "program_id"),)
 
     def __repr__(self):
         return f"<ProgramMilestone(name={self.name}, threshold={self.completion_percentage_threshold})>"
+
+
+class ProgramMilestoneItem(Base):
+    """A course, skills test or knowledge test a milestone waits for.
+
+    Exactly one of the three target columns is set, matching ``item_type``;
+    the service enforces it on every write. CASCADE on each target: an item
+    whose course or test is deleted outright has nothing left to complete, and
+    keeping it would leave an "all" milestone that can never be reached.
+    """
+
+    __tablename__ = "program_milestone_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    milestone_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("program_milestones.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    item_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    course_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("training_courses.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    skill_template_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("skill_templates.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    knowledge_test_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("knowledge_tests.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    sort_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    milestone: Mapped["ProgramMilestone"] = relationship(
+        "ProgramMilestone", back_populates="items"
+    )
+
+    @property
+    def target_id(self) -> Optional[str]:
+        return self.course_id or self.skill_template_id or self.knowledge_test_id
+
+    def __repr__(self):
+        return f"<ProgramMilestoneItem(type={self.item_type}, id={self.target_id})>"
+
+
+class ProgramMilestoneAchievement(Base):
+    """One enrollment's record of meeting one milestone.
+
+    The unique (milestone, enrollment) pair is what makes a milestone fire at
+    most once per enrollment: the progress write, the skills and knowledge test
+    hooks and the scheduled sweep can all evaluate the same member at once,
+    and only the one whose insert lands sends anything. A cycle reset deletes
+    the enrollment's rows so the new cycle earns its milestones again; a new
+    enrollment has none to begin with.
+    """
+
+    __tablename__ = "program_milestone_achievements"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    milestone_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("program_milestones.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    enrollment_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("program_enrollments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    outcome: Mapped[str] = mapped_column(String(20), nullable=False)
+    reached_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "milestone_id", "enrollment_id", name="uq_milestone_achievement"
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ProgramMilestoneAchievement(milestone={self.milestone_id}, "
+            f"enrollment={self.enrollment_id}, outcome={self.outcome})>"
+        )
 
 
 class ProgramEnrollment(Base):
@@ -2154,6 +2438,7 @@ class ProgressCreditSource(str, enum.Enum):
     SHIFT_REPORT = "shift_report"
     EXTERNAL_IMPORT = "external_import"
     OFFICER_APPLY = "officer_apply"
+    SHIFT_EVALUATION = "shift_evaluation"
 
 
 class RequirementProgressCredit(Base):
@@ -2500,6 +2785,9 @@ class ShiftCompletionReport(Base):
         # mapped.
         shift_label: Optional[str]
         shift_start_time: Optional[datetime]
+        # Set by update_report when an edit restated the credit of an approved
+        # report (review off), for the endpoint's audit entry.
+        credit_restatement: Optional[dict[str, Any]]
 
     __table_args__ = (
         Index("idx_shift_report_trainee", "trainee_id", "shift_date"),
@@ -2636,6 +2924,32 @@ class TrainingModuleConfig(Base):
     # as skills_testing — see PRACTICAL_SKILLS_METHODS.
     practical_skills_method: Mapped[Optional[str]] = mapped_column(
         String(30), nullable=True
+    )
+
+    # Shift evaluations. The general form is for members in no training
+    # program who sat in one of its evaluated seats; NULL mode reads as "off"
+    # (GENERAL_EVALUATION_MODES in app/models/shift_evaluation.py), so a
+    # department that never chose one evaluates nobody new on upgrade.
+    general_shift_evaluation_template_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey(
+            "shift_evaluation_templates.id",
+            ondelete="SET NULL",
+            name="fk_training_module_configs_general_shift_evaluation_template",
+        ),
+        nullable=True,
+    )
+    general_shift_evaluation_mode: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )
+    # Whether one evaluation on a shift counts for every program the member is
+    # enrolled in, rather than one evaluation per program.
+    one_shift_evaluation_for_multiple_programs: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", nullable=False
+    )
+    # Days after an outside shift ends that a preceptor link stays open.
+    shift_evaluation_link_days: Mapped[int] = mapped_column(
+        Integer, default=7, server_default="7", nullable=False
     )
 
     # Self-reported submissions
@@ -3068,6 +3382,15 @@ class TrainingSubmission(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    # Chosen by the device before its first attempt to send, and repeated on
+    # every resend. A submission queued offline is sent again whenever its
+    # answer did not arrive (a dropped connection, the client's 30s timeout),
+    # including when the server had already stored it; under auto-approval
+    # that second copy became a second training record and the hours counted
+    # twice. Unique per member, and NULL for submissions made without one,
+    # which MySQL's unique index allows any number of.
+    client_request_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
     # Relationships
     training_record: Mapped[Optional["TrainingRecord"]] = relationship("TrainingRecord")
 
@@ -3075,6 +3398,11 @@ class TrainingSubmission(Base):
         Index("idx_submission_org_status", "organization_id", "status"),
         Index("idx_submission_user", "submitted_by", "status"),
         Index("idx_submission_date", "completion_date"),
+        UniqueConstraint(
+            "submitted_by",
+            "client_request_id",
+            name="uq_submission_member_client_request",
+        ),
     )
 
     def __repr__(self):
@@ -3654,6 +3982,14 @@ class ExternalTrainingImport(Base):
 # ============================================
 
 
+class ShiftDutyType(str, enum.Enum):
+    """Where a shift's crew is while on duty (``Shift.duty_type``)."""
+
+    IN_STATION = "in_station"
+    # A recall shift: at home, responding if paged.
+    ON_CALL = "on_call"
+
+
 class ShiftStatus(str, enum.Enum):
     """Lifecycle status of a shift.
 
@@ -3759,6 +4095,16 @@ class Shift(Base):
     # spend one of the sheet's limited seats doing it.
     is_outreach: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
+    )
+
+    # Where the crew spent the shift. ``in_station`` is every shift the
+    # schedule has ever had; ``on_call`` is a recall shift, the crew at home
+    # and responding if paged. Both count toward shift hours — the department
+    # credits a recall shift like any other — but they are told apart wherever
+    # hours are broken down, because an hour at home is not an hour on the
+    # floor. See ``ShiftDutyType``.
+    duty_type: Mapped[str] = mapped_column(
+        String(20), default="in_station", nullable=False, server_default="in_station"
     )
 
     # Summary totals — computed on finalization, also served live via API
@@ -3873,6 +4219,9 @@ class ShiftAttendance(Base):
     __table_args__ = (
         Index("idx_shift_att_shift", "shift_id"),
         Index("idx_shift_att_user", "user_id"),
+        # One attendance row per member per shift. The service paths lock the
+        # shift and check first; this is what holds when two requests race.
+        UniqueConstraint("shift_id", "user_id", name="uq_shift_attendance_shift_user"),
     )
 
     def __repr__(self):
@@ -4358,6 +4707,54 @@ class ShiftPattern(Base):
         return f"<ShiftPattern(name={self.name}, type={self.pattern_type})>"
 
 
+class ShiftPatternOccurrence(Base):
+    """
+    One row per occurrence a pattern has generated: the durable key that stops
+    generation recreating it.
+
+    The older guard matches a shift from the pattern's template starting at the
+    occurrence's date and time, so deleting a generated shift or moving its
+    start left nothing for that guard to find and the next scheduled run put
+    the original back with its full crew (KNOWN_LIMITATIONS, shifts-module
+    review item 1). This row outlives both: deleting the shift only clears
+    ``shift_id``. Removed with its pattern.
+    """
+
+    __tablename__ = "shift_pattern_occurrences"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    pattern_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("shift_patterns.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    occurrence_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # "on" for a single-shift day, or the "day" / "night" side.
+    shift_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    shift_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "pattern_id",
+            "occurrence_date",
+            "shift_type",
+            name="uq_shift_pattern_occurrence",
+        ),
+        Index("idx_shift_pattern_occ_org", "organization_id"),
+        Index("idx_shift_pattern_occ_shift", "shift_id"),
+    )
+
+
 # ============================================
 # Shift Assignment (Duty Roster)
 # ============================================
@@ -4828,6 +5225,63 @@ class TrainingWaiver(Base):
     __table_args__ = (
         Index("idx_training_waivers_org_user", "organization_id", "user_id"),
         Index("idx_training_waivers_dates", "start_date", "end_date"),
+    )
+
+
+class TrainingRequirementOverride(Base):
+    """A Chief's ruling that a member meets a requirement over a period.
+
+    Distinct from a TrainingWaiver, which excuses days and leaves the member
+    to meet the rest: an override counts the member as meeting the
+    requirement whenever it is graded as of a date from ``start_date`` to
+    ``end_date``, however short they are. Rare by design: only a requirement
+    with ``allows_chief_override`` accepts one, and only a member holding a
+    Chief position may record or revoke it. Revoked, not deleted, so the
+    record of who granted it survives.
+    """
+
+    __tablename__ = "training_requirement_overrides"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    requirement_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("training_requirements.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # Encrypted at rest: the reason a member could not attend may be medical.
+    reason: Mapped[str] = mapped_column(EncryptedText, nullable=False)
+    granted_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    revoked_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_requirement_override_org_req_user",
+            "organization_id",
+            "requirement_id",
+            "user_id",
+        ),
     )
 
 

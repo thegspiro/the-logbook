@@ -395,7 +395,10 @@ The override:
 - keeps `mysql`, `redis` and the production `backup` sidecar from starting.
   Never start them by name (`docker compose up -d mysql`). Back the database up
   with the provider's backups, and the `uploads` and `audit_archives` volumes
-  separately ([AWS guide → Backups](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md#method-2-rds)).
+  separately ([AWS guide → Backups](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md#method-2-rds),
+  [Azure guide → Backups](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/azure.md#method-2-managed-services),
+  [Google Cloud guide → Backups](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/gcp.md#method-2-managed-services),
+  [DigitalOcean guide → Backups](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/digitalocean.md#method-2-managed-services)).
 
 `MYSQL_ROOT_PASSWORD` still needs a value, because Compose reads the unused
 `mysql` definition. `REDIS_PASSWORD` is sent to the external Redis, so it must
@@ -408,8 +411,15 @@ external database on start with the same TLS settings.
 Check what will start with `docker compose config --services`: `backend`,
 `frontend` and `clamav`, plus `nginx` if you use the proxy override.
 
-Full AWS walkthrough:
-[AWS Deployment Guide, Method 2](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md#method-2-ec2--rds--elasticache-production).
+Full walkthroughs:
+[AWS Deployment Guide, Method 2](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/aws.md#method-2-ec2--rds--elasticache-production)
+(RDS and ElastiCache),
+[Azure Deployment Guide, Method 2](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/azure.md#method-2-azure-vm--azure-database-for-mysql--azure-managed-redis-production)
+(Azure Database for MySQL and Azure Managed Redis),
+[Google Cloud Deployment Guide, Method 2](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/gcp.md#method-2-compute-engine-vm--cloud-sql-for-mysql--memorystore-production)
+(Cloud SQL for MySQL and Memorystore for Redis) and
+[DigitalOcean Deployment Guide, Method 2](https://github.com/thegspiro/the-logbook/blob/main/docs/deployment/digitalocean.md#method-2-droplet--managed-mysql--managed-valkey-production)
+(Managed MySQL and Managed Valkey).
 
 ---
 
@@ -436,6 +446,29 @@ docker push ghcr.io/thegspiro/the-logbook-frontend:latest
 
 Full procedure, including making the packages public:
 [DOCKER-BUILD-PUBLISH.md](https://github.com/thegspiro/the-logbook/blob/main/docs/DOCKER-BUILD-PUBLISH.md).
+
+### Combined image (`ghcr.io/thegspiro/the-logbook`)
+
+The Unraid Community Applications template runs a third image: nginx and the
+API in one container, assembled by `docker-bake.hcl` from the two production
+images above (`docker/combined/Dockerfile`). It listens on **3000** — the web
+interface, with `/api` and `/health` proxied to uvicorn on `127.0.0.1:3001`
+inside the container — runs as uid 1000, and starts migrations the same way
+the backend image does. MySQL and Redis stay outside it; give it `DB_*`,
+`REDIS_*`, `SECRET_KEY`, `ENCRYPTION_KEY`, `ENCRYPTION_SALT` and, in
+production, the startup-gate settings listed in `unraid/the-logbook.xml`.
+
+The `Release Image` workflow publishes it for amd64 and arm64 when a `v*.*.*`
+tag is pushed. To build it yourself (BuildKit's bake is required; a plain
+`docker build` of that Dockerfile cannot supply the two images it starts
+from):
+
+```bash
+docker buildx bake -f docker-bake.hcl combined --load
+```
+
+Name the file with `-f`: without it bake also reads `docker-compose.yml` and
+stops on its required secrets.
 
 ---
 

@@ -399,15 +399,22 @@ export interface PaginatedApparatusList {
   totalPages: number;
 }
 
+// Fields accept an explicit undefined because the store merges a filter
+// update into the current filters: leaving a key out keeps its old value.
 export interface ApparatusListFilters {
-  apparatusTypeId?: string;
-  statusId?: string;
-  primaryStationId?: string;
-  isArchived?: boolean;
-  yearMin?: number;
-  yearMax?: number;
-  make?: string;
-  search?: string;
+  apparatusTypeId?: string | undefined;
+  statusId?: string | undefined;
+  primaryStationId?: string | undefined;
+  isArchived?: boolean | undefined;
+  yearMin?: number | undefined;
+  yearMax?: number | undefined;
+  make?: string | undefined;
+  search?: string | undefined;
+  // The dashboard's fleet-readiness tiles link to the list with these; the
+  // backend applies each exactly as its tile counts.
+  serviceStatus?: 'unavailable' | undefined;
+  hasDeficiency?: boolean | undefined;
+  inspection?: 'overdue' | undefined;
 }
 
 // =============================================================================

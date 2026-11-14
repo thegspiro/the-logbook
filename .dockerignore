@@ -30,6 +30,11 @@ unraid
 infrastructure
 database
 
+# The combined image's own build files (docker-bake.hcl, docker/combined/):
+# it builds from docker/combined as its context, never from here
+docker
+docker-bake.hcl
+
 # Build output and test artifacts
 frontend/dist
 frontend/.vite

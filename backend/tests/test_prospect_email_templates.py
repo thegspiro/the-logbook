@@ -315,6 +315,7 @@ class TestInactivityWarnings:
         from types import SimpleNamespace
 
         coordinator = SimpleNamespace(
+            id="coord-1",
             email="coordinator@example.test",
             first_name="Casey",
             preferred_name=None,
@@ -328,6 +329,9 @@ class TestInactivityWarnings:
                 "_withdrawal_notice_recipients",
                 AsyncMock(return_value=[coordinator]),
             ),
+            # The bell copy is covered in test_officer_alert_copies; this
+            # stand-in is not a row a notification could point at.
+            patch("app.services.officer_alert_copies.add_in_app_copies", AsyncMock()),
         ):
             result = await svc.process_inactivity_warnings(str(org.id))
         return result, send

@@ -16,18 +16,20 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router';
 import { useSearchParams } from 'react-router';
-import { memberStatusService, userService } from '../services/api';
+import { memberStatusService, trainingService, userService } from '../services/api';
 import type { LeaveOfAbsenceResponse, TrainingWaiverResponse } from '../services/api';
 import type { User } from '../types/user';
+import type { TrainingRequirement } from '../types/training';
 import { useAuthStore } from '../stores/authStore';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
+import { getWaiverStatusBadge } from '../utils/waiverStatus';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
 import { getErrorMessage } from '../utils/errorHandling';
 import { UserStatus } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
-import { Breadcrumbs } from '../components/ux';
+import AdminPageHeader from '../components/admin/AdminPageHeader';
 import { EditLeaveDialog, type EditableLeave } from '../components/members/EditLeaveDialog';
 
 type WaiverTab = 'active' | 'create' | 'history';
@@ -55,22 +57,6 @@ const APPLIES_TO_OPTIONS = [
 
 function getWaiverTypeLabel(type: string): string {
   return WAIVER_TYPES.find((t) => t.value === type)?.label || type.replace(/_/g, ' ');
-}
-
-function getStatusBadge(waiver: { start_date: string; end_date: string | null; active: boolean }, today: string) {
-  if (!waiver.active) {
-    return { label: 'Inactive', color: 'bg-theme-surface-secondary text-theme-text-muted' };
-  }
-  if (waiver.start_date > today) {
-    return { label: 'Future', color: 'bg-blue-500/20 text-blue-700 dark:text-blue-400' };
-  }
-  if (!waiver.end_date) {
-    return { label: 'Permanent', color: 'bg-purple-500/20 text-purple-700 dark:text-purple-400' };
-  }
-  if (waiver.end_date < today) {
-    return { label: 'Expired', color: 'bg-yellow-500/20 text-yellow-800 dark:text-yellow-400' };
-  }
-  return { label: 'Active', color: 'bg-green-500/20 text-green-800 dark:text-green-400' };
 }
 
 // Unified waiver type combining leaves and training waivers
@@ -106,6 +92,7 @@ export const WaiverManagementPage: React.FC = () => {
   const [leaves, setLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
   const [trainingWaivers, setTrainingWaivers] = useState<TrainingWaiverResponse[]>([]);
   const [members, setMembers] = useState<User[]>([]);
+  const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -119,6 +106,7 @@ export const WaiverManagementPage: React.FC = () => {
     end_date: '',
     is_permanent: false,
     exempt_from_training_waiver: false,
+    requirement_ids: [] as string[],
   });
   const [creating, setCreating] = useState(false);
   // Correcting a leave's dates happens here, beside where leaves are created
@@ -151,7 +139,7 @@ export const WaiverManagementPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const [leavesData, waiversData, membersData] = await Promise.all([
+      const [leavesData, waiversData, membersData, requirementsData] = await Promise.all([
         memberStatusService.listLeavesOfAbsence({ active_only: false }),
         // Degrades to an empty list rather than failing the page. Training
         // waivers live behind the Training module's gate, so a department
@@ -161,8 +149,11 @@ export const WaiverManagementPage: React.FC = () => {
         // Training. The waivers tab shows its empty state instead.
         memberStatusService.listTrainingWaivers({ active_only: false }).catch(() => []),
         userService.getUsers(),
+        // For scoping a training-only waiver; degrades like the waivers above.
+        trainingService.getRequirements({ active_only: true }).catch(() => [] as TrainingRequirement[]),
       ]);
       setLeaves(leavesData);
+      setRequirements(requirementsData);
       setTrainingWaivers(waiversData);
       setMembers(membersData);
     } catch (_err) {
@@ -290,6 +281,7 @@ export const WaiverManagementPage: React.FC = () => {
           ...(formData.reason ? { reason: formData.reason } : {}),
           start_date: formData.start_date,
           end_date: endDate,
+          ...(formData.requirement_ids.length > 0 ? { requirement_ids: formData.requirement_ids } : {}),
         });
       } else if (hasMeetingsOrShifts) {
         // Meetings/shifts selected — create leave of absence
@@ -315,6 +307,7 @@ export const WaiverManagementPage: React.FC = () => {
         end_date: '',
         is_permanent: false,
         exempt_from_training_waiver: false,
+        requirement_ids: [],
       });
       void fetchData();
     } catch (err: unknown) {
@@ -369,16 +362,14 @@ export const WaiverManagementPage: React.FC = () => {
 
   return (
     <div>
-      {/* Header + Tab Bar */}
-      <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
-        <Breadcrumbs />
-
-        <div className="mb-6">
-          <h1 className="text-theme-text-primary text-2xl font-bold">Waiver Management</h1>
-          <p className="text-theme-text-muted mt-1 text-sm">
-            Excuse members from training, meeting and shift requirements
-          </p>
-        </div>
+      {/* Header + Tab Bar. data-page-main: AppLayout supplies the page
+          gutter, and its own padding here doubled it. */}
+      <div data-page-main className="mx-auto max-w-7xl">
+        <AdminPageHeader
+          title="Waivers"
+          description="Excuse members from training, meeting and shift requirements"
+          className="mb-6"
+        />
 
         {error && (
           <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-400">
@@ -411,7 +402,7 @@ export const WaiverManagementPage: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl py-6">
         {/* Active Waivers Tab */}
         {activeTab === 'active' && (
           <div>
@@ -426,8 +417,8 @@ export const WaiverManagementPage: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <div className="card overflow-hidden overflow-x-auto">
-                <table className="divide-theme-surface-border min-w-full divide-y">
+              <div className="rwd-table-container card overflow-hidden overflow-x-auto">
+                <table className="rwd-table rwd-table-wide divide-theme-surface-border min-w-full divide-y">
                   <thead className="bg-theme-surface-hover">
                     <tr>
                       <th
@@ -471,7 +462,7 @@ export const WaiverManagementPage: React.FC = () => {
                   <tbody className="divide-theme-surface-border divide-y">
                     {activeWaivers.map((waiver) => (
                       <tr key={`${waiver.source}-${waiver.id}`} className="hover:bg-theme-surface-hover">
-                        <td className="px-4 py-3">
+                        <td data-label="Member" className="px-4 py-3">
                           <Link
                             to={`/members/${waiver.user_id}`}
                             className="touch-target-phone text-sm font-medium text-blue-800 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
@@ -479,10 +470,10 @@ export const WaiverManagementPage: React.FC = () => {
                             {waiver.member_name}
                           </Link>
                         </td>
-                        <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                        <td data-label="Type" className="text-theme-text-secondary px-4 py-3 text-sm">
                           {getWaiverTypeLabel(waiver.waiver_type)}
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-label="Applies To" className="px-4 py-3">
                           <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-2 py-1 text-xs">
                             {waiver.applies_to === 'all'
                               ? 'Training, Meetings, Shifts'
@@ -493,14 +484,14 @@ export const WaiverManagementPage: React.FC = () => {
                                   : waiver.applies_to}
                           </span>
                         </td>
-                        <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                        <td data-label="Period" className="text-theme-text-secondary px-4 py-3 text-sm">
                           {formatDate(waiver.start_date, tz)} -{' '}
                           {waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}
                         </td>
-                        <td className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
+                        <td data-label="Reason" className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
                           {waiver.reason || '-'}
                         </td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <td data-label="Actions" className="px-4 py-3 text-right whitespace-nowrap">
                           {waiver.source === 'leave' && (
                             <button
                               onClick={() =>
@@ -634,6 +625,48 @@ export const WaiverManagementPage: React.FC = () => {
                   </p>
                 </fieldset>
 
+                {/* Which requirements a training-only waiver excuses. Without a
+                    choice here, excusing one missed drill also waived that day
+                    for every other requirement, and under a "full month" leave
+                    rule took a month off the member's hours target (workflow
+                    review, training events). A leave of absence still waives
+                    everything, so the choice is offered only without one. */}
+                {formData.applies_to.includes('training') &&
+                  !formData.applies_to.includes('leave') &&
+                  requirements.length > 0 && (
+                    <fieldset>
+                      <legend className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                        Training requirements excused
+                      </legend>
+                      <div className="mt-1 flex flex-col gap-2">
+                        {requirements.map((r) => (
+                          <label
+                            key={r.id}
+                            className="text-theme-text-primary flex cursor-pointer items-center gap-2 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={formData.requirement_ids.includes(r.id)}
+                              onChange={(e) => {
+                                const updated = e.target.checked
+                                  ? [...formData.requirement_ids, r.id]
+                                  : formData.requirement_ids.filter((id) => id !== r.id);
+                                setFormData({ ...formData, requirement_ids: updated });
+                              }}
+                              className="form-checkbox"
+                            />
+                            {r.name}
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        {formData.requirement_ids.length === 0
+                          ? 'None ticked: the waiver excuses every training requirement for these dates.'
+                          : 'Only the ticked requirements are excused; the member is held to the rest.'}
+                      </p>
+                    </fieldset>
+                  )}
+
                 {/* Date Range */}
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -751,8 +784,8 @@ export const WaiverManagementPage: React.FC = () => {
                 <p className="text-theme-text-muted">No waivers match the current filter.</p>
               </div>
             ) : (
-              <div className="card overflow-hidden overflow-x-auto">
-                <table className="divide-theme-surface-border min-w-full divide-y">
+              <div className="rwd-table-container card overflow-hidden overflow-x-auto">
+                <table className="rwd-table rwd-table-wide divide-theme-surface-border min-w-full divide-y">
                   <thead className="bg-theme-surface-hover">
                     <tr>
                       <th
@@ -801,10 +834,10 @@ export const WaiverManagementPage: React.FC = () => {
                   </thead>
                   <tbody className="divide-theme-surface-border divide-y">
                     {filteredHistory.map((waiver) => {
-                      const badge = getStatusBadge(waiver, today);
+                      const badge = getWaiverStatusBadge(waiver, today);
                       return (
                         <tr key={`${waiver.source}-${waiver.id}`} className="hover:bg-theme-surface-hover">
-                          <td className="px-4 py-3">
+                          <td data-label="Member" className="px-4 py-3">
                             <Link
                               to={`/members/${waiver.user_id}`}
                               className="touch-target-phone text-sm font-medium text-blue-800 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
@@ -812,15 +845,15 @@ export const WaiverManagementPage: React.FC = () => {
                               {waiver.member_name}
                             </Link>
                           </td>
-                          <td className="px-4 py-3">
+                          <td data-label="Status" className="px-4 py-3">
                             <span className={`rounded-full px-2 py-1 text-xs font-medium ${badge.color}`}>
                               {badge.label}
                             </span>
                           </td>
-                          <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                          <td data-label="Type" className="text-theme-text-secondary px-4 py-3 text-sm">
                             {getWaiverTypeLabel(waiver.waiver_type)}
                           </td>
-                          <td className="px-4 py-3">
+                          <td data-label="Applies To" className="px-4 py-3">
                             <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-2 py-1 text-xs">
                               {waiver.applies_to === 'all'
                                 ? 'All'
@@ -831,14 +864,14 @@ export const WaiverManagementPage: React.FC = () => {
                                     : waiver.applies_to}
                             </span>
                           </td>
-                          <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                          <td data-label="Period" className="text-theme-text-secondary px-4 py-3 text-sm">
                             {formatDate(waiver.start_date, tz)} -{' '}
                             {waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}
                           </td>
-                          <td className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
+                          <td data-label="Reason" className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
                             {waiver.reason || '-'}
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td data-label="Actions" className="px-4 py-3 text-right">
                             {waiver.active && (
                               <button
                                 onClick={() => {

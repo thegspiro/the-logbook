@@ -120,6 +120,15 @@ describe('useIdleTimer', () => {
     expect(mockLogout).toHaveBeenCalled();
   });
 
+  it('signs out as an automatic sign-out, which keeps unsent skills evaluations', async () => {
+    renderHook(() => useIdleTimer());
+    await armTimers();
+
+    await vi.advanceTimersByTimeAsync(TIMEOUT_MS + 1000);
+
+    expect(mockLogout).toHaveBeenCalledWith({ automatic: true });
+  });
+
   it('keeps the session alive when a surface signals activity', async () => {
     // An NFC tap fires no mouse, key, scroll or touch event, so a check-in
     // station in constant use looked idle and logged itself out mid-drill.

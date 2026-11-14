@@ -8,6 +8,7 @@
 import React, { FormEventHandler, ReactNode, useId } from 'react';
 import { X } from 'lucide-react';
 import { useDialog } from '../hooks/useDialog';
+import { useDiscardGuard } from '../hooks/useDiscardGuard';
 import { DialogPortal } from './DialogPortal';
 
 interface ModalProps {
@@ -37,7 +38,24 @@ interface ModalProps {
   'aria-describedby'?: string;
   /** When supplied, the modal panel is rendered as the form element. */
   onSubmit?: FormEventHandler<HTMLFormElement>;
+  /**
+   * Turns off the browser's own validation bubbles on that form, for a dialog
+   * that checks its fields itself and shows each reason on its field (forms
+   * review F-3): otherwise a `type="email"`, `min` or `max` control stops the
+   * submit with a native bubble before the field can be flagged.
+   */
+  noValidate?: boolean | undefined;
   showCloseButton?: boolean;
+  /**
+   * Pass whether the form in this dialog holds unsaved changes, and Escape and
+   * the header X ask "Keep editing" / "Discard changes" before closing a dirty
+   * one (owner decision 2026-11-06, forms review F-6). A footer Cancel button
+   * is the caller's: to have it ask too, use useDiscardGuard directly and give
+   * its result to both `onClose` and the button instead of passing this.
+   */
+  isDirty?: boolean | undefined;
+  /** Replaces the default "What you entered in this form has not been saved" wording. */
+  discardMessage?: string | undefined;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -52,11 +70,15 @@ export const Modal: React.FC<ModalProps> = ({
   titleId: titleIdProp,
   'aria-describedby': ariaDescribedBy,
   onSubmit,
+  noValidate,
   showCloseButton = true,
+  isDirty,
+  discardMessage,
 }) => {
   const generatedTitleId = useId();
   const titleId = titleIdProp ?? generatedTitleId;
-  const modalRef = useDialog<HTMLElement>({ isOpen, onClose, closeOnEscape });
+  const requestClose = useDiscardGuard({ isDirty, onClose, message: discardMessage });
+  const modalRef = useDialog<HTMLElement>({ isOpen, onClose: requestClose, closeOnEscape });
   const sizeClasses = {
     sm: 'sm:max-w-md',
     md: 'sm:max-w-lg',
@@ -67,7 +89,7 @@ export const Modal: React.FC<ModalProps> = ({
   if (!isOpen) return null;
 
   const handleBackdropClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (closeOnClickOutside && event.target === event.currentTarget) onClose();
+    if (closeOnClickOutside && event.target === event.currentTarget) requestClose();
   };
 
   const content = (
@@ -79,7 +101,7 @@ export const Modal: React.FC<ModalProps> = ({
         {showCloseButton && (
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="bg-theme-surface text-theme-text-muted hover:text-theme-text-primary focus:ring-theme-focus-ring flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md focus:ring-2 focus:outline-hidden"
             aria-label="Close modal"
             data-dialog-close
@@ -121,6 +143,7 @@ export const Modal: React.FC<ModalProps> = ({
             ref={modalRef as React.Ref<HTMLFormElement>}
             className={panelClasses}
             onSubmit={onSubmit}
+            noValidate={noValidate}
             data-testid="modal-panel"
           >
             {content}

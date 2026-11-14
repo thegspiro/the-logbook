@@ -36,6 +36,7 @@ import { inventoryService } from '@/services/inventoryService';
 import { medicalSuppliesService } from '@/services/medicalSuppliesService';
 import type { InventoryItem } from '@/services/eventServices';
 import { getErrorMessage } from '@/utils/errorHandling';
+import type { FieldControlProps } from '@/components/ux/FormField';
 import MedicalCreatePanel from './MedicalCreatePanel';
 import { searchChecklistCatalog, type CatalogDomain, type CatalogSearchScope } from '../utils/checklistCatalogSearch';
 
@@ -84,6 +85,11 @@ interface InventoryItemPickerProps {
    * or inventory.manage). Only meaningful with `searchScope.medical` on.
    */
   canCreateMedical?: boolean;
+  /**
+   * Label, error and required wiring from a surrounding `FormField`, put on
+   * the search input so the field's label names it and its error is read.
+   */
+  controlProps?: Partial<FieldControlProps> | undefined;
 }
 
 const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
@@ -94,6 +100,7 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
   createTrackingType = 'pool',
   searchScope = GEAR_ONLY,
   canCreateMedical = false,
+  controlProps,
 }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ id: string; name: string; sub?: string; domain: CatalogDomain }[]>([]);
@@ -277,6 +284,7 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
       <div className="card focus-within:ring-theme-focus-ring flex items-center gap-2 px-3 py-2 focus-within:ring-2">
         <Search className="text-theme-text-muted h-4 w-4 shrink-0" />
         <input
+          {...controlProps}
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}

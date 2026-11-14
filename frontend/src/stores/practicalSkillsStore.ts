@@ -71,8 +71,13 @@ export const usePracticalSkillsStore = create<PracticalSkillsState>((set, get) =
 /**
  * The department's practical-skills method, loading it on first use.
  * Null while unknown; see the store for why that shows both systems.
+ *
+ * `enabled: false` keeps it from asking. The setting is the Training module's
+ * and the server refuses it while that module is off, so a caller mounted
+ * outside Training's own routes passes the module check in; the training pages
+ * are behind that module's route gate already and leave it at the default.
  */
-export function usePracticalSkillsMethod(): PracticalSkillsMethod | null {
+export function usePracticalSkillsMethod(enabled = true): PracticalSkillsMethod | null {
   // Read as unknown: a suite that stubs the store without honouring the
   // selector hands back its whole stub — a new object each render, which as an
   // id would reload on every render without end. Only a string is an id.
@@ -83,8 +88,8 @@ export function usePracticalSkillsMethod(): PracticalSkillsMethod | null {
   const load = usePracticalSkillsStore((state) => state.load);
 
   useEffect(() => {
-    if (organizationId) void load(organizationId);
-  }, [organizationId, load]);
+    if (organizationId && enabled) void load(organizationId);
+  }, [organizationId, enabled, load]);
 
   return organizationId && loadedFor === organizationId ? method : null;
 }

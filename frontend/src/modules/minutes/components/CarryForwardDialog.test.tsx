@@ -114,6 +114,37 @@ describe('CarryForwardDialog', () => {
     expect(onCarried).not.toHaveBeenCalled();
   });
 
+  it('puts a 422 on the item list and announces it', async () => {
+    mockCarry.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'item_ids', message: 'List should have at most 100 items' }] },
+      },
+    });
+    const user = userEvent.setup();
+    open();
+
+    await user.click(await screen.findByRole('checkbox', { name: /Order hose/ }));
+    await user.click(screen.getByRole('button', { name: 'Carry forward (1)' }));
+
+    const list = screen.getByRole('group', { name: 'Open action items' });
+    await waitFor(() => expect(list).toHaveAccessibleDescription('List should have at most 100 items'));
+    expect(list).toHaveAttribute('aria-invalid', 'true');
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('asks before Cancel throws a picked set away', async () => {
+    const user = userEvent.setup();
+    open();
+
+    await user.click(await screen.findByRole('checkbox', { name: /Order hose/ }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('checkbox', { name: /Order hose/ })).toBeChecked();
+  });
+
   it('says so when nothing is open', async () => {
     mockOpen.mockResolvedValue([]);
     open();

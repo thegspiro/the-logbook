@@ -31,6 +31,7 @@ import { EligibilitySettingsCard } from './EligibilitySettingsCard';
 import { ShiftReportsSettingsPanel } from './ShiftReportsSettingsPanel';
 import { PlatoonRosterPanel } from './PlatoonRosterPanel';
 import { OutsideApparatusSettings } from './OutsideApparatusSettings';
+import { useFirstLoadHold } from '../../../hooks/useFirstLoadHold';
 
 /**
  * The three ways a department can record call volume.
@@ -123,6 +124,11 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   // `!== false`: the feature ships on, so a response that predates the field
   // (an older backend mid-deploy) reads as on, matching what the server does.
   const preShiftWorkEnabled = feature?.pre_shift_work_enabled !== false;
+  // Four of the General cards are drawn only once these arrive, above the
+  // template and defaults cards, so those wait for the answer rather than
+  // being pushed down by it (see useFirstLoadHold).
+  const [featureSettled, setFeatureSettled] = useState(false);
+  const holdGeneral = useFirstLoadHold(!featureSettled);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -131,6 +137,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
         if (!cancelled) setFeature(fs);
       } catch {
         // Non-critical — the panel still renders the local template settings.
+      } finally {
+        if (!cancelled) setFeatureSettled(true);
       }
     })();
     return () => {
@@ -244,7 +252,11 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     <div className="space-y-6">
       {/* ─── General Tab ─── */}
       {activeTab === 'general' && (
-        <div className="space-y-6">
+        // While held, everything after the platoon card — its first child — is invisible.
+        <div
+          data-testid="general-settings"
+          className={`space-y-6 ${holdGeneral ? '[&>*:not(:first-child)]:invisible' : ''}`}
+        >
           <div className="card-secondary p-4 sm:p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -274,7 +286,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 onClick={() => {
                   void handleTogglePlatoons(!platoonsEnabled);
                 }}
-                className={`toggle-track-sm ${platoonsEnabled ? 'bg-violet-600' : 'bg-theme-surface-border'}`}
+                className={`toggle-track-sm ${platoonsEnabled ? 'bg-theme-accent-red' : 'bg-theme-surface-border'}`}
               >
                 <span className={`toggle-knob-sm ${platoonsEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
@@ -350,7 +362,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                     void saveFeature({ auto_generate_enabled: !feature.auto_generate_enabled });
                   }}
                   className={`toggle-track-sm ${
-                    feature.auto_generate_enabled ? 'bg-violet-600' : 'bg-theme-surface-border'
+                    feature.auto_generate_enabled ? 'bg-theme-accent-red' : 'bg-theme-surface-border'
                   }`}
                 >
                   <span
@@ -426,7 +438,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                     void saveFeature({ require_end_of_shift_checks: !feature.require_end_of_shift_checks });
                   }}
                   className={`toggle-track-sm ${
-                    feature.require_end_of_shift_checks ? 'bg-violet-600' : 'bg-theme-surface-border'
+                    feature.require_end_of_shift_checks ? 'bg-theme-accent-red' : 'bg-theme-surface-border'
                   }`}
                 >
                   <span
@@ -453,7 +465,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                         key={option.value}
                         className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
                           selected
-                            ? 'border-violet-600 bg-violet-500/5'
+                            ? 'border-theme-accent-red bg-theme-accent-red-muted'
                             : 'border-theme-surface-border hover:bg-theme-surface-hover'
                         }`}
                       >
@@ -535,9 +547,40 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   onClick={() => {
                     void saveFeature({ enforce_evoc: !feature.enforce_evoc });
                   }}
-                  className={`toggle-track-sm ${feature.enforce_evoc ? 'bg-violet-600' : 'bg-theme-surface-border'}`}
+                  className={`toggle-track-sm ${feature.enforce_evoc ? 'bg-theme-accent-red' : 'bg-theme-surface-border'}`}
                 >
                   <span className={`toggle-knob-sm ${feature.enforce_evoc ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">
+                    Require approval for outside-department shifts
+                  </p>
+                  <p className="text-theme-text-muted mt-0.5 text-sm">
+                    A shift a member logs with another department waits for a scheduling officer to approve it before
+                    its hours count toward totals and compliance. Officers are emailed when one is waiting. Off, an
+                    entry counts as soon as it is logged and officers can still reject it.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="Require approval for outside-department shifts"
+                  aria-checked={!!feature.external_shifts_require_approval}
+                  disabled={savingFeature}
+                  onClick={() => {
+                    void saveFeature({ external_shifts_require_approval: !feature.external_shifts_require_approval });
+                  }}
+                  className={`toggle-track-sm ${
+                    feature.external_shifts_require_approval ? 'bg-theme-accent-red' : 'bg-theme-surface-border'
+                  }`}
+                >
+                  <span
+                    className={`toggle-knob-sm ${
+                      feature.external_shifts_require_approval ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
                 </button>
               </div>
               <div className="border-theme-surface-border/60 flex items-center justify-between gap-4 border-t pt-4">
@@ -558,7 +601,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                     void saveFeature({ restrict_checkin_to_assigned: !feature.restrict_checkin_to_assigned });
                   }}
                   className={`toggle-track-sm ${
-                    feature.restrict_checkin_to_assigned ? 'bg-violet-600' : 'bg-theme-surface-border'
+                    feature.restrict_checkin_to_assigned ? 'bg-theme-accent-red' : 'bg-theme-surface-border'
                   }`}
                 >
                   <span
@@ -585,7 +628,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   onClick={() => {
                     void saveFeature({ pre_shift_work_enabled: !preShiftWorkEnabled });
                   }}
-                  className={`toggle-track-sm ${preShiftWorkEnabled ? 'bg-violet-600' : 'bg-theme-surface-border'}`}
+                  className={`toggle-track-sm ${preShiftWorkEnabled ? 'bg-theme-accent-red' : 'bg-theme-surface-border'}`}
                 >
                   <span className={`toggle-knob-sm ${preShiftWorkEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>

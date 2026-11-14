@@ -49,6 +49,10 @@ export const InventoryNfcScanAction = {
   LOOKUP: 'lookup',
   PUT_AWAY: 'put_away',
   AUDIT: 'audit',
+  /** Not a tap: the item was created or imported, which counts as seeing it. */
+  CREATED: 'created',
+  /** Not a tap: the item was put away by barcode scan. */
+  BARCODE_PUT_AWAY: 'barcode_put_away',
 } as const;
 export type InventoryNfcScanAction = (typeof InventoryNfcScanAction)[keyof typeof InventoryNfcScanAction];
 
@@ -181,6 +185,28 @@ export const UserStatus = {
   ARCHIVED: 'archived',
 } as const;
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
+
+/**
+ * How an account status reads on screen, in the roster's own words: the
+ * stored values are identifiers, and `leave` or `dropped_voluntary` printed
+ * as-is is not something to put on a member's ID card.
+ */
+export const USER_STATUS_LABELS: Record<UserStatus, string> = {
+  active: 'Active',
+  inactive: 'Inactive',
+  suspended: 'Suspended',
+  probationary: 'Probationary',
+  leave: 'On Leave',
+  retired: 'Retired',
+  dropped_voluntary: 'Dropped (voluntary)',
+  dropped_involuntary: 'Dropped (involuntary)',
+  archived: 'Archived',
+};
+
+/** The label for a stored account status; an unknown value is shown as sent, underscores spaced. */
+export function userStatusLabel(status: string): string {
+  return USER_STATUS_LABELS[status as UserStatus] ?? status.replace(/_/g, ' ');
+}
 
 /**
  * Statuses whose holder is a current member: signs in, is scheduled, trains.
@@ -371,6 +397,63 @@ export const VictoryCondition = {
 export type VictoryCondition = (typeof VictoryCondition)[keyof typeof VictoryCondition];
 
 // ============================================
+// Attendance Rule Mode (Election.eligibility_rules.attendance.mode)
+// ============================================
+export const AttendanceRuleMode = {
+  NONE: 'none',
+  COUNT: 'count',
+  PERCENT: 'percent',
+} as const;
+export type AttendanceRuleMode = (typeof AttendanceRuleMode)[keyof typeof AttendanceRuleMode];
+
+// ============================================
+// Waiting Period Mode (ElectionEligibilityRules.waiting_periods[type].mode)
+// ============================================
+export const WaitingPeriodMode = {
+  NONE: 'none',
+  NEVER: 'never',
+  MONTHS: 'months',
+} as const;
+export type WaitingPeriodMode = (typeof WaitingPeriodMode)[keyof typeof WaitingPeriodMode];
+
+// ============================================
+// Member Voter Type — the key a waiting period is set for. Class first
+// (administrative, social), else status. Mirrors backend VOTER_TYPE_KEYS.
+// ============================================
+export const MemberVoterType = {
+  ADMINISTRATIVE: 'administrative',
+  SOCIAL: 'social',
+  REGULAR: 'regular',
+  LIFE: 'life',
+  PROBATIONARY: 'probationary',
+  RETIRED: 'retired',
+  HONORARY: 'honorary',
+  JUNIOR: 'junior',
+} as const;
+export type MemberVoterType = (typeof MemberVoterType)[keyof typeof MemberVoterType];
+
+// ============================================
+// Wait Counted From (TypeRule.wait.counted_from) — when a per-type waiting
+// period starts: when the member became that type, or when they joined.
+// ============================================
+export const WaitCountedFrom = {
+  TYPE: 'type',
+  JOINED: 'joined',
+} as const;
+export type WaitCountedFrom = (typeof WaitCountedFrom)[keyof typeof WaitCountedFrom];
+
+// ============================================
+// Meeting Kind (Election.meeting_kind) — which eligibility defaults it copies
+// ============================================
+export const MeetingKind = {
+  REGULAR: 'regular',
+  ANNUAL: 'annual',
+  BYLAWS: 'bylaws',
+  SPECIAL: 'special',
+} as const;
+export type MeetingKind = (typeof MeetingKind)[keyof typeof MeetingKind];
+
+// ============================================
 // Ballot Choice (voter action on a ballot item)
 // ============================================
 export const BallotChoice = {
@@ -482,6 +565,44 @@ export const MemberStatus = {
 export type MemberStatus = (typeof MemberStatus)[keyof typeof MemberStatus];
 
 // ============================================
+// Position Kind
+// ============================================
+// What a position is. Mirrors POSITION_KINDS in backend/app/core/permissions.py.
+export const PositionKind = {
+  OFFICE: 'office',
+  COMMITTEE: 'committee',
+  SYSTEM: 'system',
+} as const;
+export type PositionKind = (typeof PositionKind)[keyof typeof PositionKind];
+
+export const POSITION_KIND_LABELS: Record<PositionKind, string> = {
+  office: 'Office',
+  committee: 'Committee',
+  system: 'System',
+};
+
+export const MEMBER_CLASS_LABELS: Record<MemberClass, string> = {
+  operational: 'Operational',
+  administrative: 'Administrative',
+  social: 'Social',
+};
+
+/**
+ * Labels for the built-in ladder statuses. `member_status` also holds the
+ * department's own tier ids (`senior`), whose display name lives in the tier
+ * config; `memberStatusLabel` in `utils/membership.ts` resolves those.
+ */
+export const MEMBER_STATUS_LABELS: Record<MemberStatus, string> = {
+  prospective: 'Prospective',
+  probationary: 'Probationary',
+  regular: 'Regular',
+  life: 'Life',
+  retired: 'Retired',
+  honorary: 'Honorary',
+  junior: 'Junior',
+};
+
+// ============================================
 // Pipeline / Applicant Stage Types
 // ============================================
 export const StageType = {
@@ -497,6 +618,7 @@ export const StageType = {
   INTERVIEW_REQUIREMENT: 'interview_requirement',
   MULTI_APPROVAL: 'multi_approval',
   MEDICAL_SCREENING: 'medical_screening',
+  FOLLOW_UP_FORM: 'follow_up_form',
 } as const;
 export type StageType = (typeof StageType)[keyof typeof StageType];
 
@@ -546,6 +668,20 @@ export const PracticalSkillsMethod = {
 export type PracticalSkillsMethod = (typeof PracticalSkillsMethod)[keyof typeof PracticalSkillsMethod];
 
 // ============================================
+// Training — Record Source
+// ============================================
+/**
+ * Where a training record came from. The server decides it
+ * (`app/services/training_record_source.py`) and sends the label to show.
+ */
+export const TrainingRecordSource = {
+  PROVIDER: 'provider',
+  IMPORTED: 'imported',
+  LOGBOOK: 'logbook',
+} as const;
+export type TrainingRecordSource = (typeof TrainingRecordSource)[keyof typeof TrainingRecordSource];
+
+// ============================================
 // Scheduling — Assignment Status
 // ============================================
 export const AssignmentStatus = {
@@ -586,6 +722,13 @@ export const DRIVER_NOT_QUALIFIED_CODE = 'LB-SCHED-001';
  */
 export const EXCHANGE_NOT_QUALIFIED_CODE = 'LB-SCHED-002';
 
+/**
+ * Support code for an officer assignment to a department's own seat that no
+ * rank, certification, training program or open position grants. A
+ * scheduling manager's assign flow keys its officer-override offer off this.
+ */
+export const SEAT_NOT_GRANTED_CODE = 'LB-SCHED-004';
+
 // The qualification a course certifies its holder in. Values must match
 // QUALIFICATIONS in backend/app/services/qualification_service.py — a course
 // that names a code the backend does not know grants nothing, so a test parses
@@ -601,6 +744,9 @@ export const COURSE_QUALIFICATIONS: { value: string; label: string }[] = [
   { value: 'emt', label: 'EMT' },
   { value: 'aemt', label: 'Advanced EMT' },
   { value: 'paramedic', label: 'Paramedic' },
+  // Cleared to lead a crew without an officer rank: the acting-officer / AIC
+  // card. Clears the officer, captain and lieutenant seats.
+  { value: 'officer_in_charge', label: 'Officer in Charge' },
 ];
 
 /**
@@ -651,6 +797,28 @@ export const REQUEST_STATUS_COLORS: Record<string, string> = {
   denied: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
   cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
 };
+
+/**
+ * Where a shift's crew is while on duty. `on_call` is a recall shift: at home,
+ * responding if paged. Both count toward shift hours.
+ */
+export const ShiftDutyType = {
+  IN_STATION: 'in_station',
+  ON_CALL: 'on_call',
+} as const;
+export type ShiftDutyType = (typeof ShiftDutyType)[keyof typeof ShiftDutyType];
+
+/**
+ * Historical data import: what a row's hours become. `ignore` drops a column.
+ */
+export const HistoricalRecordType = {
+  SHIFT: 'shift',
+  ON_CALL: 'on_call',
+  TRAINING: 'training',
+  ADMIN: 'admin',
+  IGNORE: 'ignore',
+} as const;
+export type HistoricalRecordType = (typeof HistoricalRecordType)[keyof typeof HistoricalRecordType];
 
 /** Shift history import: a draft under review, or committed to the schedule. */
 export const HISTORY_IMPORT_STATUS_COLORS: Record<string, string> = {
@@ -884,6 +1052,10 @@ export const REQUIREMENT_TYPE_LABELS: Record<string, string> = {
   knowledge_test: 'Knowledge test',
   checklist: 'Checklist',
   certification: 'Certification',
+  evaluated_shifts: 'Evaluated shifts',
+  transports: 'Transports',
+  refusals: 'Refusals',
+  session_attendance: 'Session attendance',
 };
 
 /** Order the requirement-type picker offers, commonest first. */
@@ -896,6 +1068,9 @@ export const REQUIREMENT_TYPE_OPTIONS: { value: string; label: string }[] = [
   'knowledge_test',
   'checklist',
   'certification',
+  'evaluated_shifts',
+  'transports',
+  'refusals',
 ].map((value) => ({ value, label: REQUIREMENT_TYPE_LABELS[value] ?? value }));
 
 /** Weekday numbers used by meeting patterns (0 = Monday, matching Python). */
@@ -985,6 +1160,12 @@ export const CellTone = {
    * `tally_standing()` leaves it out of both sides of the standing.
    */
   CATCH_UP: 'catch_up',
+  /**
+   * A session-attendance requirement no session of which has been held in the
+   * member's window yet (backend status `not_applicable`): nothing to have
+   * attended, so counted neither met nor open, like CATCH_UP (W80-9).
+   */
+  NOT_YET_HELD: 'not_yet_held',
 } as const;
 export type CellTone = (typeof CellTone)[keyof typeof CellTone];
 
@@ -1176,6 +1357,8 @@ export const AdminHoursEntryMethod = {
   NFC_STATION: 'nfc_station',
   MANUAL: 'manual',
   EVENT_ATTENDANCE: 'event_attendance',
+  // Brought in from a previous system by Historical Data Import.
+  IMPORT: 'import',
 } as const;
 export type AdminHoursEntryMethod = (typeof AdminHoursEntryMethod)[keyof typeof AdminHoursEntryMethod];
 
@@ -1184,4 +1367,78 @@ export const ADMIN_HOURS_ENTRY_METHOD_LABELS: Record<string, string> = {
   nfc_station: 'ID Card Station',
   manual: 'Manual',
   event_attendance: 'Event Attendance',
+  import: 'Imported',
 };
+
+// ============================================
+// Training compliance
+// ============================================
+
+/**
+ * How a month that leave or a waiver only partly covers reduces a target.
+ * Mirrors `LeaveMonthRule` in backend/app/models/compliance_config.py.
+ */
+export const LeaveMonthRule = {
+  FULL_MONTH: 'full_month',
+  PROPORTIONAL: 'proportional',
+  HALF: 'half',
+} as const;
+export type LeaveMonthRule = (typeof LeaveMonthRule)[keyof typeof LeaveMonthRule];
+
+// ============================================
+// Session Waiver Requests (backend/app/models/attendance_waiver.py)
+// ============================================
+export const AttendanceWaiverStatus = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  DENIED: 'denied',
+  WITHDRAWN: 'withdrawn',
+  VOIDED: 'voided',
+  EXPIRED: 'expired',
+} as const;
+export type AttendanceWaiverStatus = (typeof AttendanceWaiverStatus)[keyof typeof AttendanceWaiverStatus];
+
+export const ATTENDANCE_WAIVER_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending',
+  approved: 'Approved',
+  denied: 'Denied',
+  withdrawn: 'Withdrawn',
+  voided: 'Voided',
+  expired: 'Expired',
+};
+
+export const ATTENDANCE_WAIVER_STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30',
+  approved: 'bg-green-500/10 text-green-800 dark:text-green-300 border-green-500/30',
+  denied: 'bg-red-500/10 text-red-800 dark:text-red-300 border-red-500/30',
+  withdrawn: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
+  voided: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
+  expired: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
+};
+
+/** When a request must arrive by (`AttendanceWaiverPolicy.deadline`). */
+export const AttendanceWaiverDeadline = {
+  BEFORE_START: 'before_start',
+  HOURS_24_AFTER_END: '24h_after_end',
+  DAYS_7_AFTER_END: '7d_after_end',
+} as const;
+export type AttendanceWaiverDeadline = (typeof AttendanceWaiverDeadline)[keyof typeof AttendanceWaiverDeadline];
+
+export const ATTENDANCE_WAIVER_DEADLINE_LABELS: Record<AttendanceWaiverDeadline, string> = {
+  before_start: 'Before the session starts',
+  '24h_after_end': 'Up to 24 hours after it ends',
+  '7d_after_end': 'Up to 7 days after it ends',
+};
+
+export const AttendanceWaiverCapPeriod = {
+  CALENDAR_YEAR: 'calendar_year',
+  ROLLING_12_MONTHS: 'rolling_12_months',
+} as const;
+export type AttendanceWaiverCapPeriod = (typeof AttendanceWaiverCapPeriod)[keyof typeof AttendanceWaiverCapPeriod];
+
+export const AttendanceWaiverReasonText = {
+  OFF: 'off',
+  OPTIONAL: 'optional',
+  REQUIRED: 'required',
+} as const;
+export type AttendanceWaiverReasonText = (typeof AttendanceWaiverReasonText)[keyof typeof AttendanceWaiverReasonText];

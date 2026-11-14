@@ -29,6 +29,8 @@ export interface DayDetailPanelProps {
   currentUserId: string | null | undefined;
   timezone: string;
   eligibleByShift: Record<string, string[]>;
+  /** Why the member cannot take a seat on a shift, keyed by shift; absent when they can. */
+  unavailableByShift?: Record<string, string>;
   pendingShiftId: string | null;
   onClaim: (shift: ShiftRecord, position: string | null) => void;
   onRelease: (shift: ShiftRecord, choice?: 'drop' | 'trade') => void;
@@ -61,6 +63,7 @@ export const DayDetailPanel: React.FC<DayDetailPanelProps> = ({
   currentUserId,
   timezone,
   eligibleByShift,
+  unavailableByShift = {},
   pendingShiftId,
   onClaim,
   onRelease,
@@ -157,6 +160,7 @@ export const DayDetailPanel: React.FC<DayDetailPanelProps> = ({
                   currentUserId={currentUserId}
                   timezone={timezone}
                   eligiblePositions={eligibleByShift[shift.id] ?? []}
+                  unavailableReason={unavailableByShift[shift.id] ?? null}
                   pending={pendingShiftId === shift.id}
                   onClaim={onClaim}
                   onRelease={onRelease}

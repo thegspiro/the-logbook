@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.apparatus import Apparatus, ApparatusOperator, EvocLevel
-from app.models.training import TrainingProgram
+from app.models.training import BasicApparatus, TrainingProgram
 from app.schemas.apparatus import EvocLevelCreate, EvocLevelUpdate
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -317,20 +317,38 @@ class EvocLevelService:
             "user_level": None,
         }
         if apparatus is None:
-            # `shifts.apparatus_id` carries no foreign key and `delete_apparatus`
-            # is a hard delete, so a retired engine leaves its shifts pointing at
-            # a row that no longer exists. Those shifts then reach here and the
-            # requirement stops being enforced with nothing said — log it, so the
-            # silence is at least diagnosable. Whether an unresolvable apparatus
-            # should instead fail closed is AP2-4, an owner decision.
+            # `shifts.apparatus_id` names a row in either `apparatus` or
+            # `basic_apparatus`, depending on the department, so it has no
+            # foreign key. A basic vehicle carries no EVOC requirement. An id in
+            # neither table is a vehicle deleted before both deletes began
+            # refusing a vehicle a shift still names; with nothing to say what
+            # it required, the driver seat fails closed (AP2-4, owner decision
+            # 2026-10-31) rather than passing everyone, as it used to.
+            basic_id = await self.db.scalar(
+                select(BasicApparatus.id).where(
+                    BasicApparatus.id == apparatus_id,
+                    BasicApparatus.organization_id == organization_id,
+                )
+            )
+            if basic_id is not None:
+                return no_requirement
             logger.warning(
                 "EVOC eligibility: apparatus {} not found in org {}; "
-                "no requirement enforced for user {}",
+                "refusing user {}",
                 apparatus_id,
                 organization_id,
                 user_id,
             )
-            return no_requirement
+            return {
+                "eligible": False,
+                "warning": (
+                    "This shift's vehicle no longer exists, so its EVOC "
+                    "requirement cannot be checked. Choose the shift's vehicle "
+                    "again before seating a driver."
+                ),
+                "required_level": None,
+                "user_level": None,
+            }
         if not apparatus.required_evoc_level_id:
             return no_requirement
 

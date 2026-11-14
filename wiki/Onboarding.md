@@ -138,8 +138,9 @@ that changes its flag changes this screen with it.
 > permission rows meaningful: they are filtered to the modules chosen here.
 
 > Modules the wizard does not ask about — Communications, Finance, Grants &
-> Fundraising, HR & Payroll, Incidents, Medical Screening, Public Information
-> and the Testing Checklist — are turned on later under **Settings → Modules**.
+> Fundraising, HR & Payroll, Incidents, Medical Screening and the Testing
+> Checklist — are turned on later under **Settings → Modules**. Public
+> Information is asked about in this step (since 2026-11-03).
 
 #### Step 4: Ranks & Positions
 

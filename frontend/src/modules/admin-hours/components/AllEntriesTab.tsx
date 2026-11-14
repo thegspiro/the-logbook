@@ -125,8 +125,8 @@ const AllEntriesTab: React.FC = () => {
         </div>
       ) : (
         <>
-          <div className="bg-theme-surface overflow-hidden overflow-x-auto rounded-lg shadow-md">
-            <table className="w-full">
+          <div className="bg-theme-surface rwd-table-container overflow-hidden overflow-x-auto rounded-lg shadow-md">
+            <table className="rwd-table rwd-table-wide w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th scope="col" className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase">
@@ -155,8 +155,10 @@ const AllEntriesTab: React.FC = () => {
               <tbody className="divide-theme-surface-border divide-y">
                 {allEntries.map((entry) => (
                   <tr key={entry.id}>
-                    <td className="text-theme-text-primary px-4 py-3 text-sm">{entry.userName ?? '-'}</td>
-                    <td className="px-4 py-3 text-sm">
+                    <td data-label="Member" className="text-theme-text-primary px-4 py-3 text-sm">
+                      {entry.userName ?? '-'}
+                    </td>
+                    <td data-label="Category" className="px-4 py-3 text-sm">
                       <div className="flex items-center gap-2">
                         <div
                           className="h-2.5 w-2.5 rounded-full"
@@ -165,23 +167,27 @@ const AllEntriesTab: React.FC = () => {
                         <span className="text-theme-text-primary">{entry.categoryName}</span>
                       </div>
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm">{formatDate(entry.clockInAt, tz)}</td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                    <td data-label="Date" className="text-theme-text-secondary px-4 py-3 text-sm">
+                      {formatDate(entry.clockInAt, tz)}
+                    </td>
+                    <td data-label="Duration" className="text-theme-text-secondary px-4 py-3 text-sm">
                       {formatDuration(entry.durationMinutes)}
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
-                      <span>{entryMethodLabel(entry.entryMethod)}</span>
-                      {entry.entryMethod === 'event_attendance' && entry.sourceEventId && (
-                        <Link
-                          to={`/events/${entry.sourceEventId}`}
-                          className="text-theme-accent-blue mt-0.5 block max-w-[160px] truncate text-xs hover:underline"
-                          title={entry.sourceEventName ?? 'View event'}
-                        >
-                          {entry.sourceEventName ?? 'View event'}
-                        </Link>
-                      )}
+                    <td data-label="Method" className="text-theme-text-secondary px-4 py-3 text-sm">
+                      <div className="min-w-0">
+                        <span>{entryMethodLabel(entry.entryMethod)}</span>
+                        {entry.entryMethod === 'event_attendance' && entry.sourceEventId && (
+                          <Link
+                            to={`/events/${entry.sourceEventId}`}
+                            className="text-theme-accent-blue mt-0.5 block max-w-[160px] truncate text-xs hover:underline"
+                            title={entry.sourceEventName ?? 'View event'}
+                          >
+                            {entry.sourceEventName ?? 'View event'}
+                          </Link>
+                        )}
+                      </div>
                     </td>
-                    <td className="px-4 py-3 text-sm">
+                    <td data-label="Status" className="px-4 py-3 text-sm">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                           entry.status === 'approved'
@@ -198,7 +204,9 @@ const AllEntriesTab: React.FC = () => {
                         {entryStatusLabel(entry.status)}
                       </span>
                     </td>
-                    <td className="text-theme-text-muted px-4 py-3 text-sm">{entry.approverName ?? '-'}</td>
+                    <td data-label="Reviewed By" className="text-theme-text-muted px-4 py-3 text-sm">
+                      {entry.approverName ?? '-'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

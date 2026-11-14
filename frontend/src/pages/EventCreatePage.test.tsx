@@ -183,6 +183,42 @@ describe('EventCreatePage', () => {
     });
   });
 
+  describe('Field errors (forms review F-2/F-4)', () => {
+    it('puts a server refusal on the field it names, once, without the API field name', async () => {
+      vi.mocked(eventService.createEvent).mockRejectedValue({
+        response: { status: 422, data: { detail: [{ field: 'location', message: 'Value is too long.' }] } },
+      });
+      vi.mocked(apiModule.locationsService.getLocations).mockResolvedValue([]);
+      const user = userEvent.setup();
+      renderWithRouter(<EventCreatePage />);
+
+      await user.type(screen.getByLabelText(/title/i), 'Open House');
+      fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2026-04-01' } });
+      fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-02' } });
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      const location = screen.getByPlaceholderText('e.g., Station 1 Conference Room');
+      await waitFor(() =>
+        expect(location).toHaveAccessibleDescription('Location is too long — keep it to 300 characters.')
+      );
+      expect(location).toHaveAttribute('aria-invalid', 'true');
+      await waitFor(() => expect(location).toHaveFocus());
+      expect(screen.queryByText(/location: Value is too long/)).not.toBeInTheDocument();
+    });
+
+    it('refuses an empty title on its field rather than with a browser bubble', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventCreatePage />);
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      const title = screen.getByLabelText(/title/i);
+      expect(title).toHaveAttribute('aria-invalid', 'true');
+      expect(title).toHaveAccessibleDescription('Enter a title for the event.');
+      expect(title).toHaveAttribute('aria-required', 'true');
+      expect(eventService.createEvent).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Training details', () => {
     // Pitfall #28: state every mock this block depends on, reset first.
     beforeEach(() => {

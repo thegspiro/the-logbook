@@ -165,7 +165,8 @@ export const ApprovalStepDialog: React.FC<ApprovalStepDialogProps> = ({
                 ))}
               </select>
               <p className="text-theme-text-secondary mt-1 text-xs">
-                Only the approver chosen here can approve or deny this step in The Logbook. With None, anyone with the
+                Only the approver chosen here can approve or deny this step in The Logbook. A position or member chosen
+                here can do so without the finance.approve permission, on this step only. With None, anyone with the
                 finance.approve permission can. An approvals administrator can also act on it by giving a reason, which
                 is recorded in the audit log. The Email type also sends that address a link to approve or deny the
                 request when it reaches this step (if email sending is set up).

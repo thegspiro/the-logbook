@@ -20,6 +20,7 @@ const BudgetDetailPage = lazyWithRetry(() => import('./pages/BudgetDetailPage'))
 const MyBudgetsPage = lazyWithRetry(() => import('./pages/MyBudgetsPage'));
 const BudgetRequestsPage = lazyWithRetry(() => import('./pages/BudgetRequestsPage'));
 const BudgetRequestReviewPage = lazyWithRetry(() => import('./pages/BudgetRequestReviewPage'));
+const PendingAmendmentsPage = lazyWithRetry(() => import('./pages/PendingAmendmentsPage'));
 
 // Settings
 const FiscalYearSettingsPage = lazyWithRetry(() => import('./pages/FiscalYearSettingsPage'));
@@ -49,6 +50,7 @@ const FinanceReportsPage = lazyWithRetry(() => import('./pages/FinanceReportsPag
 
 // Dues
 const DuesManagementPage = lazyWithRetry(() => import('./pages/DuesManagementPage'));
+const MyDuesPage = lazyWithRetry(() => import('./pages/MyDuesPage'));
 
 export const getFinanceRoutes = () => {
   return (
@@ -119,6 +121,23 @@ export const getFinanceRoutes = () => {
             moduleLabel="Finance"
           >
             <BudgetRequestReviewPage />
+          </ProtectedRoute>
+        }
+      />
+      {/*
+        Amendments awaiting a second officer, across every line: the confirm
+        endpoint's gate (finance.budget_review or finance.manage). Owner
+        decision, 2026-11-01.
+      */}
+      <Route
+        path="/finance/budget-amendments"
+        element={
+          <ProtectedRoute
+            requiredAnyPermission={['finance.manage', 'finance.budget_review']}
+            requiredModule="finance"
+            moduleLabel="Finance"
+          >
+            <PendingAmendmentsPage />
           </ProtectedRoute>
         }
       />
@@ -308,6 +327,15 @@ export const getFinanceRoutes = () => {
       />
 
       {/* Dues */}
+      {/* A member's own dues: needs only a session, like My Budgets. */}
+      <Route
+        path="/finance/my-dues"
+        element={
+          <ProtectedRoute requiredModule="finance" moduleLabel="Finance">
+            <MyDuesPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/finance/dues"
         element={

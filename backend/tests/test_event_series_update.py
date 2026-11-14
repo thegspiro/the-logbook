@@ -113,9 +113,19 @@ class TestUpdateFutureEventsTiming:
     async def _update(self, series, update):
         db = AsyncMock()
         db.execute.side_effect = [_scalar(series[0]), _scalars(series)]
-        with patch(
-            "app.services.event_service.resolve_scheduling_timezone",
-            AsyncMock(return_value=self.CHI),
+        # A moved series also sends its waiver requests back to their members,
+        # which reads the database; this mocked one answers only the two
+        # reads above, and the hook is pinned in its own test file.
+        with (
+            patch(
+                "app.services.event_service.resolve_scheduling_timezone",
+                AsyncMock(return_value=self.CHI),
+            ),
+            patch(
+                "app.services.attendance_waiver_service."
+                "reconfirm_for_rescheduled_events",
+                AsyncMock(return_value=[]),
+            ),
         ):
             return await EventService(db).update_future_events(uuid4(), uuid4(), update)
 

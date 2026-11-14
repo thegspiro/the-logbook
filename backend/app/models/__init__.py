@@ -41,6 +41,15 @@ from app.models.apparatus import (
     MaintenanceCategory,
     MaintenanceIntervalUnit,
 )
+from app.models.attendance_waiver import (
+    AttendanceWaiverAction,
+    AttendanceWaiverAttachment,
+    AttendanceWaiverEmailSend,
+    AttendanceWaiverRequest,
+    AttendanceWaiverRequestAction,
+    AttendanceWaiverStatus,
+    AttendanceWaiverWorkflow,
+)
 from app.models.audit import (
     AuditChainHead,
     AuditLog,
@@ -88,6 +97,25 @@ from app.models.email_template import (
     EmailTemplateType,
 )
 from app.models.error_log import ErrorLog
+from app.models.evaluation import (
+    Evaluation,
+    EvaluationAmendment,
+    EvaluationDeletionRecord,
+    EvaluationDocument,
+    EvaluationPart,
+    EvaluationPartKind,
+    EvaluationPartStatus,
+    EvaluationPeriod,
+    EvaluationSignature,
+    EvaluationStatus,
+    EvaluationStep,
+    EvaluationStepStatus,
+    EvaluationStepType,
+    EvaluationTemplate,
+    EvaluationTemplateKind,
+    EvaluationTemplateVersion,
+    SignatureDisposition,
+)
 from app.models.event import (
     AttendancePetitionStatus,
     CheckInWindowType,
@@ -137,6 +165,7 @@ from app.models.facilities import (
 )
 from app.models.finance import (
     AdvanceReturn,
+    AdvanceStatement,
     ApprovalChain,
     ApprovalChainStep,
     ApprovalEntityType,
@@ -169,6 +198,8 @@ from app.models.finance import (
     PurchaseRequestPriority,
     PurchaseRequestStatus,
     QuickBooksChartAccount,
+    QuickBooksConnection,
+    QuickBooksPosting,
 )
 from app.models.forms import (
     FieldType,
@@ -213,10 +244,43 @@ from app.models.grant import (
     RecurringFrequency,
     ReportingFrequency,
 )
+from app.models.historical_import import (
+    HistoricalImport,
+    HistoricalImportRow,
+    HistoricalImportStatus,
+    HistoricalRecordType,
+    HistoricalStaffingFile,
+    HistoricalStaffingFileKind,
+    HistoricalStaffingRow,
+    ImportedRecordKind,
+    ImportedSourceRecord,
+)
+from app.models.history import (
+    HistoricalMember,
+    HistoricalMemberPeriodTitle,
+    HistoricalMemberRelation,
+    HistoricalMemberServicePeriod,
+    HistoryAlbum,
+    HistoryAlbumItem,
+    HistoryClearanceDecision,
+    HistoryClearanceRequest,
+    HistoryClearanceStep,
+    HistoryImport,
+    HistoryImportRow,
+    HistoryImportTitleMapping,
+    HistoryMedia,
+    HistoryMediaFile,
+    HistoryMediaTag,
+    HistoryRecordRedirect,
+    HistoryRevision,
+    HistorySource,
+    HistoryTitle,
+)
 from app.models.integration import (
     CalendarSyncMapping,
     Integration,
     IntegrationSyncLog,
+    WeatherAlert,
 )
 from app.models.inventory import (
     AssignmentType,
@@ -295,6 +359,7 @@ from app.models.mcp_oauth import McpOAuthAuthorization, McpOAuthClient, McpOAuth
 from app.models.mcp_service_key import McpServiceKey
 from app.models.medical_screening import (
     ScreeningRecord,
+    ScreeningReminderSend,
     ScreeningRequirement,
     ScreeningStatus,
     ScreeningType,
@@ -307,6 +372,8 @@ from app.models.meeting import (
     MeetingStatus,
     MeetingType,
 )
+from app.models.member_position_term import MemberPositionTerm
+from app.models.member_supervisor import MemberSupervisorAssignment
 from app.models.membership_pipeline import (
     ActionType,
     MembershipPipeline,
@@ -372,6 +439,11 @@ from app.models.public_portal import (
 from app.models.qualification import MemberQualification
 from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.security_alert import AlertType, SecurityAlertRecord, ThreatLevel
+from app.models.shift_evaluation import (
+    ShiftEvaluation,
+    ShiftEvaluationLink,
+    ShiftEvaluationTemplate,
+)
 from app.models.shift_history_import import (
     ShiftHistoryImport,
     ShiftHistoryImportMapping,
@@ -379,7 +451,9 @@ from app.models.shift_history_import import (
     ShiftHistoryImportRow,
     ShiftHistoryImportStatus,
 )
+from app.models.shift_swap_notice import OpenSwapNotice
 from app.models.skills_testing import SkillTemplate, SkillTest
+from app.models.stored_file_scan import ScanVerdict, StoredFileScan
 from app.models.storefront import (
     StoreFulfillmentMethod,
     StoreOrder,
@@ -430,6 +504,8 @@ from app.models.training import (
     PreWorkStatus,
     ProgramEnrollment,
     ProgramMilestone,
+    ProgramMilestoneAchievement,
+    ProgramMilestoneItem,
     ProgramPhase,
     ProgramRequirement,
     RequirementProgress,
@@ -448,7 +524,9 @@ from app.models.training import (
     TrainingProgram,
     TrainingRecord,
     TrainingRequirement,
+    TrainingRequirementOverride,
     TrainingSession,
+    TrainingSessionRequirement,
 )
 from app.models.user import (
     LeaveType,
@@ -460,6 +538,12 @@ from app.models.user import (
     User,
     UserStatus,
     user_roles,
+)
+from app.models.zeffy import (
+    ZeffyCampaignLink,
+    ZeffyLinkTarget,
+    ZeffyPayment,
+    ZeffyPaymentState,
 )
 
 __all__ = [
@@ -480,6 +564,8 @@ __all__ = [
     "user_roles",
     "MemberLeaveOfAbsence",
     "MemberServicePeriod",
+    "MemberPositionTerm",
+    "MemberSupervisorAssignment",
     "LeaveType",
     # Audit models
     "AuditChainHead",
@@ -550,6 +636,11 @@ __all__ = [
     "DirectoryProvider",
     "Integration",
     "IntegrationSyncLog",
+    "WeatherAlert",
+    "ZeffyCampaignLink",
+    "ZeffyLinkTarget",
+    "ZeffyPayment",
+    "ZeffyPaymentState",
     "CalendarSyncMapping",
     "McpServiceKey",
     "UserPasskey",
@@ -559,6 +650,14 @@ __all__ = [
     "McpOAuthAuthorization",
     # Analytics models
     "AnalyticsEvent",
+    # Attendance waiver requests
+    "AttendanceWaiverAction",
+    "AttendanceWaiverAttachment",
+    "AttendanceWaiverRequest",
+    "AttendanceWaiverRequestAction",
+    "AttendanceWaiverEmailSend",
+    "AttendanceWaiverStatus",
+    "AttendanceWaiverWorkflow",
     # Error log models
     "ErrorLog",
     # Apparatus models
@@ -615,6 +714,24 @@ __all__ = [
     "VotingToken",
     "Vote",
     "ElectionStatus",
+    # Member performance evaluation models
+    "Evaluation",
+    "EvaluationAmendment",
+    "EvaluationDeletionRecord",
+    "EvaluationDocument",
+    "EvaluationPart",
+    "EvaluationPartKind",
+    "EvaluationPartStatus",
+    "EvaluationPeriod",
+    "EvaluationSignature",
+    "EvaluationStatus",
+    "EvaluationStep",
+    "EvaluationStepStatus",
+    "EvaluationStepType",
+    "EvaluationTemplate",
+    "EvaluationTemplateKind",
+    "EvaluationTemplateVersion",
+    "SignatureDisposition",
     # Event models
     "Event",
     "EventRSVP",
@@ -629,6 +746,8 @@ __all__ = [
     "ExternalApparatus",
     "ExternalShiftHours",
     "ExternalShiftHoursStatus",
+    # Open shift swap notices
+    "OpenSwapNotice",
     # Event request models
     "EventRequest",
     "EventRequestActivity",
@@ -640,11 +759,15 @@ __all__ = [
     "TrainingRecord",
     "TrainingRequirement",
     "TrainingSession",
+    "TrainingSessionRequirement",
+    "TrainingRequirementOverride",
     "TrainingApproval",
     "TrainingProgram",
     "ProgramPhase",
     "ProgramRequirement",
     "ProgramMilestone",
+    "ProgramMilestoneItem",
+    "ProgramMilestoneAchievement",
     "ProgramEnrollment",
     "RequirementProgress",
     "SkillEvaluation",
@@ -664,6 +787,18 @@ __all__ = [
     "ShiftPreWorkSession",
     "PreWorkStatus",
     # Shift history import
+    "ShiftEvaluation",
+    "ShiftEvaluationLink",
+    "ShiftEvaluationTemplate",
+    "HistoricalImport",
+    "HistoricalImportRow",
+    "HistoricalImportStatus",
+    "HistoricalRecordType",
+    "HistoricalStaffingFile",
+    "HistoricalStaffingFileKind",
+    "HistoricalStaffingRow",
+    "ImportedRecordKind",
+    "ImportedSourceRecord",
     "ShiftHistoryImport",
     "ShiftHistoryImportMapping",
     "ShiftHistoryImportMappingKind",
@@ -675,6 +810,9 @@ __all__ = [
     "ShiftEquipmentCheckSeal",
     # Scheduling module config
     "SchedulingModuleConfig",
+    # Malware scan of files stored before upload scanning
+    "StoredFileScan",
+    "ScanVerdict",
     # Security alert models
     "SecurityAlertRecord",
     "AlertType",
@@ -754,9 +892,30 @@ __all__ = [
     "WriteOffStatus",
     "ReturnRequestStatus",
     "ReturnRequestType",
+    # History models
+    "HistoricalMember",
+    "HistoricalMemberPeriodTitle",
+    "HistoricalMemberRelation",
+    "HistoricalMemberServicePeriod",
+    "HistoryClearanceDecision",
+    "HistoryClearanceRequest",
+    "HistoryAlbum",
+    "HistoryAlbumItem",
+    "HistoryClearanceStep",
+    "HistoryImport",
+    "HistoryImportRow",
+    "HistoryImportTitleMapping",
+    "HistoryMedia",
+    "HistoryMediaFile",
+    "HistoryMediaTag",
+    "HistoryRecordRedirect",
+    "HistoryRevision",
+    "HistorySource",
+    "HistoryTitle",
     # Medical screening models
     "ScreeningRequirement",
     "ScreeningRecord",
+    "ScreeningReminderSend",
     "ScreeningType",
     "ScreeningStatus",
     # Membership pipeline models
@@ -809,6 +968,7 @@ __all__ = [
     "ExpenseType",
     "CheckRequest",
     "AdvanceReturn",
+    "AdvanceStatement",
     "CheckRequestStatus",
     "DuesSchedule",
     "DuesFrequency",
@@ -817,6 +977,8 @@ __all__ = [
     "ExportMapping",
     "ExportLog",
     "QuickBooksChartAccount",
+    "QuickBooksConnection",
+    "QuickBooksPosting",
     # Grant & Fundraising models
     "GrantOpportunity",
     "GrantApplication",

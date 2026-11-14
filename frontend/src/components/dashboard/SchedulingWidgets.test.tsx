@@ -101,11 +101,16 @@ describe('SchedulingWidgets', () => {
   });
 
   it('saves defaults for the selected widget and reloads validated preferences', async () => {
+    getWidgetPreferences.mockResolvedValue({
+      widgets: {},
+      available_station_ids: ['station-1', 'station-2'],
+      available_platoons: ['A', 'B'],
+    });
     const user = userEvent.setup();
     renderWidget();
     await screen.findByLabelText('Today’s Staffing: 11. View filtered schedule.');
-    await user.type(screen.getByLabelText('Station ID'), 'station-1');
-    await user.type(screen.getByLabelText('Platoon'), 'A');
+    await user.selectOptions(screen.getByLabelText('Station'), 'station-1');
+    await user.selectOptions(screen.getByLabelText('Platoon'), 'A');
     await user.selectOptions(screen.getByLabelText('Days'), '30');
     await user.click(screen.getByRole('button', { name: 'Save defaults' }));
     await waitFor(() =>
@@ -114,6 +119,30 @@ describe('SchedulingWidgets', () => {
       })
     );
     expect(toastSuccess).toHaveBeenCalledWith('Widget defaults saved');
+  });
+
+  it('offers only the stations and platoons the department has, with an all option', async () => {
+    getWidgetPreferences.mockResolvedValue({
+      widgets: {},
+      available_station_ids: [],
+      available_platoons: ['A', 'B'],
+    });
+    renderWidget();
+    await screen.findByLabelText('Today’s Staffing: 11. View filtered schedule.');
+
+    // No shift carries a station, so a station filter could only ever be refused.
+    expect(screen.queryByLabelText('Station')).not.toBeInTheDocument();
+    const platoon = screen.getByLabelText('Platoon');
+    expect(platoon.tagName).toBe('SELECT');
+    expect([...(platoon as HTMLSelectElement).options].map((o) => o.textContent)).toEqual(['All platoons', 'A', 'B']);
+  });
+
+  it('labels today’s staffing as today rather than as the rolling window', async () => {
+    renderWidget();
+    const today = await screen.findByLabelText('Today’s Staffing: 11. View filtered schedule.');
+    expect(today).toHaveTextContent('Today');
+    expect(today).not.toHaveTextContent('14-day window');
+    expect(screen.getByLabelText('Open Slots: 3. View filtered schedule.')).toHaveTextContent('14-day window');
   });
 
   it('reports permission loss or removed-filter failures without retaining a false success state', async () => {

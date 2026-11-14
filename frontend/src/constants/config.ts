@@ -35,6 +35,9 @@ export const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 // ============================================
 export const AUTO_SAVE_INTERVAL_MS = 30_000; // 30 seconds
 
+/** Longest a cohort's remaining classes may be moved, either way; mirrors the API's limit. */
+export const MAX_COHORT_SHIFT_DAYS = 14;
+
 /**
  * How long a settings field waits after the last keystroke before it writes.
  * Long enough that typing a department name is one save rather than twenty,

@@ -1,19 +1,22 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithRouter } from '../../../test/utils';
 import type { AdminHoursCategory } from '../types';
 import CategoriesTab from './CategoriesTab';
 
 let categories: AdminHoursCategory[];
+const createCategory = vi.fn();
+const clearError = vi.fn();
 
 vi.mock('../store/adminHoursStore', () => ({
   useAdminHoursStore: (selector: (state: unknown) => unknown) =>
     selector({
       categories,
       categoriesLoading: false,
-      createCategory: vi.fn(),
+      createCategory: (...args: unknown[]) => createCategory(...args) as unknown,
       updateCategory: vi.fn(),
       deleteCategory: vi.fn(),
+      clearError,
     }),
 }));
 
@@ -75,5 +78,29 @@ describe('CategoriesTab approval labels', () => {
     expect(screen.getByRole('checkbox', { name: /require approval/i })).toHaveAccessibleDescription(
       /hours a member logs manually always go to an officer for review/i
     );
+  });
+});
+
+describe('CategoriesTab server refusals', () => {
+  beforeEach(() => {
+    categories = [baseCategory];
+    createCategory.mockReset();
+    clearError.mockReset();
+  });
+
+  it("puts a new category's refused name under the name, instead of the store's toast", async () => {
+    createCategory.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
+    });
+    renderWithRouter(<CategoriesTab onDataReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Add Category/ }));
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'Grounds' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create category' }));
+
+    const name = screen.getByLabelText(/^Name/);
+    await waitFor(() => expect(name).toHaveAttribute('aria-invalid', 'true'));
+    expect(name).toHaveAccessibleDescription('Name is too long — keep it to 200 characters.');
+    expect(name).toHaveFocus();
+    expect(clearError).toHaveBeenCalled();
   });
 });

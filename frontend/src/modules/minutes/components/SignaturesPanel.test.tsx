@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockStatus = vi.fn();
@@ -15,6 +15,7 @@ vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'America/Chica
 
 import { SignaturesPanel } from './SignaturesPanel';
 import type { MinutesStatus, SignatureStatus } from '../types/minutes';
+import { renderWithRouter } from '../../../test/utils';
 
 const unsigned: SignatureStatus = {
   version: 1,
@@ -54,7 +55,9 @@ describe('SignaturesPanel', () => {
   });
 
   const show = (status: MinutesStatus = 'approved') =>
-    render(<SignaturesPanel minutesId="m1" minutesTitle="October meeting" status={status} version="v1" defaultOpen />);
+    renderWithRouter(
+      <SignaturesPanel minutesId="m1" minutesTitle="October meeting" status={status} version="v1" defaultOpen />
+    );
 
   it.each<MinutesStatus>(['draft', 'submitted', 'rejected'])(
     'asks for nothing before the minutes are adopted (%s)',
@@ -110,8 +113,8 @@ describe('SignaturesPanel', () => {
     expect(within(dialog).getByRole('heading', { name: 'Sign as Recording Secretary' })).toBeInTheDocument();
 
     mockStatus.mockResolvedValue(signedOne);
-    await user.type(within(dialog).getByLabelText('Type your full name'), 'Pat Chief');
-    await user.type(within(dialog).getByLabelText('Confirm your password'), 'secret');
+    await user.type(within(dialog).getByLabelText(/^Type your full name/), 'Pat Chief');
+    await user.type(within(dialog).getByLabelText(/^Confirm your password/), 'secret');
     await user.click(within(dialog).getByRole('button', { name: 'Sign the minutes' }));
 
     expect(mockSign).toHaveBeenCalledWith('m1', 'recording_secretary', 'Pat Chief', 'secret');

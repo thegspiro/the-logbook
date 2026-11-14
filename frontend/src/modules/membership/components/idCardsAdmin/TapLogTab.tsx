@@ -208,6 +208,7 @@ export const TapLogTab: React.FC<TapLogTabProps> = ({ scope, onClearScope }) => 
       {!loading && !error && taps.length === 0 && (
         <div className="card p-4">
           <EmptyState
+            compact
             headingLevel={3}
             icon={History}
             title="No taps match"
@@ -217,7 +218,7 @@ export const TapLogTab: React.FC<TapLogTabProps> = ({ scope, onClearScope }) => 
       )}
 
       {taps.length > 0 && (
-        <div className="card overflow-hidden">
+        <div className="card rwd-table-container overflow-hidden">
           <CardTapTable taps={taps} tz={tz} />
         </div>
       )}

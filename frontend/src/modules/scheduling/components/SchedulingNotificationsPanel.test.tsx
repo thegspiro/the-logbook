@@ -107,3 +107,43 @@ describe('SchedulingNotificationsPanel — start-of-shift reminder email default
     await waitFor(async () => expect(await reminderEmailBox()).not.toBeChecked());
   });
 });
+
+// Forms review: "Add" took whatever was typed — "bob" went onto the
+// department's CC list and was saved at once. The hook computed a validation
+// error that nothing showed, and the box was labelled only by its placeholder.
+describe('SchedulingNotificationsPanel — CC addresses', () => {
+  beforeEach(() => {
+    mockGetSettings.mockReset();
+    mockGetSettings.mockResolvedValue({});
+    mockUpdateSettings.mockReset();
+    mockUpdateSettings.mockResolvedValue({});
+    mockToastError.mockReset();
+  });
+
+  it('refuses something that is not an address, and says so on the field', async () => {
+    const user = userEvent.setup();
+    render(<SchedulingNotificationsPanel />);
+
+    // Only the reminder section's email starts on, so its box is the one shown.
+    const input = await screen.findByLabelText('CC additional email addresses');
+    await user.type(input, 'bob{Enter}');
+
+    expect(input).toHaveAccessibleDescription('Enter a full email address, like name@example.com.');
+    expect(input).toHaveValue('bob');
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
+  });
+
+  it('adds a real address and names the button that removes it', async () => {
+    const user = userEvent.setup();
+    render(<SchedulingNotificationsPanel />);
+
+    // Only the reminder section's email starts on, so its box is the one shown.
+    const input = await screen.findByLabelText('CC additional email addresses');
+    await user.type(input, 'chief@dept.org{Enter}');
+
+    await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));
+    expect(JSON.stringify(mockUpdateSettings.mock.calls[0]?.[0])).toContain('"cc_emails":["chief@dept.org"]');
+    expect(await screen.findByRole('button', { name: 'Remove chief@dept.org' })).toBeInTheDocument();
+    expect(input).not.toHaveAttribute('aria-invalid');
+  });
+});

@@ -270,7 +270,7 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
               type="button"
               onClick={() => setWindowDates(option)}
               aria-pressed={windowDates === option}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`touch:min-h-11 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                 windowDates === option ? 'bg-red-800 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
@@ -289,7 +289,7 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
               type="button"
               onClick={() => setView('grid')}
               aria-pressed={effectiveView === 'grid'}
-              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`touch:min-h-11 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                 effectiveView === 'grid'
                   ? 'bg-red-800 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -301,7 +301,7 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
               type="button"
               onClick={() => setView('log')}
               aria-pressed={effectiveView === 'log'}
-              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`touch:min-h-11 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                 effectiveView === 'log'
                   ? 'bg-red-800 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -481,7 +481,15 @@ const CheckGrid: React.FC<{
     <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
       {/* Opens on the newest day: what happened this morning is the usual
           question, and it is the column a phone would otherwise hide. */}
-      <ScrollCueRow startAtEnd className="rounded-lg">
+      {/* Seven to thirty day columns cannot reflow to a phone; the strip scrolls
+          on purpose, and its cells are buttons, so the keyboard reaches its far end. */}
+      <ScrollCueRow
+        startAtEnd
+        className="rounded-lg"
+        data-mobile-scroll-region
+        role="group"
+        aria-label="Check outcomes by day"
+      >
         <table className="w-full border-collapse text-sm">
           <caption className="sr-only">Check outcomes by apparatus over the last {data.dates.length} duty days</caption>
           <thead>
@@ -516,7 +524,7 @@ const CheckGrid: React.FC<{
                 <th scope="row" className={`${PINNED_CELL} py-1 pr-3 pl-3 text-left whitespace-nowrap`}>
                   <Link
                     to={`/inventory/checklists/apparatus/${row.apparatusId}`}
-                    className="text-theme-text-primary font-mono text-xs font-bold hover:text-blue-600"
+                    className="text-theme-text-primary touch-target-phone font-mono text-xs font-bold hover:text-blue-600"
                   >
                     {row.unitLabel}
                   </Link>
@@ -525,7 +533,7 @@ const CheckGrid: React.FC<{
                   <td key={cell.date} className="px-0.5 py-1">
                     {cell.checks.length === 0 ? (
                       <span
-                        className="bg-theme-surface-border/40 touch:h-8 touch:w-9 mx-auto block h-5 w-3.5 rounded-[3px]"
+                        className="bg-theme-surface-border/40 touch:h-8 touch:w-11 mx-auto block h-5 w-3.5 rounded-[3px]"
                         title={`${formatCalendarDate(cell.date, {
                           month: 'short',
                           day: 'numeric',
@@ -540,7 +548,7 @@ const CheckGrid: React.FC<{
                         onClick={() => onOpenDay(row, cell)}
                         aria-label={cellLabel(row, cell)}
                         title={cellLabel(row, cell)}
-                        className="touch:min-h-11 touch:w-9 mx-auto flex items-center justify-center gap-[2px] rounded-md focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none"
+                        className="touch:min-h-11 touch:w-11 mx-auto flex items-center justify-center gap-[2px] rounded-md focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none"
                       >
                         {cell.checks.map((check, index) => (
                           <span

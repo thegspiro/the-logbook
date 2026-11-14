@@ -88,8 +88,10 @@ async def get_legal_text(
         legal = settings.get("legal")
         if not isinstance(legal, dict):
             legal = {}
-        # Plain text only — rendered as text paragraphs client-side, never
-        # as HTML, so org admins cannot inject markup into a public page.
+        # Text, never HTML. The page applies a small subset — headings and
+        # lists (frontend pages/legal/legalMarkup.ts) — and renders every
+        # string as a text node, so org admins cannot inject markup into a
+        # public page. Returned verbatim; nothing here escapes or strips it.
         privacy_policy = _clean_text(legal.get("privacy_policy"))
         terms_of_service = _clean_text(legal.get("terms_of_service"))
         # Revision date shown above custom text, per document — privacy and

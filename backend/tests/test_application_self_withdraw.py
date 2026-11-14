@@ -285,7 +285,7 @@ class TestNotifyCoordinatorsOfWithdrawal:
 
         [log] = _logged_activity(svc)
         assert log.action == "withdrawal_notice_sent"
-        assert log.details == {"recipient_count": 2, "delivered": 1}
+        assert log.details == {"recipient_count": 2, "in_app_count": 2, "delivered": 1}
         svc.db.commit.assert_awaited_once()
 
     async def test_no_reason_is_stated_as_such(self):

@@ -31,6 +31,13 @@ describe('requirementTarget', () => {
   it('counts shifts and calls', () => {
     expect(requirementTarget(record({ requirement_type: 'shifts', required_shifts: 3 }, 2))).toBe('2 / 3 shifts');
     expect(requirementTarget(record({ requirement_type: 'calls', required_calls: 10 }, 4))).toBe('4 / 10 calls');
+    expect(requirementTarget(record({ requirement_type: 'evaluated_shifts', required_shifts: 10 }, 3))).toBe(
+      '3 / 10 evaluated shifts'
+    );
+    expect(requirementTarget(record({ requirement_type: 'transports', required_transports: 20 }, 4))).toBe(
+      '4 / 20 transports'
+    );
+    expect(requirementTarget(record({ requirement_type: 'refusals', required_refusals: 5 }, 2))).toBe('2 / 5 refusals');
   });
 
   it('counts completed courses over the required list length', () => {

@@ -6,15 +6,33 @@ Accessible by admins via the membership module admin area.
 """
 
 import copy
+import difflib
+import hashlib
 import uuid
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Cookie,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from loguru import logger
+from sqlalchemy import select
 from sqlalchemy.exc import DataError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission, user_has_permission
+from app.api.dependencies import (
+    ensure_stepup,
+    request_access_token,
+    require_permission,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -38,6 +56,8 @@ from app.schemas.email_template import (
     EmailTemplateResponse,
     EmailTemplateUpdate,
     MemberEmailKindResponse,
+    MemberEmailOptOutRow,
+    MemberEmailOptOutsResponse,
     MemberEmailPolicyResponse,
     MemberEmailPolicyUpdate,
     MemberTextAlertResponse,
@@ -52,7 +72,10 @@ from app.services.email_policy import (
     OPTIONAL_KINDS,
     ORG_REQUIRED_KEY,
     ORG_SETTINGS_KEY,
+    EmailKind,
     department_required_kinds,
+    member_opt_outs,
+    not_emailed,
 )
 from app.services.email_template_service import (
     GLOBAL_VARIABLES,
@@ -238,6 +261,104 @@ async def update_member_email_policy(
     return await _member_email_policy_response(db, current_user)
 
 
+@router.get("/member-email-opt-outs", response_model=MemberEmailOptOutsResponse)
+async def list_member_email_opt_outs(
+    kind: Optional[str] = Query(
+        None,
+        description=(
+            "An optional email kind: list only the members who are not emailed "
+            "it. Omit to list every member who has turned anything off."
+        ),
+    ),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "settings.manage", "organization.update_settings", "notifications.manage"
+        )
+    ),
+):
+    """
+    Which current members have opted out of which optional emails.
+
+    Read-only: an opt-out is the member's own choice, set from their settings
+    page. A department that needs everyone to receive a kind makes it
+    required on the Member Emails & Texts page instead, which this view sits
+    beside. Owner decision 2026-11-01.
+
+    Requires: settings.manage, organization.update_settings or
+    notifications.manage permission — the same as the policy page.
+    """
+    filter_kind: Optional[EmailKind] = None
+    if kind is not None:
+        optional = {k.value: k for k in OPTIONAL_KINDS}
+        filter_kind = optional.get(kind)
+        if filter_kind is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Not an optional email: members cannot turn it off",
+            )
+
+    org_id = str(current_user.organization_id)
+    org = await db.get(Organization, org_id)
+    department_required = department_required_kinds(org)
+
+    # The whole roster is read and filtered here, not in SQL: whether a member
+    # misses a kind depends on the master switch, the per-kind choice and a
+    # legacy switch inside a JSON column, and member_opt_outs is the one place
+    # that reads them the way the senders do. One department is a few hundred
+    # rows (owner policy 2026-11-01: one department per installation).
+    rows = (
+        await db.execute(
+            select(
+                User.id,
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.membership_number,
+                User.notification_preferences,
+            )
+            .where(User.organization_id == org_id, User.is_active)
+            .order_by(User.last_name, User.first_name, User.id)
+        )
+    ).all()
+
+    not_emailed_counts = {k.value: 0 for k in EMAIL_POLICIES if k in OPTIONAL_KINDS}
+    matching: list[MemberEmailOptOutRow] = []
+    for row in rows:
+        opt_outs = member_opt_outs(row.notification_preferences)
+        for counted in OPTIONAL_KINDS:
+            if not_emailed(opt_outs, counted, department_required):
+                not_emailed_counts[counted.value] += 1
+        if filter_kind is not None:
+            if not not_emailed(opt_outs, filter_kind, department_required):
+                continue
+        elif not opt_outs.has_any:
+            continue
+        matching.append(
+            MemberEmailOptOutRow(
+                user_id=str(row.id),
+                name=format_display_name(
+                    row.first_name, row.last_name, row.preferred_name
+                ),
+                membership_number=row.membership_number,
+                email_notifications_off=opt_outs.email_notifications_off,
+                turned_off=[k.value for k in opt_outs.turned_off],
+            )
+        )
+
+    return MemberEmailOptOutsResponse(
+        members=matching[skip : skip + limit],
+        total=len(matching),
+        skip=skip,
+        limit=limit,
+        members_considered=len(rows),
+        not_emailed=not_emailed_counts,
+        department_required=sorted(k.value for k in department_required),
+    )
+
+
 @router.get("/footers", response_model=EmailFooterLibraryResponse)
 async def get_email_footers(
     db: AsyncSession = Depends(get_db),
@@ -263,7 +384,6 @@ async def update_email_footers(
     per-footer save could leave ``default_key`` naming a footer the same
     request deleted.
     """
-    from sqlalchemy import select
 
     from app.models.user import Organization
 
@@ -384,7 +504,6 @@ async def list_scheduled_emails(
     ),
 ):
     """List scheduled emails for the current organization."""
-    from sqlalchemy import select
 
     q = (
         select(ScheduledEmail)
@@ -414,7 +533,6 @@ async def get_email_template(
     ),
 ):
     """Get a specific email template by ID"""
-    from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
     result = await db.execute(
@@ -433,10 +551,122 @@ async def get_email_template(
     return await _with_list_metadata(EmailTemplateService(db), template)
 
 
+# Fields copied into the audit row's diff. The bodies are diffed rather than
+# stored whole, and also fingerprinted, so a change can be proven even when the
+# diff is cut off at _AUDIT_DIFF_LIMIT.
+_AUDITED_TEMPLATE_FIELDS = (
+    "name",
+    "subject",
+    "html_body",
+    "text_body",
+    "description",
+    "is_active",
+    "allow_attachments",
+    "default_cc",
+    "default_bcc",
+    "default_cc_position_ids",
+    "footer_key",
+    "header_accent",
+    "status_chip",
+    "layout",
+)
+_TEMPLATE_BODY_FIELDS = frozenset({"html_body", "text_body"})
+_AUDIT_DIFF_LIMIT = 4000
+
+PROTECTED_TEMPLATE_EDIT_REFUSED = (
+    "This email carries a password, a reset or ballot token, or an applicant's "
+    "private link, so only a full administrator may change it."
+)
+
+
+def _template_snapshot(template: EmailTemplate) -> dict:
+    return {
+        f: copy.deepcopy(getattr(template, f, None)) for f in _AUDITED_TEMPLATE_FIELDS
+    }
+
+
+def _fingerprint(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _template_changes(before: dict, after: dict) -> dict:
+    """What changed, in a form an audit reviewer can read."""
+    changes: dict = {}
+    for field in _AUDITED_TEMPLATE_FIELDS:
+        old, new = before.get(field), after.get(field)
+        if old == new:
+            continue
+        if field in _TEMPLATE_BODY_FIELDS:
+            diff = "".join(
+                difflib.unified_diff(
+                    (old or "").splitlines(keepends=True),
+                    (new or "").splitlines(keepends=True),
+                    lineterm="\n",
+                )
+            )
+            changes[field] = {
+                "diff": diff[:_AUDIT_DIFF_LIMIT],
+                "diff_truncated": len(diff) > _AUDIT_DIFF_LIMIT,
+                "sha256_before": _fingerprint(old),
+                "sha256_after": _fingerprint(new),
+            }
+        else:
+            changes[field] = {"from": old, "to": new}
+    return changes
+
+
+async def _audit_template_change(
+    db: AsyncSession,
+    *,
+    event_type: str,
+    template: EmailTemplate,
+    before: dict,
+    protected: bool,
+    current_user: User,
+) -> None:
+    await log_audit_event(
+        db=db,
+        event_type=event_type,
+        event_category="settings",
+        # A credential template is where a rewrite steals passwords; its
+        # changes are raised so a reviewer filtering for warnings sees them.
+        severity="warning" if protected else "info",
+        event_data={
+            "template_id": str(template.id),
+            "template_type": _type_value(template.template_type),
+            "credential_template": protected,
+            "changes": _template_changes(before, _template_snapshot(template)),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
+async def _load_template_for_write(
+    db: AsyncSession, template_id: str, organization_id: str
+) -> EmailTemplate:
+    result = await db.execute(
+        select(EmailTemplate).where(
+            EmailTemplate.id == template_id,
+            EmailTemplate.organization_id == organization_id,
+        )
+    )
+    template = result.scalar_one_or_none()
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Email template not found"
+        )
+    return template
+
+
 @router.put("/{template_id}", response_model=EmailTemplateResponse)
 async def update_email_template(
     template_id: str,
     update_data: EmailTemplateUpdate,
+    request: Request,
+    access_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("settings.manage", "organization.update_settings")
@@ -446,7 +676,26 @@ async def update_email_template(
     Update an email template's content, subject, CSS, or settings.
 
     Admins use this to customize the welcome email message, styling, etc.
+    A template that carries a credential or private link (``always_sent``)
+    can be changed only by a holder of ``*``, after step-up re-verification.
     """
+    existing = await _load_template_for_write(
+        db, template_id, current_user.organization_id
+    )
+    protected = is_always_sent(existing.template_type)
+    if protected:
+        # settings.manage is held by the Secretary. Rewriting the welcome or
+        # reset email reaches every new member's temporary password and every
+        # reset token, which is a takeover path settings.manage was never
+        # meant to carry.
+        if not user_has_permission(current_user, "*"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=PROTECTED_TEMPLATE_EDIT_REFUSED,
+            )
+        await ensure_stepup(db, request_access_token(request, access_token))
+    before = _template_snapshot(existing)
+
     service = EmailTemplateService(db)
     # exclude_unset, not exclude_none: a null here is the client saying
     # "clear this field", and dropping it strips the clear a layer before
@@ -468,6 +717,14 @@ async def update_email_template(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Email template not found"
         )
+    await _audit_template_change(
+        db,
+        event_type="email_template_updated",
+        template=template,
+        before=before,
+        protected=protected,
+        current_user=current_user,
+    )
     await db.commit()
 
     logger.info(
@@ -521,6 +778,10 @@ async def reset_email_template(
     Restores the subject, HTML body, text body, and CSS styles to the
     system defaults. Custom CC/BCC settings are preserved.
     """
+    existing = await _load_template_for_write(
+        db, template_id, current_user.organization_id
+    )
+    before = _template_snapshot(existing)
     service = EmailTemplateService(db)
     template = await service.reset_to_default(
         template_id=template_id,
@@ -532,6 +793,17 @@ async def reset_email_template(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Email template not found or has no built-in default",
         )
+    # Restoring the shipped default is the safe direction, so it keeps the
+    # settings.manage gate; it is audited so a protected template's history
+    # does not have a gap where a reset happened.
+    await _audit_template_change(
+        db,
+        event_type="email_template_reset",
+        template=template,
+        before=before,
+        protected=is_always_sent(template.template_type),
+        current_user=current_user,
+    )
     await db.commit()
 
     logger.info(
@@ -564,7 +836,6 @@ async def preview_email_template(
     - If ``member_id`` is set, the selected member's name/email replaces
       static sample values in the preview context.
     """
-    from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
     from app.models.user import Organization
@@ -788,7 +1059,6 @@ async def upload_attachment(
     Files are malware-scanned and stored on the uploads volume under the
     organization's own directory. Max file size: 10MB.
     """
-    from sqlalchemy import select
 
     # Verify template exists and belongs to this org
     result = await db.execute(
@@ -862,7 +1132,6 @@ async def delete_attachment(
     ),
 ):
     """Delete an attachment from an email template"""
-    from sqlalchemy import select
 
     result = await db.execute(
         select(EmailAttachment)
@@ -1030,7 +1299,6 @@ async def update_scheduled_email(
     ),
 ):
     """Update or reschedule a pending scheduled email."""
-    from sqlalchemy import select
 
     result = await db.execute(
         select(ScheduledEmail).where(
@@ -1130,7 +1398,6 @@ async def cancel_scheduled_email(
     The sender only sends a row it finds PENDING under the same row lock taken
     here, so a cancelled one is never sent.
     """
-    from sqlalchemy import select
 
     result = await db.execute(
         select(ScheduledEmail).where(

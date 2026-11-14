@@ -17,6 +17,7 @@ import toast from 'react-hot-toast';
 import { medicalSuppliesService } from '@/services/medicalSuppliesService';
 import type { InventoryCategory, InventoryItem } from '@/services/eventServices';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
 
 interface MedicalCreatePanelProps {
   name: string;
@@ -36,6 +37,10 @@ const MedicalCreatePanel: React.FC<MedicalCreatePanelProps> = ({
   const [loadFailed, setLoadFailed] = useState(false);
   const [categoryId, setCategoryId] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  // A refusal the category cannot answer for (a 409 naming the gear item
+  // with this name) stays in the panel rather than in a toast that vanished.
+  const [panelError, setPanelError] = useState<string | null>(null);
   const selectId = useId();
 
   useEffect(() => {
@@ -57,7 +62,14 @@ const MedicalCreatePanel: React.FC<MedicalCreatePanelProps> = ({
   }, []);
 
   const submit = async () => {
-    if (!categoryId || submitting) return;
+    if (submitting) return;
+    // Named on the field rather than by a greyed-out button (forms review F-3).
+    if (!categoryId) {
+      setCategoryError('Choose the medical category this supply belongs to.');
+      document.getElementById(selectId)?.focus();
+      return;
+    }
+    setPanelError(null);
     setSubmitting(true);
     try {
       const { item, created } = await medicalSuppliesService.createItemIfAbsent({
@@ -77,7 +89,7 @@ const MedicalCreatePanel: React.FC<MedicalCreatePanelProps> = ({
     } catch (err: unknown) {
       // The panel stays open so the officer can pick another category or
       // cancel; a 409 here names the clash with a gear item.
-      toast.error(getErrorMessage(err, 'Failed to create the medical supply'));
+      setPanelError(getErrorMessage(err, 'Failed to create the medical supply'));
     } finally {
       setSubmitting(false);
     }
@@ -105,36 +117,46 @@ const MedicalCreatePanel: React.FC<MedicalCreatePanelProps> = ({
         </p>
       )}
 
+      {panelError && (
+        <p role="alert" className={`text-xs ${FIELD_ERROR_CLASS}`}>
+          {panelError}
+        </p>
+      )}
+
       {categories !== null && categories.length > 0 && (
-        <div>
-          <label htmlFor={selectId} className="form-label">
-            Medical category
-          </label>
-          <select
-            id={selectId}
-            className="form-input"
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            disabled={submitting}
-          >
-            <option value="">Choose a category…</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <FormField id={selectId} label="Medical category" required error={categoryError}>
+          {(field) => (
+            <select
+              {...field}
+              className="form-input"
+              value={categoryId}
+              onChange={(e) => {
+                setCategoryId(e.target.value);
+                setCategoryError(null);
+              }}
+              disabled={submitting}
+            >
+              <option value="">Choose a category…</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </FormField>
       )}
 
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancel} disabled={submitting} className="btn-secondary text-xs">
+        <button type="button" onClick={onCancel} disabled={submitting} className="btn-secondary touch:min-h-11 text-xs">
           Cancel
         </button>
+        {/* Greyed out only when there is no category to choose at all; with
+            one to choose, pressing it names what is missing instead. */}
         <button
           type="button"
           onClick={() => void submit()}
-          disabled={!categoryId || submitting}
+          disabled={!categories?.length || submitting}
           className="btn-primary flex items-center gap-1 text-xs"
         >
           {submitting && <Loader2 className="h-3 w-3 animate-spin" />}

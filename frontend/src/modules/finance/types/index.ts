@@ -173,56 +173,62 @@ export interface ApprovalRoutePreview {
 // Status Badge Color Mappings (Tailwind classes)
 // =============================================================================
 
+// -900 / -300 text, not the -800 / -400 that badges elsewhere use: a badge is
+// 12px text, which needs 7:1 to clear AAA. green-800 on green-100 is 6.49:1,
+// and a -400 tint over the high-contrast theme's black ground 6.2-6.9:1. The
+// mobile accessibility sweep holds every finance screen's AAA budget at zero.
+// Cancelled keeps its muted grey: gray-700 on gray-200 still clears 7:1.
+
 export const PURCHASE_REQUEST_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
-  submitted: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
-  pending_approval: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
-  approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  ordered: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
-  received: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400',
-  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
-  reimbursed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
-  cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
+  draft: 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300',
+  submitted: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  pending_approval: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
+  approved: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  denied: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
+  ordered: 'bg-indigo-100 text-indigo-900 dark:bg-indigo-500/20 dark:text-indigo-300',
+  received: 'bg-teal-100 text-teal-900 dark:bg-teal-500/20 dark:text-teal-300',
+  paid: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300',
+  reimbursed: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300',
+  cancelled: 'bg-gray-200 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
 };
 
 export const EXPENSE_REPORT_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
-  submitted: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
-  pending_approval: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
-  approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
-  cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
+  draft: 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300',
+  submitted: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  pending_approval: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
+  approved: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  denied: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
+  paid: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300',
+  cancelled: 'bg-gray-200 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
 };
 
 export const CHECK_REQUEST_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
-  submitted: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
-  pending_approval: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
-  approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  issued: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
-  voided: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
-  cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
+  draft: 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300',
+  submitted: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  pending_approval: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
+  approved: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  denied: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
+  issued: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300',
+  voided: 'bg-orange-100 text-orange-900 dark:bg-orange-500/20 dark:text-orange-300',
+  cancelled: 'bg-gray-200 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
 };
 
 export const DUES_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
-  paid: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  partial: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
-  overdue: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  waived: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
-  exempt: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400',
+  pending: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
+  paid: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  partial: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  overdue: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
+  waived: 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300',
+  exempt: 'bg-purple-100 text-purple-900 dark:bg-purple-500/20 dark:text-purple-300',
 };
 
 export const APPROVAL_STEP_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
-  approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  skipped: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
-  auto_approved: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400',
-  sent: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  pending: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
+  approved: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  denied: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
+  skipped: 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300',
+  auto_approved: 'bg-teal-100 text-teal-900 dark:bg-teal-500/20 dark:text-teal-300',
+  sent: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
 };
 
 /** Exact base-10 monetary value serialized by the API. */
@@ -295,15 +301,17 @@ export interface FiscalYearLockPayload {
   notes: string;
 }
 
-/** A request still in flight that stops a closing year from locking. */
+/** A request still in flight at a year's close. */
 export interface FiscalYearOpenItem {
   /** For `budget_amendment`, `entityId` is the budget line, not the amendment. */
-  kind: 'purchase_request' | 'expense_report' | 'check_request' | 'budget_amendment';
+  kind: 'purchase_request' | 'expense_report' | 'check_request' | 'budget_amendment' | 'cash_advance';
   entityId: string;
   number: string;
   description: string;
   status: string;
   amount?: number | string | null;
+  /** False for a cash advance still outstanding: listed, but it does not stop the lock. */
+  blocksLock?: boolean | undefined;
 }
 
 /**
@@ -495,8 +503,14 @@ export interface BudgetAmendment {
   createdBy?: string | null;
   enteredByName?: string | null;
   createdAt: string;
-  /** On a reversal: the amendment it cancels. */
+  /** On a reversal: the amendment it cancels. Cleared when the reversal is rejected. */
   reversesAmendmentId?: string | null;
+  /**
+   * On a reversal: the amendment it was entered against, kept after a
+   * rejection clears `reversesAmendmentId` (owner decision, 2026-11-01).
+   * Display only.
+   */
+  reversesAmendmentRef?: string | null;
   isReversal?: boolean;
   /** On a reversed amendment: the reversal, when it was entered and by whom. */
   reversedByAmendmentId?: string | null;
@@ -504,6 +518,8 @@ export interface BudgetAmendment {
   reversedByName?: string | null;
   /** On a reversed amendment: whether its reversal is pending or confirmed. */
   reversalStatus?: BudgetAmendmentStatus | null;
+  /** On a reversed amendment: how much the reversal takes back — the whole, or a part. */
+  reversedAmount?: MonetaryAmount | null;
   status?: BudgetAmendmentStatus;
   /** Who confirmed or rejected it, when, and (on a rejection) why. */
   decidedBy?: string | null;
@@ -526,13 +542,31 @@ export interface BudgetAmendmentCreatePayload {
 }
 
 /**
- * `POST /finance/budgets/:id/amendments/:amendmentId/reverse`. Every field is
- * required; the amount is the whole amendment's, taken by the backend.
+ * `POST /finance/budgets/:id/amendments/:amendmentId/reverse`. `amount` is how
+ * much to take back, up to the whole amendment (owner decision, 2026-11-01);
+ * left out, the backend reverses the whole of it.
  */
 export interface BudgetAmendmentReversePayload {
   reason: string;
   approvedBy: string;
   approvedOn: string;
+  amount?: MonetaryAmount;
+}
+
+/**
+ * `GET /finance/budget-amendments/pending`: an amendment or reversal awaiting
+ * a second officer, with the line and year it is on. On a reversal,
+ * `reversedAmendmentAmount` and `reversedAmendmentApprovedOn` describe the
+ * amendment it reverses.
+ */
+export interface PendingBudgetAmendment extends BudgetAmendment {
+  categoryName?: string | null;
+  stationName?: string | null;
+  fiscalYearId: string;
+  fiscalYearName: string;
+  yearLocked: boolean;
+  reversedAmendmentAmount?: MonetaryAmount | null;
+  reversedAmendmentApprovedOn?: string | null;
 }
 
 /** The new amendment (or reversal) and the line as it now stands. */
@@ -678,10 +712,12 @@ export interface BudgetRequest {
   isProposedLine: boolean;
   ownerPositionId?: string | null;
   ownerPositionName?: string | null;
-  requestedAmount: MonetaryAmount;
+  /** Null only on a draft not filled in yet (owner decision, 2026-11-11). */
+  requestedAmount: MonetaryAmount | null;
   approvedAmount?: MonetaryAmount | null;
   status: BudgetRequestStatus;
-  justification: string;
+  /** Null only on a draft not filled in yet; submitting needs both. */
+  justification: string | null;
   decisionNote?: string | null;
   submittedBy?: string | null;
   submittedByName?: string | null;
@@ -710,13 +746,15 @@ export interface BudgetRequestCreatePayload {
   categoryId?: string | undefined;
   stationId?: string | undefined;
   ownerPositionId?: string | undefined;
-  requestedAmount: MonetaryAmount;
-  justification: string;
+  /** A draft may leave both out; submitting needs both. */
+  requestedAmount?: MonetaryAmount | undefined;
+  justification?: string | undefined;
 }
 
+/** An omitted key leaves the field alone; `null` clears it (a draft's alone). */
 export interface BudgetRequestUpdatePayload {
-  requestedAmount?: MonetaryAmount;
-  justification?: string;
+  requestedAmount?: MonetaryAmount | null;
+  justification?: string | null;
 }
 
 /** `adjust` needs `approvedAmount` and `decisionNote`; `decline` needs `decisionNote`. */
@@ -888,6 +926,35 @@ export interface PendingApproval {
   lateLineCount?: number;
   /** How far it would take its restricted funds past what they have left; null when it fits. */
   fundShortfall?: MonetaryAmount | null;
+  /** An "email" approver step's link, as the backend reads it; null for every other step. */
+  emailDelivery?: ApprovalEmailDelivery | null;
+  /** When the last send was attempted; null when none was recorded. */
+  emailStatusAt?: string | null;
+  /** Named back by a re-send, so a repeated one sends nothing. */
+  emailLinkVersion?: number;
+  /** The viewer may re-send the link (an approvals admin, on an email step). */
+  canResendEmail?: boolean;
+}
+
+/** The state of an emailed approval link (`PendingApproval.emailDelivery`). */
+export const ApprovalEmailDelivery = {
+  SENT: 'sent',
+  FAILED: 'failed',
+  EXPIRED: 'expired',
+  NOT_SENT: 'not_sent',
+  /** A live link emailed before send status was recorded. */
+  UNKNOWN: 'unknown',
+} as const;
+export type ApprovalEmailDelivery = (typeof ApprovalEmailDelivery)[keyof typeof ApprovalEmailDelivery];
+
+/** `POST /finance/approvals/{id}/resend-email`: the link's state afterwards, never the link. */
+export interface ApprovalEmailResendResult {
+  stepRecordId: string;
+  /** False when another re-send had already replaced the link. */
+  resent: boolean;
+  emailDelivery: ApprovalEmailDelivery | null;
+  emailStatusAt: string | null;
+  emailLinkVersion: number;
 }
 
 /** Why nobody can act on an approval step, from the approver-coverage report. */
@@ -896,8 +963,6 @@ export const ApproverCoverageProblem = {
   NOT_FOUND: 'not_found',
   NO_ACTIVE_MEMBERS: 'no_active_members',
   INVALID_EMAIL: 'invalid_email',
-  /** Someone fills the step, but none of them holds finance.approve. */
-  NO_APPROVE_PERMISSION: 'no_approve_permission',
 } as const;
 export type ApproverCoverageProblem = (typeof ApproverCoverageProblem)[keyof typeof ApproverCoverageProblem];
 
@@ -944,19 +1009,53 @@ export const SubstantiationMode = {
 export type SubstantiationMode = (typeof SubstantiationMode)[keyof typeof SubstantiationMode];
 
 /** `GET /finance/settings`: the finance rules the server applies. */
+export interface DualApprovalTypeThreshold {
+  entityType: ApprovalEntityType;
+  threshold: MonetaryAmount | null;
+  followsDefault: boolean;
+}
+
 export interface FinanceSettings {
   /**
    * Requests of this amount or more need two different approvers; null is off.
    * Changed through organization settings (`settings.manage`), not here.
    */
   dualApprovalThreshold: MonetaryAmount | null;
+  /**
+   * The threshold each request type actually uses: its own figure, or the one
+   * above when `followsDefault`. Null `threshold` is off for that type.
+   */
+  dualApprovalThresholds?: DualApprovalTypeThreshold[] | undefined;
+  /** Slug of the position one of the two approvers must hold; null is anyone. */
+  secondApproverPosition?: string | null | undefined;
+  /** That position's name; null when it no longer exists. */
+  secondApproverPositionName?: string | null | undefined;
   /** The accountable-plan deadline for expense reports. */
   substantiationMode: SubstantiationMode;
   /** Days allowed between incurring an expense and submitting it (1-60). */
   substantiationDays: number;
   /** A payment charged to a restricted fund for more than it has left. */
   fundOverspendMode: FundOverspendMode;
+  /** How a cash advance issued now has its return deadline worked out. */
+  advanceReturnMethod?: AdvanceReturnMethod | undefined;
+  /**
+   * Dollars per mile a mileage line's trip log is priced at; null until the
+   * department sets one, when a trip log cannot be recorded.
+   */
+  mileageRate?: MonetaryAmount | null | undefined;
 }
+
+/**
+ * The two IRS safe harbors for returning an advance (Treas. Reg.
+ * 1.62-2(g)(2)): 120 days from the check, or 120 days from the first
+ * quarterly statement after it. An advance keeps the method in force when its
+ * check was issued.
+ */
+export const AdvanceReturnMethod = {
+  FIXED_DATE: 'fixed_date',
+  PERIODIC_STATEMENT: 'periodic_statement',
+} as const;
+export type AdvanceReturnMethod = (typeof AdvanceReturnMethod)[keyof typeof AdvanceReturnMethod];
 
 export const FundOverspendMode = {
   OFF: 'off',
@@ -977,6 +1076,11 @@ export interface PurchaseRequest extends FunctionalClassFields, FundFields {
   vendor?: string | null;
   estimatedAmount: MonetaryAmount;
   actualAmount?: MonetaryAmount;
+  /**
+   * Once paid, what was paid less what was approved (negative when under);
+   * null until paid, or for a request paid before the amount was asked for.
+   */
+  paidDifference?: MonetaryAmount | null;
   status: PurchaseRequestStatus;
   priority: PurchaseRequestPriority;
   approvedBy?: string;
@@ -1028,7 +1132,9 @@ export interface ReimbursementCheckPayload {
 export interface ExpenseLineItem extends FunctionalClassFields, FundFields {
   id: string;
   expenseReportId: string;
-  budgetId?: string;
+  budgetId?: string | null;
+  /** The budget line's name as the request forms' picker shows it (detail responses only). */
+  budgetLabel?: string | null;
   description: string;
   amount: MonetaryAmount;
   dateIncurred: string;
@@ -1039,7 +1145,25 @@ export interface ExpenseLineItem extends FunctionalClassFields, FundFields {
   merchant?: string;
   /** Submitted after the department's substantiation deadline; decided at submission. */
   substantiatedLate?: boolean;
+  /**
+   * A mileage line's trip log. A line with one is priced by the server from
+   * its miles at `mileageRate`, dated by its first trip, and needs no receipt.
+   */
+  mileageTrips?: MileageTrip[] | null;
+  mileageRate?: MonetaryAmount | null;
+  totalMiles?: string | null;
   createdAt: string;
+}
+
+/** One trip on a mileage line's log. */
+export interface MileageTrip {
+  /** `YYYY-MM-DD`. */
+  tripDate: string;
+  fromLocation: string;
+  toLocation: string;
+  purpose: string;
+  /** Tenths of a mile, as a decimal string. */
+  miles: string;
 }
 
 /** An edit to a draft report's line: omit a field to leave it, null to clear an optional one. */
@@ -1050,6 +1174,9 @@ export interface ExpenseLineItemUpdatePayload {
   expenseType?: ExpenseType | undefined;
   merchant?: string | null | undefined;
   fundCampaignId?: string | null | undefined;
+  budgetId?: string | null | undefined;
+  /** The whole log, replacing the stored one; null removes it. */
+  mileageTrips?: MileageTrip[] | null | undefined;
 }
 
 export interface ExpenseReport {
@@ -1091,6 +1218,12 @@ export interface ExpenseReport {
   lateAcknowledgedAt?: string | null;
   /** Held until an approver acknowledges the late lines (detail responses only). */
   awaitingLateAcknowledgement?: boolean;
+  /**
+   * When approval committed the lines to their budget lines; null before
+   * approval, and for a report approved before 2026-11-06 or claiming back a
+   * purchase, which committed nothing of its own.
+   */
+  budgetCommittedAt?: string | null;
   /** How far its lines would take their restricted funds past what they have left, until approved (detail responses only). */
   fundShortfall?: MonetaryAmount | null;
   /** The purchase request this report claims back. */
@@ -1117,6 +1250,13 @@ export interface CheckRequest extends FunctionalClassFields, FundFields {
   budgetId?: string;
   /** Cash advanced to the requester ahead of an expense; charges no budget line or fund. */
   isAdvance?: boolean;
+  /**
+   * Create only: the member a finance officer raises the advance for. The
+   * member holds it (`requestedBy`); the officer is `raisedBy`.
+   */
+  advanceHolderId?: string | undefined;
+  /** The finance officer who raised this advance on the member's behalf. */
+  raisedBy?: string | null;
   payeeName: string;
   payeeAddress?: string;
   amount: MonetaryAmount;
@@ -1145,6 +1285,11 @@ export interface CheckRequest extends FunctionalClassFields, FundFields {
   expenseReportId?: string | null;
   expenseReportNumber?: string | null;
   notes?: string;
+  /** The uploaded receipt or invoice, opened through `receiptFileUrl`. */
+  receiptDocumentId?: string | null;
+  receiptFileUrl?: string | null;
+  /** Whether issuing the check waits on a receipt (not for an advance or a reimbursement check). */
+  receiptRequired?: boolean;
   createdAt: string;
   updatedAt: string;
   approvalSteps: ApprovalStepRecord[];
@@ -1160,7 +1305,13 @@ export interface DuesSchedule {
   gracePeriodDays: number;
   lateFeeAmount?: MonetaryAmount;
   fiscalYearId?: string;
-  appliesToMembershipTypes?: string[];
+  appliesToMembershipTypes?: string[] | null;
+  /**
+   * When the grace period, late fee, fiscal year and membership types began
+   * to apply. Null on a schedule saved before 2026-11-01: they are stored but
+   * not applied until it is next saved.
+   */
+  termsEffectiveAt?: string | null;
   isActive: boolean;
   notes?: string;
   /** QuickBooks accounts for its payments; null takes the department's default. */
@@ -1201,6 +1352,11 @@ export interface DuesScheduleCreatePayload {
   frequency: DuesFrequency;
   /** UTC instant of the due date. */
   dueDate: string;
+  gracePeriodDays?: number | undefined;
+  lateFeeAmount?: string | undefined;
+  fiscalYearId?: string | undefined;
+  /** Omitted bills every member. */
+  appliesToMembershipTypes?: string[] | undefined;
   notes?: string | undefined;
   qbIncomeAccount?: string | undefined;
   qbDepositAccount?: string | undefined;
@@ -1212,6 +1368,11 @@ export interface DuesScheduleUpdatePayload {
   amount?: string;
   frequency?: DuesFrequency;
   dueDate?: string;
+  gracePeriodDays?: number;
+  lateFeeAmount?: string | null;
+  fiscalYearId?: string | null;
+  /** `null` (or an empty list) bills every member. */
+  appliesToMembershipTypes?: string[] | null;
   isActive?: boolean;
   notes?: string | null;
   qbIncomeAccount?: string | null;
@@ -1239,8 +1400,38 @@ export interface DuesPayment {
   notes?: string | null;
   receivedAt: string;
   recordedBy?: string | null;
+  /** Who recorded it, by name; null when their account is gone. */
+  recordedByName?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** One payment on the member's own dues (`GET /finance/my-dues`). */
+export interface MyDuesPayment {
+  id: string;
+  amount: MonetaryAmount;
+  paymentMethod?: string | null;
+  receivedAt: string;
+}
+
+/** One of the signed-in member's own dues records (`GET /finance/my-dues`). */
+export interface MyDues {
+  id: string;
+  scheduleName: string;
+  /** Includes any late fee already charged. */
+  amountDue: MonetaryAmount;
+  amountPaid: MonetaryAmount;
+  /** Still owed; zero for paid, waived and exempt dues. */
+  balance: MonetaryAmount;
+  status: DuesStatus;
+  dueDate: string;
+  paidDate?: string | null;
+  lateFeeApplied?: MonetaryAmount | null;
+  /** A late fee not yet charged, and the instant after which it will be. */
+  lateFeeAmount?: MonetaryAmount | null;
+  lateFeeAfter?: string | null;
+  waiveReason?: string | null;
+  payments: MyDuesPayment[];
 }
 
 export interface DuesSummary {
@@ -1437,8 +1628,16 @@ export interface AdvanceSummary {
   purpose?: string | null;
   checkNumber?: string | null;
   issuedAt?: string | null;
-  /** 120 days after the check. */
+  /**
+   * The last moment to account for it: 120 days after the check, or through
+   * the 120th day after the first quarterly statement (`returnMethod`).
+   */
   dueAt?: string | null;
+  returnMethod?: AdvanceReturnMethod | undefined;
+  /** The periodic method's first statement (a calendar date). */
+  firstStatementDate?: string | null;
+  /** The finance officer who raised it on the member's behalf. */
+  raisedBy?: string | null;
   /** Covered by the member's submitted expense reports. */
   accounted: MonetaryAmount;
   returned: MonetaryAmount;
@@ -1476,9 +1675,30 @@ export interface AdvanceReturn {
   createdAt: string;
 }
 
+/** One quarterly statement under the periodic method. */
+export interface AdvanceStatement {
+  /** Calendar dates (YYYY-MM-DD) on the department's calendar. */
+  statementDate: string;
+  dueDate: string;
+  /** What it listed and when it was emailed; null until it has been. */
+  outstanding?: MonetaryAmount | null;
+  emailedAt?: string | null;
+  upcoming: boolean;
+}
+
 export interface AdvanceDetail extends AdvanceSummary {
+  raisedByName?: string | null;
+  statements?: AdvanceStatement[] | undefined;
   reports: AdvanceReportLink[];
   returns: AdvanceReturn[];
+}
+
+/** `GET /finance/advances/holders`: a member an advance can be raised for. */
+export interface AdvanceHolder {
+  id: string;
+  name: string;
+  /** The name of record the check is made out to. */
+  legalName: string;
 }
 
 /** `POST /finance/advances/{id}/returns`. */
@@ -1650,6 +1870,70 @@ export interface LateSubstantiationReport {
   total: MonetaryAmount;
 }
 
+/** One member's reimbursements in a period, from the payments register. */
+export interface ExpenseSummaryMemberRow {
+  memberId: string;
+  memberName: string;
+  reportCount: number;
+  /** Reimbursement checks to the member voided in the period. */
+  voidedChecks: number;
+  amount: MonetaryAmount;
+}
+
+export interface ExpenseSummaryByMemberReport {
+  start: string;
+  end: string;
+  rows: ExpenseSummaryMemberRow[];
+  total: MonetaryAmount;
+}
+
+/** A member with dues overdue today, by the dues screen's own rule. */
+export interface DuesDelinquencyRow {
+  memberId: string;
+  memberName: string;
+  overdueRecords: number;
+  /** Amount due (late fees included) less what was paid. */
+  amountOverdue: MonetaryAmount;
+  lateFees: MonetaryAmount;
+  /** `YYYY-MM-DD`, when the oldest overdue record fell due. */
+  oldestDue: string;
+  daysOverdue: number;
+}
+
+export interface DuesDelinquencyReport {
+  start: string;
+  end: string;
+  /** `YYYY-MM-DD`: delinquency is as of the day the report was run. */
+  asOf: string;
+  expected: MonetaryAmount;
+  collected: MonetaryAmount;
+  waived: MonetaryAmount;
+  outstanding: MonetaryAmount;
+  membersOverdue: number;
+  rows: DuesDelinquencyRow[];
+  totalOverdue: MonetaryAmount;
+}
+
+export interface VendorPurchasesRow {
+  /** Null: requests with no vendor named. */
+  vendor?: string | null;
+  orders: number;
+  /** Approved, ordered and received, at their estimate. */
+  open: MonetaryAmount;
+  /** Paid (or reimbursed to the member who bought it), at what was paid. */
+  paid: MonetaryAmount;
+  total: MonetaryAmount;
+}
+
+export interface PurchasesByVendorReport {
+  fiscalYearId: string;
+  fiscalYearName: string;
+  rows: VendorPurchasesRow[];
+  totalOpen: MonetaryAmount;
+  totalPaid: MonetaryAmount;
+  total: MonetaryAmount;
+}
+
 /** The restricted fund a payment is charged to (a fundraising campaign marked restricted). */
 export interface FundFields {
   fundCampaignId?: string | null;
@@ -1716,4 +2000,103 @@ export interface FunctionalExpensesReport {
   end: string;
   classes: FunctionalExpenseClass[];
   total: MonetaryAmount;
+}
+
+/**
+ * `GET`/`PUT /finance/settings/budget-request-reminders`: the days before a
+ * draft year's request deadline that line owners who still owe a request are
+ * reminded on, and whether a bell entry goes with each email. 7 and 1, no
+ * bell entries, until the department chooses (`isDefault`).
+ */
+export interface BudgetRequestReminderSettings {
+  /** Most distant first; empty when the department turned the reminder off. */
+  offsetsDays: number[];
+  bellNotices: boolean;
+  isDefault: boolean;
+}
+
+// ============================================
+// QuickBooks Online connection
+// ============================================
+
+export const QuickBooksConnectionStatus = {
+  DISCONNECTED: 'disconnected',
+  CONNECTED: 'connected',
+  RECONNECT_REQUIRED: 'reconnect_required',
+} as const;
+export type QuickBooksConnectionStatus = (typeof QuickBooksConnectionStatus)[keyof typeof QuickBooksConnectionStatus];
+
+export const QuickBooksPostingStatus = {
+  QUEUED: 'queued',
+  RETRYING: 'retrying',
+  POSTED: 'posted',
+  FAILED: 'failed',
+  SUPERSEDED: 'superseded',
+} as const;
+export type QuickBooksPostingStatus = (typeof QuickBooksPostingStatus)[keyof typeof QuickBooksPostingStatus];
+
+/** How each posting status reads to a Treasurer. */
+export const QUICKBOOKS_POSTING_STATUS_LABELS: Record<QuickBooksPostingStatus, string> = {
+  [QuickBooksPostingStatus.QUEUED]: 'Waiting to post',
+  [QuickBooksPostingStatus.RETRYING]: 'Retrying',
+  [QuickBooksPostingStatus.POSTED]: 'Accepted by QuickBooks',
+  [QuickBooksPostingStatus.FAILED]: 'Refused by QuickBooks',
+  [QuickBooksPostingStatus.SUPERSEDED]: 'Sent in a CSV file',
+};
+
+/** The payments a connection posts, as `quickbooks_postings.payment_type`. */
+export const QuickBooksPaymentType = {
+  PURCHASE_REQUEST: 'purchase_request',
+  CHECK_REQUEST: 'check_request',
+  EXPENSE_REPORT: 'expense_report',
+} as const;
+export type QuickBooksPaymentType = (typeof QuickBooksPaymentType)[keyof typeof QuickBooksPaymentType];
+
+export interface QuickBooksPostingCounts {
+  queued: number;
+  retrying: number;
+  posted: number;
+  failed: number;
+  superseded: number;
+}
+
+/** `GET /finance/quickbooks/connection`. */
+export interface QuickBooksConnection {
+  /** False while the server has no Intuit app (QBO_CLIENT_ID etc. blank). */
+  configured: boolean;
+  environment?: 'sandbox' | 'production' | null;
+  status: QuickBooksConnectionStatus;
+  connectedEnvironment?: string | null;
+  environmentMismatch: boolean;
+  realmId?: string | null;
+  connectedAt?: string | null;
+  connectedByName?: string | null;
+  postFrom?: string | null;
+  lastSyncAt?: string | null;
+  lastError?: string | null;
+  counts: QuickBooksPostingCounts;
+}
+
+export interface QuickBooksPosting {
+  id: string;
+  paymentType: QuickBooksPaymentType;
+  paymentId: string;
+  documentNumber: string;
+  status: QuickBooksPostingStatus;
+  vendorName?: string | null;
+  amount?: number | string | null;
+  qbPurchaseId?: string | null;
+  attempts: number;
+  nextAttemptAt?: string | null;
+  lastError?: string | null;
+  postedAt?: string | null;
+  createdAt: string;
+}
+
+export interface QuickBooksSyncResult {
+  queued: number;
+  posted: number;
+  failed: number;
+  retrying: number;
+  skipped?: string | null;
 }

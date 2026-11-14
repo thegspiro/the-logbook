@@ -26,15 +26,16 @@ import {
   Plug,
   ChevronRight,
   Loader2,
-  Rocket,
   PartyPopper,
   UserCheck,
   KeyRound,
   FileText,
   Stethoscope,
   Store,
+  Globe,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import AdminPageHeader from '../components/admin/AdminPageHeader';
 import { organizationService } from '../services/api';
 import type { SetupChecklistItem } from '../services/api';
 
@@ -48,6 +49,7 @@ const CATEGORY_STYLES: Record<string, { bgClass: string; textClass: string }> = 
   inventory: { bgClass: 'bg-orange-500/10', textClass: 'text-orange-500' },
   storefront: { bgClass: 'bg-teal-500/10', textClass: 'text-teal-500' },
   integrations: { bgClass: 'bg-cyan-500/10', textClass: 'text-cyan-500' },
+  public_info: { bgClass: 'bg-sky-500/10', textClass: 'text-sky-500' },
 };
 
 const ITEM_ICONS: Record<string, React.ReactNode> = {
@@ -71,6 +73,7 @@ const ITEM_ICONS: Record<string, React.ReactNode> = {
   email: <Mail className="h-5 w-5" />,
   pipeline: <UserPlus className="h-5 w-5" />,
   integrations: <Plug className="h-5 w-5" />,
+  public_info: <Globe className="h-5 w-5" />,
 };
 
 const DepartmentSetupPage: React.FC = () => {
@@ -128,20 +131,10 @@ const DepartmentSetupPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
-      {/* Header */}
-      <div>
-        <div className="mb-2 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10">
-            <Rocket className="h-5 w-5 text-red-500" />
-          </div>
-          <div>
-            <h1 className="text-theme-text-primary text-2xl font-bold">Department Setup</h1>
-            <p className="text-theme-text-muted text-sm">
-              Complete these steps to get your department fully operational.
-            </p>
-          </div>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Department Setup"
+        description="Complete these steps to get your department fully operational."
+      />
 
       {/* Progress Card */}
       <div className="card p-6">
@@ -281,9 +274,12 @@ const SetupCard: React.FC<SetupCardProps> = ({ item, onNavigate, onAcknowledge, 
 
       {item.kind === 'review' && (
         <div className="-mt-1 flex items-center gap-3 px-4 pb-3 pl-18">
+          {/* Named after the step: two cards each read only "Mark as
+              reviewed" to a screen reader (W06-5). */}
           <button
             onClick={() => onAcknowledge(item)}
             disabled={isAcknowledging}
+            aria-label={`Mark ${item.title} as ${item.is_complete ? 'not reviewed' : 'reviewed'}`}
             className="text-theme-text-secondary mobile-touch-target text-xs font-medium underline underline-offset-2 hover:text-red-500 disabled:opacity-50"
           >
             {item.is_complete ? 'Mark as not reviewed' : 'Mark as reviewed'}

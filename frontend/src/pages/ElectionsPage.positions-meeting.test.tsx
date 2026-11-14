@@ -24,6 +24,8 @@ vi.mock('../services/api', () => ({
     getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
   },
   electionService: {
+    // The create dialog counts who its voter rules admit.
+    previewElectorate: vi.fn().mockResolvedValue({ eligible: 0, total: 0 }),
     getElections: (...args: unknown[]) => mockGetElections(...args) as unknown,
     getElectionSettings: vi.fn().mockRejectedValue(new Error('not needed')),
   },
@@ -74,7 +76,7 @@ describe('ElectionsPage create form: positions and linked meeting', () => {
 
   it('offers department positions beside ranks, each name once, without Member', async () => {
     await openCreateDialog();
-    await userEvent.click(screen.getByRole('textbox', { name: 'Position name' }));
+    await userEvent.click(screen.getByRole('combobox', { name: 'Position name' }));
 
     const listbox = screen.getByRole('listbox', { name: 'Available positions' });
     const names = within(listbox)
@@ -86,7 +88,7 @@ describe('ElectionsPage create form: positions and linked meeting', () => {
   it('still offers ranks when the positions list cannot be read', async () => {
     mockGetRoles.mockRejectedValue(new Error('403'));
     await openCreateDialog();
-    await userEvent.click(screen.getByRole('textbox', { name: 'Position name' }));
+    await userEvent.click(screen.getByRole('combobox', { name: 'Position name' }));
 
     const listbox = screen.getByRole('listbox', { name: 'Available positions' });
     expect(
@@ -112,11 +114,11 @@ describe('ElectionsPage create form: positions and linked meeting', () => {
 
     await userEvent.selectOptions(await screen.findByLabelText(/Linked Meeting/), 'meeting:m1');
 
-    expect(screen.getByLabelText(/Start Date & Time/)).toHaveValue('2099-12-10');
+    expect(screen.getByLabelText(/Start Date & Time/, { selector: 'input' })).toHaveValue('2099-12-10');
     expect(screen.getByRole('combobox', { name: 'Start time hour' })).toHaveDisplayValue('7');
     expect(screen.getByRole('combobox', { name: 'Start time minute' })).toHaveDisplayValue('00');
     expect(screen.getByRole('combobox', { name: 'Start time AM/PM' })).toHaveDisplayValue('PM');
-    expect(screen.getByLabelText(/End Date & Time/)).toHaveValue('2099-12-10');
+    expect(screen.getByLabelText(/End Date & Time/, { selector: 'input' })).toHaveValue('2099-12-10');
     expect(screen.getByRole('combobox', { name: 'End time hour' })).toHaveDisplayValue('9');
     expect(screen.getByRole('combobox', { name: 'End time minute' })).toHaveDisplayValue('30');
     expect(screen.getByRole('combobox', { name: 'End time AM/PM' })).toHaveDisplayValue('PM');
@@ -130,6 +132,6 @@ describe('ElectionsPage create form: positions and linked meeting', () => {
 
     await userEvent.selectOptions(await screen.findByLabelText(/Linked Meeting/), 'meeting:m1');
 
-    expect(screen.getByLabelText(/Start Date & Time/)).toHaveValue('');
+    expect(screen.getByLabelText(/Start Date & Time/, { selector: 'input' })).toHaveValue('');
   });
 });

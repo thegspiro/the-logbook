@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.training import (
@@ -66,7 +67,19 @@ class TrainingModuleConfigService:
         self.db = db
 
     async def get_config(self, organization_id: UUID | str) -> TrainingModuleConfig:
-        """Get or create the config for an organization."""
+        """Get or create the config for an organization.
+
+        Two concurrent first-ever reads (e.g. two members opening a training
+        page the same moment a department has never configured) can both find
+        no row and both attempt an insert; ``organization_id`` is unique, so
+        the loser's insert fails. Without the savepoint and re-read below, that
+        raw ``IntegrityError`` surfaced as an unhandled 500 on a plain page
+        load — the same race ``SchedulingModuleConfigService._create_row``
+        already guards against for the sibling settings table. The re-read
+        locks for the same reason that one does: under REPEATABLE READ, a
+        plain ``SELECT`` would still answer from the snapshot taken at the
+        query above, which is the one that found no row.
+        """
         result = await self.db.execute(
             select(TrainingModuleConfig).where(
                 TrainingModuleConfig.organization_id == str(organization_id)
@@ -76,10 +89,31 @@ class TrainingModuleConfigService:
 
         if not config:
             config = TrainingModuleConfig(organization_id=str(organization_id))
-            self.db.add(config)
-            await self.db.flush()
-            await self.db.commit()
-            await self.db.refresh(config)
+            try:
+                async with self.db.begin_nested():
+                    self.db.add(config)
+                    await self.db.flush()
+            except IntegrityError:
+                existing = (
+                    (
+                        await self.db.execute(
+                            select(TrainingModuleConfig)
+                            .where(
+                                TrainingModuleConfig.organization_id
+                                == str(organization_id)
+                            )
+                            .with_for_update()
+                        )
+                    )
+                    .scalars()
+                    .first()
+                )
+                if existing is None:
+                    raise
+                config = existing
+            else:
+                await self.db.commit()
+                await self.db.refresh(config)
 
         return config
 
@@ -91,6 +125,7 @@ class TrainingModuleConfigService:
     ) -> TrainingModuleConfig:
         """Update configuration fields. Only supplied fields are changed."""
         config = await self.get_config(organization_id)
+        review_was_required = bool(config.report_review_required)
 
         apply_updates(config, kwargs)
 
@@ -99,6 +134,17 @@ class TrainingModuleConfigService:
 
         await self.db.commit()
         await self.db.refresh(config)
+
+        if bool(config.report_review_required) != review_was_required:
+            # Report review decides whether a shift evaluation is visible to
+            # its member, and program credit follows visibility. Imported here
+            # because the evaluation service reads this one's config.
+            from app.services.shift_evaluation_service import ShiftEvaluationService
+
+            await ShiftEvaluationService(self.db).sync_credit_for_organization(
+                organization_id
+            )
+            await self.db.refresh(config)
         return config
 
     async def get_member_visibility(

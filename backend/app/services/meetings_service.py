@@ -9,13 +9,14 @@ from datetime import date, datetime, time, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.document import Document
 from app.models.meeting import (
     ActionItemStatus,
+    AttendanceRecordedVia,
     Meeting,
     MeetingActionItem,
     MeetingAttendee,
@@ -45,6 +46,20 @@ APPROVED_MEETING_DELETE_REFUSAL = (
 
 class MeetingDeleteRefusedError(Exception):
     """A meeting that may not be deleted. Answered 409 by the endpoint."""
+
+
+def member_visible_meeting():
+    """The meetings a member without meetings.manage or minutes.manage may read.
+
+    The same rule the Minutes API applies (MM-24): approved, and not an
+    executive session. A draft's notes are unratified, and an executive
+    session's are the disciplinary and personnel deliberations it was closed
+    to hold.
+    """
+    return and_(
+        Meeting.status == MeetingStatus.APPROVED,
+        Meeting.meeting_type != MeetingType.EXECUTIVE,
+    )
 
 
 class MeetingsService:
@@ -164,6 +179,8 @@ class MeetingsService:
                         organization_id=organization_id,
                         meeting_id=meeting.id,
                         **att_data,
+                        recorded_by=str(created_by),
+                        recorded_via=AttendanceRecordedVia.MANUAL,
                     )
                     self.db.add(attendee)
 
@@ -212,9 +229,12 @@ class MeetingsService:
         from_date: Optional[date] = None,
         skip: int = 0,
         limit: int = 100,
+        member_visible_only: bool = False,
     ) -> Tuple[List[Meeting], int]:
         """Get meetings with filtering and pagination"""
         query = select(Meeting).where(Meeting.organization_id == str(organization_id))
+        if member_visible_only:
+            query = query.where(member_visible_meeting())
 
         if from_date:
             query = query.where(Meeting.meeting_date >= from_date)
@@ -327,10 +347,13 @@ class MeetingsService:
             m.action_item_count = row.get("action_items", 0)
 
     async def get_meeting_by_id(
-        self, meeting_id: UUID, organization_id: UUID | str
+        self,
+        meeting_id: UUID,
+        organization_id: UUID | str,
+        member_visible_only: bool = False,
     ) -> Optional[Meeting]:
         """Get a meeting by ID with attendees and action items"""
-        result = await self.db.execute(
+        query = (
             select(Meeting)
             .where(Meeting.id == str(meeting_id))
             .where(Meeting.organization_id == str(organization_id))
@@ -339,6 +362,9 @@ class MeetingsService:
                 selectinload(Meeting.action_items),
             )
         )
+        if member_visible_only:
+            query = query.where(member_visible_meeting())
+        result = await self.db.execute(query)
         meeting: Optional[Meeting] = result.scalar_one_or_none()
         return meeting
 
@@ -441,8 +467,10 @@ class MeetingsService:
         meeting_id: UUID,
         organization_id: UUID | str,
         attendee_data: Dict[str, Any],
+        recorded_by: Optional[UUID | str] = None,
     ) -> Tuple[Optional[MeetingAttendee], Optional[str]]:
-        """Add an attendee to a meeting"""
+        """Add an attendee to a meeting, recording ``recorded_by`` as the
+        secretary who entered it."""
         try:
             meeting = await self.get_meeting_by_id(meeting_id, organization_id)
             if not meeting:
@@ -460,10 +488,22 @@ class MeetingsService:
             if user_result.scalar_one_or_none() is None:
                 return None, "User not found in organization"
 
+            already = await self.db.execute(
+                select(MeetingAttendee.id).where(
+                    MeetingAttendee.meeting_id == str(meeting_id),
+                    MeetingAttendee.user_id == str(attendee_user_id),
+                    MeetingAttendee.organization_id == str(organization_id),
+                )
+            )
+            if already.scalar_one_or_none() is not None:
+                return None, "This member is already an attendee of this meeting"
+
             attendee = MeetingAttendee(
                 organization_id=organization_id,
                 meeting_id=meeting_id,
                 **attendee_data,
+                recorded_by=str(recorded_by) if recorded_by else None,
+                recorded_via=AttendanceRecordedVia.MANUAL,
             )
             self.db.add(attendee)
             await self.db.commit()
@@ -597,7 +637,10 @@ class MeetingsService:
             return False, str(e)
 
     async def get_open_action_items(
-        self, organization_id: UUID | str, assigned_to: Optional[UUID] = None
+        self,
+        organization_id: UUID | str,
+        assigned_to: Optional[UUID] = None,
+        member_visible_only: bool = False,
     ) -> List[MeetingActionItem]:
         """Get all open action items for the organization"""
         query = (
@@ -613,6 +656,13 @@ class MeetingsService:
         if assigned_to:
             query = query.where(MeetingActionItem.assigned_to == str(assigned_to))
 
+        if member_visible_only:
+            # An item's description and completion notes are drawn from the
+            # meeting's deliberation, so it is visible only where the meeting is.
+            query = query.join(
+                Meeting, Meeting.id == MeetingActionItem.meeting_id
+            ).where(member_visible_meeting())
+
         query = query.order_by(MeetingActionItem.due_date.asc())
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -621,13 +671,28 @@ class MeetingsService:
     # Summary & Reporting
     # ============================================
 
-    async def get_summary(self, organization_id: UUID | str) -> Dict[str, Any]:
-        """Get meetings summary statistics"""
+    async def get_summary(
+        self, organization_id: UUID | str, member_visible_only: bool = False
+    ) -> Dict[str, Any]:
+        """Get meetings summary statistics
+
+        ``member_visible_only`` counts only what the caller's list shows, so
+        the tiles beside a member's list do not count draft and executive
+        meetings, or their action items, that the list withholds.
+        """
+        meeting_scope = [Meeting.organization_id == str(organization_id)]
+        item_scope = [MeetingActionItem.organization_id == str(organization_id)]
+        if member_visible_only:
+            meeting_scope.append(member_visible_meeting())
+            item_scope.append(
+                MeetingActionItem.meeting_id.in_(
+                    select(Meeting.id).where(*meeting_scope)
+                )
+            )
+
         # Total meetings
         total_result = await self.db.execute(
-            select(func.count(Meeting.id)).where(
-                Meeting.organization_id == str(organization_id)
-            )
+            select(func.count(Meeting.id)).where(*meeting_scope)
         )
         total_meetings = total_result.scalar() or 0
 
@@ -637,7 +702,7 @@ class MeetingsService:
         )
         month_result = await self.db.execute(
             select(func.count(Meeting.id))
-            .where(Meeting.organization_id == str(organization_id))
+            .where(*meeting_scope)
             .where(Meeting.meeting_date >= first_of_month)
         )
         meetings_this_month = month_result.scalar() or 0
@@ -645,7 +710,7 @@ class MeetingsService:
         # Open action items
         open_result = await self.db.execute(
             select(func.count(MeetingActionItem.id))
-            .where(MeetingActionItem.organization_id == str(organization_id))
+            .where(*item_scope)
             .where(
                 MeetingActionItem.status.in_(
                     [ActionItemStatus.OPEN, ActionItemStatus.IN_PROGRESS]
@@ -657,7 +722,7 @@ class MeetingsService:
         # Pending approval
         pending_result = await self.db.execute(
             select(func.count(Meeting.id))
-            .where(Meeting.organization_id == str(organization_id))
+            .where(*meeting_scope)
             .where(Meeting.status == MeetingStatus.PENDING_APPROVAL)
         )
         pending_approval = pending_result.scalar() or 0
@@ -683,6 +748,11 @@ class MeetingsService:
         """
         from app.core.utils import generate_uuid
         from app.models.event import Event, EventRSVP, RSVPStatus
+
+        # Local: the waiver engine reaches the meetings models, notifications
+        # and the permission helpers, which a module-level import here would
+        # load with every meetings import.
+        from app.services.attendance_waiver_service import carry_over_meeting_waivers
 
         # Get the event, locked: two coordinators bridging the same event at
         # nearly the same instant would otherwise both read "no meeting yet"
@@ -751,27 +821,72 @@ class MeetingsService:
             self.db.add(meeting)
             await self.db.flush()
 
-            # Import attendees from EventRSVP check-ins
+            # Import attendees from EventRSVP check-ins. One row per member:
+            # meeting_attendees is unique on (meeting, member), so a second
+            # RSVP row for a member is folded into the first, a check-in on
+            # either counting.
             rsvps_result = await self.db.execute(
                 select(EventRSVP).where(
                     EventRSVP.event_id == str(event_id),
                     EventRSVP.organization_id == str(organization_id),
                 )
             )
+            attendees: Dict[str, MeetingAttendee] = {}
             for rsvp in rsvps_result.scalars().all():
+                checked_in = bool(rsvp.checked_in)
+                excused = (
+                    not checked_in and rsvp.status == RSVPStatus.NOT_GOING
+                    if hasattr(rsvp.status, "value")
+                    else False
+                )
+                checked_in_at = rsvp.checked_in_at if checked_in else None
+                existing_attendee = attendees.get(str(rsvp.user_id))
+                if existing_attendee is not None:
+                    # The earliest check-in is the one the record keeps.
+                    if checked_in and (
+                        existing_attendee.checked_in_at is None
+                        or (
+                            checked_in_at is not None
+                            and checked_in_at < existing_attendee.checked_in_at
+                        )
+                    ):
+                        existing_attendee.checked_in_at = checked_in_at
+                        existing_attendee.recorded_via = (
+                            AttendanceRecordedVia.EVENT_CHECK_IN
+                        )
+                    existing_attendee.present = existing_attendee.present or checked_in
+                    existing_attendee.excused = not existing_attendee.present and (
+                        existing_attendee.excused or excused
+                    )
+                    continue
                 attendee = MeetingAttendee(
                     id=generate_uuid(),
                     organization_id=str(organization_id),
                     meeting_id=meeting.id,
                     user_id=rsvp.user_id,
-                    present=rsvp.checked_in,
-                    excused=(
-                        not rsvp.checked_in and rsvp.status == RSVPStatus.NOT_GOING
-                        if hasattr(rsvp.status, "value")
-                        else False
+                    present=checked_in,
+                    excused=excused,
+                    checked_in_at=checked_in_at,
+                    recorded_by=str(created_by),
+                    recorded_via=(
+                        AttendanceRecordedVia.EVENT_CHECK_IN
+                        if checked_in
+                        else AttendanceRecordedVia.EVENT_RSVP
                     ),
                 )
+                attendees[str(rsvp.user_id)] = attendee
                 self.db.add(attendee)
+
+            # Members whose request to be excused was approved before this
+            # record existed: their waiver comes across now, inside the lock
+            # on the event an approval also takes (attendance_waiver_service).
+            await carry_over_meeting_waivers(
+                self.db,
+                str(organization_id),
+                str(event_id),
+                str(meeting.id),
+                attendees,
+            )
 
             await self.db.commit()
             await self.db.refresh(meeting)

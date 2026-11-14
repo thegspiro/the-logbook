@@ -5,9 +5,10 @@ Manages equipment check templates (compartments + items) and shift
 equipment check submissions.
 """
 
+import asyncio
 import base64
 from datetime import date, datetime, timezone
-from typing import Any, List
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import select
@@ -1577,6 +1578,27 @@ async def get_item_trends(
     )
 
 
+async def _audit_equipment_export(
+    db: AsyncSession,
+    current_user: User,
+    report_type: str,
+    fmt: str,
+    **parameters: Optional[str],
+) -> None:
+    """Record an equipment-check export. The reports name the members who
+    performed each check, so a download is a disclosure of member data.
+    Parameters only; never the report's content."""
+    await log_audit_event(
+        db=db,
+        event_type="equipment_check_report_exported",
+        event_category="inventory",
+        severity="info",
+        event_data={"report_type": report_type, "format": fmt, **parameters},
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+
 @router.get("/reports/export/csv")
 async def export_csv(
     report_type: str = Query(...),
@@ -1712,12 +1734,23 @@ async def export_csv(
             detail="Invalid report_type",
         )
 
+    await _audit_equipment_export(
+        db,
+        current_user,
+        report_type,
+        "csv",
+        apparatus_id=apparatus_id,
+        template_item_id=template_item_id,
+        date_from=date_from.isoformat() if date_from else None,
+        date_to=date_to.isoformat() if date_to else None,
+    )
+
     output.seek(0)
     filename = f"equipment_check_{report_type}.csv"
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": (f"attachment; filename={filename}")},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -1754,11 +1787,13 @@ async def export_pdf(
             date_from=date_from,
             date_to=date_to,
         )
-        pdf_bytes = generate_compliance_pdf(
+        pdf_bytes = await asyncio.to_thread(
+            generate_compliance_pdf,
             data,
             date_from=date_from_str,
             date_to=date_to_str,
             organization=organization,
+            generated_by=current_user.full_name,
         )
         filename = "equipment_check_compliance.pdf"
 
@@ -1772,11 +1807,13 @@ async def export_pdf(
             # Exports are records of note: checkers by legal name.
             legal_names=True,
         )
-        pdf_bytes = generate_failure_log_pdf(
+        pdf_bytes = await asyncio.to_thread(
+            generate_failure_log_pdf,
             data,
             date_from=date_from_str,
             date_to=date_to_str,
             organization=organization,
+            generated_by=current_user.full_name,
         )
         filename = "equipment_check_failures.pdf"
 
@@ -1820,7 +1857,10 @@ async def export_pdf(
             from app.models.user import User as UserModel
 
             u_result = await db.execute(
-                select(UserModel).where(UserModel.id == str(check.checked_by))
+                select(UserModel).where(
+                    UserModel.id == str(check.checked_by),
+                    UserModel.organization_id == current_user.organization_id,
+                )
             )
             u = u_result.scalar_one_or_none()
             if u:
@@ -1828,7 +1868,12 @@ async def export_pdf(
                 last = u.last_name or ""
                 name = f"{first} {last}".strip()
                 check_dict["checked_by_name"] = name or "Unknown"
-        pdf_bytes = generate_check_detail_pdf(check_dict, organization=organization)
+        pdf_bytes = await asyncio.to_thread(
+            generate_check_detail_pdf,
+            check_dict,
+            organization=organization,
+            generated_by=current_user.full_name,
+        )
         filename = f"equipment_check_{check_id[:8]}.pdf"
 
     else:
@@ -1837,10 +1882,21 @@ async def export_pdf(
             detail="Invalid report_type",
         )
 
+    await _audit_equipment_export(
+        db,
+        current_user,
+        report_type,
+        "pdf",
+        check_id=check_id if report_type == "check-detail" else None,
+        apparatus_id=apparatus_id,
+        date_from=date_from_str,
+        date_to=date_to_str,
+    )
+
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": (f"attachment; filename={filename}")},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

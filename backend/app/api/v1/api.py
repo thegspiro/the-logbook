@@ -15,6 +15,7 @@ from app.api.v1.endpoints import (
     admin_hub,
     analytics,
     apparatus,
+    attendance_waiver_requests,
     audit_logs,
     auth,
     calcom_sync,
@@ -28,6 +29,7 @@ from app.api.v1.endpoints import (
     email_templates,
     equipment_check,
     error_logs,
+    evaluations,
     event_attendance_petitions,
     event_requests,
     events,
@@ -39,6 +41,10 @@ from app.api.v1.endpoints import (
     google_calendar_oauth,
     google_workspace,
     grants,
+    historical_import,
+    history,
+    history_import,
+    history_media,
     integrations,
     inventory,
     inventory_kiosk,
@@ -54,6 +60,7 @@ from app.api.v1.endpoints import (
     mcp_oauth_admin,
     medical_screening,
     medical_supplies,
+    meeting_waiver_requests,
     meetings,
     member_badges,
     member_id_cards,
@@ -61,6 +68,7 @@ from app.api.v1.endpoints import (
     member_qualifications,
     member_service_history,
     member_status,
+    member_supervisors,
     membership_pipeline,
     message_history,
     messages,
@@ -75,6 +83,7 @@ from app.api.v1.endpoints import (
     organizations,
     outlook_calendar_oauth,
     platform_analytics,
+    quickbooks_online,
     reports,
     roles,
     salesforce_sync,
@@ -83,6 +92,8 @@ from app.api.v1.endpoints import (
     scheduling_module_config,
     security_monitoring,
     shift_completion,
+    shift_evaluation_templates,
+    shift_evaluations,
     shift_history_import,
     skill_evaluations,
     skills_testing,
@@ -99,6 +110,7 @@ from app.api.v1.endpoints import (
     training_submissions,
     training_waivers,
     users,
+    zeffy,
 )
 from app.core.security_middleware import verify_csrf_token
 
@@ -317,6 +329,18 @@ api_router.include_router(
     dependencies=module_gate("training", "Training"),
 )
 api_router.include_router(
+    shift_evaluations.router,
+    prefix="/training/shift-evaluations",
+    tags=["shift-evaluations"],
+    dependencies=module_gate("training", "Training"),
+)
+api_router.include_router(
+    shift_evaluation_templates.router,
+    prefix="/training/shift-evaluation-templates",
+    tags=["shift-evaluation-templates"],
+    dependencies=module_gate("training", "Training"),
+)
+api_router.include_router(
     training_module_config.router,
     prefix="/training/module-config",
     tags=["training-module-config"],
@@ -338,6 +362,9 @@ api_router.include_router(
     member_service_history.router, prefix="/users", tags=["member-status"]
 )
 api_router.include_router(
+    member_supervisors.router, prefix="/users", tags=["member-supervisors"]
+)
+api_router.include_router(
     member_qualifications.router, prefix="/users", tags=["member-qualifications"]
 )
 api_router.include_router(
@@ -352,7 +379,34 @@ api_router.include_router(
     tags=["medical-screening"],
     dependencies=module_gate("medical_screening", "Medical Screening"),
 )
+api_router.include_router(
+    history.router,
+    prefix="/history",
+    tags=["history"],
+    dependencies=module_gate("history", "History"),
+)
+api_router.include_router(
+    history_import.router,
+    prefix="/history",
+    tags=["history"],
+    dependencies=module_gate("history", "History"),
+)
+api_router.include_router(
+    history_media.router,
+    prefix="/history",
+    tags=["history"],
+    dependencies=module_gate("history", "History"),
+)
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
+# Ahead of the meetings router: its /{meeting_id} also matches
+# /meetings/waiver-requests, and would answer the GET with a 422 for a
+# meeting id that is not a UUID. TestRouterOrder pins the order.
+api_router.include_router(
+    meeting_waiver_requests.router,
+    prefix="/meetings/waiver-requests",
+    tags=["meetings"],
+    dependencies=module_gate("minutes", "Meeting Minutes"),
+)
 api_router.include_router(
     meetings.router,
     prefix="/meetings",
@@ -412,6 +466,13 @@ api_router.include_router(
     tags=["reports"],
     dependencies=module_gate("reports", "Reports"),
 )
+# Member evaluations sit in the Reports area, so they follow its module switch.
+api_router.include_router(
+    evaluations.router,
+    prefix="/evaluations",
+    tags=["evaluations"],
+    dependencies=module_gate("reports", "Reports"),
+)
 api_router.include_router(
     notifications.router,
     prefix="/notifications",
@@ -447,6 +508,14 @@ api_router.include_router(
     prefix="/testing-checklist",
     tags=["testing-checklist"],
     dependencies=module_gate("testing", "Testing Checklist"),
+)
+# Before ``integrations.router``: its ``/{integration_id}`` would otherwise
+# capture ``/integrations/historical-imports``.
+api_router.include_router(
+    historical_import.router,
+    prefix="/integrations/historical-imports",
+    tags=["integrations"],
+    dependencies=module_gate("integrations", "Integrations"),
 )
 api_router.include_router(
     integrations.router,
@@ -505,6 +574,17 @@ api_router.include_router(
 api_router.include_router(
     scheduled.router, prefix="/scheduled", tags=["scheduled-tasks"]
 )
+# Mounted before training_waivers, whose /{waiver_id} also matches the path
+# /training/waivers/requests. Starlette prefers a full match over a method-only
+# one, and that router has only PATCH and DELETE there, so today the order
+# changes nothing; it matters if it ever gains a GET or POST /{waiver_id}.
+# TestRouterOrder in tests/test_attendance_waiver_endpoints.py pins the order.
+api_router.include_router(
+    attendance_waiver_requests.router,
+    prefix="/training/waivers/requests",
+    tags=["training-waivers"],
+    dependencies=module_gate("training", "Training"),
+)
 api_router.include_router(
     training_waivers.router,
     prefix="/training/waivers",
@@ -531,8 +611,20 @@ api_router.include_router(
     dependencies=module_gate("grants", "Grants & Fundraising"),
 )
 api_router.include_router(
+    zeffy.router,
+    prefix="/grants/zeffy",
+    tags=["grants"],
+    dependencies=module_gate("grants", "Grants & Fundraising"),
+)
+api_router.include_router(
     finance.router,
     prefix="/finance",
+    tags=["finance"],
+    dependencies=module_gate("finance", "Finance"),
+)
+api_router.include_router(
+    quickbooks_online.router,
+    prefix="/finance/quickbooks",
     tags=["finance"],
     dependencies=module_gate("finance", "Finance"),
 )

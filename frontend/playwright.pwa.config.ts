@@ -13,6 +13,8 @@ export default defineConfig({
   testMatch: 'pwa.spec.ts',
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
+  // As in playwright.config.ts: passing only on a retry fails the run.
+  failOnFlakyTests: !!process.env.CI,
   workers: 1,
   reporter: [['list']],
   use: {

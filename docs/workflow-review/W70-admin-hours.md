@@ -129,13 +129,17 @@ same applies to End Session on Active Sessions. Driven by those names.
   Review buttons and checkboxes, End Session, the colour swatches and the
   approval checkbox.
 
-### W70-5 — LOW — Scanning another category's code while clocked in gives no way out — OPEN (lead)
+### W70-5 — LOW — Scanning another category's code while clocked in gives no way out — FIXED
 
 The refusal is clear, but the page names neither the running session nor
 offers its Clock Out; the member must find the first QR code or go to My
 Admin Hours. A Clock Out on the refusal is a small change to
 `AdminHoursClockInPage.tsx`, left for a pass that can decide whether one scan
 should end one session and start the other.
+
+Fixed 2026-11-06: the page names the running session and offers its Clock Out
+(by entry id), then this category's Clock In. A scan does not end one session
+and start the other on its own; the member makes both moves.
 
 ## Checklist
 

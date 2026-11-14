@@ -173,7 +173,7 @@ async function onboard(page, admin) {
   await page.locator("#email").fill(admin.email);
   await page.locator("#password").fill(admin.password);
   await page.locator("#confirmPassword").fill(admin.password);
-  await page.getByRole("button", { name: /create system owner/i }).click();
+  await page.getByRole("button", { name: /create account/i }).click();
   await page.waitForURL((url) => !url.pathname.endsWith("/system-owner"), {
     timeout: 20000,
   });
@@ -400,6 +400,17 @@ async function main() {
     const positionIds = Object.fromEntries(
       positions.body.map((p) => [p.slug, p.id]),
     );
+
+    // POST /users requires a recent step-up on the caller's session. The admin
+    // has no second factor yet, so the account password is the proof, and one
+    // verification covers the whole batch below (STEPUP_WINDOW_MINUTES).
+    const stepUp = await apiCall(context, "POST", "/auth/step-up", {
+      password: accounts.admin.password,
+    });
+    if (stepUp.status !== 200)
+      throw new Error(
+        `POST /auth/step-up: ${stepUp.status} ${JSON.stringify(stepUp.body)}`,
+      );
 
     const temporary = {};
     for (const spec of ROLES) {

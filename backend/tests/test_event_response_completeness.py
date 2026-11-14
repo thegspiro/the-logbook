@@ -70,6 +70,10 @@ CALLER_SUPPLIED = {
     "organizer_name",
     "alternate_organizer_name",
     "can_manage_organizers",
+    # And whether this caller may see and decide its attendance requests,
+    # which adds a fallback holder a request was sent to: the same per-caller
+    # resolution, detail endpoint only.
+    "can_review_attendance_requests",
     # The attendance tools are decided by the same per-caller rule (events.manage,
     # training.manage on a Training event, or the organizer pair) on the
     # detail endpoint; False is the honest default everywhere else.
@@ -85,6 +89,11 @@ CALLER_SUPPLIED = {
     # org's roster setting and their permission). Computed on the detail
     # endpoint only; the defaults (False / None) are the honest answer on
     # create and update responses, which no member reads to check in.
+    # Whether a session-attendance requirement counts this event: a lookup in
+    # training_session_requirements, not an Event column. Resolved on the
+    # detail endpoint (and per page on the lists); create and update responses
+    # are acknowledgements the screens refetch the detail after.
+    "counts_toward_attendance",
     "user_attended",
     "credited_hours",
     "hour_category_label",

@@ -76,4 +76,26 @@ describe('ChargeManagementPanel', () => {
 
     await waitFor(() => expect(mockUpdateIssuanceCharge).toHaveBeenCalledWith('is-1', 'charged', 12.5));
   });
+
+  // `out_of_service` has two underscores; replacing only the first showed
+  // "out of_service" in the Condition column and in the charge dialog.
+  it('shows every word of a multi-word return condition', async () => {
+    mockGetCharges.mockResolvedValue({
+      items: [{ ...pending, return_condition: 'out_of_service' }],
+      total: 1,
+      total_pending: 0,
+      total_charged: 0,
+      total_waived: 0,
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<ChargeManagementPanel />);
+    await screen.findAllByText('Nitrile Gloves');
+
+    expect(screen.getAllByText('out of service').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/of_service/)).not.toBeInTheDocument();
+
+    await user.click(firstOf(screen.getAllByRole('button', { name: 'Charge' })));
+    const dialog = screen.getByRole('dialog', { name: 'Apply Charge' });
+    expect(within(dialog).getByText('Returned in out of service condition')).toBeInTheDocument();
+  });
 });

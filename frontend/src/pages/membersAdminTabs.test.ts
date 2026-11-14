@@ -23,11 +23,12 @@ describe('Members admin areas', () => {
   it('leaves out the pages behind users.create for a member without it', () => {
     const areas = membersAdminAreasFor(allowNone);
     const filed = areas.flatMap((area) => area.destinations.map((destination) => destination.id));
-    expect(filed).toEqual(['manage', 'qualifications', 'settings']);
+    expect(filed).toEqual(['manage', 'former', 'qualifications', 'settings']);
   });
 
   it.each([
     ['manage', 'roster'],
+    ['former', 'roster'],
     ['add', 'add_import'],
     ['import', 'add_import'],
     ['qualifications', 'add_import'],

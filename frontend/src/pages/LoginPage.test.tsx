@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 
@@ -16,20 +17,32 @@ vi.mock('react-router', async () => {
 // page to its second-factor step.
 let mockMfaRequired = false;
 let mockMfaToken: string | null = null;
+let mockLoginLockouts: Record<string, { attempts: number; lockedUntil: number | null }> = {};
 const mockCompleteMfaLogin = vi.fn();
+const mockLogin = vi.fn();
+// The user the store holds once a sign-in completes; the page reads it through
+// getState to decide where to land (forms review F-10).
+let mockSignedInUser: Record<string, unknown> | null = null;
 vi.mock('../stores/authStore', () => ({
-  useAuthStore: () => ({
-    login: vi.fn(),
-    completeMfaLogin: (...a: unknown[]) => mockCompleteMfaLogin(...a) as unknown,
-    cancelMfa: vi.fn(),
-    mfaRequired: mockMfaRequired,
-    mfaToken: mockMfaToken,
-    isLoading: false,
-    isAuthenticated: false,
-    error: null,
-    clearError: vi.fn(),
-    lockedUntil: null,
-  }),
+  useAuthStore: Object.assign(
+    () => ({
+      login: (...a: unknown[]) => mockLogin(...a) as unknown,
+      completeMfaLogin: (...a: unknown[]) => mockCompleteMfaLogin(...a) as unknown,
+      cancelMfa: vi.fn(),
+      mfaRequired: mockMfaRequired,
+      mfaToken: mockMfaToken,
+      isLoading: false,
+      isAuthenticated: false,
+      error: null,
+      clearError: vi.fn(),
+      loginLockouts: mockLoginLockouts,
+    }),
+    { getState: () => ({ user: mockSignedInUser, mfaRequired: mockMfaRequired }) }
+  ),
+  lockedUntilFor: (lockouts: Record<string, { lockedUntil: number | null }>, username: string) => {
+    const until = lockouts[username.trim().toLowerCase()]?.lockedUntil ?? null;
+    return until !== null && Date.now() < until ? until : null;
+  },
 }));
 
 // authService stub (OAuth URL helpers, and the second-factor options)
@@ -167,11 +180,24 @@ describe('LoginPage second-factor step', () => {
         ? Promise.resolve({ data: { needs_onboarding: false } })
         : Promise.reject(new Error('not mocked'))
     );
+    mockCompleteMfaLogin.mockReset();
+    mockCompleteMfaLogin.mockResolvedValue(undefined);
     mockMfaRequired = true;
   });
 
   afterEach(() => {
     mockMfaRequired = false;
+  });
+
+  // Authenticator apps show the code in two groups ("123 456"), and the
+  // server takes exactly six characters, so a correct code typed as shown
+  // was refused with "code: Value is too long" (workflow review W02-10).
+  it('sends an authenticator code typed with a space as six digits', async () => {
+    renderLogin();
+    fireEvent.change(await screen.findByLabelText('Authenticator code'), { target: { value: ' 123 456 ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+
+    await waitFor(() => expect(mockCompleteMfaLogin).toHaveBeenCalledWith('123456'));
   });
 
   // Recovery codes are four groups of five (mfa_service.generate_recovery_codes).
@@ -199,6 +225,7 @@ describe('LoginPage passkey second factor', () => {
     mockAssertion.mockReset();
     mockAssertion.mockResolvedValue({ id: 'cred-1', response: {} });
     mockCompleteMfaLogin.mockReset();
+    mockSignedInUser = null;
     mockCompleteMfaLogin.mockResolvedValue(undefined);
     mockMfaRequired = true;
     mockMfaToken = 'pending-token';
@@ -232,6 +259,19 @@ describe('LoginPage passkey second factor', () => {
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true }));
   });
 
+  it('lands a member who must change their password on /account, not the dashboard (forms review F-10)', async () => {
+    mockMfaChallenge.mockResolvedValue({ totp: false, passkey_options: options });
+    mockSignedInUser = { id: 'u-1', must_change_password: true, password_expired: false };
+    renderLogin();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Use your passkey' }));
+
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith('/account', { replace: true, state: { forcePasswordChange: true } })
+    );
+    expect(mockNavigate).not.toHaveBeenCalledWith('/dashboard', expect.anything());
+  });
+
   it('offers the passkey and the code to a member with both', async () => {
     mockMfaChallenge.mockResolvedValue({ totp: true, passkey_options: options });
     renderLogin();
@@ -259,6 +299,62 @@ describe('LoginPage passkey second factor', () => {
     expect(await screen.findByText(/cancelled or timed out/)).toBeInTheDocument();
     expect(mockCompleteMfaLogin).not.toHaveBeenCalled();
     await waitFor(() => expect(mockMfaChallenge).toHaveBeenCalledTimes(2));
+  });
+});
+
+// LOC-37: an expired session reaches this page by full page load from the API
+// client, which can carry the page it left only in `?from=`. Signing in must
+// land there — for a member at a room's door, the room's check-in page.
+describe('LoginPage return after an expired session', () => {
+  const options = { challenge: 'c-1', allowCredentials: [{ id: 'cred-1', type: 'public-key' }] };
+
+  const signInAt = async (url: string) => {
+    render(
+      <MemoryRouter initialEntries={[url]}>
+        <LoginPage />
+      </MemoryRouter>
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Use your passkey' }));
+    await waitFor(() => expect(mockCompleteMfaLogin).toHaveBeenCalled());
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGet.mockReset();
+    mockGet.mockImplementation((url: string) =>
+      url === '/api/v1/onboarding/status'
+        ? Promise.resolve({ data: { needs_onboarding: false } })
+        : Promise.reject(new Error('not mocked'))
+    );
+    mockMfaChallenge.mockReset();
+    mockMfaChallenge.mockResolvedValue({ totp: false, passkey_options: options });
+    mockAssertion.mockReset();
+    mockAssertion.mockResolvedValue({ id: 'cred-1', response: {} });
+    mockCompleteMfaLogin.mockReset();
+    mockSignedInUser = null;
+    mockCompleteMfaLogin.mockResolvedValue(undefined);
+    mockMfaRequired = true;
+    mockMfaToken = 'pending-token';
+  });
+
+  afterEach(() => {
+    mockMfaRequired = false;
+    mockMfaToken = null;
+  });
+
+  it('returns the member to the room they tapped', async () => {
+    await signInAt('/login?from=%2Flocations%2Froom-7%2Fcheck-in%3Ftag%3Ddoor');
+
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith('/locations/room-7/check-in?tag=door', { replace: true })
+    );
+  });
+
+  it('will not follow a from that leaves the app', async () => {
+    await signInAt('/login?from=%2F%2Fevil.example%2Fphish');
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true }));
+    expect(mockNavigate).not.toHaveBeenCalledWith('//evil.example/phish', expect.anything());
   });
 });
 
@@ -299,5 +395,62 @@ describe('LoginPage single sign-on (W01-11)', () => {
     );
 
     expect(await screen.findByText(/sign-in service could not be reached/i)).toBeInTheDocument();
+  });
+});
+
+// W02-8 (owner decision 2026-11-05): the wait belongs to the account typed. At a
+// shared station, one member's failures held the next member's Sign in button.
+describe('LoginPage wait after failed sign-ins', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGet.mockReset();
+    mockGet.mockImplementation((url: string) =>
+      url === '/api/v1/onboarding/status'
+        ? Promise.resolve({ data: { needs_onboarding: false } })
+        : Promise.reject(new Error('not mocked'))
+    );
+    mockLoginLockouts = { review_member2: { attempts: 6, lockedUntil: Date.now() + 60_000 } };
+  });
+
+  afterEach(() => {
+    mockLoginLockouts = {};
+  });
+
+  it('holds only the account that failed', async () => {
+    renderLogin();
+    const username = await screen.findByLabelText('Username or Email');
+
+    fireEvent.change(username, { target: { value: 'Review_Member2' } });
+    expect(screen.getByRole('button', { name: /^Wait \d+s$/ })).toBeDisabled();
+
+    fireEvent.change(username, { target: { value: 'review_member' } });
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+  });
+});
+
+describe('LoginPage failed sign-in', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLogin.mockReset();
+    mockLogin.mockRejectedValue(new Error('Invalid credentials'));
+    mockGet.mockReset();
+    mockGet.mockImplementation((url: string) =>
+      url === '/api/v1/onboarding/status'
+        ? Promise.resolve({ data: { needs_onboarding: false } })
+        : Promise.reject(new Error('not mocked'))
+    );
+  });
+
+  it('puts focus back on the password, selected, so it can be retyped (forms review F-11)', async () => {
+    const user = userEvent.setup();
+    renderLogin();
+    await user.type(await screen.findByLabelText('Username or Email'), 'review_member');
+    const password = screen.getByLabelText('Password');
+    await user.type(password, 'wrong-password{Enter}');
+
+    await waitFor(() => expect(password).toHaveFocus());
+    const field = password as HTMLInputElement;
+    expect(field.selectionStart).toBe(0);
+    expect(field.selectionEnd).toBe('wrong-password'.length);
   });
 });

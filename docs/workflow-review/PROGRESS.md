@@ -143,6 +143,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W77 | The testing module and its printed report                                 | admin            | `/testing`                                 | ✅     |
 | W78 | Platform administration                                                   | admin            | `/admin/platform-analytics`                | ✅     |
 | W79 | Phone pass: W08, W19, W24, W33, W39 and W70 again at 390×844              | member, officers | as those rows                              | ✅     |
+| W80 | Training events: create, credit, correct, excuse, move (owner-asked)      | officer → member | `/training/admin`, `/events/:id`           | ✅     |
 
 ---
 
@@ -151,76 +152,600 @@ build on each other's data, so run them in order unless a row says otherwise.
 Seen while building this harness or in the ad-hoc browser pass of 2026-09-27,
 and not yet confirmed or fixed. The run for each activity starts from these.
 
-- **Reports and inventory activities** — three `DialogPanel` dialogs have no
-  `role` on the panel or a wrapper: the report viewer, and
-  InventoryScanModal's confirm and custody-transfer dialogs (W14-2). The
-  inventory pair sits inside another modal; check its tests' dialog queries
-  when changing it.
-- **Any run touching the app shell, or an accessibility activity** — every
-  page carries two "Skip to main content" links, one in `index.html` and one
-  in `AppLayout` (W20).
-- **A fresh install** — tap targets under 44px on the onboarding Modules,
-  Ranks & Positions and Apparatus steps at 390px wide (W01-13); setup cannot
-  be replayed on an installed department, so W79 could not drive it.
-- **Any run touching the app shell** — nothing keeps `TopNavigation` and
-  `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
-  whole Forms & Comms admin group present only in the side layout. A test
-  comparing the two link sets would catch the next one (W55).
-- **Any run touching Finance Reports or the QuickBooks export settings** —
-  `FinanceReportsPage.tsx` and `QuickBooksExportSettingsPage.tsx` have table
-  cells with no `data-label`. Inside an `rwd-table` body, such a cell is
-  hidden under 768px; that is how W66-2 lost the dues actions on a phone.
-  Check those tables at 390×844.
 - **Any run that merges `main`** — two pull requests that each join the same
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
   migrations.
-- **W33 / W34** — the shift-assignment notice names the equipment checklists
-  but opens the schedule rather than My Checklists, and prints the shift date
-  as `2026-09-30` (W46-16).
-- **W50 follow-up** — the election meeting-link → Import Attendees → unlink
-  round trip could not be driven in W50. W51 left a business-meeting event for
-  it: "W51 October Business Meeting (event)", 1 Oct 7:00 PM, linked to the
-  second set of October minutes. The "link survives a clear" half of W50-60 is
-  still read from code only.
-- **Documents, a later pass** — a document's type shows as a raw MIME type
-  ("TEXT/PLAIN") in the list (W53-6).
-- **Minutes, a later pass** — the meetings list badges every meeting "Draft"
-  forever (W51-9).
-
-- **Fundraising, a later pass** — the Donations list has a Receipt column
-  but nothing sends a receipt or marks one sent, and donors, donations and
-  campaigns (beyond status and restriction) have no edit control though
-  their `PUT`s now work (W69).
-- **Grants, a later pass** — budget lines and expenditures have update and
-  delete endpoints but no control on the detail page, and a compliance task
-  cannot be given an assignee when it is created (W68).
-- **Admin hours, a later pass** — scanning a second category's QR code while
-  clocked in is refused, but the page neither names the running session nor
-  offers its Clock Out (W70-5).
-- **Reports, a later pass** — every renderer prints its period and row dates
-  as ISO strings (`2026-01-01 — 2026-12-31`), unlike the rest of the app
-  (W72-4).
-
-- **Integrations, a later pass** — the `integration.connected` and
-  `integration.disconnected` audit rows carry no IP address (W75).
-
-- **Public portal, a later pass** — public events are only `public_education`
-  events, and their location is the free-text `location` alone, so an event
-  placed at a facility (`location_id`) would publish no location; read from
-  code, not driven (W76).
-
-- **Tooling** — a full `npm run lint` needs about 3.5 GB of heap (2,350
-  files with type-aware rules). It aborted out of memory under the 2 GB default
-  of the W77 container and passed with `--max-old-space-size=8192`. CI's
-  `ubuntu-latest` default is larger, but the margin is thin (W77).
-
-- **Platform analytics, a later pass** — the other "last 30 days" figures
-  (events, forms, documents, new users) are still a rolling `now - 30 days`,
-  while the two charts and their totals are now whole local days; read from
-  code (W78).
 
 ## Log
+
+### W09 second pass — Import members from a spreadsheet — 2026-11-10
+
+The owner asked to continue with W09. Driven as `admin` at 1280×900 and
+390×844 with a nine-row file, with `member2` refused.
+
+Held:
+
+- the pre-check names bad rows by column and value;
+- "Confirm it's you" opens mid-import and the run continues from that row;
+- every imported value is stored as written;
+- rows the server refuses come back in the error report;
+- a re-upload flags every imported row;
+- every create is audited;
+- the phone layout is clean.
+
+Fixed:
+
+- W09-4 (LOW): the pre-check passed an administrative member with a rank, which the server refuses.
+- W09-5 (LOW): the instructions promised a blank membershipNumber would be assigned; with numbering off it stays blank.
+
+Flagged:
+
+- W09-6 (MED): Add Member requires a membership number, the import does not. Recorded in `docs/KNOWN_LIMITATIONS.md`.
+- W09-7 (LOW, lead): a bad phone passes the pre-check and fails at import; the rule exists only on the server.
+
+Gate: typecheck and lint clean, no warnings; 65 import tests pass, and each new case failed before its fix; docs links clean. Next: W10 when the owner asks.
+
+### W08 second pass — Add a member and their first sign-in — 2026-11-09
+
+The owner asked to continue with W08. Driven as `admin`, the new member and
+`member2` at 1280×900, with a second add at 390×844.
+
+Held:
+
+- empty submit flags 13 fields and focuses the summary;
+- a weak password is held at the field;
+- a create that grants a rank or position asks "Confirm it's you" and completes once confirmed;
+- every field sent is stored, including the On Leave status;
+- the first sign-in forces the password change with no refused request;
+- `member2` is refused on page and API;
+- every step is audited;
+- the phone layout is clean.
+
+Fixed:
+
+- W08-7 (LOW): eight optional fields showed their examples as full-strength text, so they read as values already entered.
+- W08-8 (LOW): the create's audit row did not record the starting status.
+- W08-9 (LOW): nothing said that a member added Inactive or On Leave cannot sign in.
+
+Flagged:
+
+- W08-10 (NIT): "On Leave" on the form, "Leave" on the profile.
+- Lead: 127 other uses of `placeholder-theme-text-muted` across the app.
+
+Gate: typecheck and lint clean (0 warnings from this PR); flake8, black, isort and mypy clean; 131 backend and 36 Add Member tests pass, and each new case failed before its fix; docs links clean. Next: W09 when the owner asks.
+
+### W07 second pass — Dashboard for every role — 2026-11-08
+
+The owner asked to continue with W07. All ten roles were driven at 1280×900,
+with three at 390×844, on the redesigned dashboard (Personal, plus a My
+Department tab for leaders).
+
+Held:
+
+- every role's dashboard is clean on every tab: no failed request, console error or broken value;
+- every link opens a page the role can use;
+- department-wide data waits for the tab;
+- My Department and its sections are gated per role;
+- the phone layout is clean.
+
+The W01 lead is resolved: with Training off, no dashboard, Members Administration or My Account asks a Training endpoint.
+
+Fixed:
+
+- W07-2 (LOW): the two-factor grace notice said "Profile > Security" and linked to the profile tab. The step-up message and the `LB-AUTH-005` support entry also named screens that don't exist.
+
+Flagged:
+
+- W07-3 (LOW): the treasurer has no My Department tab, so the money and grant cards sit on Personal; the admin sees them under My Department.
+- W07-4 (NIT): two single-card My Department tabs.
+
+Gate: flake8, black and isort clean; 103 backend tests pass, and the new cases failed before the fix; docs links clean. Next: W08 when the owner asks.
+
+### W06 second pass — Organization settings and department setup — 2026-11-08
+
+The owner asked to keep going. Driven as `admin`, with `member` for the
+department's view, at 1280×900 and 390×844.
+
+Held:
+
+- an empty department name is held and flagged while other changes save (W06-1);
+- contact changes autosave and survive a reload;
+- a module switched off leaves the member's menu and explains itself where its pages were;
+- all 21 setup cards land where the step is done, including the new Public Portal step;
+- review progress counts, survives a reload and can be undone;
+- a member is refused on both pages and every write;
+- the five screens are clean at 390px.
+
+Fixed:
+
+- W06-5 (LOW): every review step's button was named only "Mark as reviewed".
+
+Flagged:
+
+- W06-6 (MED): the department's phone and website are stored however they are typed under Settings, while onboarding checks the website. Mirrored to KNOWN_LIMITATIONS.
+- W06-7 (NIT): "All changes saved" beside a name flagged as not saved.
+
+Gate: typecheck and lint clean; 64 related frontend tests pass, and the new case failed before the fix. Next: W07 when the owner asks.
+
+### W05 second pass — Positions and permissions — 2026-11-08
+
+The owner asked to continue with W05. Driven as `member`, `admin` and
+`membership_coordinator` at 1280×900 and 390×844.
+
+Held:
+
+- a member is refused on both pages and by the API;
+- creating a position opens "Confirm it's you", refuses a wrong password, and completes the create once confirmed;
+- a grant reaches a signed-in member and a revoke takes it away;
+- delete confirms with the member count;
+- the grant ceiling holds past the step-up;
+- every change and step-up is audited with actor, IP and department;
+- the pages and dialogs are clean at 390px.
+
+Fixed:
+
+- W05-10 (LOW): every position card's buttons were named only "Edit" and "Delete".
+- W05-11 (LOW): the two-factor deadline banner's "Set it up now" opened the profile tab instead of Security.
+
+Flagged: W05-12 (NIT, "Role" on Role Management, "Position" everywhere else).
+
+Gate: typecheck and lint clean; 93 related frontend tests pass, and both new cases failed before their fixes. Next: W06 when the owner asks.
+
+### W04 second pass — My account — 2026-11-08
+
+The owner asked to continue with W04. Driven as `member` at 1280×900 and
+390×844, on the continued install.
+
+Held:
+
+- a blank legal name saves around it (F-1);
+- a member phone in the wrong format is refused (W04-7);
+- the department fields are read-only;
+- a password change refuses a wrong or reused password, then signs out everywhere and says so (W04-1);
+- MFA enrolment shows the recovery codes once (W04-2);
+- new codes and turning MFA off need a current code;
+- notification settings survive a reload;
+- every tab is clean at 390px.
+
+Fixed:
+
+- W04-10 (MED): a code typed "123 456" was still refused on enrolment, step-up, new recovery codes and turning MFA off; W02-10 had fixed only sign-in. The three code schemas now drop whitespace.
+- W04-11 (LOW): the member's own name, phone and address fields had no autocomplete hint (WCAG 1.3.5).
+
+Flagged:
+
+- W04-12 (MED): an emergency contact's phone has no format check. Mirrored to KNOWN_LIMITATIONS.
+- Also seen: a bad member phone still refuses the whole Account save, with no flag on the field (tracked as F-3 in the forms review), and two NITs.
+
+Gate: typecheck and lint clean; flake8, black and isort clean; 125 backend and 108 frontend tests pass, and every new case failed before its fix. Next: W05 when the owner asks.
+
+### W03 second pass — Forgot password and reset by link — 2026-11-08
+
+The owner asked to continue after W02, so W03 was driven again, as a
+signed-out visitor, `member2` and `admin`, at 1280×900 and 390×844, on the
+continued install. Email is off here, so the reset link was minted, as in the
+first pass.
+
+Held:
+
+- with email off, the server issues no token and says so (W03-6 resolved);
+- opening and submitting a link have their own budget (W03-7 resolved);
+- missing, bad and used links are refused;
+- the checklist lists the seven server rules and blocks a run or a mismatch;
+- a reset signs in with the new password, refuses the old, and kills the link;
+- the completed reset is in the department's audit log.
+
+Fixed:
+
+- W03-9 (MED): reset requests never reached the department's audit log; `forgot_password` left `organization_id` empty.
+- W03-10 (MED): the password checklist's met/unmet state was an aria-hidden icon, silent to a screen reader, on the reset page and in My Account.
+- W03-11 (LOW): a stale link check could overwrite the current verdict (test-proven).
+- W03-12 (LOW): the reset page's "Back to sign in" was 40px tall.
+
+Flagged:
+
+- W03-13 (MED): reset requests wrote the typed email address into the hash-chained audit log. Flagged, then fixed on the owner's decision of 2026-11-08: a matched request keeps `user_id` only, and any other keeps a keyed fingerprint.
+- W03-14 (NIT): two pieces of copy.
+
+Gate: typecheck and lint clean; flake8, black and isort clean on the backend files; 24 backend and 116 frontend tests pass, and every new case failed before its fix. Next: none pending; the owner may name the next second pass.
+
+### W80 — Training event lifecycle: create, credit, correct, excuse, move — 2026-11-08
+
+Owner-requested, outside the rotation. Driven as: `training_officer` at
+1280×900, `member` at 390×844, `member2`, `chief` and `admin`. Held: the session
+wizard saved what was entered; self check-in and check-out; finalize, approval
+and requirement credit; the finalized event's schedule lock; reopen, delete and
+cancel keeping records consistent; waiver undo; the Chief-only override.
+Fixed: W80-1 (HIGH — moving an event kept its check-ins and would credit them
+for the new date; now refused), W80-2 (MED — approved minutes unbounded, 20 h on
+a 2 h drill; warned), W80-3 (MED — attendance-request times outside the event
+approved as shown; warned), W80-4 (MED — an officer approved their own credit;
+refused), W80-5 (MED — excusing one drill cut the hours target; requirement
+picker), W80-6 (LOW — wizard accepted an end before the start), W80-7 (LOW — a
+stray "0" after a quick check-out). Flagged: W80-11 (MED — no Postpone; design
+written and decided, for its own pull request), W80-8 (MED — no way to record
+one member on a past drill), W80-9 (LOW — "0/0 sessions — Complete"), W80-10
+(LOW — an excused drill stays in "missed mandatory"). Open: W80-12 to W80-15
+(NIT/LOW). Gate: typecheck, lint (with the larger heap of the W77 lead),
+flake8, black, isort and the touched suites clean. Next: W80-11's pull request.
+Follow-ups, all merged by 2026-11-11 on the owner's decisions: W80-11 Postpone
+(#4179, list badge #4188), W80-16 (#4181), W80-10 (#4182), W80-9 (#4185),
+W80-12 to W80-15 (#4186), W80-8 (#4187). Nothing from W80 remains open.
+
+### Leads — Duplicate skip link and the dashboard's Training call, confirmed fixed — 2026-11-10
+
+Re-driven, no code change. Both leads had been fixed by later work without the
+tracker being updated:
+
+- **Skip links (W20):** `/dashboard`, `/events` and `/training` each carry one
+  "Skip to main content" link, now only the static one in `index.html`
+  (#3755). As `member`, it is the first Tab stop, and Enter moves focus to
+  `#main-content`.
+- **Training's settings asked with Training off:** with `training` switched
+  off, two loads of the administrator's dashboard made no `/training/` API call
+  and no request failed. `usePracticalSkillsMethod` is passed the module check
+  by the side and top navigation and the command palette (`d92baccea`), and
+  `TrainingPageHeader` renders only behind Training's route gate. Training was
+  switched back on afterwards.
+
+### Lead — Lint runs with a heap ceiling it can finish under — 2026-11-08
+
+Fixed (W77-6), on the owner's decision to raise the ceiling in the script
+rather than only document it: `npm run lint` and `lint:fix` run ESLint through
+`frontend/scripts/eslint-heap.mjs` with `--max-old-space-size=8192`, unless
+`NODE_OPTIONS` already sets one. On this machine, plain ESLint capped at 2 GB
+died with "JavaScript heap out of memory" (exit 134), and `npm run lint`
+passed (exit 0) with the child running under the 8 GB ceiling.
+
+### Lead — A public event at a facility publishes its name — 2026-11-08
+
+Read from code and tested, not re-driven. Fixed (W76-7): `/events/public`
+published only an event's free-text location, so an event placed at one of
+the department's facilities reached its website with no location. The
+facility's name is now published, falling back to the free text, as the
+department calendar feed already did. Public events are still only
+`public_education` events; that filter is unchanged.
+`test_public_portal_event_location.py` failed before the fix. Gate: flake8,
+black, isort and mypy clean; the 135 public-portal tests pass.
+
+### W50 follow-up — Meeting link, Import Attendees, unlink — 2026-11-08
+
+Driven as `secretary` at 1280×900 on a fresh database, with `member` and
+`member2` RSVPing to a new business-meeting event (W51's was gone with the old
+database). Held: linking moved the voting window to the event's; the unlink
+sent explicit nulls and held after a reload, which closes the half of W50-60
+that was read from code only; imported attendees stayed after the unlink.
+Fixed (W50-93, MED): "Import Attendees from Event" sent no request, because
+the handler required a linked meeting; it now imports from the event
+("Imported 2 attendees from event"). `ElectionDetailPage.w50-import-event.test.tsx`
+failed before the fix. A no-op re-pick of "No linked meeting" is reachable
+only through Playwright's synthetic change event, so it is noted, not changed.
+Gate: typecheck, eslint and prettier clean; 73 election-detail tests pass.
+
+### Lead — Platform analytics counts one 30-day window — 2026-11-08
+
+Read from code and tested, not re-driven. Fixed (W78-4): new users, events,
+training hours, forms and documents counted "last 30 days" from a rolling
+`now - 30 days`, while the charts beside them were whole local days ending
+today. Every 30-day figure now uses the same local window as the login chart.
+`TestThirtyDayFigures` failed before the fix. Gate: flake8, black, isort and
+mypy clean; the platform-analytics tests pass.
+
+### Lead — Member administration audit rows record the caller — 2026-11-08
+
+Read from code and tested, not re-driven. Fixed (W02-12): 15 of the 19 audit
+rows `users.py` writes had empty IP and browser columns — member creation,
+role changes, viewing a member, contact and profile edits, deletes, the
+password, MFA and passkey resets, unlocks and photo changes — and the other
+four recorded the IP without the browser. Every row now records both through
+`_request_origin(request)`; eleven handlers gained a keyword-only `request`
+parameter, with no change to the HTTP API. `test_member_admin_audit_origin.py`
+failed against the old file. Gate: flake8, black, isort and the mypy ratchet
+clean; 1,064 tests across the 50 files that reach the users endpoints pass.
+
+### Lead — Integration audit rows record the caller — 2026-11-06
+
+Read from code and tested over HTTP, not re-driven. Fixed (W75-5): the
+`integration.connected`, `integration.updated` and `integration.disconnected`
+audit rows had empty IP and browser columns, so the trail could not say where
+a connection change came from. All three now record `get_client_ip` and the
+user agent, as the MCP key rows written during a disconnect already did. A new
+test in `test_integrations_lifecycle_integration.py` connects, updates and
+disconnects iCalendar and checks all three rows; it failed before the fix.
+Gate: flake8, black, isort and mypy clean on the changed files; 646
+integration and MCP tests pass.
+
+### Lead — A scan while clocked in elsewhere names the running session — 2026-11-06
+
+Read from code and component-tested, not re-driven. Fixed (W70-5): scanning
+one admin-hours category's code while clocked in to another was refused with
+no way out. The clock-in page now names the running session (its category,
+start time and time elapsed), keeps Clock In disabled, and offers "Clock out of
+<category>", which ends that session by its own entry id; Clock In then works.
+Decided here: a scan never ends one session and starts another on its own; the
+member makes both moves. A session started on another device after the page
+loaded is named the same way when Clock In is refused. No backend change.
+`AdminHoursClockInPage.test.tsx` failed against the old page. Gate: typecheck
+and lint clean, the 128 admin-hours tests pass.
+
+### Lead — A donation can be edited — 2026-11-05
+
+Read from code and tested, not re-driven. Fixed (W69): a donation's `PUT`
+worked but nothing could load one gift to edit it. `GET
+/grants/donations/{id}` (`fundraising.view`, org-scoped) returns one gift and
+presents an anonymous one as the list does (GF-8), so a view-only caller cannot
+read a hidden donor by asking for the row. The record form now also edits, at
+`/grants/donations/:donationId/edit` (`fundraising.manage`, in all three route
+registries); each row of the Donations list links there for a manager. The
+update sends every field the form owns, an emptied one as null, keeps a linked
+donor or campaign the picker no longer lists, and a failed load shows a message
+rather than a blank form that would save over the gift. The Receipt column
+stays as is (KNOWN_LIMITATIONS, 2026-11-05), so this closes the fundraising
+lead. `test_get_donation.py` and `DonationFormPage.edit.test.tsx` failed
+without the change. Gate: typecheck and lint clean, both route checks and the
+endpoint permission check clean, 164 grants and registry frontend tests and
+1,097 fundraising backend tests pass.
+
+### W02 second pass — Sign in after the November security work — 2026-11-05
+
+Every activity was ✅, so the owner asked for the next after onboarding again.
+Driven as `member`, `member2`, `admin` and anonymous, at 1280×900 and
+390×844, on the W01 third pass's install, re-seeded.
+
+Held:
+
+- deep links survive sign-in, MFA sign-in included;
+- sign-out revokes the session server-side;
+- no account enumeration;
+- the idle timeout warns, then signs out;
+- the server's per-account sign-in limit counts down from `Retry-After`.
+
+Three earlier findings are confirmed resolved:
+
+- W02-3: sign-in, failure, lock, unlock and sign-out all reach the audit log;
+- W02-4: Members shows "Sign-in locked until …" with an Unlock that holds after a reload;
+- W02-5: `/login` targets are 44px.
+
+MFA sign-in was driven for the first time.
+
+Fixed:
+
+- W02-7 (MED): a wrong password under eight characters got a 422 "password: Value is too short" instead of the generic refusal, and never counted toward lockout. `UserLogin` no longer applies a length floor.
+- W02-9 (LOW): the seven controls at the foot of the phone menu, Logout among them, were 36px tall.
+- W02-10 (LOW): a correct authenticator code typed "123 456" was refused as too long.
+
+Flagged:
+
+- W02-8 (MED): the sign-in screen's own back-off counted every name tried in a tab, so one member's failures held the next at a station computer for up to five minutes. Flagged, then fixed on the owner's decision of 2026-11-05: the count is now per account, as the server's is.
+- W02-11 (NIT): "Logout" beside "Sign in".
+
+New lead: admin actions on a member are audited without an IP. Gate: typecheck and lint clean, flake8, black and isort clean on the backend files, and 188 backend and 202 frontend tests pass; each new test failed before its fix. Next: none pending; the rotation remains complete.
+
+### Lead — Grant budget lines, expenditures and task assignees — 2026-11-05
+
+Read from code and tested, not re-driven. Fixed (W68): a grant's budget lines
+and expenditures had update and delete endpoints but no control on the detail
+page, and a compliance task could be given an assignee only by editing it after
+it was created. Each budget line and expenditure now has Edit, which reopens
+its own add dialog filled in, and Delete behind a confirmation. Deleting a line
+says how many expenditures are charged to it, since they are kept and left with
+no line (`ON DELETE SET NULL`). An edited expenditure sends an emptied vendor,
+invoice number or line as null, so it is cleared, and shows any overspend
+warning as recording one does. The compliance task dialog gains an Assigned To
+picker, shown when the member directory is readable; the create schema gains
+`assigned_to`, checked against the department as the update path already was
+(XC-1). `GrantDetailPage.editLines.test.tsx` and
+`test_grant_compliance_task_assignee.py` failed without the change. Gate:
+typecheck and lint clean, flake8 and black clean, the 141 grants and
+fundraising frontend tests and 913 grant backend tests pass.
+
+### Lead — Donors and campaigns can be edited — 2026-11-05
+
+Owner decisions: fundraising edit forms first, grants second; the Receipt
+column is left as it is. Read from code and component-tested, not re-driven.
+Fixed: donors and campaigns could be created but never edited (W69), though
+their `PUT`s work. Each now has an Edit control for `fundraising.manage`,
+which opens the page's own create form filled in. An update sends every field
+the form owns and an emptied box as null, so a cleared email or end date is
+cleared (pitfall 1). A campaign's status and restriction keep the controls
+already on its card, so the edit form leaves them out. Donations stay a lead:
+there is no endpoint that returns one donation. `fundraisingEdit.test.tsx`
+failed against the pages without the controls. Gate: typecheck and lint
+clean; the 139 grants and fundraising tests pass.
+
+### Lead — Reports printed ISO dates — 2026-11-03
+
+Read from code and component-tested, not re-driven. Fixed (W72-4): report
+tables, the period under a report's title, the previous-period heading, the
+Call Volume "Busiest Day" card and the compliance deadlines all printed
+`2026-01-01 — 2026-12-31` and `2026-10-15`. They now read `Jan 1, 2026` through
+the app's `formatCalendarDate`, which keeps a calendar date on its written day
+for every viewer; the one instant in the tables, Training Progress "Enrolled",
+goes through `formatDate` in the department's timezone. The helpers live in
+`modules/reports/utils/reportDates.ts`. Only the display columns changed: every
+export keeps ISO values, so a CSV still sorts in a spreadsheet. The Call Volume
+renderer test failed against the old rendering. Gate: typecheck and lint clean,
+and the 161 reports tests pass.
+
+### Lead — A meeting's status now follows its minutes — 2026-11-03
+
+Owner decision: drive the meeting's status from its minutes (W51-9). Fixed:
+nothing moved a meeting record's status, so every meeting read "Draft" beside
+approved, published minutes, and every meeting stayed deletable after its
+attendance became the settled record that membership tiers count. Approving a
+set of minutes now approves the meeting it was taken from, in the same
+transaction, with the minutes' approver and time. A meeting already approved
+keeps its own stamp, a meeting in another organization is never touched, and
+reopening minutes for correction leaves the meeting approved so its attendance
+cannot be deleted mid-correction. Migration `6b81e95d4157` settles the meetings
+whose minutes were approved before this change. Read from code and tested, not
+re-driven: `test_minutes_approve_meeting.py` (the approval failed to move the
+meeting before the fix) and `test_meeting_approval_backfill.py` (the backfill,
+upgrade and downgrade, against rows). Gate: flake8, black and isort clean; the
+migration guards and every minutes and meetings suite pass (1,000 tests);
+`alembic upgrade head`, `downgrade -1` and `upgrade head` clean on an empty
+database.
+
+### Lead — Documents named their type by MIME string — 2026-11-02
+
+Read from code and component-tested, not re-driven. Fixed (W53-6): the
+documents list printed a file's type as its MIME string in capitals
+("APPLICATION/PDF", and for a Word file
+"APPLICATION/VND.OPENXMLFORMATS-OFFICEDOCUMENT…"), on the cards and in the list
+view. A new `utils/fileTypeLabel.ts` names every type the documents upload
+accepts ("PDF", "Word", "Excel", "Text", "PNG image") and falls back to the
+family ("Image") or "File". The event form's attachment list printed the same
+raw string beside the size and now uses the same helper. The tests for both
+screens failed against the old rendering. Gate: typecheck and lint clean, and
+the documents, event form and reflow-table tests pass.
+
+### Lead — Shift notices printed ISO dates — 2026-11-02
+
+Read from code and unit-tested, not re-driven: the change is the text of a
+notification body. Fixed (W46-16): the assignment notice said "the 2026-09-30
+shift", and the cancellation, decline, swap, confirmation and time-off notices
+built their dates the same way. All seven now print `Sep 30, 2026`, the form
+the scheduled reminders already use, through one `_notice_date` helper in
+`scheduling_service.py`; `test_shift_notice_dates.py` failed on the ISO form
+and passes now, and the cancellation test that pinned the ISO subject was
+updated with it. Held: the assignment notice still opens the shift rather than
+My Checklists. It is the notice of an assignment, and the shift is what it
+announces. The end-of-shift checklist reminder is the notice that opens `/inventory/checklists/my?shift=…`. Gate: flake8, black and isort clean on the
+changed files, and the scheduling, swap, time-off and shift-completion suites
+pass.
+
+### W71b — Medical screening, deep dive — 2026-11-02
+
+Driven as `admin`, as `member2` holding a new Medical Officer position, and as
+`member`, on a fresh database at 1280×900 and 390×844. It covered what W71 left
+out (prospects, a prospect transferred to membership, deletion, a non-admin
+officer recording their own screening), and checked the module against the
+dashboard and the Members hub. Held: prospect recording, self-recording with
+its label, frequency grading of an undated record, waivers counting, the
+delete itself, and `member` refused. Fixed (LOW, each with a test seen to
+fail first):
+
+- View opened the member's panel off-screen, on a phone and on a laptop;
+- a Failed result was given a one-year expiration;
+- the delete confirmation did not say whose record it was;
+- dialog buttons were 36px on a phone.
+
+Flagged, mirrored to KNOWN_LIMITATIONS:
+
+- W71b-1 (HIGH): a newer failed physical leaves the member reading cleared
+  everywhere.
+- W71b-2 (HIGH): transferring a prospect leaves their screenings on the
+  prospect, so the new member owes them again.
+- W71b-3 (MED): the Members hub re-derives screening status and disagrees
+  with the Compliance tab. It also claims the lapse "blocks duty assignment".
+- W71b-4 (MED): no expiry reminders.
+- W71b-5 (LOW): new requirements default to one-time.
+
+Gate: typecheck and lint clean; 183 medical-screening and date-utility tests
+and 12 integrity tests pass.
+
+### Leads — Navigation parity and dialog roles — 2026-11-02
+
+Driven as: `admin` in the top layout at 390×844, on a reseeded review
+database. Fixed: the top layout lacked two destinations the side layout
+offers, both added there on 2026-10-26 (#3755): Medical Screening under
+Admin, and My ID Card among the member's own links. Both are now in the top
+layout, gated as in the side one, and the new `navigationParity.test.tsx`
+renders both layouts with every permission and module on, opens every group,
+and fails when either reaches a destination the other does not (80 against 82
+before the fix). Re-driven: both appear in the top layout's menu, and My ID Card
+opens the admin's own card. The W14-2 dialog-role lead was already fixed on
+main: all 56 `DialogPanel` uses carry `role="dialog"` on the panel or a
+wrapper. Gate: typecheck and lint clean, and the navigation tests pass.
+
+### Lead — Reflow table cells a phone hid — 2026-11-01
+
+Driven as: `admin` at 390×844. Fixed: every body cell of a `rwd-table` with no
+`data-label` is hidden below 768px, which took the row actions off the
+QuickBooks mapping tables and the pledges list, and every cell of the documents
+list view (a document row rendered as an empty card). Those cells now carry
+labels, and `rwdTableLabelIntegrity.test.ts` fails on the next unlabeled body
+cell, allowing only the inventory desktop actions cell (a phone gets its own)
+and the decorative bar in My Hours. Finance Reports, named in the lead, was
+clean: its unlabeled cells are in tables that do not reflow or in totals rows,
+which the rule leaves alone. Re-driven: the QuickBooks "Add a mapping", the
+pledge's Edit and a document's name, size, type and date all show on a phone;
+without the fix the document row showed nothing. Gate: typecheck and lint
+clean, and the tests for the changed pages pass.
+
+### Lead — The dashboard asked two modules that were off — 2026-10-31
+
+Driven as: `admin` at 1280×900, with Integrations and Training switched off
+over `PATCH /organization/modules` and back on afterwards. Fixed: the
+dashboard's severe-weather banner asks only while Integrations is on, and the
+side and top navigation and the command palette ask for the practical-skills
+setting only while Training is on (`usePracticalSkillsMethod` takes the module
+check from its caller; Training's own pages are behind its route gate already).
+Without the fix the dashboard sent three requests and all three were refused
+`403 LB-ORG-002`; with it, the dashboard, Events and the phone layout sent none.
+With the modules back on, both requests were sent again and answered. Gate:
+typecheck and lint clean; the 281 test files related to the changed files pass,
+and every new test fails without the fix.
+
+### W01 third pass — Onboarding options and wording, as an IT manager — 2026-10-31
+
+Driven as: a fresh install, twice (find, then re-drive), anonymous → system
+owner, at 1280×900, in the review database only. Covered what the first two
+passes left out: every option on every step against what the app did after
+(stored rows, first sign-in, navigation, Settings), the email and storage
+configuration forms, the logo upload, and the sign-in choice on a server with
+no SSO client. Held: organization and logo stored as entered, member numbering,
+IT-contact accounts without duplicates, seat lists, the SMTP test's error, and
+W01-11 (choosing an unconfigured provider keeps passwords and reset; now
+resolved). Fixed: W01-17 to W01-22, W01-25, W01-26, W01-28 to W01-33. One
+HIGH (W01-29: the OneDrive card and page said files would be stored in
+OneDrive; nothing reads that choice), now worded truthfully; the limitation
+stands per the owner's 2026-10-08 decision. Flagged: W01-23 (MED, Mobile App
+Access has no reader), W01-24 (LOW, onboarding turns Public Information off
+without offering it), W01-27 (LOW, email settings that failed their test are
+saved without a word). Resolved the dashboard lead's integrations half
+(W01-33). Gate: typecheck and lint clean, every new test seen failing first,
+the full frontend suite passes, flake8 and black clean on the two backend files.
+Follow-up 2026-11-01: owner decided W01-23, and Mobile App Access is removed
+from onboarding and Settings (the stored field is kept, retired). Owner decided
+W01-27: a failed email test now warns on the page and Continue asks before
+saving, but saving is allowed. Owner decided W01-24 (2026-11-03): completing
+setup leaves Public Information on by default; setup now decides only the
+modules it asks about.
+
+### Membership re-check (W08, W10–W15) — 2026-10-31
+
+Driven as: `admin`, `member` and `member2` on a fresh install, at 1280×900 and
+390×844. Held: every admin route and mutation refused for `member`, and contact
+data redacted from colleagues. Add member saved exactly one record on a double
+click. Clearing date of birth and phone saved the clear. The class and status
+filters and search found the edited member. The audit history recorded the edit.
+Waiver date validation worked. Deactivate worked through the step-up prompt.
+Nothing overflowed on a phone. Fixed: MR-1 (MED — the profile called future and
+expired leaves "Active"; it now shares the Waivers screen's rule) and MR-2 (LOW —
+the directory fired a refused tier-config request for every member). Flagged:
+MR-3 (LOW — members see built-in tier names; mirrored to KNOWN_LIMITATIONS),
+MR-4 (LOW — profile views crowd the audit history) and MR-7 (NIT — an unused
+membership store). MR-5 and MR-6 (NIT) were fixed in a 2026-11-01 follow-up. Gate: typecheck and lint clean;
+lint needed a larger Node heap with the harness running. The touched suites
+pass. See W10-W15-membership-recheck.md.
+
+### W01 follow-up — The open onboarding findings — 2026-10-31
+
+Driven as: a fresh install, three times, at 390×844 (the review database only,
+reset with `start.sh --reset` and seeded again afterwards). Fixed: W01-12 (owner
+decision: refuse a backup email equal to the administrator's), W01-13 (measured
+again first; every control under 44px on Modules, Ranks & Positions and
+Apparatus, and the four more the drive found on the administrator, IT Contacts
+and setup-complete steps and Reset Progress, now take `touch-target-phone`),
+W01-14 (the Create button, and Reset Progress, are named by their visible
+words), W01-15 (a failed Continue on Organization Setup focuses the first invalid
+field) and W01-16 (Stations has Back). Re-driven: every onboarding step measures
+clean at 390px, and `seed.mjs` onboards with the renamed button. New lead: the
+first dashboard asks two disabled modules and is refused. Gate: typecheck and
+lint clean, and the onboarding tests and the tests related to the changed files
+pass.
 
 ### W08-6 follow-up — Requests held while a password change is required — 2026-10-25
 
@@ -1253,6 +1778,18 @@ tests and 4083 backend tests (minutes and meetings) pass, as does the full front
 9002 tests).
 
 Next: W52.
+
+### W50 (re-drive) — Voter-eligibility rules and the lifecycle — 2026-10-31
+
+Driven as `secretary`, `membership_coordinator`, `member` and `treasurer` on a fresh database, at 1280×900 and 390×844. Covered: department defaults (regular and annual), the waiting period per member type, the profile override, a status change, count-mode attendance, the frozen roll, voting, close and results. Findings are in [W50-elections.md](./W50-elections.md#w50-re-drive--2026-10-31-voter-eligibility-rules-and-the-lifecycle).
+
+- Fixed: W50-R1 (MED — Escape in the position suggestions discarded the create form), W50-R2 (LOW — a future count-from date was accepted).
+- W50-R3 (LOW — an ineligible member is told only that they are not on the frozen roll): flagged, then fixed 2026-11-02 on the owner's decision.
+- Fixed 2026-11-01: W50-R4 and W50-R5 (NIT).
+- 2026-11-13, the remaining September items:
+  - Re-checked on `main`: W50-75 and W50-91 were already fixed. W50-12 needed no change.
+  - Fixed W50-13, W50-74, W50-76, W50-77, W50-79, W50-80, W50-81 and W50-92.
+  - Owner decisions: W50-78 (document only) and W50-82 (keep the automatic copy, relabel the button).
 
 ### W50 — An election: create, nominate, vote by ballot link, close, results — 2026-09-30
 

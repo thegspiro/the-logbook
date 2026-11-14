@@ -13,6 +13,7 @@ import re
 import secrets
 import string
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from typing import Any
 
 import jwt
@@ -94,6 +95,27 @@ def verify_password(password: str, hashed_password: str) -> tuple[bool, str | No
         return True, new_hash
     except (VerifyMismatchError, VerificationError, InvalidHash):
         return False, None
+
+
+@lru_cache(maxsize=1)
+def _dummy_password_hash() -> str:
+    # Built once with the live hasher, so it carries the same Argon2
+    # parameters as a real account's hash and verifying against it costs the
+    # same as verifying against one.
+    return password_hasher.hash(secrets.token_urlsafe(32))
+
+
+def burn_password_verification(password: str) -> None:
+    """Spend one Argon2 verification without an account to check it against.
+
+    For sign-in paths that refuse before the real verify (no such user, no
+    password set, account locked), so they take as long as a wrong password
+    for an account that exists. One verification, not a hash and a verify:
+    hashing a dummy on every call made the unknown-user path about twice as
+    slow as the wrong-password path, which told an outsider which accounts
+    exist just as reliably as answering fast did.
+    """
+    verify_password(password, _dummy_password_hash())
 
 
 def validate_password_strength(password: str) -> tuple[bool, str | None]:

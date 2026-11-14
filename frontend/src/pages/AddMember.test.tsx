@@ -18,10 +18,20 @@ const mockPreviewNextMembershipId = vi.fn();
 const mockGetRoles = vi.fn();
 const mockGetLocations = vi.fn();
 
+const mockGetTierConfig = vi.fn();
+
 vi.mock('../services/api', () => ({
   userService: {
     createMember: (...args: unknown[]) => mockCreateMember(...args) as unknown,
     getWelcomeEmailAvailability: (...args: unknown[]) => mockGetWelcomeEmailAvailability(...args) as unknown,
+  },
+  memberStatusService: {
+    // The status control reads the members-visible tier names; the fixtures
+    // below state a ladder, of which the names endpoint serves ids and names.
+    getTierNames: async (...args: unknown[]) => {
+      const config = (await mockGetTierConfig(...args)) as { tiers?: { id: string; name: string }[] } | undefined;
+      return (config?.tiers ?? []).map(({ id, name }) => ({ id, name }));
+    },
   },
   organizationService: {
     previewNextMembershipId: (...args: unknown[]) => mockPreviewNextMembershipId(...args) as unknown,
@@ -61,9 +71,11 @@ import toast from 'react-hot-toast';
 
 import { renderWithRouter } from '../test/utils';
 import AddMember from './AddMember';
+import { useAuthStore } from '../stores/authStore';
 
 const rankSelect = () => screen.getByRole('combobox', { name: /^rank$/i });
-const membershipSelect = () => screen.getByRole('combobox', { name: /membership type/i });
+const classSelect = () => screen.getByRole('combobox', { name: /member class/i });
+const statusSelect = () => screen.getByRole('combobox', { name: /membership status/i });
 
 /**
  * Fill every field `validateForm` insists on, so submit actually reaches the API.
@@ -111,6 +123,9 @@ const fillRequired = async (
 // takes longer than the default 5s even though nothing is wrong.
 describe('AddMember', { timeout: 20_000 }, () => {
   beforeEach(() => {
+    // The form keeps a local draft (forms review F-6); one test's entries
+    // must not come back as the next test's restored draft.
+    sessionStorage.clear();
     vi.clearAllMocks();
     mockPreviewNextMembershipId.mockResolvedValue({ enabled: false, next_id: null });
     mockGetRoles.mockResolvedValue([]);
@@ -118,7 +133,83 @@ describe('AddMember', { timeout: 20_000 }, () => {
     mockCreateMember.mockResolvedValue({ id: 'u1' });
     mockGetWelcomeEmailAvailability.mockReset();
     mockGetWelcomeEmailAvailability.mockResolvedValue({ available: true });
+    mockGetTierConfig.mockReset();
+    mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
     mockConnected.clear();
+  });
+
+  it('ties each refusal to its field, announces it, and moves focus to the summary of them', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<AddMember />);
+    await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+    const firstName = screen.getByLabelText(/^First Name/);
+    expect(firstName).toHaveAttribute('aria-required', 'true');
+    expect(firstName).toHaveAttribute('maxlength', '100');
+    // Details about somebody else: the officer's own autofill is not offered (F-9).
+    expect(firstName).toHaveAttribute('autocomplete', 'off');
+    await user.click(screen.getByRole('button', { name: /save member/i }));
+
+    expect(firstName).toHaveAttribute('aria-invalid', 'true');
+    expect(firstName).toHaveAccessibleDescription('First name is required');
+    expect(screen.getByRole('alert', { name: 'Fix these before saving' })).toHaveFocus();
+    expect(screen.getByLabelText(/^Street Address/)).toHaveAccessibleDescription('Street address is required');
+    expect(mockCreateMember).not.toHaveBeenCalled();
+  });
+
+  it('puts a server refusal on the field it names, including an emergency contact’s', async () => {
+    const user = userEvent.setup();
+    mockCreateMember.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: {
+          detail: [
+            { field: 'address_zip', message: 'Value is too long.' },
+            { field: 'emergency_contacts.0.phone', message: 'Value is too long.' },
+          ],
+        },
+      },
+    });
+    renderWithRouter(<AddMember />);
+    await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+    await fillRequired(user);
+    await user.click(screen.getByRole('button', { name: /save member/i }));
+
+    const zip = screen.getByLabelText(/^ZIP Code/);
+    await waitFor(() => expect(zip).toHaveAccessibleDescription('Value is too long.'));
+    expect(zip).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText(/^Phone/, { selector: '#add-emergencyPhone1' })).toHaveAccessibleDescription(
+      'Value is too long.'
+    );
+    expect(screen.getByRole('alert', { name: 'Fix these before saving' })).toHaveFocus();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('restores a draft of the member’s details, but never their emergency contacts or birth date', async () => {
+    const user = userEvent.setup();
+    // Drafts are keyed by the signed-in member, so there has to be one.
+    useAuthStore.setState({ user: { id: 'officer-1' } as never });
+    const view = renderWithRouter(<AddMember />);
+    await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+    await user.type(screen.getByLabelText(/^First Name/), 'Dana');
+    await user.type(screen.getByLabelText(/^City/), 'Falls Church');
+    await user.type(screen.getByPlaceholderText('Jane Doe'), 'Sam Reyes');
+    await user.type(screen.getByLabelText('Date of Birth'), '1990-04-01');
+    view.unmount();
+
+    const stored = Object.keys(sessionStorage)
+      .map((key) => sessionStorage.getItem(key) ?? '')
+      .join('');
+    expect(stored).toContain('Dana');
+    expect(stored).not.toContain('Sam Reyes');
+    expect(stored).not.toContain('1990-04-01');
+
+    renderWithRouter(<AddMember />);
+    expect(await screen.findByText('Restored your unsaved draft.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^First Name/)).toHaveValue('Dana');
+    expect(screen.getByLabelText(/^City/)).toHaveValue('Falls Church');
+    expect(screen.getByPlaceholderText('Jane Doe')).toHaveValue('');
   });
 
   it('offers a rank to an operational member', async () => {
@@ -144,7 +235,7 @@ describe('AddMember', { timeout: 20_000 }, () => {
     await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
 
     await user.selectOptions(rankSelect(), 'captain');
-    await user.selectOptions(membershipSelect(), 'administrative');
+    await user.selectOptions(classSelect(), 'administrative');
 
     expect(rankSelect()).toBeDisabled();
     expect(rankSelect()).toHaveValue('');
@@ -157,26 +248,54 @@ describe('AddMember', { timeout: 20_000 }, () => {
     await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
 
     await fillRequired(user);
-    await user.selectOptions(membershipSelect(), 'administrative');
+    await user.selectOptions(classSelect(), 'administrative');
+    await user.selectOptions(statusSelect(), 'life');
     await user.click(screen.getByRole('button', { name: /save member/i }));
 
     await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
     const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+    // The pair the fused dropdown could not say: an administrative life member.
     expect(payload.member_class).toBe('administrative');
-    expect(payload.member_status).toBe('regular');
+    expect(payload.member_status).toBe('life');
     expect(payload.rank).toBeUndefined();
   });
 
-  it("maps the form's 'regular' onto the class and status it means", async () => {
-    // 'regular' is a member *status*; the backend's legacy vocabulary spells
-    // that case 'active', so sending the raw string would land in the column as
-    // an unrecognised tier.
+  it("offers the department's own tiers as statuses, by name", async () => {
+    mockGetTierConfig.mockResolvedValueOnce({
+      auto_advance: true,
+      tiers: [
+        { id: 'active', name: 'Active Member', years_required: 1, sort_order: 1, benefits: {} },
+        { id: 'senior', name: 'Senior Member', years_required: 10, sort_order: 2, benefits: {} },
+      ],
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<AddMember />);
+    await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+    // The ladder's second rung is the regular status under the tier's name,
+    // not a second entry beside it; senior is its own standing.
+    const senior = await screen.findByRole('option', { name: 'Senior Member' });
+    expect(senior).toHaveValue('senior');
+    expect(screen.getByRole('option', { name: 'Active Member' })).toHaveValue('regular');
+    expect(screen.queryByRole('option', { name: 'Regular' })).not.toBeInTheDocument();
+
+    await fillRequired(user);
+    await user.selectOptions(statusSelect(), 'senior');
+    await user.click(screen.getByRole('button', { name: /save member/i }));
+
+    await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+    const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.member_class).toBe('operational');
+    expect(payload.member_status).toBe('senior');
+  });
+
+  it('sends the class and status as a pair, with the regular status spelled as the backend stores it', async () => {
     const user = userEvent.setup();
     renderWithRouter(<AddMember />);
     await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
 
     await fillRequired(user);
-    await user.selectOptions(membershipSelect(), 'regular');
+    await user.selectOptions(statusSelect(), 'regular');
     await user.selectOptions(rankSelect(), 'captain');
     await user.click(screen.getByRole('button', { name: /save member/i }));
 
@@ -364,7 +483,65 @@ describe('AddMember', { timeout: 20_000 }, () => {
     });
   });
 
+  // Forms review F-4: an empty save showed a message under every field but
+  // tied none of them to its input, and left focus on the button at the
+  // bottom of a 30-field form with the first errors out of view.
+  describe('saying what is wrong', () => {
+    it('lists the missing fields at the top, takes focus there, and ties each message to its field', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      const summary = screen.getByRole('alert', { name: 'Fix these before saving' });
+      expect(summary).toHaveFocus();
+      expect(within(summary).getByRole('link', { name: 'First name: First name is required' })).toHaveAttribute(
+        'href',
+        '#add-firstName'
+      );
+      const first = screen.getByLabelText(/^first name/i);
+      expect(first).toHaveAttribute('aria-invalid', 'true');
+      expect(first).toHaveAttribute('aria-required', 'true');
+      expect(first).toHaveAccessibleDescription('First name is required');
+      expect(mockCreateMember).not.toHaveBeenCalled();
+    });
+
+    it('puts a server refusal on the field it names', async () => {
+      mockCreateMember.mockRejectedValue({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'email', message: 'Enter a valid email address.' }], code: 'LB-VAL-001' },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      const email = screen.getByPlaceholderText('john.doe@example.com');
+      await waitFor(() => expect(email).toHaveAccessibleDescription('Enter a valid email address.'));
+      expect(screen.getByRole('alert', { name: 'Fix these before saving' })).toHaveFocus();
+    });
+  });
+
   describe('workflow review W08', () => {
+    // W08-7: the optional fields overrode form-input's faded placeholder with
+    // full-strength muted text, so "Michael", "Terry" and the whole second
+    // emergency contact ("Bob Doe", "Parent") read as values already entered.
+    it('shows every example in the same faded placeholder style', async () => {
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      const boxes = screen.getAllByRole('textbox');
+      expect(boxes.length).toBeGreaterThan(20);
+      for (const box of boxes) {
+        expect(box).not.toHaveClass('placeholder-theme-text-muted');
+      }
+    });
+
     it('names every field by its label', async () => {
       renderWithRouter(<AddMember />);
       await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
@@ -393,6 +570,17 @@ describe('AddMember', { timeout: 20_000 }, () => {
           .map((o) => o.textContent)
       ).toEqual(['Active', 'Inactive', 'On Leave']);
       expect(screen.queryByText('Preferred Contact Method')).not.toBeInTheDocument();
+    });
+
+    // W08-9: a member added Inactive or On Leave is refused at sign-in
+    // ("Account is inactive"), while the form still asks for their password.
+    it('says that an inactive or on-leave member cannot sign in', async () => {
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      expect(screen.getByRole('combobox', { name: /^status$/i })).toHaveAccessibleDescription(
+        /inactive or on leave cannot sign in until their status is set to active/i
+      );
     });
 
     // W08-1: the status used to be shown and not sent, so "On Leave" created
@@ -608,6 +796,8 @@ describe('AddMember — the position dropdown', () => {
     mockGetLocations.mockResolvedValue([]);
     mockGetWelcomeEmailAvailability.mockReset();
     mockGetWelcomeEmailAvailability.mockResolvedValue({ available: true });
+    mockGetTierConfig.mockReset();
+    mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
     mockConnected.clear();
   });
 

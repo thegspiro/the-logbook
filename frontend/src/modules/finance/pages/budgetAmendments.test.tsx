@@ -337,7 +337,7 @@ describe('Edit dialog in a locked year', () => {
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = await screen.findByRole('dialog');
-    const amount = within(dialog).getByLabelText('Amount budgeted');
+    const amount = within(dialog).getByLabelText(/^Amount budgeted/);
     expect(amount).toHaveAttribute('readonly');
     expect(within(dialog).getByText('This fiscal year is locked.')).toBeInTheDocument();
 
@@ -359,7 +359,7 @@ describe('Edit dialog in a locked year', () => {
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByLabelText('Amount budgeted')).not.toHaveAttribute('readonly');
+    expect(within(dialog).getByLabelText(/^Amount budgeted/)).not.toHaveAttribute('readonly');
     expect(within(dialog).queryByText('This fiscal year is locked.')).not.toBeInTheDocument();
   });
 });

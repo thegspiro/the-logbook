@@ -75,12 +75,12 @@ elsewhere (email, file storage, sign-in) until the end.
   - **Core** (always on): Member Management, Events & RSVP, Documents & Files, Custom Forms
   - **Operations**: Training & Certifications, Inventory, Medical Supplies, Shift Scheduling, Apparatus & Fleet, Facilities Management, Department Store
   - **Governance**: Elections & Voting, Meeting Minutes, Reports & Analytics
-  - **Communication**: Email Notifications, Mobile App Access
+  - **Communication**: In-App Notifications, Public Information
   - **Advanced**: External Integrations
   - **Membership**: Prospective Members Pipeline
 - Modules the wizard does not ask about — Communications, Finance, Grants &
-  Fundraising, HR & Payroll, Incidents, Medical Screening, Public Information and
-  the Testing Checklist — are turned on later under **Settings → Modules**
+  Fundraising, HR & Payroll, Incidents, Medical Screening and the Testing
+  Checklist — are turned on later under **Settings → Modules**
 
 #### Step 4: Ranks & Positions
 
@@ -339,7 +339,7 @@ Frontend onboarding state is stored in a Zustand store persisted to **localStora
 
 The API client stores the session identifier separately, in **`sessionStorage`** under `onboarding_session_id` _(moved from `localStorage` on 2026-08-15)_. That identifier is a bearer credential — presented as the `X-Session-ID` header, it authorizes the setup mutations that create the organization, its stations and apparatus, the IT team, and the first System Owner — so it must not survive a browser restart or be readable from unrelated tabs. Its CSRF companion, `onboarding_csrf_token`, lives in **`sessionStorage`** too and is sent as the `X-CSRF-Token` header — not as a cookie. The backend sets no cookie of that name; the client reads one only to migrate a value an older build left, then deletes it. Identifiers left in `localStorage` by an older client are deleted on load.
 
-**The two stores have different lifetimes, and that is visible to installers.** The wizard's typed answers (`onboarding-storage`) outlive the tab; the session identifier does not. Reopening `/onboarding` after closing the browser therefore repaints the answers already entered while the server session is gone — the failure surfaces at the next mutating step as `401` / `ONBD_SESSION_INVALID`, not at the repaint. **Onboarding should be completed in one tab, in one sitting**; the recovery from an expired run is to restart the wizard, not to re-type into a dead session. A second tab does not inherit the wizard either (a _duplicated_ tab does, because Chrome and Firefox copy `sessionStorage` into duplicates — browser behavior, not a supported resume path).
+**The two stores have different lifetimes, and that is visible to installers.** The wizard's typed answers (`onboarding-storage`) outlive the tab; the session identifier does not. Reopening `/onboarding` after closing the browser therefore repaints the answers already entered while the server session is gone. Since 2026-11-03 the wizard says so on load rather than at the next mutating step (`401` / `ONBD_SESSION_INVALID`): when a step opens with typed answers and no session in this tab, a banner explains that the session has ended, that the answers are a draft kept on this device, and that the first step (`/onboarding/start`) starts a new one, asking the System Owner to sign in once that account exists. **Onboarding should still be completed in one tab, in one sitting**; the recovery from an expired run is to return to the first step, not to re-type into a dead session. A second tab does not inherit the wizard either (a _duplicated_ tab does, because Chrome and Firefox copy `sessionStorage` into duplicates — browser behavior, not a supported resume path).
 
 Server-side, the session row carries a **30-minute sliding expiry** (`SESSION_EXPIRY_HOURS = 0.5`), pushed forward on each authenticated activity.
 

@@ -115,10 +115,31 @@ program enrollments, external training integrations, and compliance reporting.
 
 ## Training Requirements
 
+### Session attendance and the Chief's override
+
+`session_attendance` (2026-11-04) is met by attending `required_attendance_pct`
+of the sessions linked to it that were held in its window. Sessions link through
+`training_session_requirements`, so one drill can count toward several
+requirements; a session linked to none charges nobody. The rule is written once
+(`training_compliance.tally_session_attendance`) and every grader reads it, with
+`load_held_sessions` passed through each caller. `PUT
+/training/sessions/{id}/attendance-requirements` replaces a session's links and
+is allowed after attendance is finalized.
+
+A requirement with `allows_chief_override` accepts rows in
+`training_requirement_overrides` (who, when, dates, encrypted reason; revoked,
+never deleted). Only a holder of a Chief position (`CHIEF_POSITION_SLUGS`)
+records or revokes one, so the three routes are in the permissionless-route
+baseline. Overrides reach the graders as waiver periods tagged
+`SOURCE_OVERRIDE`; `month_waivers` and the per-session excusal ignore them, and
+only the attendance rule reads one, as met, for a member who would otherwise
+fall short. Certification-style requirements now match records by the stored
+`match_key` / `certification_key` rather than by name.
+
 ### Types, frequency and targeting
 
 A requirement has a `requirement_type` (hours, courses, certification, shifts,
-calls, skills_evaluation, checklist, knowledge_test), a `frequency` (annual,
+calls, skills_evaluation, checklist, knowledge_test, session_attendance), a `frequency` (annual,
 biannual, quarterly, monthly, one_time) and a `due_date_type`
 (calendar_period, rolling, certification_period, fixed_date). `due_date` only
 means anything for `fixed_date`: create and update clear it for every other
@@ -185,8 +206,9 @@ caller's organization via `assert_all_in_org`, reporting only "invalid" so it
 cannot be used to probe another tenant. Changing a requirement's type away from
 courses/certification clears the links.
 
-**Certification name matching** is limited to legacy records
-(`name_match_until`); see
+**Name matching** (certifications, and since 2026-11-04 skills evaluation,
+checklist and knowledge test) is limited to legacy records
+(`name_match_until`) and compares stored match keys, not text; see
 [Compliance](Module-Compliance#one-definition-of-who-is-graded-and-how-2026-10-05).
 
 ### Freshness window
@@ -344,7 +366,9 @@ service every compose file starts.
 
 The outage row **fails closed**: accepting unscanned files whenever the scanner
 is down is the state an attacker wants (the same reasoning as CAPTCHA). Files
-stored while scanning was disabled are not rescanned. See
+stored before scanning, or while it was disabled, are scanned once afterwards
+by the hourly `stored_file_malware_scan` task; an infected one is deleted and
+audited the same way. See
 [Security Configuration](Configuration-Security#malware-scanning-of-uploads).
 
 ### Certificate retention
@@ -789,8 +813,9 @@ offline queue covers an evaluation run with **no connectivity at all** (see
   (no provisional score), a named toast when the server refuses one, and the
   pending count in the nav pill.
 - **Sign-out** — Sign Out sends what it can, then warns before the local purge
-  deletes unsent evaluations. The idle timeout and an expired session purge
-  without asking.
+  deletes unsent evaluations. The idle timeout, an expired session and
+  another member signing in keep them on the device for that examiner alone,
+  for seven days; only they see or send them when they sign back in.
 
 ### Edge Cases
 

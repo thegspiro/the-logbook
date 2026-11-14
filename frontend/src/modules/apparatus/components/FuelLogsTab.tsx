@@ -44,8 +44,8 @@ export const FuelLogsTab: React.FC<FuelLogsTabProps> = ({ fuelLogs, loadingTab, 
             No fuel logged yet. Select Add Fuel Log to record a fill-up.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="rwd-table-container overflow-x-auto">
+            <table className="rwd-table rwd-table-wide w-full">
               <thead className="border-theme-surface-border border-b">
                 <tr>
                   <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
@@ -74,19 +74,25 @@ export const FuelLogsTab: React.FC<FuelLogsTabProps> = ({ fuelLogs, loadingTab, 
               <tbody className="divide-theme-surface-border divide-y">
                 {fuelLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-theme-surface-secondary/50 transition-colors">
-                    <td className="text-theme-text-primary px-4 py-3">{formatDate(log.fuelDate, timezone)}</td>
-                    <td className="text-theme-text-secondary px-4 py-3 capitalize">{log.fuelType}</td>
-                    <td className="text-theme-text-primary px-4 py-3 text-right">{Number(log.gallons).toFixed(2)}</td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-right">
+                    <td data-label="Date" className="text-theme-text-primary px-4 py-3">
+                      {formatDate(log.fuelDate, timezone)}
+                    </td>
+                    <td data-label="Fuel Type" className="text-theme-text-secondary px-4 py-3 capitalize">
+                      {log.fuelType}
+                    </td>
+                    <td data-label="Gallons" className="text-theme-text-primary px-4 py-3 text-right">
+                      {Number(log.gallons).toFixed(2)}
+                    </td>
+                    <td data-label="Price/Gal" className="text-theme-text-secondary px-4 py-3 text-right">
                       {log.pricePerGallon != null ? `$${Number(log.pricePerGallon).toFixed(3)}` : '-'}
                     </td>
-                    <td className="text-theme-text-primary px-4 py-3 text-right">
+                    <td data-label="Cost" className="text-theme-text-primary px-4 py-3 text-right">
                       {log.totalCost != null ? formatCurrency(log.totalCost) : '-'}
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-right">
+                    <td data-label="Mileage" className="text-theme-text-secondary px-4 py-3 text-right">
                       {log.mileageAtFill != null ? formatNumber(log.mileageAtFill) : '-'}
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td data-label="Full Tank" className="px-4 py-3 text-center">
                       {log.isFullTank ? (
                         <span className="text-xs text-green-700 dark:text-green-400">Yes</span>
                       ) : (

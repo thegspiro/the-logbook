@@ -35,6 +35,7 @@ PRIVILEGED_PERMISSIONS: tuple[str, ...] = (
     "audit.export",
     "audit.manage",
     "medical_screening.view",
+    "medical_screening.view_details",
     "medical_screening.manage",
 )
 

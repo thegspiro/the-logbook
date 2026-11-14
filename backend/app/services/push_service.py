@@ -222,6 +222,25 @@ def _pinned_session(endpoint: str) -> requests.Session:
     return session
 
 
+DEFAULT_CLICK_PATH = "/notifications?tab=inbox"
+
+
+def _click_path(url: Optional[str]) -> str:
+    """The page a tap on the notification opens, kept to this site.
+
+    The service worker passes this straight to ``client.navigate`` or
+    ``clients.openWindow``, which will open any URL at all. Every caller today
+    supplies a path the server built, but a notification's ``action_url`` is a
+    stored column, and a value that leaves the site — an absolute URL, a
+    scheme, or ``//host`` and ``/\\host``, which browsers read as another host —
+    would turn a trusted notification into a link anywhere. Anything that is
+    not a plain path here falls back to the inbox.
+    """
+    if not url or not url.startswith("/") or url.startswith(("//", "/\\")):
+        return DEFAULT_CLICK_PATH
+    return url
+
+
 class PushService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -467,7 +486,7 @@ class PushService:
         user_id: UUID | str,
         title: str,
         body: str,
-        url: str = "/notifications?tab=inbox",
+        url: Optional[str] = None,
         tag: Optional[str] = None,
     ) -> int:
         """Push a notification to every device the user has registered.
@@ -505,7 +524,12 @@ class PushService:
             return 0
 
         payload = json.dumps(
-            {"title": title, "body": body, "url": url, "tag": tag or "logbook"}
+            {
+                "title": title,
+                "body": body,
+                "url": _click_path(url),
+                "tag": tag or "logbook",
+            }
         )
 
         sent = 0

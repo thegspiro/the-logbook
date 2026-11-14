@@ -116,6 +116,15 @@ tester".
 
 Re-driven: both pages are 375px wide (the viewport without its scrollbar).
 
+### W77-6 — LOW — A full lint ran out of memory on a small machine — ✅ FIXED (2026-11-08)
+
+Seen in passing during the gate: a full type-aware `npm run lint` peaks near 3.5 GB. Node's default heap ceiling scales with the machine's memory, so CI's runners passed, but this run's container stopped at its 2 GB default with "JavaScript heap out of memory". It passed with `--max-old-space-size=8192`.
+
+**Fix (owner decision 2026-11-08: raise it in the script):** `frontend/package.json`'s `lint` and `lint:fix` run ESLint through `scripts/eslint-heap.mjs`. The wrapper resolves ESLint's entry file, as `tsc-native.mjs` resolves the compiler, and starts it with `--max-old-space-size=8192`. The flag is a ceiling, not a reservation. It goes to `node` directly, because `NODE_OPTIONS=...` in a package script would be POSIX-shell only. An operator who already sets the flag in `NODE_OPTIONS` keeps their value. Re-run on the same machine:
+
+- plain ESLint capped at 2 GB: `FATAL ERROR … JavaScript heap out of memory`, exit 134;
+- `npm run lint`: exit 0, with the child process running `node --max-old-space-size=8192 …/eslint/bin/eslint.js`.
+
 ## Checklist
 
 | Section                 | Result                                                                          |

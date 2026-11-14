@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router';
 import { Collapsible } from '../components/ux';
+import { AdminPageHeader } from '../components/admin/AdminPageHeader';
 import { errorLogsService, type ErrorCodeEntry } from '../services/api';
 import { errorTracker, type ErrorLog } from '../services/errorTracking';
 import { useAuthStore } from '../stores/authStore';
@@ -10,6 +11,7 @@ import { contextText, errorAction, errorPage } from '../utils/errorContext';
 import toast from 'react-hot-toast';
 
 import { useConfirm } from '../contexts/ConfirmContext';
+import { StatGrid } from '@/components/ux/StatGrid';
 /**
  * Where the error was raised. Rows written before the `source` context key
  * existed carry neither marker, so they fall back to "Client".
@@ -168,15 +170,15 @@ const ErrorMonitoringPage: React.FC = () => {
 
   return (
     <div className="mx-auto min-h-screen max-w-7xl p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-theme-text-primary text-3xl font-bold">Error Monitoring</h1>
-        <p className="text-theme-text-secondary mt-1">Errors members have run into, and how to resolve them</p>
-      </div>
+      <AdminPageHeader
+        title="Error Monitor"
+        description="Errors members have run into, and how to resolve them"
+        className="mb-6"
+      />
 
       {/* Statistics Cards */}
       {stats && (
-        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+        <StatGrid columns={4} gap={4} className="mb-6">
           <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
             <div className="text-theme-text-muted mb-1 text-sm font-medium">Total Errors</div>
             <div className="text-theme-text-primary text-3xl font-bold">{stats.total}</div>
@@ -191,7 +193,7 @@ const ErrorMonitoringPage: React.FC = () => {
                 <div className="text-3xl font-bold text-red-600">{count}</div>
               </div>
             ))}
-        </div>
+        </StatGrid>
       )}
 
       {/* Actions Bar */}
@@ -261,8 +263,8 @@ const ErrorMonitoringPage: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="divide-theme-surface-border min-w-full divide-y">
+          <div className="rwd-table-container overflow-x-auto">
+            <table className="rwd-table rwd-table-2xwide divide-theme-surface-border min-w-full divide-y">
               <thead className="bg-theme-surface-secondary">
                 <tr>
                   <th
@@ -310,10 +312,10 @@ const ErrorMonitoringPage: React.FC = () => {
                 {errors.map((error) => (
                   <React.Fragment key={error.id}>
                     <tr className="hover:bg-theme-surface-hover">
-                      <td className="text-theme-text-primary px-6 py-4 text-sm whitespace-nowrap">
+                      <td data-label="Timestamp" className="text-theme-text-primary px-6 py-4 text-sm">
                         {formatDateTime(error.timestamp, tz)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td data-label="Error Type" className="px-6 py-4">
                         <span
                           className={`inline-flex rounded-full px-2 py-1 text-xs leading-5 font-semibold ${
                             error.errorType?.startsWith('BACKEND_')
@@ -332,22 +334,39 @@ const ErrorMonitoringPage: React.FC = () => {
                           </span>
                         )}
                       </td>
-                      <td className="text-theme-text-secondary px-6 py-4 text-xs whitespace-nowrap">
+                      <td data-label="Source" className="text-theme-text-secondary px-6 py-4 text-xs whitespace-nowrap">
                         {sourceLabel(error)}
                       </td>
-                      <td className="text-theme-text-secondary max-w-md px-6 py-4 text-sm">
-                        <div className="truncate">{error.userMessage}</div>
-                        {/* The technical message is what an administrator
-                          actually needs to act on; the user message above is
-                          what the member was shown. */}
-                        {error.errorMessage && error.errorMessage !== error.userMessage && (
-                          <div className="text-theme-text-muted mt-1 truncate font-mono text-xs">
-                            {error.errorMessage}
+                      <td data-label="Message" className="text-theme-text-secondary px-6 py-4 text-sm">
+                        {/* The cap sits on a block, not the cell: a table cell's
+                          max-width is not reliably honoured, and an uncapped
+                          message set the table's width. One wrapper also keeps the
+                          two lines stacked when the row reflows into a card. The
+                          titles keep the full text, and the detail row repeats the
+                          technical message. The block is a one-column grid because
+                          a truncated line still reports its whole length as its
+                          min-content width, which held a phone card 320px wide;
+                          a minmax(0, 1fr) track lets it shrink and still truncate.
+                          Page & Action below relies on the same. */}
+                        <div className="grid max-w-xs min-w-0 grid-cols-1">
+                          <div className="truncate" title={error.userMessage}>
+                            {error.userMessage}
                           </div>
-                        )}
+                          {/* The technical message is what an administrator
+                            actually needs to act on; the user message above is
+                            what the member was shown. */}
+                          {error.errorMessage && error.errorMessage !== error.userMessage && (
+                            <div
+                              className="text-theme-text-muted mt-1 truncate font-mono text-xs"
+                              title={error.errorMessage}
+                            >
+                              {error.errorMessage}
+                            </div>
+                          )}
+                        </div>
                       </td>
-                      <td className="text-theme-text-secondary px-6 py-4 text-sm">
-                        <div className="max-w-xs">
+                      <td data-label="Page & Action" className="text-theme-text-secondary px-6 py-4 text-sm">
+                        <div className="grid max-w-xs grid-cols-1">
                           <div className="truncate text-xs" title={errorPage(error.context)}>
                             <span className="text-theme-text-muted font-medium">Page:</span>{' '}
                             <span className="font-mono">{errorPage(error.context)}</span>
@@ -358,10 +377,13 @@ const ErrorMonitoringPage: React.FC = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="text-theme-text-muted px-6 py-4 font-mono text-xs whitespace-nowrap">
+                      <td
+                        data-label="Error ID"
+                        className="text-theme-text-muted px-6 py-4 font-mono text-xs whitespace-nowrap"
+                      >
                         {error.id?.split('-')[0]}
                       </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                      <td data-label="Details" className="px-6 py-4 text-right whitespace-nowrap">
                         <button
                           type="button"
                           className="touch:min-h-11 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
@@ -377,7 +399,7 @@ const ErrorMonitoringPage: React.FC = () => {
                     </tr>
                     {expandedErrors.has(error.id) && (
                       <tr id={`error-details-${error.id}`} className="bg-theme-surface-secondary">
-                        <td colSpan={7} className="px-6 py-5">
+                        <td colSpan={7} data-label="Error details" className="rwd-table-lead px-6 py-5">
                           <div className="grid gap-5 md:grid-cols-2">
                             <dl className="space-y-3 text-sm">
                               <div>

@@ -9,7 +9,7 @@ the automatic reorder and the per-row flag all read one figure.
 """
 
 import uuid
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -41,6 +41,7 @@ from app.schemas.inventory import InventoryItemCreate, InventoryItemUpdate
 from app.services.auto_reorder_service import AutoReorderService
 from app.services.equipment_check_service import EquipmentCheckService
 from app.services.inventory_service import InventoryService
+from app.utils import org_timezone
 from app.utils.org_timezone import resolve_org_today
 
 pytestmark = pytest.mark.integration
@@ -51,7 +52,7 @@ def _uid() -> str:
 
 
 @pytest.fixture
-async def dept(db_session):
+async def dept(db_session, monkeypatch):
     """Gauze (medical, reorder at 15) and Rope (gear, reorder at 15).
 
     Gauze: 2 on the shelf; Medic 1 carries 3 in date and 4 expired, Medic 2
@@ -61,6 +62,16 @@ async def dept(db_session):
     org = Organization(id=_uid(), name="Truck FD", slug=f"truck-{_uid()[:8]}")
     db_session.add(org)
     await db_session.flush()
+    # Lots are dated relative to this day and the code under test asks for
+    # the department's date again later. Pin it, or a test running across the
+    # department's midnight counts every day-gap one short.
+    real_today_in = org_timezone.today_in
+    pinned: dict[str, date] = {}
+
+    def pinned_today_in(tz):
+        return pinned.setdefault(str(tz), real_today_in(tz))
+
+    monkeypatch.setattr(org_timezone, "today_in", pinned_today_in)
     today = await resolve_org_today(db_session, org.id)
     user = User(
         id=_uid(),
@@ -562,6 +573,23 @@ class TestNextExpiryAcrossShelfAndTrucks:
         assert gauze.days_until_next_expiration == 5
         assert gauze.next_expiration_location == "shelf"
         assert gauze.next_expiration_where is None
+
+    async def test_the_count_holds_across_the_departments_midnight(
+        self, db_session, dept, monkeypatch
+    ):
+        # CI once built the fixture at 23:59:59 in the department's zone and
+        # listed it a second later, on the next day: the shelf's +5 read 4.
+        class Tomorrow(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return datetime.now(tz) + timedelta(days=1)
+
+        monkeypatch.setattr(org_timezone, "datetime", Tomorrow)
+
+        gauze = await _gauze_row(db_session, dept)
+
+        assert gauze.next_expiration_date == dept.today - timedelta(days=2)
+        assert gauze.days_until_next_expiration == -2
 
     async def test_truck_dates_beyond_the_expiring_window_still_count(
         self, db_session, dept

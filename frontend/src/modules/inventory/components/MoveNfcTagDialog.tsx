@@ -12,6 +12,9 @@ import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Loader2, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { inventoryService } from '../../../services/api';
 import { InventoryNfcTagKind } from '../../../constants/enums';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -23,6 +26,13 @@ const KIND_NOUNS: Record<InventoryNfcTagKind, string> = {
   compartment: 'compartment',
 };
 
+// The noun with its article: "an item", but "a storage area".
+const KIND_WITH_ARTICLE: Record<InventoryNfcTagKind, string> = {
+  item: 'an item',
+  storage_area: 'a storage area',
+  compartment: 'a compartment',
+};
+
 const currentTargetId = (tag: InventoryNfcRegisterTag): string | null =>
   tag.item_id ?? tag.storage_area_id ?? tag.check_compartment_id;
 
@@ -30,6 +40,11 @@ const moveBody = (kind: InventoryNfcTagKind, id: string): InventoryNfcTagMove =>
   if (kind === InventoryNfcTagKind.ITEM) return { item_id: id };
   if (kind === InventoryNfcTagKind.STORAGE_AREA) return { storage_area_id: id };
   return { check_compartment_id: id };
+};
+
+/** Whichever target key the move sends, a 422 on it belongs to the list of places (forms review F-2). */
+const MOVE_FIELDS: Record<'target', ServerFieldSpec> = {
+  target: { label: 'Move to', api: ['item_id', 'storage_area_id', 'check_compartment_id'] },
 };
 
 interface MoveNfcTagDialogProps {
@@ -47,6 +62,9 @@ export const MoveNfcTagDialog: React.FC<MoveNfcTagDialogProps> = ({ tag, onClose
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [targetError, setTargetError] = useState<string | null>(null);
+  // A chosen place is what Escape, the X and Cancel ask about (forms review F-6).
+  const requestClose = useDiscardGuard({ isDirty: chosen !== null, onClose });
   // A search typed quickly fires several requests; only the latest may land.
   const requestSeq = useRef(0);
 
@@ -71,16 +89,24 @@ export const MoveNfcTagDialog: React.FC<MoveNfcTagDialogProps> = ({ tag, onClose
   useEffect(() => {
     setSearch('');
     setChosen(null);
+    setTargetError(null);
     setTargets([]);
     if (tag) void load(tag.kind, '');
   }, [tag, load]);
 
   if (!tag) return null;
   const noun = KIND_NOUNS[tag.kind];
+  const aNoun = KIND_WITH_ARTICLE[tag.kind];
   const here = currentTargetId(tag);
 
+  const targetErrorId = `${idBase}-target-error`;
+
   const submit = async () => {
-    if (!chosen) return;
+    // Named rather than a silently greyed-out button (forms review F-3).
+    if (!chosen) {
+      setTargetError(`Choose the ${noun} to move the tag to.`);
+      return;
+    }
     setSaving(true);
     try {
       await inventoryService.moveNfcTag(tag.id, moveBody(tag.kind, chosen));
@@ -88,7 +114,9 @@ export const MoveNfcTagDialog: React.FC<MoveNfcTagDialogProps> = ({ tag, onClose
       toast.success(`Tag …${tag.uid_preview} moved to ${name}`);
       onMoved();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not move the tag.'));
+      const mapped = mapServerFieldErrors(err, MOVE_FIELDS);
+      if (mapped?.fieldErrors.target) setTargetError(mapped.fieldErrors.target);
+      else toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Could not move the tag.'));
     } finally {
       setSaving(false);
     }
@@ -97,17 +125,17 @@ export const MoveNfcTagDialog: React.FC<MoveNfcTagDialogProps> = ({ tag, onClose
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title={`Move tag …${tag.uid_preview}`}
       footer={
         <>
-          <button type="button" className="btn-secondary" onClick={onClose}>
+          <button type="button" className="btn-secondary" onClick={requestClose}>
             Cancel
           </button>
           <button
             type="button"
             className="btn-primary inline-flex items-center gap-2"
-            disabled={!chosen || saving}
+            disabled={saving}
             onClick={() => void submit()}
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -130,7 +158,7 @@ export const MoveNfcTagDialog: React.FC<MoveNfcTagDialogProps> = ({ tag, onClose
         >
           <div className="flex-1">
             <label className="form-label" htmlFor={`${idBase}-search`}>
-              Find a {noun}
+              Find {aNoun}
             </label>
             <input
               id={`${idBase}-search`}
@@ -140,18 +168,18 @@ export const MoveNfcTagDialog: React.FC<MoveNfcTagDialogProps> = ({ tag, onClose
               maxLength={100}
             />
           </div>
-          <button type="submit" className="btn-secondary btn-auto self-end" aria-label={`Search for a ${noun}`}>
+          <button type="submit" className="btn-secondary btn-auto self-end" aria-label={`Search for ${aNoun}`}>
             <Search className="h-4 w-4" aria-hidden="true" />
           </button>
         </form>
 
-        {error && <p className="text-theme-alert-danger-text text-sm">{error}</p>}
+        {error && <p className={`text-sm ${FIELD_ERROR_CLASS}`}>{error}</p>}
         {loading ? (
           <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" aria-label="Loading" />
         ) : targets.length === 0 && !error ? (
           <p className="text-theme-text-secondary text-sm">No {noun} matches.</p>
         ) : (
-          <fieldset>
+          <fieldset {...(targetError ? { 'aria-describedby': targetErrorId, 'aria-invalid': true } : {})}>
             <legend className="sr-only">Move to</legend>
             <ul className="divide-theme-surface-border max-h-72 divide-y overflow-y-auto">
               {targets.map((target) => (
@@ -164,7 +192,10 @@ export const MoveNfcTagDialog: React.FC<MoveNfcTagDialogProps> = ({ tag, onClose
                       value={target.id}
                       checked={chosen === target.id}
                       disabled={target.id === here}
-                      onChange={() => setChosen(target.id)}
+                      onChange={() => {
+                        setChosen(target.id);
+                        setTargetError(null);
+                      }}
                     />
                     <span className="min-w-0">
                       <span className="text-theme-text-primary block text-sm">
@@ -179,6 +210,11 @@ export const MoveNfcTagDialog: React.FC<MoveNfcTagDialogProps> = ({ tag, onClose
                 </li>
               ))}
             </ul>
+            {targetError && (
+              <p id={targetErrorId} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+                {targetError}
+              </p>
+            )}
           </fieldset>
         )}
       </div>

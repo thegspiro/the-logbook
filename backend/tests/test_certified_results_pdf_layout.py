@@ -160,3 +160,11 @@ def test_revisions_print_before_the_results():
     data = _data(revisions_display=["Results revised by Alice: a vote was voided"])
     text = _text(_render(data))
     assert text.index("Results revised by Alice") < text.index("Results — Chief")
+
+
+def test_the_vote_total_is_labelled_votes_not_ballots():
+    """W50-76: ``total_votes`` counts votes, one per race a ballot marked, so
+    "Ballots cast 11" overstated a 3-ballot election. It reads Votes cast."""
+    text = _text(_render())
+    assert "Votes cast" in text
+    assert "Ballots cast" not in text

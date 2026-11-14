@@ -12,7 +12,7 @@
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 export const ADMIN_TOTP_ENV = "SCREENSHOT_ADMIN_TOTP_SECRET";
 export const TOTP_PERIOD_SECONDS = 30;
@@ -81,6 +81,33 @@ export function readAdminTotpSecret(env = process.env) {
     if (at === -1) continue;
     const value = line.slice(at + 1).trim();
     if (line.slice(0, at).trim() === ADMIN_TOTP_ENV && value) return value;
+  }
+  return null;
+}
+
+/**
+ * Where the seeder keeps the secrets of the members it enrols for the captures
+ * (`ENROLLED_MEMBER_USERNAMES` in seed_demo_data.py): one `username=secret`
+ * line each, beside the administrator's file.
+ */
+export function memberTotpPath(env = process.env) {
+  return join(dirname(adminTotpPath(env)), "member-totp.env");
+}
+
+/** The stored secret for *username*, or null when none is stored. */
+export function readMemberTotpSecret(username, env = process.env) {
+  let text;
+  try {
+    text = readFileSync(memberTotpPath(env), "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+  for (const line of text.split("\n")) {
+    const at = line.indexOf("=");
+    if (at === -1) continue;
+    const value = line.slice(at + 1).trim();
+    if (line.slice(0, at).trim() === username && value) return value;
   }
   return null;
 }

@@ -203,3 +203,125 @@ describe('VariantGroupsPage', () => {
     expect(screen.queryByRole('button', { name: 'Edit Class A Uniform' })).not.toBeInTheDocument();
   });
 });
+
+describe('VariantGroupsPage add dialog validation', () => {
+  beforeEach(() => {
+    mockGetVariantGroups.mockReset();
+    mockGetCategories.mockReset();
+    mockCreateVariantGroup.mockReset();
+    mockCheckPermission.mockReset();
+    mockToastError.mockReset();
+    mockGetVariantGroups.mockResolvedValue([makeGroup()]);
+    mockGetCategories.mockResolvedValue([]);
+    mockCreateVariantGroup.mockResolvedValue({});
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  const openAdd = async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<VariantGroupsPage />);
+    await screen.findByText('Class A Uniform');
+    await user.click(screen.getByRole('button', { name: /Add Group/ }));
+    await screen.findByText('Add Variant Group');
+    return user;
+  };
+
+  it('names the missing name under its field and sends nothing', async () => {
+    const user = await openAdd();
+    await user.click(screen.getByRole('button', { name: 'Create Group' }));
+    const name = screen.getByRole('textbox', { name: 'Name' });
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('Enter a name for the group.');
+    expect(name).toHaveFocus();
+    expect(mockCreateVariantGroup).not.toHaveBeenCalled();
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 on the field it names', async () => {
+    mockCreateVariantGroup.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'unit_of_measure', message: 'Value is too long.' }] } },
+    });
+    const user = await openAdd();
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Dress Shirts');
+    await user.click(screen.getByRole('button', { name: 'Create Group' }));
+    expect(
+      await screen.findByRole('textbox', { name: 'Unit of Measure', description: 'Value is too long.' })
+    ).toHaveFocus();
+  });
+
+  it('shows a server failure inside the dialog, not as a toast', async () => {
+    mockCreateVariantGroup.mockRejectedValue(new Error('Database unavailable'));
+    const user = await openAdd();
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Dress Shirts');
+    await user.click(screen.getByRole('button', { name: 'Create Group' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Database unavailable');
+    expect(mockToastError).not.toHaveBeenCalled();
+    expect(screen.getByText('Add Variant Group')).toBeInTheDocument();
+  });
+});
+
+describe('VariantGroupsPage dialog: amounts, edits and discarding', () => {
+  beforeEach(() => {
+    mockGetVariantGroups.mockReset();
+    mockGetCategories.mockReset();
+    mockCreateVariantGroup.mockReset();
+    mockUpdateVariantGroup.mockReset();
+    mockCheckPermission.mockReset();
+    mockToastSuccess.mockReset();
+    mockGetVariantGroups.mockResolvedValue([makeGroup({ base_price: 40 })]);
+    mockGetCategories.mockResolvedValue([]);
+    mockCreateVariantGroup.mockResolvedValue({});
+    mockUpdateVariantGroup.mockResolvedValue({});
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  it('flags a negative price on its field and creates nothing', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<VariantGroupsPage />);
+    await screen.findByText('Class A Uniform');
+    await user.click(screen.getByRole('button', { name: /Add Group/ }));
+    await user.type(await screen.findByRole('textbox', { name: 'Name' }), 'Dress Shirts');
+    await user.type(screen.getByRole('spinbutton', { name: 'Base Price' }), '-5');
+    await user.click(screen.getByRole('button', { name: 'Create Group' }));
+
+    expect(screen.getByRole('spinbutton', { name: 'Base Price' })).toHaveAccessibleDescription(
+      'Enter an amount of 0 or more, or leave it empty.'
+    );
+    expect(mockCreateVariantGroup).not.toHaveBeenCalled();
+  });
+
+  it('saves the rest of an edit and keeps a refused field flagged, open', async () => {
+    mockUpdateVariantGroup.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'base_price', message: 'Input should be less than 1000000' }] },
+      },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<VariantGroupsPage />);
+    await screen.findByText('Class A Uniform');
+    await user.click(screen.getByRole('button', { name: 'Edit Class A Uniform' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Unit of Measure' }), 'each');
+    await user.click(screen.getByRole('button', { name: 'Update Group' }));
+
+    await waitFor(() => expect(mockUpdateVariantGroup).toHaveBeenCalledTimes(2));
+    expect(mockUpdateVariantGroup.mock.calls[1]?.[1]).not.toHaveProperty('base_price');
+    expect(mockUpdateVariantGroup.mock.calls[1]?.[1]).toMatchObject({ unit_of_measure: 'each' });
+    expect(screen.getByRole('alert')).toHaveTextContent('Variant group saved, except base price.');
+    expect(screen.getByRole('spinbutton', { name: 'Base Price' })).toHaveAccessibleDescription(
+      'Input should be less than 1000000.'
+    );
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('asks before Cancel discards what was typed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<VariantGroupsPage />);
+    await screen.findByText('Class A Uniform');
+    await user.click(screen.getByRole('button', { name: /Add Group/ }));
+    await user.type(await screen.findByRole('textbox', { name: 'Name' }), 'Dress Shirts');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Dress Shirts');
+  });
+});

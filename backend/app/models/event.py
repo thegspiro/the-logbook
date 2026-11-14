@@ -337,6 +337,16 @@ class Event(Base):
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Set by EventService.postpone_event. postponed_from_start keeps the start
+    # the event had before its *first* postponement, so a drill moved twice
+    # still says where it was originally scheduled.
+    postponed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    postponed_from_start: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    postponement_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Metadata
     created_by: Mapped[Optional[str]] = mapped_column(

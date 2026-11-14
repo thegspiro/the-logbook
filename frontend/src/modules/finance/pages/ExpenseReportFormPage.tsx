@@ -3,9 +3,13 @@
  *
  * Form for creating expense reports with line items.
  * Uses react-hook-form + zod for validation.
+ *
+ * A mileage line may record its trips instead of an amount (owner decision
+ * 2026-11-01); the server prices it at the department's rate, and the total
+ * shown here previews that figure.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowLeft, Save, Plus, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -16,28 +20,50 @@ import { useFinanceStore } from '../store/financeStore';
 import { MAX_MONEY_AMOUNT, MIN_MONEY_AMOUNT } from '../utils/moneyLimits';
 import { EXPENSE_TYPE_OPTIONS, expenseLineSchema } from '../utils/expenseLines';
 import { useLateLineWarning } from '../hooks/useLateLineWarning';
-import { useRequestFormOptions } from '../hooks/useRequestFormOptions';
+import { budgetOptionLabel, selectableBudgetOptions, useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
+import { FormField } from '@/components/ux/FormField';
+import { mapServerFieldErrors, type ServerFieldSpec } from '@/utils/serverFieldErrors';
+import { getSaveFailureMessage } from '@/utils/errorHandling';
+import { DraftRestoredNotice } from '@/components/ux/DraftRestoredNotice';
+import { useSessionDraft } from '@/hooks/useSessionDraft';
 import { ApprovalEntityType, ExpenseType } from '../types';
 import { useMyOpenAdvances } from '../hooks/useMyOpenAdvances';
 import { useFundOptions } from '../hooks/useFundOptions';
 import { FundSelect } from '../components/FundSelect';
 import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
+import { MileageTripLog } from '../components/MileageTripLog';
+import { useMileageRate } from '../hooks/useMileageRate';
+import { useTimezone } from '@/hooks/useTimezone';
+import { getTodayLocalDate } from '@/utils/dateFormatting';
+import { priceTrips, toTripPayload, tripLogError, type TripEntry } from '../utils/mileage';
 
 // =============================================================================
 // Validation Schema
 // =============================================================================
 
+/** `ExpenseReportCreate.title` and `ExpenseLineItemCreate.description`'s max_length. */
+const TITLE_MAX_LENGTH = 300;
+const LINE_DESCRIPTION_MAX_LENGTH = 500;
+
 const expenseReportSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(200),
+  title: z
+    .string()
+    .min(1, 'Title is required')
+    .max(TITLE_MAX_LENGTH, `Keep the title to ${TITLE_MAX_LENGTH} characters`),
   description: z.string().max(2000).optional(),
   fiscalYearId: z.string().min(1, 'Fiscal year is required'),
   advanceId: z.string().optional(),
 });
 
 type ExpenseReportFormData = z.infer<typeof expenseReportSchema>;
+
+/** What the report keeps in its local draft (useSessionDraft). Receipts are files and are not drafted. */
+interface ExpenseReportDraft extends ExpenseReportFormData {
+  lineItems: LineItemEntry[];
+}
 
 interface LineItemEntry {
   description: string;
@@ -46,6 +72,10 @@ interface LineItemEntry {
   expenseType: string;
   merchant: string;
   fundCampaignId: string;
+  /** The budget line the member charges; approval commits the amount there. */
+  budgetId: string;
+  /** A mileage line's trips; with any, the server prices the line. */
+  trips: TripEntry[];
 }
 
 // =============================================================================
@@ -54,8 +84,51 @@ interface LineItemEntry {
 
 const inputClass = 'form-input';
 const selectClass = inputClass;
-const labelClass = 'form-label';
-const errorClass = 'mt-1 text-xs text-red-600';
+
+/**
+ * The header fields as a 422 names them. Finance request schemas report
+ * snake_case locs (`loc_by_alias=False`); the mapper reads both spellings.
+ */
+const SERVER_FIELDS: Record<keyof ExpenseReportFormData, ServerFieldSpec> = {
+  title: { label: 'Title', maxLength: TITLE_MAX_LENGTH },
+  description: { label: 'Description' },
+  fiscalYearId: { label: 'Fiscal Year' },
+  advanceId: { label: 'Accounts for a cash advance' },
+};
+
+/** A line's fields, keyed as `lineFieldErrors` keys them after the line's index. */
+const LINE_SERVER_FIELDS = {
+  description: { label: 'Description', maxLength: LINE_DESCRIPTION_MAX_LENGTH, api: 'description' },
+  amount: { label: 'Amount', api: 'amount' },
+  dateIncurred: { label: 'Date', api: 'date_incurred' },
+  expenseType: { label: 'Type', api: 'expense_type' },
+  merchant: { label: 'Merchant', api: 'merchant' },
+  budgetId: { label: 'Budget line', api: 'budget_id' },
+  fundCampaignId: { label: 'Restricted fund', api: 'fund_campaign_id' },
+} as const satisfies Record<string, ServerFieldSpec & { api: string }>;
+type LineServerField = keyof typeof LINE_SERVER_FIELDS;
+
+/** The suffix of each line field's element id, `line-<index>-<suffix>`. */
+const LINE_FIELD_IDS: Record<LineServerField, string> = {
+  description: 'description',
+  amount: 'amount',
+  dateIncurred: 'date',
+  expenseType: 'type',
+  merchant: 'merchant',
+  budgetId: 'budget',
+  fundCampaignId: 'fund',
+};
+
+/** Every line's fields, for mapping a 422 whose locs run `line_items.<index>.<field>`. */
+function lineServerSpecs(count: number): Record<string, ServerFieldSpec> {
+  const specs: Record<string, ServerFieldSpec> = {};
+  for (let i = 0; i < count; i++) {
+    for (const [field, spec] of Object.entries(LINE_SERVER_FIELDS)) {
+      specs[`${String(i)}.${field}`] = { ...spec, api: [`line_items.${String(i)}.${spec.api}`] };
+    }
+  }
+  return specs;
+}
 
 // =============================================================================
 // Loading Skeleton
@@ -83,21 +156,32 @@ const ExpenseReportFormPage: React.FC = () => {
   const navigate = useNavigate();
 
   const { createExpenseReport } = useFinanceStore();
-  // The active and draft years, from the options endpoint a member holding
-  // only finance.request can read. Expense lines carry no budget here.
-  const { fiscalYears, fiscalYearsLoaded } = useRequestFormOptions(undefined);
 
   const [lineItems, setLineItems] = useState<LineItemEntry[]>([]);
   const [lineItemErrors, setLineItemErrors] = useState<Record<number, string>>({});
+  // Server refusals of a line's fields, keyed `<index>.<field>`.
+  const [lineFieldErrors, setLineFieldErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
   const lateWarning = useLateLineWarning();
   const { funds, mode: fundMode } = useFundOptions();
   // The member's own advances with something left to account for; only they
   // can be chosen (the server checks the same).
   const advances = useMyOpenAdvances();
+  const { rate: mileageRate } = useMileageRate();
+  const tz = useTimezone();
+
+  // A line's log counts only while it is mileage and the department has a rate.
+  const isLogged = (item: LineItemEntry) =>
+    item.expenseType === ExpenseType.MILEAGE && Boolean(mileageRate) && item.trips.length > 0;
+  const lineAmount = (item: LineItemEntry) =>
+    isLogged(item) ? Number(priceTrips(item.trips, mileageRate) ?? 0) : item.amount || 0;
 
   const {
     register,
     handleSubmit,
+    watch,
+    setError,
+    setFocus,
     formState: { errors, isSubmitting },
     reset,
   } = useForm<ExpenseReportFormData>({
@@ -109,6 +193,29 @@ const ExpenseReportFormPage: React.FC = () => {
     },
   });
 
+  // The active and draft years, and the chosen year's budget lines the
+  // member may charge, from the options endpoints a member holding only
+  // finance.request can read (owner decision 2026-11-01: the member picks
+  // each expense's line, and approval commits it there).
+  const fiscalYearId = watch('fiscalYearId');
+  const { fiscalYears, fiscalYearsLoaded, budgetOptions } = useRequestFormOptions(fiscalYearId || undefined);
+
+  // A restored draft sets the year and its lines together; the year arriving
+  // must not then clear the lines that belong to it.
+  const restoredYear = useRef<string | null>(null);
+
+  // A line belongs to one year's budget, so choosing another year clears the
+  // lines picked from the last one.
+  useEffect(() => {
+    if (restoredYear.current !== null && restoredYear.current === fiscalYearId) {
+      restoredYear.current = null;
+      return;
+    }
+    setLineItems((prev) =>
+      prev.some((item) => item.budgetId) ? prev.map((item) => ({ ...item, budgetId: '' })) : prev
+    );
+  }, [fiscalYearId]);
+
   // Auto-select active fiscal year
   useEffect(() => {
     if (fiscalYears.length > 0) {
@@ -119,21 +226,41 @@ const ExpenseReportFormPage: React.FC = () => {
     }
   }, [fiscalYears, reset]);
 
-  const totalAmount = useMemo(() => {
-    return lineItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-  }, [lineItems]);
+  // Kept in this tab so leaving the page does not lose a half-entered report
+  // (forms review F-6). Restored once the years have loaded, so the active
+  // year chosen above does not land on top of the one in the draft.
+  const headerValues = watch();
+  const draft = useSessionDraft<ExpenseReportDraft>({
+    form: 'expense-report',
+    ready: fiscalYearsLoaded,
+    value: { ...headerValues, lineItems },
+    isEmpty: (v) => !v.title.trim() && !v.description?.trim() && !v.advanceId && v.lineItems.length === 0,
+    onRestore: (saved) => {
+      const { lineItems: savedLines, ...header } = saved;
+      restoredYear.current = header.fiscalYearId;
+      reset(header);
+      setLineItems(savedLines);
+    },
+  });
+  const discardDraft = () => {
+    draft.discard();
+    const active = fiscalYears.find((fy) => fy.status === 'active');
+    reset({ title: '', description: '', fiscalYearId: active?.id ?? '' });
+    setLineItems([]);
+    setLineItemErrors({});
+    setLineFieldErrors({});
+  };
+
+  const totalAmount = lineItems.reduce((sum, item) => sum + lineAmount(item), 0);
 
   // A fund's warning weighs every line charged to it, since together they
   // are what an approval would take out of it.
-  const chargedToFund = useMemo(() => {
-    const totals: Record<string, number> = {};
-    for (const item of lineItems) {
-      if (item.fundCampaignId) {
-        totals[item.fundCampaignId] = (totals[item.fundCampaignId] ?? 0) + (item.amount || 0);
-      }
+  const chargedToFund: Record<string, number> = {};
+  for (const item of lineItems) {
+    if (item.fundCampaignId) {
+      chargedToFund[item.fundCampaignId] = (chargedToFund[item.fundCampaignId] ?? 0) + lineAmount(item);
     }
-    return totals;
-  }, [lineItems]);
+  }
 
   const addLineItem = () => {
     setLineItems((prev) => [
@@ -145,12 +272,16 @@ const ExpenseReportFormPage: React.FC = () => {
         expenseType: ExpenseType.GENERAL,
         merchant: '',
         fundCampaignId: '',
+        budgetId: '',
+        trips: [],
       },
     ]);
   };
 
   const removeLineItem = (index: number) => {
     setLineItems((prev) => prev.filter((_, i) => i !== index));
+    // Keyed by index, so a removed line would shift the rest onto the wrong lines.
+    setLineFieldErrors({});
     setLineItemErrors((prev) => {
       const next = { ...prev };
       delete next[index];
@@ -158,15 +289,28 @@ const ExpenseReportFormPage: React.FC = () => {
     });
   };
 
-  const updateLineItem = (index: number, field: keyof LineItemEntry, value: string | number) => {
+  const updateLineItem = (index: number, field: keyof LineItemEntry, value: string | number | TripEntry[]) => {
     setLineItems((prev) => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)));
+    const key = `${String(index)}.${field}`;
+    setLineFieldErrors((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
   };
+  const lineError = (index: number, field: LineServerField) => lineFieldErrors[`${String(index)}.${field}`];
 
   const validateLineItems = (): boolean => {
     const newErrors: Record<number, string> = {};
     for (let i = 0; i < lineItems.length; i++) {
       const item = lineItems[i];
       if (!item) continue;
+      if (isLogged(item)) {
+        const problem = item.description.trim() ? tripLogError(item.trips) : 'Description is required';
+        if (problem) newErrors[i] = problem;
+        continue;
+      }
       const result = expenseLineSchema.safeParse({
         ...item,
         amount: Number(item.amount),
@@ -181,6 +325,7 @@ const ExpenseReportFormPage: React.FC = () => {
   };
 
   const onSubmit = async (data: ExpenseReportFormData) => {
+    setFormError(null);
     if (lineItems.length === 0) {
       toast.error('Add at least one line item');
       return;
@@ -196,18 +341,26 @@ const ExpenseReportFormPage: React.FC = () => {
         title: data.title,
         fiscalYearId: data.fiscalYearId,
         lineItems: lineItems.map((item) => {
-          const li: Record<string, unknown> = {
-            description: item.description,
-            // A DecimalString, matching PurchaseRequestFormPage/
-            // CheckRequestFormPage -- never Number()/parseFloat() at the
-            // wire boundary, which round-trips through a JS float.
-            amount: item.amount.toFixed(2),
-            dateIncurred: item.dateIncurred,
-            expenseType: item.expenseType,
-          };
+          // With a log, the server works out the amount and the date.
+          const li: Record<string, unknown> = isLogged(item)
+            ? {
+                description: item.description,
+                expenseType: item.expenseType,
+                mileageTrips: toTripPayload(item.trips),
+              }
+            : {
+                description: item.description,
+                // A DecimalString, matching PurchaseRequestFormPage/
+                // CheckRequestFormPage -- never Number()/parseFloat() at the
+                // wire boundary, which round-trips through a JS float.
+                amount: item.amount.toFixed(2),
+                dateIncurred: item.dateIncurred,
+                expenseType: item.expenseType,
+              };
           const merchant = item.merchant?.trim();
           if (merchant) li.merchant = merchant;
           if (item.fundCampaignId) li.fundCampaignId = item.fundCampaignId;
+          if (item.budgetId) li.budgetId = item.budgetId;
           return li;
         }),
       };
@@ -216,10 +369,30 @@ const ExpenseReportFormPage: React.FC = () => {
       if (data.advanceId) payload.advanceId = data.advanceId;
 
       const created = await createExpenseReport(payload);
+      draft.clear();
       toast.success('Expense report created');
       void navigate(`/finance/expenses/${created.id}`);
-    } catch {
-      // Error handled by store
+    } catch (err: unknown) {
+      // A create form creates nothing until each refusal is fixed, so each one
+      // is put on the field it names (forms review F-2), a line's on that line.
+      const header = mapServerFieldErrors(err, SERVER_FIELDS);
+      const lines = mapServerFieldErrors(err, lineServerSpecs(lineItems.length));
+      const headerKeys = Object.keys(header?.fieldErrors ?? {}) as (keyof ExpenseReportFormData)[];
+      for (const key of headerKeys) setError(key, { type: 'server', message: header?.fieldErrors[key] ?? '' });
+      const lineErrors = lines?.fieldErrors ?? {};
+      setLineFieldErrors(lineErrors as Record<string, string>);
+      if (headerKeys[0]) setFocus(headerKeys[0]);
+      else {
+        const firstLine = Object.keys(lineErrors)[0];
+        const [index, field] = (firstLine ?? '').split('.');
+        if (index !== undefined && field !== undefined) {
+          document.getElementById(`line-${index}-${LINE_FIELD_IDS[field as LineServerField]}`)?.focus();
+        }
+      }
+      // An entry is unmatched only if neither the header nor any line took it.
+      const unmatched = (header?.unmatched ?? []).filter((message) => lines?.unmatched.includes(message));
+      if (headerKeys.length + Object.keys(lineErrors).length > 0 && unmatched.length === 0) return;
+      setFormError(unmatched.join(' ') || getSaveFailureMessage(err, 'create the expense report'));
     }
   };
 
@@ -263,77 +436,82 @@ const ExpenseReportFormPage: React.FC = () => {
 
       {/* Form */}
       <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="space-y-6">
+        {draft.restored && <DraftRestoredNotice onDiscard={discardDraft} />}
         {/* Report Details */}
         <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Report Details</h2>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label htmlFor="er-title" className={labelClass}>
-                Title *
-              </label>
-              <input
-                type="text"
-                className={inputClass}
-                placeholder="Brief title for this expense report"
-                id="er-title"
-                {...register('title')}
-              />
-              {errors.title && <p className={errorClass}>{errors.title.message}</p>}
-            </div>
+            <FormField
+              className="sm:col-span-2"
+              id="er-title"
+              label="Title"
+              required
+              error={errors.title?.message}
+              maxLength={TITLE_MAX_LENGTH}
+              count={headerValues.title.length}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  className={inputClass}
+                  placeholder="Brief title for this expense report"
+                  autoComplete="off"
+                  {...register('title')}
+                />
+              )}
+            </FormField>
 
-            <div className="sm:col-span-2">
-              <label htmlFor="er-description" className={labelClass}>
-                Description
-              </label>
-              <textarea
-                className={inputClass}
-                rows={3}
-                placeholder="Additional context for this expense report"
-                id="er-description"
-                {...register('description')}
-              />
-              {errors.description && <p className={errorClass}>{errors.description.message}</p>}
-            </div>
+            <FormField
+              className="sm:col-span-2"
+              id="er-description"
+              label="Description"
+              error={errors.description?.message}
+            >
+              {(field) => (
+                <textarea
+                  {...field}
+                  className={inputClass}
+                  rows={3}
+                  placeholder="Additional context for this expense report"
+                  {...register('description')}
+                />
+              )}
+            </FormField>
 
-            <div>
-              <label htmlFor="er-fiscalYearId" className={labelClass}>
-                Fiscal Year *
-              </label>
-              <select className={selectClass} id="er-fiscalYearId" {...register('fiscalYearId')}>
-                <option value="">Select fiscal year</option>
-                {fiscalYears.map((fy) => (
-                  <option key={fy.id} value={fy.id}>
-                    {fy.name} {fy.status === 'active' ? '(Active)' : ''}
-                  </option>
-                ))}
-              </select>
-              {errors.fiscalYearId && <p className={errorClass}>{errors.fiscalYearId.message}</p>}
-            </div>
-
-            {advances.length > 0 && (
-              <div className="sm:col-span-2">
-                <label htmlFor="advanceId" className={labelClass}>
-                  Accounts for a cash advance
-                </label>
-                <select
-                  id="advanceId"
-                  className={selectClass}
-                  aria-describedby="advanceId-hint"
-                  {...register('advanceId')}
-                >
-                  <option value="">No, reimburse me for these expenses</option>
-                  {advances.map((advance) => (
-                    <option key={advance.id} value={advance.id}>
-                      {advance.requestNumber}: {formatCurrency(advance.outstanding)} outstanding
-                      {advance.purpose ? ` (${advance.purpose})` : ''}
+            <FormField id="er-fiscalYearId" label="Fiscal Year" required error={errors.fiscalYearId?.message}>
+              {(field) => (
+                <select {...field} className={selectClass} {...register('fiscalYearId')}>
+                  <option value="">Select fiscal year</option>
+                  {fiscalYears.map((fy) => (
+                    <option key={fy.id} value={fy.id}>
+                      {fy.name} {fy.status === 'active' ? '(Active)' : ''}
                     </option>
                   ))}
                 </select>
-                <p id="advanceId-hint" className="text-theme-text-secondary mt-1 text-xs">
-                  These expenses are taken off what you owe on the advance. Anything above it is reimbursed to you as
-                  usual; anything below, return to the Treasurer.
-                </p>
-              </div>
+              )}
+            </FormField>
+
+            {advances.length > 0 && (
+              <FormField
+                className="sm:col-span-2"
+                id="advanceId"
+                label="Accounts for a cash advance"
+                error={errors.advanceId?.message}
+                hint="These expenses are taken off what you owe on the advance. Anything above it is reimbursed to you as usual; anything below, return to the Treasurer."
+              >
+                {(field) => (
+                  <select {...field} className={selectClass} {...register('advanceId')}>
+                    <option value="">No, reimburse me for these expenses</option>
+                    {advances.map((advance) => (
+                      <option key={advance.id} value={advance.id}>
+                        {advance.requestNumber}: {formatCurrency(advance.outstanding)} outstanding
+                        {advance.purpose ? ` (${advance.purpose})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
             )}
 
             <div className="flex items-end">
@@ -365,7 +543,7 @@ const ExpenseReportFormPage: React.FC = () => {
           {lineItems.length === 0 ? (
             <p className="text-theme-text-secondary py-8 text-center text-sm">
               No line items yet. Use &quot;Add Item&quot; to add each expense. After saving, attach a receipt to each
-              line — the report cannot be submitted without them.
+              line — the report cannot be submitted without them. A mileage line can record its trips here instead.
             </p>
           ) : (
             <div className="space-y-4">
@@ -383,87 +561,147 @@ const ExpenseReportFormPage: React.FC = () => {
                     </button>
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div className="sm:col-span-2">
-                      <label htmlFor={`line-${String(index)}-description`} className={labelClass}>
-                        Description *
-                      </label>
-                      <input
-                        type="text"
-                        className={inputClass}
-                        id={`line-${String(index)}-description`}
-                        placeholder="What was purchased"
-                        value={item.description}
-                        onChange={(e) => updateLineItem(index, 'description', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor={`line-${String(index)}-amount`} className={labelClass}>
-                        Amount *
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min={MIN_MONEY_AMOUNT}
-                        max={MAX_MONEY_AMOUNT}
-                        className={inputClass}
-                        id={`line-${String(index)}-amount`}
-                        placeholder="0.00"
-                        value={item.amount || ''}
-                        onChange={(e) => updateLineItem(index, 'amount', parseFloat(e.target.value) || 0)}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor={`line-${String(index)}-date`} className={labelClass}>
-                        Date *
-                      </label>
-                      <input
-                        id={`line-${String(index)}-date`}
-                        type="date"
-                        className={inputClass}
-                        value={item.dateIncurred}
-                        onChange={(e) => updateLineItem(index, 'dateIncurred', e.target.value)}
-                        aria-describedby={lateWarning(item.dateIncurred) ? `line-${String(index)}-late` : undefined}
-                      />
-                      {lateWarning(item.dateIncurred) && (
-                        <p
-                          id={`line-${String(index)}-late`}
-                          className="mt-1 text-xs text-amber-800 dark:text-amber-300"
-                          role="status"
-                        >
-                          {lateWarning(item.dateIncurred)}
-                        </p>
+                    <FormField
+                      className="sm:col-span-2"
+                      id={`line-${String(index)}-description`}
+                      label="Description"
+                      required
+                      error={lineError(index, 'description')}
+                      maxLength={LINE_DESCRIPTION_MAX_LENGTH}
+                      count={item.description.length}
+                    >
+                      {(field) => (
+                        <input
+                          {...field}
+                          type="text"
+                          className={inputClass}
+                          placeholder="What was purchased"
+                          autoComplete="off"
+                          value={item.description}
+                          onChange={(e) => updateLineItem(index, 'description', e.target.value)}
+                        />
                       )}
-                    </div>
-                    <div>
-                      <label htmlFor={`line-${String(index)}-type`} className={labelClass}>
-                        Type *
-                      </label>
-                      <select
-                        className={selectClass}
-                        id={`line-${String(index)}-type`}
-                        value={item.expenseType}
-                        onChange={(e) => updateLineItem(index, 'expenseType', e.target.value)}
+                    </FormField>
+                    {!isLogged(item) && (
+                      <FormField
+                        id={`line-${String(index)}-amount`}
+                        label="Amount"
+                        required
+                        error={lineError(index, 'amount')}
                       >
-                        {EXPENSE_TYPE_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label htmlFor={`line-${String(index)}-merchant`} className={labelClass}>
-                        Merchant
-                      </label>
-                      <input
-                        type="text"
-                        className={inputClass}
-                        id={`line-${String(index)}-merchant`}
-                        placeholder="Store or vendor"
-                        value={item.merchant}
-                        onChange={(e) => updateLineItem(index, 'merchant', e.target.value)}
-                      />
-                    </div>
+                        {(field) => (
+                          <input
+                            {...field}
+                            type="number"
+                            inputMode="decimal"
+                            step="0.01"
+                            min={MIN_MONEY_AMOUNT}
+                            max={MAX_MONEY_AMOUNT}
+                            className={inputClass}
+                            placeholder="0.00"
+                            value={item.amount || ''}
+                            onChange={(e) => updateLineItem(index, 'amount', parseFloat(e.target.value) || 0)}
+                          />
+                        )}
+                      </FormField>
+                    )}
+                    {!isLogged(item) && (
+                      <FormField
+                        id={`line-${String(index)}-date`}
+                        label="Date"
+                        required
+                        error={lineError(index, 'dateIncurred')}
+                        hint={
+                          lateWarning(item.dateIncurred) ? (
+                            <span className="text-amber-800 dark:text-amber-300" role="status">
+                              {lateWarning(item.dateIncurred)}
+                            </span>
+                          ) : undefined
+                        }
+                      >
+                        {(field) => (
+                          <input
+                            {...field}
+                            type="date"
+                            className={inputClass}
+                            value={item.dateIncurred}
+                            onChange={(e) => updateLineItem(index, 'dateIncurred', e.target.value)}
+                          />
+                        )}
+                      </FormField>
+                    )}
+                    <FormField
+                      id={`line-${String(index)}-type`}
+                      label="Type"
+                      required
+                      error={lineError(index, 'expenseType')}
+                    >
+                      {(field) => (
+                        <select
+                          {...field}
+                          className={selectClass}
+                          value={item.expenseType}
+                          onChange={(e) => updateLineItem(index, 'expenseType', e.target.value)}
+                        >
+                          {EXPENSE_TYPE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </FormField>
+                    <FormField
+                      id={`line-${String(index)}-merchant`}
+                      label="Merchant"
+                      error={lineError(index, 'merchant')}
+                    >
+                      {(field) => (
+                        <input
+                          {...field}
+                          type="text"
+                          className={inputClass}
+                          placeholder="Store or vendor"
+                          autoComplete="off"
+                          value={item.merchant}
+                          onChange={(e) => updateLineItem(index, 'merchant', e.target.value)}
+                        />
+                      )}
+                    </FormField>
+                    {item.expenseType === ExpenseType.MILEAGE && (
+                      <div className="sm:col-span-3">
+                        <MileageTripLog
+                          idPrefix={`line-${String(index)}`}
+                          trips={item.trips}
+                          onChange={(trips) => updateLineItem(index, 'trips', trips)}
+                          rate={mileageRate}
+                          today={getTodayLocalDate(tz)}
+                        />
+                      </div>
+                    )}
+                    <FormField
+                      className="sm:col-span-3"
+                      id={`line-${String(index)}-budget`}
+                      label="Budget line"
+                      error={lineError(index, 'budgetId')}
+                      hint="Approving the report commits this amount to the line you choose."
+                    >
+                      {(field) => (
+                        <select
+                          {...field}
+                          className={selectClass}
+                          value={item.budgetId}
+                          onChange={(e) => updateLineItem(index, 'budgetId', e.target.value)}
+                        >
+                          <option value="">No budget line</option>
+                          {selectableBudgetOptions(budgetOptions).map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {budgetOptionLabel(option)}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </FormField>
                     <div className="sm:col-span-3">
                       <FundSelect
                         id={`line-${String(index)}-fund`}
@@ -472,15 +710,26 @@ const ExpenseReportFormPage: React.FC = () => {
                         amount={item.fundCampaignId ? (chargedToFund[item.fundCampaignId] ?? 0) : 0}
                         funds={funds}
                         mode={fundMode}
+                        error={lineError(index, 'fundCampaignId')}
                       />
                     </div>
                   </div>
-                  {lineItemErrors[index] && <p className="mt-2 text-xs text-red-600">{lineItemErrors[index]}</p>}
+                  {lineItemErrors[index] && (
+                    <p role="alert" className="mt-2 text-xs text-red-800 dark:text-red-300">
+                      {lineItemErrors[index]}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </div>
+
+        {formError && (
+          <p role="alert" className="text-sm text-red-800 dark:text-red-300">
+            {formError}
+          </p>
+        )}
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-3">

@@ -22,9 +22,17 @@ const mockUpdateRequirementEnhanced = vi.fn();
 const mockGetPrograms = vi.fn();
 const mockUpdateProgramRequirement = vi.fn();
 const mockUpdateMilestone = vi.fn();
+const mockCreateMilestone = vi.fn();
+const mockGetMilestoneOptions = vi.fn();
 const mockGetProgramEnrollments = vi.fn();
+// The program forms load the department's evaluation forms for their picker;
+// an empty list unless a test says otherwise.
+const mockListShiftEvaluationTemplates = vi.fn();
 
 vi.mock('../services/api', () => ({
+  shiftEvaluationTemplateService: {
+    list: (...a: unknown[]) => mockListShiftEvaluationTemplates(...a) as unknown,
+  },
   trainingProgramService: {
     addProgramRequirement: (...a: unknown[]) => mockAddProgramRequirement(...a) as unknown,
     createRequirementEnhanced: (...a: unknown[]) => mockCreateRequirementEnhanced(...a) as unknown,
@@ -36,6 +44,8 @@ vi.mock('../services/api', () => ({
     getPrograms: (...a: unknown[]) => mockGetPrograms(...a) as unknown,
     updateProgramRequirement: (...a: unknown[]) => mockUpdateProgramRequirement(...a) as unknown,
     updateMilestone: (...a: unknown[]) => mockUpdateMilestone(...a) as unknown,
+    createMilestone: (...a: unknown[]) => mockCreateMilestone(...a) as unknown,
+    getMilestoneOptions: (...a: unknown[]) => mockGetMilestoneOptions(...a) as unknown,
     getProgramEnrollments: (...a: unknown[]) => mockGetProgramEnrollments(...a) as unknown,
   },
   trainingService: {
@@ -94,6 +104,8 @@ const renderModal = (props: Partial<React.ComponentProps<typeof RequirementFormM
 
 describe('RequirementFormModal', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement, hipaaRequirement]);
     mockGetCourses.mockResolvedValue([]);
@@ -247,6 +259,8 @@ describe('RequirementFormModal — the requirement’s settings in this program'
   };
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetRequirementsEnhanced.mockReset();
     mockGetRequirementsEnhanced.mockResolvedValue([cprRequirement, hipaaRequirement]);
@@ -339,6 +353,8 @@ const phases = [
 
 describe('PhaseFormModal — phase prerequisites', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockCreateProgramPhase.mockResolvedValue({ id: 'ph-3' });
     mockUpdateProgramPhase.mockResolvedValue({ id: 'ph-2' });
@@ -411,6 +427,8 @@ const program = {
 
 describe('EditProgramModal — deadline reminders', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockUpdateProgram.mockResolvedValue(program);
     mockGetPrograms.mockReset();
@@ -486,6 +504,8 @@ describe('EditProgramModal — enrollment rules', () => {
   const concurrencyLabel = 'Allow members to be enrolled in other programs at the same time';
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetPrograms.mockReset();
     mockGetPrograms.mockResolvedValue(others);
@@ -530,6 +550,7 @@ describe('EditProgramModal — enrollment rules', () => {
         recert_anchor_day: undefined,
         prerequisite_program_ids: ['prog-driver'],
         allows_concurrent_enrollment: false,
+        shift_evaluation_template_id: null,
       });
     });
     // The parent re-fetches the program on onSaved.
@@ -607,6 +628,8 @@ describe('EditProgramModal — deactivating', () => {
   ];
 
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockGetPrograms.mockReset();
     mockGetPrograms.mockResolvedValue([]);
@@ -668,6 +691,8 @@ describe('EditProgramModal — deactivating', () => {
 // so each of these forms must send an emptied field as null to clear it.
 describe('clearing a field on an edit sends null', () => {
   beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
     vi.clearAllMocks();
     mockUpdateProgram.mockReset();
     mockUpdateProgram.mockResolvedValue(program);
@@ -677,6 +702,8 @@ describe('clearing a field on an edit sends null', () => {
     mockUpdateProgramPhase.mockResolvedValue({ id: 'ph-2' });
     mockUpdateMilestone.mockReset();
     mockUpdateMilestone.mockResolvedValue({ id: 'ms-1' });
+    mockGetMilestoneOptions.mockReset();
+    mockGetMilestoneOptions.mockResolvedValue(milestoneOptions);
   });
 
   it('clears the program’s text, limits and recert schedule', async () => {
@@ -804,7 +831,7 @@ describe('clearing a field on an edit sends null', () => {
     );
 
     await user.clear(screen.getByLabelText(/^Description/));
-    await user.clear(screen.getByLabelText(/^Notification message/));
+    await user.clear(screen.getByLabelText(/^Message to the member/));
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
@@ -812,6 +839,240 @@ describe('clearing a field on an edit sends null', () => {
         'prog-1',
         'ms-1',
         expect.objectContaining({ description: null, notification_message: null })
+      );
+    });
+  });
+});
+
+const milestoneOptions = {
+  courses: [
+    { id: 'course-pump', name: 'Pump Operations', detail: 'PO-1' },
+    { id: 'course-ladder', name: 'Ladder Operations', detail: null },
+  ],
+  skill_tests: [{ id: 'skill-hose', name: 'Hose Deployment', detail: null }],
+  knowledge_tests: [{ id: 'kt-hydraulics', name: 'Hydraulics Exam', detail: null }],
+  positions: [
+    { id: 'pos-chief', name: 'Chief', detail: null },
+    { id: 'pos-qm', name: 'Quartermaster', detail: null },
+  ],
+  members: [{ id: 'user-casey', name: 'Casey Tester', detail: '104' }],
+};
+
+describe('MilestoneFormModal — triggers and recipients', () => {
+  const existing = {
+    id: 'ms-1',
+    program_id: 'prog-1',
+    name: 'Halfway',
+    completion_percentage_threshold: 50,
+    created_at: '',
+    items: [],
+    item_match_mode: 'all' as const,
+    counts_prior_completions: false,
+    notify_member: true,
+    notify_positions: [],
+    notify_users: [],
+  };
+
+  beforeEach(() => {
+    mockCreateMilestone.mockReset();
+    mockCreateMilestone.mockResolvedValue({ id: 'ms-new' });
+    mockUpdateMilestone.mockReset();
+    mockUpdateMilestone.mockResolvedValue({ id: 'ms-1' });
+    mockGetMilestoneOptions.mockReset();
+    mockGetMilestoneOptions.mockResolvedValue(milestoneOptions);
+    mockToastError.mockReset();
+  });
+
+  const renderNew = () =>
+    renderWithRouter(<MilestoneFormModal programId="prog-1" phases={[]} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+  const addCourse = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
+    const picker = await screen.findByRole('combobox', { name: 'Choose a course' });
+    await waitFor(() => expect(picker).toBeEnabled());
+    await user.selectOptions(picker, screen.getByRole('option', { name: new RegExp(`^${name}`) }));
+    await user.click(screen.getAllByRole('button', { name: 'Add' })[0] as HTMLElement);
+  };
+
+  it('creates a milestone that waits only on courses, any one of them', async () => {
+    const user = userEvent.setup();
+    renderNew();
+    await user.type(screen.getByLabelText(/^Name/), 'Engine ready');
+    await user.click(screen.getByRole('checkbox', { name: /this far through the program/ }));
+    await addCourse(user, 'Pump Operations');
+    await addCourse(user, 'Ladder Operations');
+    await user.click(screen.getByRole('radio', { name: 'Any one of these' }));
+    await user.click(screen.getByRole('checkbox', { name: /completed before the member/ }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(mockCreateMilestone).toHaveBeenCalled());
+    const payload = mockCreateMilestone.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      name: 'Engine ready',
+      completion_percentage_threshold: undefined,
+      items: [
+        { item_type: 'course', item_id: 'course-pump' },
+        { item_type: 'course', item_id: 'course-ladder' },
+      ],
+      item_match_mode: 'any',
+      counts_prior_completions: true,
+      notify_member: true,
+    });
+  });
+
+  it('sends the chosen positions, members and officer note', async () => {
+    const user = userEvent.setup();
+    renderNew();
+    await user.type(screen.getByLabelText(/^Name/), 'Phase 2 done');
+    await user.click(await screen.findByRole('checkbox', { name: 'Chief' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Quartermaster' }));
+    const memberPicker = screen.getByRole('combobox', { name: 'Choose a member to notify' });
+    await user.selectOptions(memberPicker, screen.getByRole('option', { name: 'Casey Tester (104)' }));
+    await user.click(screen.getAllByRole('button', { name: 'Add' })[1] as HTMLElement);
+    await user.type(screen.getByLabelText(/Note for the officers/), 'Uniform issue may be due.');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(mockCreateMilestone).toHaveBeenCalled());
+    expect(mockCreateMilestone.mock.calls[0]?.[1]).toMatchObject({
+      completion_percentage_threshold: 100,
+      notify_position_ids: ['pos-chief', 'pos-qm'],
+      notify_user_ids: ['user-casey'],
+      officer_message: 'Uniform issue may be due.',
+    });
+  });
+
+  it('refuses a milestone with neither a percentage nor an item', async () => {
+    const user = userEvent.setup();
+    renderNew();
+    await user.type(screen.getByLabelText(/^Name/), 'Nothing');
+    await user.click(screen.getByRole('checkbox', { name: /this far through the program/ }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(mockToastError).toHaveBeenCalledWith('Choose a percentage, at least one course or test, or both');
+    expect(mockCreateMilestone).not.toHaveBeenCalled();
+  });
+
+  it('warns that members who already meet an edited trigger are not told', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <MilestoneFormModal programId="prog-1" phases={[]} milestone={existing} onClose={vi.fn()} onSaved={vi.fn()} />
+    );
+    const warning = /already meet the updated milestone won’t be notified/;
+    await user.clear(screen.getByLabelText(/^Name/));
+    await user.type(screen.getByLabelText(/^Name/), 'Halfway there');
+    expect(screen.queryByText(warning)).not.toBeInTheDocument();
+
+    const pct = screen.getByLabelText('Percentage complete');
+    await user.clear(pct);
+    await user.type(pct, '60');
+    expect(screen.getByText(warning)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockUpdateMilestone).toHaveBeenCalledWith(
+        'prog-1',
+        'ms-1',
+        expect.objectContaining({
+          name: 'Halfway there',
+          completion_percentage_threshold: 60,
+          items: [],
+          notify_position_ids: [],
+          notify_user_ids: [],
+          officer_message: null,
+        })
+      )
+    );
+  });
+});
+
+describe('EditProgramModal — shift evaluation form', () => {
+  const template = (id: string, name: string, isActive = true) => ({
+    id,
+    name,
+    is_active: isActive,
+    program_names: [],
+    is_general_form: false,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([
+      template('tpl-emt', 'EMT Shift Evaluation'),
+      template('tpl-driver', 'Driver Evaluation'),
+      template('tpl-old', 'Old Evaluation', false),
+    ]);
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue([]);
+    mockUpdateProgram.mockReset();
+    mockUpdateProgram.mockResolvedValue(program);
+  });
+
+  it('offers the active forms, and keeps an inactive one the program already uses', async () => {
+    renderWithRouter(
+      <EditProgramModal
+        program={{ ...program, shift_evaluation_template_id: 'tpl-old' }}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    );
+
+    const select = await screen.findByRole('combobox', { name: 'Shift evaluation form' });
+    await waitFor(() => expect(select).toBeEnabled());
+    expect(select).toHaveValue('tpl-old');
+    const options = screen.getAllByRole('option').map((o) => o.textContent);
+    expect(options).toEqual(
+      expect.arrayContaining([
+        'No evaluation form',
+        'EMT Shift Evaluation',
+        'Driver Evaluation',
+        'Old Evaluation (inactive)',
+      ])
+    );
+  });
+
+  it('does not offer an inactive form the program does not use', async () => {
+    renderWithRouter(<EditProgramModal program={program} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    const select = await screen.findByRole('combobox', { name: 'Shift evaluation form' });
+    await waitFor(() => expect(select).toBeEnabled());
+    expect(screen.queryByRole('option', { name: 'Old Evaluation (inactive)' })).not.toBeInTheDocument();
+  });
+
+  it('sends the chosen form', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EditProgramModal program={program} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    const select = await screen.findByRole('combobox', { name: 'Shift evaluation form' });
+    await waitFor(() => expect(select).toBeEnabled());
+    await user.selectOptions(select, 'Driver Evaluation');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateProgram).toHaveBeenCalledWith(
+        'prog-1',
+        expect.objectContaining({ shift_evaluation_template_id: 'tpl-driver' })
+      );
+    });
+  });
+
+  it('sends null when the form is removed, so the clear is saved', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <EditProgramModal
+        program={{ ...program, shift_evaluation_template_id: 'tpl-emt' }}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    );
+
+    const select = await screen.findByRole('combobox', { name: 'Shift evaluation form' });
+    await waitFor(() => expect(select).toBeEnabled());
+    await user.selectOptions(select, 'No evaluation form');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateProgram).toHaveBeenCalledWith(
+        'prog-1',
+        expect.objectContaining({ shift_evaluation_template_id: null })
       );
     });
   });

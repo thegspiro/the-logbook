@@ -135,6 +135,15 @@ PINNED_EXCLUSIONS = {
         "equipment requests: the requesting member and their free-text "
         "notes; no response_model"
     ),
+    "/evaluations/mine": (
+        "a member's own performance evaluations: ratings and the evaluator's "
+        "free-text comments (evaluator_name/display_name — not in PII_FIELDS, "
+        "so the ratchet is blind to this route)"
+    ),
+    "/evaluations/{evaluation_id}": (
+        "one evaluation in full, member and evaluator named, including "
+        "signatures; same field-name blind spot as /evaluations/mine above"
+    ),
     # -- Inert today, guarded so it stays a decision rather than an accident --
     "/apparatus/evoc-check/{apparatus_id}/{user_id}": (
         "a named member's driving eligibility; served today by the apparatus "

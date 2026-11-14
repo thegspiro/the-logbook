@@ -15,7 +15,7 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 - **Publish Workflow**: Approved minutes are published as styled HTML to the Documents module
 - **Event Linking**: Minutes can be linked to events for context
 - **Full-Text Search**: Search across minutes titles and section content
-- **Roll Call**: Six attendance statuses with notes, a suggested roll from event check-ins or the member list, and a quorum derived from it _(2026-10-14)_
+- **Roll Call**: Six attendance statuses with notes (a seventh, represented by proxy, where the department uses proxies), a suggested roll from event check-ins or the member list, and a quorum derived from it _(2026-10-14)_
 - **Election Results**: A closed election's certified tally frozen into the minutes _(2026-10-14)_
 - **Attachments**: Reports, handouts and the signed copy, scanned and stored encrypted _(2026-10-14)_
 - **Approved Versions**: An immutable, SHA-256-hashed snapshot per approval, with verification _(2026-10-14)_
@@ -61,7 +61,7 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 | `backend/app/services/minutes_record_service.py`           | Roll-call suggestions, election results, attachments, revisions, carry-forward, "assigned to me"       |
 | `backend/app/services/minutes_notifications.py`            | Assignment email, decided by `EmailKind.MINUTES_ACTION_ITEMS`                                          |
 | `backend/app/api/v1/endpoints/minutes_records.py`          | Record-keeping endpoints, mounted beside `minutes.py` at the same prefix                               |
-| `backend/app/utils/minutes_attendance.py`                  | The one canonical attendee shape and what counts toward quorum                                         |
+| `backend/app/utils/minutes_attendance.py`                  | The one canonical attendee shape and the statuses quorum can count                                     |
 | `backend/app/utils/minutes_snapshot.py`                    | What an approval covers, and its hash                                                                  |
 | `backend/app/utils/minutes_pdf.py`                         | The printable minutes                                                                                  |
 | `backend/app/services/template_service.py`                 | Template CRUD, default template creation                                                               |
@@ -327,8 +327,9 @@ Motions, action items and quorum have their own sub-routes under
 item's assignee (matched on `assignee_id`), who may change only `status` and
 `completion_notes`; any other field is a 403, and someone else's item a 404
 _(2026-10-11, W52-7)_. `GET /api/v1/minutes-records/action-item-assignees`
-(`minutes.manage`) lists every active member as `{id, name}` for the assignee
-picker; an action item's `assignee_id` must name an active member of the
+(`minutes.manage`, or `meetings.manage` since 2026-11-05 for the Action
+Items screen's meeting items) lists every active member as `{id, name}` for
+the assignee picker; an action item's `assignee_id` must name an active member of the
 department, and the server stores that member's name beside it _(W52-6)_.
 
 **Approved minutes are locked, including their quorum settings** _(2026-10-11,
@@ -433,18 +434,39 @@ shape (`app/utils/minutes_attendance.py`):
   "user_id": "…|null",
   "name": "…",
   "role": "…|null",
-  "status": "present|late|left_early|excused|absent|guest",
+  "status": "present|late|left_early|proxy|excused|absent|guest",
   "present": true,
   "note": "…|null"
 }
 ```
 
-`status` is the record; `present` is derived from it and means "counted toward
-quorum". **Present, late and left early count; excused, absent and guests do
-not.** A client that sends only `present` (the old contract) gets the matching
-status, so existing callers keep working. A member can be listed once. A
-migration rewrote every stored entry; a legacy entry that was present stays
-`present`, so a quorum already recorded does not change.
+`status` is the record; `present` is derived from it and means "in the room":
+present, late or left early. A client that sends only `present` (the old
+contract) gets the matching status, so existing callers keep working. A member
+can be listed once. A migration rewrote every stored entry; a legacy entry that
+was present stays `present`, so a quorum already recorded does not change.
+
+#### Who counts toward quorum _(2026-11-05, owner decision 2026-11-01)_
+
+The department chooses, under **Minutes → Settings → Quorum**
+(`settings.minutes`, `settings.manage`):
+
+| Key                        | Unset reads as | Effect                                                                                    |
+| -------------------------- | -------------- | ----------------------------------------------------------------------------------------- |
+| `quorum_counts_late`       | on             | A member marked Late counts toward quorum                                                 |
+| `quorum_counts_left_early` | on             | A member marked Left early counts toward quorum                                           |
+| `proxy_attendance`         | off            | The roll call offers **Represented by proxy** (`proxy`), and a proxy counts toward quorum |
+
+Present always counts; excused, absent and guests never do. Unset is the rule
+every department had before the setting, so an upgrade changes no count.
+`QuorumService.calculate_quorum` is the only place the rule is applied
+(`quorum_counting_in` in `app/utils/minutes_settings.py` resolves it), and its
+description names anything that differs from the default. A proxy is not
+`present`: it does not vote in a roll call and is not counted toward a
+"majority of members present" threshold. A line already recorded as a proxy
+stays editable after proxies are switched off, and then no longer counts.
+Adopted minutes keep the quorum they were adopted with; a draft is recounted
+the next time its quorum is checked. `GET /settings` returns the three values.
 
 #### Who the minutes name _(2026-10-18)_
 
@@ -452,16 +474,21 @@ The roll is always recorded in full: quorum, the attendance dashboard and the
 carry-forward read it. What a **reader** is shown is a separate, display-only
 choice, because some departments denote only who was present.
 
-| Listing           | Names                                                            |
-| ----------------- | ---------------------------------------------------------------- |
-| `all`             | Every status (what minutes have always shown)                    |
-| `present_excused` | Present, late, left early, guests, and excused members           |
-| `present`         | Present, late, left early and guests; excused and absent are not |
+| Listing           | Names                                                                     |
+| ----------------- | ------------------------------------------------------------------------- |
+| `all`             | Every status (what minutes have always shown)                             |
+| `present_excused` | Present, late, left early, proxies, guests, and excused members           |
+| `present`         | Present, late, left early, proxies and guests; excused and absent are not |
 
-A guest was in the room, so every listing names guests. The department sets the
+A guest was in the room, so every listing names guests; a proxy may have made
+the quorum, so every listing names who was represented (the public copy counts
+proxies separately, and only when there is one). The department sets the
 default under **Minutes → Settings → Attendance** (`settings.minutes.attendance_listing`,
 `settings.manage`); unset, or any unrecognised value, reads as `all`, so an
-upgrade changes no printed or published copy. One set of minutes can choose for
+upgrade changes no printed or published copy. A department created by setup
+from 2026-11-05 has `present` written there when it is created (owner decision
+2026-11-01, present only for new installs); that is a stored value, not a
+change to how unset reads. One set of minutes can choose for
 itself (`meeting_minutes.attendance_listing`, draft or rejected minutes only;
 `null` follows the department). The choice applies at display time to the
 minutes page, the PDF, the library copy and the public copy; the public copy
@@ -529,6 +556,19 @@ a member sees them once the minutes are approved, and never for executive
 minutes. Categories: `signed_copy`, `report`, `agenda`, `handout`,
 `correspondence`, `other`.
 
+**In the published copy and the PDF _(owner decision 2026-11-01, built
+2026-11-05)_.** Publishing lists the files in the library copy and stamps each
+`minutes_attachments.published_at`. Whoever can read that document opens them
+through it — `GET /documents/{id}/minutes-attachments` and
+`GET /documents/{id}/minutes-attachments/{attachment_id}/file`, `documents.view`
+plus the document's own folder rules (`can_access_document`), so an executive
+copy's files stay in its leadership-only folder. Only stamped files are served:
+a signed copy filed after publishing waits for the next publish. The Documents
+screen shows a paperclip on published minutes that opens the list. The bytes
+are not copied into Documents; they stay in `minutes-attachments/`. The public
+copy still carries no attachments. `GET /{id}/pdf` embeds them — see
+"Printable minutes".
+
 ### Locking and approved versions
 
 Everything above follows the MM-17 lock: roll call, election results and
@@ -572,6 +612,21 @@ already-approved minutes is emailed when it is added. A failed send is logged
 and never fails the approval.
 
 ### Action item reminders _(2026-10-15)_
+
+**Meeting-record items are emailed too _(owner decision 2026-11-01, built
+2026-11-05)_.** Action items on a meeting record (`meeting_action_items`) were
+reminded only on the bell. `run_action_item_reminders` now also emails the
+assignee on the same days (3 and 1 days before, the due date, the day after),
+one email per member per run, under `EmailKind.MINUTES_ACTION_ITEMS` — now
+labelled "Action items from meetings and minutes" — so the member's existing
+switch turns it off and a department can make it required. The bell entry is
+unchanged and is sent either way. `meeting_action_items.reminder_emailed_on`
+holds the department-local day the email went out; a second run that day sends
+nothing (send, then stamp: a crash between the two sends again, which for a
+reminder is a nuisance, not harm). A failed send leaves the item unstamped for
+the next run. Items on minutes are still emailed only by the task below, so no
+item is mailed on two schedules. Code:
+`app/services/meeting_action_item_reminder_service.py`.
 
 Before this, an assignee was reminded only by a bell notification
 (`run_action_item_reminders`, 3, 1 and 0 days out and once overdue) and never by
@@ -619,6 +674,17 @@ lines for the recording secretary and presiding officer, and — for approved
 minutes — the approver, version and SHA-256 in the footer. It follows the same
 visibility as the minutes.
 
+Since 2026-11-05 (owner decision 2026-11-01) it also embeds the attachments
+(`app/utils/minutes_pdf_attachments.py`): images are drawn after the signature
+block, scaled down to 1800 px; PDFs are appended after the minutes page for
+page, each bookmarked; Word, Excel and text files are listed by name. The
+attachment table says, per file, which happened. Budgets keep one export
+bounded: 40 MB of attachment files read (by the size recorded at upload, so
+nothing past it is read), 300 appended pages, 40 megapixels per image. A file
+over a budget, missing, password-protected or unreadable is listed with the
+reason and the PDF is still produced. The rendering runs off the event loop.
+Appended pages carry no minutes footer.
+
 ### Record-keeping endpoints
 
 | Method   | Path                                               | Permission       | Description                                                      |
@@ -654,8 +720,9 @@ Filing election results is no longer on that list: it happens automatically
 ### Minutes settings page _(2026-10-19)_
 
 Every department-wide choice about minutes is on one screen, **Minutes →
-Settings** (`/minutes/settings`, `minutes.manage`), in five sections addressed by
-`?tab=`: **Attendance** (who the minutes name), **Signatures** (who signs adopted
+Settings** (`/minutes/settings`, `minutes.manage`), in six sections addressed by
+`?tab=`: **Attendance** (who the minutes name), **Quorum** (who counts toward
+quorum, 2026-11-05), **Signatures** (who signs adopted
 minutes), **Reminders** (action item follow-up), **Publishing** (the library
 and the public page) and **Elections** (whether a closed election files its result
 with the minutes). They replace four buttons on the Minutes page that each
@@ -1139,22 +1206,23 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 
 ## Database Migrations
 
-| Migration                                                           | Revision              | Description                                                                                                                                       |
-| ------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `20260212_1200_add_meeting_minutes_tables.py`                       | `add_meeting_minutes` | Creates `meeting_minutes` table                                                                                                                   |
-| `20260213_0800_add_templates_documents_dynamic_sections.py`         | `20260213_0800`       | Creates `minutes_templates`, `document_folders`, `documents` tables                                                                               |
-| `20260213_1400_add_trustee_executive_annual_meeting_types.py`       | `a7f3e2d91b04`        | Extends MeetingType ENUM with `trustee`, `executive`, `annual`                                                                                    |
-| `20261014_1719_8efc77d4c0c3_minutes_record_keeping_*.py`            | `8efc77d4c0c3`        | Attendance backfill; carry-forward columns; election results, attachments and revisions tables (idempotent; the downgrade drops them)             |
-| `20261014_1830_f2c5e55e7dda_minutes_adoption_suggestions_*.py`      | `f2c5e55e7dda`        | Adoption columns; motion ballot link; `is_addendum`; closed-session and suggestion tables (idempotent; the downgrade drops them)                  |
-| `20261015_0910_48f403b2631f_minutes_suggestions_tracked_changes.py` | `48f403b2631f`        | Tracked-change columns on `minutes_suggestions` (idempotent; the downgrade drops them)                                                            |
-| `20261016_2141_38a57d984653_meeting_agenda_items.py`                | `38a57d984653`        | `meetings.agenda_items` JSON column (idempotent; the downgrade drops it and the items with it)                                                    |
-| `20261016_1101_f236c56b1b49_minutes_signatures.py`                  | `f236c56b1b49`        | `minutes_signatures` table (idempotent; the downgrade drops it)                                                                                   |
-| `20261015_1652_9ce470b513ae_minutes_motions_vote_detail.py`         | `9ce470b513ae`        | `meeting_motions.votes_recused` / `threshold` / `roll_call` (idempotent; the downgrade drops them)                                                |
-| `20261015_1441_b90813f63e25_minutes_action_items_last_reminded.py`  | `b90813f63e25`        | `minutes_action_items.last_reminded_at` (idempotent; the downgrade drops it)                                                                      |
-| `20261017_2305_89723c04ae94_minutes_public_copies.py`               | `89723c04ae94`        | `minutes_public_copies` table; `meeting_minutes.published_revision_version` / `published_at` (idempotent; the downgrade drops them)               |
-| `20261018_2152_751a14709cc4_minutes_section_motions.py`             | `751a14709cc4`        | `meeting_motions` status `pending`, `previous_minutes_id`, `acceptance`; merges the two heads (idempotent; the downgrade deletes pending motions) |
-| `20261018_1723_6dc58d6997df_minutes_attendance_listing.py`          | `6dc58d6997df`        | `meeting_minutes.attendance_listing` (idempotent; the downgrade drops it)                                                                         |
-| `20261015_1126_bb60bd43bede_minutes_motions_on_sections_and_.py`    | `bb60bd43bede`        | `meeting_motions.section_key`; `meeting_minutes.adoption_moved_by` / `adoption_seconded_by` (idempotent; the downgrade drops them)                |
+| Migration                                                             | Revision              | Description                                                                                                                                                       |
+| --------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `20260212_1200_add_meeting_minutes_tables.py`                         | `add_meeting_minutes` | Creates `meeting_minutes` table                                                                                                                                   |
+| `20260213_0800_add_templates_documents_dynamic_sections.py`           | `20260213_0800`       | Creates `minutes_templates`, `document_folders`, `documents` tables                                                                                               |
+| `20260213_1400_add_trustee_executive_annual_meeting_types.py`         | `a7f3e2d91b04`        | Extends MeetingType ENUM with `trustee`, `executive`, `annual`                                                                                                    |
+| `20261014_1719_8efc77d4c0c3_minutes_record_keeping_*.py`              | `8efc77d4c0c3`        | Attendance backfill; carry-forward columns; election results, attachments and revisions tables (idempotent; the downgrade drops them)                             |
+| `20261014_1830_f2c5e55e7dda_minutes_adoption_suggestions_*.py`        | `f2c5e55e7dda`        | Adoption columns; motion ballot link; `is_addendum`; closed-session and suggestion tables (idempotent; the downgrade drops them)                                  |
+| `20261015_0910_48f403b2631f_minutes_suggestions_tracked_changes.py`   | `48f403b2631f`        | Tracked-change columns on `minutes_suggestions` (idempotent; the downgrade drops them)                                                                            |
+| `20261016_2141_38a57d984653_meeting_agenda_items.py`                  | `38a57d984653`        | `meetings.agenda_items` JSON column (idempotent; the downgrade drops it and the items with it)                                                                    |
+| `20261016_1101_f236c56b1b49_minutes_signatures.py`                    | `f236c56b1b49`        | `minutes_signatures` table (idempotent; the downgrade drops it)                                                                                                   |
+| `20261015_1652_9ce470b513ae_minutes_motions_vote_detail.py`           | `9ce470b513ae`        | `meeting_motions.votes_recused` / `threshold` / `roll_call` (idempotent; the downgrade drops them)                                                                |
+| `20261015_1441_b90813f63e25_minutes_action_items_last_reminded.py`    | `b90813f63e25`        | `minutes_action_items.last_reminded_at` (idempotent; the downgrade drops it)                                                                                      |
+| `20261017_2305_89723c04ae94_minutes_public_copies.py`                 | `89723c04ae94`        | `minutes_public_copies` table; `meeting_minutes.published_revision_version` / `published_at` (idempotent; the downgrade drops them)                               |
+| `20261105_0532_a42466630e74_minutes_attachments_in_the_published_.py` | `a42466630e74`        | `minutes_attachments.published_at`; `meeting_action_items.reminder_emailed_on` (idempotent; each step skipped when its table is absent; the downgrade drops both) |
+| `20261018_2152_751a14709cc4_minutes_section_motions.py`               | `751a14709cc4`        | `meeting_motions` status `pending`, `previous_minutes_id`, `acceptance`; merges the two heads (idempotent; the downgrade deletes pending motions)                 |
+| `20261018_1723_6dc58d6997df_minutes_attendance_listing.py`            | `6dc58d6997df`        | `meeting_minutes.attendance_listing` (idempotent; the downgrade drops it)                                                                                         |
+| `20261015_1126_bb60bd43bede_minutes_motions_on_sections_and_.py`      | `bb60bd43bede`        | `meeting_motions.section_key`; `meeting_minutes.adoption_moved_by` / `adoption_seconded_by` (idempotent; the downgrade drops them)                                |
 
 ### Migration Chain
 

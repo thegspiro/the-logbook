@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
@@ -218,5 +218,40 @@ describe('ReceiveDeliveryModal', () => {
 
       expect(await screen.findByRole('option', { name: 'Gauze 20' })).toBeInTheDocument();
     });
+  });
+
+  it('puts a refused lot number on its own line, announced', async () => {
+    mockReceiveDelivery.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'entries.0.lot_number', message: 'Value is too long.' }] } },
+    });
+    renderModal();
+    await chooseItem(screen.getByLabelText(/^Item/), '4x4 Gauze', 'item-1');
+    await userEvent.type(screen.getByLabelText('Qty'), '12');
+    await userEvent.type(screen.getByLabelText('Lot #'), 'LOT-A');
+    await userEvent.click(screen.getByRole('button', { name: 'Record delivery' }));
+
+    const lot = screen.getByLabelText('Lot #');
+    await waitFor(() => expect(lot).toHaveAccessibleDescription('Lot # is too long — keep it to 100 characters.'));
+    expect(lot).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('flags the missing quantity on its line', async () => {
+    renderModal();
+    await chooseItem(screen.getByLabelText(/^Item/), '4x4 Gauze', 'item-1');
+    await userEvent.click(screen.getByRole('button', { name: 'Record delivery' }));
+    expect(screen.getByLabelText('Qty')).toHaveAccessibleDescription('Enter a quantity, or clear this row.');
+  });
+
+  it('asks before Escape or Cancel discards a half-entered shipment', async () => {
+    const onClose = vi.fn();
+    renderWithRouter(<ReceiveDeliveryModal onClose={onClose} onSaved={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText('Qty'), '5');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await userEvent.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

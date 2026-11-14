@@ -50,7 +50,7 @@ export const MODULE_CHECKBOX_TIERS: Readonly<Record<string, ModuleCheckboxTiers>
   minutes: { view: true, manage: true },
   reports: { view: true, manage: true },
   notifications: { view: true, manage: true },
-  mobile: { view: false, manage: false },
+  public_info: { view: false, manage: false },
   integrations: { view: false, manage: true },
   prospective_members: { view: true, manage: true },
   positions: { view: true, manage: true },
@@ -177,6 +177,21 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
   communications_officer: {
     view: ['members', 'events', 'documents', 'storefront', 'notifications', 'positions'],
     manage: ['events', 'notifications'],
+  },
+  community_outreach_team: {
+    view: [
+      'members',
+      'events',
+      'documents',
+      'forms',
+      'training',
+      'inventory',
+      'scheduling',
+      'storefront',
+      'elections',
+      'minutes',
+    ],
+    manage: [],
   },
   compliance_officer: {
     view: [
@@ -329,9 +344,39 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
     view: ['members', 'events', 'documents', 'storefront', 'reports', 'notifications'],
     manage: ['reports'],
   },
+  fundraising_committee: {
+    view: [
+      'members',
+      'events',
+      'documents',
+      'forms',
+      'training',
+      'inventory',
+      'scheduling',
+      'storefront',
+      'elections',
+      'minutes',
+    ],
+    manage: [],
+  },
   historian: {
     view: ['members', 'events', 'documents', 'storefront', 'minutes', 'notifications'],
     manage: ['documents'],
+  },
+  history_committee: {
+    view: [
+      'members',
+      'events',
+      'documents',
+      'forms',
+      'training',
+      'inventory',
+      'scheduling',
+      'storefront',
+      'elections',
+      'minutes',
+    ],
+    manage: [],
   },
   it_manager: {
     view: [
@@ -402,6 +447,21 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
     manage: ['events'],
   },
   member: {
+    view: [
+      'members',
+      'events',
+      'documents',
+      'forms',
+      'training',
+      'inventory',
+      'scheduling',
+      'storefront',
+      'elections',
+      'minutes',
+    ],
+    manage: [],
+  },
+  membership_committee: {
     view: [
       'members',
       'events',

@@ -32,6 +32,11 @@ vi.mock('../store/schedulingStore', () => ({
 
 const mockUpdateFeatureSettings = vi.fn();
 
+vi.mock('../../../hooks/useMembershipTierOptions', () => ({
+  useMembershipTierOptions: () => ({ tiers: mockTiers(), loaded: true }),
+}));
+const mockTiers = vi.fn(() => [] as { id: string; name: string }[]);
+
 vi.mock('../services/api', () => ({
   schedulingService: {
     getFeatureSettings: vi.fn().mockResolvedValue({
@@ -134,6 +139,22 @@ describe('ShiftSettingsPanel', () => {
     }
   );
 
+  // Four General cards are drawn only once the feature settings arrive, above
+  // the template and defaults cards, so those wait for the answer.
+  it('keeps the General cards after the first invisible until the feature settings answer', async () => {
+    const HIDES_ALL_BUT_FIRST = '[&>*:not(:first-child)]:invisible';
+    let settle: (value: SchedulingFeatureSettings) => void = () => {};
+    vi.mocked(schedulingService.getFeatureSettings).mockReturnValueOnce(
+      new Promise<SchedulingFeatureSettings>((resolve) => (settle = resolve))
+    );
+    renderPanel('general');
+    const general = () => screen.getByTestId('general-settings');
+    expect(general()).toHaveClass(HIDES_ALL_BUT_FIRST);
+
+    settle({ hours_window_days: 7 } as SchedulingFeatureSettings);
+    await waitFor(() => expect(general()).not.toHaveClass(HIDES_ALL_BUT_FIRST));
+  });
+
   it('no longer renders its own heading — the page owns the title', () => {
     renderPanel('general');
 
@@ -185,6 +206,24 @@ describe('ShiftSettingsPanel', () => {
     await user.click(toggle);
 
     await waitFor(() => expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({ enforce_evoc: false }));
+  });
+
+  it('shows outside-shift approval as off when the response omits it, matching the backend default', async () => {
+    renderPanel('general');
+    const toggle = await screen.findByRole('switch', { name: /require approval for outside-department shifts/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('turns outside-shift approval on through the backend', async () => {
+    const user = userEvent.setup();
+    renderPanel('general');
+    const toggle = await screen.findByRole('switch', { name: /require approval for outside-department shifts/i });
+
+    await user.click(toggle);
+
+    await waitFor(() =>
+      expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({ external_shifts_require_approval: true })
+    );
   });
 
   it('shows pre-shift work as on when the response omits the field, matching the backend default', async () => {
@@ -270,6 +309,7 @@ describe('ShiftSettingsPanel switches with the flags absent from the response', 
     'Require end-of-shift equipment checks',
     'Enforce EVOC for drivers',
     'Restrict check-in to assigned members',
+    'Require approval for outside-department shifts',
   ];
 
   // `mockReset()` before each default, per CLAUDE.md: an unconsumed

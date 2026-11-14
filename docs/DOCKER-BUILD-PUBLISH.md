@@ -1,9 +1,13 @@
 # Building and Publishing Docker Images to GitHub Container Registry
 
-The project does not publish Docker images: no CI workflow builds or pushes
-them, and every shipped compose file — including the Unraid ones, which tag
-their builds `the-logbook-backend:local` / `the-logbook-frontend:local` —
-builds the backend and frontend on the host that runs them.
+The project publishes one image: `ghcr.io/thegspiro/the-logbook`, the combined
+web-and-API container the Unraid Community Applications template runs, which
+`.github/workflows/release-image.yml` builds and pushes when a `v*.*.*`
+release tag is pushed (see `unraid/COMMUNITY-APP-SUBMISSION.md`, "Publishing
+the image"). The separate backend and frontend images are not published: every
+shipped compose file — including the Unraid ones, which tag their builds
+`the-logbook-backend:local` / `the-logbook-frontend:local` — builds them on
+the host that runs them.
 
 This guide is for an operator who wants to publish their own images to GitHub
 Container Registry (ghcr.io) by hand — for example, to build once on a fast

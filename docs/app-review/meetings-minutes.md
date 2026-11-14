@@ -57,21 +57,25 @@ paths "apply these via a blind `setattr`". They have gone through `apply_updates
 since MM-9; the validators are still needed (`apply_updates` checks nullability,
 not enum membership) but for a different reason, which the comment now states.
 
-### MM5-4 — MED — section edits send the whole array, so two editors silently overwrite each other — 🚩 FLAGGED
+### MM5-4 — MED — section edits send the whole array, so two editors silently overwrite each other — ✅ RESOLVED (2026-10-31)
 
 `modules/minutes/pages/MinutesDetailPage.tsx` saves, reorders, adds and deletes a
 section by PUTting the **entire** `sections` list built from the page's local copy
 (`handleSaveSection`, `handleReorderSection`, `handleAddSection`,
 `handleDeleteSection`), and `MinuteService.update_minutes` replaces the stored
-list wholesale ("Full sections replacement" in `MinutesUpdate`). There is no
-version, ETag or per-section endpoint. If two secretaries have the same draft
-open, the second save writes back the first one's stale copy of every section the
-second did not touch, and the first person's text is gone with a success toast.
+list wholesale ("Full sections replacement" in `MinutesUpdate`). There was no
+version, ETag or per-section endpoint, so if two secretaries had the same draft
+open, the second save wrote back the first one's stale copy of every section the
+second did not touch, and the first person's text was gone with a success toast.
 
-Not fixed: the cure is an API change (a per-section update, or an `If-Match` /
-`updated_at` precondition on the PUT) and a decision about how a conflict is
-shown to the user. Mirrored to `docs/KNOWN_LIMITATIONS.md` as MM5-4. Same
-lost-update class as SF-9, but here on text people typed.
+**Owner decision: refuse with a conflict, not a per-section endpoint.**
+`meeting_minutes.edit_version` (migration `e15d635bbb98`) is bumped by every
+content save; the page sends the version it loaded as `expected_version`, and
+`PUT /minutes-records/{id}` refuses with 409 (via a `.with_for_update()` locking
+read, so two racing saves cannot both pass) when it is stale. The editor keeps
+whatever was typed and shows a **Reload** banner; a save naming no version stays
+unconditional. See `docs/KNOWN_LIMITATIONS.md`'s MM5-4 entry and
+`docs/security-review/MM-24-meetings-minutes.md`'s Pass 12 section.
 
 ### Verified good ✅ (this pass)
 

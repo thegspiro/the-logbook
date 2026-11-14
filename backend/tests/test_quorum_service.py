@@ -37,6 +37,11 @@ def _minutes(**kw):
     )
 
 
+# A department that has chosen nothing. Every calculation reads the settings,
+# for who counts toward quorum, even when the meeting overrides the threshold.
+_ORG = SimpleNamespace(settings={})
+
+
 def _attendees(present, absent=0):
     return [{"present": True}] * present + [{"present": False}] * absent
 
@@ -83,7 +88,7 @@ class TestQuorumRecalcLocking:
         minutes = _minutes(
             quorum_type="count", quorum_threshold=2, attendees=_attendees(2)
         )
-        db = _db([_one(minutes)])
+        db = _db([_one(minutes), _one(_ORG)])
 
         await QuorumService(db).calculate_quorum("min-1", "org-1")
 
@@ -104,7 +109,7 @@ class TestQuorumRecalcLocking:
         minutes = _minutes(
             quorum_type="count", quorum_threshold=2, attendees=_attendees(2)
         )
-        db = _db([_one(minutes)])
+        db = _db([_one(minutes), _one(_ORG)])
 
         await QuorumService(db).calculate_quorum("min-1", "org-1")
 
@@ -117,7 +122,7 @@ class TestCountQuorum:
         minutes = _minutes(
             quorum_type="count", quorum_threshold=5, attendees=_attendees(5)
         )
-        db = _db([_one(minutes)])
+        db = _db([_one(minutes), _one(_ORG)])
         met, present, required, _ = await QuorumService(db).calculate_quorum(
             "min-1", "org-1"
         )
@@ -131,7 +136,7 @@ class TestCountQuorum:
             quorum_type="count", quorum_threshold=8, attendees=_attendees(5, absent=2)
         )
         met, present, required, _ = await QuorumService(
-            _db([_one(minutes)])
+            _db([_one(minutes), _one(_ORG)])
         ).calculate_quorum("min-1", "org-1")
         assert (met, present, required) == (False, 5, 8)
 
@@ -149,7 +154,7 @@ class TestApprovedMinutesAreNotRecalculated:
             quorum_met=True,
             quorum_count=9,
         )
-        db = _db([_one(minutes)])
+        db = _db([_one(minutes), _one(_ORG)])
         met, present, required, _ = await QuorumService(db).calculate_quorum(
             "min-1", "org-1"
         )
@@ -165,7 +170,7 @@ class TestApprovedMinutesAreNotRecalculated:
             quorum_threshold=5,
             attendees=_attendees(5),
         )
-        db = _db([_one(minutes)])
+        db = _db([_one(minutes), _one(_ORG)])
         met, present, _, _ = await QuorumService(db).calculate_quorum("min-1", "org-1")
         assert (met, present) == (True, 5)
         assert minutes.quorum_met is None
@@ -174,8 +179,9 @@ class TestApprovedMinutesAreNotRecalculated:
 
 class TestPercentageQuorum:
     def _db_for_percent(self, minutes, active):
-        # Per-meeting percentage override: minutes lookup, then active count.
-        return _db([_one(minutes), _scalar(active)])
+        # Per-meeting percentage override: minutes lookup, the department's
+        # settings (who counts), then active count.
+        return _db([_one(minutes), _one(_ORG), _scalar(active)])
 
     async def test_simple_majority_even(self):
         # 50% of 10 = 5.0 exactly -> required 5 (epsilon must not push to 6).
@@ -239,14 +245,53 @@ class TestPercentageQuorum:
         assert (met, present, required) == (True, 6, 5)
 
 
+class TestWhoCounts:
+    """Owner decision 2026-11-01: the department chooses who counts."""
+
+    _ROLL = [
+        {"status": "present"},
+        {"status": "late"},
+        {"status": "left_early"},
+        {"status": "proxy"},
+        {"status": "guest"},
+    ]
+
+    async def _count(self, settings):
+        minutes = _minutes(
+            quorum_type="count", quorum_threshold=3, attendees=self._ROLL
+        )
+        db = _db([_one(minutes), _one(SimpleNamespace(settings=settings))])
+        return await QuorumService(db).calculate_quorum("min-1", "org-1")
+
+    async def test_unset_counts_everyone_in_the_room(self):
+        met, present, _, description = await self._count({})
+        assert (met, present) == (True, 3)
+        assert description == "3 members required"
+
+    async def test_the_department_rule_is_applied_and_described(self):
+        settings = {
+            "minutes": {"quorum_counts_left_early": False, "proxy_attendance": True}
+        }
+        met, present, _, description = await self._count(settings)
+        assert (met, present) == (True, 3)
+        assert description == (
+            "3 members required "
+            "(members who left early not counted; proxies counted)"
+        )
+
+        settings = {"minutes": {"quorum_counts_left_early": False}}
+        met, present, _, _ = await self._count(settings)
+        assert (met, present) == (False, 2)
+
+
 class TestUpdateOnCheckin:
     async def test_returns_status_dict(self):
         minutes = _minutes(
             quorum_type="count", quorum_threshold=3, attendees=_attendees(4)
         )
-        out = await QuorumService(_db([_one(minutes)])).update_quorum_on_checkin(
-            "min-1", "org-1"
-        )
+        out = await QuorumService(
+            _db([_one(minutes), _one(_ORG)])
+        ).update_quorum_on_checkin("min-1", "org-1")
         assert out == {
             "quorum_met": True,
             "present_count": 4,

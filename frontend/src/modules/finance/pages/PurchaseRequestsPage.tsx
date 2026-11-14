@@ -51,10 +51,10 @@ const PRIORITY_LABELS: Record<string, string> = {
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
-  low: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400',
-  medium: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-  high: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
-  urgent: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
+  low: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
+  medium: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  high: 'bg-orange-100 text-orange-900 dark:bg-orange-500/20 dark:text-orange-300',
+  urgent: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
 };
 
 // =============================================================================
@@ -108,8 +108,8 @@ const PurchaseRequestsPage: React.FC = () => {
       <Breadcrumbs />
 
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="page-header gap-4 sm:items-center">
+        <div className="page-header-title">
           <h1 className="text-theme-text-primary text-2xl font-bold">{pageTitle}</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">{pageSubtitle}</p>
         </div>
@@ -139,7 +139,7 @@ const PurchaseRequestsPage: React.FC = () => {
             key={tab.value}
             type="button"
             onClick={() => setStatusFilter(tab.value)}
-            className={`touch:min-h-11 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`touch:min-h-11 touch:min-w-11 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               statusFilter === tab.value
                 ? 'bg-red-800 text-white'
                 : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover'
@@ -202,8 +202,13 @@ const PurchaseRequestsPage: React.FC = () => {
         />
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Purchase requests">
-            <table className="w-full">
+          <div
+            className="rwd-table-container overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Purchase requests"
+          >
+            <table className="rwd-table rwd-table-xwide w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th
@@ -257,29 +262,39 @@ const PurchaseRequestsPage: React.FC = () => {
                     onClick={() => void navigate(`/finance/purchase-requests/${pr.id}`)}
                     className="hover:bg-theme-surface-hover cursor-pointer transition-colors"
                   >
-                    <td className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-600">{pr.requestNumber}</td>
-                    <td className="text-theme-text-primary px-4 py-3 text-sm">{pr.title}</td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                    <td
+                      data-label="Request #"
+                      className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-800 dark:text-red-300"
+                    >
+                      {pr.requestNumber}
+                    </td>
+                    <td data-label="Title" className="text-theme-text-primary px-4 py-3 text-sm">
+                      {pr.title}
+                    </td>
+                    <td data-label="Vendor" className="text-theme-text-secondary px-4 py-3 text-sm">
                       {pr.vendor ?? '--'}
                     </td>
-                    <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
+                    <td
+                      data-label="Amount"
+                      className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap"
+                    >
                       {formatCurrencyWhole(pr.estimatedAmount)}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td data-label="Priority" className="px-4 py-3 whitespace-nowrap">
                       <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[pr.priority] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400'}`}
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[pr.priority] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300'}`}
                       >
                         {PRIORITY_LABELS[pr.priority] ?? pr.priority}
                       </span>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td data-label="Status" className="px-4 py-3 whitespace-nowrap">
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PURCHASE_REQUEST_STATUS_COLORS[pr.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                       >
                         {STATUS_LABEL_MAP[pr.status] ?? pr.status}
                       </span>
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                    <td data-label="Date" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                       {formatDate(pr.createdAt, tz)}
                     </td>
                   </tr>

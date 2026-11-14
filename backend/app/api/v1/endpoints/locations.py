@@ -7,7 +7,6 @@ Endpoints for location management including CRUD operations and event queries.
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -19,8 +18,7 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
-from app.models.user import Organization, User
-from app.schemas.event import QRCheckInData
+from app.models.user import User
 from app.schemas.location import (
     LocationBadgeCheckInUpdate,
     LocationCreate,
@@ -29,7 +27,7 @@ from app.schemas.location import (
     LocationResponse,
     LocationUpdate,
 )
-from app.services.event_service import EventService
+from app.services.location_display import build_location_display
 from app.services.location_service import LocationInUseError, LocationService
 from app.utils.nfc_integration import nfc_id_cards_enabled
 
@@ -383,79 +381,14 @@ async def get_location_display_info(
         "Location",
     )
 
-    # Get events currently in check-in window
     events = await service.get_current_events_in_check_in_window(
         location_id=location_id,
         organization_id=current_user.organization_id,
     )
 
-    # Build event data for display
-    current_events = []
-    for event in events:
-        # Use the canonical window calculation rather than a local copy. The
-        # window is per-event configurable (check_in_window_type, and
-        # check_in_minutes_before) — a hardcoded "start minus one hour"
-        # ignores both: a STRICT event's window opens at actual_start_time,
-        # and a FLEXIBLE one opens wherever its own lead time says, which an
-        # event may set anywhere from 0 to 1440 minutes.
-        check_in_start, check_in_end = EventService._get_check_in_window(event)
-
-        current_events.append(
-            QRCheckInData(
-                event_id=str(event.id),
-                event_name=event.title,
-                event_type=event.event_type.value if event.event_type else None,
-                # Matches the public kiosk's own redaction (public/display.py):
-                # this reports whatever event is physically using the room,
-                # with no audience filter on top (see LOC-32's history), so a
-                # member who could not otherwise see this event must not learn
-                # its description here either. LOC5-32-1.
-                event_description=None,
-                start_datetime=event.start_datetime.isoformat(),
-                end_datetime=event.end_datetime.isoformat(),
-                actual_end_time=(
-                    event.actual_end_time.isoformat() if event.actual_end_time else None
-                ),
-                check_in_start=check_in_start.isoformat(),
-                check_in_end=check_in_end.isoformat(),
-                is_valid=True,  # Already filtered by check-in window
-                # `get_current_events_in_check_in_window` keeps only events
-                # satisfying `check_in_start <= now <= check_in_end` — the
-                # strict window. Anything the permissive rule adds (the
-                # Flexible/Window early-arrival grace) is a superset of that,
-                # so an event that reached this loop can certainly be checked
-                # into. Hardcoded for the same reason `is_valid` is.
-                can_check_in=True,
-                location=event.location,
-                location_id=str(event.location_id) if event.location_id else None,
-                location_name=location.name,
-                require_checkout=event.require_checkout or False,
-            ).model_dump()
-        )
-
-    # `timezone` and `badge_check_in_enabled` are deliberately left at their
-    # defaults, which is not the LOC-2 defect returning. Both exist for the
-    # *public* kiosk: an unauthenticated tablet has no profile to read the
-    # department zone from, and it needs to know whether to run its card
-    # reader. This endpoint's only caller is RoomCheckInPage, which a member
-    # reaches signed in from a room's NFC tag — so `useTimezone()` already
-    # resolves the department zone from their profile, and a phone has no
-    # reader to arm. Populating them here would add a query per request for a
-    # consumer that reads neither. If a second, unauthenticated consumer ever
-    # appears, it needs both — and should use the public endpoint instead.
-    return LocationDisplayInfo(
-        location_id=UUID(location.id),
-        location_name=location.name,
-        current_events=current_events,
-        has_overlap=len(current_events) > 1,
-        # Same field the public kiosk sends. RoomCheckInPage reads the
-        # member's own org timezone today, but a caller without one would
-        # otherwise render these UTC times in the device's zone.
-        timezone=(
-            await db.execute(
-                select(Organization.timezone).where(
-                    Organization.id == location.organization_id
-                )
-            )
-        ).scalar_one_or_none(),
-    )
+    # LOC-40: the same builder as the public kiosk, so both fill every field
+    # the same way. `recheck_window=False` is the one deliberate difference:
+    # the selection above already applied the strict check-in window, and the
+    # permissive rule a tap is held to admits a superset of it, so every event
+    # listed here can be checked into.
+    return await build_location_display(db, location, events, recheck_window=False)

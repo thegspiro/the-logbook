@@ -72,3 +72,19 @@ describe('riding positions', () => {
     expect(screen.getByRole('button', { name: '+ EMT' })).toBeInTheDocument();
   });
 });
+
+// W01-13: the "+ position" chips were 26px and a seat's remove button 12px at
+// phone width. jsdom cannot measure, so this pins the utility that sizes them.
+describe('riding position touch targets', () => {
+  it('gives the chips and the seat remove buttons the phone touch minimum', async () => {
+    const user = userEvent.setup();
+    renderStep();
+    await user.click(screen.getByRole('button', { name: /add apparatus/i }));
+    await user.click(screen.getByRole('button', { name: /^\+ officer$/i }));
+
+    const chips = screen.getAllByRole('button', { name: /^\+ / });
+    expect(chips.length).toBeGreaterThan(3);
+    for (const chip of chips) expect(chip).toHaveClass('touch-target-phone');
+    expect(screen.getByRole('button', { name: 'Remove officer (seat 1)' })).toHaveClass('touch-target-phone');
+  });
+});

@@ -30,13 +30,14 @@ import { memberBadgeService } from '../services/memberBadgeService';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
-import { formatDate } from '../utils/dateFormatting';
+import { formatDate, formatDateCustom } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
 import type { UserWithRoles } from '../types/role';
 import { isAdministrativeMember } from '../utils/membership';
 import { VIEW_OTHER_MEMBER_ID_CARD_PERMISSIONS, canViewMemberIdCard } from '../utils/memberIdCardAccess';
 import { displayNameOf, givenName } from '../utils/memberName';
+import { userStatusLabel } from '../constants/enums';
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
@@ -198,7 +199,7 @@ export const MemberIdCardPage: React.FC = () => {
   const displayName = displayNameOf(member) || member.username;
   const initials = (givenName(member)[0] ?? member.username?.[0] ?? '?').toUpperCase();
   const qrValue = badgeCode ?? '';
-  const isAdministrative = isAdministrativeMember(undefined, member.membership_type);
+  const isAdministrative = isAdministrativeMember(member.member_class, member.membership_type);
 
   return (
     <div className="flex min-h-screen flex-col items-center px-4 py-8 print:min-h-0 print:px-0 print:py-0">
@@ -258,14 +259,14 @@ export const MemberIdCardPage: React.FC = () => {
                 <span
                   className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${getStatusColor(member.status)} print:bg-gray-100 print:text-gray-800`}
                 >
-                  {member.status}
+                  {userStatusLabel(member.status)}
                 </span>
               </div>
             </div>
 
             {/* Operational members show their rank; administrative members have
                 no operational rank, so identify their member class instead. */}
-            {(member.rank || isAdministrative || member.hire_date) && (
+            {(member.rank || isAdministrative || member.service_since) && (
               <div className="mb-4 grid grid-cols-2 gap-3">
                 {(member.rank || isAdministrative) && (
                   <div className="bg-theme-surface-hover rounded-lg px-3 py-2 text-center print:border print:border-gray-200 print:bg-gray-50">
@@ -277,13 +278,16 @@ export const MemberIdCardPage: React.FC = () => {
                     </p>
                   </div>
                 )}
-                {member.hire_date && (
+                {/* Credited service, not the hire date (owner decision
+                    2026-11-01) — the same year the printed card carries.
+                    A calendar date, so formatted without a zone shift. */}
+                {member.service_since && (
                   <div className="bg-theme-surface-hover rounded-lg px-3 py-2 text-center print:border print:border-gray-200 print:bg-gray-50">
                     <p className="text-theme-text-muted text-xs tracking-wider uppercase print:text-gray-500">
                       Member Since
                     </p>
                     <p className="text-theme-text-primary text-sm font-semibold print:text-black">
-                      {new Date(member.hire_date).getFullYear()}
+                      {formatDateCustom(member.service_since, { year: 'numeric' }, tz)}
                     </p>
                   </div>
                 )}

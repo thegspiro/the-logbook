@@ -176,6 +176,10 @@ class ScreeningRecordCreate(ScreeningRecordBase):
 class ScreeningRecordUpdate(BaseModel):
     """Schema for updating a screening record."""
 
+    # The requirement the record satisfies, and the only one (owner decision
+    # 2026-11-01). An explicit null unlinks it, after which it counts toward
+    # nothing.
+    requirement_id: Optional[str] = None
     screening_type: Optional[str] = None
     status: Optional[str] = None
     scheduled_date: Optional[date] = None
@@ -195,6 +199,21 @@ class ScreeningRecordUpdate(BaseModel):
     @classmethod
     def _valid_status(cls, v: Optional[str]) -> Optional[str]:
         return _validate_enum(v, _SCREENING_STATUSES, "status")
+
+
+#: The clinical narrative on a record (MS-14, owner decision 2026-11-01): who
+#: examined the member and what they found. ``medical_screening.view`` alone
+#: reads a record without these — they come back null — and
+#: ``medical_screening.view_details`` (or ``.manage``, whose edit form writes
+#: them) reads them. Everything else on a record is compliance status: the
+#: type, the dates, the passed/failed/waived outcome, the linked requirement,
+#: who reviewed it.
+NARRATIVE_FIELDS: tuple[str, ...] = (
+    "provider_name",
+    "result_summary",
+    "result_data",
+    "notes",
+)
 
 
 class ScreeningRecordResponse(ScreeningRecordBase, UTCResponseBase):
@@ -238,7 +257,19 @@ class ComplianceItem(BaseModel):
         description="The record has no expiration date of its own; this one is "
         "its completed date plus the requirement's frequency (W71-1).",
     )
-    days_until_expiration: Optional[int] = None
+    days_until_expiration: Optional[int] = Field(
+        default=None,
+        description="Days until the due date; negative while in the grace period.",
+    )
+    in_grace_period: bool = Field(
+        default=False,
+        description="Past its due date and still compliant: inside the "
+        "requirement's grace_period_days (MS-16). Counted as expiring soon.",
+    )
+    grace_period_ends: Optional[date] = Field(
+        default=None,
+        description="The last day the screening still counts, when in grace.",
+    )
     status: Optional[str] = None
     self_recorded: bool = Field(
         default=False,
@@ -327,9 +358,10 @@ class MyComplianceSummary(BaseModel):
     days_until_next_expiration: Optional[int] = Field(
         default=None,
         description=(
-            "Days until the soonest still-valid screening lapses, or None when "
-            "nothing is due. Negative values are never returned — an already "
-            "lapsed screening is counted in non_compliant_count instead."
+            "Days until the soonest still-valid screening falls due, or None "
+            "when nothing is due. Negative values are never returned — one past "
+            "due but inside its grace period reads 0, and an already lapsed "
+            "screening is counted in non_compliant_count instead."
         ),
     )
 
@@ -356,6 +388,7 @@ class ExpiringScreening(BaseModel):
 
     record_id: str
     screening_type: str
+    requirement_id: Optional[str] = None
     requirement_name: Optional[str] = None
     user_id: Optional[str] = None
     user_name: Optional[str] = None
@@ -369,3 +402,8 @@ class ExpiringScreening(BaseModel):
     status: Optional[str] = None
     # No expiration date on the record; due by its requirement's frequency.
     expiration_from_frequency: bool = False
+    # Past due but inside the requirement's grace period (MS-16): still
+    # compliant, lapsing on grace_period_ends. days_until_expiration is
+    # negative for these.
+    in_grace_period: bool = False
+    grace_period_ends: Optional[date] = None

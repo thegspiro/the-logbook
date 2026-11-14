@@ -125,8 +125,8 @@ export const AttendanceRequestsPage: React.FC = () => {
           <ul className="space-y-4">
             {requests.map((request) => (
               <li key={request.id} className="card p-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
+                <div className="split-row gap-3 sm:items-start">
+                  <div className="split-row-main">
                     <Link
                       to={`/events/${request.event_id}`}
                       className="text-theme-text-primary text-base font-semibold hover:underline"
@@ -160,7 +160,7 @@ export const AttendanceRequestsPage: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <div className="flex shrink-0 gap-2">
+                  <div className="split-row-aside flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => setApproving(request)}

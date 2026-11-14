@@ -1,7 +1,17 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { Loader2, Cloud, Database, HardDrive, Info, Eye, EyeOff } from 'lucide-react';
-import type { FileStorageSettings } from '../../types/user';
+import type { FileStorageSettings, FileStorageStatus } from '../../types/user';
+import { blankToNull } from '../../utils/formValues';
 import StorageLocationPanel from './StorageLocationPanel';
+
+/**
+ * Only to pick which listed option a saved value is, so `http://minio:9000/`
+ * selects the operator's `http://minio:9000`. Whether an endpoint is allowed
+ * is the server's call (its exact rule also settles default ports); a saved
+ * value matching none of the options is shown as saved, and the status panel
+ * above reports the server's verdict on it.
+ */
+const endpointKey = (url: string): string => url.trim().replace(/\/+$/, '').toLowerCase();
 
 interface StorageSettingsSectionProps {
   storageSettings: FileStorageSettings;
@@ -20,6 +30,20 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
   onToggleSecretVisible,
   onSave,
 }) => {
+  // Null until the status panel has the server's answer, so a saved endpoint
+  // is not labelled as unlisted before the list has even arrived.
+  const [allowedEndpoints, setAllowedEndpoints] = useState<string[] | null>(null);
+  const handleStatus = useCallback((status: FileStorageStatus) => {
+    setAllowedEndpoints(status.allowed_s3_endpoints);
+  }, []);
+
+  const listedEndpoints = allowedEndpoints ?? [];
+  const savedEndpoint = storageSettings.s3_endpoint_url?.trim() || '';
+  const listedMatch = listedEndpoints.find((url) => endpointKey(url) === endpointKey(savedEndpoint));
+  const selectedEndpoint = savedEndpoint ? (listedMatch ?? savedEndpoint) : '';
+  const savedOffMenu = savedEndpoint !== '' && listedMatch === undefined;
+  const savedButUnlisted = savedOffMenu && allowedEndpoints !== null;
+
   return (
     <div className="space-y-6">
       <div>
@@ -36,7 +60,7 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
         </p>
       </div>
 
-      <StorageLocationPanel savingStorage={savingStorage} />
+      <StorageLocationPanel savingStorage={savingStorage} onStatus={handleStatus} />
 
       {/* Platform selection */}
       <div>
@@ -244,7 +268,7 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="text-theme-text-muted mb-1 block text-xs">Bucket Name</label>
               <input
@@ -265,17 +289,48 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
                 className="form-input"
               />
             </div>
-            <div>
-              <label className="text-theme-text-muted mb-1 block text-xs">Endpoint URL (optional, for MinIO)</label>
-              <input
-                type="text"
-                value={storageSettings.s3_endpoint_url || ''}
-                onChange={(e) => onStorageSettingsChange((s) => ({ ...s, s3_endpoint_url: e.target.value }))}
-                placeholder="https://minio.example.com"
-                className="form-input"
-              />
-            </div>
           </div>
+          {listedEndpoints.length > 0 || savedOffMenu ? (
+            <div>
+              <label htmlFor="s3-endpoint" className="text-theme-text-muted mb-1 block text-xs">
+                Endpoint
+              </label>
+              <select
+                id="s3-endpoint"
+                value={selectedEndpoint}
+                onChange={(e) =>
+                  // An update: choosing Amazon S3 sends null so the saved endpoint is cleared.
+                  onStorageSettingsChange((s) => ({ ...s, s3_endpoint_url: blankToNull(e.target.value) }))
+                }
+                className="form-input"
+              >
+                <option value="">Amazon S3 (the region’s own endpoint)</option>
+                {listedEndpoints.map((url) => (
+                  <option key={url} value={url}>
+                    {url}
+                  </option>
+                ))}
+                {savedOffMenu && (
+                  <option value={savedEndpoint} disabled={savedButUnlisted}>
+                    {savedButUnlisted ? `${savedEndpoint} (saved, not offered by this installation)` : savedEndpoint}
+                  </option>
+                )}
+              </select>
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Self-hosted S3 or MinIO endpoints are the ones whoever runs this installation has allowed.
+              </p>
+            </div>
+          ) : (
+            allowedEndpoints !== null && (
+              <div>
+                <p className="text-theme-text-muted mb-1 text-xs">Endpoint</p>
+                <p className="text-theme-text-secondary text-sm">
+                  Amazon S3, at the region’s own endpoint. A self-hosted S3 or MinIO endpoint is set by whoever runs
+                  this installation, in the server’s <code>S3_ALLOWED_ENDPOINTS</code> setting — ask them to add yours.
+                </p>
+              </div>
+            )
+          )}
         </div>
       )}
 

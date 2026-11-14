@@ -22,6 +22,7 @@ from app.api.v1.endpoints.dashboard import (
     set_department_pulse_layout,
     set_my_pulse_layout,
 )
+from app.models.audit import AuditLog
 from app.models.user import Organization, User
 from app.schemas.dashboard_pulse import (
     PULSE_CARD_IDS,
@@ -30,6 +31,7 @@ from app.schemas.dashboard_pulse import (
     normalize_pulse_layout,
     resolve_pulse_layout,
 )
+from tests.fake_request import FAKE_IP, FAKE_USER_AGENT, fake_request
 
 
 def _ids(response) -> list[str]:
@@ -248,6 +250,7 @@ class TestPersistence:
             body=DashboardPulseLayout(
                 period="year", cards=[PulseCardPreference(id="community_engagement")]
             ),
+            request=fake_request(),
             current_user=admin,
             db=db_session,
         )
@@ -257,7 +260,9 @@ class TestPersistence:
         assert seen.organization_default is True
         assert seen.personal is False
 
-        reset = await reset_department_pulse_layout(current_user=admin, db=db_session)
+        reset = await reset_department_pulse_layout(
+            request=fake_request(), current_user=admin, db=db_session
+        )
         assert reset.organization_default is False
         assert _ids(reset) == list(PULSE_CARD_IDS)
 
@@ -288,3 +293,44 @@ class TestPersistence:
         seen = await get_pulse_layout(db=db_session, current_user=user)
         assert _ids(seen) == list(PULSE_CARD_IDS)
         assert (seen.personal, seen.organization_default) == (False, False)
+
+
+@pytest.mark.integration
+class TestDepartmentDefaultAuditRows:
+    """A department-wide setting change records where it came from (DASH-41).
+
+    Both rows recorded who acted but left the IP and browser columns empty,
+    which the member endpoints were fixed for in W02-12.
+    """
+
+    async def test_saving_and_resetting_record_the_callers_origin(self, db_session):
+        _, admin = await _org_and_user(db_session)
+        admin_id = str(admin.id)
+
+        await set_department_pulse_layout(
+            body=DashboardPulseLayout(cards=[PulseCardPreference(id="dues")]),
+            request=fake_request(),
+            current_user=admin,
+            db=db_session,
+        )
+        await reset_department_pulse_layout(
+            request=fake_request(), current_user=admin, db=db_session
+        )
+
+        rows = (
+            (
+                await db_session.execute(
+                    select(AuditLog).where(
+                        AuditLog.user_id == admin_id,
+                        AuditLog.event_type == "organization_settings_updated",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(rows) == 2
+        assert [(r.ip_address, r.user_agent) for r in rows] == [
+            (FAKE_IP, FAKE_USER_AGENT),
+            (FAKE_IP, FAKE_USER_AGENT),
+        ]

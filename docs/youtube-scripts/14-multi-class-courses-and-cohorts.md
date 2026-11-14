@@ -152,6 +152,17 @@ Pause on an amber warning row.]**
 > Labor Day and Thanksgiving are sitting inside your course, offered to you as
 > days to skip. Tick them, hit Recalculate, and the schedule works around them."
 
+> "It also names the room. Set the cohort's room once on the Schedule step and it's
+> booked for every class that hasn't a room of its own. On this step you can give
+> one class a different room, and the preview checks straight away whether it's
+> free."
+
+**[PRODUCTION NOTE — 2026-11-05. New lines, about 20 seconds; re-time Chapter 3.
+Room (optional) is on the Schedule step; each Preview row has its own room
+picker and shows why a room was chosen: for this class, from the syllabus, or the
+cohort's room. Shift remaining's 14-day limit is 2026-10-29: the field refuses a
+larger number and says why.]**
+
 **[SCREEN: Click two holiday chips, click Recalculate; the dates shift.]**
 
 > "You can move any individual class right here, or tick Skip this class to
@@ -214,8 +225,9 @@ appears.]**
 **[SCREEN: Click Shift remaining, enter 7, click Apply; the remaining dates
 all move.]**
 
-> "Weather took out a week? Shift remaining, seven days, done. Everything that
-> hasn't happened yet moves. Classes that already ran stay put — their
+> "Weather took out a week? Shift remaining, seven days, done — it goes up to
+> fourteen days either way, forward or back. For a bigger move, reschedule the
+> classes instead. Everything that hasn't happened yet moves. Classes that already ran stay put — their
 > attendance records are attached to those dates."
 
 > "Two things it gets right for you. A seven o'clock class stays at seven

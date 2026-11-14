@@ -69,6 +69,16 @@ _PLAIN_COLUMNS = [
         ],
     ),
     (
+        "shift_evaluations",
+        "id",
+        ["responses", "closing_comments"],
+    ),
+    (
+        "shift_evaluation_links",
+        "id",
+        ["token", "preceptor_email"],
+    ),
+    (
         "users",
         "id",
         [
@@ -102,6 +112,9 @@ _PLAIN_COLUMNS = [
     ),
     ("member_leaves_of_absence", "id", ["reason"]),
     ("training_waivers", "id", ["reason"]),
+    ("attendance_waiver_requests", "id", ["reason"]),
+    ("attendance_waiver_request_actions", "id", ["note"]),
+    ("training_requirement_overrides", "id", ["reason"]),
     (
         "prospects",
         "id",
@@ -137,14 +150,40 @@ _PLAIN_COLUMNS = [
     ("facility_insurance_policies", "id", ["agent_phone", "agent_email"]),
     ("facility_occupants", "id", ["contact_phone"]),
     ("inventory_vendor_contacts", "id", ["phone", "email"]),
-    ("event_requests", "id", ["contact_phone", "venue_address", "contact_email"]),
+    (
+        "event_requests",
+        "id",
+        ["contact_phone", "venue_address", "contact_email", "status_token"],
+    ),
     ("form_submissions", "id", ["sensitive_data"]),
+    ("prospect_form_requests", "id", ["token", "draft_data", "changes"]),
     (
         "screening_records",
         "id",
-        ["provider_name", "result_summary", "notes", "result_data"],
+        [
+            "provider_name",
+            "result_summary",
+            "notes",
+            "result_data",
+            "status",
+            "screening_type",
+            "requirement_id",
+        ],
     ),
+    (
+        "historical_members",
+        "id",
+        ["birth_date", "addresses", "verification_sources", "research_notes"],
+    ),
+    ("history_revisions", "id", ["snapshot"]),
+    ("history_import_rows", "id", ["cells", "edits"]),
+    ("history_media", "id", ["research_notes"]),
     ("integrations", "id", ["encrypted_config"]),
+    (
+        "quickbooks_connections",
+        "id",
+        ["access_token", "refresh_token", "pending_attempt"],
+    ),
     ("external_training_providers", "id", ["api_key", "api_secret", "client_secret"]),
     ("apparatus_report_configs", "id", ["email_recipients"]),
     ("approval_chain_steps", "id", ["notification_emails"]),
@@ -162,6 +201,7 @@ _PLAIN_COLUMNS = [
     ("scheduled_emails", "id", ["bcc_emails", "cc_emails", "to_emails"]),
     ("store_payment_events", "id", ["payer_email"]),
     ("xapi_statements", "id", ["actor_email"]),
+    ("zeffy_payments", "id", ["payer_email"]),
 ]
 
 
@@ -265,12 +305,12 @@ async def _rotate_fingerprints(session, stats, commit: bool) -> None:
             stats["unreadable"] += 1
             continue
         held = set(json.loads(prints) if isinstance(prints, str) else prints or [])
-        expected = [
+        expected_prints = [
             fp
             for fp in (email_fingerprint(a) for a in _summary_addresses(summary))
             if fp
         ]
-        if set(expected) <= held:
+        if set(expected_prints) <= held:
             stats["current"] += 1
             continue
         stats["rotated"] += 1
@@ -280,7 +320,10 @@ async def _rotate_fingerprints(session, stats, commit: bool) -> None:
                     "UPDATE message_history SET recipient_fingerprints = :fps "
                     "WHERE id = :pk"
                 ),
-                {"fps": json.dumps(list(dict.fromkeys(expected))), "pk": row_id},
+                {
+                    "fps": json.dumps(list(dict.fromkeys(expected_prints))),
+                    "pk": row_id,
+                },
             )
 
 

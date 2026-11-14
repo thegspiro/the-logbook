@@ -18,6 +18,7 @@ from datetime import date, datetime
 
 from cryptography.fernet import InvalidToken
 from sqlalchemy import Text, event
+from sqlalchemy.sql import operators
 from sqlalchemy.types import TypeDecorator
 
 
@@ -57,6 +58,87 @@ class EncryptedText(TypeDecorator):
                 # ciphertext as if it were plaintext.
                 return value
         return value
+
+
+class _NoComparison(TypeDecorator.Comparator):
+    """Refuse SQL comparisons on a column whose stored value is ciphertext.
+
+    AES-GCM encrypts the same value differently on every write, so
+    ``column == x`` is never true in the database: a forgotten filter would
+    silently match nothing rather than fail. Only the NULL checks, which do
+    not read the value, are allowed.
+    """
+
+    def operate(self, op, *other, **kwargs):
+        if op in (operators.is_, operators.is_not):
+            return super().operate(op, *other, **kwargs)
+        raise TypeError(
+            f"{self.expr} is encrypted at rest and cannot be compared in SQL; "
+            "load the rows and compare the decrypted value in Python"
+        )
+
+    def reverse_operate(self, op, other, **kwargs):
+        return self.operate(op, other, **kwargs)
+
+
+class EncryptedReference(EncryptedText):
+    """The id of another row, stored as AES-256-GCM ciphertext.
+
+    For a link that is itself sensitive: ``screening_records.requirement_id``
+    points at a requirement whose plaintext name says what the screening was
+    ("Pre-membership Drug Screen"), so leaving the link readable would undo
+    encrypting the screening type (MS-18). The price is the database foreign
+    key and every join on it: the column cannot be compared in SQL (see
+    ``_NoComparison``), so readers load rows and match the decrypted id in
+    Python, and a deletion that would have been ``ON DELETE SET NULL`` clears
+    the link in code instead.
+    """
+
+    cache_ok = True
+    comparator_factory = _NoComparison
+
+
+class EncryptedEnum(EncryptedText):
+    """An enum column stored as AES-256-GCM ciphertext; the Python value is the enum.
+
+    Subclasses ``EncryptedText`` so the key-rotation scripts' registry test
+    counts it as encrypted. A value that is not a member is refused before it
+    is written. A legacy plaintext row (the value or the member name) reads
+    back as its member, so the application keeps working before the migration
+    has encrypted it. The database cannot compare the column; see
+    ``_NoComparison``.
+    """
+
+    cache_ok = True
+    comparator_factory = _NoComparison
+
+    def __init__(self, enum_class, *args, **kwargs):
+        # Not ``enum_class``: that is SQLAlchemy ``Enum``'s attribute, and the
+        # schema tests take a type carrying it for a database enum with an
+        # ``enums`` list, which ciphertext in a TEXT column does not have.
+        self.python_enum = enum_class
+        super().__init__(*args, **kwargs)
+
+    def _member(self, value):
+        if isinstance(value, self.python_enum):
+            return value
+        if isinstance(value, str):
+            try:
+                return self.python_enum(value)
+            except ValueError:
+                if value in self.python_enum.__members__:
+                    return self.python_enum[value]
+        raise ValueError(f"not a {self.python_enum.__name__} value")
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return super().process_bind_param(self._member(value).value, dialect)
+
+    def process_result_value(self, value, dialect):
+        if value is None or value == "":
+            return None
+        return self._member(super().process_result_value(value, dialect))
 
 
 class EncryptedJSON(TypeDecorator):

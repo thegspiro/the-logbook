@@ -389,9 +389,12 @@ class TestProgramRecencyWindow:
     async def test_the_window_is_measured_from_the_departments_date(self):
         """A 180-day window measured from Oct 6 still admits Apr 9; measured
         from the UTC date (Oct 7) it would reject it."""
+        from app.models.training import RequirementType
         from app.services.training_program_service import TrainingProgramService
 
-        requirement = SimpleNamespace(id="req-1", recency_days=180)
+        requirement = SimpleNamespace(
+            id="req-1", requirement_type=RequirementType.COURSES, recency_days=180
+        )
         db = MagicMock()
         db.execute = AsyncMock(
             side_effect=[
@@ -868,19 +871,49 @@ class TestMembership:
         assert member.membership_type == "probationary"
 
     async def test_a_screening_expiring_today_is_still_listed(self):
+        """Expiring on the department's date (6 October) it is due today, not
+        lapsed — by UTC it is already 7 October. The window used to be read
+        off the SQL bounds; since MS-18 every linked record is loaded and the
+        window is applied in Python, so this asserts the listing itself."""
+        from app.models.medical_screening import ScreeningStatus, ScreeningType
         from app.services.medical_screening_service import MedicalScreeningService
 
+        requirement = SimpleNamespace(
+            id="req-1",
+            name="Annual physical",
+            grace_period_days=0,
+            frequency_months=None,
+        )
+        record = SimpleNamespace(
+            id="rec-1",
+            requirement_id="req-1",
+            user_id="u1",
+            prospect_id=None,
+            screening_type=ScreeningType.PHYSICAL_EXAM,
+            status=ScreeningStatus.PASSED,
+            completed_date=LOCAL_TODAY - timedelta(days=365),
+            expiration_date=LOCAL_TODAY,
+            created_at=None,
+            self_recorded=False,
+        )
+        names = MagicMock()
+        names.all.return_value = [("u1", "Jordan", "Avery", None)]
         db = MagicMock()
-        # The third read is the requirements' frequencies (W71-1). With none,
-        # no record falls due by frequency and nothing more is queried.
-        no_frequencies = MagicMock(all=MagicMock(return_value=[]))
-        db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([]), no_frequencies])
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(_org()),
+                _scalars([requirement]),
+                _scalars([record]),
+                names,
+            ]
+        )
 
-        await MedicalScreeningService(db).get_expiring_soon("org-1", days=30)
+        listed = await MedicalScreeningService(db).get_expiring_soon("org-1", days=30)
 
-        bound = _bound(db.execute.await_args_list[1].args[0])
-        assert {LOCAL_TODAY, LOCAL_TODAY + timedelta(days=30)} <= bound
-        assert FROZEN_UTC.date() not in bound
+        assert [(s.record_id, s.days_until_expiration) for s in listed] == [
+            ("rec-1", 0)
+        ]
+        assert listed[0].expiration_date == LOCAL_TODAY
 
 
 class TestAdministration:
@@ -901,7 +934,14 @@ class TestAdministration:
         no_meeting = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
         db = MagicMock()
         db.execute = AsyncMock(
-            side_effect=[_one(event), no_meeting, _one(_org()), _scalars([])]
+            # ... the RSVPs, then the approved waiver requests carried over.
+            side_effect=[
+                _one(event),
+                no_meeting,
+                _one(_org()),
+                _scalars([]),
+                _scalars([]),
+            ]
         )
         db.add = MagicMock()
         db.flush = AsyncMock()

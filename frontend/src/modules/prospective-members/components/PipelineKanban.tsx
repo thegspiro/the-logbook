@@ -211,6 +211,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
               onClick={onApplicantClick}
               onDragStart={handleDragStart}
               isDragging={draggedApplicant?.id === applicant.id}
+              hasSelectControl={!!onToggleSelect}
             />
           </div>
         ))

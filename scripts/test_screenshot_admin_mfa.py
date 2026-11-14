@@ -315,6 +315,52 @@ class SecretFileTest(StateDirTestCase):
         assert run({seed.ADMIN_TOTP_ENV: "OVERRIDE"}) == "OVERRIDE"
 
 
+class MemberSecretFileTest(StateDirTestCase):
+    """The capture accounts' secrets, one `username=secret` line each."""
+
+    def test_written_beside_the_admin_file_and_private(self) -> None:
+        path = seed.write_member_totp_secret("okittredge", SECRET)
+        assert path == self.secret_file.with_name("member-totp.env")
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        assert seed.read_member_totp_secret("okittredge") == SECRET
+
+    def test_rewriting_one_member_keeps_the_others(self) -> None:
+        seed.write_member_totp_secret("okittredge", "AAAAAAAA")
+        seed.write_member_totp_secret("someone", "BBBBBBBB")
+        seed.write_member_totp_secret("okittredge", SECRET)
+        assert seed.read_member_totp_secret("okittredge") == SECRET
+        assert seed.read_member_totp_secret("someone") == "BBBBBBBB"
+
+    def test_unknown_member_and_absent_file_read_as_none(self) -> None:
+        assert seed.read_member_totp_secret("okittredge") is None
+        seed.write_member_totp_secret("someone", SECRET)
+        assert seed.read_member_totp_secret("okittredge") is None
+
+    def test_grace_account_is_never_enrolled(self) -> None:
+        assert seed.MFA_GRACE_USERNAME not in seed.ENROLLED_MEMBER_USERNAMES
+
+    def test_node_reads_the_same_file(self) -> None:
+        node = shutil.which("node")
+        if node is None:  # pragma: no cover - CI images all ship node
+            raise unittest.SkipTest("node is required to run totp.mjs")
+        seed.write_member_totp_secret("someone", "BBBBBBBB")
+        seed.write_member_totp_secret("okittredge", SECRET)
+        module = json.dumps(str(SCREENSHOTS / "totp.mjs"))
+        script = (
+            f"import {{ readMemberTotpSecret }} from {module};"
+            "console.log(JSON.stringify(["
+            "readMemberTotpSecret('okittredge'), readMemberTotpSecret('nobody')]));"
+        )
+        proc = subprocess.run(
+            [node, "--input-type=module", "-e", script],
+            capture_output=True,
+            text=True,
+            check=True,
+            env=dict(os.environ),
+        )
+        assert json.loads(proc.stdout) == [SECRET, None]
+
+
 class AdminSignInTest(StateDirTestCase):
     def start(self, *, enrolled: bool) -> tuple[FakeBackend, seed.Api, FakeClock]:
         # Two seconds into a step, so a reused step forces a visible wait.
@@ -415,6 +461,24 @@ class AdminSignInTest(StateDirTestCase):
         self.login(api)
         assert backend.requests.count("POST /api/v1/auth/mfa/login") == 2
         assert any(c.name == "access_token" for c in api.jar)
+
+    def test_enrolled_capture_member_signs_in_with_its_stored_secret(self) -> None:
+        backend, api, _ = self.start(enrolled=True)
+        member = seed.ENROLLED_MEMBER_USERNAMES[0]
+        seed.write_member_totp_secret(member, SECRET)
+        api.login_as(member, "pw")
+        assert backend.requests == [
+            "POST /api/v1/auth/login",
+            "POST /api/v1/auth/mfa/login",
+        ]
+        assert any(c.name == "access_token" for c in api.jar)
+
+    def test_member_not_listed_is_refused_at_the_code_step(self) -> None:
+        backend, api, _ = self.start(enrolled=True)
+        seed.write_member_totp_secret("someone", SECRET)
+        error = raised(seed.ApiError, lambda: api.login_as("someone", "pw"))
+        assert "no secret is known" in str(error)
+        assert backend.requests == ["POST /api/v1/auth/login"]
 
     def test_password_session_steps_up_with_its_password(self) -> None:
         api = seed.Api("http://127.0.0.1:9")

@@ -67,6 +67,10 @@ export interface AssignmentCreate {
   is_training?: boolean;
   training_program_id?: string | undefined;
   training_evaluator_id?: string | undefined;
+  /** Seat the member in an ungranted custom seat (scheduling.manage; LB-SCHED-004). */
+  override_seat_eligibility?: boolean | undefined;
+  /** Required with the override; noted on the assignment and audited. */
+  override_reason?: string | undefined;
 }
 
 export interface AssignmentUpdate {
@@ -307,7 +311,7 @@ export interface SchedulingEligibilitySettings {
 /** Why a member holds a position: their rank, a completed program, or an
  *  org-wide open position. `label` names the specific rank or program. */
 export interface PositionEligibilitySource {
-  type: 'rank' | 'position' | 'qualification' | 'training' | 'open';
+  type: 'rank' | 'qualification' | 'training' | 'open';
   label: string;
   /**
    * Calendar date the qualification lapses. Set only for `qualification`, and
@@ -619,6 +623,21 @@ export interface CloseoutState {
    * picker. Claimed ones (`attached`) are part of `reported_call_count`.
    */
   attachable_calls: CloseoutAttachableCall[];
+}
+
+/** What close-out still needs in trainee reports (GET /shifts/{id}/trainee-reports). */
+export interface TraineeReportRequirement {
+  /** The department requires a report for each member in a training seat. */
+  required: boolean;
+  missing: { user_id: string; name: string }[];
+  /**
+   * Shift evaluations still to be submitted, whatever `required` says: a form
+   * attached to a program requires them. `name` carries the program(s).
+   * Absent from a server older than this field.
+   */
+  missing_evaluations?: { user_id: string; name: string }[] | undefined;
+  /** The viewer may close out without them (scheduling.manage). */
+  can_override: boolean;
 }
 
 export interface CloseoutAttendanceEntry {

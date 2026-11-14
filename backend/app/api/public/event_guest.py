@@ -107,7 +107,7 @@ async def get_link_guest_check_in_info(
     """
     event, org = await _resolve_link_event(db, guest_token)
 
-    is_open, closed_reason = GuestCheckInService.check_in_window_state(
+    is_open, closed_reason = GuestCheckInService.guest_sign_in_state(
         event, datetime.now(timezone.utc)
     )
 
@@ -177,16 +177,18 @@ async def link_guest_check_in(
 
     service = GuestCheckInService(db)
     try:
-        attendee, error, prospect_created = await service.check_in_guest(
-            event=event,
-            organization_id=event.organization_id,
-            first_name=payload.first_name,
-            last_name=payload.last_name,
-            email=str(payload.email) if payload.email else None,
-            phone=payload.phone,
-            organization_name=payload.organization_name,
-            interest_reason=payload.interest_reason,
-            source=GuestCheckInService.SOURCE_EVENT_QR,
+        attendee, error, prospect_created, _already_checked_in = (
+            await service.check_in_guest(
+                event=event,
+                organization_id=event.organization_id,
+                first_name=payload.first_name,
+                last_name=payload.last_name,
+                email=str(payload.email) if payload.email else None,
+                phone=payload.phone,
+                organization_name=payload.organization_name,
+                interest_reason=payload.interest_reason,
+                source=GuestCheckInService.SOURCE_EVENT_QR,
+            )
         )
     except ValueError as exc:
         raise HTTPException(
@@ -306,15 +308,13 @@ async def link_guest_lookup(
             ),
             message="Welcome back! Please confirm this is you.",
         )
-    if outcome == GuestCheckInService.LOOKUP_MEMBER:
-        return GuestLookupResponse(
-            status=outcome,
-            message=(
-                "This looks like a department member account. "
-                "Please scan the event's member check-in QR code instead."
-            ),
-        )
-    return GuestLookupResponse(status=outcome, message=not_found_message)
+    # A member account answers exactly as an unknown address does. Telling a
+    # member to use the member code also told anyone holding this public
+    # link which addresses belong to the department's members; the audit row
+    # above still records the true outcome.
+    return GuestLookupResponse(
+        status=GuestCheckInService.LOOKUP_NOT_FOUND, message=not_found_message
+    )
 
 
 @router.post(

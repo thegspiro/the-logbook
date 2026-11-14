@@ -127,9 +127,7 @@ async function renderLoaded() {
   window.history.pushState({}, '', '/training/compliance-config');
   renderWithRouter(<ComplianceRequirementsConfigPage />);
   await waitFor(() => {
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Compliance Requirements Configuration' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Compliance Settings' })).toBeInTheDocument();
   });
 }
 
@@ -163,6 +161,7 @@ describe('ComplianceRequirementsConfigPage — clearing a field on update', () =
         at_risk_threshold: 75,
         grace_period_days: 0,
         include_current_month: true,
+        leave_month_rule: 'full_month',
         auto_report_frequency: 'monthly',
         report_email_recipients: ['chief@dept.com'],
         report_day_of_month: 1,
@@ -189,6 +188,7 @@ describe('ComplianceRequirementsConfigPage — clearing a field on update', () =
         at_risk_threshold: 75,
         grace_period_days: 0,
         include_current_month: true,
+        leave_month_rule: 'full_month',
         auto_report_frequency: 'monthly',
         report_email_recipients: null,
         report_day_of_month: 1,
@@ -234,6 +234,7 @@ describe('ComplianceRequirementsConfigPage — clearing a field on update', () =
         name: 'Active Firefighter',
         description: null,
         membership_types: [],
+        role_ids: [],
         required_requirement_ids: [],
         optional_requirement_ids: [],
         compliant_threshold_override: null,

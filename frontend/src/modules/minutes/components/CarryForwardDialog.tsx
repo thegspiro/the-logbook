@@ -10,11 +10,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCalendarDate, formatDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { minutesService } from '../services/api';
 import type { OpenActionItem } from '../types/minutes';
+
+/** CarryForwardRequest in schemas/minute.py: 1 to 100 item ids. */
+const CARRY_FIELDS: Record<'items', ServerFieldSpec> = {
+  items: { label: 'Open action items', api: 'item_ids' },
+};
 
 interface CarryForwardDialogProps {
   isOpen: boolean;
@@ -30,6 +37,11 @@ export const CarryForwardDialog: React.FC<CarryForwardDialogProps> = ({ isOpen, 
   const [otherTypes, setOtherTypes] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [carrying, setCarrying] = useState(false);
+  const [itemsError, setItemsError] = useState<string | null>(null);
+
+  // A picked set is work a stray Escape should not throw away unasked; called
+  // here rather than given to Modal so Cancel asks too.
+  const requestClose = useDiscardGuard({ isDirty: selected.size > 0, onClose });
 
   const load = useCallback(async () => {
     setItems(null);
@@ -48,6 +60,7 @@ export const CarryForwardDialog: React.FC<CarryForwardDialogProps> = ({ isOpen, 
   }, [isOpen, load]);
 
   const toggle = (id: string) => {
+    setItemsError(null);
     setSelected((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
@@ -60,6 +73,7 @@ export const CarryForwardDialog: React.FC<CarryForwardDialogProps> = ({ isOpen, 
     e.preventDefault();
     if (selected.size === 0) return;
     setCarrying(true);
+    setItemsError(null);
     try {
       await minutesService.carryForward(minutesId, [...selected], otherTypes);
       toast.success(
@@ -68,7 +82,9 @@ export const CarryForwardDialog: React.FC<CarryForwardDialogProps> = ({ isOpen, 
       await onCarried();
       onClose();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to carry the action items forward'));
+      const mapped = mapServerFieldErrors(err, CARRY_FIELDS);
+      if (mapped?.fieldErrors.items) setItemsError(mapped.fieldErrors.items);
+      else toast.error(getErrorMessage(err, 'Failed to carry the action items forward'));
     } finally {
       setCarrying(false);
     }
@@ -77,7 +93,7 @@ export const CarryForwardDialog: React.FC<CarryForwardDialogProps> = ({ isOpen, 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title="Carry action items forward"
       size="lg"
       onSubmit={(e) => {
@@ -85,7 +101,7 @@ export const CarryForwardDialog: React.FC<CarryForwardDialogProps> = ({ isOpen, 
       }}
       footer={
         <>
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={requestClose} className="btn-secondary">
             Cancel
           </button>
           <button type="submit" disabled={carrying || selected.size === 0} className="btn-primary">
@@ -120,8 +136,16 @@ export const CarryForwardDialog: React.FC<CarryForwardDialogProps> = ({ isOpen, 
       ) : items.length === 0 ? (
         <p className="text-theme-text-muted text-sm">There are no open action items from earlier meetings.</p>
       ) : (
-        <fieldset>
+        <fieldset
+          aria-invalid={itemsError ? true : undefined}
+          aria-describedby={itemsError ? 'carry-items-error' : undefined}
+        >
           <legend className="sr-only">Open action items</legend>
+          {itemsError && (
+            <p id="carry-items-error" className="mb-2 text-sm text-red-800 dark:text-red-300">
+              {itemsError}
+            </p>
+          )}
           <ul className="space-y-2">
             {items.map((item) => (
               <li key={item.id} className="border-theme-surface-border rounded-lg border p-3">

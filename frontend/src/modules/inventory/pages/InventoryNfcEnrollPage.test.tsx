@@ -164,4 +164,26 @@ describe('InventoryNfcEnrollPage', () => {
     await user.click(screen.getByRole('button', { name: /Find items/ }));
     await waitFor(() => expect(service.getUntaggedItems).toHaveBeenLastCalledWith({ search: 'rad', limit: 200 }));
   });
+
+  // W44-3: two items sharing a name and neither serial nor asset tag read
+  // identically while tagging; every item's barcode tells them apart.
+  it('shows each item’s barcode, and nothing for an item without one', async () => {
+    const user = userEvent.setup();
+    const twin = { serial_number: null, asset_tag: null, category_name: 'Medical', storage_area_name: null };
+    service.getUntaggedItems.mockResolvedValue({
+      total: 3,
+      items: [
+        { ...twin, id: 'a', name: 'Shears', barcode: 'INV-000101' },
+        { ...twin, id: 'b', name: 'Shears', barcode: 'INV-000102' },
+        { ...twin, id: 'c', name: 'Shears', barcode: null },
+      ],
+    });
+    renderWithRouter(<InventoryNfcEnrollPage />);
+    expect(await screen.findByText('Barcode INV-000101 · Medical')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Skip this item/ }));
+    expect(await screen.findByText('Barcode INV-000102 · Medical')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Skip this item/ }));
+    expect(await screen.findByText('Medical')).toBeInTheDocument();
+    expect(screen.queryByText(/Barcode/)).not.toBeInTheDocument();
+  });
 });

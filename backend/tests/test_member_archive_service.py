@@ -179,6 +179,7 @@ class TestTheArchiveNoticeIsTheTemplate:
             EmailTemplateService, "get_template", AsyncMock(return_value=None)
         )
         admin = SimpleNamespace(
+            id="qm-1",
             email="qm@example.test",
             roles=[SimpleNamespace(slug="quartermaster")],
             notification_preferences=None,

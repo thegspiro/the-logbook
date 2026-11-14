@@ -16,7 +16,6 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import JsBarcode from 'jsbarcode';
 import {
   AlertCircle,
   ArrowLeft,
@@ -34,6 +33,9 @@ import toast from 'react-hot-toast';
 import { QRCodeSVG } from 'qrcode.react';
 import { PrinterLanguage, labelPrinterService, labelService, Symbology } from '../../services/labelService';
 import { BARCODE_SVG_PRINT_CSS } from './barcodePrintCss';
+import { drawCode128ForPrinter, horizontalPaddingInches } from './barcodeGeometry';
+import { PrinterDpiSelect } from './PrinterDpiSelect';
+import { usePrinterDpi } from './printerDpi';
 import { LABEL_FONT_FAMILY, labelNameStyle } from './labelText';
 import { PrintSetupChecklist } from './PrintSetupChecklist';
 import { isPrintChecklistSkipped } from './printChecklist';
@@ -44,6 +46,8 @@ import { getTodayLocalDate } from '../../utils/dateFormatting';
 import { prefersPdfOverBrowserPrint } from '../../utils/printEnvironment';
 import { useTimezone } from '../../hooks/useTimezone';
 import {
+  AVERY_5160_COLUMN_GAP,
+  AVERY_5160_PAGE_MARGIN,
   CUSTOM_PRESET_ID,
   DEFAULT_PRESET_ID,
   LABEL_PRESETS,
@@ -78,10 +82,11 @@ const SAME_PRINTER = '\u0000same';
 const presetKey = (preset: string, w: string, h: string, symbology: string, printerId: string) =>
   `${preset === CUSTOM_PRESET_ID ? `custom:${w}x${h}` : preset}:${symbology}:${printerId}`;
 
-const BarcodeLabel: React.FC<{ item: LabelListItem; preset: LabelPreset; symbology: Symbology }> = ({
+const BarcodeLabel: React.FC<{ item: LabelListItem; preset: LabelPreset; symbology: Symbology; dpi: number }> = ({
   item,
   preset,
   symbology,
+  dpi,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const value = sanitizeForCode128((item.barcodeValue || '').trim());
@@ -89,24 +94,30 @@ const BarcodeLabel: React.FC<{ item: LabelListItem; preset: LabelPreset; symbolo
   useEffect(() => {
     if (isQr || !svgRef.current || !value) return;
     try {
-      const quietZone = Math.ceil(preset.barcodeWidth * 10);
-      JsBarcode(svgRef.current, value, {
-        format: 'CODE128',
-        width: preset.barcodeWidth,
-        height: preset.barcodeHeight,
-        displayValue: true,
-        fontSize: preset.barcodeFontSize,
-        marginTop: 0,
-        marginBottom: 1,
-        marginLeft: quietZone,
-        marginRight: quietZone,
-        textMargin: 1,
-        font: 'monospace',
-      });
+      drawCode128ForPrinter(
+        svgRef.current,
+        value,
+        {
+          moduleCssPx: preset.barcodeWidth,
+          barHeightCssPx: preset.barcodeHeight,
+          fontSizeCssPx: preset.barcodeFontSize,
+        },
+        parseFloat(preset.width) - horizontalPaddingInches(preset.padding),
+        dpi
+      );
     } catch {
       /* invalid value — leave empty */
     }
-  }, [isQr, value, preset.barcodeWidth, preset.barcodeHeight, preset.barcodeFontSize]);
+  }, [
+    isQr,
+    value,
+    preset.barcodeWidth,
+    preset.barcodeHeight,
+    preset.barcodeFontSize,
+    preset.width,
+    preset.padding,
+    dpi,
+  ]);
 
   return (
     <div
@@ -190,6 +201,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
     : (LABEL_PRESETS.find((p) => p.id === presetId) ?? firstPreset);
   const effectiveAutoRotate = autoRotateOverride ?? preset.autoRotate;
   const isThermal = preset.columns === 1;
+  const printerDpi = usePrinterDpi(preset.id);
   // A custom size is its own stock, so "don't show again" is per dimension.
   const printSizeKey = isCustom ? `custom:${customW}x${customH}` : preset.id;
   const isLandscape = parseFloat(preset.width) > parseFloat(preset.height);
@@ -457,7 +469,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
     const isThermalFmt = preset.columns === 1;
     doc.open();
     doc.write(`<!DOCTYPE html><html><head><style>
-      @page { size: ${preset.pageWidth} ${preset.pageHeight}; margin: ${isThermalFmt ? '0' : '0.5in 0.19in'}; }
+      @page { size: ${preset.pageWidth} ${preset.pageHeight}; margin: ${isThermalFmt ? '0' : AVERY_5160_PAGE_MARGIN}; }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { background: white; }
       .barcode-label { break-inside: avoid; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -511,8 +523,8 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
 
   return (
     <>
-      <style>{`
-        @page { size: ${preset.pageWidth} ${preset.pageHeight}; margin: ${isThermal ? '0' : '0.5in 0.19in'}; }
+      <style data-testid="label-page-css">{`
+        @page { size: ${preset.pageWidth} ${preset.pageHeight}; margin: ${isThermal ? '0' : AVERY_5160_PAGE_MARGIN}; }
         @media print { .print-controls { display: none !important; } }
         @media screen { .barcode-label { border: 1px dashed #ccc; background: white; } }
       `}</style>
@@ -805,6 +817,15 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                 </div>
               )}
 
+              {symbology === Symbology.CODE128 && (
+                <PrinterDpiSelect
+                  id="printer-dpi"
+                  value={printerDpi.override}
+                  autoDpi={printerDpi.autoDpi}
+                  onChange={printerDpi.setOverride}
+                />
+              )}
+
               <div>
                 <label
                   htmlFor="copies"
@@ -866,10 +887,16 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
             <div
               id={`label-print-container-${module}`}
               className="barcode-labels-container"
+              data-testid="label-sheet-grid"
               style={
                 isThermal
                   ? { display: 'flex', flexDirection: 'column', gap: '4px' }
-                  : { display: 'grid', gridTemplateColumns: `repeat(${preset.columns}, 1fr)`, gap: '2px' }
+                  : {
+                      display: 'grid',
+                      gridTemplateColumns: `repeat(${preset.columns}, ${preset.width})`,
+                      columnGap: AVERY_5160_COLUMN_GAP,
+                      rowGap: 0,
+                    }
               }
             >
               {/* Blank cells ahead of the first label, so the preview and a
@@ -883,7 +910,13 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                 />
               ))}
               {labelItems.map((item, i) => (
-                <BarcodeLabel key={`${item.id}-${i}`} item={item} preset={preset} symbology={symbology} />
+                <BarcodeLabel
+                  key={`${item.id}-${i}`}
+                  item={item}
+                  preset={preset}
+                  symbology={symbology}
+                  dpi={printerDpi.dpi}
+                />
               ))}
             </div>
           </div>

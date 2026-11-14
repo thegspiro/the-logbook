@@ -5,9 +5,9 @@
  * Whether the viewer may act is the backend's answer, not this component's:
  * the detail endpoint sets `canAct` (the viewer is the step's named approver)
  * or `requiresOverride` (an approvals admin who is not) on the step the request
- * is waiting on, from the same rule approve / deny enforce. Both are false for
- * a notification step and for a viewer without `finance.approve`, so neither
- * is re-checked here.
+ * is waiting on, from the same rule approve / deny enforce. A member the step
+ * names may act without `finance.approve` (owner decision 2026-11-01), so no
+ * permission is checked here; both flags are false for a notification step.
  *
  * Renders nothing unless the request is pending approval and has a pending
  * step. A pending request with no pending step is a different problem and is
@@ -64,10 +64,8 @@ export const ApprovalStepActions: React.FC<ApprovalStepActionsProps> = ({
       : 'border-theme-surface-border bg-theme-surface-secondary';
 
   return (
-    <div
-      className={`mb-6 flex flex-col gap-3 rounded-lg border p-4 lg:flex-row lg:items-center lg:justify-between ${boxClass}`}
-    >
-      <div className="text-theme-text-primary space-y-1 text-sm">
+    <div className={`split-row mb-6 gap-3 rounded-lg border p-4 sm:items-center ${boxClass}`}>
+      <div className="split-row-main text-theme-text-primary space-y-1 text-sm">
         {assigneeLabel && (
           <p>
             Waiting on <span className="font-medium">{assigneeLabel}</span>.
@@ -84,7 +82,7 @@ export const ApprovalStepActions: React.FC<ApprovalStepActionsProps> = ({
         )}
       </div>
       {canAct && (
-        <div className="flex flex-wrap gap-2 lg:shrink-0">
+        <div className="split-row-aside flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => open('approve')}
@@ -104,7 +102,7 @@ export const ApprovalStepActions: React.FC<ApprovalStepActionsProps> = ({
         </div>
       )}
       {requiresOverride && (
-        <div className="flex flex-wrap gap-2 lg:shrink-0">
+        <div className="split-row-aside flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => open('approve')}

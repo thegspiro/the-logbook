@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import { useIPSecurityStore } from '../store/ipSecurityStore';
 import { IPExceptionTable } from '../components/IPExceptionTable';
 import { IPExceptionRequestForm } from '../components/IPExceptionRequestForm';
+import { mapServerFieldErrors } from '../../../utils/serverFieldErrors';
 import type { IPExceptionRequestCreate } from '../types';
 
 const MyIPExceptionsPage: React.FC = () => {
@@ -32,10 +33,14 @@ const MyIPExceptionsPage: React.FC = () => {
 
   // Resolves false on a refusal so the form keeps what the member typed; the
   // store has already put the reason in `error`, which the effect above toasts.
+  // A validation refusal is the exception: the store leaves it out of
+  // `error`, and it goes back to the form, which puts it on the field it
+  // names (forms review F-2).
   const handleRequestSubmit = async (data: IPExceptionRequestCreate): Promise<boolean> => {
     try {
       await requestException(data);
-    } catch {
+    } catch (err: unknown) {
+      if (mapServerFieldErrors(err, {})) throw err;
       return false;
     }
     toast.success('IP exception request submitted');
@@ -47,8 +52,8 @@ const MyIPExceptionsPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Header */}
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
+        <div className="page-header mb-6 gap-3 sm:items-center">
+          <div className="page-header-title flex items-center gap-3">
             <div className="shrink-0 rounded-lg bg-blue-600 p-2">
               <Shield className="h-5 w-5 text-white" />
             </div>
@@ -57,11 +62,8 @@ const MyIPExceptionsPage: React.FC = () => {
               <p className="text-theme-text-muted text-sm">Request an IP exception and track its status</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="rounded-lg bg-red-800 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
-            >
+          <div className="page-header-actions flex flex-wrap items-center gap-2">
+            <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm">
               {showForm ? 'Cancel' : 'New Request'}
             </button>
             <button
@@ -69,7 +71,7 @@ const MyIPExceptionsPage: React.FC = () => {
                 void fetchMyExceptions(includeExpired);
               }}
               aria-label="Refresh my requests"
-              className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
+              className="btn-secondary btn-icon-sm"
             >
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>

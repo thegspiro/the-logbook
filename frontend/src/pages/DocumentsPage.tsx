@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
+import { FormField } from '../components/ux/FormField';
+import { useDiscardGuard } from '../hooks/useDiscardGuard';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
 import { Breadcrumbs, type BreadcrumbItem } from '../components/ux/Breadcrumbs';
 import { Pagination } from '../components/ux/Pagination';
 import {
@@ -33,6 +36,7 @@ import { asArray } from '../utils/asArray';
 import { FolderManageDialog } from '../components/documents/FolderManageDialog';
 import { AdminOnlyFoldersNotice } from '../components/documents/AdminOnlyFoldersNotice';
 import { DocumentCorrectionNotice } from '../components/documents/DocumentCorrectionNotice';
+import { PublishedMinutesAttachments } from '../components/documents/PublishedMinutesAttachments';
 import { FolderAccessFields } from '../components/documents/FolderAccessFields';
 import {
   ADMIN_ONLY_CONFIRMATION,
@@ -42,7 +46,10 @@ import {
   isAdminOnlyRefusal,
 } from '../components/documents/folderAccess';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
+import { getErrorDetail } from '../utils/errorHandling';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import { fileTypeLabel } from '../utils/fileTypeLabel';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 type ViewMode = 'grid' | 'list';
 
@@ -57,6 +64,14 @@ const DOCUMENTS_PAGE_SIZE = 50;
 const FOLDER_PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 300;
 
+/** DocumentFolderCreate.name max_length (forms review F-2). */
+const FOLDER_NAME_MAX_LENGTH = 255;
+type CreateFolderField = 'name' | 'description';
+const CREATE_FOLDER_FIELDS: FieldSpecs<CreateFolderField> = {
+  name: { id: 'folder-name', label: 'Folder Name' },
+  description: { id: 'folder-description', label: 'Description' },
+};
+
 /**
  * How a restricted folder is described to the people who file into it. The
  * server enforces these (`_folder_admits_user`); the label only says so, so a
@@ -66,6 +81,16 @@ const SEARCH_DEBOUNCE_MS = 300;
 const RESTRICTED_FOLDER_LABEL: Record<string, string> = {
   leadership: 'Document managers only',
   owner: 'Only its owner',
+};
+
+// The upload endpoint takes `name` and `description` as plain Form fields with
+// no length limit, so neither input carries a maxLength.
+type UploadField = 'file' | 'name' | 'description' | 'folder';
+const UPLOAD_FIELDS: Record<UploadField, ServerFieldSpec> = {
+  file: { label: 'File' },
+  name: { label: 'Document name' },
+  description: { label: 'Description' },
+  folder: { label: 'Folder', api: 'folder_id' },
 };
 
 const DocumentsPage: React.FC = () => {
@@ -113,7 +138,11 @@ const DocumentsPage: React.FC = () => {
   // Form state
   const [folderForm, setFolderForm] = useState({ name: '', description: '' });
   const [folderAccess, setFolderAccess] = useState(EMPTY_FOLDER_ACCESS);
-  const [createFolderError, setCreateFolderError] = useState<string | null>(null);
+  const createFolderErrors = useFieldErrors(CREATE_FOLDER_FIELDS);
+  const clearCreateFolderErrors = createFolderErrors.clear;
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadErrors, setUploadErrors] = useState<Partial<Record<UploadField, string | undefined>>>({});
+  const [uploadInitialFolder, setUploadInitialFolder] = useState('');
   const [uploadForm, setUploadForm] = useState({
     name: '',
     description: '',
@@ -246,10 +275,24 @@ const DocumentsPage: React.FC = () => {
   // Handlers
   // -------------------------------------------------------
 
+  const { setErrors: setCreateFolderFieldErrors, setFormError: setCreateFolderFormError } = createFolderErrors;
+  const { focusFirst: focusFirstCreateFolderError, setFromApiError: setCreateFolderApiError } = createFolderErrors;
   const handleCreateFolder = useCallback(async () => {
-    if (!folderForm.name.trim() || folderAccessIncomplete(folderAccess)) return;
+    // Checked here rather than by greying out Create Folder, which told a
+    // member nothing about why it would not press (forms review F-3).
+    const problems: FieldErrors<CreateFolderField> = {};
+    if (!folderForm.name.trim()) problems.name = 'Enter a name for the folder.';
+    setCreateFolderFieldErrors(problems);
+    // The positions list says "Choose at least one position" beside itself;
+    // this repeats it where the press happened.
+    setCreateFolderFormError(
+      folderAccessIncomplete(folderAccess) ? 'Choose at least one position who can open the folder.' : null
+    );
+    if (Object.keys(problems).length > 0 || folderAccessIncomplete(folderAccess)) {
+      focusFirstCreateFolderError(problems);
+      return;
+    }
     setActionLoading(true);
-    setCreateFolderError(null);
     const payload = {
       name: folderForm.name.trim(),
       ...(folderForm.description.trim() ? { description: folderForm.description.trim() } : {}),
@@ -271,17 +314,37 @@ const DocumentsPage: React.FC = () => {
       await fetchSummary();
     } catch (err: unknown) {
       // Shown in the dialog, not behind it: the server's reason (an unknown
-      // position, settings that would shut you out) is what to fix.
-      setCreateFolderError(getErrorMessage(err, 'Unable to create folder. Check your connection and try again.'));
+      // position, settings that would shut you out) is what to fix. A
+      // refusal naming the folder's name or description lands on that field.
+      focusFirstCreateFolderError(
+        setCreateFolderApiError(err, 'Unable to create folder. Check your connection and try again.')
+      );
     } finally {
       setActionLoading(false);
     }
-  }, [folderForm, folderAccess, currentFolder, folderSkip, fetchFolders, fetchSummary, confirm]);
+  }, [
+    folderForm,
+    folderAccess,
+    currentFolder,
+    folderSkip,
+    fetchFolders,
+    fetchSummary,
+    confirm,
+    setCreateFolderFieldErrors,
+    setCreateFolderFormError,
+    focusFirstCreateFolderError,
+    setCreateFolderApiError,
+  ]);
 
   const handleUploadDocument = useCallback(async () => {
-    if (!uploadForm.file) return;
+    if (!uploadForm.file) {
+      setUploadErrors({ file: 'Choose the file to upload.' });
+      document.getElementById('file-upload')?.focus();
+      return;
+    }
     setActionLoading(true);
-    setError(null);
+    setUploadError(null);
+    setUploadErrors({});
     try {
       const formData = new FormData();
       formData.append('file', uploadForm.file);
@@ -307,8 +370,15 @@ const DocumentsPage: React.FC = () => {
       if (selectedFolder) {
         await fetchDocuments(selectedFolder, debouncedSearch);
       }
-    } catch {
-      setError('Unable to upload document. Check your connection and try again.');
+    } catch (err: unknown) {
+      // Shown in the dialog, on the field it concerns where the server names
+      // one, rather than on the page behind the dialog.
+      const mapped = mapServerFieldErrors(err, UPLOAD_FIELDS);
+      if (mapped && Object.keys(mapped.fieldErrors).length > 0 && mapped.unmatched.length === 0) {
+        setUploadErrors(mapped.fieldErrors);
+      } else {
+        setUploadError('Unable to upload document. Check your connection and try again.');
+      }
     } finally {
       setActionLoading(false);
     }
@@ -405,8 +475,37 @@ const DocumentsPage: React.FC = () => {
       folder: currentFolderId,
       file: null,
     });
+    setUploadInitialFolder(currentFolderId);
+    setUploadError(null);
+    setUploadErrors({});
     setShowUploadModal(true);
   }, [currentFolder]);
+
+  // Escape, the X and Cancel ask before a dialog with changes is discarded
+  // (forms review F-6). A discarded folder leaves nothing behind for the next
+  // time the dialog opens.
+  const closeCreateFolder = () => {
+    setShowCreateFolder(false);
+    setFolderForm({ name: '', description: '' });
+    clearCreateFolderErrors();
+  };
+  const requestCloseCreateFolder = useDiscardGuard({
+    isDirty:
+      showCreateFolder &&
+      (folderForm.name !== '' ||
+        folderForm.description !== '' ||
+        JSON.stringify(folderAccess) !== JSON.stringify(EMPTY_FOLDER_ACCESS)),
+    onClose: closeCreateFolder,
+  });
+  const requestCloseUpload = useDiscardGuard({
+    isDirty:
+      showUploadModal &&
+      (uploadForm.file !== null ||
+        uploadForm.name !== '' ||
+        uploadForm.description !== '' ||
+        uploadForm.folder !== uploadInitialFolder),
+    onClose: () => setShowUploadModal(false),
+  });
 
   const breadcrumbItems: BreadcrumbItem[] = [
     {
@@ -441,12 +540,57 @@ const DocumentsPage: React.FC = () => {
   // Render
   // -------------------------------------------------------
 
+  // The header is drawn while the folders load: a full-screen centred spinner
+  // was replaced wholesale, and the page landed ~400px above where its box had
+  // been.
+  const pageHeader = (
+    <div className="page-header mb-8 gap-3 sm:items-center">
+      <div className="page-header-title flex items-center space-x-3">
+        <div className="shrink-0 rounded-lg bg-amber-600 p-2">
+          <FileText className="h-6 w-6 text-white" aria-hidden="true" />
+        </div>
+        <div>
+          <h1 className="text-theme-text-primary text-2xl font-bold">Documents & Files</h1>
+          <p className="text-theme-text-secondary text-sm">
+            SOPs, policies, forms, and other department files in one place
+          </p>
+        </div>
+      </div>
+      {canManage && (
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => {
+              // Fresh access settings and no stale error each time it opens.
+              setFolderAccess(EMPTY_FOLDER_ACCESS);
+              clearCreateFolderErrors();
+              setShowCreateFolder(true);
+            }}
+            className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary touch:min-h-11 flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
+          >
+            <Folder className="h-4 w-4" aria-hidden="true" />
+            <span>New Folder</span>
+          </button>
+          <button
+            onClick={handleOpenUploadModal}
+            className="touch:min-h-11 flex items-center space-x-2 rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors hover:bg-amber-800"
+          >
+            <Upload className="h-4 w-4" />
+            <span>Upload Document</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   if (foldersLoading && folderPath.length === 0 && !showAllDocuments) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="flex flex-col items-center space-y-4" role="status" aria-live="polite">
-          <Loader2 className="h-10 w-10 animate-spin text-amber-700 dark:text-amber-400" />
-          <p className="text-theme-text-secondary text-sm">Loading documents...</p>
+      <div className="min-h-screen">
+        <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+          {pageHeader}
+          <div className="flex flex-col items-center space-y-4 py-24" role="status" aria-live="polite">
+            <Loader2 className="h-10 w-10 animate-spin text-amber-700 dark:text-amber-400" />
+            <p className="text-theme-text-secondary text-sm">Loading documents...</p>
+          </div>
         </div>
       </div>
     );
@@ -455,43 +599,7 @@ const DocumentsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        {/* Page Header */}
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="shrink-0 rounded-lg bg-amber-600 p-2">
-              <FileText className="h-6 w-6 text-white" aria-hidden="true" />
-            </div>
-            <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">Documents & Files</h1>
-              <p className="text-theme-text-secondary text-sm">
-                SOPs, policies, forms, and other department files in one place
-              </p>
-            </div>
-          </div>
-          {canManage && (
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={() => {
-                  // Fresh access settings and no stale error each time it opens.
-                  setFolderAccess(EMPTY_FOLDER_ACCESS);
-                  setCreateFolderError(null);
-                  setShowCreateFolder(true);
-                }}
-                className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary touch:min-h-11 flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
-              >
-                <Folder className="h-4 w-4" aria-hidden="true" />
-                <span>New Folder</span>
-              </button>
-              <button
-                onClick={handleOpenUploadModal}
-                className="touch:min-h-11 flex items-center space-x-2 rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors hover:bg-amber-800"
-              >
-                <Upload className="h-4 w-4" />
-                <span>Upload Document</span>
-              </button>
-            </div>
-          )}
-        </div>
+        {pageHeader}
 
         {/* Error Toast */}
         {error && (
@@ -529,7 +637,7 @@ const DocumentsPage: React.FC = () => {
           </div>
         )}
         {summary && (
-          <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+          <StatGrid columns={4} className="mb-8">
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Documents</p>
               <p className="text-theme-text-primary mt-1 text-2xl font-bold">{summary.total_documents}</p>
@@ -550,7 +658,7 @@ const DocumentsPage: React.FC = () => {
                 {summary.documents_this_month}
               </p>
             </div>
-          </div>
+          </StatGrid>
         )}
 
         {/* Search & View Toggle */}
@@ -769,9 +877,12 @@ const DocumentsPage: React.FC = () => {
                           <div className="mt-2 flex items-center gap-3">
                             <span className="text-theme-text-muted text-xs">{formatFileSize(doc.file_size)}</span>
                             {doc.file_type && (
-                              <span className="text-theme-text-muted text-xs uppercase">{doc.file_type}</span>
+                              <span className="text-theme-text-muted text-xs">{fileTypeLabel(doc.file_type)}</span>
                             )}
                             <div className="ml-auto flex shrink-0 items-center gap-1">
+                              {doc.source_type === 'meeting_minutes' && (
+                                <PublishedMinutesAttachments documentId={doc.id} documentName={doc.name} />
+                              )}
                               {doc.has_file && (
                                 <button
                                   onClick={(e) => {
@@ -855,7 +966,7 @@ const DocumentsPage: React.FC = () => {
                           key={doc.id}
                           className="border-theme-surface-border hover:bg-theme-surface-hover border-b transition-colors"
                         >
-                          <td className="px-4 py-3">
+                          <td data-label="Name" className="rwd-table-lead px-4 py-3">
                             <div className="flex items-center space-x-2">
                               <File className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
                               <div>
@@ -874,15 +985,20 @@ const DocumentsPage: React.FC = () => {
                               </div>
                             </div>
                           </td>
-                          <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                          <td data-label="Size" className="text-theme-text-secondary px-4 py-3 text-sm">
                             {formatFileSize(doc.file_size)}
                           </td>
-                          <td className="text-theme-text-secondary px-4 py-3 text-sm uppercase">
-                            {doc.file_type || '-'}
+                          <td data-label="Type" className="text-theme-text-secondary px-4 py-3 text-sm">
+                            {fileTypeLabel(doc.file_type) ?? '-'}
                           </td>
-                          <td className="text-theme-text-muted px-4 py-3 text-sm">{formatDate(doc.created_at, tz)}</td>
-                          <td className="px-4 py-3 text-right">
+                          <td data-label="Uploaded" className="text-theme-text-muted px-4 py-3 text-sm">
+                            {formatDate(doc.created_at, tz)}
+                          </td>
+                          <td data-label="Actions" className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end space-x-1">
+                              {doc.source_type === 'meeting_minutes' && (
+                                <PublishedMinutesAttachments documentId={doc.id} documentName={doc.name} />
+                              )}
                               {doc.has_file && (
                                 <button
                                   onClick={() => void handleDownloadDocument(doc)}
@@ -1006,130 +1122,153 @@ const DocumentsPage: React.FC = () => {
           >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" aria-hidden="true" />
-              <DialogPanel onClose={() => setShowUploadModal(false)} className="relative w-full max-w-lg">
-                <div className="px-6 pt-5 pb-4">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 id="upload-document-title" className="text-theme-text-primary text-lg font-medium">
-                      Upload Document
-                    </h3>
-                    <button
-                      data-dialog-close
-                      onClick={() => setShowUploadModal(false)}
-                      className="text-theme-text-muted hover:text-theme-text-primary"
-                      aria-label="Close dialog"
-                    >
-                      <X className="h-5 w-5" aria-hidden="true" />
-                    </button>
-                  </div>
+              <DialogPanel onClose={requestCloseUpload} className="relative w-full max-w-lg">
+                <form
+                  noValidate
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void handleUploadDocument();
+                  }}
+                >
+                  <div className="px-6 pt-5 pb-4">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 id="upload-document-title" className="text-theme-text-primary text-lg font-medium">
+                        Upload Document
+                      </h3>
+                      <button
+                        type="button"
+                        data-dialog-close
+                        onClick={requestCloseUpload}
+                        className="text-theme-text-muted hover:text-theme-text-primary"
+                        aria-label="Close dialog"
+                      >
+                        <X className="h-5 w-5" aria-hidden="true" />
+                      </button>
+                    </div>
 
-                  <div className="space-y-4">
-                    <div className="border-theme-surface-border rounded-lg border-2 border-dashed p-8 text-center transition-colors hover:border-amber-500/50">
-                      <Upload className="text-theme-text-muted mx-auto mb-3 h-10 w-10" />
-                      {/* No drop handler is wired to this box, so the copy
+                    <div className="space-y-4">
+                      {uploadError && (
+                        <p className="alert-danger" role="alert">
+                          {uploadError}
+                        </p>
+                      )}
+                      <div className="border-theme-surface-border rounded-lg border-2 border-dashed p-8 text-center transition-colors hover:border-amber-500/50">
+                        <Upload className="text-theme-text-muted mx-auto mb-3 h-10 w-10" />
+                        {/* No drop handler is wired to this box, so the copy
                           does not offer drag and drop. */}
-                      <p className="text-theme-text-primary mb-3 font-medium">Choose the file to upload</p>
-                      {/* sr-only, not hidden: a display:none input takes no
+                        <p className="text-theme-text-primary mb-3 font-medium">Choose the file to upload</p>
+                        {/* sr-only, not hidden: a display:none input takes no
                           focus, so the keyboard could never choose a file and
                           Upload stayed disabled (W53-1). The label shows the
                           focus ring the input cannot. */}
-                      <input
-                        type="file"
-                        className="peer sr-only"
-                        id="file-upload"
-                        onChange={(e) => setUploadForm({ ...uploadForm, file: e.target.files?.[0] || null })}
-                      />
-                      <label
-                        htmlFor="file-upload"
-                        className="peer-focus-visible:ring-theme-focus-ring inline-flex cursor-pointer items-center rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors peer-focus-visible:ring-2 hover:bg-amber-800"
-                      >
-                        Choose File
-                      </label>
-                      {uploadForm.file && (
-                        <p className="mt-2 text-sm text-amber-700 dark:text-amber-400">{uploadForm.file.name}</p>
-                      )}
-                    </div>
+                        <input
+                          type="file"
+                          className="peer sr-only"
+                          id="file-upload"
+                          aria-required="true"
+                          aria-invalid={uploadErrors.file ? true : undefined}
+                          aria-describedby={uploadErrors.file ? 'file-upload-error' : undefined}
+                          onChange={(e) => {
+                            setUploadForm({ ...uploadForm, file: e.target.files?.[0] || null });
+                            setUploadErrors((prev) => ({ ...prev, file: undefined }));
+                          }}
+                        />
+                        <label
+                          htmlFor="file-upload"
+                          className="peer-focus-visible:ring-theme-focus-ring inline-flex cursor-pointer items-center rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors peer-focus-visible:ring-2 hover:bg-amber-800"
+                        >
+                          Choose File
+                        </label>
+                        {uploadForm.file && (
+                          <p className="mt-2 text-sm text-amber-700 dark:text-amber-400">{uploadForm.file.name}</p>
+                        )}
+                        {uploadErrors.file && (
+                          <p id="file-upload-error" className="mt-2 text-sm text-red-800 dark:text-red-300">
+                            {uploadErrors.file}
+                          </p>
+                        )}
+                      </div>
 
-                    <div>
-                      <label htmlFor="upload-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                        Document Name
-                      </label>
-                      <input
-                        id="upload-name"
-                        type="text"
-                        value={uploadForm.name}
-                        onChange={(e) => setUploadForm({ ...uploadForm, name: e.target.value })}
-                        className="form-input focus:ring-amber-500"
-                        placeholder="Optional — uses the file name if left blank"
-                      />
-                    </div>
+                      <FormField label="Document Name" id="upload-name" error={uploadErrors.name}>
+                        {(field) => (
+                          <input
+                            {...field}
+                            type="text"
+                            autoComplete="off"
+                            value={uploadForm.name}
+                            onChange={(e) => {
+                              setUploadForm({ ...uploadForm, name: e.target.value });
+                              setUploadErrors((prev) => ({ ...prev, name: undefined }));
+                            }}
+                            className="form-input"
+                            placeholder="Optional — uses the file name if left blank"
+                          />
+                        )}
+                      </FormField>
 
-                    <div>
-                      <label
-                        htmlFor="upload-description"
-                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                      >
-                        Description
-                      </label>
-                      <textarea
-                        id="upload-description"
-                        rows={2}
-                        value={uploadForm.description}
-                        onChange={(e) => setUploadForm({ ...uploadForm, description: e.target.value })}
-                        className="form-input focus:ring-amber-500"
-                        placeholder="Optional"
-                      />
-                    </div>
+                      <FormField label="Description" id="upload-description" error={uploadErrors.description}>
+                        {(field) => (
+                          <textarea
+                            {...field}
+                            rows={2}
+                            value={uploadForm.description}
+                            onChange={(e) => {
+                              setUploadForm({ ...uploadForm, description: e.target.value });
+                              setUploadErrors((prev) => ({ ...prev, description: undefined }));
+                            }}
+                            className="form-input"
+                            placeholder="Optional"
+                          />
+                        )}
+                      </FormField>
 
-                    <div>
-                      <label
-                        htmlFor="upload-folder"
-                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                      >
-                        Folder
-                      </label>
-                      <select
-                        id="upload-folder"
-                        value={uploadForm.folder}
-                        onChange={(e) => setUploadForm({ ...uploadForm, folder: e.target.value })}
-                        className="form-input focus:ring-amber-500"
-                      >
-                        {/* The server files an upload with no folder into General Documents. */}
-                        <option value="">General Documents (default)</option>
-                        {currentFolder && <option value={currentFolder.id}>{currentFolder.name} (current)</option>}
-                        {folders.map((f) => (
-                          <option key={f.id} value={f.id}>
-                            {f.name}
-                            {f.visibility && RESTRICTED_FOLDER_LABEL[f.visibility]
-                              ? ` (${RESTRICTED_FOLDER_LABEL[f.visibility]?.toLowerCase()})`
-                              : ''}
-                          </option>
-                        ))}
-                      </select>
+                      <FormField label="Folder" id="upload-folder" error={uploadErrors.folder}>
+                        {(field) => (
+                          <select
+                            {...field}
+                            value={uploadForm.folder}
+                            onChange={(e) => {
+                              setUploadForm({ ...uploadForm, folder: e.target.value });
+                              setUploadErrors((prev) => ({ ...prev, folder: undefined }));
+                            }}
+                            className="form-input"
+                          >
+                            {/* The server files an upload with no folder into General Documents. */}
+                            <option value="">General Documents (default)</option>
+                            {currentFolder && <option value={currentFolder.id}>{currentFolder.name} (current)</option>}
+                            {folders.map((f) => (
+                              <option key={f.id} value={f.id}>
+                                {f.name}
+                                {f.visibility && RESTRICTED_FOLDER_LABEL[f.visibility]
+                                  ? ` (${RESTRICTED_FOLDER_LABEL[f.visibility]?.toLowerCase()})`
+                                  : ''}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </FormField>
                     </div>
                   </div>
-                </div>
-                <div className="bg-theme-surface-secondary flex justify-end space-x-3 rounded-b-lg px-6 py-3">
-                  <button
-                    onClick={() => setShowUploadModal(false)}
-                    className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      void handleUploadDocument();
-                    }}
-                    disabled={!uploadForm.file || actionLoading}
-                    className={`inline-flex items-center space-x-2 rounded-lg px-4 py-2 text-white transition-colors ${
-                      !uploadForm.file || actionLoading
-                        ? 'cursor-not-allowed bg-amber-700 opacity-50'
-                        : 'bg-amber-700 hover:bg-amber-800'
-                    }`}
-                  >
-                    {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                    <span>Upload</span>
-                  </button>
-                </div>
+                  <div className="bg-theme-surface-secondary flex justify-end space-x-3 rounded-b-lg px-6 py-3">
+                    <button
+                      type="button"
+                      onClick={requestCloseUpload}
+                      className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={actionLoading}
+                      className={`inline-flex items-center space-x-2 rounded-lg px-4 py-2 text-white transition-colors ${
+                        actionLoading ? 'cursor-not-allowed bg-amber-700 opacity-50' : 'bg-amber-700 hover:bg-amber-800'
+                      }`}
+                    >
+                      {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                      <span>Upload</span>
+                    </button>
+                  </div>
+                </form>
               </DialogPanel>
             </div>
           </div>
@@ -1156,92 +1295,114 @@ const DocumentsPage: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="create-folder-title"
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setShowCreateFolder(false);
-            }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" aria-hidden="true" />
-              <DialogPanel onClose={() => setShowCreateFolder(false)} className="relative w-full max-w-lg">
-                <div className="px-6 pt-5 pb-4">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 id="create-folder-title" className="text-theme-text-primary text-lg font-medium">
-                      Create Folder
-                    </h3>
+              <DialogPanel onClose={requestCloseCreateFolder} className="relative w-full max-w-lg">
+                <form
+                  noValidate
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void handleCreateFolder();
+                  }}
+                >
+                  <div className="px-6 pt-5 pb-4">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 id="create-folder-title" className="text-theme-text-primary text-lg font-medium">
+                        Create Folder
+                      </h3>
+                      <button
+                        type="button"
+                        data-dialog-close
+                        onClick={requestCloseCreateFolder}
+                        className="text-theme-text-muted hover:text-theme-text-primary"
+                        aria-label="Close dialog"
+                      >
+                        <X className="h-5 w-5" aria-hidden="true" />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      {createFolderErrors.formError && (
+                        <p className="alert-danger" role="alert">
+                          {createFolderErrors.formError}
+                        </p>
+                      )}
+                      <p className="text-theme-text-secondary text-sm">
+                        Location:{' '}
+                        <span className="text-theme-text-primary font-medium">{currentFolder?.name ?? 'Root'}</span>
+                        {showAllDocuments && ' (folders created from All Documents are placed at the root)'}
+                      </p>
+                      <FormField
+                        label="Folder Name"
+                        required
+                        id={CREATE_FOLDER_FIELDS.name.id}
+                        error={createFolderErrors.errors.name}
+                        maxLength={FOLDER_NAME_MAX_LENGTH}
+                        count={folderForm.name.length}
+                      >
+                        {(field) => (
+                          <input
+                            {...field}
+                            type="text"
+                            autoComplete="off"
+                            value={folderForm.name}
+                            onChange={(e) => {
+                              setFolderForm({ ...folderForm, name: e.target.value });
+                              createFolderErrors.setError('name', null);
+                            }}
+                            className="form-input"
+                            placeholder="e.g., Safety Bulletins"
+                          />
+                        )}
+                      </FormField>
+                      <FormField
+                        label="Description"
+                        id={CREATE_FOLDER_FIELDS.description.id}
+                        error={createFolderErrors.errors.description}
+                      >
+                        {(field) => (
+                          <textarea
+                            {...field}
+                            rows={2}
+                            value={folderForm.description}
+                            onChange={(e) => {
+                              setFolderForm({ ...folderForm, description: e.target.value });
+                              createFolderErrors.setError('description', null);
+                            }}
+                            className="form-input"
+                          />
+                        )}
+                      </FormField>
+                      <FolderAccessFields
+                        idPrefix="create-folder"
+                        value={folderAccess}
+                        onChange={(next) => {
+                          setFolderAccess(next);
+                          createFolderErrors.setFormError(null);
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="bg-theme-surface-secondary flex justify-end space-x-3 rounded-b-lg px-6 py-3">
                     <button
-                      data-dialog-close
-                      onClick={() => setShowCreateFolder(false)}
-                      className="text-theme-text-muted hover:text-theme-text-primary"
-                      aria-label="Close dialog"
+                      type="button"
+                      onClick={requestCloseCreateFolder}
+                      className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
                     >
-                      <X className="h-5 w-5" aria-hidden="true" />
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={actionLoading}
+                      className={`inline-flex items-center space-x-2 rounded-lg px-4 py-2 text-white transition-colors ${
+                        actionLoading ? 'cursor-not-allowed bg-amber-700 opacity-50' : 'bg-amber-700 hover:bg-amber-800'
+                      }`}
+                    >
+                      {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                      <span>Create Folder</span>
                     </button>
                   </div>
-                  <div className="space-y-4">
-                    {createFolderError && (
-                      <p className="alert-danger" role="alert">
-                        {createFolderError}
-                      </p>
-                    )}
-                    <p className="text-theme-text-secondary text-sm">
-                      Location:{' '}
-                      <span className="text-theme-text-primary font-medium">{currentFolder?.name ?? 'Root'}</span>
-                      {showAllDocuments && ' (folders created from All Documents are placed at the root)'}
-                    </p>
-                    <div>
-                      <label htmlFor="folder-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                        Folder Name <span aria-hidden="true">*</span>
-                      </label>
-                      <input
-                        id="folder-name"
-                        type="text"
-                        required
-                        value={folderForm.name}
-                        onChange={(e) => setFolderForm({ ...folderForm, name: e.target.value })}
-                        className="form-input focus:ring-amber-500"
-                        placeholder="e.g., Safety Bulletins"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="folder-description"
-                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                      >
-                        Description
-                      </label>
-                      <textarea
-                        id="folder-description"
-                        rows={2}
-                        value={folderForm.description}
-                        onChange={(e) => setFolderForm({ ...folderForm, description: e.target.value })}
-                        className="form-input focus:ring-amber-500"
-                      />
-                    </div>
-                    <FolderAccessFields idPrefix="create-folder" value={folderAccess} onChange={setFolderAccess} />
-                  </div>
-                </div>
-                <div className="bg-theme-surface-secondary flex justify-end space-x-3 rounded-b-lg px-6 py-3">
-                  <button
-                    onClick={() => setShowCreateFolder(false)}
-                    className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      void handleCreateFolder();
-                    }}
-                    disabled={!folderForm.name.trim() || folderAccessIncomplete(folderAccess) || actionLoading}
-                    className={`inline-flex items-center space-x-2 rounded-lg px-4 py-2 text-white transition-colors ${
-                      !folderForm.name.trim() || folderAccessIncomplete(folderAccess) || actionLoading
-                        ? 'cursor-not-allowed bg-amber-700 opacity-50'
-                        : 'bg-amber-700 hover:bg-amber-800'
-                    }`}
-                  >
-                    {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                    <span>Create Folder</span>
-                  </button>
-                </div>
+                </form>
               </DialogPanel>
             </div>
           </div>

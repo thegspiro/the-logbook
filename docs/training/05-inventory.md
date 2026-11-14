@@ -130,6 +130,11 @@ that are hidden on a desktop to save width (manufacturer, serial number, asset
 tag, barcode and cost) come back on the phone card, where there is room for
 them.
 
+_(2026-11-06)_ The items list (Pinned, the shelf and Unavailable) and the
+reorder requests list switch to these cards below about 1280 pixels wide, not
+only on a phone, so a tablet or a laptop with the sidebar open no longer scrolls
+them sideways.
+
 ![The inventory items table on a phone — each row stacked into a card with the field name on the left and its value on the right](./images/05-70-inventory-table-mobile.png)
 
 ---
@@ -214,6 +219,10 @@ uniforms, hand tools, power equipment, ladders, radios, EMS supplies and more.
 Each one arrives with its serial-number, maintenance and NFPA switches already
 set.
 
+- **Category names are unique among siblings** _(2026-11-05)_. You cannot add
+  or rename a category to a name its parent already has. Categories that already
+  shared a name before this rule are flagged with a duplicate-name badge so you
+  can merge or rename them.
 - A category your department already has is marked **already added**, so you
   can come back to this step safely. A second visit adds only what is missing.
 - **Select all** ticks everything still available.
@@ -426,6 +435,10 @@ stay. A size filed under a different name is left alone. If any new name would b
 over 255 characters, nothing changes. Generating more sizes afterward reuses the
 group by its new name.
 
+![The inventory items list with the folded Structural Coat row: 5 loaded, its sizes L, M, S, XL and XXL on one line, and the pencil Rename button focused at the end of the row](./images/05-148-folded-product-rename.png)
+
+![The Rename product window for Structural Coat: renames it on every size and variant while the size, colour and style part of each name stays, with Product name, Cancel and Rename](./images/05-149-rename-product-dialog.png)
+
 ### Generating sizes and styles
 
 Needs the **Manage gear, uniforms and equipment** permission.
@@ -559,7 +572,7 @@ gear, uniforms and equipment** permission.
 
 A kit must have at least one item.
 
-![Equipment kit editor with its line items and quantities](./images/05-27-equipment-kit-modal.png)
+![The Edit Kit window for New Recruit PPE Kit, scrolled to its lines: the single-size lines with their category, quantity and Optional box, and Structural Coat with its Size set to Member's size](./images/05-27-equipment-kit-modal.png)
 
 ### Issuing a Kit
 
@@ -574,7 +587,7 @@ Each item in the kit is then given to the member on its own record: tracked
 items as assignments, counted items as issuances. The message says how many
 were issued.
 
-![The Issue New Recruit PPE Kit? confirmation after picking Rafael Duarte, naming how many items the kit hands out, with Don't issue and Issue to Rafael Duarte](./images/05-95-kit-issue-confirm.png)
+![The Issue New Recruit PPE Kit? review after picking Rafael Duarte: Structural Coat resolved to M from his size on file (Member's size: M), the single-size lines asking for a choice, and Don't issue and Issue to Rafael Duarte](./images/05-95-kit-issue-confirm.png)
 
 ![Equipment kit detail listing its component items](./images/05-50-equipment-kit-detail.png)
 
@@ -829,6 +842,10 @@ create one with **Temporary loan** in [Item Distribution](#item-distribution).
   the day you choose, in your department's time zone.
 - A loan is overdue once its current due date has passed. Changing a loan
   keeps its due date.
+- _(2026-11-02)_ A member holding overdue gear gets an "Overdue Equipment
+  Reminder" email listing each item and its due date, at most once per calendar
+  day in your department's time zone, for as long as it stays overdue. Restarting or
+  updating The Logbook no longer sends it again the same day.
 
 ![Equipment checkout page with the item, member, and expected return date](./images/05-08-checkouts.png)
 
@@ -1274,18 +1291,31 @@ item kept in dated lots, the quantity counts in-date lots only, and says so.
 - Each person gets only the rows they may see. Gear rows go to officers who
   manage gear; medical rows to those who manage medical supplies. Someone with
   both gets one complete email.
-- An officer who has turned off their quartermaster duty emails is left out.
+- Every one of those officers also gets a bell notice, **Low stock — _N_
+  item(s) at or below reorder point**, linking to the same list. An officer who
+  turned off their quartermaster duty emails gets the bell notice and no email.
+  While it is unread, the next day's run updates it rather than adding another.
 - When the email lists gear or uniform rows it ends with **View low-stock gear
   and uniforms**. The link opens **Inventory Items** already narrowed to items at
   or below their reorder point, with a notice **Showing only items at or below
   their reorder point** and a **Show all items** button to lift it. Medical rows
   link to the **Low stock** tab of Medical Supplies instead, and an officer who
   sees only one kind gets only that link.
+
+  ![Inventory Items opened from the low-stock email link: the notice Showing only items at or below their reorder point with Show all items, above Firefighting Gloves, the one gear item at or below its reorder point](./images/05-152-items-low-stock-notice.png)
+
 - Low-stock alerts are **email only**. No text message is sent, because
   reordering is a business-hours decision made from an item table a text
   cannot hold.
 
 ### Other inventory alert emails
+
+Each of these also leaves a bell notice for every officer it goes to, so an
+officer who turned off quartermaster duty emails is still told. The shelf-audit
+digest, the NFPA retirement alert and **Supplies to Replace** update an unread
+notice rather than adding another each time. A reorder request filed
+automatically after a swap does the same, pointing an officer who manages gear
+at the reorder queue and a medical-only officer at Medical Supplies.
 
 | Email                                                      | What it shows                                                                                                                                       |
 | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1886,21 +1916,29 @@ Moves and lost/found changes are recorded in the audit log.
 
 The page only appears while NFC tags are turned on.
 
-<!-- Screenshot needed: The NFC Tag Register as a quartermaster: item and shelf tags with their status and last tap, one tag marked Lost -->
+![The NFC Tag Register as a quartermaster: tags on a cylinder and on coats with what each names, its status (one Lost, offering Mark found) and the last time it was tapped, each with Mark lost, Move and Unlink, and two tags ticked with the 2 selected bar (Mark lost, Mark found, Clear selection) above the list](./images/05-140-nfc-tag-register.png)
 
-<!-- Screenshot needed: The Move tag dialog from the NFC Tag Register, searching for another item to move an item tag onto -->
+![The Move tag dialog for an item tag: a search for another item and the matching items to move the tag onto, with Move tag and Cancel](./images/05-141-nfc-move-tag.png)
 
 ### Items not seen
 
 Needs the **Manage gear, uniforms and equipment** permission.
 
+**Item dates and Unassign** _(2026-11-05)_. A date you change on an item (purchase,
+warranty, expiration) is checked against your department's date, not the
+server's, so an evening entry is not refused as "tomorrow". **Unassign** now opens
+its own dialog instead of sharing the assign form. **Tag Items in Bulk** shows
+each item's barcode.
+
 **Inventory Administration → Items Not Seen** lists items nobody has handled in
 30, 90, 180 (the default) or 365 days. "Handled" means an NFC tap by a
-quartermaster, an assignment or return, a loan or check-in, or an issuance or
-its return. Editing the item's record does not count.
+quartermaster, an assignment or return, a loan or check-in, an issuance or
+its return, creating the item, or putting it away by barcode _(2026-11-05)_.
+Editing the item's record does not count.
 
-Items never handled at all are listed first as **Never**. That includes items
-added today, because being added is not being handled. Filter by **Category**,
+Items never handled at all are listed first as **Never**. An item added today is
+no longer in that group, because creating it now counts as the first sighting.
+A deleted storage area is no longer named in the "last seen" place. Filter by **Category**,
 and use **Download CSV** for the full list.
 
 This report works whether or not NFC tags are turned on.
@@ -1931,6 +1969,9 @@ Needs the **Manage gear, uniforms and equipment** permission.
    - Use the **Barcode labels** card at the end of the setup steps.
    - Open the print page with nothing selected and choose a category, location
      or storage area.
+
+   ![The Print Labels menu opened beside Export on the inventory items list: This list with its item count, Items that need a label with its count, and Choose by category or location](./images/05-146-print-labels-menu.png)
+
 2. Select **Settings** and choose a **Label Size**. The sizes are cards, not a
    list:
    - **Dymo 30252**, **30256**, **30334** and **30336**: the four common Dymo
@@ -1986,6 +2027,8 @@ and for this part of The Logbook. See
 
 ![The inventory label print page with Settings open: the saved-setup row, the label size choices, copies per item, What Prints on the Label, and a preview of the three barcode labels](./images/05-69-label-print-page.png)
 
+_(2026-10-29)_ The preview now sits directly under the controls instead of a screen below them, so a change to size or copies is visible without scrolling.
+
 ![Inventory label printing page with format presets and preview](./images/05-33-label-printing.png)
 
 > **Saved setups for the department.** Above the printer controls, **Save
@@ -2039,11 +2082,33 @@ printer is registered, the window also points to **Settings → Label
 Printers**, where an administrator can register one and skip the print dialog
 altogether.
 
+![The Before you print window for a 2" x 1" roll: choose the label printer, paper size 2" x 1" under More settings, margins None and scale 100%, with the Don't show again box, Back and Open print dialog](./images/05-147-before-you-print.png)
+
 The checklist is not shown for **PDF**, **Print to _printer name_**, or on a
 phone or tablet, where printing always downloads the PDF.
 
 The same checklist runs on the shared label page used for apparatus, facility,
 member and storage-area labels. _(2026-10-28)_
+
+**Printer resolution.** _(2026-11-03)_ A browser print of a **Code 128** barcode
+is drawn for the printer's resolution, so each bar lands on whole printer dots
+and prints at an exact width. The browser cannot ask the printer, so the page
+guesses from the label size. That guess is wrong for some printers (a 300 dpi
+Zebra, say), and their bars then print at uneven widths that may not scan. With
+**Code 128** chosen, the settings panel has a **Printer resolution** box:
+
+- **Auto** (the default) shows the resolution it is using for the label size,
+  for example _Auto (203 dpi for this label size)_.
+- **203 dpi**, **300 dpi** or **600 dpi** names the printer's own resolution.
+  Rollo and most Zebra desktop printers are 203, Dymo LabelWriters 300; it is on
+  the printer's spec sheet.
+
+The choice is remembered for that label size on this computer only, because it
+belongs to the printer plugged in there: one station can feed a Rollo for 2" x 1"
+rolls and a Dymo for address labels. It changes only the browser print, not the
+**PDF** or a **Print to _printer name_** job, and the box is not shown for QR
+codes. The same box is on the shared label page for apparatus, facility, member
+and storage-area labels.
 
 ### Choosing which items to label
 
@@ -2177,6 +2242,10 @@ a barcode that scans is to avoid any scaling.
    paper size to the label size. The **Before you print** checklist names
    these for the size you chose. A Rollo finds the gap between labels on its
    own, but its driver's paper size must still match the label.
+5. _(2026-11-03)_ If you print **Code 128** labels through the browser, set
+   **Printer resolution** to your printer's resolution once for each label size
+   (see [Before you print](#before-you-print-2026-10-27)). Leave it on **Auto**
+   when barcodes printed from the browser already scan.
 
 > **Rollo and other roll-fed printers.** Two Rollo sizes are built in: **Rollo
 > 4" x 6"** (portrait shipping labels) and **Rollo / Thermal 2" x 1"** (small
@@ -2817,7 +2886,7 @@ The red numbers count:
 
 ![Inventory admin hub with its area cards and page strip](./images/05-25-admin-hub.png)
 
-![The inventory admin hub with an area chosen and its pages listed](./images/05-60-admin-hub-groups.png)
+![Inventory Administration with the Catalog area chosen: its pages in the strip under the area cards (All Items, Pool Items, Categories, Variant Groups, Storage Areas, Vendors, Print Labels) and the line naming the page open](./images/05-60-admin-hub-groups.png)
 
 ### Who sees which pages
 
@@ -2894,7 +2963,7 @@ the three can no longer offer different sections.
   apparatus** puts a heading per rig. **Add stock** opens a sheet with Quantity
   and Lot side by side and the amount on the truck now above them.
 
-![One apparatus on a phone: the back arrow, unit name and readiness on one row, and the tabs pinned under the header](./images/05-129-apparatus-detail-phone.png)
+![Medic 3 opened from Fleet Readiness on a phone: the unit name and its readiness (No checks yet) on one row, the recent-check strip at full width, and the Checks, Inventory, Findings and Check log tabs under the header](./images/05-129-apparatus-detail-phone.png)
 
 ![The Expiring on Apparatus worklist on a phone with its count chips, each item showing its rig, compartment, expiry and lot, and full-size Add and Manage buttons](./images/05-130-supply-worklist-phone.png)
 
@@ -2975,6 +3044,11 @@ number boxes when you click away or press Enter. There is no Save button.
 Clearing a number box and leaving it empty puts back the saved value. A number
 outside the range is changed to the nearest allowed value.
 
+On a phone each setting is one row with its switch or number box at the right,
+under a compact page top.
+
+![Checklist Settings on a phone: the compact page top, then Start-of-shift and End-of-shift checklists as rows with their switches, and Opens before the start and Closes after the end with their hour boxes](./images/05-153-checklist-settings-phone.png)
+
 ### Building a checklist
 
 Build checklists in the **Template builder**, from the checklist console.
@@ -3008,6 +3082,10 @@ Build checklists in the **Template builder**, from the checklist console.
   (gauze, say) is stocked in many places, each counted on its own.
 - After pasting a list into a saved location, the builder offers **Match to
   catalog**.
+- **Crew view** shows the checklist as a crew will see it on a phone, and
+  updates as you edit. On a wide screen it is a panel beside the checklist; on a
+  narrower one it has a bar of its own. Select the expand button to open it
+  **full size**.
 - **Clone checklist** (on the list, or **Tools → Clone checklist** in the
   builder) asks **which apparatus to copy onto**. Only full Apparatus-module
   units are offered. The copy is named "_apparatus_ - _template_" and starts
@@ -3016,6 +3094,10 @@ Build checklists in the **Template builder**, from the checklist console.
 ![Linked Inventory Item in the checklist builder, searched for tourniquet: Tourniquet, CAT with its Medical badge, then Create in Medical Supplies and Create as equipment or gear](./images/05-123-builder-medical-picker.png)
 
 ![Copy checklist to an apparatus, opened from Tools → Clone checklist: the note that the copy starts switched off so it can be reviewed first, and Copy onto set to B-5 — Brush 5](./images/05-124-clone-checklist-dialog.png)
+
+![The Crew view panel beside the checklist builder for Engine Daily Check: What the crew sees, updating as you edit, the checklist inside the phone frame as a crew gets it, and the expand button](./images/05-150-builder-crew-view.png)
+
+![The crew view opened full size from the checklist builder: Engine Daily Check in the large phone frame, as a crew sees it, with the round close button](./images/05-151-builder-crew-view-full.png)
 
 ### Catalog Links
 
@@ -3168,7 +3250,7 @@ total. Gear is unchanged: it is still judged on the shelf alone.
   The tab shows how many supplies wait on a count, and the list can be filtered
   to them.
 
-  <!-- Screenshot needed: The Not yet counted tab of Medical Supplies, each uncounted truck position linked to that truck's inventory -->
+  ![The Not yet counted tab of Medical Supplies: supplies whose truck positions nobody has counted, each naming the apparatus and compartment and linking to that truck's inventory](./images/05-145-medical-not-yet-counted.png)
 
 - The list (and its CSV export) can be sorted by **Next expiry**, shelf and
   trucks together; supplies with no date sort last. The supply export adds
@@ -3178,6 +3260,11 @@ total. Gear is unchanged: it is still judged on the shelf alone.
 - The **Expiring** tab's **Look ahead** offers 30, 60 or 90 days. The tiles,
   the list and the Next expiry colouring follow it. It is not saved between
   visits, and the weekly email keeps 30 days.
+- On the **Expiring** tab, a row for stock on a truck names the apparatus and
+  compartment and links to that apparatus's inventory, where the swap and
+  restock are done.
+
+![The Expiring tab of Medical Supplies with Look ahead set to 90 days: the recalled Nasal Cannula lot listed first and marked Recalled, then shelf lots and the stock on trucks, each truck row naming its apparatus and compartment with a Swap or restock link](./images/05-154-medical-expiring-lookahead.png)
 
 **Kept on apparatus only.** Some equipment has no spare in a stock room: a LUCAS
 device or a cardiac monitor lives on the ambulance. Tick **Kept on apparatus
@@ -3193,7 +3280,7 @@ value is refused rather than guessed).
 
 ![The medical supply form with Kept on apparatus only ticked and its explanation, for a supply that never goes through the stock room](./images/05-134-medical-supply-apparatus-only.png)
 
-![The Expiring stock tab of Medical Supplies: the Expiring within 30 days tile reading 1 shelf and 1 on trucks, and the list carrying a shelf lot beside the tourniquet carried on Rescue 7](./images/05-137-medical-expiring-split.png)
+![The Expiring stock tab of Medical Supplies: the Expiring within 30 days tile reading 2, 1 shelf and 1 on trucks, the Recalled lots panel, and the list carrying the recalled cannula lot first, a shelf lot and the tourniquet on Rescue 7 with Swap or restock](./images/05-137-medical-expiring-split.png)
 
 ### Deleting a medical supply category
 
@@ -3272,12 +3359,12 @@ delivery of the same lot.
    **Find**. It searches the shelves and every apparatus checklist, in date or
    not.
 
-   <!-- Screenshot needed: Find a lot on the Medical Supplies Expiring tab, with a lot found on the shelf and its Recall lot button -->
+   ![Find a lot on the Medical Supplies Expiring tab: the lot number HG-2607 typed, the Hemostatic Gauze lot it found on the shelf, and the Recall lot button for it](./images/05-142-find-lot-recall.png)
 
 3. Select **Recall lot _number_ of _supply_**. Add a reason if you like (for
    example the manufacturer's notice number) and select **Recall lot**.
 
-   <!-- Screenshot needed: The Recall this lot dialog with a reason typed and the Recall lot button -->
+   ![The Recall this lot dialog for Hemostatic Gauze lot HG-2607, saying the units stop counting as stock and cannot be swapped onto a truck, with a reason typed and Recall lot](./images/05-143-recall-lot-dialog.png)
 
 **While a lot is recalled:**
 
@@ -3297,7 +3384,7 @@ at once.
 
 A lot with no lot number cannot be recalled.
 
-<!-- Screenshot needed: The Recalled lots panel on the Expiring tab, with the recalled saline lot, how many are still to pull, and Lift recall -->
+![The Recalled lots panel on the Medical Supplies Expiring tab: Nasal Cannula lot NC-2519, the date it was recalled, how many are still to pull and Lift recall](./images/05-144-recalled-lots-panel.png)
 
 ---
 

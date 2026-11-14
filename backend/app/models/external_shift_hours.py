@@ -7,9 +7,11 @@ staffing agreement. There is no ``Shift`` row to attach the time to, so it
 cannot live in ``shift_attendance``, whose every reader joins through
 ``shifts`` for the organization and the date.
 
-An entry counts from the moment it is logged. An officer who finds one
-wrong rejects it, which removes it from every total without deleting the
-member's record of what they claimed.
+An entry counts from the moment it is logged, unless the department has
+switched on ``external_shifts_require_approval`` in Scheduling Settings: then
+it is logged ``pending`` and counts only once an officer approves it. An
+officer who finds one wrong rejects it, which removes it from every total
+without deleting the member's record of what they claimed.
 
 The agency and apparatus come from a list officers maintain
 (``external_agencies`` / ``external_apparatus``) rather than free text, so
@@ -41,6 +43,9 @@ from app.core.utils import generate_uuid
 
 
 class ExternalShiftHoursStatus(str, Enum):
+    # Awaiting an officer, when the department requires approval. Never
+    # counted: every reader counts ``COUNTED`` alone, which is the one rule.
+    PENDING = "pending"
     COUNTED = "counted"
     REJECTED = "rejected"
 
@@ -62,6 +67,12 @@ class ExternalAgency(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="1"
+    )
+    # A shift a member logs on this agency's units is evaluated like one of
+    # the department's own: a member in a program with an evaluation form gets
+    # one per shift. Off by default, so a mutual-aid neighbour asks for nothing.
+    evaluate_shifts: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -153,6 +164,10 @@ class ExternalShiftHours(Base):
     agency_name: Mapped[str] = mapped_column(String(255), nullable=False)
     apparatus_name: Mapped[str] = mapped_column(String(100), nullable=False)
     role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # Calls the member ran on the outside unit. Only a historical import sets
+    # it: the outside agency keeps the call record itself, so it is a member
+    # credit and never feeds the department's call volume.
+    call_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     status: Mapped[str] = mapped_column(
@@ -189,7 +204,7 @@ class ExternalShiftHours(Base):
         Index("ix_external_shift_hours_org_date", "organization_id", "shift_date"),
         Index("ix_external_shift_hours_apparatus", "external_apparatus_id"),
         CheckConstraint(
-            "status IN ('counted', 'rejected')",
+            "status IN ('pending', 'counted', 'rejected')",
             name="ck_external_shift_hours_status",
         ),
         CheckConstraint(

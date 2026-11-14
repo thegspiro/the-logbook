@@ -339,10 +339,14 @@ async def bench(db_session: AsyncSession) -> AsyncGenerator[_Bench]:
 _EMPTY = (None, "", "null", "[]", "{}")
 
 # Nullable fields whose null is refused on purpose: the handler or service reads
-# None as "not provided", so a null would answer 200 and change nothing.
+# None as "not provided", so a null would answer 200 and change nothing. The
+# names are nullable only for legacy rows; an update may not clear a member's
+# legal name (forms review F-1), as AdminUserCreate never lets one be absent.
 _REFUSED_BY_DESIGN = {
     ("Position", "description"),
     ("User", "notification_preferences"),
+    ("User", "first_name"),
+    ("User", "last_name"),
 }
 
 # Fields whose null clears even though the response schema is not nullable.

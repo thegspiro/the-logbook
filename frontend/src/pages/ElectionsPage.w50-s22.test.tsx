@@ -19,6 +19,8 @@ vi.mock('../services/api', () => ({
     getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
   },
   electionService: {
+    // The create dialog counts who its voter rules admit.
+    previewElectorate: vi.fn().mockResolvedValue({ eligible: 0, total: 0 }),
     getElections: (...args: unknown[]) => mockGetElections(...args) as unknown,
     getElectionSettings: vi.fn().mockRejectedValue(new Error('not needed')),
   },
@@ -45,7 +47,7 @@ import { ElectionsPage } from './ElectionsPage';
  */
 function endPicker() {
   return {
-    dateInput: screen.getByLabelText(/End Date & Time/),
+    dateInput: screen.getByLabelText(/End Date & Time/, { selector: 'input' }),
     hour: screen.getAllByLabelText(/hour$/)[1],
     minute: screen.getAllByLabelText(/minute$/)[1],
     period: screen.getAllByLabelText(/AM\/PM$/)[1],
@@ -60,7 +62,7 @@ async function openCreateDialogWithStart() {
   });
   await userEvent.click(screen.getByRole('button', { name: /^Create Election$/ }));
   // Picking a date with no time yet gives a 09:00 start in the department zone.
-  const startDate = screen.getByLabelText(/Start Date & Time/);
+  const startDate = screen.getByLabelText(/Start Date & Time/, { selector: 'input' });
   fireEvent.change(startDate, { target: { value: '2026-10-01' } });
   expect(startDate).toHaveValue('2026-10-01');
 }

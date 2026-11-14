@@ -49,7 +49,7 @@ env_file_get() {
 }
 
 if [[ -f "$ENV_FILE" ]]; then
-    for _key in DB_HOST DB_USER DB_PASSWORD DB_NAME DB_CONTAINER BACKEND_CONTAINER \
+    for _key in DB_HOST DB_PORT DB_USER DB_PASSWORD DB_NAME DB_CONTAINER BACKEND_CONTAINER \
         BACKUP_LOCATION BACKUP_RETENTION_DAYS BACKUP_KEYS_DIR \
         BACKUP_ENCRYPT_EXISTING VERSION ENVIRONMENT \
         AWS_S3_BUCKET AZURE_STORAGE_ACCOUNT AZURE_STORAGE_CONTAINER \
@@ -65,6 +65,7 @@ fi
 # Defaults so `set -u` cannot trip on keys absent from .env (the Unraid .env
 # legitimately omits DB_HOST — the compose hardcodes it per container).
 DB_HOST="${DB_HOST:-}"
+DB_PORT="${DB_PORT:-}"
 DB_USER="${DB_USER:-}"
 DB_PASSWORD="${DB_PASSWORD:-}"
 DB_NAME="${DB_NAME:-}"
@@ -126,6 +127,21 @@ detect_db_container() {
         | grep -m1 -E '^(logbook-db|intranet-mysql)$' || true
 }
 
+# Fills DB_PORT_ARGS with the -P option for a direct connection to DB_HOST.
+# Left empty when DB_PORT is unset, so a port= in ~/.my.cnf still applies
+# rather than being overridden by a guessed 3306: a managed database is often
+# on another port (DigitalOcean's is), and the backend already reaches it on
+# DB_PORT. Not used for the bundled container, which listens on its default.
+db_port_args() {
+    DB_PORT_ARGS=()
+    [[ -n "$DB_PORT" ]] || return 0
+    if [[ ! "$DB_PORT" =~ ^[0-9]+$ ]]; then
+        print_error "DB_PORT must be a port number, got: $DB_PORT"
+        return 1
+    fi
+    DB_PORT_ARGS=(-P"$DB_PORT")
+}
+
 # Sets MYSQL_CONTAINER to the container mysqldump/mysql should run in, or to
 # the empty string for a direct host connection to DB_HOST.
 resolve_db_target() {
@@ -177,8 +193,10 @@ backup_database() {
             > "/tmp/$BACKUP_NAME/database.sql"
     else
         db_tls_args || exit 1
+        db_port_args || exit 1
         MYSQL_PWD="${DB_PASSWORD}" mysqldump \
             -h"${DB_HOST:-localhost}" \
+            ${DB_PORT_ARGS[@]+"${DB_PORT_ARGS[@]}"} \
             -u"${DB_USER}" \
             ${DB_TLS_ARGS[@]+"${DB_TLS_ARGS[@]}"} \
             "${DB_NAME}" \
@@ -524,8 +542,10 @@ restore_backup() {
                 "${DB_NAME}"
         else
             db_tls_args || exit 1
+            db_port_args || exit 1
             gunzip -c "$BACKUP_EXTRACT_DIR/database.sql.gz" | MYSQL_PWD="${DB_PASSWORD}" mysql \
                 -h"${DB_HOST:-localhost}" \
+                ${DB_PORT_ARGS[@]+"${DB_PORT_ARGS[@]}"} \
                 -u"${DB_USER}" \
                 ${DB_TLS_ARGS[@]+"${DB_TLS_ARGS[@]}"} \
                 "${DB_NAME}"

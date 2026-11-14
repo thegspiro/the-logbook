@@ -26,6 +26,8 @@ interface TargetRolePickerProps {
   hint?: string | undefined;
   disabled?: boolean | undefined;
   id?: string | undefined;
+  /** A refusal for this field, announced on the select as FormField does. */
+  error?: string | undefined;
 }
 
 const TargetRolePicker: React.FC<TargetRolePickerProps> = ({
@@ -35,6 +37,7 @@ const TargetRolePicker: React.FC<TargetRolePickerProps> = ({
   hint,
   disabled = false,
   id = 'target-role',
+  error,
 }) => {
   const [roles, setRoles] = useState<Role[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -62,6 +65,11 @@ const TargetRolePicker: React.FC<TargetRolePickerProps> = ({
     };
   }, []);
 
+  const errorId = `${id}-error`;
+  const hintId = `${id}-hint`;
+  const showsHint = failed || Boolean(hint);
+  const describedBy = [error ? errorId : null, showsHint ? hintId : null].filter(Boolean).join(' ') || undefined;
+
   return (
     <div>
       {label && (
@@ -75,6 +83,8 @@ const TargetRolePicker: React.FC<TargetRolePickerProps> = ({
         value={value}
         disabled={disabled || isLoading || failed}
         onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
       >
         <option value="">
           {isLoading ? 'Loading positions…' : failed ? 'Positions unavailable' : 'No specific role'}
@@ -85,12 +95,21 @@ const TargetRolePicker: React.FC<TargetRolePickerProps> = ({
           </option>
         ))}
       </select>
+      {error && (
+        <p id={errorId} className="mt-1 text-sm text-red-800 dark:text-red-300">
+          {error}
+        </p>
+      )}
       {failed ? (
-        <p className="text-theme-text-muted mt-1 text-xs">
+        <p id={hintId} className="text-theme-text-muted mt-1 text-xs">
           Positions could not be loaded. The applicant can be saved without one and it can be set later.
         </p>
       ) : (
-        hint && <p className="text-theme-text-muted mt-1 text-xs">{hint}</p>
+        hint && (
+          <p id={hintId} className="text-theme-text-muted mt-1 text-xs">
+            {hint}
+          </p>
+        )
       )}
     </div>
   );

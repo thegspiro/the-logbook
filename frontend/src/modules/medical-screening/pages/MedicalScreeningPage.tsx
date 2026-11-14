@@ -14,8 +14,11 @@ import { ScreeningRequirementForm } from '../components/ScreeningRequirementForm
 import { ScreeningRecordForm } from '../components/ScreeningRecordForm';
 import { ComplianceDashboard } from '../components/ComplianceDashboard';
 import { SelfRecordedBadge } from '../components/SelfRecordedBadge';
+import { useCanViewNarrative } from '../hooks/useCanViewNarrative';
+import AdminPageHeader from '../../../components/admin/AdminPageHeader';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { mapServerFieldErrors } from '../../../utils/serverFieldErrors';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { SCREENING_TYPE_LABELS, SCREENING_STATUS_LABELS, SCREENING_STATUS_COLORS } from '../types';
 import type {
@@ -25,6 +28,7 @@ import type {
   ScreeningRequirementUpdate,
   ScreeningRecordCreate,
   ScreeningRecordUpdate,
+  ScreeningSaveOptions,
 } from '../types';
 
 const MEDICAL_SCREENING_TABS = ['requirements', 'records', 'compliance'] as const;
@@ -44,13 +48,21 @@ export const MedicalScreeningPage: React.FC = () => {
   const requestedTab = searchParams.get('tab');
   const activeTab: Tab = MEDICAL_SCREENING_TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : 'requirements';
   const setActiveTab = (tab: Tab) => setSearchParams({ tab });
+  // MS-14: the provider, result summary and notes are clinical narrative,
+  // returned only with medical_screening.view_details (or .manage).
+  const canViewNarrative = useCanViewNarrative();
   const [showRequirementForm, setShowRequirementForm] = useState(false);
   const [editingRequirement, setEditingRequirement] = useState<ScreeningRequirement | null>(null);
   const [showRecordForm, setShowRecordForm] = useState(false);
   const [editingRecord, setEditingRecord] = useState<ScreeningRecord | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'requirement' | 'record'; id: string; name: string } | null>(
-    null
-  );
+  // `subject` is whose record it is: the confirmation must say so, because the
+  // delete cannot be undone and the type alone is the same for every member.
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: 'requirement' | 'record';
+    id: string;
+    name: string;
+    subject?: string | undefined;
+  } | null>(null);
 
   const {
     requirements,
@@ -87,18 +99,22 @@ export const MedicalScreeningPage: React.FC = () => {
   );
 
   const handleSaveRequirement = useCallback(
-    async (data: ScreeningRequirementCreate | ScreeningRequirementUpdate) => {
+    async (data: ScreeningRequirementCreate | ScreeningRequirementUpdate, options?: ScreeningSaveOptions) => {
       try {
         if (editingRequirement) {
           await updateRequirement(editingRequirement.id, data);
-          toast.success('Requirement updated');
+          if (!options?.keepOpen) toast.success('Requirement updated');
         } else {
           await createRequirement(data as ScreeningRequirementCreate);
           toast.success('Requirement created');
         }
+        // A partial save: the form stays open with the refused fields flagged.
+        if (options?.keepOpen) return;
         setShowRequirementForm(false);
         setEditingRequirement(null);
       } catch (err: unknown) {
+        // A validation refusal goes back to the form, which puts it on its field.
+        if (mapServerFieldErrors(err, {})) throw err;
         toast.error(getErrorMessage(err, 'Failed to save requirement'));
       }
     },
@@ -106,18 +122,22 @@ export const MedicalScreeningPage: React.FC = () => {
   );
 
   const handleSaveRecord = useCallback(
-    async (data: ScreeningRecordCreate | ScreeningRecordUpdate) => {
+    async (data: ScreeningRecordCreate | ScreeningRecordUpdate, options?: ScreeningSaveOptions) => {
       try {
         if (editingRecord) {
           await updateRecord(editingRecord.id, data);
-          toast.success('Record updated');
+          if (!options?.keepOpen) toast.success('Record updated');
         } else {
           await createRecord(data as ScreeningRecordCreate);
           toast.success('Record created');
         }
+        // A partial save: the form stays open with the refused fields flagged.
+        if (options?.keepOpen) return;
         setShowRecordForm(false);
         setEditingRecord(null);
       } catch (err: unknown) {
+        // A validation refusal goes back to the form, which puts it on its field.
+        if (mapServerFieldErrors(err, {})) throw err;
         toast.error(getErrorMessage(err, 'Failed to save record'));
       }
     },
@@ -150,42 +170,36 @@ export const MedicalScreeningPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Stethoscope className="text-theme-text-muted h-6 w-6 shrink-0" />
-          <div>
-            <h1 className="text-theme-text-primary text-2xl font-bold">Medical Screening</h1>
-            <p className="text-theme-text-muted text-sm">
-              Set screening requirements, record screenings, and see which ones expire soon.
-            </p>
-          </div>
-        </div>
-        {activeTab === 'requirements' && (
-          <button
-            onClick={() => {
-              setEditingRequirement(null);
-              setShowRequirementForm(true);
-            }}
-            className="btn-primary flex shrink-0 items-center gap-2 self-start text-sm font-medium sm:self-auto"
-          >
-            <Plus className="h-4 w-4" />
-            Add Requirement
-          </button>
-        )}
-        {activeTab === 'records' && (
-          <button
-            onClick={() => {
-              setEditingRecord(null);
-              setShowRecordForm(true);
-            }}
-            className="btn-primary flex shrink-0 items-center gap-2 self-start text-sm font-medium sm:self-auto"
-          >
-            <Plus className="h-4 w-4" />
-            Add Record
-          </button>
-        )}
-      </div>
+      <AdminPageHeader
+        title="Medical Screening"
+        description="Set screening requirements, record screenings, and see which ones expire soon."
+        className="mb-6"
+        actions={
+          activeTab === 'requirements' ? (
+            <button
+              onClick={() => {
+                setEditingRequirement(null);
+                setShowRequirementForm(true);
+              }}
+              className="btn-primary flex shrink-0 items-center gap-2 text-sm font-medium"
+            >
+              <Plus className="h-4 w-4" />
+              Add Requirement
+            </button>
+          ) : activeTab === 'records' ? (
+            <button
+              onClick={() => {
+                setEditingRecord(null);
+                setShowRecordForm(true);
+              }}
+              className="btn-primary flex shrink-0 items-center gap-2 text-sm font-medium"
+            >
+              <Plus className="h-4 w-4" />
+              Add Record
+            </button>
+          ) : undefined
+        }
+      />
 
       {/* Expiring Soon Alert */}
       {expiringWithin30.length > 0 && (
@@ -326,12 +340,21 @@ export const MedicalScreeningPage: React.FC = () => {
                       {SCREENING_STATUS_LABELS[record.status] ?? record.status}
                     </span>
                     {record.self_recorded && <SelfRecordedBadge />}
+                    {!record.requirement_id && (
+                      <span
+                        className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                        title="A record counts only toward the requirement it is linked to. Edit it to link one."
+                      >
+                        Not linked to a requirement
+                      </span>
+                    )}
                   </div>
                   <p className="text-theme-text-muted mt-1 text-xs">
                     {record.user_name ??
                       record.prospect_name ??
                       (record.user_id || record.prospect_id ? 'Unknown' : 'Not linked to a member or prospect')}
-                    {record.provider_name ? ` — ${record.provider_name}` : ''}
+                    {record.requirement_name ? ` — ${record.requirement_name}` : ''}
+                    {canViewNarrative && record.provider_name ? ` — ${record.provider_name}` : ''}
                     {/* Calendar dates, spelled out (W71: these printed as "2026-11-01"). */}
                     {record.scheduled_date ? ` — Scheduled: ${formatCalendarDate(record.scheduled_date)}` : ''}
                     {record.completed_date ? ` — Completed: ${formatCalendarDate(record.completed_date)}` : ''}
@@ -355,6 +378,7 @@ export const MedicalScreeningPage: React.FC = () => {
                         type: 'record',
                         id: record.id,
                         name: SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type,
+                        subject: record.user_name || record.prospect_name || undefined,
                       })
                     }
                     className="text-theme-text-muted touch-target-phone transition-colors hover:text-red-700 dark:hover:text-red-400"
@@ -389,6 +413,7 @@ export const MedicalScreeningPage: React.FC = () => {
         <ScreeningRecordForm
           record={editingRecord}
           requirements={requirements}
+          showNarrative={canViewNarrative}
           onSave={handleSaveRecord}
           onClose={() => {
             setShowRecordForm(false);
@@ -404,7 +429,7 @@ export const MedicalScreeningPage: React.FC = () => {
         message={
           deleteTarget?.type === 'requirement'
             ? `Delete "${deleteTarget.name}"? Screening records filed under it are kept, but will no longer be linked to a requirement. You can't undo this.`
-            : `Delete this ${deleteTarget?.name ?? ''} record? You can't undo this.`
+            : `Delete ${deleteTarget?.subject ? `${deleteTarget.subject}'s` : 'this'} ${deleteTarget?.name ?? ''} record? You can't undo this.`
         }
         confirmLabel={deleteTarget?.type === 'requirement' ? 'Delete Requirement' : 'Delete Record'}
         variant="danger"

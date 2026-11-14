@@ -76,8 +76,9 @@ import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { blankToNull } from '../../utils/formValues';
 import { formatHours } from '../../utils/hoursFormatting';
 import { DriverBlockedDialog } from './DriverBlockedDialog';
-import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
-import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
+import { DRIVER_NOT_QUALIFIED_CODE, SEAT_NOT_GRANTED_CODE } from '../../constants/enums';
+import { PromptDialog } from '../../components/ux/PromptDialog';
+import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus, ShiftDutyType } from '../../constants/enums';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { NfcTagWriter } from '../../components/nfc/NfcTagWriter';
 import { PrintDocumentButton } from '../../components/PrintDocumentButton';
@@ -86,11 +87,13 @@ import { buildShiftCheckInUrl } from '../../constants/nfc';
 import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
 import { BUILTIN_POSITIONS } from '../../modules/scheduling/types/shiftSettings';
 import TimeQuarterHour from '../../components/ux/TimeQuarterHour';
+import { SkeletonText } from '../../components/ux/Skeleton';
 import { AssignmentActions } from './AssignmentActions';
 import { PositionEditor } from './PositionEditor';
 import { CrewBoardSlot } from './CrewBoardSlot';
 import { ShiftCallsSection } from './ShiftCallsSection';
 import { ShiftCloseoutWizard } from './ShiftCloseoutWizard';
+import TraineeReportGate, { type TraineeReportGateState } from '../../modules/scheduling/components/TraineeReportGate';
 import { displayNameOf } from '../../utils/memberName';
 import { useConfirm } from '../../contexts/ConfirmContext';
 
@@ -180,7 +183,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   // (mirrors the backend's per-shift authority). Editing/deleting the shift
   // record itself still requires scheduling.manage.
   const isShiftOfficer = !!(shift.shift_officer_id && user?.id && String(shift.shift_officer_id) === String(user.id));
-  const canAssign = checkPermission('scheduling.assign') || canManage || isShiftOfficer;
+  // Not `|| canManage`: creating, editing and removing an assignment require
+  // scheduling.assign or being the shift officer, and scheduling.manage implies
+  // neither, so a manage-only officer was offered a form the server refused.
+  const canAssign = checkPermission('scheduling.assign') || isShiftOfficer;
   // Filling the roster is not fitting out the rig: the officer who prints the
   // QR card may still not be the one who mounts the truck's NFC tag.
   const canWriteApparatusTags = checkPermission('apparatus.manage_nfc_tags');
@@ -275,6 +281,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const [passDownNotes, setPassDownNotes] = useState('');
   const [overrideChecks, setOverrideChecks] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
+  const [reportGate, setReportGate] = useState<TraineeReportGateState>({ blocked: false, override: false, reason: '' });
   const [handoff, setHandoff] = useState<{ shift_date: string | null; pass_down_notes: string } | null>(null);
   const [showReopenConfirm, setShowReopenConfirm] = useState(false);
   const [reopenReason, setReopenReason] = useState('');
@@ -829,7 +836,15 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     setPendingFlag('bulkAssigning', false);
   };
 
-  const handleAssign = async () => {
+  /**
+   * LB-SCHED-004: the seat is one of the department's own and nothing grants
+   * it. A scheduling manager is offered the officer override (owner decision,
+   * 2026-11-01) with a required reason the server notes and audits; anyone
+   * else sees the refusal, which says how to grant the seat.
+   */
+  const [seatOverride, setSeatOverride] = useState<{ message: string } | null>(null);
+
+  const handleAssign = async (overrideReason?: string) => {
     if (!assignForm.user_id) {
       toast.error('Select a member');
       return;
@@ -842,7 +857,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
         is_training: assignForm.is_training,
         training_program_id: assignForm.is_training ? assignForm.training_program_id || undefined : undefined,
         training_evaluator_id: assignForm.is_training ? assignForm.training_evaluator_id || undefined : undefined,
+        ...(overrideReason ? { override_seat_eligibility: true, override_reason: overrideReason } : {}),
       });
+      setSeatOverride(null);
       toast.success('Member assigned');
       surfaceAssignmentWarnings(res);
       setShowAssignForm(false);
@@ -857,6 +874,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       await refreshAssignments();
       onRefresh?.();
     } catch (err) {
+      const appError = toAppError(err);
+      if (appError.code === SEAT_NOT_GRANTED_CODE && canManage && !overrideReason) {
+        setSeatOverride({ message: appError.message });
+        return;
+      }
+      setSeatOverride(null);
       handleAssignmentError(err, 'Failed to assign member', assignForm.user_id, memberName(assignForm.user_id));
     } finally {
       setPendingFlag('assigning', false);
@@ -943,10 +966,20 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       const entries = Object.entries(manualHours)
         .map(([uid, val]) => ({ user_id: uid, hours: parseFloat(val) }))
         .filter((e) => e.hours > 0 && !isNaN(e.hours));
-      const opts: { override_incomplete_checks?: boolean; override_reason?: string; pass_down_notes?: string } = {};
+      const opts: {
+        override_incomplete_checks?: boolean;
+        override_reason?: string;
+        override_missing_reports?: boolean;
+        report_override_reason?: string;
+        pass_down_notes?: string;
+      } = {};
       if (overrideChecks) {
         opts.override_incomplete_checks = true;
         if (overrideReason.trim()) opts.override_reason = overrideReason.trim();
+      }
+      if (reportGate.override) {
+        opts.override_missing_reports = true;
+        opts.report_override_reason = reportGate.reason;
       }
 
       if (passDownNotes.trim()) opts.pass_down_notes = passDownNotes.trim();
@@ -1013,8 +1046,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
    * have accepted. The override is offered, not demanded.
    */
   const overrideBlocked =
-    requireEndOfShiftChecks &&
-    ((hasIncompleteEquipmentChecks && !overrideChecks) || (overrideChecks && overrideReason.trim().length === 0));
+    (requireEndOfShiftChecks &&
+      ((hasIncompleteEquipmentChecks && !overrideChecks) || (overrideChecks && overrideReason.trim().length === 0))) ||
+    reportGate.blocked;
 
   /**
    * What Escape means here, handed to `useDialog` via DialogPanel rather than
@@ -1380,6 +1414,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   {platoonsEnabled && shift.platoon && (
                     <span className="mt-1.5 inline-block rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">
                       Platoon {shift.platoon}
+                    </span>
+                  )}
+                  {shift.duty_type === ShiftDutyType.ON_CALL && (
+                    <span className="mt-1.5 ml-1 inline-block rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-800 dark:text-sky-300">
+                      On call (recall)
                     </span>
                   )}
                 </div>
@@ -1900,6 +1939,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     />
                   </div>
 
+                  <TraineeReportGate shiftId={shift.id} onChange={setReportGate} />
+
                   {/* Enforcement ON: block, or override with a logged reason.
                       Also offered when the status could not be read — the server
                       is the authority and may refuse, and without the control
@@ -2222,8 +2263,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 {(() => {
                   const target = hasApparatusPositions ? apparatusPositions.length : (shift.min_staffing ?? 0);
                   const filled = activeAssignments.length;
-                  const isFull = target > 0 && filled >= target;
-                  const isShort = target > 0 && filled < target;
+                  // Until the roster has loaded, `filled` counts the empty
+                  // array the panel starts with: the card read "0 assigned"
+                  // in short-staffed amber on every opening, then jumped to
+                  // the real figure. Neither colour is claimed until it is
+                  // known.
+                  const isFull = !loading && target > 0 && filled >= target;
+                  const isShort = !loading && target > 0 && filled < target;
                   return (
                     <div
                       className={`flex items-center gap-3 rounded-lg p-3 ${
@@ -2240,8 +2286,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       <div>
                         <p className="text-theme-text-muted text-xs">Crew</p>
                         <p className="text-theme-text-primary text-sm font-medium">
-                          {filled} assigned
-                          {target > 0 && <span className="text-theme-text-muted"> / {target} positions</span>}
+                          {loading ? (
+                            <>
+                              <SkeletonText className="w-24" />
+                              <span className="sr-only">Loading crew…</span>
+                            </>
+                          ) : (
+                            <>
+                              {filled} assigned
+                              {target > 0 && <span className="text-theme-text-muted"> / {target} positions</span>}
+                            </>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -2408,7 +2463,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       >
                         <UserPlus className="h-3.5 w-3.5" aria-hidden="true" /> Assign someone
                       </button>
-                      {openPositions.length > 1 && (
+                      {/* Not until the roster has loaded: before then every seat
+                          reads as open, so the label overstated the gap and the
+                          form it opens offered seats already taken. */}
+                      {!loading && openPositions.length > 1 && (
                         <button
                           onClick={openBulkAssign}
                           className="flex items-center gap-1 rounded-lg border border-violet-500/20 px-2.5 py-1.5 text-xs text-violet-600 transition-colors hover:bg-violet-500/10 dark:text-violet-400"
@@ -2931,7 +2989,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               </div>
 
               {/* QR Code for apparatus check-in (officers) */}
-              {canAssign && shift.apparatus_id && (
+              {(canAssign || canManage) && shift.apparatus_id && (
                 <div>
                   <button
                     onClick={() => setShowQR(!showQR)}
@@ -2975,7 +3033,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               )}
 
               {/* Declined / Removed Members (admin visibility) */}
-              {canAssign && inactiveAssignments.length > 0 && (
+              {(canAssign || canManage) && inactiveAssignments.length > 0 && (
                 <div className="opacity-60">
                   <h3 className="text-theme-text-muted mb-2 text-xs font-medium tracking-wide uppercase">
                     Declined / Removed ({inactiveAssignments.length})
@@ -3161,6 +3219,23 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           </DialogPanel>
         </div>
       </DialogPortal>
+
+      <PromptDialog
+        isOpen={seatOverride !== null}
+        onClose={() => setSeatOverride(null)}
+        onSubmit={(reason) => void handleAssign(reason)}
+        title="Seat by officer override?"
+        message={seatOverride?.message ?? ''}
+        label="Reason"
+        placeholder="e.g. Only rope-qualified member on tonight"
+        required
+        multiline
+        hint="Saved on the assignment and in the audit log."
+        confirmLabel="Assign anyway"
+        cancelLabel="Keep the seat open"
+        confirmVariant="warning"
+        loading={pending.assigning}
+      />
 
       {driverBlock && (
         <DriverBlockedDialog

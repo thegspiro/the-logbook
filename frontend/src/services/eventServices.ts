@@ -10,6 +10,7 @@ import type {
   Event,
   EventAttendee,
   EventCancel,
+  EventPostpone,
   EventCreate,
   EventListItem,
   EventStats,
@@ -148,6 +149,14 @@ export const eventService = {
    */
   async cancelEvent(eventId: string, cancelData: EventCancel): Promise<Event> {
     const response = await api.post<Event>(`/events/${eventId}/cancel`, cancelData);
+    return response.data;
+  },
+
+  /**
+   * Postpone an event to a new time: clears its check-ins, keeps its RSVPs
+   */
+  async postponeEvent(eventId: string, data: EventPostpone): Promise<Event> {
+    const response = await api.post<Event>(`/events/${eventId}/postpone`, data);
     return response.data;
   },
 
@@ -1005,6 +1014,12 @@ export interface InventoryCategory {
   updated_at: string;
   /** Active items filed here. Sent by the medical category list only. */
   item_count?: number | null;
+  /**
+   * Another active category under the same parent (and on the same page) has
+   * this name. Only duplicates stored before names were checked can be in this
+   * state; the category lists set it so an officer can rename one.
+   */
+  duplicate_name?: boolean;
 }
 
 /** A truck position whose stock is assumed at its target, because no crew has counted it. */

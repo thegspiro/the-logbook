@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
 from app.core.permissions import (
+    POSITION_KINDS,
     default_positions_for,
     describe_invalid_permission_grants,
     get_rank_default_permissions,
@@ -23,6 +24,7 @@ from app.core.permissions import (
     permission_matches,
     permission_matches_any,
 )
+from app.models.member_position_term import note_position_actor, sync_position_terms
 from app.models.user import Organization, Role, User, user_roles
 from app.services.admin_continuity_service import (
     assert_positions_retain_administrator,
@@ -112,6 +114,7 @@ class RoleManagementService:
                 "is_system": role.is_system,
                 "priority": role.priority,
                 "mirrors_rank": role.mirrors_rank,
+                "kind": role.kind or "office",
                 "created_at": role.created_at,
                 "updated_at": role.updated_at,
             }
@@ -169,6 +172,7 @@ class RoleManagementService:
         description: Optional[str] = None,
         priority: int = 0,
         is_system: bool = False,
+        kind: str = "office",
         audit_username: Optional[str] = None,
         audit_ip_address: Optional[str] = None,
         audit_user_agent: Optional[str] = None,
@@ -211,6 +215,17 @@ class RoleManagementService:
         if invalid:
             raise ValueError(describe_invalid_permission_grants(invalid))
 
+        if kind not in POSITION_KINDS or kind == "system":
+            # Mirrors update_role's check: a position is an office or a
+            # committee through this surface. "system" is reserved for the
+            # platform's own seeded rows (`initialize_default_roles` builds
+            # those directly, never through this method), so a future caller
+            # cannot mint a fake "system" position by calling create_role.
+            raise ValueError(
+                f"Unknown position kind '{kind}'. Expected one of: "
+                f"{', '.join(k for k in POSITION_KINDS if k != 'system')}."
+            )
+
         # Create role
         role = Role(
             id=str(uuid4()),
@@ -221,6 +236,7 @@ class RoleManagementService:
             permissions=permissions,
             is_system=is_system,
             priority=priority,
+            kind=kind,
         )
 
         db.add(role)
@@ -300,6 +316,7 @@ class RoleManagementService:
         description: Optional[str] = None,
         permissions: Optional[List[str]] = None,
         priority: Optional[int] = None,
+        kind: Optional[str] = None,
         audit_username: Optional[str] = None,
         audit_ip_address: Optional[str] = None,
         audit_user_agent: Optional[str] = None,
@@ -346,6 +363,10 @@ class RoleManagementService:
         # Its stable slug remains the identifier used for baseline assignment and
         # permission resolution.
         if role.is_system:
+            if kind is not None and kind != role.kind:
+                # A seeded committee stays a committee and a rank mirror stays
+                # the platform's: the kind is what the registry says it is.
+                raise ValueError("Cannot change the kind of a system position")
             if name is not None:
                 if role.slug != "member":
                     raise ValueError("Cannot rename this system position")
@@ -400,6 +421,14 @@ class RoleManagementService:
             if priority is not None:
                 changes["priority"] = {"old": role.priority, "new": priority}
                 role.priority = priority
+            if kind is not None and kind != role.kind:
+                if kind not in POSITION_KINDS or kind == "system":
+                    raise ValueError(
+                        "A position is an office or a committee; 'system' is "
+                        "reserved for the platform's own."
+                    )
+                changes["kind"] = {"old": role.kind, "new": kind}
+                role.kind = kind
 
         if changes:
             try:
@@ -498,7 +527,10 @@ class RoleManagementService:
             db, organization_id, str(role_id), role_name
         )
 
-        # Delete role (cascade will remove user_roles entries)
+        # Delete role (cascade will remove user_roles entries). The flush hook
+        # in member_position_term closes the holders' open terms first, naming
+        # whoever deleted it as the one who ended them.
+        note_position_actor(db, deleted_by)
         await db.delete(role)
         try:
             await db.flush()
@@ -572,6 +604,9 @@ class RoleManagementService:
             description=new_description or f"Clone of {source.name}",
             priority=source.priority or 0,
             is_system=False,  # Cloned roles are never system roles
+            # A copy of a committee is a committee; a copy of anything the
+            # platform owns is an ordinary office.
+            kind=source.kind if source.kind == "committee" else "office",
         )
 
     # ============================================
@@ -672,6 +707,7 @@ class RoleManagementService:
                 assigned_by=assigned_by,
             )
         )
+        await sync_position_terms(db, [(user_id, role_id)], actor_id=assigned_by)
         # Get role name for audit
         role = await db.execute(select(Role.name).where(Role.id == str(role_id)))
         role_name = role.scalar()
@@ -749,6 +785,7 @@ class RoleManagementService:
         )
         if rows_affected(result) == 0:
             return False  # Wasn't assigned
+        await sync_position_terms(db, [(user_id, role_id)], actor_id=removed_by)
 
         # Audit log
         try:
@@ -882,6 +919,10 @@ class RoleManagementService:
                     for role_id in to_add
                 ],
             )
+        # Core statements above, so the flush hook cannot see them.
+        await sync_position_terms(
+            db, [(user_id, rid) for rid in to_add | to_remove], actor_id=set_by
+        )
 
         # Audit log the bulk change
         if to_add or to_remove:
@@ -999,6 +1040,7 @@ class RoleManagementService:
                 permissions=role_def["permissions"],
                 is_system=role_def["is_system"],
                 priority=role_def["priority"],
+                kind=role_def.get("kind", "office"),
             )
 
             db.add(role)

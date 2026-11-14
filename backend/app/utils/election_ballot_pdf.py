@@ -31,10 +31,10 @@ from reportlab.platypus import (
     SimpleDocTemplate,
     Spacer,
     Table,
-    TableStyle,
 )
 
 from app.utils.election_pdf_style import (
+    BOTTOM_MARGIN,
     CONTENT_WIDTH,
     GRID,
     INK,
@@ -47,6 +47,7 @@ from app.utils.election_pdf_style import (
     page_of_footer,
     panel,
 )
+from app.utils.pdf_fonts import BODY_FONT, BOLD_FONT, body_table_style
 
 _MARK_COL = 0.6 * inch
 # A ranked race prints one mark column per rank. Below this name width a
@@ -119,7 +120,7 @@ def _contest(
             Table(
                 rows,
                 colWidths=[_MARK_COL, CONTENT_WIDTH - _MARK_COL],
-                style=TableStyle(
+                style=body_table_style(
                     [
                         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                         ("ALIGN", (0, 0), (0, -1), "CENTER"),
@@ -163,7 +164,7 @@ def _ranked_grid(labels: List[Paragraph], styles: Dict[str, ParagraphStyle]) -> 
         rows,
         colWidths=[CONTENT_WIDTH - columns * _RANK_COL] + [_RANK_COL] * columns,
         repeatRows=1,
-        style=TableStyle(
+        style=body_table_style(
             [
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("ALIGN", (1, 0), (-1, -1), "CENTER"),
@@ -216,9 +217,11 @@ def render_printable_ballot_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> B
         buf = BytesIO()
         doc = SimpleDocTemplate(
             buf,
+            # The canvas otherwise declares Helvetica, never embedded, on every page.
+            initialFontName=BODY_FONT,
             pagesize=letter,
             topMargin=VERTICAL_MARGIN,
-            bottomMargin=VERTICAL_MARGIN,
+            bottomMargin=BOTTOM_MARGIN,
             leftMargin=SIDE_MARGIN,
             rightMargin=SIDE_MARGIN,
             title="Official Ballot",
@@ -257,7 +260,7 @@ def _story(data: Dict[str, Any], meta: Dict[str, Any]) -> List[Any]:
     styles["rank_header"] = ParagraphStyle(
         "BallotRankHeader",
         parent=styles["panel"],
-        fontName="Helvetica-Bold",
+        fontName=BOLD_FONT,
         fontSize=9,
         leading=11,
         alignment=1,

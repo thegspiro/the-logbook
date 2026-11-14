@@ -424,6 +424,23 @@ class TestNominationsAnnouncement(TestNominationSetup):
         assert not kwargs.get("bcc_emails")
         assert kwargs["subject"].startswith("Nominations Open:")
 
+    async def test_the_announcement_names_its_category_in_the_tab(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        """W50-80: the mail's tab strip printed no category at all."""
+        org_id, user1_id, _user2_id = setup_org_and_users
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        svc = ElectionService(db_session)
+        await svc.open_nominations(uuid.UUID(election_id), uuid.UUID(org_id))
+
+        send_email = self._accept_all()
+        with patch(
+            "app.services.email_service.EmailService.send_email", new=send_email
+        ):
+            await svc.announce_nominations_open(election_id, org_id, user1_id)
+
+        assert "Nominations open" in send_email.await_args.kwargs["html_body"]
+
     async def test_opening_nominations_does_not_send_inline(
         self, db_session: AsyncSession, setup_org_and_users
     ):

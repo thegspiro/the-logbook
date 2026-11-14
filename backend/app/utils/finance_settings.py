@@ -21,6 +21,26 @@ of these defaults.
     over one mistyped setting (Pitfall #19, "read free-form JSON
     defensively").
 
+``dual_approval_thresholds``
+    Per request type (owner decision, 2026-11-01): ``purchase_request``,
+    ``check_request`` and ``expense_report``, each in whole dollars. A type
+    whose value is absent, ``null`` or malformed follows
+    ``dual_approval_threshold`` above, so a department that never sets one
+    keeps exactly the single figure it had; ``0`` turns the rule off for that
+    type alone. ``FinanceSettings.threshold_for`` is the one place a type's
+    figure is worked out.
+
+``second_approver_position``
+    The slug of the position (the office) that must give the second approval
+    on a request held by the threshold (owner decision, 2026-11-01). Absent or
+    blank: any ``finance.approve`` holder other than the first approver may,
+    as before. Set: the request completes only once two different people have
+    approved it **and** one of them holds this position, so a request the
+    office has not yet approved waits for a holder of it. A slug that names no
+    position fails closed: nobody holds it, the request stays waiting, and the
+    settings screen says the position no longer exists. Saving a slug the
+    department does not have is refused.
+
 ``substantiation_mode`` and ``substantiation_days``
     The accountable-plan deadline for expense reports: a line submitted more
     than ``substantiation_days`` after it was incurred is late. The mode is
@@ -56,19 +76,41 @@ of these defaults.
     way as the dues accounts (``PUT /finance/export/advance-accounts``). An
     export carrying an advance, a report that settles one or a return is
     refused while either is blank.
+
+``advance_return_method``
+    How the return deadline of a cash advance is worked out, under the two
+    IRS safe harbors of Treas. Reg. 1.62-2(g)(2) (owner decision,
+    2026-11-01): ``fixed_date`` (the default, and the only method before
+    2026-11-06) gives 120 days from the check; ``periodic_statement`` gives
+    120 days from the first quarterly statement after it.
+    ``app/services/cash_advances.py`` holds the rules. An advance takes the
+    method in force when its check is issued and keeps it, so changing this
+    moves no deadline already running. Absent or unreadable is
+    ``fixed_date``: what every department had before the setting existed.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.finance import ApprovalEntityType
 from app.models.user import Organization
 
 FINANCE_SETTINGS_KEY = "finance"
 DUAL_APPROVAL_THRESHOLD_KEY = "dual_approval_threshold"
+DUAL_APPROVAL_THRESHOLDS_KEY = "dual_approval_thresholds"
+SECOND_APPROVER_POSITION_KEY = "second_approver_position"
+
+# The request types a dual-approval threshold applies to, in the order the
+# settings screen lists them.
+DUAL_APPROVAL_TYPES = (
+    ApprovalEntityType.PURCHASE_REQUEST.value,
+    ApprovalEntityType.CHECK_REQUEST.value,
+    ApprovalEntityType.EXPENSE_REPORT.value,
+)
 SUBSTANTIATION_MODE_KEY = "substantiation_mode"
 SUBSTANTIATION_DAYS_KEY = "substantiation_days"
 
@@ -86,6 +128,11 @@ QB_DUES_INCOME_KEY = "qb_dues_income_account"
 QB_DUES_DEPOSIT_KEY = "qb_dues_deposit_account"
 QB_ADVANCES_KEY = "qb_advances_account"
 QB_ADVANCES_CASH_KEY = "qb_advances_cash_account"
+ADVANCE_RETURN_METHOD_KEY = "advance_return_method"
+
+ADVANCE_FIXED_DATE = "fixed_date"
+ADVANCE_PERIODIC_STATEMENT = "periodic_statement"
+ADVANCE_RETURN_METHODS = (ADVANCE_FIXED_DATE, ADVANCE_PERIODIC_STATEMENT)
 
 # The IRS safe harbor for substantiating an expense "within a reasonable time"
 # under an accountable plan (Treas. Reg. 1.62-2(g)(2)).
@@ -102,6 +149,35 @@ class FinanceSettings:
     substantiation_mode: str = SUBSTANTIATION_OFF
     substantiation_days: int = MAX_SUBSTANTIATION_DAYS
     fund_overspend_mode: str = FUND_OVERSPEND_WARN
+    # Per request type: whole dollars, 0 for "off for this type", or None
+    # (absent) for "follows dual_approval_threshold".
+    dual_approval_type_overrides: dict[str, Optional[int]] = field(default_factory=dict)
+    second_approver_position: Optional[str] = None
+    advance_return_method: str = ADVANCE_FIXED_DATE
+
+    def threshold_for(self, entity_type: Any) -> Optional[Decimal]:
+        """The dual-approval threshold in force for one request type.
+
+        Every reader asks this (the approval hold, the route preview and
+        ``GET /finance/settings``), so the screen and the approval path cannot
+        disagree about a type (CLAUDE.md pitfall #29).
+        """
+        key = getattr(entity_type, "value", entity_type)
+        override = self.dual_approval_type_overrides.get(key)
+        if override is None:
+            return self.dual_approval_threshold
+        return Decimal(override) if override > 0 else None
+
+
+def _whole_dollars(raw: Any, minimum: int) -> Optional[int]:
+    # bool is an int subclass; a stray ``true`` must not read as $1.
+    if (
+        isinstance(raw, int)
+        and not isinstance(raw, bool)
+        and minimum <= raw <= MAX_DUAL_APPROVAL_THRESHOLD
+    ):
+        return raw
+    return None
 
 
 def finance_settings_in(settings: Any) -> FinanceSettings:
@@ -110,15 +186,18 @@ def finance_settings_in(settings: Any) -> FinanceSettings:
     if not isinstance(section, dict):
         section = {}
 
-    raw = section.get(DUAL_APPROVAL_THRESHOLD_KEY)
-    threshold: Optional[Decimal] = None
-    # bool is an int subclass; a stray ``true`` must not read as $1.
-    if (
-        isinstance(raw, int)
-        and not isinstance(raw, bool)
-        and 0 < raw <= MAX_DUAL_APPROVAL_THRESHOLD
-    ):
-        threshold = Decimal(raw)
+    whole = _whole_dollars(section.get(DUAL_APPROVAL_THRESHOLD_KEY), 1)
+    threshold = Decimal(whole) if whole is not None else None
+
+    per_type = section.get(DUAL_APPROVAL_THRESHOLDS_KEY)
+    if not isinstance(per_type, dict):
+        per_type = {}
+    overrides: dict[str, Optional[int]] = {
+        key: _whole_dollars(per_type.get(key), 0) for key in DUAL_APPROVAL_TYPES
+    }
+
+    office = section.get(SECOND_APPROVER_POSITION_KEY)
+    office = office.strip() if isinstance(office, str) else ""
 
     mode = section.get(SUBSTANTIATION_MODE_KEY)
     if mode not in SUBSTANTIATION_MODES:
@@ -133,11 +212,17 @@ def finance_settings_in(settings: Any) -> FinanceSettings:
     fund_mode = section.get(FUND_OVERSPEND_MODE_KEY)
     if fund_mode not in FUND_OVERSPEND_MODES:
         fund_mode = FUND_OVERSPEND_WARN
+    advance_method = section.get(ADVANCE_RETURN_METHOD_KEY)
+    if advance_method not in ADVANCE_RETURN_METHODS:
+        advance_method = ADVANCE_FIXED_DATE
     return FinanceSettings(
         dual_approval_threshold=threshold,
         substantiation_mode=mode,
         substantiation_days=days,
         fund_overspend_mode=fund_mode,
+        dual_approval_type_overrides=overrides,
+        second_approver_position=office or None,
+        advance_return_method=advance_method,
     )
 
 
@@ -174,3 +259,74 @@ def advance_accounts(settings: Any) -> tuple[str, str]:
     advances, blank where unset."""
     advances, cash = _qb_accounts(settings, QB_ADVANCES_KEY, QB_ADVANCES_CASH_KEY)
     return advances, cash
+
+
+# ---------------------------------------------------------------------------
+# Budget-request deadline reminders (owner decision, 2026-11-01)
+# ---------------------------------------------------------------------------
+#
+# ``budget_request_reminder_days``
+#     The days before a draft year's request deadline on which line owners who
+#     still owe a request are reminded: a list of whole days, 0 (the deadline
+#     day itself) to 60, at most five. Absent or malformed reads as ``[7, 1]``,
+#     the schedule every department had before the setting existed, so an
+#     upgrade changes nothing (Pitfall #19: absence means current behaviour,
+#     never "off"). An empty list is a department turning the reminder off.
+#
+# ``budget_request_bell_notices``
+#     Whether each reminder also puts an entry in the owner's notification
+#     bell. Off when absent: the emails are the channel of record (Pitfall
+#     #18) and were the only one before the setting.
+#
+# Bookkeeping rather than a control on the finance officers, so the finance
+# office sets them (``PUT /finance/settings/budget-request-reminders``,
+# ``finance.manage``), as it does the QuickBooks accounts above.
+
+BUDGET_REQUEST_REMINDER_DAYS_KEY = "budget_request_reminder_days"
+BUDGET_REQUEST_BELL_KEY = "budget_request_bell_notices"
+DEFAULT_BUDGET_REQUEST_REMINDER_DAYS = (7, 1)
+MAX_BUDGET_REQUEST_REMINDER_DAYS = 60
+MAX_BUDGET_REQUEST_REMINDERS = 5
+
+
+@dataclass(frozen=True)
+class BudgetRequestReminderSettings:
+    # Most distant first, without repeats.
+    offsets_days: tuple[int, ...] = DEFAULT_BUDGET_REQUEST_REMINDER_DAYS
+    bell_notices: bool = False
+    # False when the department has chosen its own schedule.
+    is_default: bool = True
+
+
+def valid_reminder_day(raw: Any) -> bool:
+    return (
+        isinstance(raw, int)
+        and not isinstance(raw, bool)
+        and 0 <= raw <= MAX_BUDGET_REQUEST_REMINDER_DAYS
+    )
+
+
+def budget_request_reminders_in(settings: Any) -> BudgetRequestReminderSettings:
+    """Resolve the reminder schedule out of an organization's settings JSON.
+
+    Read by the scheduled reminder and reported by the settings endpoint, so
+    the screen shows what the task will do (Pitfall #29). A malformed list is
+    ignored whole rather than filtered: half of a schedule somebody typed is
+    not a schedule anybody chose.
+    """
+    section = settings.get(FINANCE_SETTINGS_KEY) if isinstance(settings, dict) else None
+    if not isinstance(section, dict):
+        section = {}
+    bell = section.get(BUDGET_REQUEST_BELL_KEY) is True
+    raw = section.get(BUDGET_REQUEST_REMINDER_DAYS_KEY)
+    if (
+        isinstance(raw, list)
+        and len(raw) <= MAX_BUDGET_REQUEST_REMINDERS
+        and all(valid_reminder_day(day) for day in raw)
+    ):
+        return BudgetRequestReminderSettings(
+            offsets_days=tuple(sorted(set(raw), reverse=True)),
+            bell_notices=bell,
+            is_default=False,
+        )
+    return BudgetRequestReminderSettings(bell_notices=bell)
