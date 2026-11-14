@@ -224,7 +224,7 @@ Manage on the same order showed the same lines in a Delivery panel, at
 1280×900 and at 390×844 with no sideways overflow. No console errors and no
 failed API calls.
 
-### W67b-4 — MED — An order's status can be moved anywhere, including backwards and to Cancelled — OPEN
+### W67b-4 — MED — An order's status can be moved anywhere, including backwards and to Cancelled — ✅ FIXED (2026-11-14)
 
 **Did:** as `quartermaster`, through `POST /store/orders/{id}/status`, took
 ORD-2026-0002 Paid → Fulfilled → Awaiting payment → Cancelled.
@@ -243,15 +243,78 @@ ORD-2026-0002 Paid → Fulfilled → Awaiting payment → Cancelled.
 
 **Read from code:** setting the same status again re-sends the status email.
 
-**Fix (not applied):**
+**Owner decision (2026-11-14):** backward moves are allowed only as
+fulfilment corrections. The alternatives were "forward only" and "any move,
+guard contradictions".
 
-- an allowed-transition table;
-- Cancelled routed through `cancel_order`;
-- a same-status call treated as a no-op.
+**Fix:** `update_order_status` in `storefront_service.py`, which the single
+and bulk endpoints share, now applies these rules:
 
-Existing tests call `update_order_status(CANCELLED)` as a supported path:
-`test_storefront_service.py`, `test_storefront_reconciliation.py`. So the
-change needs an owner nod.
+- **Forward moves** are allowed as before, payment gate included.
+- **Backward moves** are allowed only among Ordered / Ready for pickup /
+  Fulfilled. Leaving Fulfilled clears `fulfilled_at`, `fulfilled_by` and each
+  item's `fulfilled_quantity`.
+- **No move back into Submitted, Awaiting payment or Paid,** which follow the
+  payment ledger. A settled order cannot be set to Submitted or Awaiting
+  payment either.
+- **The same status again** is a no-op: no timeline event and no email.
+- **Cancelled is still accepted,** but is routed to `cancel_order`, so it
+  records the date, the reason (the status note) and the cancellation
+  notice. Existing callers and tests that cancel this way keep working.
+
+The rules live in `_STATUS_STAGE`, `_FULFILMENT_STAGES` and
+`_status_transition_error`, and are documented under "Order lifecycle" in
+`docs/STOREFRONT_MODULE.md`.
+
+**Lock handling in bulk updates:** a bulk move to Paid now rolls back after
+a refused order, releasing that order's row lock rather than carrying it
+into the next, as `bulk_mark_paid` does. The rollback is limited to Paid,
+the only target that locks. A first version rolled back on every refusal.
+That made `test_bulk_fulfill_reports_who_was_held_back` fail, and it would
+have crashed `record_vendor_order`, which uses its window object after
+calling the bulk update.
+
+**Tests:** `TestOrderStatusTransitions` in `tests/test_storefront_service.py`
+has seven cases:
+
+- the same status is a no-op;
+- Cancelled through the route is a real cancellation;
+- no move back into a payment state;
+- a settled order cannot be marked Awaiting payment;
+- a fulfilment correction clears the fulfilled stamps;
+- bulk skips and reports a refused move;
+- bulk to Paid goes on past a refused order.
+
+Each failed against the old service. 571 storefront, payment, locking and
+separation-of-duties tests pass.
+
+**Re-driven** on the review install, restarted onto the new code:
+
+1. As `member2`, placed ORD-2026-0008; as `quartermaster`, marked it paid.
+2. In Manage, Fulfilled was accepted.
+3. Awaiting payment was refused. The toast read "This order is already
+   settled, so it cannot be marked awaiting payment", and the badge stayed
+   Fulfilled.
+4. Ready for pickup was accepted, with `fulfilledAt` null, the item's
+   fulfilled quantity 0 and the payment still Paid.
+5. Through the API:
+   - the same status again added no timeline event (4 before, 4 after);
+   - Paid was refused with 400 ("An order cannot move back from ready for
+     pickup to paid…");
+   - Cancelled with the note "Duplicate order" set `cancelledAt` and stored
+     that note as the reason.
+
+The only failed request was the deliberate refusal.
+
+**Still open, related:**
+
+- The dialog's status list still offers every status, including moves the
+  server now refuses; a refused move shows its reason. Filtering the list
+  would re-implement the rule in the browser (CLAUDE.md Pitfall #29). The
+  clean fix is for the API to report each order's allowed moves.
+- `record_vendor_order` still moves Ready for pickup orders back to Ordered
+  (W67b-13). Under these rules that is a permitted correction, so W67b-13's
+  fix is to advance only orders before Ordered.
 
 ### W67b-5 — MED — Admins have no way to cancel an order on screen — ✅ FIXED (2026-11-14)
 
@@ -451,9 +514,9 @@ install sends no email.
 
 ## Completion gate
 
-The review itself changed no code. The W67b-3 and W67b-5 fixes of 2026-11-14
-are the only code changes. The figures below are for the tree with both
-applied:
+The review itself changed no code. The W67b-3, W67b-5 (frontend) and W67b-4
+(backend) fixes of 2026-11-14 are the only code changes. The figures below are
+for the tree with all three applied:
 
 | Check                    | Result                                                                                                                                   |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -462,4 +525,4 @@ applied:
 | prettier --check         | clean on the changed files                                                                                                               |
 | frontend tests (touched) | `src/modules/storefront`: 247 passed; 8 new (4 for W67b-3, 4 for W67b-5), each seen to fail first                                        |
 | integrity suites         | dialog scroll, dialog dismiss, touch target, hover reveal and the stylesheet suites: all passed (313 in total with the storefront tests) |
-| backend                  | not run; no backend file changed                                                                                                         |
+| backend                  | flake8, black, isort clean on the changed files; mypy ratchet 0 errors; 571 storefront, payment, locking and SoD tests pass              |

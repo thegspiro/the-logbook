@@ -192,11 +192,13 @@ Fixed 2026-11-14:
   cancels through the existing endpoint, with a reason and a confirmation
   that names any money already recorded. A cancelled order then offers
   Refund and nothing the server refuses.
+- W67b-4 (MED): order status could move anywhere. Owner decision: backward
+  moves only as fulfilment corrections (Ordered / Ready / Fulfilled), never
+  back into a payment stage. The same status is a no-op, and Cancelled goes
+  through the real cancel.
 
 Open:
 
-- W67b-4 (MED): order status can move backwards, or to Cancelled without
-  the cancel record;
 - W67b-6 (MED): sizes can be priced below zero;
 - W67b-7 (MED): overpayment is accepted;
 - W67b-8 (LOW): refund is one tap and always refunds everything;
@@ -209,8 +211,9 @@ Read from code, not driven: W67b-11 to W67b-17 (window lifecycle, vendor
 order, payment reports and notification gaps). Details in
 [`W67b-department-store-follow-up.md`](./W67b-department-store-follow-up.md).
 
-Gate for the W67b-3 and W67b-5 fixes: typecheck and lint clean, and 313
-storefront and integrity tests pass.
+Gate for the W67b-3, -4 and -5 fixes: typecheck, lint, flake8, black, isort
+and the mypy ratchet clean; 313 frontend storefront and integrity tests and 571
+backend storefront, payment, locking and SoD tests pass.
 
 ### W09 second pass — Import members from a spreadsheet — 2026-11-10
 

@@ -154,6 +154,25 @@ been ordered from the vendor yet, and a shirt can be sitting on the shelf ready
 for pickup while the member still owes for it. Collapsing them into one status
 would force a false ordering on two independent things.
 
+**Which status changes staff can make** (owner decision, W67b-4, 2026-11-14).
+`POST /store/orders/{id}/status` and its bulk sibling apply these rules:
+
+- **Forward moves** are allowed, subject to the payment policy's gate.
+- **Backward moves** are corrections, allowed only among `ordered`,
+  `ready_for_pickup` and `fulfilled`. Leaving `fulfilled` clears the
+  fulfilled date, who fulfilled it and each item's fulfilled quantity.
+- **`submitted`, `awaiting_payment` and `paid`** describe money, so an order
+  never moves back into them. Nor can a settled order be set to `submitted`
+  or `awaiting_payment`.
+- **Setting the status an order already has** does nothing: no timeline entry
+  and no email.
+- **`cancelled`** is still accepted, but goes through the cancel path, so the
+  order gets its cancel date, reason, cancellation notice and timeline entry.
+  A cancelled order cannot change status.
+
+A refused move answers 400 with the reason. The bulk endpoint skips the order
+and reports why.
+
 `pending_verification` exists because a member can _report_ having sent
 payment. That is a claim, not a receipt — it moves the order into a queue for
 somebody to confirm, and never marks it paid on its own.
