@@ -101,4 +101,60 @@ describe('ItemEditor', () => {
       ['Shifts', ['Shifts worked']],
     ]);
   });
+
+  it('says which values a scoring rule leaves without a suggestion', () => {
+    const sources: EvaluationDataSource[] = [
+      {
+        key: 'training.hours',
+        label: 'Training hours',
+        unit: 'hours',
+        module: 'training',
+        description: '',
+        scoreable: true,
+      },
+    ];
+    const item: TemplateItem = {
+      ...newItem('Training', []),
+      data_block: {
+        source: 'training.hours',
+        scoring_rule: {
+          bands: [
+            { min: 0, max: 10, score: 2 },
+            { min: 20, max: null, score: 4 },
+          ],
+        },
+      },
+    };
+    render(<Harness initial={item} sources={sources} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('No rating is suggested for values from 10 up to 20.');
+  });
+
+  it('says nothing when the bands cover every value', () => {
+    const sources: EvaluationDataSource[] = [
+      {
+        key: 'training.hours',
+        label: 'Training hours',
+        unit: 'hours',
+        module: 'training',
+        description: '',
+        scoreable: true,
+      },
+    ];
+    const item: TemplateItem = {
+      ...newItem('Training', []),
+      data_block: {
+        source: 'training.hours',
+        scoring_rule: {
+          bands: [
+            { min: 0, max: 10, score: 2 },
+            { min: 10, max: null, score: 4 },
+          ],
+        },
+      },
+    };
+    render(<Harness initial={item} sources={sources} />);
+
+    expect(screen.queryByText(/no rating is suggested/i)).not.toBeInTheDocument();
+  });
 });

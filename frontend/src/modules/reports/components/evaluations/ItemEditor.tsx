@@ -16,7 +16,7 @@ import {
   type ScoreBand,
   type TemplateItem,
 } from '../../types/evaluations';
-import { groupDataSources, replaceAt, withTool } from '../../utils/evaluationTemplate';
+import { describeGap, groupDataSources, replaceAt, scoringGaps, withTool } from '../../utils/evaluationTemplate';
 
 interface ItemEditorProps {
   item: TemplateItem;
@@ -59,6 +59,7 @@ export const ItemEditor: React.FC<ItemEditorProps> = ({
   const isScored = SCORED_TOOLS.includes(item.tool);
   const source = dataSources.find((s) => s.key === item.data_block?.source);
   const bands = item.data_block?.scoring_rule?.bands ?? [];
+  const gaps = source ? scoringGaps(bands, source.unit) : [];
 
   // The textarea keeps what the user typed — a trailing blank line after
   // Enter, a space mid-word — while the item always holds the parsed list.
@@ -446,6 +447,12 @@ export const ItemEditor: React.FC<ItemEditorProps> = ({
             </button>
             {source.unit === 'percent' && (
               <p className="text-theme-text-muted mt-1 text-xs">Values are percentages (0–100).</p>
+            )}
+            {gaps.length > 0 && (
+              <p role="status" className="mt-2 text-xs text-amber-900 dark:text-amber-200">
+                No rating is suggested for values {gaps.map((gap) => describeGap(gap, source.unit)).join(', ')}. A
+                member whose figure falls there is rated without a suggestion.
+              </p>
             )}
           </fieldset>
         )}

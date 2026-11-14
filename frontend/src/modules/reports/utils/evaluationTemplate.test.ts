@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   defaultLevels,
+  describeGap,
   describeMatching,
   groupDataSources,
   insertStep,
   makeKey,
   moveItem,
   newItem,
+  scoringGaps,
   weightTotal,
   withTool,
 } from './evaluationTemplate';
@@ -171,5 +173,68 @@ describe('groupDataSources', () => {
     expect(groupDataSources([source('apparatus.runs', 'apparatus')])).toEqual([
       { label: 'Other', sources: [source('apparatus.runs', 'apparatus')] },
     ]);
+  });
+});
+
+describe('scoringGaps', () => {
+  it('finds nothing when the bands run from the floor to an open top', () => {
+    expect(
+      scoringGaps(
+        [
+          { min: 0, max: 10, score: 1 },
+          { min: 10, max: null, score: 3 },
+        ],
+        'hours'
+      )
+    ).toEqual([]);
+  });
+
+  it('finds a hole between bands, below the first, and above a closed top', () => {
+    expect(
+      scoringGaps(
+        [
+          { min: 20, max: 30, score: 4 },
+          { min: 5, max: 10, score: 2 },
+        ],
+        'hours'
+      )
+    ).toEqual([
+      { from: 0, to: 5 },
+      { from: 10, to: 20 },
+      { from: 30, to: null },
+    ]);
+  });
+
+  it('leaves exactly 100% out of a percentage band that stops at 100', () => {
+    expect(scoringGaps([{ min: 0, max: 100, score: 3 }], 'percent')).toEqual([{ from: 100, to: null }]);
+    expect(scoringGaps([{ min: 0, max: 101, score: 3 }], 'percent')).toEqual([]);
+  });
+
+  it('starts a rating at 1, the lowest a rating average can be', () => {
+    expect(scoringGaps([{ min: 1, max: null, score: 3 }], 'rating')).toEqual([]);
+  });
+
+  it('reports no gap where bands overlap, which the backend refuses on its own', () => {
+    expect(
+      scoringGaps(
+        [
+          { min: 0, max: 20, score: 1 },
+          { min: 10, max: null, score: 3 },
+        ],
+        'count'
+      )
+    ).toEqual([]);
+  });
+
+  it('has nothing to say about a rule with no bands', () => {
+    expect(scoringGaps([], 'hours')).toEqual([]);
+  });
+});
+
+describe('describeGap', () => {
+  it('words each kind of gap', () => {
+    expect(describeGap({ from: 0, to: 5 }, 'hours')).toBe('below 5');
+    expect(describeGap({ from: 10, to: 20 }, 'count')).toBe('from 10 up to 20');
+    expect(describeGap({ from: 100, to: null }, 'percent')).toBe('100% and above');
   });
 });
