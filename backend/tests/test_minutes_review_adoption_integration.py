@@ -14,7 +14,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.email_template import EmailTemplate, EmailTemplateType
 from app.models.meeting import Meeting, MeetingStatus, MeetingType
+from app.services.email_service import EmailService
 from tests.minutes_support import (
     _approve,
     _client,
@@ -60,10 +62,15 @@ async def _adopt(
 class TestCirculationEmail:
     @pytest.fixture
     def mailer(self, monkeypatch):
+        # Only the send is replaced: the body is rendered from the template.
         sender = MagicMock()
         sender.send_email = AsyncMock(return_value=(1, 0))
+
+        class Recording(EmailService):
+            send_email = sender.send_email
+
         monkeypatch.setattr(
-            "app.services.minutes_notifications.EmailService", lambda: sender
+            "app.services.minutes_notifications.EmailService", Recording
         )
         return sender
 
@@ -135,6 +142,88 @@ class TestCirculationEmail:
         body = self.circulation_mails(mailer)[0].kwargs["html_body"]
         assert "<script>x</script>" not in body
         assert "&lt;script&gt;" in body
+
+    # The department's templates (2026-11-14).
+
+    @staticmethod
+    async def _store(w: _World, template_type, *, subject="Edited", active=True):
+        w.db.add(
+            EmailTemplate(
+                id=str(uuid.uuid4()),
+                organization_id=w.org_id,
+                template_type=template_type,
+                name=f"Edited {template_type.value}",
+                subject=subject,
+                html_body="<p>Edited body</p>{{action_items_html}}",
+                text_body="Edited text",
+                is_active=active,
+            )
+        )
+        await w.db.flush()
+
+    async def test_circulation_uses_the_departments_wording(
+        self, world: _World, mailer
+    ):
+        await self._store(
+            world,
+            EmailTemplateType.MINUTES_CIRCULATED,
+            subject="Please read: {{minutes_title}}",
+        )
+        minutes = await _create(world, title="March Meeting")
+        await _circulate(world, minutes["id"])
+
+        mails = self.circulation_mails(mailer)
+        assert mails
+        assert {c.kwargs["subject"] for c in mails} == {"Please read: March Meeting"}
+
+    async def test_switched_off_circulation_sends_nothing_and_still_circulates(
+        self, world: _World, mailer
+    ):
+        await self._store(world, EmailTemplateType.MINUTES_CIRCULATED, active=False)
+        minutes = await _create(world)
+        await _circulate(world, minutes["id"])
+
+        assert self.circulation_mails(mailer) == []
+        async with _client(world.db, world.secretary) as c:
+            assert (await c.get(f"/minutes/{minutes['id']}")).json()[
+                "status"
+            ] == "submitted"
+
+    async def test_an_assignee_is_emailed_their_items_from_the_template(
+        self, world: _World, mailer
+    ):
+        minutes = await _create(
+            world,
+            items=[{"description": "Order hose", "assignee_id": str(world.member.id)}],
+        )
+        await _circulate(world, minutes["id"])
+        await _adopt(world, minutes["id"])
+
+        (mail,) = [
+            c
+            for c in mailer.send_email.await_args_list
+            if c.kwargs["template_type"] == "minutes_action_items"
+        ]
+        assert mail.kwargs["to_emails"] == [world.member.email]
+        assert "<li>Order hose</li>" in mail.kwargs["html_body"]
+        assert "- Order hose" in mail.kwargs["text_body"]
+
+    async def test_switched_off_assignment_email_sends_nothing(
+        self, world: _World, mailer
+    ):
+        await self._store(world, EmailTemplateType.MINUTES_ACTION_ITEMS, active=False)
+        minutes = await _create(
+            world,
+            items=[{"description": "Order hose", "assignee_id": str(world.member.id)}],
+        )
+        await _circulate(world, minutes["id"])
+        await _adopt(world, minutes["id"])
+
+        assert [
+            c
+            for c in mailer.send_email.await_args_list
+            if c.kwargs["template_type"] == "minutes_action_items"
+        ] == []
 
 
 # ── Review: what members see, and suggestions ────────────────────────

@@ -42,7 +42,7 @@ from app.utils.hours import meets_required_hours
 from app.utils.org_timezone import resolve_org_today
 
 if TYPE_CHECKING:
-    from app.services.training_compliance import HeldSession
+    from app.services.training_compliance import EvaluationCredits, HeldSession
 
 # What a requirement check reads from a completed record; the preload that
 # serves a page of checks loads these and nothing else.
@@ -589,6 +589,7 @@ class TrainingService:
         shift_dates: Optional[Sequence[date]] = None,
         held_sessions: Optional[Mapping[str, Sequence["HeldSession"]]] = None,
         course_catalog: Optional[Mapping[str, Tuple[str, Optional[str]]]] = None,
+        evaluation_credits: Optional["EvaluationCredits"] = None,
     ) -> Dict:
         """Evaluate a member's progress on a single requirement (in-memory).
 
@@ -616,6 +617,10 @@ class TrainingService:
         *held_sessions* is ``training_compliance.load_held_sessions`` for the
         requirements being evaluated, required for a SESSION_ATTENDANCE one.
 
+        *evaluation_credits* is the member's entry in
+        ``training_compliance.load_evaluation_credits``, required for an
+        evaluated-shifts, transports or refusals requirement.
+
         *course_catalog* maps a course id to its ``(name, code)``, for the
         courses COURSES requirements name (``load_required_course_catalog``).
         With it, a COURSES requirement also reports ``course_checklist``: each
@@ -632,8 +637,11 @@ class TrainingService:
             certification_record_matches,
             counts_shift_attendance,
             credited_shifts_in_window,
+            evaluation_credits_in_window,
+            evaluation_target,
             fallback_record_matches,
             hours_record_counts,
+            is_evaluation_credited,
             monthly_counts,
             monthly_hours,
             next_window_opens,
@@ -819,6 +827,28 @@ class TrainingService:
             completed_value = float(len(type_matched))
             counted_dates = [r.completion_date for r in type_matched]
             base_required = float(req.required_calls or 0)
+            adjusted_required = base_required
+
+            if base_required > 0 and start_date and end_date and _waivers:
+                adjusted_required, waived_months, active_months = adjust_required(
+                    base_required,
+                    start_date,
+                    end_date,
+                    _waivers,
+                    str(req.id),
+                    period_months=get_rolling_period_months(req),
+                    whole_units=True,
+                )
+
+        # ---- Evaluated shifts, transports, refusals: training_compliance's
+        # count of visible shift evaluations, never records ----
+        elif is_evaluation_credited(req):
+            evaluated = evaluation_credits_in_window(req, evaluation_credits, today)
+            completed_value = float(sum(units for _, units in evaluated))
+            # One date per unit, so the monthly breakdown counts transports
+            # and refusals, not evaluations.
+            counted_dates = [d for d, units in evaluated for _ in range(int(units))]
+            base_required = evaluation_target(req)
             adjusted_required = base_required
 
             if base_required > 0 and start_date and end_date and _waivers:
@@ -1078,6 +1108,7 @@ class TrainingService:
         join_date: Optional[date] = None,
         shift_dates: Optional[Sequence[date]] = None,
         held_sessions: Optional[Mapping[str, Sequence["HeldSession"]]] = None,
+        evaluation_credits: Optional["EvaluationCredits"] = None,
     ) -> RequirementProgress:
         """
         Check a user's progress towards a specific requirement.
@@ -1103,7 +1134,9 @@ class TrainingService:
         *shift_dates* is the member's worked shifts, full history
         (``load_credited_shift_dates(..., full_history=True)``), for a
         requirement counted from attendance; without them the check loads
-        them itself.
+        them itself. *evaluation_credits*, the member's entry in
+        ``load_evaluation_credits``, is the same for a requirement counted
+        from shift evaluations.
         """
         from app.models.training import RequirementType
         from app.services.training_compliance import (
@@ -1112,10 +1145,14 @@ class TrainingService:
             certification_record_matches,
             counts_shift_attendance,
             credited_shifts_in_window,
+            evaluation_credits_in_window,
+            evaluation_target,
             fallback_record_matches,
             hours_record_counts,
+            is_evaluation_credited,
             is_session_attendance,
             load_credited_shift_dates,
+            load_evaluation_credits,
             recency_cutoff,
             rolling_hours_has_no_deadline,
         )
@@ -1159,6 +1196,17 @@ class TrainingService:
                     full_history=True,
                 )
             ).get(str(user_id), [])
+        if evaluation_credits is None and is_evaluation_credited(requirement):
+            evaluation_credits = (
+                await load_evaluation_credits(
+                    self.db,
+                    str(organization_id),
+                    [str(user_id)],
+                    [requirement],
+                    today,
+                    True,
+                )
+            ).get(str(user_id), {})
         start_date, end_date = self._get_date_window(requirement, today)
         # Every RequirementProgress this method returns carries this, so
         # consumers (the MCP `get_member_requirements_progress` tool
@@ -1505,6 +1553,38 @@ class TrainingService:
                 else prorated_to_zero or completed_value > 0
             )
 
+        # ---- Evaluated shifts, transports, refusals: visible shift
+        # evaluations (training_compliance), never records ----
+        elif is_evaluation_credited(requirement):
+            completed_value = float(
+                sum(
+                    units
+                    for _, units in evaluation_credits_in_window(
+                        requirement, evaluation_credits, today
+                    )
+                )
+            )
+            required_value = evaluation_target(requirement)
+
+            # Adjust for waivers
+            if required_value > 0 and start_date and end_date and waivers:
+                required_value, _, _ = adjust_required(
+                    required_value,
+                    start_date,
+                    end_date,
+                    waivers,
+                    str(requirement.id),
+                    period_months=get_rolling_period_months(requirement),
+                    whole_units=True,
+                )
+                prorated_to_zero = required_value <= 0
+
+            is_complete = (
+                completed_value >= required_value
+                if required_value > 0
+                else prorated_to_zero or completed_value > 0
+            )
+
         # ---- CALLS requirements ----
         elif req_type == RequirementType.CALLS.value:
             records = await _windowed()
@@ -1722,6 +1802,7 @@ class TrainingService:
         # the latest shift however old.
         from app.services.training_compliance import (
             load_credited_shift_dates,
+            load_evaluation_credits,
             load_held_sessions,
         )
 
@@ -1736,6 +1817,16 @@ class TrainingService:
                 full_history=True,
             )
         ).get(str(user_id), [])
+        evaluation_credits = (
+            await load_evaluation_credits(
+                self.db,
+                str(organization_id),
+                [str(user_id)],
+                requirements,
+                today,
+                True,
+            )
+        ).get(str(user_id), {})
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), requirements
         )
@@ -1752,6 +1843,7 @@ class TrainingService:
                 join_date=join_date,
                 shift_dates=shift_dates,
                 held_sessions=held_sessions,
+                evaluation_credits=evaluation_credits,
             )
             progress_list.append(progress)
         return progress_list

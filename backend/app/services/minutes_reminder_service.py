@@ -36,6 +36,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings as app_settings
 from app.core.permissions import permission_matches
+from app.models.email_template import EmailTemplateType
 from app.models.minute import (
     ActionItem,
     MeetingMinutes,
@@ -49,8 +50,7 @@ from app.services.email_policy import (
     member_receives_email,
     recipients_for,
 )
-from app.services.email_service import EmailService, wrap_email_body
-from app.services.email_theme import ACCENT_INDIGO, action
+from app.services.email_service import EmailService
 from app.utils.minutes_settings import (
     LAST_DIGEST_KEY,
     MINUTES_SETTINGS_KEY,
@@ -229,45 +229,55 @@ class MinutesReminderService:
         )
         soon = sorted((r for r in reminders if r.kind == DUE_SOON), key=lambda r: r.due)
 
-        def rows(group: List[_Reminder]) -> str:
+        def line(r: _Reminder) -> str:
             return (
-                "<ul>"
-                + "".join(
-                    f"<li>{html.escape(r.item.description)} — due "
-                    f"{r.due.strftime('%b %d, %Y')} "
-                    f"({html.escape(r.item.minutes.title)})</li>"
-                    for r in group
-                )
-                + "</ul>"
+                f"{r.item.description} — due {r.due.strftime('%b %d, %Y')} "
+                f"({r.item.minutes.title})"
             )
 
         body = ""
-        if overdue:
-            body += f"<p><strong>Overdue ({len(overdue)})</strong></p>{rows(overdue)}"
-        if soon:
-            body += f"<p><strong>Due soon ({len(soon)})</strong></p>{rows(soon)}"
+        text_parts = []
+        for heading, group in (("Overdue", overdue), ("Due soon", soon)):
+            if not group:
+                continue
+            body += (
+                f"<p><strong>{heading} ({len(group)})</strong></p><ul>"
+                + "".join(f"<li>{html.escape(line(r))}</li>" for r in group)
+                + "</ul>"
+            )
+            text_parts.append(
+                f"{heading} ({len(group)})\n" + "\n".join(f"- {line(r)}" for r in group)
+            )
         link = f"{app_settings.FRONTEND_URL.rstrip('/')}/action-items"
-        body += action(html.escape(link), "View your action items")
 
         if overdue:
-            subject = f"{len(overdue)} overdue action item(s)" + (
+            summary = f"{len(overdue)} overdue action item(s)" + (
                 f" and {len(soon)} due soon" if soon else ""
             )
         else:
-            subject = f"{len(soon)} action item(s) due soon"
+            summary = f"{len(soon)} action item(s) due soon"
         try:
-            sent, _failed = await EmailService().send_email(
+            email_service = EmailService(organization)
+            rendered = await email_service.render_notice(
+                EmailTemplateType.MINUTES_ACTION_ITEM_REMINDER,
+                {
+                    "reminder_summary": summary,
+                    "action_items_html": body,
+                    "action_items_text": "\n\n".join(text_parts),
+                    "action_items_url": link,
+                },
+                self.db,
+            )
+            if rendered is None:
+                return False
+            subject, html_body, text_body = rendered
+            sent, _failed = await email_service.send_email(
                 to_emails=[member.email],
                 subject=subject,
-                html_body=wrap_email_body(
-                    organization,
-                    "Action item reminder",
-                    body,
-                    header_color=ACCENT_INDIGO,
-                    chip="Meeting minutes",
-                ),
+                html_body=html_body,
+                text_body=text_body,
                 db=self.db,
-                template_type="minutes_action_item_reminder",
+                template_type=EmailTemplateType.MINUTES_ACTION_ITEM_REMINDER.value,
             )
             return bool(sent)
         except Exception as exc:
@@ -333,6 +343,7 @@ class MinutesReminderService:
         more = len(items) - len(shown)
 
         table_rows = ""
+        text_lines = []
         for item in shown:
             due = due_day(item)
             late = due is not None and due < today
@@ -348,11 +359,21 @@ class MinutesReminderService:
                 )
                 + "</td></tr>"
             )
+            due_text = (
+                f"{due.strftime('%b %d, %Y')}{' (overdue)' if late else ''}"
+                if due
+                else "No due date"
+            )
+            text_lines.append(f"- {item.description} — {owner} — {due_text}")
+        if more > 0:
+            text_lines.append(f"…and {more} more.")
         link = f"{app_settings.FRONTEND_URL.rstrip('/')}/action-items"
-        body = (
-            f"<p>{len(items)} action item(s) from adopted minutes are still open"
+        summary = (
+            f"{len(items)} action item(s) from adopted minutes are still open"
             + (f", {len(overdue)} of them overdue" if overdue else "")
-            + ".</p>"
+            + "."
+        )
+        open_items_html = (
             '<table style="width:100%;border-collapse:collapse;margin:16px 0;">'
             '<thead><tr style="background:#f3f4f6;">'
             '<th style="padding:8px 12px;text-align:left;">Item</th>'
@@ -360,25 +381,34 @@ class MinutesReminderService:
             '<th style="padding:8px 12px;text-align:left;">Due</th>'
             f"</tr></thead><tbody>{table_rows}</tbody></table>"
             + (f"<p>…and {more} more.</p>" if more > 0 else "")
-            + action(html.escape(link), "Open the action items")
         )
-        html_body = wrap_email_body(
-            organization,
-            "Open action items",
-            body,
-            header_color=ACCENT_INDIGO,
-            chip="Meeting minutes",
+        email_service = EmailService(organization)
+        # One body for every manager: nothing in it is per member.
+        rendered = await email_service.render_notice(
+            EmailTemplateType.MINUTES_OPEN_ITEMS_DIGEST,
+            {
+                "open_count": str(len(items)),
+                "summary": summary,
+                "open_items_html": open_items_html,
+                "open_items_text": "\n".join(text_lines),
+                "action_items_url": link,
+            },
+            self.db,
         )
+        if rendered is None:
+            return 0
+        subject, html_body, text_body = rendered
 
         sent_total = 0
         for member in recipients:
             try:
-                sent, _failed = await EmailService().send_email(
+                sent, _failed = await email_service.send_email(
                     to_emails=[member.email],
-                    subject=f"Open action items — {len(items)} to follow up",
+                    subject=subject,
                     html_body=html_body,
+                    text_body=text_body,
                     db=self.db,
-                    template_type="minutes_open_items_digest",
+                    template_type=EmailTemplateType.MINUTES_OPEN_ITEMS_DIGEST.value,
                 )
                 sent_total += sent
             except Exception as exc:
