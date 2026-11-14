@@ -99,6 +99,20 @@ describe('SizePreferencesModal', () => {
     await waitFor(() => expect(mockUpsertMy).toHaveBeenCalledTimes(1));
   });
 
+  it('admin mode: starts from a blank, save-ready form when the member has no sizes saved (null)', async () => {
+    mockGetMember.mockResolvedValue(null);
+    const user = userEvent.setup();
+    render(<SizePreferencesModal isOpen onClose={onClose} userId="u-1" memberName="Jane Doe" />);
+
+    expect(await pantWaist()).toHaveValue('');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    const saveButton = screen.getByRole('button', { name: 'Save Sizes' });
+    expect(saveButton).not.toBeDisabled();
+
+    await user.click(saveButton);
+    await waitFor(() => expect(mockUpsertMember).toHaveBeenCalledWith('u-1', expect.any(Object)));
+  });
+
   it('blocks saving after a non-404 load failure, instead of clearing unseen preferences', async () => {
     // Regression test for the bug Codex found on the pass-4 correction round
     // (PR #2422): before this fix, ANY load failure — not just the expected

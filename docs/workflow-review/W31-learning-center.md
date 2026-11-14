@@ -103,15 +103,17 @@ documents, but the browser logs a failed request on a normal first visit.
 Left: answering 200 with an empty body changes a response contract that the
 admin variant shares.
 
-**Fixed:** the member's own endpoint now answers 200 with a `null` body when
-no sizes are saved. `inventoryService.getMySizePreferences` returns `null` for
-that, and for an older backend's 404. `SizePreferencesModal` treats `null` as
-"nothing stored yet", the same blank, save-ready form as the 404. Without that,
-reading fields off `null` would have landed in the load-failure branch, which
-blocks Save. The officer-facing `/members/{user_id}/size-preferences` keeps its
-404, and the dialog still handles it. Covered by
-`backend/tests/test_my_size_preferences_empty.py` (the `null` case failed
-against the old endpoint) and new cases in `SizePreferencesModal.test.tsx` and
+**Fixed:** both size endpoints, the member's own `/my/size-preferences` and
+the quartermaster's `/members/{user_id}/size-preferences`, now answer 200 with
+a `null` body when no sizes are saved. `getMySizePreferences` and
+`getMemberSizePreferences` return `null` for that, and for an older backend's 404. `SizePreferencesModal` treats `null` as "nothing stored yet", the same
+blank, save-ready form as the 404. Without that, reading fields off `null` would
+have landed in the load-failure branch, which blocks Save. The officer
+endpoint's self-or-quartermaster gate still runs first, so a colleague is still
+refused (403), and a member in another department answers `null` like a member
+with none saved, as it answered the same 404 before. Covered by
+`backend/tests/test_my_size_preferences_empty.py` (each `null` case failed
+against the old endpoints) and new cases in `SizePreferencesModal.test.tsx` and
 `inventoryService.test.ts`, which failed against the old dialog and service.
 
 ## Checklist

@@ -697,7 +697,7 @@ POST   /api/v1/inventory/kits/{id}/issue/{user_id}       # Issue kit to member
 
 GET    /api/v1/inventory/my/size-preferences             # Caller's sizes (null when unset)
 PUT    /api/v1/inventory/my/size-preferences             # Upsert caller's sizes
-GET    /api/v1/inventory/members/{user_id}/size-preferences  # A member's sizes (self or inventory.manage)
+GET    /api/v1/inventory/members/{user_id}/size-preferences  # A member's sizes, null when unset (self or inventory.manage)
 PUT    /api/v1/inventory/members/{user_id}/size-preferences  # Upsert a member's sizes (inventory.manage)
 ```
 

@@ -840,6 +840,39 @@ describe('inventoryService', () => {
       expect(mockGet).toHaveBeenCalledWith('/inventory/members/u1/size-preferences');
       expect(result).toEqual(data);
     });
+
+    it('reads a null body as "no sizes saved"', async () => {
+      mockGet.mockResolvedValueOnce({ data: null });
+      await expect(inventoryService.getMemberSizePreferences('u1')).resolves.toBeNull();
+    });
+
+    it('still reads an older backend\'s 404 as "no sizes saved"', async () => {
+      const config = { headers: new AxiosHeaders() };
+      mockGet.mockRejectedValueOnce(
+        new AxiosError('Request failed', '404', config, null, {
+          status: 404,
+          statusText: '',
+          headers: {},
+          config,
+          data: { detail: 'Size preferences not found for this member' },
+        } as never)
+      );
+      await expect(inventoryService.getMemberSizePreferences('u1')).resolves.toBeNull();
+    });
+
+    it('does not hide a refusal or any other failure', async () => {
+      const config = { headers: new AxiosHeaders() };
+      mockGet.mockRejectedValueOnce(
+        new AxiosError('Request failed', '403', config, null, {
+          status: 403,
+          statusText: '',
+          headers: {},
+          config,
+          data: { detail: "Not authorized to view this member's inventory" },
+        } as never)
+      );
+      await expect(inventoryService.getMemberSizePreferences('u1')).rejects.toBeInstanceOf(AxiosError);
+    });
   });
 
   describe('upsertMemberSizePreferences', () => {

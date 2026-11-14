@@ -1547,9 +1547,17 @@ export const inventoryService = {
   },
 
   // Member Size Preferences
-  async getMemberSizePreferences(userId: string): Promise<MemberSizePreferences> {
-    const response = await api.get<MemberSizePreferences>(`/inventory/members/${userId}/size-preferences`);
-    return response.data;
+  /** A member's sizes, read by themselves or a quartermaster, or null when none are saved. */
+  async getMemberSizePreferences(userId: string): Promise<MemberSizePreferences | null> {
+    try {
+      // 200 with a null body when the member has saved none; see getMySizePreferences.
+      const response = await api.get<MemberSizePreferences | null>(`/inventory/members/${userId}/size-preferences`);
+      return response.data ?? null;
+    } catch (err: unknown) {
+      // An older backend answers 404 for the same case during a rolling upgrade.
+      if (err instanceof AxiosError && err.response?.status === 404) return null;
+      throw err;
+    }
   },
 
   async upsertMemberSizePreferences(userId: string, data: MemberSizePreferencesCreate): Promise<MemberSizePreferences> {

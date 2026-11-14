@@ -7493,7 +7493,7 @@ async def issue_kit_to_member(
 
 @router.get(
     "/members/{user_id}/size-preferences",
-    response_model=MemberSizePreferencesResponse,
+    response_model=MemberSizePreferencesResponse | None,
 )
 async def get_member_size_preferences(
     user_id: UUID,
@@ -7501,24 +7501,29 @@ async def get_member_size_preferences(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get a member's size preferences.
+    Get a member's size preferences, or ``null`` if they have none saved.
 
     Members can view their own sizes. Quartermasters (inventory.manage) can
     view any member's, as on the departure clearance route.
 
+    A member with no sizes saved is a normal state, and the quartermaster's
+    sizes dialog asks on every opening: a 404 here logged a failed request on
+    an ordinary visit. A member the caller cannot see (another department's,
+    or no such member) answers ``null`` too, the same answer it gave as a 404
+    before, so nothing about them is revealed.
+
     **Authentication required**
     """
     # INV-9: inventory.view is baseline, so it let any member read a
-    # colleague's uniform measurements.
+    # colleague's uniform measurements. This gate must stay ahead of the
+    # lookup, so a refused caller learns nothing, not even "none saved".
     _require_self_or_quartermaster(user_id, current_user)
     service = InventoryService(db)
     prefs = await service.get_member_size_preferences(
         user_id, current_user.organization_id
     )
     if not prefs:
-        raise HTTPException(
-            status_code=404, detail="Size preferences not found for this member"
-        )
+        return None
     return MemberSizePreferencesResponse.model_validate(prefs)
 
 
@@ -7569,8 +7574,8 @@ async def get_my_size_preferences(
 
     Having no sizes saved is the normal state for a new member, and My Sizes
     asks on every opening: a 404 here logged a failed request on an ordinary
-    first visit. The officer-facing read of another member's sizes keeps its
-    404 for the same case.
+    first visit. The officer-facing read of another member's sizes answers
+    the same way.
 
     **Authentication required**
     """
