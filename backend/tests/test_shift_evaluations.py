@@ -130,6 +130,10 @@ async def _enroll(db, org_id, user, program, status=EnrollmentStatus.ACTIVE):
         user_id=user.id,
         program_id=program.id,
         status=status,
+        # Enrolled well before the scene's shift: a shift counts only toward
+        # programs the member had joined by its date, so an enrollment stamped
+        # now would postdate the shift and drop out of every requirement.
+        enrolled_at=datetime.now(timezone.utc) - timedelta(days=30),
     )
     db.add(enrollment)
     await db.flush()
@@ -179,10 +183,6 @@ async def _scene(db, settings=None) -> Scene:
         db, scene.org_id, "EMT Field Internship", template.id
     )
     scene.enrollment = await _enroll(db, scene.org_id, scene.trainee, scene.program)
-    # Enrolled well before the shift: a shift counts only toward programs the
-    # member had joined by its date.
-    scene.enrollment.enrolled_at = datetime.now(timezone.utc) - timedelta(days=30)
-    await db.flush()
     return scene
 
 
