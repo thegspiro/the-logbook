@@ -16,6 +16,7 @@ import pytest
 
 from app.services import minutes_notifications, minutes_print_data
 from app.services.document_service import DocumentService
+from app.services.email_template_service import EmailTemplateService
 from app.utils.org_timezone import stored_calendar_day
 
 pytestmark = [pytest.mark.unit]
@@ -136,16 +137,19 @@ class TestAssigneeEmail:
         monkeypatch.setattr(
             minutes_notifications, "department_required_kinds", lambda org: set()
         )
-        monkeypatch.setattr(
-            minutes_notifications,
-            "wrap_email_body",
-            lambda org, title, body, **kw: body,
-        )
         send = AsyncMock(return_value=(1, 0))
+
+        # The shipped default, rendered for real: the stored-template lookup
+        # needs a database this test does not have.
+        async def render_notice(template_type, context, _db):
+            return EmailTemplateService.render_default(template_type, context)
+
         monkeypatch.setattr(
             minutes_notifications,
             "EmailService",
-            lambda: SimpleNamespace(send_email=send),
+            lambda organization: SimpleNamespace(
+                send_email=send, render_notice=render_notice
+            ),
         )
 
         sent = await minutes_notifications.notify_action_item_assignees(

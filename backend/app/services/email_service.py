@@ -607,6 +607,28 @@ class EmailService:
             attachments_out=attachments_out,
         )
 
+    async def render_notice(
+        self, template_type: EmailTemplateType, context: Dict[str, Any], db: Any
+    ) -> Optional[Tuple[str, str, Optional[str]]]:
+        """This organization's template for a notice, rendered with *context*.
+
+        The department's stored template when it has one, else the shipped
+        default; ``None`` when the department switched the notice off, which
+        the caller treats as "not sent". For the senders whose bodies moved
+        out of code on 2026-11-14 (elections and minutes), so none of them
+        restates the default it falls back to.
+        """
+        default = EmailTemplateService._default_definition(template_type)
+        return await self._render_unless_switched_off(
+            template_type=template_type,
+            context=context,
+            db=db,
+            organization_id=str(self.organization.id) if self.organization else None,
+            default_subject=default["subject"],
+            default_html=default["html"],
+            default_text=default["text"],
+        )
+
     async def _render_with_fallback(
         self,
         template_type: EmailTemplateType,
