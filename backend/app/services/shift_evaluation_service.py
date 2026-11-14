@@ -774,23 +774,46 @@ class ShiftEvaluationService:
     async def detail(
         self, evaluation: ShiftEvaluation, organization_id: UUID | str
     ) -> ShiftEvaluationDetail:
+        return (await self.details([evaluation], organization_id))[0]
+
+    async def details(
+        self, evaluations: list[ShiftEvaluation], organization_id: UUID | str
+    ) -> list[ShiftEvaluationDetail]:
+        """The detail of each, with the names and preceptor links behind them
+        read once for the whole list."""
+        if not evaluations:
+            return []
         users = await self._users(
-            {str(evaluation.member_id), str(evaluation.evaluator_id or "")},
+            {str(e.member_id) for e in evaluations}
+            | {str(e.evaluator_id) for e in evaluations if e.evaluator_id},
             organization_id,
         )
+        links = {
+            str(link.evaluation_id): link
+            for link in (
+                await self.db.execute(
+                    select(ShiftEvaluationLink).where(
+                        ShiftEvaluationLink.evaluation_id.in_(
+                            [e.id for e in evaluations]
+                        ),
+                        ShiftEvaluationLink.organization_id == str(organization_id),
+                    )
+                )
+            ).scalars()
+        }
+        return [self._detail_from(e, users, links.get(str(e.id))) for e in evaluations]
+
+    @staticmethod
+    def _detail_from(
+        evaluation: ShiftEvaluation,
+        users: dict[str, User],
+        link: Optional[ShiftEvaluationLink],
+    ) -> ShiftEvaluationDetail:
         responses = {
             key: EvaluationItemResponse.model_validate(value)
             for key, value in (evaluation.responses or {}).items()
             if isinstance(value, dict)
         }
-        link = (
-            await self.db.execute(
-                select(ShiftEvaluationLink).where(
-                    ShiftEvaluationLink.evaluation_id == evaluation.id,
-                    ShiftEvaluationLink.organization_id == str(organization_id),
-                )
-            )
-        ).scalar_one_or_none()
         return ShiftEvaluationDetail(
             id=evaluation.id,
             member_id=str(evaluation.member_id),
@@ -1646,13 +1669,16 @@ class ShiftEvaluationService:
         return outstanding[:limit]
 
     async def sync_credit_for_organization(self, organization_id: UUID | str) -> None:
-        """Re-sync every submitted evaluation, after report review is toggled."""
+        """Re-sync after report review is toggled: the department-shift
+        evaluations it decides, not the outside ones, whose visibility follows
+        their logged shift whatever the setting."""
         evaluation_ids = list(
             (
                 await self.db.execute(
                     select(ShiftEvaluation.id).where(
                         ShiftEvaluation.organization_id == str(organization_id),
                         ShiftEvaluation.status == "submitted",
+                        ShiftEvaluation.occasion != EXTERNAL_OCCASION,
                     )
                 )
             ).scalars()
@@ -1679,51 +1705,104 @@ class ShiftEvaluationService:
         self, evaluation: ShiftEvaluation, organization_id: UUID | str
     ) -> bool:
         """Whether the evaluated member may see it, on the shift report's terms."""
-        if evaluation.status != "submitted":
-            return False
-        if (evaluation.occasion or SHIFT_OCCASION) == EXTERNAL_OCCASION:
-            # No report to wait for: the member sees it while the logged
-            # shift it describes still counts.
-            if not evaluation.external_shift_id:
-                return False
-            entry_status = (
-                await self.db.execute(
-                    select(ExternalShiftHours.status).where(
-                        ExternalShiftHours.id == evaluation.external_shift_id,
-                        ExternalShiftHours.organization_id == str(organization_id),
+        return evaluation.id in await self.visible_ids([evaluation], organization_id)
+
+    async def visible_ids(
+        self, evaluations: list[ShiftEvaluation], organization_id: UUID | str
+    ) -> set[str]:
+        """Which of these the evaluated member may see, decided for the whole
+        list at once (a fixed handful of queries however many there are).
+
+        - Outside shift: while the logged shift it describes counts (no report
+          to wait for).
+        - Department shift, report review off: once submitted.
+        - Department shift, review on: once the member's own report on that
+          shift is approved; with no report of their own (a general-form seat,
+          or a department that does not ask trainees for one), once the shift
+          is closed out (owner decision, 2026-11-13). Finalize and reopen
+          re-sync credit through sync_credit_for_shift.
+        """
+        org = str(organization_id)
+        submitted = [e for e in evaluations if e.status == "submitted"]
+        outside = [
+            e
+            for e in submitted
+            if (e.occasion or SHIFT_OCCASION) == EXTERNAL_OCCASION
+            and e.external_shift_id
+        ]
+        department = [
+            e for e in submitted if (e.occasion or SHIFT_OCCASION) != EXTERNAL_OCCASION
+        ]
+        visible: set[str] = set()
+
+        if outside:
+            counted = set(
+                (
+                    await self.db.execute(
+                        select(ExternalShiftHours.id).where(
+                            ExternalShiftHours.id.in_(
+                                {str(e.external_shift_id) for e in outside}
+                            ),
+                            ExternalShiftHours.organization_id == org,
+                            ExternalShiftHours.status
+                            == ExternalShiftHoursStatus.COUNTED.value,
+                        )
                     )
-                )
-            ).scalar_one_or_none()
-            return entry_status == ExternalShiftHoursStatus.COUNTED.value
+                ).scalars()
+            )
+            visible.update(e.id for e in outside if str(e.external_shift_id) in counted)
+
+        if not department:
+            return visible
         config = await self._config(organization_id)
         if not (config and config.report_review_required):
-            return True
-        if not evaluation.shift_id:
-            return False
-        report = (
+            visible.update(e.id for e in department)
+            return visible
+        on_shift = [e for e in department if e.shift_id]
+        if not on_shift:
+            return visible
+        shift_ids = {str(e.shift_id) for e in on_shift}
+        reports: dict[tuple[str, str], str] = {}
+        for shift_id, trainee_id, review_status in (
             await self.db.execute(
-                select(ShiftCompletionReport.review_status).where(
-                    ShiftCompletionReport.shift_id == evaluation.shift_id,
-                    ShiftCompletionReport.trainee_id == evaluation.member_id,
-                    ShiftCompletionReport.organization_id == str(organization_id),
+                select(
+                    ShiftCompletionReport.shift_id,
+                    ShiftCompletionReport.trainee_id,
+                    ShiftCompletionReport.review_status,
+                ).where(
+                    ShiftCompletionReport.shift_id.in_(shift_ids),
+                    ShiftCompletionReport.trainee_id.in_(
+                        {str(e.member_id) for e in on_shift}
+                    ),
+                    ShiftCompletionReport.organization_id == org,
                 )
             )
-        ).first()
-        if report is not None:
-            return report[0] == "approved"
-        # No report of their own to wait for (a general-form seat, or a
-        # department that does not ask trainees for one): visible once the
-        # shift is closed out (owner decision, 2026-11-13). Finalize and
-        # reopen re-sync credit through sync_credit_for_shift.
-        finalized = (
-            await self.db.execute(
-                select(Shift.is_finalized).where(
-                    Shift.id == evaluation.shift_id,
-                    Shift.organization_id == str(organization_id),
-                )
+        ).all():
+            # One report per trainee per shift is the rule; should a second
+            # exist, the first read decides, as the one-at-a-time read did.
+            reports.setdefault(
+                (str(shift_id), str(trainee_id)),
+                getattr(review_status, "value", review_status),
             )
-        ).scalar_one_or_none()
-        return bool(finalized)
+        finalized = set(
+            (
+                await self.db.execute(
+                    select(Shift.id).where(
+                        Shift.id.in_(shift_ids),
+                        Shift.organization_id == org,
+                        Shift.is_finalized.is_(True),
+                    )
+                )
+            ).scalars()
+        )
+        for e in on_shift:
+            key = (str(e.shift_id), str(e.member_id))
+            if key in reports:
+                if reports[key] == "approved":
+                    visible.add(e.id)
+            elif str(e.shift_id) in finalized:
+                visible.add(e.id)
+        return visible
 
     async def list_for_member(
         self,
@@ -1746,11 +1825,8 @@ class ShiftEvaluationService:
         query = query.order_by(ShiftEvaluation.shift_date.desc(), ShiftEvaluation.id)
         evaluations = list((await self.db.execute(query)).scalars())
         if member_view:
-            evaluations = [
-                e
-                for e in evaluations
-                if await self.visible_to_member(e, organization_id)
-            ]
+            visible = await self.visible_ids(evaluations, organization_id)
+            evaluations = [e for e in evaluations if e.id in visible]
         return evaluations
 
     async def averages_by_form(
