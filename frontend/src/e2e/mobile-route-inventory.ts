@@ -871,8 +871,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/inventory/storage-areas',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/storage-areas/print-labels',
@@ -883,14 +883,14 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/inventory/import',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/items',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/items/:id',
@@ -1599,8 +1599,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/inventory/checklists/my',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/admin/checklists',
@@ -1678,38 +1678,38 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/inventory/admin/checklists/reports',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/admin/checklists/catalog-links',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/admin/checklists/supply',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/checklists/apparatus-inventory',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/checklists',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/checklists/log',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/checklists/apparatus/:apparatusId',

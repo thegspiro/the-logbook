@@ -912,9 +912,11 @@
      block, so in a block button an icon stacked above its label from 768px
      up — the store catalog's Edit and Archive drew that way on every tablet.
      Grow to the 44px touch minimum on phones and touch screens only, so
-     mouse-driven desktop button density is untouched. */
+     mouse-driven desktop button density is untouched. The width floor is
+     for a one-word label: "Edit" in a stacked inventory card measured 43px. */
   @media (max-width: 767px), (pointer: coarse) {
     min-height: 44px;
+    min-width: 44px;
   }
 }
 

@@ -787,13 +787,13 @@ const MinutesPage: React.FC = () => {
                     Structured templates for recording meeting minutes with attendees, motions, and votes.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800 dark:text-cyan-400">
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-900 dark:text-cyan-300">
                       Roll Call
                     </span>
-                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800 dark:text-cyan-400">
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-900 dark:text-cyan-300">
                       Motions
                     </span>
-                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800 dark:text-cyan-400">
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-900 dark:text-cyan-300">
                       Votes
                     </span>
                   </div>
@@ -805,13 +805,13 @@ const MinutesPage: React.FC = () => {
                     Track action items from meetings with assignees, due dates, and completion status.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-900 dark:text-green-300">
                       Assignees
                     </span>
-                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-900 dark:text-green-300">
                       Due Dates
                     </span>
-                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-900 dark:text-green-300">
                       Follow-up
                     </span>
                   </div>
@@ -823,10 +823,10 @@ const MinutesPage: React.FC = () => {
                     Search past meetings by title, or by any words in their minutes.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-400">
+                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-900 dark:text-amber-300">
                       Search
                     </span>
-                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-400">
+                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-900 dark:text-amber-300">
                       Publish to Documents
                     </span>
                   </div>

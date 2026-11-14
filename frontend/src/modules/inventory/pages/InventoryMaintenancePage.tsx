@@ -492,7 +492,7 @@ const InventoryMaintenancePage: React.FC = () => {
                       <td data-label="Item Name" className="px-3 py-3">
                         <button
                           onClick={() => void loadHistory(item)}
-                          className="text-theme-text-primary flex items-center gap-1 text-left font-medium hover:underline"
+                          className="text-theme-text-primary touch:min-h-11 flex items-center gap-1 text-left font-medium hover:underline"
                         >
                           {item.name}
                           <ChevronRight className="text-theme-text-muted h-3 w-3" />

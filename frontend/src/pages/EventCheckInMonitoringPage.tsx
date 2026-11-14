@@ -256,7 +256,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
             <div className="text-theme-text-muted text-sm">Last updated: {formatTime(lastUpdated, tz)}</div>
             <div className="mt-1">
               {stats.is_check_in_active ? (
-                <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
+                <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-900 dark:bg-green-500/20 dark:text-green-300">
                   <span className="mr-2 h-2 w-2 animate-pulse rounded-full bg-green-600"></span>
                   Check-In Active
                 </span>

@@ -78,7 +78,7 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
       onClick={() => {
         void exportData();
       }}
-      className="btn-secondary shrink-0 self-start text-sm font-medium text-blue-700 sm:self-auto dark:text-blue-400"
+      className="btn-secondary shrink-0 self-start text-sm font-medium text-blue-900 sm:self-auto dark:text-blue-300"
     >
       Export Data
     </button>

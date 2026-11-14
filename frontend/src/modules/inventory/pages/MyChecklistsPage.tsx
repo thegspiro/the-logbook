@@ -56,7 +56,7 @@ const statusBadge = (status: string) => {
     case 'pass':
       return (
         <span
-          className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"
+          className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-900 dark:bg-green-900/30 dark:text-green-300"
           role="status"
           aria-live="polite"
         >
@@ -69,7 +69,7 @@ const statusBadge = (status: string) => {
     case 'out_of_service':
       return (
         <span
-          className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
+          className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900 dark:bg-red-900/30 dark:text-red-300"
           role="status"
           aria-live="polite"
         >
@@ -92,7 +92,7 @@ const statusBadge = (status: string) => {
     case 'incomplete':
       return (
         <span
-          className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+          className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-900 dark:bg-yellow-900/30 dark:text-yellow-300"
           role="status"
           aria-live="polite"
         >
@@ -126,8 +126,8 @@ const TIMING_SHORT: Record<string, string> = {
 
 const timingBadgeClass = (timing: string | undefined) =>
   timing === 'start_of_shift'
-    ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-400'
-    : 'border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-400';
+    ? 'border-blue-500/20 bg-blue-500/10 text-blue-900 dark:text-blue-300'
+    : 'border-amber-500/20 bg-amber-500/10 text-amber-900 dark:text-amber-300';
 
 const DAY_HEADING_CLASS =
   'bg-theme-bg text-theme-text-primary mobile-header-inset sticky z-10 flex items-baseline gap-2 py-1.5 text-sm font-semibold md:top-0';
@@ -592,7 +592,7 @@ export const MyChecklistsPage: React.FC = () => {
                 <section key={day.key} aria-label={label}>
                   <h3 className={DAY_HEADING_CLASS}>
                     {label}
-                    {overdue && <span className="text-xs font-medium text-red-700 dark:text-red-400">overdue</span>}
+                    {overdue && <span className="text-xs font-medium text-red-900 dark:text-red-300">overdue</span>}
                   </h3>
                   <ul className="border-theme-surface-border bg-theme-surface divide-theme-surface-border divide-y overflow-hidden rounded-lg border">
                     {day.items.map((checklist) => {
@@ -628,7 +628,10 @@ export const MyChecklistsPage: React.FC = () => {
                                 {TIMING_SHORT[checklist.checkTiming] ?? checklist.checkTiming}
                               </span>
                             </div>
-                            <p className="text-theme-text-secondary mt-0.5 truncate text-xs">
+                            {/* Two lines rather than one: on a phone a single truncated line
+                                cut "Medic Unit Daily Readiness…" to its first three words,
+                                which is not enough to tell two checklists apart. */}
+                            <p className="text-theme-text-secondary mt-0.5 line-clamp-2 text-xs break-words">
                               <span>{checklist.templateName}</span>
                               {total > 0 && !isStarted && !isSubmitted && <span> &middot; {total} items</span>}
                             </p>
@@ -861,8 +864,8 @@ export const MyChecklistsPage: React.FC = () => {
                             <span
                               className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
                                 tmpl.checkTiming === 'start_of_shift'
-                                  ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-400'
-                                  : 'border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-400'
+                                  ? 'border-blue-500/20 bg-blue-500/10 text-blue-900 dark:text-blue-300'
+                                  : 'border-amber-500/20 bg-amber-500/10 text-amber-900 dark:text-amber-300'
                               }`}
                             >
                               {TIMING_LABELS[tmpl.checkTiming ?? ''] ?? tmpl.checkTiming}
@@ -909,7 +912,10 @@ const HeaderMenu: React.FC<{ canManage: boolean }> = ({ canManage }) => {
   }, []);
 
   return (
-    <details ref={ref} className="relative sm:hidden" data-testid="checklist-header-menu">
+    // ml-auto: on the narrowest phones the header's primary button takes the
+    // whole row and this wraps under it. Left-aligned there, its right-anchored
+    // menu opened 160px past the screen's left edge.
+    <details ref={ref} className="relative ml-auto sm:hidden" data-testid="checklist-header-menu">
       <summary
         className="btn-icon border-theme-surface-border text-theme-text-secondary list-none rounded-lg border [&::-webkit-details-marker]:hidden"
         aria-label="More checklist pages"

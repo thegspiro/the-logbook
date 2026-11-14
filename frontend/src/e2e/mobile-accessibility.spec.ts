@@ -125,15 +125,17 @@ const ALLOWED_UNDECIDED = [
 ];
 
 const AAA_CONTRAST_BUDGET: Record<string, number> = {
-  '/dashboard': 9,
+  // Down from 9 on 2026-11-13 (SectionError's red-700 and the Log Training
+  // hint moved to AAA). What remains is `text-theme-accent-red`, a shared
+  // token at every "View all" link, which is an app-wide palette decision.
+  '/dashboard': 5,
   '/members/admin': 3,
-  // Both render substantive bodies now that helpers.ts serves them a
-  // correctly shaped payload; before, each measured an empty state.
+  // Renders a substantive body now that helpers.ts serves it a correctly
+  // shaped payload; before, it measured an empty state.
   // 2, not 1: raising the warning badge to amber-800 cleared its AA failure
   // (4.47:1) and left it AAA-only (6.31:1), which is where the other two
   // severity badges already sit. Call sites are held to AA by policy.
   '/admin/audit-log': 2,
-  '/events/1/monitoring': 1,
   // Training Setup's Import Past Training tab, measured the first time it went on the
   // pass. Every node sits on the selected match-strategy card, a red-600/10
   // tint: the option's red-700 title and its muted hint (light), and the
@@ -156,20 +158,16 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // this count. Clearing it is a palette decision for every event screen, not
   // one this settings tab makes on its own.
   '/events/admin?tab=settings': 10,
-  '/scheduling/admin/closeout': 5,
-  '/admin-hours': 2,
-  '/notifications?tab=inbox': 3,
-  '/inventory/admin/checklists': 6,
+  // Both measured the first time the inventory fixtures put rows on them, and
+  // both are `text-theme-text-muted` (slate-600) on a tinted surface rather
+  // than a colour either screen chose: categories' item-count chips sit on
+  // `bg-theme-surface-hover` (6.91:1), and supply's location line, restock
+  // note and lot toggle on an expired item's red-50 card (6.92:1). The status
+  // badges beside them were raised to AAA in the same change. AA-clean, and
+  // short of 7:1 by a hair, like the shared alert-warning token above.
+  '/inventory/admin/categories': 7,
+  '/inventory/admin/checklists/supply': 3,
   '/elections': 3,
-  // The minutes landing as a manager sees it, measured the first time the pass
-  // granted minutes.manage. All eight nodes are its feature tags (Roll Call,
-  // Motions, Votes, Assignees, Due Dates, Follow-up, Search, Publish to
-  // Documents) in the light theme: `text-*-800` on a matching `/10` tint at
-  // 6.5:1, the same shortfall the scheduling settings badges carry below.
-  // AA-clean — this file asserts that at zero — and short of 7:1. The empty
-  // state's Record First Minutes button was a cyan-700 fill at 5.27:1 in every
-  // theme; it is btn-primary now, like the header button beside it.
-  '/minutes': 8,
   // One node: the `alert-warning` heading that tells an officer this ladder
   // decides who votes. `--alert-warning-title` is amber-800 on amber-50 and
   // measures 6.83:1 — AA-clean, AAA short by a hair, and the same shortfall the
@@ -214,11 +212,9 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   '/scheduling/admin/settings/eligibility': 3,
   '/scheduling/admin/settings/notifications': 17,
   '/scheduling/admin/settings/shift-reports': 2,
-  '/admin/analytics': 1,
-  '/grants': 12,
-  '/reports': 8,
-  '/integrations': 3,
-  '/admin/public-portal': 2,
+  // Down from 12 on 2026-11-13: the three left are the hub's "View all"
+  // links in `text-theme-accent-red`, the shared token /dashboard carries.
+  '/grants': 3,
   '/onboarding/start': 5,
 };
 

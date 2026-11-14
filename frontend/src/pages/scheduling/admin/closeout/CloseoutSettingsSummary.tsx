@@ -181,7 +181,7 @@ const CloseoutSettingsSummary: React.FC = () => {
           <div key={row.label} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
             <dt className="min-w-0">
               <span className="text-theme-text-muted text-xs">{row.label}</span>
-              {row.hint && <span className="text-theme-text-muted block text-[11px] opacity-80">{row.hint}</span>}
+              {row.hint && <span className="text-theme-text-muted block text-[11px]">{row.hint}</span>}
             </dt>
             <dd className="text-theme-text-primary shrink-0 text-xs font-medium">
               {row.href ? (

@@ -222,7 +222,7 @@ interface SectionErrorProps {
 
 const SectionError: React.FC<SectionErrorProps> = ({ message, source, busy, onRetry }) => {
   return (
-    <div role="alert" className="flex items-center gap-3 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+    <div role="alert" className="flex items-center gap-3 px-4 py-3 text-sm text-red-900 dark:text-red-300">
       <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span className="min-w-0 flex-1">{message}</span>
       {/* mobile-touch-target, not a hand-set height: at min-h-9 this rendered
@@ -1987,7 +1987,7 @@ const Dashboard: React.FC = () => {
                     </span>
                     <span className="min-w-0">
                       <span className="block text-base font-bold">Log Training</span>
-                      <span className="mt-0.5 block truncate text-[13px] text-red-100">Record a course or hours</span>
+                      <span className="mt-0.5 block truncate text-[13px] text-red-50">Record a course or hours</span>
                     </span>
                   </button>
 
