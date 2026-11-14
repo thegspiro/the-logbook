@@ -33,6 +33,7 @@ import {
   enqueueSkillsUpdate,
   getCachedSkillTemplate,
   getCachedSkillTest,
+  drainedVersionFor,
   getOwnSkillsPending,
   mintTestId,
   rememberCandidate,
@@ -398,7 +399,20 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     const waiting = await getOwnSkillsPending(id);
     if (!waiting) {
       try {
-        const test = await skillsTestingService.updateTest(id, data);
+        // A drain may have sent this test's last queued save, and taken the
+        // entry away, before its result reached this screen — the service
+        // worker reports by message. Saving against the version the screen
+        // loaded would then be refused as a conflict with nobody. The version
+        // that save produced is this device's own write, so the screen's
+        // scoring, which is at least as new, can be saved against it. Only a
+        // drain sets it: a version some other load saw may carry another
+        // examiner's write, and is never adopted (see recordDrainedVersion).
+        const drained = data.expected_version !== undefined ? await drainedVersionFor(id) : null;
+        const body =
+          drained !== null && data.expected_version !== undefined && drained > data.expected_version
+            ? { ...data, expected_version: drained }
+            : data;
+        const test = await skillsTestingService.updateTest(id, body);
         set({ currentTest: test });
         cacheIfExamining(test);
         return test;
@@ -708,7 +722,11 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     // the next save is made against it, keep the local scoring (it is at least
     // as new as what was sent), and re-read what is still waiting.
     set({
-      currentTest: test ? applyPending({ ...current, version: test.version }, entry) : current,
+      // Never backwards: a save made after the drain, against the version it
+      // produced, can land before the drain's own report does.
+      currentTest: test
+        ? applyPending({ ...current, version: Math.max(current.version, test.version) }, entry)
+        : current,
       offlineState: offlineStateFor(testId, entry),
     });
   },
