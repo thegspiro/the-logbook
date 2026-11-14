@@ -1,7 +1,7 @@
 import { formatCalendarDate } from './dateFormatting';
 import type { RequirementDetail } from '../types/training';
 
-type MonthlyHours = NonNullable<RequirementDetail['monthly_hours']>;
+type MonthlyHours = ReadonlyArray<Pick<NonNullable<RequirementDetail['monthly_hours']>[number], 'month'>>;
 
 /** "Nov" or "Nov 2025" for a "YYYY-MM" month key. */
 export const monthLabel = (month: string, withYear = false): string =>

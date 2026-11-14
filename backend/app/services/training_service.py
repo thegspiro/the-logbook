@@ -634,6 +634,7 @@ class TrainingService:
             credited_shifts_in_window,
             fallback_record_matches,
             hours_record_counts,
+            monthly_counts,
             monthly_hours,
             next_window_opens,
             recency_cutoff,
@@ -695,6 +696,9 @@ class TrainingService:
         cert_expired = False
         blocks_activity = False
         month_breakdown: Optional[List[Dict]] = None
+        count_breakdown: Optional[List[Dict]] = None
+        # Dates of the shifts or calls counted, for their monthly breakdown.
+        counted_dates: Optional[List[date]] = None
         course_checklist: Optional[List[Dict]] = None
         attendance_met: Optional[bool] = None
         attendance_overridden = False
@@ -779,13 +783,10 @@ class TrainingService:
         # ---- SHIFTS ----
         elif req_type == RequirementType.SHIFTS.value:
             if counts_shift_attendance(req):
-                completed_value = float(
-                    len(
-                        credited_shifts_in_window(
-                            req, _require_shift_dates(req, shift_dates), today
-                        )
-                    )
+                counted_dates = credited_shifts_in_window(
+                    req, _require_shift_dates(req, shift_dates), today
                 )
+                completed_value = float(len(counted_dates))
             else:
                 type_matched = windowed
                 if req.training_type:
@@ -793,6 +794,7 @@ class TrainingService:
                         r for r in windowed if r.training_type == req.training_type
                     ]
                 completed_value = float(len(type_matched))
+                counted_dates = [r.completion_date for r in type_matched]
             base_required = float(req.required_shifts or 0)
             adjusted_required = base_required
 
@@ -815,6 +817,7 @@ class TrainingService:
                     r for r in windowed if r.training_type == req.training_type
                 ]
             completed_value = float(len(type_matched))
+            counted_dates = [r.completion_date for r in type_matched]
             base_required = float(req.required_calls or 0)
             adjusted_required = base_required
 
@@ -859,6 +862,16 @@ class TrainingService:
                     completed_value = 1
             else:
                 completed_value = 0
+
+        if counted_dates is not None and start_date and end_date:
+            # Shifts and calls month by month, as the hours breakdown above,
+            # so a member on leave sees which months were excused.
+            count_breakdown = monthly_counts(
+                counted_dates,
+                start_date,
+                min(end_date, today),
+                month_waivers(_waivers, start_date, end_date, str(req.id)),
+            )
 
         # Calculate percentage
         if adjusted_required > 0:
@@ -1049,6 +1062,7 @@ class TrainingService:
                 else None
             ),
             "monthly_hours": month_breakdown,
+            "monthly_counts": count_breakdown,
             "course_checklist": course_checklist,
         }
 

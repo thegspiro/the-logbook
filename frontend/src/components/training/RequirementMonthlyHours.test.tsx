@@ -158,4 +158,47 @@ describe('RequirementMonthlyHours', () => {
     await open(requirement({ monthly_hours: [{ month: '2026-01', hours: 0, waived: true }] }));
     expect(screen.getByLabelText('Jan 2026: leave, 0 hours')).toBeInTheDocument();
   });
+
+  it('breaks a shift requirement down by month, with its leave', async () => {
+    const user = userEvent.setup();
+    render(
+      <RequirementMonthlyHours
+        requirement={requirement({
+          name: 'Shift Coverage',
+          requirement_type: 'shifts',
+          required_hours: 2,
+          original_required_hours: 24,
+          completed_hours: 3,
+          monthly_hours: null,
+          monthly_counts: [
+            { month: '2025-12', count: 2, waived: true, waived_share: 1, on_leave: true },
+            { month: '2026-01', count: 0, waived: false },
+            { month: '2026-02', count: 1, waived: false },
+          ],
+        })}
+      />
+    );
+    await user.click(screen.getByRole('button', { name: /show monthly shifts/i }));
+    expect(screen.getByLabelText('Dec 2025: leave, 2 shifts')).toBeInTheDocument();
+    expect(screen.getByLabelText('Feb 2026: 1 shift')).toBeInTheDocument();
+    expect(
+      screen.getByText(/3 shifts over 3 months \(2 on leave\) · average 0\.5 shifts\/month in the 2 months not excused/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/2 shifts\/month needed/)).toBeInTheDocument();
+  });
+
+  it('says calls for a call requirement', async () => {
+    const user = userEvent.setup();
+    render(
+      <RequirementMonthlyHours
+        requirement={requirement({
+          requirement_type: 'calls',
+          monthly_hours: null,
+          monthly_counts: [{ month: '2026-01', count: 1, waived: false }],
+        })}
+      />
+    );
+    await user.click(screen.getByRole('button', { name: /show monthly calls/i }));
+    expect(screen.getByLabelText('Jan 2026: 1 call')).toBeInTheDocument();
+  });
 });

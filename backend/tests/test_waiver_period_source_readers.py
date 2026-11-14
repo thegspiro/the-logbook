@@ -48,7 +48,7 @@ REVIEWED = {
     ("services/training_waiver_service.py", "excused_month_reasons"): (
         "reads month_waivers' result, which drops the excusal"
     ),
-    ("services/training_compliance.py", "monthly_hours"): (
+    ("services/training_compliance.py", "_month_rows"): (
         "reads month_waivers' result (MonthWaiver.sources), which drops the excusal"
     ),
     ("services/scheduling_service.py", "get_shift_compliance"): (
@@ -63,7 +63,7 @@ REVIEWED = {
     ("services/evaluation_data_service.py", "served_intervals"): (
         "reads MemberServicePeriod rows, not waiver periods"
     ),
-    ("api/v1/endpoints/training_module_config.py", "get_member_requirements"): (
+    ("api/v1/endpoints/training_module_config.py", "_member_leaves"): (
         "lists MemberLeaveOfAbsence rows, not waiver periods"
     ),
 }

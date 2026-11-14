@@ -38,6 +38,11 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
     !notYetHeld && req.days_until_due != null && req.days_until_due <= 30 && req.days_until_due >= 0 && !req.is_met;
   const self = audience === 'self';
   const unitFor = (count: number) => requirementUnitSuffix(req.requirement_type, count);
+  const breakdown = req.monthly_hours?.length ? req.monthly_hours : (req.monthly_counts ?? []);
+  // A shift or call target is rounded down to whole units, so enough months
+  // of leave can bring it to zero. That is met, and reads as such, not 0/0.
+  const nothingOwed =
+    !notYetHeld && req.required_hours === 0 && (req.original_required_hours ?? 0) > 0 && (req.waived_months ?? 0) > 0;
 
   return (
     <div
@@ -71,6 +76,8 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
           >
             {notYetHeld ? (
               <span className="text-theme-text-muted font-normal">No sessions held yet</span>
+            ) : nothingOwed ? (
+              <>Nothing owed (on leave)</>
             ) : (
               <>
                 {req.completed_hours}/{req.required_hours}
@@ -125,8 +132,17 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
               <>
                 {' '}
                 (originally {req.original_required_hours}
-                {unitFor(req.original_required_hours)}, adjusted to {req.required_hours}
-                {unitFor(req.required_hours)} for {req.active_months} active month{req.active_months !== 1 ? 's' : ''})
+                {unitFor(req.original_required_hours)},{' '}
+                {nothingOwed ? (
+                  <>so nothing is owed for this period</>
+                ) : (
+                  <>
+                    adjusted to {req.required_hours}
+                    {unitFor(req.required_hours)} for {req.active_months} active month
+                    {req.active_months !== 1 ? 's' : ''}
+                  </>
+                )}
+                )
               </>
             )}
           </p>
@@ -155,8 +171,8 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
             <span className={isDueSoon ? 'text-yellow-700 dark:text-yellow-400' : ''}>
               Due: {formatDate(req.due_date, timezone)} ({req.days_until_due} days)
             </span>
-          ) : req.monthly_hours && req.monthly_hours.length > 0 ? (
-            <span>Counting {countingWindowLabel(req.monthly_hours)}</span>
+          ) : breakdown.length > 0 ? (
+            <span>Counting {countingWindowLabel(breakdown)}</span>
           ) : null}
         </div>
       </div>

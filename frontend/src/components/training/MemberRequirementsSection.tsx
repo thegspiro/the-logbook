@@ -12,17 +12,9 @@ import React, { useEffect, useState } from 'react';
 import { ClipboardList } from 'lucide-react';
 import { trainingModuleConfigService } from '../../services/api';
 import { RequirementDetailCard } from './RequirementDetailCard';
-import { formatCalendarDate } from '../../utils/dateFormatting';
+import { LeaveOfAbsenceSummary } from './LeaveOfAbsenceSummary';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { LeaveMonthRule } from '../../constants/enums';
 import type { MemberRequirementsResponse } from '../../types/training';
-
-/** What the department's leave month rule means, in one sentence. */
-const LEAVE_MONTH_RULE_SUMMARY: Record<string, string> = {
-  [LeaveMonthRule.FULL_MONTH]: 'Any day of leave excuses the whole month.',
-  [LeaveMonthRule.PROPORTIONAL]: 'A partly covered month is excused by the share of its days on leave.',
-  [LeaveMonthRule.HALF]: '15 or more days of leave excuses half the month; a whole month excuses all of it.',
-};
 
 interface MemberRequirementsSectionProps {
   userId: string;
@@ -83,23 +75,7 @@ export const MemberRequirementsSection: React.FC<MemberRequirementsSectionProps>
 
       {data && (
         <>
-          {data.leaves_of_absence.length > 0 && (
-            <div className="mb-4 rounded-sm border border-blue-500/20 bg-blue-500/10 px-3 py-2">
-              <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Leave of absence</p>
-              <ul className="mt-1 space-y-0.5">
-                {data.leaves_of_absence.map((leave) => (
-                  <li key={leave.id} className="text-xs text-blue-700 dark:text-blue-300">
-                    <span className="capitalize">{leave.leave_type.replace(/_/g, ' ')}</span>:{' '}
-                    {formatCalendarDate(leave.start_date)} –{' '}
-                    {leave.end_date ? formatCalendarDate(leave.end_date) : 'no end date'}
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
-                Training done during leave still counts. {LEAVE_MONTH_RULE_SUMMARY[data.leave_month_rule] ?? ''}
-              </p>
-            </div>
-          )}
+          <LeaveOfAbsenceSummary leaves={data.leaves_of_absence} rule={data.leave_month_rule} />
 
           {data.requirements_detail.length === 0 ? (
             <p className="text-theme-text-muted text-sm">No training requirements apply to this member.</p>

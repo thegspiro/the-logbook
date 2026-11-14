@@ -228,6 +228,7 @@ class TestOfficerView:
             "leave_type": "leave_of_absence",
             "start_date": "2025-07-01",
             "end_date": "2026-09-01",
+            "excuses_training": True,
         }
 
     async def test_proportional_rule_measures_the_partial_month(

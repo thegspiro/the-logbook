@@ -30,6 +30,7 @@ from app.api.v1.endpoints import (
     training_module_config,
 )
 from app.core.database import get_db
+from app.models.audit import AuditLog
 from app.models.training import (
     TrainingRecord,
     TrainingRequirement,
@@ -251,8 +252,33 @@ class TestLeaveRecordedThroughTheApp:
                 "leave_type": "leave_of_absence",
                 "start_date": "2025-07-01",
                 "end_date": "2026-09-01",
+                "excuses_training": True,
             }
         ]
+
+    async def test_member_sees_their_own_leave_dates(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        officer, member, _ = await _seed(db_session, org_id)
+        await _record_leave(db_session, officer, member)
+
+        async with _as(db_session, member) as client:
+            response = await client.get("/training/module-config/my-training")
+        body = response.json()
+
+        assert body["leave_month_rule"] == "full_month"
+        [leave] = body["leaves_of_absence"]
+        assert (leave["start_date"], leave["end_date"]) == ("2025-07-01", "2026-09-01")
+        assert leave["excuses_training"] is True
+        # Dates and type only: the reason stays with the leave record.
+        assert set(leave) == {
+            "id",
+            "leave_type",
+            "start_date",
+            "end_date",
+            "excuses_training",
+        }
 
     async def test_matrix_names_the_leave_once(self, db_session, setup_org_and_admin):
         org_id, _ = setup_org_and_admin
@@ -293,6 +319,10 @@ class TestExemptLeave:
         assert leave["linked_training_waiver_id"] is None
 
         detail = await _my_requirement(db_session, member, req_id)
+        async with _as(db_session, member) as client:
+            listed = (await client.get("/training/module-config/my-training")).json()
+        # Still listed, and labelled as not reducing the target.
+        assert [lv["excuses_training"] for lv in listed["leaves_of_absence"]] == [False]
 
         assert detail["waived_months"] == 0
         assert detail["required_hours"] == 72
@@ -333,3 +363,108 @@ class TestDepartmentRule:
                 assert months["2026-09"]["waived"] is False, rule
             else:
                 assert months["2026-09"]["waived_share"] == september, rule
+
+
+class TestSettingChangesAreAudited:
+    """A rule change moves every member on leave at once; it leaves a record."""
+
+    @staticmethod
+    async def _entries(db, officer: User) -> list:
+        result = await db.execute(
+            select(AuditLog).where(
+                AuditLog.event_type == "compliance_config_updated",
+                AuditLog.user_id == str(officer.id),
+            )
+        )
+        return list(result.scalars().all())
+
+    async def test_a_rule_change_is_recorded_from_and_to(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        officer, _, _ = await _seed(db_session, org_id)
+        await _set_rule(db_session, officer, "half")
+        await _set_rule(db_session, officer, "proportional")
+
+        entries = await self._entries(db_session, officer)
+        changes = [e.event_data["changes"]["leave_month_rule"] for e in entries]
+        assert {"from": "half", "to": "proportional"} in changes
+
+    async def test_saving_unchanged_settings_records_nothing(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        officer, _, _ = await _seed(db_session, org_id)
+        await _set_rule(db_session, officer, "half")
+        before = len(await self._entries(db_session, officer))
+        await _set_rule(db_session, officer, "half")
+        assert len(await self._entries(db_session, officer)) == before
+
+    async def test_email_recipients_are_not_copied_into_the_log(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        officer, _, _ = await _seed(db_session, org_id)
+        async with _as(db_session, officer) as client:
+            response = await client.put(
+                "/compliance/config",
+                json={"report_email_recipients": ["chief@example.com"]},
+            )
+        assert response.status_code == 200, response.text
+
+        [entry] = await self._entries(db_session, officer)
+        assert entry.event_data["changes"]["report_email_recipients"] == {
+            "changed": True
+        }
+        assert "chief@example.com" not in str(entry.event_data)
+
+
+class TestShiftAndCallBreakdown:
+    async def test_a_call_requirement_shows_its_months_and_the_leave(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        officer, member, _ = await _seed(db_session, org_id)
+        calls = TrainingRequirement(
+            organization_id=org_id,
+            name="Calls Answered",
+            requirement_type="calls",
+            required_calls=24,
+            training_type=TrainingType.CERTIFICATION,
+            frequency="annual",
+            due_date_type="rolling",
+            rolling_period_months=12,
+        )
+        db_session.add(calls)
+        for day in (date(2025, 12, 3), date(2025, 12, 20), date(2026, 10, 2)):
+            db_session.add(
+                TrainingRecord(
+                    organization_id=org_id,
+                    user_id=member.id,
+                    course_name="Call",
+                    training_type=TrainingType.CERTIFICATION,
+                    status=TrainingStatus.COMPLETED,
+                    completion_date=day,
+                    hours_completed=1,
+                )
+            )
+        await db_session.flush()
+        await _record_leave(db_session, officer, member)
+
+        detail = await _my_requirement(db_session, member, str(calls.id))
+
+        assert detail["monthly_hours"] is None
+        months = {m["month"]: m for m in detail["monthly_counts"]}
+        assert months["2025-12"] == {
+            "month": "2025-12",
+            "count": 2,
+            "waived": True,
+            "waived_share": 1.0,
+            "on_leave": True,
+            "on_waiver": False,
+        }
+        assert months["2026-10"]["count"] == 1
+        assert months["2026-10"]["waived"] is False
+        assert sum(m["count"] for m in detail["monthly_counts"]) == 3
+        # 24 a year with 11 months on leave: 2 owed, rounded down.
+        assert detail["required_hours"] == 2.0
