@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { formatPartialDate, formatPeriod, sanitizeArchiveHtml } from './historyFormat';
+import { formatDuration, formatPartialDate, formatPeriod, sanitizeArchiveHtml } from './historyFormat';
+
+describe('formatDuration', () => {
+  it('reads as minutes and seconds, with hours from an hour up', () => {
+    expect(formatDuration(0)).toBe('0:00');
+    expect(formatDuration(65)).toBe('1:05');
+    expect(formatDuration(754)).toBe('12:34');
+    expect(formatDuration(3725)).toBe('1:02:05');
+  });
+
+  it('is blank when the length is unknown', () => {
+    expect(formatDuration(null)).toBe('');
+    expect(formatDuration(undefined)).toBe('');
+    expect(formatDuration(Number.NaN)).toBe('');
+  });
+});
 
 describe('formatPartialDate', () => {
   it('shows only as much of the date as is known', () => {

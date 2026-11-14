@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { BookOpen, ClipboardCheck, FileUp, Landmark, Medal, Settings, Users } from 'lucide-react';
+import { BookOpen, ClipboardCheck, FileUp, Images, Landmark, Medal, Settings, Users } from 'lucide-react';
 import { Breadcrumbs } from '../../../components/ux/Breadcrumbs';
 import { SkeletonPage } from '../../../components/ux/Skeleton';
 import { useAuthStore } from '../../../stores/authStore';
@@ -70,6 +70,10 @@ export const HistoryHomePage: React.FC = () => {
         <Link to="/history/people" className="card card-hover flex items-center gap-3 p-4">
           <Users className="h-5 w-5 shrink-0" aria-hidden="true" />
           <span className="text-theme-text-primary font-medium">Past members</span>
+        </Link>
+        <Link to="/history/media" className="card card-hover flex items-center gap-3 p-4">
+          <Images className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span className="text-theme-text-primary font-medium">Photos and media</span>
         </Link>
         <Link to="/history/honor-roll" className="card card-hover flex items-center gap-3 p-4">
           <Medal className="h-5 w-5 shrink-0" aria-hidden="true" />

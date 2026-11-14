@@ -707,10 +707,10 @@ an erasure request, a public-website question or a large upload knows it.
   decision: the public feed ships in phase 7).** Publishing to the public
   writes a cleared snapshot and the clearance list is enforced, but no public
   portal endpoint reads it yet. The person page says so beside the button.
-- **Video and large audio are not accepted yet.** Phase 1 stores no files.
-  When photos and media arrive (phase 3) uploads stay under the 60 MB proxy
-  limit every nginx configuration sets (`client_max_body_size 60M`) — 55 MB
-  per file was agreed; long recordings wait for chunked uploads.
+- **Audio and video are limited to 55 MB a file.** ✅ Photos and media
+  shipped 2026-11-13 (phase 3). Uploads stay under the 60 MB proxy limit every
+  nginx configuration sets (`client_max_body_size 60M`) — 55 MB per file was
+  agreed; long recordings wait for chunked uploads.
 - **Person merge and bulk import are phase 2.** ✅ **Shipped 2026-11-13.**
   Until then a duplicate was warned about at entry but two records for one
   person were combined by hand. The decisions they ship with are below.
@@ -756,6 +756,47 @@ an erasure request, a public-website question or a large upload knows it.
   chosen over a `history.view` grant on every position, which would have
   needed a positions migration for every department; `history.view` instead
   reads drafts and research.
+
+Phase 3, photos and media (2026-11-13), ships with these:
+
+- **TIFF is refused (owner decision).** It is refused everywhere else on the
+  platform as a complex format with a history of decoder vulnerabilities, and
+  the archive follows suit: a Historian converts a TIFF scan to JPEG or PNG
+  before uploading it, and the archival TIFF itself is kept outside the app.
+- **ffmpeg is part of the backend image (owner decision).** It makes the
+  image larger on every platform (Docker, Unraid, the ARM build); it is
+  installed without Debian's recommended extras to keep that down. It strips
+  audio and video for members — the streams are copied, not re-encoded, so
+  quality is unchanged and the members' copy roughly doubles each
+  recording's storage — and makes a video's poster frame and the length shown
+  in the gallery.
+- **A host without ffmpeg refuses audio and video (owner decision).** A
+  bare Linux or cloud install that runs the backend outside the image must
+  install the `ffmpeg` package (which provides `ffprobe`) for audio and video
+  uploads; until then they are refused with a message naming the package,
+  never stored unstripped. Photos are unaffected.
+- **Stripping covers tags and side tracks, not the sound or picture
+  itself.** Location, device and title tags, chapters, subtitles, data
+  tracks (where some cameras keep GPS) and embedded cover art are removed. A
+  place spoken aloud or visible in the frame is not, nor anything a codec
+  hides inside the encoded stream; the Historian still listens and watches
+  before publishing.
+- **The original is downloadable by `history.manage` only.** It is kept
+  byte for byte; everyone else gets the stripped copy.
+- **A photo-use consent warning never blocks.** A tagged person who declined
+  photo use, or never answered, is named on the item page and in a
+  confirmation before publishing; the Historian may publish anyway. A past
+  member with no account has no answer to show.
+- **Tags point at past-member records, not member accounts.** A current member
+  is tagged through their history record, which the Historian creates first
+  (`POST /people/from-member/{user_id}`).
+- **An item can be deleted only while it is a draft.** A published one is
+  returned to draft first, so deleting it is a deliberate second step.
+- **A batch upload is not one transaction.** Each file is its own request; if
+  the browser is closed part way, the files already sent stay as drafts and
+  the rest were never uploaded. The shared `batch_id` identifies the set.
+- **Documents (letters, minutes, scanned PDFs) are phase 4.** The media
+  upload refuses PDF and office files.
 
 ## Medical Screening — Gaps for the Owner (2026-11-02, updated 2026-11-03)
 

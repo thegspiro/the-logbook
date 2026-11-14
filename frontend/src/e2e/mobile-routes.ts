@@ -1185,6 +1185,7 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/reports/evaluations/mine', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/medical-screening', maxSmallTargets: 0, maxTinyText: 0, permissions: ['medical_screening.view'] },
   { path: '/history', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/history/media', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/medical-supplies', maxSmallTargets: 0, maxTinyText: 0, permissions: ['inventory.view_medical'] },
   { path: '/ip-security', maxSmallTargets: 0, maxTinyText: 0, permissions: ['security.manage'] },
   // Both are settings.manage-gated, so they cost no extra sign-in between them.

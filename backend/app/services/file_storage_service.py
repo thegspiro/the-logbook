@@ -117,6 +117,8 @@ class StorageArea(str, Enum):
     EVALUATIONS = "evaluations"
     # Documents filed with attendance waiver requests (often medical).
     ATTENDANCE_WAIVERS = "attendance-waivers"
+    # History photos, audio and video: originals and derived copies.
+    HISTORY_MEDIA = "history-media"
 
 
 # Where each area wrote files before the org-first layout, relative to
@@ -133,6 +135,7 @@ _LEGACY_ROOTS: Mapping[StorageArea, tuple[str, ...]] = {
     StorageArea.MINUTES_ATTACHMENTS: (),
     StorageArea.EVALUATIONS: (),
     StorageArea.ATTENDANCE_WAIVERS: (),
+    StorageArea.HISTORY_MEDIA: (),
 }
 
 
@@ -319,6 +322,15 @@ def stored_file_response(
     )
 
 
+def _disposition(filename: str, content_disposition_type: str) -> str:
+    # Starlette's FileResponse rule for the filename, so every branch sends
+    # the same header for the same name.
+    quoted = quote(filename)
+    if quoted != filename:
+        return f"{content_disposition_type}; filename*=utf-8''{quoted}"
+    return f'{content_disposition_type}; filename="{filename}"'
+
+
 def _streaming_response(
     size: int,
     chunks: Iterator[bytes],
@@ -327,21 +339,83 @@ def _streaming_response(
     media_type: str,
     content_disposition_type: str,
 ) -> Response:
-    # Starlette's FileResponse rule for the filename, so every branch sends
-    # the same header for the same name.
-    quoted = quote(filename)
-    if quoted != filename:
-        disposition = f"{content_disposition_type}; filename*=utf-8''{quoted}"
-    else:
-        disposition = f'{content_disposition_type}; filename="{filename}"'
     return StreamingResponse(
         iterate_in_threadpool(chunks),
         media_type=media_type,
         headers={
-            "content-disposition": disposition,
+            "content-disposition": _disposition(filename, content_disposition_type),
             "content-length": str(size),
         },
     )
+
+
+class RangeNotSatisfiable(ValueError):
+    """A ``Range`` header that asks for bytes the file does not have."""
+
+
+def parse_byte_range(header: Optional[str], size: int) -> Optional[tuple[int, int]]:
+    """The inclusive ``(first, last)`` byte positions a ``Range`` header asks
+    for, or None to send the whole file.
+
+    One range only: a request for several, or a header this does not
+    understand, gets the whole file, which RFC 9110 permits a server to send
+    instead. A range starting past the end is refused (416).
+    """
+    if not header:
+        return None
+    unit, _, spec = header.strip().partition("=")
+    if unit.strip().lower() != "bytes" or "," in spec:
+        return None
+    first_text, dash, last_text = spec.strip().partition("-")
+    if not dash:
+        return None
+    try:
+        if not first_text:
+            suffix = int(last_text)
+            if suffix <= 0:
+                raise RangeNotSatisfiable("Empty suffix range")
+            if size == 0:
+                raise RangeNotSatisfiable("Range of an empty file")
+            return max(size - suffix, 0), size - 1
+        first = int(first_text)
+        last = int(last_text) if last_text else size - 1
+    except ValueError as exc:
+        if isinstance(exc, RangeNotSatisfiable):
+            raise
+        return None
+    if first < 0:
+        return None
+    # Before the order check: with an open end, ``last`` defaults to the final
+    # byte, so a start at or past the end would otherwise read as backwards.
+    if first >= size:
+        raise RangeNotSatisfiable("Range starts past the end of the file")
+    if last < first:
+        return None
+    return first, min(last, size - 1)
+
+
+def _slice(chunks: Iterator[bytes], first: int, last: int) -> Iterator[bytes]:
+    """The bytes ``first..last`` (inclusive) of a plaintext stream.
+
+    Encrypted files are decrypted from their first chunk; a range near the end
+    of a 55 MB file costs one pass of AES-GCM, well inside a request's time.
+    """
+    position = 0
+    try:
+        for chunk in chunks:
+            chunk_end = position + len(chunk)
+            if chunk_end > first:
+                low = max(first - position, 0)
+                high = min(last + 1 - position, len(chunk))
+                if high > low:
+                    yield chunk[low:high]
+            position = chunk_end
+            if position > last:
+                break
+    finally:
+        close = getattr(chunks, "close", None)
+        if close is not None:
+            close()
 
 
 class FileStorageService:
@@ -892,6 +966,18 @@ class _LocalBackend:
         return True
 
     @staticmethod
+    def stream(ref: str) -> tuple[int, Iterator[bytes]]:
+        if file_encryption.is_encrypted(ref):
+            return file_encryption.open_plaintext_stream(ref)
+
+        def chunks() -> Iterator[bytes]:
+            with open(ref, "rb") as handle:
+                while block := handle.read(file_encryption.CHUNK_SIZE):
+                    yield block
+
+        return os.path.getsize(ref), chunks()
+
+    @staticmethod
     def response(
         ref: str, filename: str, media_type: str, content_disposition_type: str
     ) -> Response:
@@ -938,6 +1024,12 @@ class _RemoteFileBackend:
             logger.warning(f"Could not remove {ref}: its store is not configured")
             return False
         return self._store.delete(ref)
+
+    def stream(self, ref: str) -> tuple[int, Iterator[bytes]]:
+        try:
+            return self._backend().open_plaintext(ref)
+        except RemoteStorageError:
+            raise _unavailable()
 
     def response(
         self, ref: str, filename: str, media_type: str, content_disposition_type: str
@@ -1035,4 +1127,53 @@ async def file_response(
         filename,
         media_type,
         content_disposition_type,
+    )
+
+
+async def file_range_response(
+    ref: str,
+    *,
+    range_header: Optional[str],
+    filename: str,
+    media_type: str,
+    content_disposition_type: str = "inline",
+) -> Response:
+    """:func:`file_response` that also answers a ``Range`` request, so audio
+    and video can seek: ``206`` with the requested bytes, ``416`` for a range
+    past the end, and the whole file otherwise. Every reply says
+    ``Accept-Ranges: bytes`` so a player knows it may ask."""
+    backend = await _backend_for(ref)
+    size, chunks = await asyncio.to_thread(backend.stream, ref)
+    try:
+        wanted = parse_byte_range(range_header, size)
+    except RangeNotSatisfiable:
+        close = getattr(chunks, "close", None)
+        if close is not None:
+            close()
+        return Response(
+            status_code=416,
+            headers={"content-range": f"bytes */{size}", "accept-ranges": "bytes"},
+        )
+    disposition = _disposition(filename, content_disposition_type)
+    if wanted is None:
+        return StreamingResponse(
+            iterate_in_threadpool(chunks),
+            media_type=media_type,
+            headers={
+                "content-disposition": disposition,
+                "content-length": str(size),
+                "accept-ranges": "bytes",
+            },
+        )
+    first, last = wanted
+    return StreamingResponse(
+        iterate_in_threadpool(_slice(chunks, first, last)),
+        status_code=206,
+        media_type=media_type,
+        headers={
+            "content-disposition": disposition,
+            "content-length": str(last - first + 1),
+            "content-range": f"bytes {first}-{last}/{size}",
+            "accept-ranges": "bytes",
+        },
     )

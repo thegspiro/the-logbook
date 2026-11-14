@@ -3,8 +3,9 @@
 The department archive. Phase 1 (2026-11-03) delivers the module switch, the
 past-members roster, the managed title list, family links, the Honor Roll, the
 change history and the department clearance list. Phase 2 (2026-11-13) adds
-roster import and person merge. Later phases add photos and media (3),
-documents (4), events and
+roster import and person merge. Phase 3 (2026-11-13) adds photos, audio and
+video, with albums, a managed source list and tags on past-member records.
+Later phases add documents (4), events and
 timelines with historical apparatus (5), articles with PDF/Word export (6),
 and publishing outward — the public portal feed and the "Today in history"
 widget (7).
@@ -164,6 +165,74 @@ Historian chooses; research text may keep both). The merge
   `redirected_from`, and the person page moves to the kept address;
 - records the merge as a substantial edit of the kept record.
 
+## Photos and media
+
+`/history/media`. One item is one photo, recording or video, with a catalogue:
+title, description, a partial date (year, month or day, optionally "circa"),
+place, creator, source or donor (from the managed list), rights note,
+accession number, where the physical original is kept, and research notes
+(encrypted, the archive's keepers only). Items use the same publication model
+as people — draft, members, public; the clearance list; minor and substantial
+revisions, recorded with `record_type` `media`. A change to the title,
+description or date, or to who is tagged, is always substantial.
+
+**What is stored.** One `history_media_files` row per stored file, under
+`<org>/history-media/<media id>/`, encrypted at rest like every other upload
+and malware-scanned before it is written (`store_media_upload`):
+
+| Role        | Photo                                                    | Audio or video                                                   |
+| ----------- | -------------------------------------------------------- | ---------------------------------------------------------------- |
+| `original`  | the upload, byte for byte (SHA-256 recorded)             | the upload, byte for byte                                        |
+| `display`   | WebP, longest side 2048 px, rotated upright, no EXIF/GPS | same container, streams copied, every tag and data track dropped |
+| `thumbnail` | WebP, longest side 400 px, same stripping                | a video's poster frame (WebP, 400 px); none for audio            |
+
+Photos are JPEG, PNG or WebP up to 20 MB and 25 megapixels. TIFF is refused,
+as everywhere else on the platform; scans are converted to JPEG or PNG first.
+Audio is MP3, M4A, WAV or FLAC and video MP4 or WebM, up to 55 MB, under the
+60 MB proxy limit. The type is read from the bytes (libmagic) and must agree
+with the extension. A photo Pillow cannot open, or a recording ffmpeg cannot
+read, is refused rather than stored without copies.
+
+**Recordings and ffmpeg.** `history_media_files.make_av_copies` runs ffmpeg and
+ffprobe (installed in `backend/Dockerfile`) on the scanned upload in a private
+temporary directory. The members' copy is a stream copy (`-c copy`, no
+re-encoding) with `-map_metadata -1`, chapters, subtitles and data tracks
+dropped, so a phone's recording location, device name and title tags do not
+reach readers; an audio file keeps only its sound, so an MP3's embedded cover
+picture goes too. ffprobe gives the length (`duration_seconds`) and a video's
+size; a video's poster frame is taken about a second in. Every call names the
+input's demuxer and allows only the `file` protocol, so a file shaped like a
+playlist cannot point ffmpeg at anything else on the server. On a host without
+ffmpeg, an audio or video upload is refused with 503 before anything is
+scanned or written; photos are unaffected.
+
+**Who gets which file.** Everyone who may read the item gets the display copy
+(`/view`) and thumbnail. `/view` is never the original. Only `history.manage`
+downloads the original (`/original`, as an attachment). `/view` honours a
+single `Range` (206 / 416), so a long recording seeks without downloading the
+whole file.
+
+**Tags** point at past-member records only. Each tag shows the Historian that
+person's photo-use answer from the consent records — granted, declined, not
+answered, or no account — on the item page and in a confirmation before
+publishing. A warning never blocks publishing (owner decision). A member reads
+the tags of a published item; the public snapshot lists only people who are
+themselves public. A person page lists the items they are tagged in, and a
+merge moves the removed record's tags to the kept one.
+
+**Upload** (`/history/media/upload`, `history.manage`) takes up to 25 files
+at once with one catalogue and one set of tags. Each file is its own request,
+sent one after another under a shared `batch_id`, so a refused file is marked
+and the rest carry on. Every file becomes a draft.
+
+**Albums** (`/history/albums`) are named, ordered lists of items, at draft or
+members level; an album lists only the items its reader may see. **Sources**
+are managed in History settings; two sources for one donor can be merged.
+
+**Deleting** an item is allowed only while it is a draft. Its files are removed
+after the delete commits, so a failed commit never leaves a row pointing at a
+missing file.
+
 ## API
 
 `/api/v1/history`, gated on the module. Every by-id read filters the
@@ -180,6 +249,10 @@ position) is checked against it before it is stored.
 | `GET /clearance/positions`, `PUT /clearance/steps`                                                                                                                                                                               | `history.manage` or `settings.manage`                    |
 | `GET /clearance/requests/{id}`                                                                                                                                                                                                   | keepers, the submitter, or a holder of a step's position |
 | `POST /clearance/requests/{id}/decide`                                                                                                                                                                                           | a holder of the current step's position                  |
+| `GET /media`, `GET /media/{id}`, `/thumbnail`, `/view`, `GET /people/{id}/media`, `GET /sources`, `GET /albums`, `GET /albums/{id}`                                                                                              | signed in (drafts to the keepers only)                   |
+| `POST /media`, `PATCH /media/{id}`, `PUT /media/{id}/tags`, `DELETE /media/{id}`, `GET /media/{id}/original`, source and album writes                                                                                            | `history.manage`                                         |
+| `POST /media/{id}/publish`, `/unpublish`                                                                                                                                                                                         | `history.publish`                                        |
+| `GET /media/{id}/revisions`                                                                                                                                                                                                      | `history.view` / `history.manage`, or a clearer          |
 
 Markdown is rendered on the server (`app/utils/markdown_render.py`:
 `markdown-it-py` with raw HTML and images off, then `nh3` against an
@@ -192,6 +265,9 @@ allowlist (`modules/history/utils/historyFormat.ts`).
 `/history/people/new`, `/history/people/:personId`,
 `/history/people/:personId/edit`, `/history/people/:personId/merge`,
 `/history/import`, `/history/import/:importId`, `/history/honor-roll`,
-`/history/clearance/:requestId`, `/history/settings`. Every route carries
+`/history/clearance/:requestId`, `/history/settings`, `/history/media`,
+`/history/media/upload`, `/history/media/:mediaId`,
+`/history/media/:mediaId/edit`, `/history/albums`,
+`/history/albums/:albumId`. Every route carries
 `requiredModule="history"`; the API client is `createApiClient`, and `/history`
 URLs are never cached (`UNCACHEABLE_SUBSTRINGS`).

@@ -20,7 +20,7 @@ not change a review already under way.
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,12 +34,16 @@ from app.models.history import (
     HistoryClearanceDecision,
     HistoryClearanceRequest,
     HistoryClearanceStep,
+    HistoryMedia,
     HistoryRevision,
     RevisionKind,
 )
 from app.models.user import Position, User, user_positions
 
-RECORD_PATHS = {"member": "/history/people/{id}"}
+RECORD_PATHS = {
+    "member": "/history/people/{id}",
+    "media": "/history/media/{id}",
+}
 REVIEW_PATH = "/history/clearance/{id}"
 
 
@@ -256,14 +260,16 @@ class HistoryClearanceService:
 
     async def submit(
         self,
-        person: HistoricalMember,
+        person: Union[HistoricalMember, HistoryMedia],
         purpose: ClearancePurpose,
         actor_id: str,
     ) -> tuple[HistoryClearanceRequest, list[str]]:
-        """Open a request for the record's current revision.
+        """Open a request for the record's current revision: a person, or a
+        photo or media item.
 
         Returns the request and the members to tell it is their turn.
         """
+        record_type = "media" if isinstance(person, HistoryMedia) else "member"
         steps = await self.list_steps(person.organization_id)
         if not steps:
             raise ValueError(
@@ -271,11 +277,11 @@ class HistoryClearanceService:
                 "published directly"
             )
         await self.withdraw_pending(
-            person.organization_id, "member", person.id, actor_id
+            person.organization_id, record_type, person.id, actor_id
         )
         request = HistoryClearanceRequest(
             organization_id=person.organization_id,
-            record_type="member",
+            record_type=record_type,
             record_id=person.id,
             revision_number=person.revision_number,
             purpose=purpose,
