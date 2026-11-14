@@ -1073,6 +1073,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/members/leave-requests',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
     path: '/members/:userId/training',
     source: 'src/modules/membership/routes.tsx',
     coverage: 'exempt',
@@ -1134,6 +1140,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   },
   {
     path: '/members/admin/settings/tiers',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/members/admin/settings/leave',
     source: 'src/modules/membership/routes.tsx',
     coverage: 'ratchet',
     detail: 'fast route-level mobile presentation ratchet',

@@ -174,6 +174,9 @@ Complete reference of all pages in the application, organized by module.
 | `/members/:userId`          | Member Profile          | Authenticated |
 | `/members/:userId/training` | Member Training History | Authenticated |
 | `/members/my-crew`          | My Crew                 | Authenticated |
+| `/members/leave-requests`   | Leave Requests          | Authenticated |
+
+> **Leave Requests (`/members/leave-requests`)** _(added 2026-11-14)_. A member asks for a leave of absence here, when the department has turned requests on under **Members Settings — Leave of Absence**, and sees where their requests stand. Members who may decide a request see it under **To decide**: the department's chosen approver positions, or, when nobody else holds them, the Chief, then everyone with `members.manage`. Authenticated with no permission: who decides is not a permission, and the server lists each caller only the requests they may see (`GET /users/leave-requests`, `GET /users/leave-requests/me`). The member's reason is shown to them and their approvers only, and is never emailed.
 
 > **My Crew (`/members/my-crew`)** _(added 2026-11-04)_. The members the signed-in member supervises today, by the dated Reports To assignments (owner decision 2026-11-01, crew views). Authenticated with no permission: the assignment is the grant, and the server lists only the caller's current crew (`GET /users/me/crew`). Each card shows the member's training standing from `GET /training/compliance-summary/{id}` and links to their training records; the page also lists the evaluations written about the crew (`GET /evaluations/crew`). The menu offers My Crew only to a member who supervises someone. Medical records and contact details are not part of crew access.
 
@@ -209,6 +212,7 @@ Member Management lists every member except the archived and dropped (voluntary 
 | `/members/admin/settings/ids`        | Members Settings — Membership IDs     | `members.manage`, `settings.edit` or `organization.update_settings`                                                                              |
 | `/members/admin/settings/ranks`      | Members Settings — Operational Ranks  | `members.manage` or `settings.manage`                                                                                                            |
 | `/members/admin/settings/tiers`      | Members Settings — Membership Tiers   | `members.manage`                                                                                                                                 |
+| `/members/admin/settings/leave`      | Members Settings — Leave of Absence   | `members.manage`                                                                                                                                 |
 | `/members/admin/settings/evoc`       | Members Settings — EVOC Levels        | `members.manage` or `apparatus.manage`                                                                                                           |
 | `/members/check-in-station`          | Check-In Station                      | `members.check_in`                                                                                                                               |
 

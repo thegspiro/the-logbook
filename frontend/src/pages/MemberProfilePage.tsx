@@ -86,6 +86,7 @@ import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/ce
 import { blankToNull } from '../utils/formValues';
 import { displayNameOf, givenName } from '../utils/memberName';
 import { getWaiverStatusBadge } from '../utils/waiverStatus';
+import { leaveRequestService } from '../services/leaveRequestService';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 // Types for inventory data
@@ -187,6 +188,9 @@ export const MemberProfilePage: React.FC = () => {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [activeLeaves, setActiveLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
+  // Whether the department takes leave requests, read only on one's own
+  // profile: the link to ask for leave is offered there and nowhere else.
+  const [leaveRequestsEnabled, setLeaveRequestsEnabled] = useState(false);
   const [adminHoursSummary, setAdminHoursSummary] = useState<AdminHoursSummary | null>(null);
   const [adminHoursLoading, setAdminHoursLoading] = useState(false);
   const [adminHoursCompliance, setAdminHoursCompliance] = useState<AdminHoursComplianceItem[]>([]);
@@ -329,6 +333,12 @@ export const MemberProfilePage: React.FC = () => {
       if (canViewTargetLeaves) {
         void fetchLeaves(userId);
       }
+      if (isSelf) {
+        leaveRequestService
+          .getConfig()
+          .then((config) => setLeaveRequestsEnabled(config.requests_enabled === true))
+          .catch(() => setLeaveRequestsEnabled(false));
+      }
       if (canViewTargetAdminHours) {
         void fetchAdminHours(userId);
       }
@@ -343,6 +353,7 @@ export const MemberProfilePage: React.FC = () => {
     canViewTargetTraining,
     canViewTargetAdminHours,
     canViewTargetLeaves,
+    isSelf,
     fetchUserData,
     fetchModuleStatus,
     fetchLeaves,
@@ -1559,10 +1570,22 @@ export const MemberProfilePage: React.FC = () => {
               </div>
             )}
 
-            {/* Active Leaves of Absence */}
-            {activeLeaves.length > 0 && (
+            {/* Active Leaves of Absence, and on one's own profile the way to
+                ask for one when the department takes requests. */}
+            {(activeLeaves.length > 0 || (isSelf && leaveRequestsEnabled)) && (
               <div className="card p-6">
-                <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Leave of Absence</h2>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-theme-text-primary text-lg font-semibold">Leave of Absence</h2>
+                  {isSelf && leaveRequestsEnabled && (
+                    <Link
+                      to="/members/leave-requests"
+                      className="mobile-touch-target text-sm font-medium text-blue-700 hover:underline dark:text-blue-300"
+                    >
+                      Ask for leave
+                    </Link>
+                  )}
+                </div>
+                {activeLeaves.length === 0 && <p className="text-theme-text-muted text-sm">You are not on leave.</p>}
                 <div className="space-y-3">
                   {activeLeaves.map((leave) => {
                     // "active" from the API means not cancelled; whether the

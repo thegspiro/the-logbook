@@ -160,6 +160,8 @@ export const ALL_ROUTES: RouteCheck[] = [
   // stretched icon button in it would never be seen.
   { path: '/events', maxSmallTargets: 0, maxTinyText: 0, permissions: ['events.manage'] },
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
+  // Every member reaches it; the fixture puts a request to decide on screen.
+  { path: '/members/leave-requests', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
   // The hub's other three tabs. Add and Import stand on `users.create` as well,
   // so without it the hub falls back to the roster and measures that instead.
@@ -238,6 +240,9 @@ export const ALL_ROUTES: RouteCheck[] = [
   // equivalent of — a reorder pair, a rights disclosure and a remove button, all
   // of which the fixture's two rungs put on screen.
   { path: '/members/admin/settings/tiers', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
+  // Leave of absence settings, with requests on so the approver picker and the
+  // rule choice render.
+  { path: '/members/admin/settings/leave', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
   // EVOC needs a grant from another module entirely: the levels are served by
   // the apparatus API, so without `apparatus.manage` the page filters the
   // section out and redirects, and the pass would measure Operational Ranks

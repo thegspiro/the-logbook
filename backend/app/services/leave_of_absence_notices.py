@@ -130,8 +130,13 @@ def build_context(
     officer_name: str,
     member_name: str,
     rule: str,
+    summary: Optional[str] = None,
 ) -> Dict[str, str]:
-    """The template variables. Never the leave's reason or type."""
+    """The template variables. Never the leave's reason or type.
+
+    ``summary`` replaces the opening sentence, for a leave a member asked
+    for: "Your request ... was approved" rather than "X recorded a leave".
+    """
     action = {
         RECORDED: "recorded a leave of absence for you",
         UPDATED: "updated your leave of absence",
@@ -142,7 +147,7 @@ def build_context(
     return {
         "member_name": member_name,
         "change_word": kind,
-        "summary": f"{officer_name} {action[kind]}.",
+        "summary": summary or f"{officer_name} {action[kind]}.",
         "start_date": _date(leave.start_date),
         "end_date": _date(leave.end_date),
         "training_effect": training_effect(
@@ -159,7 +164,11 @@ def _display_name(user: Optional[User], fallback: str) -> str:
 
 
 async def send_leave_notice(
-    organization_id: str, leave_id: str, officer_id: str, kind: str
+    organization_id: str,
+    leave_id: str,
+    officer_id: str,
+    kind: str,
+    summary: Optional[str] = None,
 ) -> None:
     """Background task: tell the leave's member what an officer did to it.
 
@@ -172,7 +181,12 @@ async def send_leave_notice(
     try:
         async for session in database_manager.get_session():
             await deliver_leave_notice(
-                session, str(organization_id), str(leave_id), str(officer_id), kind
+                session,
+                str(organization_id),
+                str(leave_id),
+                str(officer_id),
+                kind,
+                summary=summary,
             )
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("Leave of absence notice failed: {}", exc)
@@ -184,6 +198,7 @@ async def deliver_leave_notice(
     leave_id: str,
     officer_id: str,
     kind: str,
+    summary: Optional[str] = None,
 ) -> bool:
     """Send the email. Returns whether one went out (``False`` for an
     officer's own leave, a departed member, a member with no address, or one
@@ -229,6 +244,7 @@ async def deliver_leave_notice(
         _display_name(officer, "A department officer"),
         _display_name(member, ""),
         await get_leave_month_rule(session, organization_id),
+        summary=summary,
     )
     try:
         from app.services.email_service import EmailService

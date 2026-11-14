@@ -3406,6 +3406,49 @@ class EmailService:
 
         return success_count > 0
 
+    async def send_leave_workflow_email(
+        self,
+        template_type: EmailTemplateType,
+        to_email: str,
+        context: Dict[str, Any],
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Send one of the leave reminder, digest or request emails.
+
+        *template_type* is one of ``email_templates_leave_workflow.DEFAULTS``;
+        *context* carries its variables and never a leave's reason or type.
+        """
+        from app.services.email_templates_leave_workflow import DEFAULTS
+
+        if template_type.value not in DEFAULTS:
+            raise ValueError(f"Not a leave workflow email: {template_type}")
+        default_subject, default_html, default_text = DEFAULTS[template_type.value]
+
+        rendered = await self._render_unless_switched_off(
+            template_type=template_type,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=default_subject,
+            default_html=default_html,
+            default_text=default_text,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=template_type.value,
+        )
+
+        return success_count > 0
+
     async def send_leave_of_absence_notice_email(
         self,
         to_email: str,

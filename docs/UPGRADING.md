@@ -802,6 +802,32 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Leave reminders, an open-ended leave digest, and member leave requests (2026-11-14)
+
+Nothing blocks a restart. Migration `c8d2f61a7e34` creates three empty tables
+(`leave_requests`, `leave_request_votes`, `leave_notice_sends`) and widens the
+template type list by five values; no existing row changes.
+
+- **Leave-ending reminders start at once, for every department.** By default
+  a member is emailed 7 days before their leave of absence ends, and the
+  officers who manage leave are copied. The first daily run after the upgrade
+  reminds every member whose leave ends within the next 7 days. To change the
+  number of days, stop copying officers, or turn reminders off (0 days), open
+  **Members → Administration → Settings → Leave of Absence** before upgrading.
+- **A monthly digest of open-ended leaves starts too.** The officers who
+  manage leave get one email a month listing leaves with no end date that
+  began six or more months ago. The first run after the upgrade sends this
+  month's, if there are any.
+- **Member leave requests are off** until a department turns them on in the
+  same settings section, where it also chooses who decides and how (any one
+  approver, a majority, or all of them).
+- Five new templates appear under Communications → Email Templates →
+  Training & Certifications. None carries a leave's reason or type.
+- **Downgrading** drops the three tables, which deletes every leave request
+  and its votes, and the record of which reminders were sent: a reminder
+  already sent may go out again after a later upgrade. Leaves an approved
+  request created are kept.
+
 ### Members are emailed about their leave of absence (2026-11-14)
 
 Nothing blocks a restart. Migration `b4e7c2a91f06` widens the template type

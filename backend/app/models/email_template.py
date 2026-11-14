@@ -103,6 +103,13 @@ class EmailTemplateType(str, enum.Enum):
     SHIFT_EVALUATION_PRECEPTOR_LINK = "shift_evaluation_preceptor_link"
     # To the member when an officer records, changes or removes their leave.
     LEAVE_OF_ABSENCE_NOTICE = "leave_of_absence_notice"
+    # Leave reminders, the open-ended digest and member leave requests; see
+    # email_templates_leave_workflow.py.
+    LEAVE_ENDING_REMINDER = "leave_ending_reminder"
+    LEAVE_ENDING_OFFICER_NOTICE = "leave_ending_officer_notice"
+    OPEN_ENDED_LEAVE_DIGEST = "open_ended_leave_digest"
+    LEAVE_REQUEST_SUBMITTED = "leave_request_submitted"
+    LEAVE_REQUEST_DENIED = "leave_request_denied"
     CUSTOM = "custom"
 
 

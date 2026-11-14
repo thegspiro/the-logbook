@@ -75,6 +75,7 @@ export const MEMBERS_SETTINGS_VISIBILITY_GATE = [
 export const MEMBERS_SETTINGS_IDS_GATE = ['settings.edit', 'organization.update_settings', 'members.manage'];
 export const MEMBERS_SETTINGS_RANKS_GATE = ['settings.manage', 'members.manage'];
 export const MEMBERS_SETTINGS_TIERS_GATE = ['members.manage'];
+export const MEMBERS_SETTINGS_LEAVE_GATE = ['members.manage'];
 export const MEMBERS_SETTINGS_EVOC_GATE = ['apparatus.manage', 'members.manage'];
 
 /**
@@ -94,6 +95,7 @@ export const MEMBERS_SETTINGS_ANY_PERMISSION = [
   'settings.edit',
   'apparatus.manage',
 ];
+const LeaveRequestsPage = lazyWithRetry(() => import('../../pages/LeaveRequestsPage'));
 const MemberAdminEditPage = lazyWithRetry(() => import('../../pages/MemberAdminEditPage'));
 const MemberAuditHistoryPage = lazyWithRetry(() => import('../../pages/MemberAuditHistoryPage'));
 const MemberIdCardPage = lazyWithRetry(() => import('../../pages/MemberIdCardPage'));
@@ -176,6 +178,17 @@ export const getMembershipRoutes = () => {
         element={
           <Suspense fallback={null}>
             <MyCrewPage />
+          </Suspense>
+        }
+      />
+      {/* No permission: asking for leave needs none, and who may decide a
+          request is the department's chosen positions, worked out by the
+          server, which lists each caller only what they may see. */}
+      <Route
+        path="/members/leave-requests"
+        element={
+          <Suspense fallback={null}>
+            <LeaveRequestsPage />
           </Suspense>
         }
       />
@@ -281,6 +294,16 @@ export const getMembershipRoutes = () => {
           <ProtectedRoute requiredAnyPermission={MEMBERS_SETTINGS_TIERS_GATE}>
             <Suspense fallback={null}>
               <MembersSettingsPage section="tiers" />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/members/admin/settings/leave"
+        element={
+          <ProtectedRoute requiredAnyPermission={MEMBERS_SETTINGS_LEAVE_GATE}>
+            <Suspense fallback={null}>
+              <MembersSettingsPage section="leave" />
             </Suspense>
           </ProtectedRoute>
         }
