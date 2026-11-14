@@ -26,6 +26,7 @@ from app.models.call_tracking import CallTrackingMode
 from app.models.notification import NotificationLog
 from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.training import (
+    WORKING_ASSIGNMENT_STATUSES,
     AssignmentStatus,
     BasicApparatus,
     DueDateType,
@@ -468,6 +469,8 @@ class SchedulingService:
         AssignmentStatus.DECLINED,
         AssignmentStatus.CANCELLED,
     ]
+    # Crew who took the shift (see the model's WORKING_ASSIGNMENT_STATUSES).
+    WORKING_ASSIGNMENT_STATUSES = list(WORKING_ASSIGNMENT_STATUSES)
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -10857,8 +10860,8 @@ class SchedulingService:
                 .where(
                     ShiftAssignment.shift_id == str(shift_id),
                     ShiftAssignment.is_training.is_(True),
-                    ShiftAssignment.assignment_status.notin_(
-                        self.INACTIVE_ASSIGNMENT_STATUSES
+                    ShiftAssignment.assignment_status.in_(
+                        self.WORKING_ASSIGNMENT_STATUSES
                     ),
                     User.organization_id == str(organization_id),
                 )
@@ -11319,10 +11322,7 @@ class SchedulingService:
                         # attendance row and the apparatus's full call count by
                         # default — crediting calls to people who never worked.
                         ShiftAssignment.assignment_status.in_(
-                            [
-                                AssignmentStatus.ASSIGNED,
-                                AssignmentStatus.CONFIRMED,
-                            ]
+                            self.WORKING_ASSIGNMENT_STATUSES
                         ),
                     )
                 )
@@ -11738,9 +11738,7 @@ class SchedulingService:
             ).where(
                 ShiftAssignment.shift_id == str(shift.id),
                 ShiftAssignment.is_training.is_(True),
-                ShiftAssignment.assignment_status.notin_(
-                    self.INACTIVE_ASSIGNMENT_STATUSES
-                ),
+                ShiftAssignment.assignment_status.in_(self.WORKING_ASSIGNMENT_STATUSES),
             )
         )
         training_map = {

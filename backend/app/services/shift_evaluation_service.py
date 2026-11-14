@@ -57,7 +57,7 @@ from app.models.shift_evaluation import (
     ShiftEvaluationTemplate,
 )
 from app.models.training import (
-    AssignmentStatus,
+    WORKING_ASSIGNMENT_STATUSES,
     EnrollmentStatus,
     ProgramEnrollment,
     ProgramRequirement,
@@ -91,11 +91,6 @@ from app.services.training_program_service import (
 )
 from app.utils.org_timezone import local_date, resolve_scheduling_timezone
 from app.utils.positions import canonical_position
-
-# Mirrors SchedulingService.INACTIVE_ASSIGNMENT_STATUSES. Not imported from
-# there because scheduling_service imports this module for the close-out
-# check; a declined or cancelled seat is not crew.
-_INACTIVE_ASSIGNMENT_STATUSES = (AssignmentStatus.DECLINED, AssignmentStatus.CANCELLED)
 
 # The template fields an evaluation keeps a copy of.
 _SNAPSHOT_FIELDS = (
@@ -492,8 +487,11 @@ class ShiftEvaluationService:
                     .join(User, User.id == ShiftAssignment.user_id)
                     .where(
                         ShiftAssignment.shift_id == occasion.shift.id,
-                        ShiftAssignment.assignment_status.notin_(
-                            _INACTIVE_ASSIGNMENT_STATUSES
+                        # Crew who took the shift, the trainee-report gate's
+                        # rule: a no-show is not evaluated (owner decision,
+                        # 2026-11-14).
+                        ShiftAssignment.assignment_status.in_(
+                            WORKING_ASSIGNMENT_STATUSES
                         ),
                         User.organization_id == org,
                     )

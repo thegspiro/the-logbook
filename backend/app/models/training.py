@@ -4440,6 +4440,13 @@ class AssignmentStatus(str, enum.Enum):
     NO_SHOW = "no_show"
 
 
+# Crew who took the shift: what close-out credits with attendance and calls,
+# and the only crew asked for a trainee report or a shift evaluation (owner
+# decision, 2026-11-14). NO_SHOW and PENDING still hold a seat but did not
+# work it.
+WORKING_ASSIGNMENT_STATUSES = (AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED)
+
+
 class SwapRequestStatus(str, enum.Enum):
     """Status of a shift swap request"""
 
