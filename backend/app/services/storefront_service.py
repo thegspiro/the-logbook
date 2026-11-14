@@ -125,6 +125,27 @@ _MEMBER_CANCELLABLE_STATUSES = (
     StoreOrderStatus.AWAITING_PAYMENT,
 )
 
+# Where each status sits in an order's life, for telling a forward move from a
+# backward one. Cancelled is absent: it is not a stage, and it is reached only
+# through cancel_order.
+_STATUS_STAGE = {
+    StoreOrderStatus.SUBMITTED: 0,
+    StoreOrderStatus.AWAITING_PAYMENT: 1,
+    StoreOrderStatus.PAID: 2,
+    StoreOrderStatus.ORDERED: 3,
+    StoreOrderStatus.READY_FOR_PICKUP: 4,
+    StoreOrderStatus.FULFILLED: 5,
+}
+
+# Owner decision (W67b-4, 2026-11-14): staff may step an order backwards only
+# to correct a fulfilment mistake, between these three. The earlier stages
+# describe money, and the payment ledger, not a status pick, decides those.
+_FULFILMENT_STAGES = (
+    StoreOrderStatus.ORDERED,
+    StoreOrderStatus.READY_FOR_PICKUP,
+    StoreOrderStatus.FULFILLED,
+)
+
 _STATUS_LABELS = {
     StoreOrderStatus.SUBMITTED: "Submitted",
     StoreOrderStatus.AWAITING_PAYMENT: "Awaiting payment",
@@ -134,6 +155,35 @@ _STATUS_LABELS = {
     StoreOrderStatus.FULFILLED: "Fulfilled",
     StoreOrderStatus.CANCELLED: "Cancelled",
 }
+
+
+def _status_transition_error(
+    order: "StoreOrder", current: StoreOrderStatus, target: StoreOrderStatus
+) -> Optional[str]:
+    """Why ``order`` may not move from ``current`` to ``target``, or None.
+
+    Cancelled and an unchanged status are settled by the caller before this
+    is asked.
+    """
+    target_label = _STATUS_LABELS[target]
+    if target in (
+        StoreOrderStatus.SUBMITTED,
+        StoreOrderStatus.AWAITING_PAYMENT,
+    ) and _is_settled(order):
+        return (
+            f"This order is already settled, so it cannot be marked "
+            f"{target_label.lower()}"
+        )
+    backward = _STATUS_STAGE[target] < _STATUS_STAGE[current]
+    if backward and not (
+        current in _FULFILMENT_STAGES and target in _FULFILMENT_STAGES
+    ):
+        return (
+            f"An order cannot move back from {_STATUS_LABELS[current].lower()} "
+            f"to {target_label.lower()}. Its payment stages follow the payments "
+            "recorded against it."
+        )
+    return None
 
 
 def _money(value: Any) -> Decimal:
@@ -1904,6 +1954,20 @@ class StorefrontService:
         message: Optional[str] = None,
         notify_member: bool = True,
     ) -> StoreOrder:
+        status = StoreOrderStatus(status)
+        # A cancellation through this route used to set the status alone,
+        # skipping the cancel date, the reason and the cancellation notice
+        # (W67b-4). The route still accepts it, so the bulk endpoint and
+        # existing callers keep working, but the cancel itself is cancel_order's.
+        if status == StoreOrderStatus.CANCELLED:
+            return await self.cancel_order(
+                order_id,
+                organization_id,
+                actor_id,
+                reason=message,
+                notify_member=notify_member,
+            )
+
         # A move to PAID may settle the ledger below, a read-modify-write on
         # amount_paid, so it locks the order like the other settlement paths
         # (SF8-04-2). A payment landing in between would otherwise be decided
@@ -1917,6 +1981,17 @@ class StorefrontService:
             raise ValueError("Order not found")
         if order.status == StoreOrderStatus.CANCELLED:
             raise ValueError("A cancelled order cannot be advanced")
+
+        current = StoreOrderStatus(order.status)
+        if status == current:
+            # Nothing changes, so nothing is recorded and nobody is emailed a
+            # second time. The commit only releases the PAID row lock.
+            await self.db.commit()
+            return order
+
+        refused = _status_transition_error(order, current, status)
+        if refused:
+            raise ValueError(refused)
 
         if status in _PAYMENT_GATED_STATUSES and not _is_settled(order):
             settings = await self.get_settings(organization_id)
@@ -1948,6 +2023,13 @@ class StorefrontService:
 
         previous = order.status
         order.status = status
+        if current == StoreOrderStatus.FULFILLED:
+            # A correction out of Fulfilled: the order was not in fact handed
+            # over, so nothing may go on saying it was.
+            order.fulfilled_at = None
+            order.fulfilled_by = None
+            for item in order.items:
+                item.fulfilled_quantity = 0
         if status == StoreOrderStatus.FULFILLED:
             order.fulfilled_at = _utcnow()
             order.fulfilled_by = actor_id
@@ -2549,6 +2631,14 @@ class StorefrontService:
                 )
                 updated += 1
             except ValueError as exc:
+                # A move to PAID locks the order before it can be refused;
+                # nothing was written, so rolling back only releases that lock
+                # rather than carrying it into the next order (as bulk_mark_paid).
+                # Only PAID locks. Any other target must not roll back: it
+                # expires every loaded object, and record_vendor_order goes on
+                # to use its window after calling this with ORDERED.
+                if status == StoreOrderStatus.PAID:
+                    await self.db.rollback()
                 skipped += 1
                 errors.append({"order_id": str(order_id), "error": str(exc)})
         return {"updated": updated, "skipped": skipped, "errors": errors}

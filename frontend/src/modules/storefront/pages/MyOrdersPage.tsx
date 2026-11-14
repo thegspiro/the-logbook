@@ -20,6 +20,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCurrency, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { OrderChargeRows, OrderDeliveryDetails } from '../components/OrderDeliveryDetails';
 import { OrderStatusStepper } from '../components/OrderStatusStepper';
 import { PaymentOptions } from '../components/PaymentOptions';
 import { storefrontService } from '../services/api';
@@ -195,6 +196,11 @@ const MyOrdersPage: React.FC = () => {
           </ul>
 
           <dl className="border-theme-surface-border flex flex-col gap-1 border-t pt-3 text-sm">
+            <OrderChargeRows
+              order={order}
+              termClassName="text-theme-text-secondary"
+              valueClassName="text-theme-text-primary font-mono"
+            />
             <div className="flex justify-between">
               <dt className="text-theme-text-secondary">Total</dt>
               <dd className="text-theme-text-primary font-mono font-medium">{formatCurrency(Number(order.total))}</dd>
@@ -204,6 +210,10 @@ const MyOrdersPage: React.FC = () => {
               <dd className="text-theme-text-primary font-mono">{formatCurrency(Number(order.amountPaid))}</dd>
             </div>
           </dl>
+
+          <div className="border-theme-surface-border border-t pt-3">
+            <OrderDeliveryDetails order={order} audience="member" />
+          </div>
 
           {balance > 0 && (
             <div className="alert-warning">
