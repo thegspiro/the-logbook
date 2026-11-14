@@ -151,7 +151,7 @@ describe('StaffingSection', () => {
   it('uploads a file as the kind its drop zone names', async () => {
     mockGet.mockResolvedValue(empty);
     await openSection();
-    const zone = await screen.findByRole('button', { name: 'Drop the events file here or click to browse' });
+    const zone = await screen.findByRole('button', { name: /^Drop the events file here or click to browse/ });
     const file = new File(['EventID,eDate\n1,2016-05-02'], 'Events.csv', { type: 'text/csv' });
     fireEvent.drop(zone, { dataTransfer: { files: [file] } });
 

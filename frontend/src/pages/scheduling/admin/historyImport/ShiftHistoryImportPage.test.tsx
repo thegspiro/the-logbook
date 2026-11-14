@@ -29,7 +29,7 @@ vi.mock('react-router', async () => {
 import ShiftHistoryImportPage from './ShiftHistoryImportPage';
 
 const dropFile = (file: File) =>
-  fireEvent.drop(screen.getByRole('button', { name: 'Drop a CSV here or click to browse' }), {
+  fireEvent.drop(screen.getByRole('button', { name: /^Drop a CSV here or click to browse/ }), {
     dataTransfer: { files: [file] },
   });
 
