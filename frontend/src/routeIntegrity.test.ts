@@ -148,15 +148,31 @@ for (const file of files) {
     });
 }
 
-/** Turns a route pattern into a matcher: `:id` accepts one segment, `*` any tail. */
-const routeMatcher = (routePath: string): RegExp =>
-  new RegExp(`^${routePath.replace(/\*/g, '.*').replace(/:[^/]+/g, '[^/]+')}$`);
+/**
+ * Turns a route pattern into a matcher: `:id` accepts one segment, `*` any
+ * tail. A trailing `/*` also matches the path without it, as React Router's
+ * splat does: `/elections/:electionId/*` serves `/elections/X` itself, not only
+ * `/elections/X/results`.
+ */
+const routeMatcher = (routePath: string): RegExp => {
+  const splat = routePath.endsWith('/*');
+  const head = (splat ? routePath.slice(0, -2) : routePath).replace(/\*/g, '.*').replace(/:[^/]+/g, '[^/]+');
+  return new RegExp(`^${head}${splat ? '(?:/.*)?' : ''}$`);
+};
 
 const matchers = [...declaredRoutes].filter((routePath) => routePath !== '*').map(routeMatcher);
 
 const pathOf = (target: string): string => target.split(/[?#]/)[0] || '/';
 
 describe('route integrity', () => {
+  it('matches a trailing splat the way the router does, with or without the tail', () => {
+    const splat = routeMatcher('/elections/:electionId/*');
+    expect(splat.test('/elections/X')).toBe(true);
+    expect(splat.test('/elections/X/results')).toBe(true);
+    expect(splat.test('/elections')).toBe(false);
+    expect(routeMatcher('*').test('/anything')).toBe(true);
+  });
+
   it('finds the routes and navigation targets it is meant to check', () => {
     // Guards the regexes themselves: a silent zero-match sweep would pass every
     // assertion below while checking nothing at all.
