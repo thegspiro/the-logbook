@@ -101,6 +101,8 @@ class EmailTemplateType(str, enum.Enum):
     MEETING_WAIVER_DECIDED = "meeting_waiver_decided"
     MEETING_WAIVER_WITHDRAWN = "meeting_waiver_withdrawn"
     SHIFT_EVALUATION_PRECEPTOR_LINK = "shift_evaluation_preceptor_link"
+    # To the member when an officer records, changes or removes their leave.
+    LEAVE_OF_ABSENCE_NOTICE = "leave_of_absence_notice"
     CUSTOM = "custom"
 
 

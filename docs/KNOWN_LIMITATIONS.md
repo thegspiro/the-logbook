@@ -6802,7 +6802,12 @@ error until a sender exists, rather than the current silent-accept.
 > decision:** the two reports still measure program progress and can disagree
 > with the dashboard; that is now stated on them. Tests:
 > `tests/test_training_summary_program_progress.py`,
-> `programProgressLabels.test.tsx`. The text below is the original finding.
+> `programProgressLabels.test.tsx`. **Reaffirmed 2026-11-14:** asked whether
+> to rebuild `compliance_status` on the dashboard's evaluation so a leave of
+> absence reduces its targets, the owner kept this decision and chose instead
+> to list each member's leave in the past year beside the progress (an
+> **On leave** mark and the dates); no figure changes
+> (`tests/test_reports_leave.py`). The text below is the original finding.
 
 `reports_service._generate_compliance_status` (the `compliance_status`
 report) and `_generate_training_summary`'s `requirement_breakdown` section

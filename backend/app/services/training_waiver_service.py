@@ -503,6 +503,23 @@ def excused_month_reasons(
     return {"leave_months": leave, "waiver_months": waiver}
 
 
+def leave_months_in(
+    waivers: List[WaiverPeriod],
+    period_start: date,
+    period_end: date,
+) -> float:
+    """How many months of a period a leave of absence excused.
+
+    The sum of each month's share under the department's rule, counted from
+    leave periods alone: a training waiver, an override or a session excusal
+    is not leave. Under ``full_month`` this is a whole number of months; under
+    the other rules a partly covered month adds its share.
+    """
+    leave = [w for w in waivers if w.source == SOURCE_LEAVE]
+    shares = month_waivers(leave, period_start, period_end).values()
+    return round(sum(mw.share for mw in shares), 2)
+
+
 def waived_month_keys(
     waivers: List[WaiverPeriod],
     period_start: date,

@@ -17,7 +17,7 @@ DELETE /users/leaves-of-absence/{id}             - Deactivate a leave
 
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import and_, case, func, select
@@ -35,6 +35,11 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, safe_error_detail
 from app.models.user import MemberLeaveOfAbsence, User
+from app.services.leave_of_absence_notices import (
+    notice_kind,
+    send_leave_notice,
+    snapshot,
+)
 from app.services.member_leave_service import MemberLeaveService
 from app.services.scheduling_service import SchedulingService
 from app.utils.org_timezone import resolve_org_today
@@ -200,6 +205,7 @@ def _to_response(leave) -> LeaveOfAbsenceResponse:
 )
 async def create_leave_of_absence(
     data: LeaveOfAbsenceCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_all_permissions("members.manage", "scheduling.assign")
@@ -257,6 +263,7 @@ async def create_leave_of_absence(
             exc,
         )
 
+    _notify_member(background_tasks, current_user, leave, None)
     return _to_response(leave)
 
 
@@ -339,12 +346,17 @@ async def get_member_leaves(
 async def update_leave_of_absence(
     leave_id: str,
     data: LeaveOfAbsenceUpdate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
 ):
     """Update a leave of absence."""
     svc = MemberLeaveService(db)
     updates = data.model_dump(exclude_unset=True)
+    existing = await svc.get_leave(
+        organization_id=str(current_user.organization_id), leave_id=leave_id
+    )
+    before = snapshot(existing) if existing else None
     try:
         updated = await svc.update_leave(
             organization_id=str(current_user.organization_id),
@@ -369,12 +381,15 @@ async def update_leave_of_absence(
         username=current_user.username,
     )
 
+    if before is not None:
+        _notify_member(background_tasks, current_user, leave, before)
     return _to_response(leave)
 
 
 @router.delete("/leaves-of-absence/{leave_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_leave_of_absence(
     leave_id: str,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
 ):
@@ -385,6 +400,7 @@ async def delete_leave_of_absence(
     leave = await svc.get_leave(
         organization_id=str(current_user.organization_id), leave_id=leave_id
     )
+    before = snapshot(leave) if leave else None
     success = await svc.deactivate_leave(
         organization_id=str(current_user.organization_id),
         leave_id=leave_id,
@@ -402,4 +418,31 @@ async def delete_leave_of_absence(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+
+    if leave is not None and before is not None:
+        _notify_member(background_tasks, current_user, leave, before)
+
+
+def _notify_member(
+    background_tasks: BackgroundTasks,
+    current_user: User,
+    leave: MemberLeaveOfAbsence,
+    before: dict | None,
+) -> None:
+    """Email the leave's member about the change, after the response is sent.
+
+    Decided from the leave before and after this request, so one that changes
+    nothing the member is told about -- a repeated PATCH, a second DELETE --
+    sends nothing (pitfall #36).
+    """
+    kind = notice_kind(before, snapshot(leave))
+    if kind is None:
+        return
+    background_tasks.add_task(
+        send_leave_notice,
+        str(current_user.organization_id),
+        str(leave.id),
+        str(current_user.id),
+        kind,
     )

@@ -31,6 +31,7 @@ from app.models.email_template import (
 from app.services import email_footers as _footers
 from app.services import email_templates_attendance_waivers as _waiver_templates
 from app.services import email_templates_evaluations as _evaluation_templates
+from app.services import email_templates_leave as _leave_templates
 from app.services import email_templates_storefront as _storefront_templates
 from app.services.branding_service import email_logo_src
 from app.services.email_theme import (  # noqa: F401  (re-exported: many services import DEFAULT_CSS from here)
@@ -1053,6 +1054,7 @@ def _sample(*dicts: Dict[str, str]) -> Dict[str, str]:
 TEMPLATE_VARIABLES.update(_storefront_templates.TEMPLATE_VARIABLES)
 TEMPLATE_VARIABLES.update(_evaluation_templates.TEMPLATE_VARIABLES)
 TEMPLATE_VARIABLES.update(_waiver_templates.TEMPLATE_VARIABLES)
+TEMPLATE_VARIABLES.update(_leave_templates.TEMPLATE_VARIABLES)
 
 SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
     "welcome": _sample(
@@ -1788,6 +1790,9 @@ SAMPLE_CONTEXT.update(
 SAMPLE_CONTEXT.update(
     {key: _sample(value) for key, value in _waiver_templates.SAMPLE_CONTEXT.items()}
 )
+SAMPLE_CONTEXT.update(
+    {key: _sample(value) for key, value in _leave_templates.SAMPLE_CONTEXT.items()}
+)
 
 # The sample links' placeholder host. Only the host is replaced: each path is
 # the one the real sender builds (``/events/{id}``, ``/training/approve/…``),
@@ -1879,6 +1884,7 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
 }
 TEST_RECIPIENT_FIELDS.update(_evaluation_templates.TEST_RECIPIENT_FIELDS)
 TEST_RECIPIENT_FIELDS.update(_waiver_templates.TEST_RECIPIENT_FIELDS)
+TEST_RECIPIENT_FIELDS.update(_leave_templates.TEST_RECIPIENT_FIELDS)
 
 _DATE_TIME = "%B %d, %Y at %I:%M %p"
 _DATE = "%B %d, %Y"
@@ -1981,6 +1987,12 @@ TEST_SAMPLE_DATES.update(
     {
         key: {"session_date": (days, None, _strf(_DATE))}
         for key, days in _waiver_templates.SAMPLE_SESSION_DAYS.items()
+    }
+)
+TEST_SAMPLE_DATES.update(
+    {
+        key: {name: (days, None, _strf(_DATE)) for name, days in fields.items()}
+        for key, fields in _leave_templates.SAMPLE_LEAVE_DAYS.items()
     }
 )
 
@@ -5736,6 +5748,9 @@ class EmailTemplateService:
         # Attendance waiver requests, for training sessions and business
         # meetings; see email_templates_attendance_waivers.py.
         *_waiver_templates.DEFAULT_TEMPLATE_DEFS,
+        # A member's leave of absence recorded, changed or removed; see
+        # email_templates_leave.py.
+        *_leave_templates.DEFAULT_TEMPLATE_DEFS,
     ]
 
     # Stamp each definition with the colourway build_shell recorded for its

@@ -9,16 +9,38 @@
  */
 
 import React from 'react';
-import type { ComplianceStatusReport } from '../../types';
+import type { ComplianceMemberEntry, ComplianceStatusReport } from '../../types';
+
+/**
+ * A member's leave in the past year, beside progress it does not change
+ * (owner decision 2026-11-14): an officer chasing an outstanding item can see
+ * the member was, or is, away.
+ */
+const LeaveCell: React.FC<{ entry: ComplianceMemberEntry }> = ({ entry }) => {
+  const periods = entry.leave_periods ?? [];
+  if (periods.length === 0) return <span className="text-theme-text-muted text-xs">-</span>;
+  return (
+    <div className="text-xs">
+      {entry.on_leave && <div className="font-semibold text-blue-700 dark:text-blue-300">On leave</div>}
+      {periods.map((period) => (
+        <div key={`${period.start_date}-${period.end_date ?? ''}`} className="text-theme-text-muted">
+          {leavePeriodText(period)}
+        </div>
+      ))}
+    </div>
+  );
+};
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
 import { renderCalendarDate } from '../../utils/reportDates';
+import { leavePeriodText, leavePeriodsText } from '../../utils/leavePeriods';
 
 interface Props {
   data: ComplianceStatusReport;
 }
 
 export const ComplianceStatusRenderer: React.FC<Props> = ({ data }) => {
+  const entriesById = new Map(data.entries.map((entry) => [entry.member_id, entry]));
   const columns = [
     { key: 'member_name', header: 'Member' },
     { key: 'rank', header: 'Rank' },
@@ -73,6 +95,14 @@ export const ComplianceStatusRenderer: React.FC<Props> = ({ data }) => {
         );
       },
     },
+    {
+      key: 'on_leave',
+      header: 'Leave',
+      render: (_v: unknown, row: Record<string, unknown>) => {
+        const entry = entriesById.get(typeof row.member_id === 'string' ? row.member_id : '');
+        return entry ? <LeaveCell entry={entry} /> : '-';
+      },
+    },
   ];
 
   return (
@@ -115,6 +145,13 @@ export function getComplianceStatusExportData(data: ComplianceStatusReport) {
     { key: 'completed_requirements', header: 'Completed' },
     { key: 'compliance_percentage', header: 'Program Progress %' },
     { key: 'overdue_items', header: 'Outstanding' },
+    { key: 'on_leave_text', header: 'On Leave Now' },
+    { key: 'leave_periods_text', header: 'Leave in Past Year' },
   ];
-  return { rows: data.entries as unknown as Array<Record<string, unknown>>, columns };
+  const rows = data.entries.map((entry) => ({
+    ...entry,
+    on_leave_text: entry.on_leave ? 'Yes' : 'No',
+    leave_periods_text: leavePeriodsText(entry.leave_periods),
+  }));
+  return { rows: rows as unknown as Array<Record<string, unknown>>, columns };
 }

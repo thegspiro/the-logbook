@@ -15,6 +15,7 @@ import {
   UserPlus,
   KeyRound,
   CalendarX,
+  CalendarOff,
   CalendarClock,
   GraduationCap,
   Vote,
@@ -174,6 +175,7 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   session_waiver_requested: { icon: ClipboardCheck, label: 'Training Waiver Requested', color: 'text-purple-500' },
   session_waiver_decided: { icon: BadgeCheck, label: 'Training Waiver Decided', color: 'text-purple-500' },
   session_waiver_withdrawn: { icon: Undo2, label: 'Training Waiver Withdrawn', color: 'text-purple-500' },
+  leave_of_absence_notice: { icon: CalendarOff, label: 'Leave of Absence Notice', color: 'text-purple-500' },
   meeting_waiver_requested: {
     icon: ClipboardCheck,
     label: 'Meeting Waiver Requested',
@@ -287,6 +289,7 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
       'session_waiver_requested',
       'session_waiver_decided',
       'session_waiver_withdrawn',
+      'leave_of_absence_notice',
     ],
   },
   {

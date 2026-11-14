@@ -2312,6 +2312,19 @@ like any other training, and the monthly hours show it under the month's
 - **The Compliance Matrix** — a reduced cell's note names the months as "on
   leave" only where a leave of absence covered them, and as "waived months"
   where a training waiver did.
+- **The Annual Training report** _(2026-11-14)_ — a **Leave** column gives
+  each member's leave dates and the months of the year it excused, by the
+  same department rule, beside their hours. See
+  [Reports > Annual Training Summary](./08-admin-reports.md#realistic-example-generating-the-annual-training-summary-report).
+- **The member's email** _(2026-11-14)_ — when an officer records, changes or
+  removes a member's leave, the member is emailed **Leave of absence
+  recorded** (or updated, or removed) with the dates and what the leave does
+  to their training requirements, including the department's rule for a
+  partly covered month. It is always sent, under **Changes to your training
+  record**, and never includes the leave's reason or type. An officer
+  recording their own leave is not emailed. The wording is the **Leave of
+  Absence Notice** template under **Communications > Email Templates >
+  Training & Certifications**.
 - **The Shift Compliance report** (Scheduling) — counts leaves of absence only,
   as before, but now excuses each month by the same department rule, so a
   month reads the same there as on the member's training screen.
