@@ -258,8 +258,9 @@ decider queue all read it.
 
 **Who is copied** _(2026-11-13)_. `cc_position_ids` names positions whose
 current holders are told the outcome of each final decision (approved, denied,
-the Chief's override) by an in-app notice (category `attendance_waiver_cc`) and
-an email under the workflow's decider email kind. They are informed only: the
+the Chief's override) by an in-app notice (category `attendance_waiver_cc`).
+An email copy comes from the decided template's own CC positions instead, so
+nobody named in both is emailed twice. They are informed only: the
 notice names the member, the session, its date and the outcome, never the
 reason, category or note; it leads to `/events/{id}` while the event exists and
 nowhere after. The requester and the decider are left out, and each holder gets
@@ -286,6 +287,36 @@ and the audit log. The member's data export carries their requests, reasons
 included, and the decision log of each, notes included; it does not carry
 notes the member wrote as a decider on anyone else's request. Anonymizing a
 departed member clears the reason and the notes; the request itself is kept.
+
+**Email.** Each step is emailed, after it is saved, one message per person,
+using templates the department edits under Communications → Email Templates:
+
+| When                           | Template                    | To                                      |
+| ------------------------------ | --------------------------- | --------------------------------------- |
+| A member asks                  | _Training Waiver Requested_ | everyone the request is routed to       |
+| Approved, denied or overridden | _Training Waiver Decided_   | the member                              |
+| The member withdraws           | _Training Waiver Withdrawn_ | the approvers the request email reached |
+
+- The approvers' email names the member, the session, its date and the
+  category, and says whether a reason was given. **The reason is never in an
+  email**; the approver reads it in the Logbook.
+- Its **Approve** and **Deny** buttons open `/attendance-waivers/{id}?action=…`.
+  Opening one changes nothing — mail scanners such as Safe Links and
+  Proofpoint open every link in a message — because the page requires sign-in
+  and decides only when the approver confirms.
+- An approver may switch these off under _Training officer duties_. The
+  member's decision email is always sent: it changes how their attendance is
+  graded.
+- A template's **default CC**, **CC positions** (say, the Secretary) and
+  **BCC** each get their own copy, which has no buttons, no category and no
+  decider's note, and says it is a copy for the department's records.
+- A retried send is never sent twice: each one is recorded against the
+  decision-log entry and the recipient, which the database keeps unique.
+- No text message is sent. The in-app notifications are unchanged.
+
+The meeting templates (_Meeting Waiver Requested / Decided / Withdrawn_) are
+sent the same way for business-meeting requests, under the event-duty and
+event-change email preferences rather than the training ones.
 
 **Supporting documents.** When the policy's `attachment` is `optional` or
 `required`, a member may file up to three documents with a request: PDF,

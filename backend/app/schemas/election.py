@@ -177,6 +177,11 @@ def clean_voter_types(values: List[str]) -> List[str]:
 # Ballot Item Schemas
 
 
+# A reason a secretary gives for voter rules that differ from the
+# department's defaults; long enough for a bylaws citation and a sentence.
+MAX_OVERRIDE_REASON_LENGTH = 2000
+
+
 class BallotItem(BaseModel):
     """Schema for a ballot item with voter eligibility rules.
 
@@ -247,6 +252,28 @@ class BallotItem(BaseModel):
         description="Override election-level voting method for this item",
     )
 
+    # Per-item voter rules: the carve-out that lets one question on a ballot
+    # (a bylaws amendment at a business meeting) follow a different kind of
+    # vote's rules than the rest. When ``eligibility_rules`` is set, it
+    # replaces the election's rules -- and, being version 2, the tier
+    # ladder's -- for this item only. ``eligibility_kind`` names the kind
+    # whose defaults they were copied from, or is None for custom rules.
+    # Stored as plain JSON here because this is the tolerant read shape;
+    # ``BallotItemInput`` validates the rules on the way in.
+    eligibility_kind: Optional[str] = Field(
+        default=None,
+        description="Meeting kind whose voter rules this item follows",
+    )
+    eligibility_rules: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Version 2 voter rules for this item instead of the election's",
+    )
+    eligibility_override_reason: Optional[str] = Field(
+        default=None,
+        max_length=MAX_OVERRIDE_REASON_LENGTH,
+        description="Why this item's voter rules differ from the defaults",
+    )
+
     @field_validator("type")
     @classmethod
     def validate_type(cls, v: str) -> str:
@@ -313,6 +340,32 @@ class BallotItemInput(BallotItem):
             )
         return self
 
+    @field_validator("eligibility_kind")
+    @classmethod
+    def validate_eligibility_kind(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_choice(v, VALID_MEETING_KINDS, "meeting kind")
+
+    @field_validator("eligibility_rules")
+    @classmethod
+    def validate_item_rules(
+        cls, v: Optional[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        if v is None:
+            return None
+        rules = ElectionEligibilityRules.model_validate(v)
+        # Version 1 rules sit beside the tier ladder's; an item's own rules
+        # are meant to be the whole answer for that item.
+        if rules.version != 2:
+            raise ValueError(
+                "A ballot item's own voter rules must be set per member type"
+            )
+        return rules.model_dump()
+
+    @field_validator("eligibility_override_reason")
+    @classmethod
+    def blank_reason_is_none(cls, v: Optional[str]) -> Optional[str]:
+        return (v or "").strip() or None
+
 
 class PositionEligibility(BaseModel):
     """Schema for position-specific voter eligibility"""
@@ -326,9 +379,10 @@ class PositionEligibility(BaseModel):
 
 
 VALID_ATTENDANCE_RULE_MODES = {"none", "count", "percent"}
-# Which of the department's eligibility defaults an election copies: those
-# for regular business meetings, or the annual meeting's own.
-VALID_MEETING_KINDS = {"regular", "annual"}
+# Which of the department's eligibility defaults an election copies. Every
+# kind but "regular" may carry its own set and uses the regular one until it
+# does.
+VALID_MEETING_KINDS = {"regular", "annual", "bylaws", "special"}
 # Mirrors app.models.meeting.MeetingType; kept as literals so this schema
 # module does not import the ORM.
 VALID_MEETING_TYPES = {
@@ -447,23 +501,100 @@ class WaitingPeriod(BaseModel):
         return self
 
 
-class ElectionEligibilityRules(BaseModel):
-    """Election-wide voter rules, stored on ``elections.eligibility_rules``.
+VALID_WAIT_COUNTED_FROM = {"type", "joined"}
+MAX_TYPE_ATTENDANCE_RULES = 4
+MAX_TYPE_RULES = 60
+# A member type is a built-in status, a class, or a department tier id;
+# tier ids are at most 50 characters (MembershipTier.id).
+_TYPE_RULE_KEY = re.compile(r"^[a-z0-9][a-z0-9_-]{0,49}$")
 
-    These apply to every ballot item and position in the election, on top of
-    each item's own voter types and check-in requirement and each membership
-    tier's own rules. A secretary's voter override bypasses them.
+
+class TypeWait(BaseModel):
+    """How long members of one type wait before they may vote.
+
+    ``counted_from``: ``type`` counts from when the member became that type
+    (``member_status_since`` / ``member_class_since``); ``joined`` counts from
+    when their current period of membership began. Either way a secretary's
+    ``voting_wait_from`` wins, and never from before the current stint.
     """
 
     model_config = ConfigDict(extra="forbid")
 
+    months: int = Field(..., ge=1, le=MAX_WAITING_PERIOD_MONTHS)
+    counted_from: str = Field(default="type")
+
+    @field_validator("counted_from")
+    @classmethod
+    def validate_counted_from(cls, v: str) -> str:
+        return _validate_choice(v, VALID_WAIT_COUNTED_FROM, "waiting period start")
+
+
+class TypeRule(BaseModel):
+    """Every voting rule for one member type, one row of the settings table.
+
+    A member must meet every rule on their row; every attendance rule in
+    ``attendance`` must pass, and an empty list means attendance is not
+    required. A type that may not vote carries no other rule.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    may_vote: bool = True
+    wait: Optional[TypeWait] = None
+    attendance: List[AttendanceRule] = Field(
+        default_factory=list, max_length=MAX_TYPE_ATTENDANCE_RULES
+    )
+
+    @model_validator(mode="after")
+    def normalize(self) -> "TypeRule":
+        # "none" is what an empty list already means; keeping it would make
+        # two spellings of one rule.
+        self.attendance = [a for a in self.attendance if a.mode != "none"]
+        if not self.may_vote:
+            self.wait = None
+            self.attendance = []
+        return self
+
+
+class ElectionEligibilityRules(BaseModel):
+    """Voter rules, stored on ``elections.eligibility_rules`` and as each
+    meeting kind's department defaults.
+
+    Two shapes, told apart by ``version``:
+
+    - **1**, the original: one ``attendance`` rule every voter must meet and
+      a ``waiting_periods`` entry per member type, applied alongside each
+      membership tier's own voting rules. Elections created before version 2
+      keep it, and are judged exactly as they were.
+    - **2**: ``types``, one complete row of rules per member type, and
+      nothing else -- membership tier voting rules do not apply. A member is
+      judged by the row for their status (or department tier) and, when they
+      are administrative or social, also by the row for their class.
+
+    These apply to every ballot item and position in the election, on top of
+    each item's own voter types and check-in requirement. A secretary's
+    voter override bypasses them.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    version: int = Field(default=1, ge=1, le=2)
     attendance: AttendanceRule = Field(default_factory=AttendanceRule)
     waiting_periods: Dict[str, WaitingPeriod] = Field(
         default_factory=dict,
         description=(
-            "Per member type (see app.utils.membership.VOTER_TYPE_KEYS): how "
-            "long after becoming that type a member may vote. A type not "
-            "listed has no waiting period"
+            "Version 1 only. Per member type (see "
+            "app.utils.membership.VOTER_TYPE_KEYS): how long after becoming "
+            "that type a member may vote. A type not listed has no waiting "
+            "period"
+        ),
+    )
+    types: Dict[str, TypeRule] = Field(
+        default_factory=dict,
+        max_length=MAX_TYPE_RULES,
+        description=(
+            "Version 2 only. Keyed by built-in status, class "
+            "(administrative, social) or department tier id"
         ),
     )
 
@@ -481,6 +612,29 @@ class ElectionEligibilityRules(BaseModel):
         # "none" is what an absent key already means; storing it would make
         # two spellings of one rule.
         return {k: p for k, p in v.items() if p.mode != "none"}
+
+    @field_validator("types")
+    @classmethod
+    def validate_type_keys(cls, v: Dict[str, TypeRule]) -> Dict[str, TypeRule]:
+        for key in v:
+            if not _TYPE_RULE_KEY.match(key):
+                raise ValueError(
+                    f"Invalid member type '{key[:60]}'. Use the lower-case id "
+                    "of a status, class or membership tier"
+                )
+        return v
+
+    @model_validator(mode="after")
+    def validate_version_shape(self) -> "ElectionEligibilityRules":
+        if self.version == 2:
+            if self.attendance.mode != "none" or self.waiting_periods:
+                raise ValueError(
+                    "Version 2 rules are set per member type in 'types'; "
+                    "'attendance' and 'waiting_periods' must be left empty"
+                )
+        elif self.types:
+            raise ValueError("Per-type rules in 'types' need version 2")
+        return self
 
 
 class ElectionEligibilityRulesRead(ElectionEligibilityRules):
@@ -582,6 +736,14 @@ class ElectionBase(BaseModel):
         description=(
             "Election-wide voter rules; omitted on create to copy the "
             "department's defaults"
+        ),
+    )
+    eligibility_override_reason: Optional[str] = Field(
+        default=None,
+        max_length=MAX_OVERRIDE_REASON_LENGTH,
+        description=(
+            "Why these rules differ from the department's defaults for the "
+            "meeting kind; required when they do"
         ),
     )
     meeting_kind: Optional[str] = Field(
@@ -829,6 +991,9 @@ class ElectionUpdate(BaseModel):
     ballot_items: Optional[List[BallotItemInput]] = Field(default=None, max_length=250)
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
     eligibility_rules: Optional[ElectionEligibilityRules] = None
+    eligibility_override_reason: Optional[str] = Field(
+        None, max_length=MAX_OVERRIDE_REASON_LENGTH
+    )
     meeting_kind: Optional[str] = None
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
@@ -947,6 +1112,7 @@ class ElectionResponse(UTCResponseBase):
     ballot_items: Optional[List[BallotItem]] = None
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
     eligibility_rules: Optional[ElectionEligibilityRulesRead] = None
+    eligibility_override_reason: Optional[str] = None
     meeting_kind: str = "regular"
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
@@ -1472,6 +1638,21 @@ class PositionResults(BaseModel):
     is_tie: bool = False
 
 
+class VoterRuleException(BaseModel):
+    """Where an election's voter rules depart from the department's
+    defaults: the election as a whole, or one ballot item with rules of its
+    own. Carried in the results so the minutes record who could vote and
+    why it differed."""
+
+    # "election" or "ballot_item"
+    scope: str
+    title: str
+    # The meeting kind whose rules apply; None for an item's custom rules.
+    meeting_kind: Optional[str] = None
+    # None for an item that follows another kind's defaults unchanged.
+    reason: Optional[str] = None
+
+
 class ElectionResults(BaseModel):
     """Complete election results"""
 
@@ -1497,6 +1678,7 @@ class ElectionResults(BaseModel):
     quorum_met: Optional[bool] = None
     quorum_detail: Optional[str] = None
     tie_policy: Optional[str] = None
+    voter_rule_exceptions: List[VoterRuleException] = Field(default_factory=list)
 
 
 class ElectionStats(BaseModel):
@@ -2063,6 +2245,96 @@ class SuccessResponse(BaseModel):
     message: str
 
 
+class ElectoratePreviewRequest(BaseModel):
+    """Voter rules to preview against today's members: the rules given, or
+    when none are, the defaults ``meeting_kind`` would copy."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    meeting_kind: str = "regular"
+    eligibility_rules: Optional[ElectionEligibilityRules] = None
+
+    @field_validator("meeting_kind")
+    @classmethod
+    def validate_meeting_kind(cls, v: str) -> str:
+        return _validate_choice(v, VALID_MEETING_KINDS, "meeting kind")
+
+
+class ElectoratePreviewResponse(BaseModel):
+    """How many active members the previewed rules admit today."""
+
+    eligible: int
+    total: int
+
+
+class ElectionAttendanceMember(BaseModel):
+    """One member's meeting attendance over the chosen period, and whether
+    they may vote in the chosen election (its eligibility roster's answer)."""
+
+    user_id: str
+    name: str
+    member_type: Optional[str] = None
+    member_since: Optional[date] = None
+    meetings_in_period: int
+    attended: int
+    absent: int
+    excused: int
+    on_leave: int
+    attendance_pct: float
+    # None when the member is not on the election's roster at all.
+    may_vote: Optional[bool] = None
+    reason: Optional[str] = None
+
+
+class ElectionAttendanceResponse(BaseModel):
+    election_id: str
+    election_title: str
+    start: date
+    end: date
+    meeting_types: Optional[List[str]] = None
+    total_meetings: int
+    members: List[ElectionAttendanceMember]
+
+
+class MemberMeetingRecord(BaseModel):
+    """One meeting in a member's record: how it counts, and where the
+    attendance record came from (NULL for records written before that was
+    kept)."""
+
+    meeting_id: str
+    title: str
+    meeting_type: Optional[str] = None
+    meeting_date: date
+    # present, absent, excused or on_leave
+    status: str
+    checked_in_at: Optional[datetime] = None
+    recorded_by_name: Optional[str] = None
+    recorded_via: Optional[str] = None
+    waiver_reason: Optional[str] = None
+    leave_start: Optional[date] = None
+    leave_end: Optional[date] = None
+
+
+class MemberMeetingsResponse(BaseModel):
+    user_id: str
+    name: str
+    start: date
+    end: date
+    meetings: List[MemberMeetingRecord]
+
+
+class VoterRow(BaseModel):
+    """One member type the per-type rules table has a row for."""
+
+    key: str
+    label: str
+    # "status" rows are matched on the member's status or department tier;
+    # "class" rows (administrative, social) apply on top of the status row.
+    decided_by: str
+    # The status whose row judges a department tier without a row of its own.
+    counts_as: Optional[str] = None
+
+
 class ElectionSettingsResponse(BaseModel):
     """Organization-level election settings"""
 
@@ -2084,10 +2356,16 @@ class ElectionSettingsResponse(BaseModel):
     # batch before its votes count. 0 disables attestation.
     paper_ballot_attestations_required: Optional[int] = 2
     eligibility: EligibilityDefaults = Field(default_factory=EligibilityDefaults)
-    # The annual meeting's own defaults; null means it uses ``eligibility``.
+    # Each other meeting kind's own defaults; null means it uses
+    # ``eligibility``.
     annual_eligibility: Optional[EligibilityDefaults] = None
-    # Each membership tier's own voting rules, read-only here: they are
-    # edited on the membership tier settings and apply alongside these.
+    bylaws_eligibility: Optional[EligibilityDefaults] = None
+    special_eligibility: Optional[EligibilityDefaults] = None
+    # The rows the per-type rules table offers, in display order.
+    voter_rows: List[VoterRow] = Field(default_factory=list)
+    # Each membership tier's stored voting benefits. Kept for API
+    # compatibility: version 2 rules (every set above) no longer read them;
+    # they only seed a department's first version 2 rules.
     tier_voting_rules: List[TierVotingRule] = Field(default_factory=list)
     security: Optional[Dict[str, Any]] = None
 

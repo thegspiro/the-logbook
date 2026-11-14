@@ -9,6 +9,7 @@
  */
 
 import React, { useState } from 'react';
+import { Link } from 'react-router';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { electionService } from '../../../services/api';
@@ -16,8 +17,16 @@ import type { Election, ElectionEligibilityRules } from '../../../types/election
 import { ElectionStatus, MeetingKind } from '../../../constants/enums';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useConfirm } from '../../../contexts/ConfirmContext';
-import { EMPTY_ELIGIBILITY_RULES, MEETING_KIND_LABELS, describeEligibilityRules } from '../eligibilityRules';
+import {
+  EMPTY_ELIGIBILITY_RULES,
+  MEETING_KINDS,
+  MEETING_KIND_LABELS,
+  describeEligibilityRules,
+  rowsForRules,
+} from '../eligibilityRules';
 import { EligibilityRulesEditor } from './EligibilityRulesEditor';
+import { TypeRulesEditor } from './TypeRulesEditor';
+import { OVERRIDE_REASON_MAX } from './CreateVoterRulesSection';
 
 /**
  * Render with a `key` derived from the election's stored rules, so a save or
@@ -33,16 +42,18 @@ const rulesOf = (election: Election): ElectionEligibilityRules => election.eligi
 export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPanelProps> = ({ election, onUpdate }) => {
   const editable = election.status === ElectionStatus.DRAFT || election.status === ElectionStatus.NOMINATIONS;
   const [rules, setRules] = useState<ElectionEligibilityRules>(() => rulesOf(election));
+  const storedReason = election.eligibility_override_reason ?? '';
+  const [reason, setReason] = useState(storedReason);
   const [saving, setSaving] = useState(false);
   // Bumped on discard so the editor drops any half-typed number with it.
   const [editorKey, setEditorKey] = useState(0);
-  const dirty = JSON.stringify(rules) !== JSON.stringify(rulesOf(election));
+  const dirty = JSON.stringify(rules) !== JSON.stringify(rulesOf(election)) || reason !== storedReason;
   const { confirm } = useConfirm();
   const kind = election.meeting_kind ?? MeetingKind.REGULAR;
 
   const changeKind = async (next: MeetingKind) => {
     const replace = await confirm({
-      title: `Hold this election at the ${MEETING_KIND_LABELS[next].toLowerCase()}?`,
+      title: `Make this election a ${MEETING_KIND_LABELS[next].toLowerCase()}?`,
       message: `Its voter rules and position voter types will be replaced with the ${MEETING_KIND_LABELS[
         next
       ].toLowerCase()} defaults from Election Settings${dirty ? ', and your unsaved changes below will be lost' : ''}.`,
@@ -55,7 +66,7 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
       setSaving(true);
       const updated = await electionService.updateElection(election.id, { meeting_kind: next });
       onUpdate(updated);
-      toast.success(`Now held at the ${MEETING_KIND_LABELS[next].toLowerCase()}`);
+      toast.success(`Now a ${MEETING_KIND_LABELS[next].toLowerCase()}`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to change the meeting'));
     } finally {
@@ -66,7 +77,12 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
   const save = async () => {
     try {
       setSaving(true);
-      const updated = await electionService.updateElection(election.id, { eligibility_rules: rules });
+      // The server keeps the reason only while the rules differ from the
+      // kind's defaults, and refuses a difference without one.
+      const updated = await electionService.updateElection(election.id, {
+        eligibility_rules: rules,
+        eligibility_override_reason: reason.trim() || null,
+      });
       onUpdate(updated);
       toast.success('Voter rules saved');
     } catch (err: unknown) {
@@ -80,9 +96,17 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
 
   return (
     <section className="card p-6" aria-labelledby="election-eligibility-rules-heading">
-      <h2 id="election-eligibility-rules-heading" className="text-theme-text-primary text-lg font-semibold">
-        Rules every voter must meet
-      </h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="election-eligibility-rules-heading" className="text-theme-text-primary text-lg font-semibold">
+          {election.eligibility_rules?.version === 2 ? 'Voter rules by member type' : 'Rules every voter must meet'}
+        </h2>
+        <Link
+          to={`/elections/attendance?election=${encodeURIComponent(election.id)}`}
+          className="text-theme-text-primary touch-target-phone inline-flex items-center text-sm font-medium underline"
+        >
+          Meeting attendance
+        </Link>
+      </div>
       {editable ? (
         <>
           <p className="text-theme-text-muted mt-1 mb-5 text-sm">
@@ -91,7 +115,7 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
           </p>
           <div className="mb-5 max-w-xs">
             <label htmlFor={`election-${election.id}-meeting-kind`} className="form-label">
-              Held at
+              Kind of vote
             </label>
             <select
               id={`election-${election.id}-meeting-kind`}
@@ -100,19 +124,47 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
               disabled={saving}
               onChange={(e) => void changeKind(e.target.value as MeetingKind)}
             >
-              {[MeetingKind.REGULAR, MeetingKind.ANNUAL].map((option) => (
+              {MEETING_KINDS.map((option) => (
                 <option key={option} value={option}>
                   {MEETING_KIND_LABELS[option]}
                 </option>
               ))}
             </select>
           </div>
-          <EligibilityRulesEditor
-            key={editorKey}
-            idPrefix={`election-${election.id}-eligibility`}
-            value={rules}
-            onChange={setRules}
-          />
+          {rules.version === 2 ? (
+            <TypeRulesEditor
+              key={editorKey}
+              idPrefix={`election-${election.id}-eligibility`}
+              value={rules}
+              rows={rowsForRules(rules)}
+              onChange={setRules}
+            />
+          ) : (
+            <EligibilityRulesEditor
+              key={editorKey}
+              idPrefix={`election-${election.id}-eligibility`}
+              value={rules}
+              onChange={setRules}
+            />
+          )}
+          <div className="mt-5 max-w-2xl">
+            <label htmlFor={`election-${election.id}-override-reason`} className="form-label">
+              Why these rules differ from the defaults
+            </label>
+            <textarea
+              id={`election-${election.id}-override-reason`}
+              className="form-input mt-1"
+              rows={3}
+              maxLength={OVERRIDE_REASON_MAX}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              aria-describedby={`election-${election.id}-override-reason-help`}
+            />
+            <p id={`election-${election.id}-override-reason-help`} className="text-theme-text-muted mt-1 text-xs">
+              Required when the rules differ from the {MEETING_KIND_LABELS[kind].toLowerCase()} rules in Election
+              Settings. Recorded in the audit log and printed in the minutes with the result.
+            </p>
+          </div>
           <div className="mt-5 flex flex-wrap gap-3">
             <button
               type="button"
@@ -130,6 +182,7 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
                 disabled={saving}
                 onClick={() => {
                   setRules(rulesOf(election));
+                  setReason(storedReason);
                   setEditorKey((k) => k + 1);
                 }}
               >
@@ -141,9 +194,14 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
       ) : (
         <>
           <p className="text-theme-text-muted mt-1 mb-3 text-sm">
-            Held at the {MEETING_KIND_LABELS[kind].toLowerCase()}. Fixed when voting opened. A voter override still lets
-            a member vote who fails them.
+            {MEETING_KIND_LABELS[kind]}. Fixed when voting opened. A voter override still lets a member vote who fails
+            them.
           </p>
+          {storedReason && (
+            <p className="text-theme-text-primary mb-3 text-sm" data-testid="election-override-reason">
+              <span className="font-medium">Why these rules differ from the defaults:</span> {storedReason}
+            </p>
+          )}
           {summary.length === 0 ? (
             <p className="text-theme-text-secondary text-sm">No election-wide rules apply to this election.</p>
           ) : (

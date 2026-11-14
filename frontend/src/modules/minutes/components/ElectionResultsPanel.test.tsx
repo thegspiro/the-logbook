@@ -67,17 +67,50 @@ describe('ElectionResultsPanel', () => {
     mockImportable.mockResolvedValue([]);
   });
 
+  // total_votes counts votes, one per race a ballot marked, so "ballots cast"
+  // overstated a multi-race election (W50-76, as the certified PDF reads).
+  it('labels the total as votes, in the singular for one', async () => {
+    mockList.mockResolvedValue([{ ...filed, snapshot: { ...filed.snapshot, total_votes: 1 } }]);
+    renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
+
+    expect(await screen.findByText(/12 eligible · 1 vote cast ·/)).toBeInTheDocument();
+  });
+
   it('shows the filed tally with turnout, quorum and the winner', async () => {
     renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
 
     expect(await screen.findByRole('heading', { name: 'Officer election' })).toBeInTheDocument();
-    expect(screen.getByText(/12 eligible · 9 ballots cast · 75% turnout · Quorum met/)).toBeInTheDocument();
+    expect(screen.getByText(/12 eligible · 9 votes cast · 75% turnout · Quorum met/)).toBeInTheDocument();
     expect(screen.getByText(/Filed .* by Sam Secretary/)).toBeInTheDocument();
     const table = screen.getByRole('table', { name: 'Results for Chief' });
     expect(within(table).getByText('Winner')).toBeInTheDocument();
     expect(within(table).getByText('Blake Brown')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'File an election result' })).not.toBeInTheDocument();
+  });
+
+  it('records where the voter rules departed from the defaults, and why', async () => {
+    mockList.mockResolvedValue([
+      {
+        ...filed,
+        snapshot: {
+          ...filed.snapshot,
+          voter_rule_exceptions: [
+            { scope: 'ballot_item', title: 'Amend Article IV', meeting_kind: null, reason: 'Bylaws Article XII' },
+          ],
+        },
+      },
+    ]);
+    renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
+
+    const exceptions = await screen.findByTestId('filed-voter-rule-exceptions');
+    expect(exceptions).toHaveTextContent('"Amend Article IV" had custom voter rules. Reason: Bylaws Article XII');
+  });
+
+  it('says nothing about voter rules for a result filed without them', async () => {
+    renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
+    await screen.findByRole('heading', { name: 'Officer election' });
+    expect(screen.queryByTestId('filed-voter-rule-exceptions')).not.toBeInTheDocument();
   });
 
   it('renders nothing for a reader when no result is filed', async () => {

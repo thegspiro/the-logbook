@@ -44,6 +44,7 @@ from app.models.apparatus import (
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
     AttendanceWaiverAttachment,
+    AttendanceWaiverEmailSend,
     AttendanceWaiverRequest,
     AttendanceWaiverRequestAction,
     AttendanceWaiverStatus,
@@ -259,10 +260,20 @@ from app.models.history import (
     HistoricalMemberPeriodTitle,
     HistoricalMemberRelation,
     HistoricalMemberServicePeriod,
+    HistoryAlbum,
+    HistoryAlbumItem,
     HistoryClearanceDecision,
     HistoryClearanceRequest,
     HistoryClearanceStep,
+    HistoryImport,
+    HistoryImportRow,
+    HistoryImportTitleMapping,
+    HistoryMedia,
+    HistoryMediaFile,
+    HistoryMediaTag,
+    HistoryRecordRedirect,
     HistoryRevision,
+    HistorySource,
     HistoryTitle,
 )
 from app.models.integration import (
@@ -428,7 +439,11 @@ from app.models.public_portal import (
 from app.models.qualification import MemberQualification
 from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.security_alert import AlertType, SecurityAlertRecord, ThreatLevel
-from app.models.shift_evaluation import ShiftEvaluation, ShiftEvaluationTemplate
+from app.models.shift_evaluation import (
+    ShiftEvaluation,
+    ShiftEvaluationLink,
+    ShiftEvaluationTemplate,
+)
 from app.models.shift_history_import import (
     ShiftHistoryImport,
     ShiftHistoryImportMapping,
@@ -640,6 +655,7 @@ __all__ = [
     "AttendanceWaiverAttachment",
     "AttendanceWaiverRequest",
     "AttendanceWaiverRequestAction",
+    "AttendanceWaiverEmailSend",
     "AttendanceWaiverStatus",
     "AttendanceWaiverWorkflow",
     # Error log models
@@ -772,6 +788,7 @@ __all__ = [
     "PreWorkStatus",
     # Shift history import
     "ShiftEvaluation",
+    "ShiftEvaluationLink",
     "ShiftEvaluationTemplate",
     "HistoricalImport",
     "HistoricalImportRow",
@@ -882,8 +899,18 @@ __all__ = [
     "HistoricalMemberServicePeriod",
     "HistoryClearanceDecision",
     "HistoryClearanceRequest",
+    "HistoryAlbum",
+    "HistoryAlbumItem",
     "HistoryClearanceStep",
+    "HistoryImport",
+    "HistoryImportRow",
+    "HistoryImportTitleMapping",
+    "HistoryMedia",
+    "HistoryMediaFile",
+    "HistoryMediaTag",
+    "HistoryRecordRedirect",
     "HistoryRevision",
+    "HistorySource",
     "HistoryTitle",
     # Medical screening models
     "ScreeningRequirement",

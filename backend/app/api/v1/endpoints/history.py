@@ -13,7 +13,8 @@ Every by-id read resolves inside the caller's department, and every
 client-sent id is checked against it before it is stored.
 """
 
-from typing import Optional
+from dataclasses import replace
+from typing import Optional, Union
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -23,7 +24,7 @@ from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
-from app.models.history import HistoricalMember, PublicationLevel
+from app.models.history import HistoricalMember, HistoryMedia, PublicationLevel
 from app.models.user import Position, User
 from app.schemas.history import (
     ClearanceDecide,
@@ -45,6 +46,9 @@ from app.schemas.history import (
     HonorRollEntry,
     MarkdownRender,
     MarkdownRendered,
+    MediaMemberView,
+    MergePreview,
+    MergeRequest,
     PersonCheck,
     PositionOption,
     PublishRequest,
@@ -58,6 +62,8 @@ from app.services.history_clearance_service import (
     record_path,
     review_path,
 )
+from app.services.history_media_service import RECORD_MEDIA, HistoryMediaService
+from app.services.history_merge_service import HistoryMergeService
 from app.services.history_notifications import (
     awaiting_clearance_notice,
     clearance_list_changed_notice,
@@ -138,6 +144,18 @@ async def _managed_person(
         await HistoryService(db).get_person(str(user.organization_id), person_id),
         _PERSON,
     )
+
+
+async def _clearance_record(
+    db: AsyncSession, organization_id: str, record_type: str, record_id: str
+) -> tuple[Optional[Union[HistoricalMember, HistoryMedia]], str]:
+    """The person or media item a clearance request is about, in the
+    department, and the label its notices and review page use."""
+    if record_type == RECORD_MEDIA:
+        item = await HistoryMediaService(db).get_media(organization_id, record_id)
+        return (item, item.title) if item else (None, "")
+    person = await HistoryService(db).get_person(organization_id, record_id)
+    return (person, display_name(person)) if person else (None, "")
 
 
 # ----------------------------------------------------------------------
@@ -222,10 +240,19 @@ async def get_person(
     **Authentication required**
     """
     viewer = Viewer.of(current_user)
-    person = ensure_found(
-        await HistoryService(db).get_readable_person(viewer, person_id), _PERSON
-    )
-    return await _person_view(db, viewer, person)
+    service = HistoryService(db)
+    person = await service.get_readable_person(viewer, person_id)
+    redirected_from = None
+    if person is None:
+        # A record merged into another: its address leads to the kept one,
+        # so links and bookmarks to it keep working.
+        new_id = await service.redirected_id(viewer.organization_id, person_id)
+        if new_id:
+            person = await service.get_readable_person(viewer, new_id)
+            redirected_from = person_id
+    view = await _person_view(db, viewer, ensure_found(person, _PERSON))
+    view.redirected_from = redirected_from
+    return view
 
 
 @router.post("/people", response_model=HistoricalMemberFullView, status_code=201)
@@ -384,6 +411,61 @@ async def delete_person(
         {"person_id": person_id, "display_name": label},
         severity="warning",
     )
+
+
+@router.get("/people/{person_id}/merge-preview", response_model=MergePreview)
+async def merge_preview(
+    person_id: str,
+    other_id: str = Query(..., min_length=1, max_length=36),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("history.manage")),
+):
+    """
+    The two records side by side before a merge: each field, whether it needs
+    a choice, and anything that refuses or should give the Historian pause.
+
+    **Requires permission: history.manage**
+    """
+    keep = await _managed_person(db, current_user, person_id)
+    other = await _managed_person(db, current_user, other_id)
+    return MergePreview(**await HistoryMergeService(db).preview(keep, other))
+
+
+@router.post("/people/{person_id}/merge", response_model=HistoricalMemberFullView)
+async def merge_person(
+    person_id: str,
+    payload: MergeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("history.manage")),
+):
+    """
+    Merge another record into this one. The other record's periods, family
+    links and change history move here, and its address forwards here.
+
+    **Requires permission: history.manage**
+    """
+    async with handle_service_errors("Could not merge these records"):
+        try:
+            person = await HistoryMergeService(db).merge(
+                str(current_user.organization_id),
+                person_id,
+                payload.other_id,
+                dict(payload.choices),
+                str(current_user.id),
+            )
+        except LookupError:
+            raise HTTPException(status_code=404, detail="Person not found")
+    await db.commit()
+    await _audit(
+        db,
+        current_user,
+        "history_person_merged",
+        {"person_id": person.id, "merged_person_id": payload.other_id},
+    )
+    reloaded = await _managed_person(db, current_user, person.id)
+    view = await _person_view(db, Viewer.of(current_user), reloaded)
+    assert isinstance(view, HistoricalMemberFullView)
+    return view
 
 
 @router.get("/people/{person_id}/revisions", response_model=list[RevisionResponse])
@@ -831,11 +913,15 @@ async def submit_for_clearance(
 
     **Requires permission: history.manage**
     """
-    person = await _managed_person(db, current_user, payload.record_id)
+    record, label = await _clearance_record(
+        db, str(current_user.organization_id), payload.record_type, payload.record_id
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail="Record not found")
     service = HistoryClearanceService(db)
     async with handle_service_errors("Could not submit this record"):
         request, notify = await service.submit(
-            person, payload.purpose, str(current_user.id)
+            record, payload.purpose, str(current_user.id)
         )
     await db.commit()
     await _audit(
@@ -844,11 +930,11 @@ async def submit_for_clearance(
         "history_clearance_submitted",
         {
             "request_id": request.id,
-            "record_id": person.id,
+            "record_type": request.record_type,
+            "record_id": record.id,
             "purpose": request.purpose.value,
         },
     )
-    label = display_name(person)
     background_tasks.add_task(
         send_history_notice,
         str(current_user.organization_id),
@@ -881,7 +967,11 @@ async def decide_clearance(
     org_id = str(current_user.organization_id)
     service = HistoryClearanceService(db)
     request = ensure_found(await service.get_request(org_id, request_id), "Request")
-    person = await _managed_person(db, current_user, request.record_id)
+    record, label = await _clearance_record(
+        db, org_id, request.record_type, request.record_id
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail="Record not found")
     async with handle_service_errors("Could not record this decision"):
         try:
             outcome = await service.decide(
@@ -896,13 +986,13 @@ async def decide_clearance(
         "history_clearance_decided",
         {
             "request_id": request_id,
-            "record_id": person.id,
+            "record_type": request.record_type,
+            "record_id": record.id,
             "decision": payload.decision.value,
             "status": outcome.request.status.value,
         },
     )
-    label = display_name(person)
-    path = record_path(RECORD_MEMBER, person.id)
+    path = record_path(request.record_type, record.id)
     if outcome.notify_next:
         background_tasks.add_task(
             send_history_notice,
@@ -940,17 +1030,18 @@ async def clearance_queue(
     """
     org_id = str(current_user.organization_id)
     service = HistoryClearanceService(db)
-    history = HistoryService(db)
     out = []
     for request in await service.queue(org_id, str(current_user.id)):
-        person = await history.get_person(org_id, request.record_id)
-        if person is None:
+        record, label = await _clearance_record(
+            db, org_id, request.record_type, request.record_id
+        )
+        if record is None:
             continue
         out.append(
             ClearanceRequestResponse(
                 **await service.request_view(
                     request,
-                    record_label=display_name(person),
+                    record_label=label,
                     viewer_id=str(current_user.id),
                 )
             )
@@ -992,16 +1083,31 @@ async def review_clearance_request(
         # The same answer as a missing request: a member who may not review
         # it learns nothing about what is under review.
         raise HTTPException(status_code=404, detail="Request not found")
-    history = HistoryService(db)
-    person = ensure_found(
-        await history.get_person(viewer.organization_id, request.record_id), _PERSON
+    record, label = await _clearance_record(
+        db, viewer.organization_id, request.record_type, request.record_id
     )
-    relations = await history.relations_for(viewer, person)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Record not found")
+    review_view: Union[HistoricalMemberMemberView, MediaMemberView]
+    if isinstance(record, HistoryMedia):
+        # A reviewer reads the item as members will, draft or not: they
+        # cannot clear what they cannot see.
+        review_view = MediaMemberView(
+            **HistoryMediaService(db).member_view(
+                replace(viewer, can_view_archive=True), record
+            )
+        )
+    else:
+        history = HistoryService(db)
+        relations = await history.relations_for(viewer, record)
+        review_view = HistoricalMemberMemberView(
+            **history.member_view(record, relations)
+        )
     return ClearanceReview(
         request=ClearanceRequestResponse(
             **await service.request_view(
-                request, record_label=display_name(person), viewer_id=viewer.user_id
+                request, record_label=label, viewer_id=viewer.user_id
             )
         ),
-        record=HistoricalMemberMemberView(**history.member_view(person, relations)),
+        record=review_view,
     )

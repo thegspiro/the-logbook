@@ -39,6 +39,8 @@ settings. Beneath it are **Dashboard**, **Opportunities**, **Applications**,
 **Campaigns**, **Donors**, **Donations**, **Pledges**, **Events**, **Zeffy** and
 **Reports**.
 
+![The sidebar with Grants & Fundraising expanded: Dashboard, Opportunities, Applications, Campaigns, Donors, Donations, Pledges, Events, Zeffy and Reports, with Zeffy selected](./images/12-18-grants-menu-zeffy.png)
+
 ### Permissions
 
 Two permissions control the module. The Role Management screen lists them as:
@@ -754,6 +756,8 @@ At the top of the page:
 
 **Sync now** reads Zeffy at once instead of waiting for the hour.
 
+![The Zeffy page: the Connection panel with Instant updates on, the last sync and one payment needing attention; four Zeffy campaigns, two linked (Fill the Boot to the Fill the Boot campaign, Annual Membership to the year's Annual Member Dues) and two Not linked; and the Payments list with its status filter and payments that are Applied, Campaign not linked, No member match, Processing and Reversed](./images/12-19-zeffy-page.png)
+
 ### Linking a Campaign
 
 **Required Permission:** Manage fundraising
@@ -778,6 +782,8 @@ recorded only** until you link it.
 3. Choose the campaign, event or dues schedule.
 4. Decide **Apply payments made on or after** (see below).
 5. Select **Save link**.
+
+![Link Zeffy campaign for the Equipment Fund Appeal: Record payments as Fundraising campaign, with the note that each payment becomes a donation from a donor matched by email; the year's Equipment Fund chosen; and Apply payments made on or after left blank, with its warning that an earlier date can count hand-entered gifts twice](./images/12-20-zeffy-link-dialog.png)
 
 Payments Zeffy already reported for that campaign are applied straight away, if
 they fall on or after the start date.

@@ -24,14 +24,14 @@ import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { placeApiError } from '../../../hooks/useFieldErrors';
 
 const ITEM_TYPE_COLORS: Record<string, string> = {
-  uniform: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30',
-  ppe: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30',
-  tool: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/30',
-  equipment: 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/30',
-  vehicle: 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 border-emerald-500/30',
-  electronics: 'bg-cyan-500/10 text-cyan-800 dark:text-cyan-400 border-cyan-500/30',
-  consumable: 'bg-orange-500/10 text-orange-800 dark:text-orange-400 border-orange-500/30',
-  medical: 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30',
+  uniform: 'bg-blue-500/10 text-blue-900 dark:text-blue-300 border-blue-500/30',
+  ppe: 'bg-red-500/10 text-red-900 dark:text-red-300 border-red-500/30',
+  tool: 'bg-amber-500/10 text-amber-900 dark:text-amber-300 border-amber-500/30',
+  equipment: 'bg-purple-500/10 text-purple-900 dark:text-purple-300 border-purple-500/30',
+  vehicle: 'bg-emerald-500/10 text-emerald-900 dark:text-emerald-300 border-emerald-500/30',
+  electronics: 'bg-cyan-500/10 text-cyan-900 dark:text-cyan-300 border-cyan-500/30',
+  consumable: 'bg-orange-500/10 text-orange-900 dark:text-orange-300 border-orange-500/30',
+  medical: 'bg-sky-500/10 text-sky-900 dark:text-sky-300 border-sky-500/30',
   other: 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border',
 };
 
@@ -391,7 +391,7 @@ const InventoryCategoriesPage: React.FC = () => {
                 )}
               </div>
               {cat.low_stock_threshold != null && cat.low_stock_threshold > 0 && (
-                <div className="border-theme-surface-border mt-auto flex items-center gap-1.5 border-t pt-2 text-xs text-amber-800 dark:text-amber-400">
+                <div className="border-theme-surface-border mt-auto flex items-center gap-1.5 border-t pt-2 text-xs text-amber-900 dark:text-amber-300">
                   <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
                   Low stock alert at {cat.low_stock_threshold} items
                 </div>

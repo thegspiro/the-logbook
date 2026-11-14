@@ -113,3 +113,122 @@ Seen and left: urgent texts can be switched on with no mobile number on file. Th
 | black --check            | ✅ (and isort)                                                                                                 |
 | frontend tests (touched) | ✅ full suite: 602 files, 8185 tests; each new case failed before its fix                                      |
 | backend tests (touched)  | ✅ `-k "auth or login or mfa or lockout"`: 354 passed, 1 skipped (optional `py_vapid`); new test failed before |
+
+---
+
+## Second pass — My Account after the November work (2026-11-08)
+
+**Driven:** 2026-11-08 · **As:** `member` · **Viewports:** 1280×900, 390×844
+**Commit:** `e4ea171` plus this pass's fixes (each re-driven) · **Database:** continued from the W03 second pass; no reset
+
+The owner asked to continue with W04. Since the first pass, member phone
+numbers gained a format rule (W04-7, owner decision 2026-10-05), and the
+profile learned to save around a blank legal name (forms review F-1, owner
+decision 2026-11-05).
+
+### What was driven
+
+1. Account tab: blanked the first name and saved, then a phone of "call me maybe", then valid phone, mobile and city values. Reloaded.
+2. Password tab: a wrong current password, the same password again, then a real change, then signed in with the new one.
+3. Security tab: enrolled the authenticator app from the shown key with a code typed `123 456`, read the recovery codes, generated new ones, then turned MFA off with a wrong code and then a real one.
+4. Notifications tab: turned Shift notices off and saved, switched urgent texts on, reloaded, then restored both.
+5. Emergency Contacts: saved a contact with "nope" as the phone, then with a valid phone, and reloaded.
+6. All eight tabs at 390×844: overflow, targets under 44px, unnamed controls.
+
+Not driven: adding a passkey (the headless browser has no authenticator), and Web Push (not configured here).
+
+### Held up ✅
+
+- **A blank legal name (F-1):** the save goes through and keeps the stored name: "Profile saved. A name can't be blank, so your saved first name was kept."
+- **A member's phone (W04-7):** "call me maybe" is refused, naming the field and the accepted formats. `(555) 010-2233` and `555.010.4455` are stored and survive a reload.
+- **The department fields:** Membership Number, Rank and Station are disabled and read-only, with a line saying who can change them.
+- **Password change:**
+  - a wrong or reused current password is refused in plain words;
+  - a real change signs the member out with "Your password was changed, and you have been signed out everywhere" (W04-1);
+  - the new password signs in.
+- **MFA enrolment:** a valid code is required. After it, the ten recovery codes are shown once, with Copy and Done (W04-2), and the status reads "Authenticator app is on · 10 recovery codes left".
+- **New recovery codes and turning MFA off:** both ask for a current code. A wrong code gets "Invalid verification code".
+- **Notifications:**
+  - a switch saved with Save Preferences survives a reload, and the others are untouched;
+  - urgent texts save the moment they are switched ("Text messages turned on");
+  - every switch is named (W04-8).
+- **Phone:** no sideways scroll on any tab. Radio and checkbox labels on Privacy and Emergency Contacts are 44px targets. No unnamed controls.
+
+### W04-10 — MED — A code typed as the authenticator app shows it was refused everywhere but sign-in — ✅ FIXED
+
+**Did:** on the Security tab, entered the current code as `123 456` to confirm enrolment.
+**Saw:** `422`, shown as "code: Value is too long. (Error code: LB-VAL-001)".
+**Where:** `MFAVerify`, `StepUpRequest` and `MFALogin` (`backend/app/schemas/auth.py`) take exactly six characters. W02-10 dropped the space on the sign-in screen only, so these all still refused a grouped code:
+
+- enrolment;
+- the "confirm it's you" step-up in front of sensitive actions;
+- new recovery codes;
+- turning MFA off.
+
+**Fix:** the three schemas drop whitespace before the length check, so every path reads a code the same way. A code of the wrong length is still refused. The sign-in screen's own clean-up stays; it is now redundant but harmless.
+**Re-driven:** `123 456`-style codes enrolled, generated new recovery codes and turned MFA off. Test: `tests/test_mfa_code_grouping.py`, whose six grouped-code cases failed before the fix.
+
+### W04-11 — LOW — The member's own name, phone and address fields had no autocomplete hint — ✅ FIXED
+
+**Did:** read the Account tab's inputs.
+**Saw:** no `autocomplete` on First, Middle, Last or Preferred Name, Phone, Mobile, or the four address fields. A browser or assistive tool could not fill them. WCAG 2.2 SC 1.3.5 (Identify Input Purpose, AA) asks for it on fields that collect the user's own details.
+**Fix:**
+
+| Field          | `autocomplete`    |
+| -------------- | ----------------- |
+| First name     | `given-name`      |
+| Middle name    | `additional-name` |
+| Last name      | `family-name`     |
+| Preferred name | `nickname`        |
+| Phone, Mobile  | `tel`             |
+| Street address | `street-address`  |
+| City           | `address-level2`  |
+| State          | `address-level1`  |
+| ZIP code       | `postal-code`     |
+
+Emergency contacts describe someone else, so they are outside the rule and left alone. Re-driven: each field carries its token. Test: `UserSettingsPage.test.tsx`, "names the purpose of each of the member's own fields", which failed before the fix.
+
+### W04-12 — MED — An emergency contact's phone has no format check — FLAGGED
+
+**Did:** saved an emergency contact with "nope" as the phone.
+**Saw:** "Emergency contacts saved". The server stored it.
+**Where:** `EmergencyContact.phone` (`backend/app/schemas/user.py`) is any string up to 20 characters. The W04-7 rule (`app/utils/phone_numbers.py`) covers a member's own phone and mobile only.
+**Why it matters:** this is the number the department calls when something has happened to the member.
+**Why not fixed:** the 2026-10-05 decision chose a format rule for the member's own numbers and named those paths. Whether it extends to emergency contacts, and what to do with contacts already stored (they are encrypted, so a sweep means decrypting each), is the owner's call. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+
+### Also seen
+
+- **A bad member phone still refuses the whole save (F-3).** The Account tab refuses everything typed with it, shows only a toast, and doesn't flag the field (`aria-invalid` unset). The 2026-11-05 decision says a single-save form should save the rest, keep the stored value and flag the field. Only the name fields have been brought into line, and the rest is tracked as F-3 in `docs/FORMS_REVIEW_2026-11-05.md`, so this is recorded there rather than patched here. Doing it here would mean copying the server's phone rule into the page (CLAUDE.md pitfall 29).
+- **NIT:** under "Authenticator app", the button reads "Enable two-factor authentication", although a passkey on the same tab also counts as two-factor. "Set up authenticator app" would say what it does.
+- **NIT:** an unknown `?tab=` (for example `?tab=emergency-contacts`) quietly opens the Account tab.
+
+### Harness
+
+The password change set `member` to `Tanker-Ridge-58!x`. It is recorded in
+`.workflow-review/accounts.json` (not committed). MFA was turned back off, so
+`wr.as("member")` still signs in with a password. The notification settings
+were restored. The emergency contact and the profile's phone, mobile and city
+were left in place for later runs.
+
+### Checklist
+
+| Section                 | Result                                                                     |
+| ----------------------- | -------------------------------------------------------------------------- |
+| 1. The job gets done    | ✅ profile, password, MFA, notifications, contacts; W04-10 fixed           |
+| 2. The right people     | ✅ department fields read-only; MFA changes need a current code            |
+| 3. Wrong input, failure | ✅ wrong or reused password, wrong code, bad phone refused; W04-12 flagged |
+| 4. Browser signals      | ✅ only the expected 400s and the 422 that W04-10 fixed                    |
+| 5. Coming back to it    | ✅ every save checked after a reload                                       |
+| 6. On a phone           | ✅ no overflow, nothing under 44px, nothing unnamed                        |
+| 7. Everyone can use it  | ✅ after W04-11: own-detail fields name their purpose                      |
+| 8. What happens around  | ✅ a password change signs out everywhere and says so                      |
+
+### Completion gate
+
+| Check                  | Result                                                                                                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| npm run typecheck      | ✅ clean                                                                                                                                               |
+| npm run lint           | ✅ clean (8 GB heap, per the W77 tooling lead)                                                                                                         |
+| flake8 / black / isort | ✅ `app/schemas/auth.py`, `tests/test_mfa_code_grouping.py`                                                                                            |
+| backend tests          | ✅ 125 passed: the new test and the MFA endpoint, step-up, MFA policy, sign-in audit and per-account limit suites; the new cases failed before the fix |
+| frontend tests         | ✅ `vitest related` on `UserSettingsPage`: 11 files, 108 tests; the new case failed before the fix                                                     |

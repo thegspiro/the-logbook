@@ -683,7 +683,7 @@
   /* A list of record cards — one card per event, document, course, etc.
 
      Columns follow the width the grid itself has, never the viewport. The
-     sidebar is expanded from lg up, so a viewport rule like
+     sidebar is expanded from md up, so a viewport rule like
      `sm:grid-cols-2 lg:grid-cols-3` packed three ~200px cards into a 1024px
      tablet and pushed their footer buttons off the card edge.
 
@@ -709,6 +709,15 @@
     auto-fill,
     minmax(min(100%, max(var(--card-grid-min, 20rem), calc(100% / 3 - 1rem))), 1fr)
   );
+}
+
+@utility thumb-grid {
+  /* A grid of photo thumbnails. Unlike `card-grid` it is not capped at three
+     columns: a thumbnail carries no text or buttons to fit, so as many 9rem
+     tiles as the grid's own width allows, one column on the narrowest phone. */
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr));
 }
 
 /* --- Page header ---
@@ -903,9 +912,11 @@
      block, so in a block button an icon stacked above its label from 768px
      up — the store catalog's Edit and Archive drew that way on every tablet.
      Grow to the 44px touch minimum on phones and touch screens only, so
-     mouse-driven desktop button density is untouched. */
+     mouse-driven desktop button density is untouched. The width floor is
+     for a one-word label: "Edit" in a stacked inventory card measured 43px. */
   @media (max-width: 767px), (pointer: coarse) {
     min-height: 44px;
+    min-width: 44px;
   }
 }
 

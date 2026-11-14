@@ -35,7 +35,13 @@ import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
 import type { ElectionSettings, ElectionListItem, EligibilityDefaults } from '../types/election';
 import { MeetingKind } from '../constants/enums';
-import { DEFAULT_ELIGIBILITY, MEETING_KIND_LABELS } from '../modules/elections/eligibilityRules';
+import {
+  DEFAULT_ELIGIBILITY,
+  MEETING_KIND_LABELS,
+  MEETING_KINDS,
+  OWN_DEFAULTS_FIELD,
+  type OwnDefaultsKind,
+} from '../modules/elections/eligibilityRules';
 import { EligibilityDefaultsEditor } from '../modules/elections/components/EligibilityDefaultsEditor';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -62,6 +68,43 @@ const isSectionKey = (value: string | null): value is SectionKey =>
 
 /** The section a bare /elections/settings opens on, and so carries no ?tab=. */
 const DEFAULT_SECTION: SectionKey = 'proxy';
+
+/** How the section speaks of each kind that may carry rules of its own. */
+const OWN_RULES_WORDING: Record<
+  OwnDefaultsKind,
+  { toggle: string; description: string; uses: string; at: string; own: string; elections: string; discard: string }
+> = {
+  [MeetingKind.ANNUAL]: {
+    toggle: 'Use different rules at the annual meeting',
+    description:
+      'Elections held at the annual meeting — usually officer elections — can carry stricter or different rules. They start as a copy of the regular-meeting rules.',
+    uses: 'The annual meeting uses the regular business meeting rules.',
+    at: 'at the annual meeting',
+    own: "annual meeting's own rules",
+    elections: 'annual-meeting elections',
+    discard: 'Discard annual rules',
+  },
+  [MeetingKind.BYLAWS]: {
+    toggle: 'Use different rules for bylaws amendments',
+    description:
+      'A vote on amending the bylaws can follow the rules the bylaws set for it. They start as a copy of the regular-meeting rules.',
+    uses: 'Bylaws amendments use the regular business meeting rules.',
+    at: 'for bylaws amendments',
+    own: "bylaws amendments' own rules",
+    elections: 'bylaws-amendment votes',
+    discard: 'Discard bylaws rules',
+  },
+  [MeetingKind.SPECIAL]: {
+    toggle: 'Use different rules at special meetings',
+    description:
+      'Elections held at a special meeting can carry their own rules. They start as a copy of the regular-meeting rules.',
+    uses: 'Special meetings use the regular business meeting rules.',
+    at: 'at special meetings',
+    own: "special meetings' own rules",
+    elections: 'special-meeting elections',
+    discard: 'Discard special-meeting rules',
+  },
+};
 
 const inputClass = 'form-input';
 const selectClass = inputClass;
@@ -146,10 +189,10 @@ export const ElectionsSettingsPage: React.FC = () => {
   }, [loadData]);
 
   const handleSendTestBallot = async () => {
-    if (!selectedTestElection) {
-      toast.error('Select a draft election first');
-      return;
-    }
+    // The button is disabled until a draft is chosen and says so beneath it
+    // (W50-77), so this is only a guard: the toast it once raised was never
+    // reachable.
+    if (!selectedTestElection) return;
     try {
       setSendingTest(true);
       const result = await electionService.sendTestBallot(selectedTestElection);
@@ -208,24 +251,25 @@ export const ElectionsSettingsPage: React.FC = () => {
   // Debounced: the rule editor reports each valid keystroke, and the
   // position names are typed. One write lands once the typing stops.
   const updateEligibility = (kind: MeetingKind, next: EligibilityDefaults) => {
-    updateField(kind === MeetingKind.ANNUAL ? 'annual_eligibility' : 'eligibility', next, { immediate: false });
+    updateField(kind === MeetingKind.REGULAR ? 'eligibility' : OWN_DEFAULTS_FIELD[kind], next, { immediate: false });
   };
 
-  const setAnnualOwnRules = async (own: boolean) => {
+  const setOwnRules = async (kind: OwnDefaultsKind, own: boolean) => {
+    const field = OWN_DEFAULTS_FIELD[kind];
     if (own) {
-      // Starts as a copy, so only what differs at the annual meeting needs changing.
-      updateField('annual_eligibility', structuredClone(settingsRef.current.eligibility ?? DEFAULT_ELIGIBILITY));
+      // Starts as a copy, so only what differs for this kind needs changing.
+      updateField(field, structuredClone(settingsRef.current.eligibility ?? DEFAULT_ELIGIBILITY));
       return;
     }
+    const wording = OWN_RULES_WORDING[kind];
     const discard = await confirm({
-      title: 'Use the regular rules at the annual meeting?',
-      message:
-        "The annual meeting's own rules will be discarded, and annual-meeting elections created from now on will copy the regular-meeting rules. Elections that already exist keep the rules they have.",
-      confirmLabel: 'Discard annual rules',
+      title: `Use the regular rules ${wording.at}?`,
+      message: `The ${wording.own} will be discarded, and ${wording.elections} created from now on will copy the regular-meeting rules. Elections that already exist keep the rules they have.`,
+      confirmLabel: wording.discard,
       cancelLabel: 'Keep them',
       variant: 'warning',
     });
-    if (discard) updateField('annual_eligibility', null);
+    if (discard) updateField(field, null);
   };
 
   const renderContent = () => {
@@ -240,7 +284,14 @@ export const ElectionsSettingsPage: React.FC = () => {
     switch (activeSection) {
       case 'eligibility': {
         const tierRules = settings.tier_voting_rules ?? [];
-        const annualEligibility = settings.annual_eligibility ?? null;
+        const voterRows = settings.voter_rows ?? [];
+        const kindsWithOwnRules = MEETING_KINDS.filter(
+          (kind): kind is OwnDefaultsKind => kind !== MeetingKind.REGULAR && Boolean(settings[OWN_DEFAULTS_FIELD[kind]])
+        );
+        const ownEligibility =
+          eligibilityKind === MeetingKind.REGULAR ? null : (settings[OWN_DEFAULTS_FIELD[eligibilityKind]] ?? null);
+        // Tier voting rules apply only beside version 1 rules; version 2 rows replace them.
+        const showTierRules = [eligibility, ownEligibility].some((set) => set && set.rules.version !== 2);
         return (
           <div className="space-y-8">
             <div>
@@ -254,7 +305,7 @@ export const ElectionsSettingsPage: React.FC = () => {
             </div>
 
             <div role="group" aria-label="Which meetings these rules are for" className="flex flex-wrap gap-2">
-              {[MeetingKind.REGULAR, MeetingKind.ANNUAL].map((kind) => (
+              {MEETING_KINDS.map((kind) => (
                 <button
                   key={kind}
                   type="button"
@@ -275,89 +326,93 @@ export const ElectionsSettingsPage: React.FC = () => {
               <div className="space-y-2">
                 <p className="text-theme-text-muted text-sm">
                   Used by every election held at a regular business meeting
-                  {annualEligibility ? '.' : ', and at the annual meeting until it is given rules of its own.'}
+                  {kindsWithOwnRules.length === MEETING_KINDS.length - 1
+                    ? '.'
+                    : ', and by every other kind of vote until it is given rules of its own.'}
                 </p>
                 <EligibilityDefaultsEditor
                   key="regular"
                   idPrefix="regular-eligibility"
                   value={eligibility}
+                  voterRows={voterRows}
                   onChange={(next) => updateEligibility(MeetingKind.REGULAR, next)}
                 />
               </div>
             ) : (
               <div className="space-y-6">
                 <ToggleRow
-                  checked={annualEligibility !== null}
-                  onChange={(next) => void setAnnualOwnRules(next)}
-                  label="Use different rules at the annual meeting"
-                  description="Elections held at the annual meeting — usually officer elections — can carry stricter or different rules. They start as a copy of the regular-meeting rules."
+                  checked={ownEligibility !== null}
+                  onChange={(next) => void setOwnRules(eligibilityKind, next)}
+                  label={OWN_RULES_WORDING[eligibilityKind].toggle}
+                  description={OWN_RULES_WORDING[eligibilityKind].description}
                 />
-                {annualEligibility ? (
+                {ownEligibility ? (
                   <EligibilityDefaultsEditor
-                    key="annual"
-                    idPrefix="annual-eligibility"
-                    value={annualEligibility}
-                    onChange={(next) => updateEligibility(MeetingKind.ANNUAL, next)}
+                    key={eligibilityKind}
+                    idPrefix={`${eligibilityKind}-eligibility`}
+                    value={ownEligibility}
+                    voterRows={voterRows}
+                    onChange={(next) => updateEligibility(eligibilityKind, next)}
                   />
                 ) : (
-                  <p className="text-theme-text-secondary text-sm">
-                    The annual meeting uses the regular business meeting rules.
-                  </p>
+                  <p className="text-theme-text-secondary text-sm">{OWN_RULES_WORDING[eligibilityKind].uses}</p>
                 )}
               </div>
             )}
 
-            <section aria-labelledby="eligibility-tiers-heading" className="space-y-3">
-              <div>
-                <h3 id="eligibility-tiers-heading" className="text-theme-text-primary text-base font-semibold">
-                  Membership tier rules
-                </h3>
-                <p className="text-theme-text-muted text-sm">
-                  Each membership tier carries its own voting rules, which apply at every meeting alongside the rules
-                  above. They are changed in{' '}
-                  <Link to="/members/admin/settings/tiers" className="text-theme-text-primary font-medium underline">
-                    membership tier settings
-                  </Link>
-                  .
-                </p>
-              </div>
-              {tierRules.length === 0 ? (
-                <p className="text-theme-text-secondary text-sm">No membership tiers are configured.</p>
-              ) : (
-                <table className="rwd-table w-full text-left text-sm">
-                  <thead>
-                    <tr className="text-theme-text-secondary">
-                      <th scope="col" className="py-2 pr-4 font-medium">
-                        Tier
-                      </th>
-                      <th scope="col" className="py-2 pr-4 font-medium">
-                        May vote
-                      </th>
-                      <th scope="col" className="py-2 font-medium">
-                        Tier attendance rule
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tierRules.map((tier) => (
-                      <tr key={tier.tier_id} className="border-theme-surface-border border-t">
-                        <td data-label="Tier" className="text-theme-text-primary py-2 pr-4">
-                          {tier.name}
-                        </td>
-                        <td data-label="May vote" className="text-theme-text-primary py-2 pr-4">
-                          {tier.voting_eligible ? 'Yes' : 'No'}
-                        </td>
-                        <td data-label="Tier attendance rule" className="text-theme-text-primary py-2">
-                          {tier.voting_eligible && tier.requires_meeting_attendance && tier.min_attendance_pct > 0
-                            ? `${tier.min_attendance_pct}% of meetings over ${tier.attendance_period_months} months`
-                            : 'None'}
-                        </td>
+            {showTierRules && (
+              <section aria-labelledby="eligibility-tiers-heading" className="space-y-3">
+                <div>
+                  <h3 id="eligibility-tiers-heading" className="text-theme-text-primary text-base font-semibold">
+                    Membership tier rules
+                  </h3>
+                  <p className="text-theme-text-muted text-sm">
+                    Each membership tier carries its own voting rules, which apply at every meeting alongside the rules
+                    above. They are changed in{' '}
+                    <Link to="/members/admin/settings/tiers" className="text-theme-text-primary font-medium underline">
+                      membership tier settings
+                    </Link>
+                    .
+                  </p>
+                </div>
+                {tierRules.length === 0 ? (
+                  <p className="text-theme-text-secondary text-sm">No membership tiers are configured.</p>
+                ) : (
+                  <table className="rwd-table w-full text-left text-sm">
+                    <thead>
+                      <tr className="text-theme-text-secondary">
+                        <th scope="col" className="py-2 pr-4 font-medium">
+                          Tier
+                        </th>
+                        <th scope="col" className="py-2 pr-4 font-medium">
+                          May vote
+                        </th>
+                        <th scope="col" className="py-2 font-medium">
+                          Tier attendance rule
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </section>
+                    </thead>
+                    <tbody>
+                      {tierRules.map((tier) => (
+                        <tr key={tier.tier_id} className="border-theme-surface-border border-t">
+                          <td data-label="Tier" className="text-theme-text-primary py-2 pr-4">
+                            {tier.name}
+                          </td>
+                          <td data-label="May vote" className="text-theme-text-primary py-2 pr-4">
+                            {tier.voting_eligible ? 'Yes' : 'No'}
+                          </td>
+                          <td data-label="Tier attendance rule" className="text-theme-text-primary py-2">
+                            {tier.voting_eligible && tier.requires_meeting_attendance && tier.min_attendance_pct > 0
+                              ? `${tier.min_attendance_pct}% of meetings over ${tier.attendance_period_months} months`
+                              : 'None'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </section>
+            )}
           </div>
         );
       }
@@ -500,11 +555,16 @@ export const ElectionsSettingsPage: React.FC = () => {
               title="Test Ballot"
               description="Send yourself a test ballot to preview the voting experience. Test votes are clearly marked and excluded from real results."
             />
+            <label htmlFor="test-ballot-election" className="text-theme-text-primary mb-1 block text-sm font-medium">
+              Draft election
+            </label>
             <div className="flex flex-col gap-3 sm:flex-row">
               <select
+                id="test-ballot-election"
                 className={selectClass + ' flex-1'}
                 value={selectedTestElection}
                 onChange={(e) => setSelectedTestElection(e.target.value)}
+                aria-describedby="test-ballot-help"
               >
                 <option value="">Select a draft election...</option>
                 {elections.map((e) => (
@@ -524,6 +584,13 @@ export const ElectionsSettingsPage: React.FC = () => {
                 Send Test Ballot
               </button>
             </div>
+            {!selectedTestElection && (
+              <p id="test-ballot-help" className="text-theme-text-muted mt-2 text-xs">
+                {elections.length === 0
+                  ? 'There is no draft election to preview. Create one, then send its test ballot from here.'
+                  : 'Choose a draft election to send yourself its test ballot.'}
+              </p>
+            )}
           </div>
         );
 

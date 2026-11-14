@@ -11237,6 +11237,17 @@ class SchedulingService:
             await self.db.commit()
             await self.db.refresh(shift)
 
+            # Under report review, an evaluation of a member with no report of
+            # their own becomes visible, and credits, at close-out.
+            from app.services.shift_evaluation_service import (
+                ShiftEvaluationService,
+            )
+
+            await ShiftEvaluationService(self.db).sync_credit_for_shift(
+                shift_id, organization_id
+            )
+            await self.db.refresh(shift)
+
             # Finalizing is the action the post-shift validation prompt asks
             # for — archive it here so every finalize path clears it, not
             # just the REST endpoint.
@@ -11634,6 +11645,15 @@ class SchedulingService:
                     if k != "validation_notification_sent"
                 }
             await self.db.commit()
+            # Reopened, an evaluation that waited for close-out is hidden
+            # again until the shift is re-finalized.
+            from app.services.shift_evaluation_service import (
+                ShiftEvaluationService,
+            )
+
+            await ShiftEvaluationService(self.db).sync_credit_for_shift(
+                shift_id, organization_id
+            )
             await self.db.refresh(shift)
             return shift, None
         except Exception as e:

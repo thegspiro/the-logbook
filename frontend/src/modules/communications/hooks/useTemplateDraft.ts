@@ -31,6 +31,8 @@ export interface TemplateDraft {
   setDefaultCc: (value: string) => void;
   defaultBcc: string;
   setDefaultBcc: (value: string) => void;
+  ccPositionIds: string[];
+  setCcPositionIds: (value: string[]) => void;
   ccError: string | null;
   bccError: string | null;
   hasValidationErrors: boolean;
@@ -51,10 +53,16 @@ const EMPTY_TEMPLATE = {
   layout: '',
 } as const;
 
+/** Order-insensitive identity of a position list, for dirty checks. */
+function positionKey(ids: readonly string[] | null | undefined): string {
+  return [...(ids ?? [])].sort().join(',');
+}
+
 export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft {
   const source = template ?? (EMPTY_TEMPLATE as unknown as EmailTemplate);
   const origCc = (source.default_cc ?? []).join(', ');
   const origBcc = (source.default_bcc ?? []).join(', ');
+  const origPositions = positionKey(source.default_cc_position_ids);
 
   const [subject, setSubject] = useState(source.subject);
   const [htmlBody, setHtmlBody] = useState(source.html_body);
@@ -65,6 +73,7 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
   const [layout, setLayout] = useState(source.layout ?? '');
   const [defaultCc, setDefaultCc] = useState(origCc);
   const [defaultBcc, setDefaultBcc] = useState(origBcc);
+  const [ccPositionIds, setCcPositionIds] = useState<string[]>(source.default_cc_position_ids ?? []);
 
   const discard = useCallback(() => {
     setSubject(source.subject);
@@ -76,6 +85,7 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
     setLayout(source.layout ?? '');
     setDefaultCc((source.default_cc ?? []).join(', '));
     setDefaultBcc((source.default_bcc ?? []).join(', '));
+    setCcPositionIds(source.default_cc_position_ids ?? []);
   }, [source]);
 
   /**
@@ -100,6 +110,7 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
     source.layout ?? '',
     origCc,
     origBcc,
+    origPositions,
   ].join('\u0000');
 
   useEffect(() => {
@@ -121,7 +132,8 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
     statusChip !== (source.status_chip ?? '') ||
     layout !== (source.layout ?? '') ||
     defaultCc !== origCc ||
-    defaultBcc !== origBcc;
+    defaultBcc !== origBcc ||
+    positionKey(ccPositionIds) !== origPositions;
 
   const buildUpdate = useCallback((): EmailTemplateUpdate => {
     const data: EmailTemplateUpdate = {};
@@ -146,8 +158,24 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
       const parsed = parseEmailList(defaultBcc);
       data.default_bcc = parsed.length > 0 ? parsed : null;
     }
+    // An explicit null clears the list; an omitted key would leave it.
+    if (positionKey(ccPositionIds) !== positionKey(source.default_cc_position_ids)) {
+      data.default_cc_position_ids = ccPositionIds.length > 0 ? ccPositionIds : null;
+    }
     return data;
-  }, [source, subject, htmlBody, textBody, footerKey, headerAccent, statusChip, layout, defaultCc, defaultBcc]);
+  }, [
+    source,
+    subject,
+    htmlBody,
+    textBody,
+    footerKey,
+    headerAccent,
+    statusChip,
+    layout,
+    defaultCc,
+    defaultBcc,
+    ccPositionIds,
+  ]);
 
   return useMemo(
     () => ({
@@ -169,6 +197,8 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
       setDefaultCc,
       defaultBcc,
       setDefaultBcc,
+      ccPositionIds,
+      setCcPositionIds,
       ccError,
       bccError,
       hasValidationErrors: ccError !== null || bccError !== null,
@@ -186,6 +216,7 @@ export function useTemplateDraft(template: EmailTemplate | null): TemplateDraft 
       layout,
       defaultCc,
       defaultBcc,
+      ccPositionIds,
       ccError,
       bccError,
       isDirty,

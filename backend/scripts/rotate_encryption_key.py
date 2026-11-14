@@ -74,6 +74,11 @@ _PLAIN_COLUMNS = [
         ["responses", "closing_comments"],
     ),
     (
+        "shift_evaluation_links",
+        "id",
+        ["token", "preceptor_email"],
+    ),
+    (
         "users",
         "id",
         [
@@ -171,6 +176,8 @@ _PLAIN_COLUMNS = [
         ["birth_date", "addresses", "verification_sources", "research_notes"],
     ),
     ("history_revisions", "id", ["snapshot"]),
+    ("history_import_rows", "id", ["cells", "edits"]),
+    ("history_media", "id", ["research_notes"]),
     ("integrations", "id", ["encrypted_config"]),
     (
         "quickbooks_connections",

@@ -122,3 +122,109 @@ That last one means errors from this state cannot be reported. Nothing on the pa
 | black --check            | n/a                                                                            |
 | frontend tests (touched) | ✅ full suite: 604 files, 8199 tests; the four new cases failed before the fix |
 | backend tests (touched)  | n/a                                                                            |
+
+## Second pass — Add Member after the status, labels and forms changes (2026-11-09)
+
+**Driven:** 2026-11-09 · **As:** `admin`, the new member, `member2` · **Viewports:** 1280×900, 390×844
+**Commit:** `9ffc4fa` plus this pass's fixes · **Database:** continued from the W07 second pass; no reset
+
+The owner asked to continue with W08. Since the first pass:
+
+- the form takes a starting status again (W08-1, owner decision 2026-10-05);
+- the first sign-in no longer fires refused requests (W08-6);
+- the form reports errors per field with a summary (owner decision 2026-11-05);
+- creating a member with a rank or position asks the officer to confirm it's them.
+
+### What was driven
+
+1. As `admin`, Members Administration → Add Member:
+   - submitted the form empty;
+   - filled it in with a run in the password (`Abcdefgh1234!`);
+   - replaced the password and saved with:
+     - Status On Leave;
+     - class Operational, membership status Probationary;
+     - rank Firefighter, position Safety Officer;
+     - station, platoon and join date.
+   - Confirmed the "Confirm it's you" prompt.
+2. Read the new member's record through the API.
+3. As the new member, in a fresh browser:
+   - signed in while On Leave;
+   - after `admin` set them Active from their profile, signed in again, changed the password when told to, and signed in with the new one.
+4. As `member2`:
+   - opened the Add Member tab;
+   - tried `POST /users`;
+   - looked the new member up in the directory.
+5. Read the audit rows for all of it.
+6. At 390×844, as `admin`, added a second member with no rank or position.
+
+Not driven, as in the first pass: adding a member **without** a password. Email is off in the review install, so the form requires one and says why.
+
+### Held up ✅
+
+- **Empty submit:** 13 fields are flagged, each with its own message, and focus moves to the summary ("Fix these before saving"). Nothing is sent.
+- **Weak password:** refused at the field ("Password does not meet every rule listed below"), and nothing is sent.
+- **Step-up:** a create that grants a rank or position is refused once with `LB-AUTH-013`. The form opens "Confirm it's you" and completes the create once the password is confirmed.
+- **Everything the form sends is stored:**
+  - status `leave`;
+  - class and membership status;
+  - rank and station, platoon and join date;
+  - phone and address;
+  - the emergency contact;
+  - Member plus Safety Officer.
+
+  Members Management counts the member under On Leave.
+
+- **First sign-in:** "Password change required", with every rule listed and no refused request (W08-6 holds). The change signs the member out "everywhere". The new password lands on the dashboard.
+- **`member2`:** gets "Access Denied" on the tab and `403 LB-PERM-001` from the API, and sees the new member in the directory.
+- **Audited, every row stamped with the department:**
+  - `stepup_verified` and `user_created`, the latter with the positions granted;
+  - the refused sign-in, as `login_failed` with reason `account_inactive`;
+  - the status change;
+  - the password change.
+- **Phone:** no sideways scroll, and the member was added. The only control under 44px is the inline "Set it up now" link, which is exempt.
+
+### W08-7 — LOW — The optional fields' examples read as entered values — ✅ FIXED
+
+**Saw:** eight optional fields showed their placeholder in full-strength text, the same as a typed value:
+
+- middle name ("Michael") and preferred name ("Terry");
+- secondary phone;
+- both emergency emails;
+- the whole second emergency contact ("Bob Doe", "Parent").
+
+An officer reading the form back would take them for data already entered. Every other field uses `form-input`'s faded placeholder.
+**Where:** `AddMember.tsx`. The eight inputs added `placeholder-theme-text-muted` on top of `form-input` (CLAUDE.md pitfall 17).
+**Fix:** the override is removed, so every text field on the form shares one placeholder style. Re-driven.
+**Test:** `AddMember.test.tsx`, which failed before the fix.
+**Lead:** 127 other uses of `placeholder-theme-text-muted` across the app; not swept here.
+
+### W08-8 — LOW — The create audit did not record the starting status — ✅ FIXED
+
+**Saw:** the member was created On Leave and refused at sign-in. The `user_created` row carried the id, username, email and positions, but no status, and no `member_status_changed` row exists for a starting status. Nothing in the audit log said why the member could not sign in.
+**Where:** `create_member` (`backend/app/api/v1/endpoints/users.py`).
+**Fix:** the row now carries `status`.
+**Test:** `tests/test_add_member_initial_status.py`, whose new case failed before the fix (`KeyError: 'status'`).
+
+### W08-9 — LOW — Nothing said that a member added On Leave cannot sign in — ✅ FIXED
+
+**Saw:** sign-in admits only Active and Probationary members. The member added On Leave got "Account is inactive. Please contact an administrator." with the password the officer had just set and handed over. The Status field's help spoke only of retired and dropped members.
+**Fix:** the help now starts "A member added Inactive or On Leave cannot sign in until their status is set to Active." Re-driven at 390px.
+**Test:** `AddMember.test.tsx`, which failed before the fix.
+**Not changed:** whether a member on leave should be able to sign in at all. The rule applies to every member set On Leave, not only new ones, so it is a product question beyond this form.
+
+### W08-10 — NIT — "On Leave" on the form, "Leave" on the profile
+
+Add Member and the Members Management tile say "On Leave". The profile header ("Status: Leave") and its Change Member Status dialog say "Leave".
+
+### Checklist
+
+| Section                 | Result                                                                     |
+| ----------------------- | -------------------------------------------------------------------------- |
+| 1. The job gets done    | ✅ add (with step-up) → record → first sign-in → forced change → dashboard |
+| 2. The right people     | ✅ `member2` refused on page and API                                       |
+| 3. Wrong input, failure | ✅ per-field errors and summary; weak password held; W08-9 fixed           |
+| 4. Browser signals      | ✅ only the provoked `403`s (step-up, inactive sign-in, `member2`)         |
+| 5. Coming back to it    | ✅ the new member is in the directory and the On Leave count               |
+| 6. On a phone           | ✅ clean                                                                   |
+| 7. Everyone can use it  | ✅ after W08-7                                                             |
+| 8. What happens around  | ✅ every step audited, after W08-8                                         |

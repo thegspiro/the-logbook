@@ -28,6 +28,7 @@ import {
   choiceLabel,
   choiceToVote,
   emptyChoice,
+  itemForm,
   missingWriteIn,
   unansweredItems,
 } from './ballot/ballotChoices';
@@ -110,7 +111,9 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({ electionId, onVo
       return;
     }
     const summary = openItems
-      .map((item) => `${item.title}: ${choiceLabel(choices[item.id], ballot.candidates)}`)
+      .map(
+        (item) => `${item.title}: ${choiceLabel(choices[item.id], ballot.candidates, itemForm(item, ballot.election))}`
+      )
       .join('; ');
     const ok = await confirm({
       title: ballot.proxy ? `Cast ${proxyName}'s ballot` : 'Cast your ballot',

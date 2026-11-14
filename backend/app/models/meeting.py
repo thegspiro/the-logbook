@@ -177,6 +177,18 @@ class Meeting(Base):
         return f"<Meeting(title={self.title}, date={self.meeting_date})>"
 
 
+class AttendanceRecordedVia:
+    """How a meeting attendance record was written (``recorded_via``)."""
+
+    MANUAL = "manual"  # a secretary added the member to the meeting
+    EVENT_CHECK_IN = "event_check_in"  # imported from the member's event check-in
+    EVENT_RSVP = "event_rsvp"  # imported from an event RSVP with no check-in
+    WAIVER = "waiver"  # a secretary granted a waiver for a missed meeting
+    WAIVER_REQUEST = "waiver_request"  # an approved member waiver request
+
+    ALL = (MANUAL, EVENT_CHECK_IN, EVENT_RSVP, WAIVER, WAIVER_REQUEST)
+
+
 class MeetingAttendee(Base):
     """
     Meeting Attendee model
@@ -223,6 +235,19 @@ class MeetingAttendee(Base):
         ForeignKey("attendance_waiver_requests.id", ondelete="SET NULL"),
         nullable=True,
     )
+
+    # Where the record came from, for the secretary reading a member's
+    # meetings back. ``checked_in_at`` is the moment the member checked in,
+    # set only from a real check-in (an event's), never from a secretary's
+    # entry, which carries no such moment. ``recorded_via`` is one of
+    # RECORDED_VIA. All three are NULL on rows written before they existed.
+    checked_in_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    recorded_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    recorded_via: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     # Timestamps
     created_at: Mapped[Optional[datetime]] = mapped_column(

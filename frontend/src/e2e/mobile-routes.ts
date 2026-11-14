@@ -566,6 +566,17 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory/my-equipment', maxSmallTargets: 0, maxTinyText: 0 },
+  // Measured once helpers.ts served an item list, the storage areas and the
+  // summaries; before, the first two drew their empty states. inventory.manage
+  // is in the base grant.
+  {
+    path: '/inventory/items',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: 'Globe G-Xtreme Turnout Coat, Size 44 Regular',
+  },
+  { path: '/inventory/storage-areas', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Radio Charging Cabinet' },
+  { path: '/inventory/import', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Import Inventory from CSV' },
   // inventory.check_manage is a distinct grant from inventory.manage, and
   // checkPermission compares literally — without it this hub renders Access
   // Denied, which passes both budgets while measuring an error page.
@@ -697,6 +708,61 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: ['inventory.check_manage'],
+  },
+  // The equipment-check screens a crew and its officers use day to day. Each
+  // was exempt until helpers.ts served the equipment-check reads; four of them
+  // threw on the catch-all's `{}`. One grant set for all six, so they share a
+  // sign-in, and an `expectText` only the populated page renders.
+  {
+    path: '/inventory/admin/checklists/reports',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'inventory.check_view'],
+    expectText: 'Jordan Okonkwo-Fitzgerald',
+  },
+  {
+    path: '/inventory/admin/checklists/supply',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'inventory.check_view'],
+    expectText: 'Epinephrine Auto-Injector, Adult 0.3 mg',
+  },
+  {
+    path: '/inventory/admin/checklists/catalog-links',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'inventory.check_view'],
+    expectText: 'Halligan Bar',
+  },
+  {
+    path: '/inventory/checklists',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'inventory.check_view'],
+    expectText: 'Out of service since 11 Nov: hydraulic leak on the aerial turntable',
+  },
+  {
+    path: '/inventory/checklists/log',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'inventory.check_view'],
+    expectText: 'Every expected check, including the ones that did not happen',
+  },
+  {
+    path: '/inventory/checklists/my',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'inventory.check_view'],
+    expectText: 'Engine Weekly SCBA and Tool Inventory',
+  },
+  // The page picks no apparatus on its own; `?apparatus=` is how a crew lands
+  // on one from the fleet board, and it is what puts a body on the page here.
+  {
+    path: '/inventory/checklists/apparatus-inventory?apparatus=e2e-app-m2',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'inventory.check_view'],
+    expectText: 'Dextrose 50% Syringe',
   },
   // Also needs settings.manage: its four values are written through the
   // organization-settings endpoint, so the checklist grant is not enough.
@@ -965,6 +1031,7 @@ export const ALL_ROUTES: RouteCheck[] = [
   // Held off by toggle-track and on the pass now that it is 44px: both of its
   // sub-44px controls were switches, and both its unnamed selects are named.
   { path: '/elections/settings', maxSmallTargets: 0, maxTinyText: 0, permissions: ['elections.manage'] },
+  { path: '/elections/attendance', maxSmallTargets: 0, maxTinyText: 0, permissions: ['elections.manage'] },
   { path: '/account', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/testing', maxSmallTargets: 0, maxTinyText: 0 },
 
@@ -990,7 +1057,183 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: ['finance.view', 'finance.manage'],
     expectText: 'Collection Rate',
   },
+  //: The rest of Finance. Each sat in the inventory as exempt under the
+  //: generated "covered by its representative module route" sentence, and none
+  //: could have been measured: the catch-all's `{}` drew every list as empty,
+  //: and took budget amendments and reports down through the ErrorBoundary.
+  //: The fixtures in helpers.ts give each a populated body, and `expectText` is
+  //: a string only that populated body draws. The manage grant is on every one
+  //: so the officer controls are measured too; the two that need more come last.
+  //: Written out rather than mapped from a list: mobile-route-integrity.spec.ts
+  //: finds each path in this file as an object literal's first key, so it
+  //: would not see a mapped one.
+  {
+    path: '/finance/budgets',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'Apparatus Maintenance',
+  },
+  {
+    path: '/finance/my-budgets',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'Apparatus Maintenance',
+  },
+  {
+    path: '/finance/budget-requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'No request yet',
+  },
+  {
+    path: '/finance/budget-requests/review',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'Apparatus Maintenance',
+  },
+  {
+    path: '/finance/budget-amendments',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'Grant award for turnout gear replacement',
+  },
+  {
+    path: '/finance/purchase-requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'PR-2026-0012',
+  },
+  {
+    path: '/finance/expenses',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'ER-2026-0031',
+  },
+  {
+    path: '/finance/check-requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'CR-2026-0008',
+  },
+  {
+    path: '/finance/my-dues',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: '2026 Annual Membership Dues',
+  },
+  {
+    path: '/finance/reports',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'Apparatus Maintenance',
+  },
+  {
+    path: '/finance/settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'FY 2026',
+  },
+  {
+    path: '/finance/settings/quickbooks',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'QuickBooks Export',
+  },
+  {
+    path: '/finance/approvals',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage', 'finance.approve'],
+    expectText: 'Replacement SCBA cylinders (6)',
+  },
+  {
+    path: '/finance/settings/approval-chains',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage', 'finance.configure_approvals'],
+    expectText: 'Purchases over $1,000',
+  },
   { path: '/grants', maxSmallTargets: 0, maxTinyText: 0, permissions: ['fundraising.view'] },
+  //: The rest of Grants & Fundraising, on the same footing as Finance above:
+  //: exempt under the generated sentence, drawn empty by the catch-all, and
+  //: Zeffy and Reports taken down through the ErrorBoundary. The fixtures in
+  //: helpers.ts give each a populated body, and `expectText` is a string only
+  //: that body draws; the manage grant measures the officer controls too.
+  {
+    path: '/grants/opportunities',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Assistance to Firefighters Grant (AFG)',
+  },
+  {
+    path: '/grants/applications',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'State Volunteer Fire Assistance',
+  },
+  {
+    path: '/grants/campaigns',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Thermal Imaging Camera Drive',
+  },
+  {
+    path: '/grants/donors',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Harrington Family Foundation',
+  },
+  {
+    path: '/grants/donations',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Oakville Hardware & Supply',
+  },
+  {
+    path: '/grants/pledges',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Thermal Imaging Camera Drive',
+  },
+  {
+    path: '/grants/events',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Pancake Breakfast',
+  },
+  {
+    path: '/grants/zeffy',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'D. Alvarez',
+  },
+  {
+    path: '/grants/reports',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Total Applications',
+  },
   { path: '/reports', maxSmallTargets: 0, maxTinyText: 0, permissions: ['reports.view'] },
   { path: '/reports/saved', maxSmallTargets: 0, maxTinyText: 0, permissions: ['reports.view', 'reports.manage'] },
   {
@@ -1008,6 +1251,7 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/reports/evaluations/mine', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/medical-screening', maxSmallTargets: 0, maxTinyText: 0, permissions: ['medical_screening.view'] },
   { path: '/history', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/history/media', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/medical-supplies', maxSmallTargets: 0, maxTinyText: 0, permissions: ['inventory.view_medical'] },
   { path: '/ip-security', maxSmallTargets: 0, maxTinyText: 0, permissions: ['security.manage'] },
   // Both are settings.manage-gated, so they cost no extra sign-in between them.

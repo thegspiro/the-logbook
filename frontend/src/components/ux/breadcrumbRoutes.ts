@@ -96,6 +96,9 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   // Published history is read by any signed-in member.
   '/history': {},
   '/history/people': {},
+  '/history/import': { permissions: ['history.manage'] },
+  '/history/media': {},
+  '/history/albums': {},
   '/integrations': { permissions: ['settings.manage'] },
   // Registered for its label: the segment is "historical-import".
   '/integrations/historical-import': {

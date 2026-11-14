@@ -19,6 +19,7 @@ import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import type { Budget } from '../types';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 /** Station filter value for lines with no station. */
 const DEPARTMENT_WIDE = '__department_wide__';
@@ -47,7 +48,9 @@ const BudgetProgress: React.FC<BudgetProgressProps> = ({ spent, encumbered, budg
       <div className="text-theme-text-secondary mb-1 flex items-center justify-between text-xs">
         <span>{totalPct.toFixed(0)}% used</span>
         {overBudget && (
-          <span className="font-medium text-red-600">{totalPct > 100 ? 'Over budget' : 'Near limit'}</span>
+          <span className="font-medium text-red-800 dark:text-red-300">
+            {totalPct > 100 ? 'Over budget' : 'Near limit'}
+          </span>
         )}
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
@@ -78,12 +81,12 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({ budgets }) => {
     {
       label: 'Total Budgeted',
       value: formatCurrencyWhole(totalBudgeted),
-      color: 'text-green-700 dark:text-green-600',
+      color: 'text-green-800 dark:text-green-300',
     },
     {
       label: 'Total Spent',
       value: formatCurrencyWhole(totalSpent),
-      color: 'text-blue-600',
+      color: 'text-blue-700 dark:text-blue-300',
     },
     {
       label: 'Encumbered',
@@ -93,19 +96,19 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({ budgets }) => {
     {
       label: 'Remaining',
       value: formatCurrencyWhole(totalRemaining),
-      color: totalRemaining < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-600',
+      color: totalRemaining < 0 ? 'text-red-800 dark:text-red-300' : 'text-green-800 dark:text-green-300',
     },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <StatGrid columns={4}>
       {cards.map((c) => (
         <div key={c.label} className="card p-4">
           <p className="text-theme-text-secondary text-sm">{c.label}</p>
           <p className={`text-xl font-bold ${c.color}`}>{c.value}</p>
         </div>
       ))}
-    </div>
+    </StatGrid>
   );
 };
 
@@ -414,7 +417,7 @@ const BudgetsPage: React.FC = () => {
                         </td>
                         <td
                           data-label="Remaining"
-                          className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${remaining < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-600'}`}
+                          className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${remaining < 0 ? 'text-red-800 dark:text-red-300' : 'text-green-800 dark:text-green-300'}`}
                         >
                           {formatCurrencyWhole(remaining)}
                         </td>
@@ -507,7 +510,7 @@ const BudgetsPage: React.FC = () => {
                   </td>
                   <td
                     data-label="Remaining"
-                    className={`px-4 py-3 text-right text-sm font-bold whitespace-nowrap ${totalRemaining < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-600'}`}
+                    className={`px-4 py-3 text-right text-sm font-bold whitespace-nowrap ${totalRemaining < 0 ? 'text-red-800 dark:text-red-300' : 'text-green-800 dark:text-green-300'}`}
                   >
                     {formatCurrencyWhole(totalRemaining)}
                   </td>

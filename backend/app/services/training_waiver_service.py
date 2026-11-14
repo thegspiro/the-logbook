@@ -203,11 +203,7 @@ async def fetch_user_waivers(
         # Most members have neither; the rule would go unread.
         return unruled
     rule = await get_leave_month_rule(db, org_id)
-    periods: List[WaiverPeriod] = []
-    for w in waivers:
-        periods.append(_to_waiver_period(w, SOURCE_WAIVER, rule))
-    for leave in leaves:
-        periods.append(_to_waiver_period(leave, SOURCE_LEAVE, rule))
+    periods = [p for _, p in _leave_and_waiver_periods(waivers, leaves, rule)]
     return periods + unruled
 
 
@@ -244,15 +240,45 @@ async def fetch_org_waivers(
         return unruled_by_user
     rule = await get_leave_month_rule(db, org_id)
     by_user: Dict[str, List[WaiverPeriod]] = {}
-    for w in waivers:
-        uid = str(w.user_id)
-        by_user.setdefault(uid, []).append(_to_waiver_period(w, SOURCE_WAIVER, rule))
-    for leave in leaves:
-        uid = str(leave.user_id)
-        by_user.setdefault(uid, []).append(_to_waiver_period(leave, SOURCE_LEAVE, rule))
+    for uid, period in _leave_and_waiver_periods(waivers, leaves, rule):
+        by_user.setdefault(uid, []).append(period)
     for uid, periods in unruled_by_user.items():
         by_user.setdefault(uid, []).extend(periods)
     return by_user
+
+
+def _leave_and_waiver_periods(
+    waivers, leaves, rule: str
+) -> List[Tuple[str, WaiverPeriod]]:
+    """Leaves and training waivers as (user id, period), each reason once.
+
+    Recording a leave writes a matching training waiver too
+    (``MemberLeaveService.create_leave``), so the two rows describe one leave.
+    The linked waiver is read as that leave: counting it as a second reason
+    made every month read "on leave" and "waived" at once. It is kept rather
+    than dropped, so an officer who later edits the waiver's dates still has
+    those dates honoured.
+
+    A leave marked ``exempt_from_training_waiver`` is one the officer chose to
+    keep the member's training requirements through, so it excuses nothing;
+    the leave itself still shows wherever leaves are listed.
+    """
+    linked = {
+        str(leave.linked_training_waiver_id)
+        for leave in leaves
+        if leave.linked_training_waiver_id
+    }
+    periods: List[Tuple[str, WaiverPeriod]] = []
+    for w in waivers:
+        source = SOURCE_LEAVE if str(w.id) in linked else SOURCE_WAIVER
+        periods.append((str(w.user_id), _to_waiver_period(w, source, rule)))
+    for leave in leaves:
+        if leave.exempt_from_training_waiver:
+            continue
+        periods.append(
+            (str(leave.user_id), _to_waiver_period(leave, SOURCE_LEAVE, rule))
+        )
+    return periods
 
 
 def _override_period(override: TrainingRequirementOverride) -> WaiverPeriod:

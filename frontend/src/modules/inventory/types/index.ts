@@ -135,21 +135,21 @@ export const STATUS_OPTIONS = [
   {
     value: 'available',
     label: 'Available',
-    color: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/30',
+    color: 'bg-green-500/10 text-green-900 dark:text-green-300 border-green-500/30',
   },
-  { value: 'assigned', label: 'Assigned', color: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30' },
+  { value: 'assigned', label: 'Assigned', color: 'bg-blue-500/10 text-blue-900 dark:text-blue-300 border-blue-500/30' },
   {
     value: 'checked_out',
     label: 'Checked Out',
-    color: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/30',
+    color: 'bg-yellow-500/10 text-yellow-900 dark:text-yellow-300 border-yellow-500/30',
   },
   {
     value: 'in_maintenance',
     label: 'In Maintenance',
-    color: 'bg-orange-500/10 text-orange-800 dark:text-orange-400 border-orange-500/30',
+    color: 'bg-orange-500/10 text-orange-900 dark:text-orange-300 border-orange-500/30',
   },
-  { value: 'lost', label: 'Lost', color: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30' },
-  { value: 'stolen', label: 'Stolen', color: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30' },
+  { value: 'lost', label: 'Lost', color: 'bg-red-500/10 text-red-900 dark:text-red-300 border-red-500/30' },
+  { value: 'stolen', label: 'Stolen', color: 'bg-red-500/10 text-red-900 dark:text-red-300 border-red-500/30' },
   {
     value: 'retired',
     label: 'Retired',
@@ -411,12 +411,12 @@ export const ITEM_TYPE_FIELDS: Record<string, string[]> = {
 
 /** Shared request/workflow status badge colors (pending/approved/denied/completed) */
 export const REQUEST_STATUS_BADGES: Record<string, string> = {
-  pending: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border border-yellow-500/30',
-  approved: 'bg-green-500/10 text-green-800 dark:text-green-400 border border-green-500/30',
-  denied: 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30',
-  completed: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30',
+  pending: 'bg-yellow-500/10 text-yellow-900 dark:text-yellow-300 border border-yellow-500/30',
+  approved: 'bg-green-500/10 text-green-900 dark:text-green-300 border border-green-500/30',
+  denied: 'bg-red-500/10 text-red-900 dark:text-red-300 border border-red-500/30',
+  completed: 'bg-blue-500/10 text-blue-900 dark:text-blue-300 border border-blue-500/30',
   // A return notice whose gear came back through a direct return (W39-5).
-  received: 'bg-green-500/10 text-green-800 dark:text-green-400 border border-green-500/30',
+  received: 'bg-green-500/10 text-green-900 dark:text-green-300 border border-green-500/30',
 };
 
 /**
@@ -454,17 +454,17 @@ export function getStatusLabel(status: string): string {
 export function getConditionColor(condition: string): string {
   switch (condition) {
     case 'excellent':
-      return 'text-green-700 dark:text-green-400';
+      return 'text-green-900 dark:text-green-300';
     case 'good':
-      return 'text-emerald-700 dark:text-emerald-400';
+      return 'text-emerald-900 dark:text-emerald-300';
     case 'fair':
-      return 'text-yellow-700 dark:text-yellow-400';
+      return 'text-yellow-900 dark:text-yellow-300';
     case 'poor':
-      return 'text-orange-700 dark:text-orange-400';
+      return 'text-orange-900 dark:text-orange-300';
     case 'damaged':
-      return 'text-red-700 dark:text-red-400';
+      return 'text-red-900 dark:text-red-300';
     case 'out_of_service':
-      return 'text-red-700 dark:text-red-500';
+      return 'text-red-900 dark:text-red-300';
     default:
       return 'text-theme-text-muted';
   }

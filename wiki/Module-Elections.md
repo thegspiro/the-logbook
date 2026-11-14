@@ -89,6 +89,19 @@ shown as replacing it. The minutes screen, the PDF and the published library
 and public copies all show the correction (the public copy shows its date, not
 the reason).
 
+### List and Detail Responses
+
+`GET /elections` returns a summary row per election, for the list and its
+filters. It leaves out what only one election's page needs, so read those
+from that election's own endpoints (W50-78):
+
+- `auto_open`, `reminder_hours_before_close` and `nomination_deadline` come
+  from `GET /elections/{id}`.
+- Candidates come from `GET /elections/{id}/candidates`. The detail response
+  carries no candidate list.
+- Rollback history comes from `GET /elections/{id}/forensics`, which is
+  `elections.manage` only.
+
 ---
 
 ## Voter Eligibility
@@ -284,8 +297,10 @@ eligibility is evaluated live.
 A member left off the roll who opens the election in the app is told the
 rule they still fail, such as a waiting period, attendance or their tier.
 The frozen roll is named only when they now pass every rule, as a member
-waived after opening does (`check_voter_eligibility`). The emailed-ballot
-link and the secretary's roster still give the roll as the reason.
+waived after opening does (`check_voter_eligibility`). The secretary's
+eligibility roster and the ballot send's skipped list give the same reason
+for that member, through `_off_roll_reason`. The emailed-ballot link still
+gives the roll as the reason.
 
 ### Voting Attendance Window
 

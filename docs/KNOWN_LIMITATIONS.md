@@ -1,5 +1,144 @@
 # Known Limitations & Open Decisions
 
+## Attendance Waiver Emails and Template Copies — Choices Made Without a Ruling (2026-11-11)
+
+The waiver emails and the template-CC fix (defect D1) follow the owner
+decisions of 2026-11-10. Where those left a gap, the conservative choice was
+taken; each is listed so the owner can confirm or reverse it.
+
+- **A CC copy leaves out the category and the decider's note, not only the
+  buttons and the reason.** The decision said a copy carries "no buttons and
+  no reason text". A category (_Medical_) or a note can say as much as a
+  reason, so both read _Not included in this copy_. Reversing it is a
+  one-line change per field in `AttendanceWaiverEmails._context`.
+- **The withdrawal email goes only to approvers the request email reached.**
+  Not to everyone routed now: an approver who was never emailed has nothing
+  to stop doing. A request made before this release was never emailed, so
+  withdrawing it emails nobody (the in-app prompt is still archived).
+- **A send that dies mid-flight is not retried.** Each email is claimed before
+  it goes out and released if the send fails; a process killed between the
+  two leaves the claim, so that one email is never sent (at most once). The
+  in-app prompt reaches the same approvers either way. Claiming first is
+  what stops a retry or a second worker mailing anyone twice; the cost is
+  the rare email lost to a crash (pitfall #36 asks for the order to be
+  stated).
+- **Template copies reach every message of a bulk send.** A template with a
+  default CC that goes to many members at once (an event reminder) copies
+  the CC on each member's message, which is what the editor has always
+  promised. `docs/UPGRADING.md` tells operators to review saved CC lists.
+- **Credential templates are never copied, scheduled or not.** The exclusion
+  is `ALWAYS_SENT_TYPES` (welcome, password reset, IT password, ballot,
+  applicant status, follow-up form and contact-changed). There is no MFA or
+  sign-in-code template to add: those emails carry no template type. A
+  scheduled email of one of these types used to carry the template's CC; it
+  now keeps only the addresses typed for that email.
+- **The meeting templates are sent from the meeting screens' release**
+  (#4266), under `EVENT_DUTIES` for approvers and `EVENT_CHANGES` for the
+  member (`_KINDS` in `attendance_waiver_email_service.py`), the kinds the
+  meeting workflow's in-app notices already used.
+- **A waiver policy's CC positions copy a decision in the app only** _(owner
+  choice, 2026-11-13)_. #4266 also emailed those holders, beside the decided
+  template's own CC positions, so a person named in both would have been
+  emailed twice; the email copy is left to the template. The request, decision
+  and withdrawal are emailed only from their templates; the hand-built emails
+  remain for the notices no template covers (a question, an answer, a moved
+  session, an expiry).
+
+## Elections — Voter Rules by Member Type (Owner Decisions, 2026-11-13)
+
+Election Settings › Voter Eligibility now sets who may vote as one row per
+member type (version 2 rules, `app/services/voter_rules.py`): may vote, a
+waiting period counted from joining the department or from becoming the type,
+and any number of meeting-attendance rules, up to four, all of which must pass.
+Four kinds of vote carry their own set — regular business meeting, annual
+meeting, bylaws amendment, special meeting — and each but the first uses the
+regular set until given one.
+
+### Decided
+
+- **Administrative and social members are judged by two rows.** Their status
+  row (Regular, Probationary, Life, a department tier…) and their class row
+  both apply. This is what the membership tiers already did, since a tier
+  follows status whatever the class, so converting a department's tier rules
+  takes no vote away from anyone on that basis. It can take one away: a
+  status row's waiting period now reaches administrative and social members,
+  who before waited only on their class.
+- **Version 2 rules replace the tiers' voting benefits.** The tier screen no
+  longer offers "Can vote" or the attendance threshold; it points to Election
+  Settings. The stored values are kept, not deleted, and seed a department's
+  rows until the secretary first saves this screen.
+- **No data migration.** Stored rules and tier benefits are converted when
+  they are read (`rules_from_v1`), never rewritten, so a department that never
+  opens the screen keeps exactly the electorate it had.
+- **Elections created before this keep version 1 rules,** and are judged as
+  they were — tier benefits included — until they close.
+
+### Left open
+
+- **A tier's attendance threshold now stops the ballot being sent.** Before, it
+  was checked only when the member tried to vote, so a member who fell short
+  received a ballot link and was then refused. As a row rule it applies
+  everywhere the other rules do: the roster, the ballot send and the vote.
+- ~~**Minutes › Attendance still reads the tier benefits** for its "Voting"
+  column.~~ Resolved 2026-11-13: the column now asks the same gate the ballot
+  send does, under the department's regular business meeting rules
+  (`ElectionService.voting_reason_under_rules`), so it agrees with an
+  election held on those defaults. It cannot speak for an election with
+  customized rules; Elections › Meeting Attendance does, per election.
+- **A version 1 election's tier rules can no longer be edited,** because the
+  tier screen dropped the fields. Its own election-wide rules still can, until
+  voting opens.
+- **A tier added after the rows were saved** has no row of its own and is
+  judged by the row of the status it counts as (or by no row at all, if it
+  counts as none) until the secretary gives it one; the screen says so on that
+  row.
+
+### Holding an election outside the defaults (2026-11-13)
+
+- **A reason is required whenever an election's rules differ from its kind's
+  defaults** (owner decision), on create and on any edit that touches the
+  rules, the kind or the reason. It is cleared when the rules match the
+  defaults again, written to the audit log
+  (`election_voter_rules_customized`), shown on the election, and carried in
+  the results the minutes file. This includes an explicit "no rules" (null),
+  which the API accepted without a reason before.
+- **A ballot item can follow another kind's rules, or rules of its own**
+  (owner decision: the bylaws carve-out is per ballot item, not per member).
+  Its own rules replace the election's — and the tier ladder's — for that item
+  only. Custom item rules need a reason; following a kind's defaults does not.
+- **In an election with such an item, a vote is judged live against the rules
+  of the item being voted on**, even for a member on the roll frozen when
+  voting opened. The roll holds everyone eligible for at least one item, so
+  being on it no longer proves eligibility for the item in hand. The cost: a
+  meeting recorded while the vote is open can change the answer for those
+  elections, which the frozen roll otherwise prevents. Elections with no such
+  item keep the frozen-roll behaviour.
+- **The create dialog's count of members who would receive a ballot** covers
+  the election's rules only, not each ballot item's own voter types, check-in
+  or carve-out rules; it says so beside the number.
+
+### Elections › Meeting Attendance (2026-11-13)
+
+`/elections/attendance` shows each member's meetings over a period the
+secretary picks (presets of 3 to 24 months, or custom dates up to five years),
+whether they may vote in the chosen election, and each member's meetings with
+how they counted and where the record came from (owner decisions: a second
+page with the same data as Minutes › Attendance; check-in time and recorded-by
+added; `elections.manage` is enough; eligibility follows the election chosen).
+
+- **The period is for reading only.** "May vote" is the election's own roster
+  answer, and its attendance rules count their own last N meetings or months,
+  whatever period the page shows. The page says so beside the tiles.
+- **Check-in time and recorded-by start now.** `meeting_attendees` gained
+  `checked_in_at`, `recorded_by` and `recorded_via`; rows written before this
+  have none, and nothing backfills them, since there is no record of who
+  entered them. Those meetings show their status with no source beside it.
+  Only an event check-in has a check-in time: a secretary's entry claims no
+  moment for one.
+- **Excused, on-leave and pre-membership meetings** are classified by the
+  same tally the ballot check uses, so a meeting held before a member's
+  current stint is left out of both the count and their list.
+
 ## Evaluations — Waiver Data Points in the Annual Review (2026-11-11)
 
 The annual review can show a member's requests to be excused from training
@@ -568,17 +707,96 @@ an erasure request, a public-website question or a large upload knows it.
   decision: the public feed ships in phase 7).** Publishing to the public
   writes a cleared snapshot and the clearance list is enforced, but no public
   portal endpoint reads it yet. The person page says so beside the button.
-- **Video and large audio are not accepted yet.** Phase 1 stores no files.
-  When photos and media arrive (phase 3) uploads stay under the 60 MB proxy
-  limit every nginx configuration sets (`client_max_body_size 60M`) — 55 MB
-  per file was agreed; long recordings wait for chunked uploads.
-- **Person merge and bulk import are phase 2.** Until then a duplicate is
-  warned about at entry but two records for one person are combined by hand.
+- **Audio and video are limited to 55 MB a file.** ✅ Photos and media
+  shipped 2026-11-13 (phase 3). Uploads stay under the 60 MB proxy limit every
+  nginx configuration sets (`client_max_body_size 60M`) — 55 MB per file was
+  agreed; long recordings wait for chunked uploads.
+- **Person merge and bulk import are phase 2.** ✅ **Shipped 2026-11-13.**
+  Until then a duplicate was warned about at entry but two records for one
+  person were combined by hand. The decisions they ship with are below.
+- **An import never creates a login account (owner decision, 2026-11-03).**
+  A roster row is matched to an existing history record, mapped to an existing
+  member account, created as a new unlinked record, or skipped. A former
+  member who never had an account stays a history record only.
+- **A matched row only fills what is empty.** Names, badge, birth and death
+  dates, the line-of-duty flag and the notes are written only where the record
+  has nothing; what the Historian entered always wins, and a row's notes are
+  dropped where the record already has research notes. The row's service
+  period is added unless an identical one is already there.
+- **A blank "Left" means unknown, not still serving.** Only `present` (or
+  `current`, `now`) makes a service period ongoing.
+- **Slashed dates are read month first** (`6/14/1952` is 14 June). One whose
+  month would be over 12 is reported for correction, never swapped.
+- **Import drafts are deleted 30 days after anyone last worked on them**
+  (owner decision, 30 days; measured from the last change rather than the
+  upload, so a large roster reviewed over several sittings is not lost). The
+  rows hold the file's personal data encrypted; the import record itself is
+  kept, marked expired, as the audit of what was uploaded.
+- **"Remove this import's records" is not a batch undo.** It deletes only the
+  records the import created that are still drafts and that nobody has
+  edited, published, reviewed, linked to family or merged since; each one kept
+  is named with the reason. What the import added to existing records stays.
+- **A review screen reloads the whole draft after each decision.** Fine for a
+  department roster; a 5,000-row file answers each click in a second or two.
+- **Merging keeps the kept record's publication level** (choice made in the
+  phase 2 spec). If the removed record was published more widely, the merge
+  screen says so before the merge, and the Historian publishes again
+  afterwards. A merge into a public record is a substantial edit, so the public
+  keeps the last cleared version until the result is cleared.
+- **A merge deletes the removed record's clearance requests.** Clearance is
+  decided by revision number, so a request cleared for the removed record
+  could otherwise vouch for a revision of the kept one that nobody reviewed.
+  The change history, which moves to the kept record, still records every step
+  of that review.
+- **A memorial or line-of-duty designation on either record carries through a
+  merge.** A flag that is off is treated as an absence, not as a value that
+  competes with the other record's.
 - **Reading published history needs no permission.** Any signed-in member of a
   department with the module on reads what is published to members. This was
   chosen over a `history.view` grant on every position, which would have
   needed a positions migration for every department; `history.view` instead
   reads drafts and research.
+
+Phase 3, photos and media (2026-11-13), ships with these:
+
+- **TIFF is refused (owner decision).** It is refused everywhere else on the
+  platform as a complex format with a history of decoder vulnerabilities, and
+  the archive follows suit: a Historian converts a TIFF scan to JPEG or PNG
+  before uploading it, and the archival TIFF itself is kept outside the app.
+- **ffmpeg is part of the backend image (owner decision).** It makes the
+  image larger on every platform (Docker, Unraid, the ARM build); it is
+  installed without Debian's recommended extras to keep that down. It strips
+  audio and video for members — the streams are copied, not re-encoded, so
+  quality is unchanged and the members' copy roughly doubles each
+  recording's storage — and makes a video's poster frame and the length shown
+  in the gallery.
+- **A host without ffmpeg refuses audio and video (owner decision).** A
+  bare Linux or cloud install that runs the backend outside the image must
+  install the `ffmpeg` package (which provides `ffprobe`) for audio and video
+  uploads; until then they are refused with a message naming the package,
+  never stored unstripped. Photos are unaffected.
+- **Stripping covers tags and side tracks, not the sound or picture
+  itself.** Location, device and title tags, chapters, subtitles, data
+  tracks (where some cameras keep GPS) and embedded cover art are removed. A
+  place spoken aloud or visible in the frame is not, nor anything a codec
+  hides inside the encoded stream; the Historian still listens and watches
+  before publishing.
+- **The original is downloadable by `history.manage` only.** It is kept
+  byte for byte; everyone else gets the stripped copy.
+- **A photo-use consent warning never blocks.** A tagged person who declined
+  photo use, or never answered, is named on the item page and in a
+  confirmation before publishing; the Historian may publish anyway. A past
+  member with no account has no answer to show.
+- **Tags point at past-member records, not member accounts.** A current member
+  is tagged through their history record, which the Historian creates first
+  (`POST /people/from-member/{user_id}`).
+- **An item can be deleted only while it is a draft.** A published one is
+  returned to draft first, so deleting it is a deliberate second step.
+- **A batch upload is not one transaction.** Each file is its own request; if
+  the browser is closed part way, the files already sent stay as drafts and
+  the rest were never uploaded. The shared `batch_id` identifies the set.
+- **Documents (letters, minutes, scanned PDFs) are phase 4.** The media
+  upload refuses PDF and office files.
 
 ## Medical Screening — Gaps for the Owner (2026-11-02, updated 2026-11-03)
 
@@ -1926,6 +2144,87 @@ existing rows were deliberately not rewritten: the correct date is derivable
 (the event's start time and the organization's timezone), but a migration
 would change historical compliance results, and that was judged not worth it.
 An officer can correct an individual record's date where it matters.
+
+## Membership Number — Add Member Requires One, Import Does Not (W09-6, 2026-11-10)
+
+**Owner decision needed.** When the department does not number members
+automatically (Members Administration → Settings → Membership IDs), the two
+ways of adding a member disagree:
+
+- **Add Member** refuses to save without a membership number (`AddMember.tsx`).
+- **Import Members** creates a member with none when the column is blank. The workflow review's W09 second pass imported three members this way.
+
+`POST /users` accepts either. It assigns a number when automatic numbering is
+on, and otherwise stores none. The rule exists only in Add Member's form.
+
+Until W09-5, the import's instructions promised that a blank number would be
+assigned, so an officer had no reason to fill the column. The instruction now
+says whether one will be. Two questions are open:
+
+- **Should a membership number be required when numbering is off?** If so, the rule belongs on `POST /users`, so that both paths and any API caller meet it.
+- **What happens to members already stored without one?** They can be found by a query and given numbers from each profile; no bulk assignment was checked.
+
+## Department Contact Details — Settings Stores Them However They Are Typed (W06-6, 2026-11-08)
+
+**Owner decision needed.** Under Settings → Contact, the department's phone
+and website are saved as typed. The workflow review's W06 second pass stored
+"call us maybe" and "not a url", and both came back after a reload.
+`OrganizationProfileUpdate` (`backend/app/schemas/organization.py`) bounds
+their length and checks nothing else.
+
+The two writers of these fields disagree:
+
+- **Onboarding** refuses a website that doesn't look like an address ("Enter a valid website address", `OrganizationSetup.tsx`), and its schema adds `https://` when no scheme is given.
+- **The department's phone** gets none of the W04-7 rule that applies to members' own numbers (`app/utils/phone_numbers.py`).
+
+The website is printed in email footers (`organization_website`) and returned
+by the public portal API, so a bad value reaches members and the public. Only
+administrators can set it.
+
+Three questions are open, the same three as the emergency-contact entry below:
+
+- **Apply the onboarding website check and the W04-7 phone rule to the Settings path?**
+- **Refuse a bad value, or save it and flag the field** under the 2026-11-05 forms decision?
+- **What happens to values already stored?**
+
+## Emergency Contacts — The Phone Has No Format Check (W04-12, 2026-11-08)
+
+**Owner decision needed.** A member's emergency contact is saved with any phone
+up to 20 characters. The workflow review's W04 second pass saved "nope", and
+the server stored it. `EmergencyContact.phone` (`backend/app/schemas/user.py`)
+has no rule. The W04-7 rule (`app/utils/phone_numbers.py`, owner decision
+2026-10-05) covers a member's own phone and mobile only. It accepts digits,
+spaces, dashes, dots, brackets, a leading `+` and an extension, with 7 to 15
+digits.
+
+This is the number the department calls when something has happened to the
+member. Three questions are open:
+
+- **Extend the W04-7 rule to emergency-contact phones?** As there, it would apply to new writes only, with a value sent back unchanged still accepted.
+- **What happens to contacts already stored?** They are encrypted (`emergency_contacts` is an encrypted column), so finding bad ones means decrypting each.
+- **Follow the 2026-11-05 forms decision?** A contact with a bad phone could be kept and flagged rather than refused.
+
+## Password Reset Requests Store the Typed Address in the Audit Log (W03-13, 2026-11-08)
+
+**Resolved (2026-11-08), owner decision: a keyed fingerprint for unknown
+addresses.** `POST /auth/forgot-password` wrote the typed address into its
+`auth.password_reset_requested` audit row, including addresses that match
+nobody. The audit log is hash-chained and kept for good.
+
+It no longer writes the address:
+
+- **A request that matched a member** is named by `user_id` alone.
+- **Any other request** stores `email_fingerprint`, the keyed HMAC the account lookup uses (`app.core.security.email_fingerprint`). Repeats of one address can be matched, but the address can't be read back.
+- **Requests with email off** always carry the fingerprint, because the server looks nothing up then.
+
+Every row also carries the department's `organization_id` (W03-9).
+`tests/test_forgot_password_audit_scope.py` covers all three cases.
+
+**Still true:**
+
+- Rows written before this change keep the address, because editing them would break the hash chain.
+- A fingerprint is computed under the current `ENCRYPTION_KEY`, so after a key rotation the same address fingerprints differently from older rows.
+- No screen turns an address into its fingerprint, so an administrator who wants to ask "was this address tried?" has no tool for it yet.
 
 ## Sign-in From a Shared Station Address (2026-10-05)
 
@@ -9952,3 +10251,58 @@ option was taken; each is open for the owner to revisit.
 - **`idx_meeting_attendees_meeting` is now a prefix of the new unique
   `(meeting_id, user_id)` index** and could be dropped; it was left to keep
   the migration to what the feature needs.
+
+## Training — Shift Evaluations: What the 2026-11-13 Review Left Open
+
+A review of the five shift-evaluation pull requests (#3884, #3902, #3922,
+#3956, #4264) fixed the defects listed in its pull request. These were found
+and deliberately not changed, because each needs an owner ruling or reaches
+beyond the feature.
+
+**For the owner to decide**
+
+- **The evaluations a shift calls for follow today's settings, not the
+  shift's.** Who needs which evaluation is worked out on every read from the
+  current "one evaluation for several programs" setting and the member's
+  current enrollments. Switching that setting, or enrolling a member in a
+  second program, while a shift is still open re-scopes it: evaluations
+  already submitted are kept but no longer required, new ones are required,
+  and close-out waits for them. Freezing the set at close-out would need a
+  stored snapshot.
+- **No-show and pending crew are asked for an evaluation.** The rule mirrors
+  the trainee-report gate (only declined and cancelled seats are left out),
+  so the two agree; excusing no-shows would mean changing both.
+- **No requirement type counts the calls an evaluation records.** Evaluated
+  shifts, transports and refusals are credited; the existing Calls type is
+  still fed by shift reports.
+- **A department requirement of an evaluation type, linked into a program
+  with "Link existing", is not credited by evaluations.** A linked row is
+  graded by the compliance engine, which has no branch for these types and
+  falls back to matching training records by type.
+
+**Accepted for now**
+
+- **Going to an evaluation from the Shift Completion Report loses most of the
+  report's unsaved fields.** The report's draft restore keeps crew selections,
+  remarks and the narrative; calls, ratings and the rest reload empty. The
+  restore logic predates evaluations, which now make leaving the report
+  routine.
+- **Two evaluation credits to the same requirement at the same moment can
+  lose one.** The shared credit primitive computes the new value from an
+  unlocked read. It is shared by every credit source, so it is not changed
+  here.
+- **Credit is not re-stated when a requirement's crediting rule changes**
+  (its type, or "leave out the lowest rating"), **when an evaluation's
+  combined scope shrinks**, or **when its shift is deleted, an outside entry
+  moves to an agency that does not evaluate, or the member is removed from the
+  shift.** Each leaves earlier credit standing until the evaluation is saved
+  again.
+- **A deactivated evaluation form is still offered and required** where a
+  program or the department settings still name it.
+- **Two administrators creating forms with the same name at the same moment
+  get a 500** rather than the duplicate-name 400.
+- **A preceptor-link submission that collides with an officer creating the
+  same evaluation** retries once; the retry keeps the link marked used but
+  loses the submitting device's address and browser from the record.
+- **Restoring a pending outside shift approves it**, without approve's
+  pending-only check (it still needs `scheduling.manage`).

@@ -16,6 +16,7 @@ import type {
   MeetingKind,
   MemberVoterType,
   WaitingPeriodMode,
+  WaitCountedFrom,
 } from '../constants/enums';
 export type { ElectionStatus, VotingMethod, VictoryCondition, BallotChoice, RunoffType, QuorumType };
 
@@ -36,6 +37,16 @@ export interface BallotItem {
   victory_percentage?: number | undefined;
   voting_method?: VotingMethod | undefined;
   prospect_package_id?: string | undefined;
+  /**
+   * The carve-out: voter rules this item follows instead of the election's.
+   * `eligibility_kind` names the kind whose defaults they came from (the
+   * server copies them when only the kind is sent); null for custom rules.
+   * Send null on all three to put the item back on the election's rules.
+   */
+  eligibility_kind?: MeetingKind | null | undefined;
+  eligibility_rules?: ElectionEligibilityRules | null | undefined;
+  /** Required by the server when the rules differ from that kind's defaults. */
+  eligibility_override_reason?: string | null | undefined;
 }
 
 export interface PositionEligibility {
@@ -67,11 +78,44 @@ export interface WaitingPeriod {
   months?: number | null;
 }
 
-/** Election-wide voter rules, stored on the election (backend `ElectionEligibilityRules`). */
+/** How long members of one type wait before they may vote (backend `TypeWait`). */
+export interface TypeWait {
+  months: number;
+  counted_from: WaitCountedFrom;
+}
+
+/** Every voting rule for one member type (backend `TypeRule`). */
+export interface TypeRule {
+  may_vote: boolean;
+  wait: TypeWait | null;
+  /** Every rule must pass; an empty list means attendance is not required. */
+  attendance: AttendanceRule[];
+}
+
+/**
+ * Voter rules, stored on the election and as each meeting kind's defaults
+ * (backend `ElectionEligibilityRules`). Version 1 — absent `version` — holds
+ * one election-wide `attendance` rule and `waiting_periods`, applied beside
+ * the membership tiers' own voting rules. Version 2 holds one row per member
+ * type in `types`, and nothing else; tier voting rules do not apply to it.
+ */
 export interface ElectionEligibilityRules {
+  version?: 1 | 2;
   attendance: AttendanceRule;
-  /** Per member type; a type not listed has no waiting period. */
+  /** Version 1: per member type; a type not listed has no waiting period. */
   waiting_periods?: Partial<Record<MemberVoterType, WaitingPeriod>>;
+  /** Version 2: keyed by status, class or department tier id. */
+  types?: Record<string, TypeRule>;
+}
+
+/** One member type the per-type rules table has a row for (backend `VoterRow`). */
+export interface VoterRow {
+  key: string;
+  label: string;
+  /** `class` rows (administrative, social) apply on top of a status row. */
+  decided_by: 'status' | 'class';
+  /** A department tier without a row of its own is judged by this status's row. */
+  counts_as?: string | null;
 }
 
 /** Where a member stands against one meeting kind's waiting period. */
@@ -133,6 +177,8 @@ export interface Election {
   ballot_items?: BallotItem[];
   position_eligibility?: { [position: string]: PositionEligibility };
   eligibility_rules?: ElectionEligibilityRules | null;
+  /** Why the rules differ from the meeting kind's defaults, as the secretary gave it. */
+  eligibility_override_reason?: string | null;
   meeting_kind?: MeetingKind;
   meeting_date?: string;
   meeting_id?: string;
@@ -292,6 +338,10 @@ export interface ElectionCreate {
   position_eligibility?: { [position: string]: PositionEligibility } | undefined;
   // Omitted, the server derives it from the linked meeting's type.
   meeting_kind?: MeetingKind | undefined;
+  // Omitted, the server copies the meeting kind's defaults.
+  eligibility_rules?: ElectionEligibilityRules | null | undefined;
+  // Required by the server when eligibility_rules differ from those defaults.
+  eligibility_override_reason?: string | undefined;
   meeting_date?: string | undefined;
   meeting_id?: string | undefined;
   event_id?: string | undefined;
@@ -327,6 +377,9 @@ export interface ElectionUpdate {
   position_eligibility?: { [position: string]: PositionEligibility };
   // null removes every election-wide rule; an omitted key leaves them alone
   eligibility_rules?: ElectionEligibilityRules | null | undefined;
+  // Required when the resulting rules differ from the meeting kind's
+  // defaults; cleared by the server when they match.
+  eligibility_override_reason?: string | null | undefined;
   // Changing it replaces the election's rules with that kind's defaults,
   // unless the same request sends eligibility_rules / position_eligibility.
   meeting_kind?: MeetingKind | undefined;
@@ -499,6 +552,27 @@ export interface ElectionResults {
   quorum_met?: boolean | null;
   quorum_detail?: string | null;
   tie_policy?: TiePolicy;
+  /** Where this election's voter rules departed from the department's defaults. */
+  voter_rule_exceptions?: VoterRuleException[];
+}
+
+/** Backend `VoterRuleException`, carried in the results and so in the minutes. */
+export interface VoterRuleException {
+  scope: 'election' | 'ballot_item';
+  title: string;
+  meeting_kind?: MeetingKind | null;
+  reason?: string | null;
+}
+
+/** POST /elections/eligibility-preview. Omit the rules to preview the kind's defaults. */
+export interface ElectoratePreviewRequest {
+  meeting_kind: MeetingKind;
+  eligibility_rules?: ElectionEligibilityRules | null | undefined;
+}
+
+export interface ElectoratePreview {
+  eligible: number;
+  total: number;
 }
 
 export interface TimelineEvent {
@@ -827,7 +901,16 @@ export interface ElectionSettings {
    * Unlike `eligibility`, null is a value PATCH accepts.
    */
   annual_eligibility?: EligibilityDefaults | null;
-  /** Read-only: each membership tier's own voting rules, edited on the tier settings. */
+  /** A bylaws amendment's own defaults; null means it uses `eligibility`. */
+  bylaws_eligibility?: EligibilityDefaults | null;
+  /** A special meeting's own defaults; null means it uses `eligibility`. */
+  special_eligibility?: EligibilityDefaults | null;
+  /** The rows the per-type rules table offers, in display order. */
+  voter_rows?: VoterRow[];
+  /**
+   * Read-only: each membership tier's stored voting benefits. They apply only
+   * beside version 1 rules; version 2 rules replace them.
+   */
   tier_voting_rules?: TierVotingRule[];
   /**
    * Read-only posture reported by GET /elections/settings. `security` is not
@@ -940,4 +1023,64 @@ export interface EligibilityRoster {
   total_ballots_sent: number;
   email_sent_at: string | null;
   roster: RosterMember[];
+}
+
+/** GET /elections/{id}/attendance (snake_case, as the module). */
+export interface ElectionAttendanceMember {
+  user_id: string;
+  name: string;
+  member_type?: string | null;
+  member_since?: string | null;
+  meetings_in_period: number;
+  attended: number;
+  absent: number;
+  excused: number;
+  on_leave: number;
+  attendance_pct: number;
+  /** The election's eligibility roster answer; null when the member is not on it. */
+  may_vote?: boolean | null;
+  reason?: string | null;
+}
+
+export interface ElectionAttendance {
+  election_id: string;
+  election_title: string;
+  start: string;
+  end: string;
+  meeting_types?: string[] | null;
+  total_meetings: number;
+  members: ElectionAttendanceMember[];
+}
+
+/** How one meeting counts for a member. */
+export type MeetingAttendanceStatus = 'present' | 'absent' | 'excused' | 'on_leave';
+
+export interface MemberMeetingRecord {
+  meeting_id: string;
+  title: string;
+  meeting_type?: string | null;
+  meeting_date: string;
+  status: MeetingAttendanceStatus;
+  /** Null when the record was written before check-in times were kept, or was no check-in. */
+  checked_in_at?: string | null;
+  recorded_by_name?: string | null;
+  recorded_via?: string | null;
+  waiver_reason?: string | null;
+  leave_start?: string | null;
+  leave_end?: string | null;
+}
+
+export interface MemberMeetings {
+  user_id: string;
+  name: string;
+  start: string;
+  end: string;
+  meetings: MemberMeetingRecord[];
+}
+
+/** The period and meeting types an attendance read covers. */
+export interface AttendancePeriodQuery {
+  start?: string | undefined;
+  end?: string | undefined;
+  meeting_type?: string[] | undefined;
 }

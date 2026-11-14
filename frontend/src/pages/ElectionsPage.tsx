@@ -5,7 +5,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { useSubmitGuard } from '../hooks/useSubmitGuard';
 import { electionService, eventService, meetingsService, ranksService, roleService } from '../services/api';
 import type { MeetingRecord, OperationalRankResponse } from '../services/api';
@@ -33,17 +33,17 @@ import {
 import { formatDate, formatForDateTimeInput, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
 import { HelpLink } from '../components/HelpLink';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
-import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
+import { getTimeRemaining, getStatusBadgeClass, getStatusLabel } from '../utils/electionHelpers';
 import { eventWindow, meetingWindow, type MeetingWindow } from '../utils/electionMeetingWindow';
 import { ElectionSummaryCards } from '../modules/elections/components/ElectionSummaryCards';
-import { MEETING_KIND_LABELS, defaultsForKind, describeEligibilityRules } from '../modules/elections/eligibilityRules';
+import { CreateVoterRulesSection } from '../modules/elections/components/CreateVoterRulesSection';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
 import { useDiscardGuard } from '../hooks/useDiscardGuard';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
-import { Vote } from 'lucide-react';
+import { ClipboardCheck, Settings, Vote } from 'lucide-react';
 
 interface PositionSuggestion {
   key: string;
@@ -133,7 +133,23 @@ const holdsBuiltInDefaults = (form: ElectionCreate): boolean =>
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
   const [filteredElections, setFilteredElections] = useState<ElectionListItem[]>([]);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  // The filter lives in ?status= so a reload or a shared link keeps it
+  // (W50-76). Replace, not push, as the settings screens do for their view
+  // state; anything that is not a real status reads as All.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusParam = searchParams.get('status');
+  const statusFilter =
+    statusParam && (Object.values(ElectionStatus) as string[]).includes(statusParam) ? statusParam : 'all';
+  const setStatusFilter = (next: string) =>
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === 'all') params.delete('status');
+        else params.set('status', next);
+        return params;
+      },
+      { replace: true }
+    );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -152,9 +168,6 @@ export const ElectionsPage: React.FC = () => {
   // election by its meeting kind. Shown so the secretary knows what the
   // election starts with.
   const [electionSettings, setElectionSettings] = useState<ElectionSettings>({});
-  const voterRules = describeEligibilityRules(
-    defaultsForKind(electionSettings, formData.meeting_kind ?? MeetingKind.REGULAR).rules
-  );
   const [showPositionDropdown, setShowPositionDropdown] = useState(false);
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
   const [upcomingEvents, setBusinessMeetingEvents] = useState<EventListItem[]>([]);
@@ -293,9 +306,15 @@ export const ElectionsPage: React.FC = () => {
           meeting_id: id,
           event_id: undefined,
           meeting_date: meeting.meeting_date,
-          // An annual meeting record decides the kind; any other meeting is
-          // a regular one. Still a choice the secretary can change below.
-          meeting_kind: meeting.meeting_type === 'annual' ? MeetingKind.ANNUAL : MeetingKind.REGULAR,
+          // An annual or special meeting record decides the kind; any other
+          // meeting is a regular one, as the backend's _meeting_kind_of_link
+          // decides. Still a choice the secretary can change below.
+          meeting_kind:
+            meeting.meeting_type === 'annual'
+              ? MeetingKind.ANNUAL
+              : meeting.meeting_type === 'special'
+                ? MeetingKind.SPECIAL
+                : MeetingKind.REGULAR,
         });
       }
     } else if (source === 'event') {
@@ -406,6 +425,7 @@ export const ElectionsPage: React.FC = () => {
         const submitData = {
           ...formData,
           description: formData.description?.trim() || undefined,
+          eligibility_override_reason: formData.eligibility_override_reason?.trim() || undefined,
           start_date: localToUTC(formData.start_date, tz),
           end_date: localToUTC(formData.end_date, tz),
         };
@@ -513,26 +533,22 @@ export const ElectionsPage: React.FC = () => {
               />
               {canManage && (
                 <>
+                  {/* Labelled, not a bare gear: officers missed the icon, and the
+                      Minutes header beside it already names its Settings link. */}
                   <Link
                     to="/elections/settings"
-                    className="btn-secondary btn-icon-sm"
-                    aria-label="Election settings"
-                    title="Election Settings"
+                    className="btn-secondary touch:min-h-11 inline-flex items-center gap-2"
                   >
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
+                    <Settings className="h-4 w-4" aria-hidden="true" />
+                    <span>Election Settings</span>
+                  </Link>
+                  <Link
+                    to="/elections/attendance"
+                    className="btn-secondary btn-icon-sm"
+                    aria-label="Meeting attendance"
+                    title="Meeting Attendance"
+                  >
+                    <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
                   </Link>
                   <button
                     onClick={() => setShowCreateModal(true)}
@@ -581,7 +597,7 @@ export const ElectionsPage: React.FC = () => {
                     : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
                 }`}
               >
-                {status.charAt(0).toUpperCase() + status.slice(1)}
+                {getStatusLabel(status)}
                 <span
                   className={`rounded-full px-1.5 py-0.5 text-xs ${
                     statusFilter === status
@@ -650,7 +666,7 @@ export const ElectionsPage: React.FC = () => {
                                   election.status
                                 )}`}
                               >
-                                {election.status}
+                                {getStatusLabel(election.status)}
                               </span>
                             </div>
 
@@ -897,6 +913,20 @@ export const ElectionsPage: React.FC = () => {
                       </select>
                     )}
                   </FormField>
+
+                  <CreateVoterRulesSection
+                    settings={electionSettings}
+                    meetingKind={formData.meeting_kind ?? MeetingKind.REGULAR}
+                    onMeetingKindChange={(kind) => setFormData({ ...formData, meeting_kind: kind })}
+                    customRules={formData.eligibility_rules ?? null}
+                    onCustomRulesChange={(rules) => {
+                      // Back on the kind's defaults: no rules sent, no reason either.
+                      const { eligibility_rules: _rules, eligibility_override_reason: _reason, ...rest } = formData;
+                      setFormData(rules ? { ...formData, eligibility_rules: rules } : rest);
+                    }}
+                    reason={formData.eligibility_override_reason ?? ''}
+                    onReasonChange={(reason) => setFormData({ ...formData, eligibility_override_reason: reason })}
+                  />
 
                   <div className="space-y-4">
                     <FormField
@@ -1467,52 +1497,6 @@ export const ElectionsPage: React.FC = () => {
                         />
                       )}
                     </FormField>
-                  </div>
-                </div>
-
-                <div className="bg-theme-surface-secondary mt-6 space-y-3 rounded-md p-4">
-                  <div className="max-w-xs">
-                    <label htmlFor="election-meeting-kind" className={LABEL_CLASS}>
-                      Held at
-                    </label>
-                    <select
-                      id="election-meeting-kind"
-                      value={formData.meeting_kind ?? MeetingKind.REGULAR}
-                      onChange={(e) => setFormData({ ...formData, meeting_kind: e.target.value as MeetingKind })}
-                      aria-describedby="election-meeting-kind-help"
-                      className="form-input mt-1 shadow-xs"
-                    >
-                      {[MeetingKind.REGULAR, MeetingKind.ANNUAL].map((kind) => (
-                        <option key={kind} value={kind}>
-                          {MEETING_KIND_LABELS[kind]}
-                        </option>
-                      ))}
-                    </select>
-                    <p id="election-meeting-kind-help" className="text-theme-text-muted mt-1 text-xs">
-                      Decides which voter rules from Election Settings this election starts with.
-                    </p>
-                  </div>
-                  <div data-testid="create-voter-rules">
-                    <p className="text-theme-text-primary text-sm font-medium">
-                      Voter rules for {MEETING_KIND_LABELS[formData.meeting_kind ?? MeetingKind.REGULAR].toLowerCase()}s
-                    </p>
-                    {voterRules.length === 0 ? (
-                      <p className="text-theme-text-muted mt-1 text-sm">
-                        No election-wide rules. Every member whose tier may vote is eligible, subject to each ballot
-                        item&apos;s own rules.
-                      </p>
-                    ) : (
-                      <>
-                        <ul className="text-theme-text-secondary mt-1 list-disc pl-5 text-sm">
-                          {voterRules.map((line) => (
-                            <li key={line}>{line}</li>
-                          ))}
-                        </ul>
-                        <p className="text-theme-text-muted mt-1 text-xs">
-                          Change them for this election on its Eligibility tab, any time before voting opens.
-                        </p>
-                      </>
-                    )}
                   </div>
                 </div>
 

@@ -55,6 +55,12 @@ def _clock(monkeypatch):
     monkeypatch.setattr(engine, "_now", lambda: NOW)
 
 
+def _mail_to(outbox, *people):
+    """The messages in ``outbox`` addressed to any of ``people``."""
+    addresses = {str(p.email) for p in people}
+    return [m for m in outbox if addresses & set(m.to_emails)]
+
+
 @pytest.fixture
 def outbox(monkeypatch):
     """Every send_email call, instead of a mail server."""
@@ -170,13 +176,9 @@ class TestWhoIsCopied:
             assert copy.notification_metadata["waiver_request_id"] == str(request.id)
             _assert_private(copy.subject, copy.message)
 
-        cc_mail = [m for m in outbox if str(dept.lena.email) in m.to_emails]
-        (mail,) = cc_mail
-        assert sorted(mail.to_emails) == sorted([dept.lena.email, dept.carl.email])
-        assert f"/events/{dept.drill}" in mail.text_body
-        assert "/attendance-waivers/" not in mail.text_body
-        assert "/attendance-waivers/" not in mail.html_body
-        _assert_private(mail.subject, mail.text_body, mail.html_body)
+        # In-app only: an email copy of a decision comes from the decided
+        # template's own CC addresses and positions, not from this policy.
+        assert _mail_to(outbox, dept.lena, dept.carl) == []
 
     async def test_neither_the_member_nor_the_decider_is_copied(
         self, db_session, dept, outbox
@@ -208,18 +210,16 @@ class TestWhoIsCopied:
         await _svc(db_session).approve(dept.org, dept.chief, request.id)
         assert await _copies(db_session, dept.org) == []
 
-    async def test_the_email_follows_the_decider_kind(self, db_session, dept, outbox):
+    async def test_the_copy_ignores_email_preferences(self, db_session, dept, outbox):
         dept.lena.notification_preferences = {"email_kinds": {"training_duties": False}}
         await db_session.flush()
         request = await _submit(db_session, dept)
         outbox.clear()
         await _svc(db_session).approve(dept.org, dept.officer, request.id)
-        cc_mail = [m for m in outbox if str(dept.carl.email) in m.to_emails]
-        (mail,) = cc_mail
-        assert mail.to_emails == [dept.carl.email]
-        # The bell still rings for Lena: the preference governs email only.
+        # The copy is a bell, which an email preference does not govern.
         recipients = {c.recipient_id for c in await _copies(db_session, dept.org)}
-        assert str(dept.lena.id) in recipients
+        assert recipients == {str(dept.lena.id), str(dept.carl.id)}
+        assert _mail_to(outbox, dept.lena, dept.carl) == []
 
 
 class TestOutcomes:
@@ -269,10 +269,6 @@ class TestOutcomes:
         ]
         assert overrides
         assert all(c.action_url is None for c in overrides)
-        cc_mail = [m for m in outbox if str(dept.lena.email) in m.to_emails]
-        (mail,) = cc_mail
-        assert "/events/" not in mail.text_body
-        assert 'class="button"' not in mail.html_body
 
 
 class TestNotDecisions:
@@ -319,9 +315,7 @@ class TestMeetingWorkflow:
         await svc.approve(dept.org, officer, request.id)
         recipients = {c.recipient_id for c in await _copies(db_session, dept.org)}
         assert recipients == {str(dept.lena.id), str(dept.carl.id)}
-        cc_mail = [m for m in outbox if str(dept.lena.email) in m.to_emails]
-        (mail,) = cc_mail
-        assert mail.to_emails == [dept.lena.email]
+        assert _mail_to(outbox, dept.lena, dept.carl) == []
 
 
 class TestSavingThePolicy:

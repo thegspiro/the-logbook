@@ -27,6 +27,53 @@ const courses: RequirementDetail = {
 };
 
 describe('RequirementDetailCard', () => {
+  // Shift and call targets round down, so leave can bring one to zero. That
+  // is met, and reads as nothing owed rather than 0/0.
+  it('says nothing is owed when leave rounds a shift target down to zero', () => {
+    render(
+      <RequirementDetailCard
+        requirement={{
+          ...base,
+          name: 'Shift Coverage',
+          requirement_type: 'shifts',
+          required_hours: 0,
+          original_required_hours: 3,
+          completed_hours: 0,
+          progress_percentage: 100,
+          is_met: true,
+          waived_months: 11,
+          leave_months: 11,
+          active_months: 1,
+        }}
+        timezone="UTC"
+      />
+    );
+    expect(screen.getByText('Nothing owed (on leave)')).toBeInTheDocument();
+    expect(screen.queryByText(/0\/0/)).not.toBeInTheDocument();
+    expect(screen.getByText(/so nothing is owed for this period/)).toBeInTheDocument();
+  });
+
+  it('still shows the count when a reduced target is above zero', () => {
+    render(
+      <RequirementDetailCard
+        requirement={{
+          ...base,
+          name: 'Shift Coverage',
+          requirement_type: 'shifts',
+          required_hours: 2,
+          original_required_hours: 3,
+          completed_hours: 1,
+          waived_months: 3,
+          leave_months: 3,
+          active_months: 9,
+        }}
+        timezone="UTC"
+      />
+    );
+    expect(screen.queryByText('Nothing owed (on leave)')).not.toBeInTheDocument();
+    expect(screen.getByText(/adjusted to 2 shifts for 9 active months/)).toBeInTheDocument();
+  });
+
   // Workflow review W80-9: no session held yet read "0/0 sessions" and
   // "Complete", and counted as met. It is now neither.
   it('says no session has been held yet, rather than 0/0 and Complete', () => {

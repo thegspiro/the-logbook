@@ -2442,6 +2442,12 @@ export interface RequirementDetail {
    */
   monthly_hours?: RequirementMonth[] | null;
   /**
+   * Shifts worked or calls run per calendar month, for a shift or call
+   * requirement: `monthly_hours`' counterpart, with `count` in place of
+   * `hours` and the same leave fields. Null for every other type.
+   */
+  monthly_counts?: RequirementCountMonth[] | null;
+  /**
    * For a `courses` requirement: each required course, in the requirement's
    * order, ticked by the same test the count uses. Null for every other type.
    */
@@ -2456,6 +2462,11 @@ export interface RequirementCourseEntry {
   completed: boolean;
   /** Latest completion inside the window; null when the record carries no date. */
   completed_on: string | null;
+}
+
+/** A month of a shift or call requirement: `RequirementMonth` with a count. */
+export interface RequirementCountMonth extends Omit<RequirementMonth, 'hours'> {
+  count: number;
 }
 
 export interface RequirementMonth {
@@ -2477,6 +2488,8 @@ export interface MemberLeavePeriod {
   leave_type: string;
   start_date: string;
   end_date: string | null;
+  /** False for a leave an officer marked exempt: training requirements stay in force. */
+  excuses_training?: boolean;
 }
 
 /** `/training/module-config/members/{id}/requirements`: one member, officer's view. */
@@ -2543,6 +2556,9 @@ export interface MyTrainingHistoryPage {
 export interface MyTrainingSummary {
   visibility: MemberVisibility;
   requirements_detail?: RequirementDetail[];
+  /** Sent with `requirements_detail`: the leaves behind a reduced target. */
+  leaves_of_absence?: MemberLeavePeriod[];
+  leave_month_rule?: LeaveMonthRule;
   training_records?: Array<{
     id: string;
     course_name: string;
@@ -3634,12 +3650,42 @@ export interface ShiftEvaluationSettings {
   general_shift_evaluation_template_id: string | null;
   general_shift_evaluation_mode: GeneralShiftEvaluationMode;
   one_shift_evaluation_for_multiple_programs: boolean;
+  /** Days after an outside shift ends that a preceptor link stays open. */
+  shift_evaluation_link_days: number;
 }
 
 export interface ShiftEvaluationSettingsUpdate {
   general_shift_evaluation_template_id?: string | null | undefined;
   general_shift_evaluation_mode?: GeneralShiftEvaluationMode | undefined;
   one_shift_evaluation_for_multiple_programs?: boolean | undefined;
+  shift_evaluation_link_days?: number | undefined;
+}
+
+/** A no-login link an outside preceptor fills one evaluation out through. */
+export interface PreceptorLink {
+  id: string;
+  scope_key: string;
+  /** The link itself, a bearer credential: shown as a QR code and copied. */
+  url: string;
+  expires_at: string;
+  created_at: string;
+  created_by_member: boolean;
+  preceptor_email: string | null;
+  last_sent_at: string | null;
+  /** Whether this request's email went out. */
+  email_sent: boolean;
+}
+
+/** What the preceptor's page shows: the member, the shift and the form. */
+export interface PublicShiftEvaluationView {
+  organization_name: string;
+  member_name: string;
+  shift_date: string;
+  shift_start: string | null;
+  shift_end: string | null;
+  unit_label: string | null;
+  template: ShiftEvaluationFormSnapshot;
+  expires_at: string;
 }
 
 // ============================================
@@ -3717,6 +3763,10 @@ export interface ShiftEvaluationDetail {
   external_shift_id: string | null;
   /** The outside preceptor named on an outside-shift evaluation. */
   preceptor_name: string | null;
+  /** Submitted by the preceptor through a no-login link. */
+  via_preceptor_link?: boolean;
+  /** The evaluated member made that link themselves. */
+  link_created_by_member?: boolean;
   shift_date: string;
   shift_start: string | null;
   shift_end: string | null;

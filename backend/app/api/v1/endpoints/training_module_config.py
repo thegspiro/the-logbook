@@ -238,6 +238,41 @@ async def _resolve_caller_visibility(
     return visibility, is_officer, user_with_roles
 
 
+async def _member_leaves(db: AsyncSession, org_id: str, user_id: str) -> list:
+    """A member's active leaves of absence: dates, type, and whether they excuse training.
+
+    The reason is free text and stays with the leave record; the dates and type
+    are what explain a reduced target. ``excuses_training`` is false for a leave
+    an officer marked exempt, which keeps the member's training requirements
+    in force (``training_waiver_service._leave_and_waiver_periods``).
+    """
+    leaves = (
+        (
+            await db.execute(
+                select(MemberLeaveOfAbsence)
+                .where(
+                    MemberLeaveOfAbsence.organization_id == org_id,
+                    MemberLeaveOfAbsence.user_id == user_id,
+                    MemberLeaveOfAbsence.active.is_(True),
+                )
+                .order_by(MemberLeaveOfAbsence.start_date.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        {
+            "id": str(leave.id),
+            "leave_type": getattr(leave.leave_type, "value", leave.leave_type),
+            "start_date": str(leave.start_date),
+            "end_date": str(leave.end_date) if leave.end_date else None,
+            "excuses_training": not leave.exempt_from_training_waiver,
+        }
+        for leave in leaves
+    ]
+
+
 async def _evaluate_member_requirements(
     db: AsyncSession,
     member: User,
@@ -542,6 +577,10 @@ async def get_my_training_summary(
     # overdue-by-N-days — was returned to everybody.
     if shows_requirement_details:
         result["requirements_detail"] = requirements_detail
+        # The leave behind a reduced target, so a member reading "11 months
+        # on leave" can see which leave it was without asking an officer.
+        result["leaves_of_absence"] = await _member_leaves(db, org_id, user_id)
+        result["leave_month_rule"] = await get_leave_month_rule(db, org_id)
 
     # --- Certification Status ---
     if is_officer or visibility.get("show_certification_status", True):
@@ -870,24 +909,6 @@ async def get_member_requirements(
     )
     met_count, total_reqs = tally_standing(statuses)
 
-    # Leaves of absence only — the reason is free text and stays with the
-    # leave record; the dates and type are what explain a reduced target.
-    leaves = (
-        (
-            await db.execute(
-                select(MemberLeaveOfAbsence)
-                .where(
-                    MemberLeaveOfAbsence.organization_id == org_id,
-                    MemberLeaveOfAbsence.user_id == str(member.id),
-                    MemberLeaveOfAbsence.active.is_(True),
-                )
-                .order_by(MemberLeaveOfAbsence.start_date.desc())
-            )
-        )
-        .scalars()
-        .all()
-    )
-
     return {
         "user_id": str(member.id),
         "as_of": str(today),
@@ -900,15 +921,7 @@ async def get_member_requirements(
             ),
         },
         "requirements_detail": requirements_detail,
-        "leaves_of_absence": [
-            {
-                "id": str(leave.id),
-                "leave_type": getattr(leave.leave_type, "value", leave.leave_type),
-                "start_date": str(leave.start_date),
-                "end_date": str(leave.end_date) if leave.end_date else None,
-            }
-            for leave in leaves
-        ],
+        "leaves_of_absence": await _member_leaves(db, org_id, str(member.id)),
     }
 
 

@@ -64,7 +64,14 @@ test.describe('mobile dialogs', () => {
     // Measured at 7.5 min on a dedicated CI runner (2026-10-04); 2x that, the
     // multiple every @sweep test uses. The previous 30 min was 4x and predated
     // the matrix split, when this shared a runner with the whole suite.
-    test.setTimeout(900_000);
+    //
+    // Raised on 2026-11-13, by owner decision, to 2x the measured run as the
+    // route list grows. 9.8 min on `main` (run 43208484077, 2026-11-12); 12.1
+    // min once the finance screens joined (#4267, run 43415858920); the nine
+    // grants screens add ~5% (0.78 of 14.9 min, timed per route locally), so
+    // ~12.7 min, and 2x that would have been 26. This PR's own run measured
+    // 15.1 min with every route in (#4269, run 43444576216), so 2x is 31.
+    test.setTimeout(1_860_000);
 
     // A dialog still fading in when axe runs is measured through a partial
     // opacity: on a slow runner the Create Shift dialog reported 38 contrast
@@ -137,16 +144,22 @@ test.describe('mobile dialogs', () => {
             return b.height > 80 && b.width > 100;
           }) ?? panel;
         const box = inner.getBoundingClientRect();
-        const style = getComputedStyle(inner);
+        // The end is reachable when anything from the measured element up to
+        // and including the dialog element scrolls. Where role="dialog" sits
+        // on the capped, scrolling panel itself, `inner` is the form inside it:
+        // taller than the screen and not scrolling on its own, yet every field
+        // is reached by scrolling the panel around it.
+        let scrolls = false;
+        for (let el: Element | null = inner; el; el = el === panel ? null : el.parentElement) {
+          const overflowY = getComputedStyle(el).overflowY;
+          if (overflowY === 'auto' || overflowY === 'scroll') scrolls = true;
+        }
         return {
           named: !!(panel.getAttribute('aria-label')?.trim() || panel.getAttribute('aria-labelledby')?.trim()),
           // Both ends must be reachable: a panel centred by flex that outgrows
           // the viewport overflows in both directions and no scrollbar reaches
           // either edge, unless the panel itself scrolls.
-          strandedEnd:
-            (box.top < -1 || box.bottom > viewportHeight + 1) &&
-            style.overflowY !== 'auto' &&
-            style.overflowY !== 'scroll',
+          strandedEnd: (box.top < -1 || box.bottom > viewportHeight + 1) && !scrolls,
           top: Math.round(box.top),
           bottom: Math.round(box.bottom),
           viewportHeight,

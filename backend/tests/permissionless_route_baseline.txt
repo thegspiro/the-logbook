@@ -478,6 +478,12 @@ app/api/v1/endpoints/shift_evaluations.py::list_my_shift_evaluations
 # training.manage, the evaluator, or the evaluated member once visible to
 # them; anyone else gets the same 404 as a missing row.
 app/api/v1/endpoints/shift_evaluations.py::get_shift_evaluation
+# Preceptor links: the member who logged the outside shift, or training.manage
+# (_entry_for_link); anyone else gets the same 404 as a missing shift.
+app/api/v1/endpoints/shift_evaluations.py::create_preceptor_link
+app/api/v1/endpoints/shift_evaluations.py::get_preceptor_link
+app/api/v1/endpoints/shift_evaluations.py::revoke_preceptor_link
+app/api/v1/endpoints/shift_evaluations.py::send_preceptor_link
 
 app/api/v1/endpoints/shift_completion.py::acknowledge_report
 app/api/v1/endpoints/shift_completion.py::batch_create_shift_reports
@@ -651,6 +657,26 @@ app/api/v1/endpoints/history.py::list_people
 app/api/v1/endpoints/history.py::list_revisions
 app/api/v1/endpoints/history.py::list_titles
 app/api/v1/endpoints/history.py::review_clearance_request
+# History photos and media (2026-11-13), the same rule: published items are
+# read by any signed-in member. Every query filters the caller's organization
+# and HistoryMediaService.can_read hides drafts from anyone without
+# history.view/manage/publish, through the gallery, an item, its thumbnail and
+# its file (list_media, get_media, media_thumbnail, media_view_file), a
+# person's strip (person_media, which also requires the person to be readable)
+# and albums (list_albums, get_album: members see members-level albums and only
+# the items in them they may read). list_sources is the department's own
+# source names. list_media_revisions refuses unless the caller holds
+# history.view/manage or a clearance-step position. The original file is not
+# here: it requires history.manage.
+app/api/v1/endpoints/history_media.py::get_album
+app/api/v1/endpoints/history_media.py::get_media
+app/api/v1/endpoints/history_media.py::list_albums
+app/api/v1/endpoints/history_media.py::list_media
+app/api/v1/endpoints/history_media.py::list_media_revisions
+app/api/v1/endpoints/history_media.py::list_sources
+app/api/v1/endpoints/history_media.py::media_thumbnail
+app/api/v1/endpoints/history_media.py::media_view_file
+app/api/v1/endpoints/history_media.py::person_media
 
 # Added 2026-11-04 (owner decisions of 2026-11-01). Each is meant for every
 # member and scoped inside the handler:

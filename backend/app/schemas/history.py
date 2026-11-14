@@ -14,11 +14,16 @@ from typing import Literal, Optional, Union
 from pydantic import BaseModel, Field, model_validator
 
 from app.models.history import (
+    AlbumLevel,
     ClearanceDecisionKind,
     ClearancePurpose,
     ClearanceStatus,
     DatePrecision,
     FieldVisibility,
+    HistoryImportDecision,
+    HistoryImportStatus,
+    HistoryTitleAction,
+    MediaKind,
     PublicationLevel,
     RelationType,
     RevisionKind,
@@ -206,6 +211,8 @@ class HistoricalMemberMemberView(BaseModel):
     service_periods: list[ServicePeriodResponse]
     relations: list[RelationResponse]
     publication_level: PublicationLevel
+    #: The merged-away id this request named, when it was forwarded here.
+    redirected_from: Optional[str] = None
 
 
 class ClearanceStepState(BaseModel):
@@ -286,6 +293,10 @@ class HistoricalMemberFullView(BaseModel):
     can_publish: bool
     created_at: datetime
     updated_at: datetime
+    #: Set when the record was created by an import.
+    import_id: Optional[str] = None
+    #: The merged-away id this request named, when it was forwarded here.
+    redirected_from: Optional[str] = None
 
 
 HistoricalMemberView = Union[HistoricalMemberFullView, HistoricalMemberMemberView]
@@ -358,7 +369,7 @@ class PositionOption(BaseModel):
 
 
 class ClearanceSubmit(BaseModel):
-    record_type: Literal["member"]
+    record_type: Literal["member", "media"]
     record_id: str
     purpose: ClearancePurpose = ClearancePurpose.PUBLIC
 
@@ -381,7 +392,9 @@ class ClearanceReview(BaseModel):
     """A request with the record as members would read it, for its reviewers."""
 
     request: ClearanceRequestResponse
-    record: HistoricalMemberMemberView
+    #: A person or a photo/media item, as members would read it; which one
+    #: is ``request.record_type``.
+    record: Union[HistoricalMemberMemberView, "MediaMemberView"]
 
 
 class MarkdownRender(BaseModel):
@@ -390,3 +403,346 @@ class MarkdownRender(BaseModel):
 
 class MarkdownRendered(BaseModel):
     html: str
+
+
+# ----------------------------------------------------------------------
+# Import
+# ----------------------------------------------------------------------
+
+
+class HistoryImportSummary(BaseModel):
+    id: str
+    status: HistoryImportStatus
+    source_filename: str
+    row_count: int
+    #: {field: header} the import read each column from.
+    column_mapping: dict[str, str]
+    #: Counts after commit: created, mapped, matched, repeats, skipped, removed.
+    summary: Optional[dict[str, int]]
+    expires_at: Optional[datetime]
+    created_at: datetime
+    committed_at: Optional[datetime]
+
+
+class ImportSuggestion(BaseModel):
+    kind: Literal["match", "map", "same_as"]
+    id: str
+    strength: Literal["strong", "weak"]
+    label: str
+
+
+class ImportRowView(BaseModel):
+    id: str
+    line_number: int
+    #: The file's values with the Historian's corrections applied.
+    values: dict[str, str]
+    edited_fields: list[str]
+    problems: list[str]
+    decision: Optional[HistoryImportDecision]
+    target_member_id: Optional[str]
+    target_user_id: Optional[str]
+    target_row_id: Optional[str]
+    target_label: Optional[str]
+    suggestions: list[ImportSuggestion]
+
+
+class ImportTitleView(BaseModel):
+    text: str
+    key: str
+    #: known: already on the list; mapped / create / dropped: answered;
+    #: unresolved: waiting for the Historian.
+    status: Literal["known", "mapped", "create", "dropped", "unresolved"]
+    title_id: Optional[str] = None
+
+
+class HistoryImportDetail(HistoryImportSummary):
+    rows: list[ImportRowView]
+    titles: list[ImportTitleView]
+    ready: bool
+    #: Why a commit would be refused right now, one line each.
+    blockers: list[str]
+
+
+class ImportRowUpdate(BaseModel):
+    """A correction to the row's values, a decision, or both."""
+
+    #: {field: text}; an empty string clears the file's value.
+    edits: Optional[dict[str, str]] = None
+    decision: Optional[HistoryImportDecision] = None
+    target_member_id: Optional[str] = None
+    target_user_id: Optional[str] = None
+    target_row_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _edits_are_short(self) -> "ImportRowUpdate":
+        for key, value in (self.edits or {}).items():
+            if len(key) > 50 or len(value or "") > 2000:
+                raise ValueError("A corrected value is too long")
+        return self
+
+
+class ImportTitleChoice(BaseModel):
+    text: str = Field(min_length=1, max_length=150)
+    action: HistoryTitleAction
+    title_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _map_names_a_title(self) -> "ImportTitleChoice":
+        if self.action == HistoryTitleAction.MAP and not self.title_id:
+            raise ValueError("Choose the title to use")
+        return self
+
+
+class ImportTitlesUpdate(BaseModel):
+    choices: list[ImportTitleChoice] = Field(max_length=500)
+
+
+class AcceptSuggestionsResult(BaseModel):
+    decided: int
+
+
+class RemovedRecord(BaseModel):
+    id: str
+    display_name: str
+    reason: str
+
+
+class RemoveRecordsResult(BaseModel):
+    removed: int
+    kept: list[RemovedRecord]
+
+
+# ----------------------------------------------------------------------
+# Merge
+# ----------------------------------------------------------------------
+
+
+class MergeSide(BaseModel):
+    id: str
+    display_name: str
+    service_years: Optional[str]
+    publication_level: PublicationLevel
+    period_count: int
+    relation_count: int
+    linked_member_name: Optional[str]
+    is_memorial: bool
+    is_line_of_duty_death: bool
+
+
+class MergeField(BaseModel):
+    field: str
+    label: str
+    keep_value: Optional[str]
+    other_value: Optional[str]
+    #: same / keep_blank / other_blank need no choice; differs does.
+    state: Literal["same", "keep_blank", "other_blank", "differs"]
+    can_keep_both: bool
+
+
+class MergePreview(BaseModel):
+    keep: MergeSide
+    other: MergeSide
+    fields: list[MergeField]
+    #: Why this pair cannot be merged, when it cannot.
+    refusal: Optional[str]
+    warnings: list[str]
+
+
+class MergeRequest(BaseModel):
+    other_id: str = Field(min_length=1, max_length=36)
+    #: {field: "keep" | "other" | "both"} for each field that differs.
+    choices: dict[str, Literal["keep", "other", "both"]] = Field(default_factory=dict)
+
+
+# ----------------------------------------------------------------------
+# Photos and media
+# ----------------------------------------------------------------------
+
+ConsentState = Literal["granted", "declined", "not_answered", "no_account"]
+
+
+class MediaTagMember(BaseModel):
+    member_id: str
+    display_name: str
+
+
+class MediaTagFull(MediaTagMember):
+    #: The tagged person's photo-use answer, read from their linked account.
+    #: A warning for the archive's keepers only; it never blocks.
+    consent: ConsentState
+
+
+class _MediaCatalogue(BaseModel):
+    id: str
+    kind: MediaKind
+    title: str
+    description: Optional[str]
+    taken_date: Optional[date]
+    taken_date_precision: DatePrecision
+    taken_date_circa: bool
+    place: Optional[str]
+    creator: Optional[str]
+    source_id: Optional[str]
+    source_name: Optional[str]
+    rights_note: Optional[str]
+    accession_number: Optional[str]
+    original_location: Optional[str]
+    width: Optional[int]
+    height: Optional[int]
+    duration_seconds: Optional[int]
+    has_thumbnail: bool
+    #: The type of what ``/view`` returns: the WebP viewing copy of a photo,
+    #: or the stripped copy of a recording (same container as the original).
+    mime_type: Optional[str]
+    publication_level: PublicationLevel
+
+
+class MediaMemberView(_MediaCatalogue):
+    """What a member reading published history receives: no research notes,
+    no original file, and tags only for people they may read."""
+
+    view: Literal["member"] = "member"
+    tags: list[MediaTagMember]
+
+
+class MediaFullView(_MediaCatalogue):
+    view: Literal["full"] = "full"
+    research_notes: Optional[str]
+    original_filename: str
+    original_mime_type: Optional[str]
+    original_size_bytes: Optional[int]
+    original_sha256: Optional[str]
+    batch_id: Optional[str]
+    tags: list[MediaTagFull]
+    published_at: Optional[datetime]
+    revision_number: int
+    public_revision_number: Optional[int]
+    public_changes_pending: bool
+    clearance_required: bool
+    cleared_for_public: bool
+    clearance: Optional[ClearanceRequestResponse]
+    can_edit: bool
+    can_publish: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+MediaView = Union[MediaFullView, MediaMemberView]
+
+
+class MediaSummary(BaseModel):
+    id: str
+    kind: MediaKind
+    title: str
+    taken_date: Optional[date]
+    taken_date_precision: DatePrecision
+    taken_date_circa: bool
+    duration_seconds: Optional[int]
+    has_thumbnail: bool
+    publication_level: PublicationLevel
+
+
+class MediaList(BaseModel):
+    items: list[MediaSummary]
+    total: int
+
+
+class _MediaFields(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    description: Optional[str] = _TEXT
+    taken_date: Optional[date] = None
+    taken_date_precision: Optional[DatePrecision] = None
+    taken_date_circa: Optional[bool] = None
+    place: Optional[str] = Field(default=None, max_length=255)
+    creator: Optional[str] = Field(default=None, max_length=255)
+    source_id: Optional[str] = Field(default=None, max_length=36)
+    rights_note: Optional[str] = _TEXT
+    accession_number: Optional[str] = Field(default=None, max_length=100)
+    original_location: Optional[str] = Field(default=None, max_length=255)
+    research_notes: Optional[str] = _TEXT
+
+
+class MediaUploadFields(_MediaFields):
+    """The catalogue sent with each file of a batch, as a JSON form field."""
+
+    tag_member_ids: list[str] = Field(default_factory=list, max_length=200)
+
+
+class MediaUpdate(_MediaFields):
+    #: Forced to substantial when the title, description or date changes.
+    edit_kind: EditKind = "minor"
+    edit_note: Optional[str] = Field(default=None, max_length=2000)
+
+
+class MediaTagsReplace(BaseModel):
+    member_ids: list[str] = Field(max_length=200)
+
+
+class MediaPublishResult(BaseModel):
+    item: MediaFullView
+    #: Tagged people whose photo-use answer was not "granted" when it was
+    #: published. Recorded with the publication; never a refusal.
+    consent_warnings: list[MediaTagFull]
+
+
+# --- Sources ---
+
+
+class HistorySourceResponse(BaseModel):
+    id: str
+    name: str
+    sort_order: int
+    is_retired: bool
+    usage_count: int = 0
+
+
+class HistorySourceCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=150)
+
+
+class HistorySourceUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=150)
+    is_retired: Optional[bool] = None
+
+
+class HistorySourceMerge(BaseModel):
+    into_source_id: str
+
+
+# --- Albums ---
+
+
+class AlbumSummary(BaseModel):
+    id: str
+    name: str
+    description: Optional[str]
+    level: AlbumLevel
+    #: Only when the viewer may read the cover item.
+    cover_media_id: Optional[str]
+    #: Items the viewer may read.
+    item_count: int
+
+
+class AlbumDetail(AlbumSummary):
+    items: list[MediaSummary]
+    can_edit: bool
+
+
+class AlbumCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: Optional[str] = _TEXT
+    level: AlbumLevel = AlbumLevel.DRAFT
+
+
+class AlbumUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    description: Optional[str] = _TEXT
+    level: Optional[AlbumLevel] = None
+    cover_media_id: Optional[str] = None
+
+
+class AlbumItemsReplace(BaseModel):
+    media_ids: list[str] = Field(max_length=1000)
+
+
+ClearanceReview.model_rebuild()

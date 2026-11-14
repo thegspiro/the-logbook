@@ -16,7 +16,7 @@ import {
   type ScoreBand,
   type TemplateItem,
 } from '../../types/evaluations';
-import { replaceAt, withTool } from '../../utils/evaluationTemplate';
+import { groupDataSources, replaceAt, withTool } from '../../utils/evaluationTemplate';
 
 interface ItemEditorProps {
   item: TemplateItem;
@@ -361,10 +361,14 @@ export const ItemEditor: React.FC<ItemEditorProps> = ({
           onChange={(e) => setSource(e.target.value)}
         >
           <option value="">None</option>
-          {dataSources.map((s) => (
-            <option key={s.key} value={s.key}>
-              {s.label}
-            </option>
+          {groupDataSources(dataSources).map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.sources.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
         {source && <p className="text-theme-text-muted mt-1 text-xs">{source.description}</p>}

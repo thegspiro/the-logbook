@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { BookOpen, ClipboardCheck, Landmark, Medal, Settings, Users } from 'lucide-react';
+import { BookOpen, ClipboardCheck, FileUp, Images, Landmark, Medal, Settings, Users } from 'lucide-react';
 import { Breadcrumbs } from '../../../components/ux/Breadcrumbs';
 import { SkeletonPage } from '../../../components/ux/Skeleton';
 import { useAuthStore } from '../../../stores/authStore';
@@ -71,10 +71,20 @@ export const HistoryHomePage: React.FC = () => {
           <Users className="h-5 w-5 shrink-0" aria-hidden="true" />
           <span className="text-theme-text-primary font-medium">Past members</span>
         </Link>
+        <Link to="/history/media" className="card card-hover flex items-center gap-3 p-4">
+          <Images className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span className="text-theme-text-primary font-medium">Photos and media</span>
+        </Link>
         <Link to="/history/honor-roll" className="card card-hover flex items-center gap-3 p-4">
           <Medal className="h-5 w-5 shrink-0" aria-hidden="true" />
           <span className="text-theme-text-primary font-medium">Honor Roll</span>
         </Link>
+        {canManage && (
+          <Link to="/history/import" className="card card-hover flex items-center gap-3 p-4">
+            <FileUp className="h-5 w-5 shrink-0" aria-hidden="true" />
+            <span className="text-theme-text-primary font-medium">Import a roster</span>
+          </Link>
+        )}
         {canConfigure && (
           <Link to="/history/settings" className="card card-hover flex items-center gap-3 p-4">
             <Settings className="h-5 w-5 shrink-0" aria-hidden="true" />

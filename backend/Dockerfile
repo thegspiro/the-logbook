@@ -29,6 +29,14 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
+# ffmpeg strips History audio and video of their metadata (a phone recording
+# carries where it was made) and makes a video's poster frame. Without it the
+# backend refuses audio and video uploads rather than keep them unstripped.
+# --no-install-recommends keeps out the X11, Vulkan and font packages the
+# Debian ffmpeg recommends and the server never uses.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create app user
 RUN useradd -m -u 1000 appuser
 

@@ -672,7 +672,7 @@ const AdminHoursPage: React.FC = () => {
             <p className="text-theme-text-secondary text-sm font-medium">Approved</p>
             <CheckCircle2 className="h-5 w-5 text-green-700 dark:text-green-600" aria-hidden="true" />
           </div>
-          <p className="mt-2 text-3xl font-bold text-green-700 dark:text-green-400">
+          <p className="mt-2 text-3xl font-bold text-green-900 dark:text-green-300">
             {formatHours(mySummary?.approvedHours)}
             <span className="ml-1 text-base font-medium">hrs</span>
           </p>
@@ -690,7 +690,7 @@ const AdminHoursPage: React.FC = () => {
             <p className="text-theme-text-secondary text-sm font-medium">Awaiting review</p>
             <ListChecks className="h-5 w-5 text-amber-700 dark:text-amber-600" aria-hidden="true" />
           </div>
-          <p className="mt-2 text-3xl font-bold text-amber-700 dark:text-amber-400">
+          <p className="mt-2 text-3xl font-bold text-amber-900 dark:text-amber-300">
             {formatHours(mySummary?.pendingHours)}
             <span className="ml-1 text-base font-medium">hrs</span>
           </p>

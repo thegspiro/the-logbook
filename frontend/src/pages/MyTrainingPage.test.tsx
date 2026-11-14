@@ -554,6 +554,26 @@ describe('MyTrainingPage', () => {
       expect(screen.getAllByText('Annual Training Hours').length).toBeGreaterThan(0);
     });
 
+    it("shows the member's own leave beside their requirements", async () => {
+      mockGetMyTraining.mockResolvedValue({
+        ...mockTrainingData,
+        leave_month_rule: 'full_month',
+        leaves_of_absence: [
+          {
+            id: 'loa-1',
+            leave_type: 'leave_of_absence',
+            start_date: '2025-07-01',
+            end_date: '2026-09-01',
+            excuses_training: true,
+          },
+        ],
+      });
+      renderWithRouter(<MyTrainingPage />);
+      expect(await screen.findByText('Leave of absence')).toBeInTheDocument();
+      expect(screen.getByText(/Jul 1, 2025 – Sep 1, 2026/)).toBeInTheDocument();
+      expect(screen.getByText(/Any day of leave excuses the whole month/)).toBeInTheDocument();
+    });
+
     it('announces the next early-credit window of a requirement that is already met', async () => {
       mockGetMyTraining.mockResolvedValue({
         ...mockTrainingData,

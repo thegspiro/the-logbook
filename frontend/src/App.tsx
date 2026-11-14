@@ -80,6 +80,7 @@ import { OAuthCallbackPage } from './pages/OAuthCallbackPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { FinanceApprovalPage } from './pages/FinanceApprovalPage';
+const PreceptorShiftEvaluationPage = lazyWithRetry(() => import('./pages/PreceptorShiftEvaluationPage'));
 
 const PublicMinutesPage = lazyWithRetry(() => import('./pages/PublicMinutesPage'));
 // Public legal pages (privacy policy / terms of service)
@@ -214,6 +215,8 @@ function App() {
                     <Route path="/public/minutes/:copyId" element={<PublicMinutesPage />} />
                     {/* Public external-approver page (token-authenticated) */}
                     <Route path="/finance/approvals/:token" element={<FinanceApprovalPage />} />
+                    {/* Outside preceptor's shift evaluation (token-authenticated, no sign-in) */}
+                    <Route path="/shift-evaluation/:token" element={<PreceptorShiftEvaluationPage />} />
                   </Routes>
                 </Suspense>
 

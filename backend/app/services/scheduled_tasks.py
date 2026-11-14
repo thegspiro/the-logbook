@@ -589,6 +589,12 @@ SCHEDULE = {
         "recommended_time": "03:30",
         "cron": "30 3 * * *",
     },
+    "history_import_expiry": {
+        "description": "Delete the rows of History roster-import drafts nobody has worked on for 30 days (the import record stays, marked expired)",
+        "frequency": "daily",
+        "recommended_time": "03:45",
+        "cron": "45 3 * * *",
+    },
     "inventory_audit_digest": {
         "description": "Email inventory managers a list of shelves overdue for an NFC shelf audit. Checked daily, sent at most once a week per department, and only when something is overdue",
         "frequency": "daily check, weekly send",
@@ -4502,12 +4508,25 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 template, item.context or {}, organization=org
             )
 
-            # Merge template default CC/BCC with per-email overrides
-            cc = list(set((template.default_cc or []) + (item.cc_emails or []))) or None
-            bcc = (
-                list(set((template.default_bcc or []) + (item.bcc_emails or [])))
-                or None
+            # Merge template default CC/BCC with per-email overrides. The
+            # template here is the one the email was scheduled with (a custom
+            # template included), so its copies are merged here and the send
+            # layer is told not to look them up again by type. A credential
+            # template is never copied (NO_TEMPLATE_COPY_TYPES): only the
+            # addresses the scheduler typed for this one email are kept.
+            copies = not is_always_sent(template.template_type)
+            position_cc = (
+                await template_svc.position_holder_emails(
+                    str(item.organization_id),
+                    [str(p) for p in template.default_cc_position_ids or [] if p],
+                )
+                if copies and template.default_cc_position_ids
+                else []
             )
+            template_cc = (template.default_cc or []) if copies else []
+            template_bcc = (template.default_bcc or []) if copies else []
+            cc = list(set(template_cc + position_cc + (item.cc_emails or []))) or None
+            bcc = list(set(template_bcc + (item.bcc_emails or []))) or None
 
             # Check if email is actually enabled before attempting send
             from app.core.config import settings as _settings
@@ -4541,6 +4560,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 template_type=(
                     item.template_type.value if item.template_type else "scheduled"
                 ),
+                apply_template_copies=False,
             )
 
             if success_count > 0:
@@ -5754,6 +5774,30 @@ async def run_nfc_card_tap_purge(db: AsyncSession) -> Dict[str, Any]:
         return deleted
 
     return await _for_each_org(db, "nfc_card_tap_purge", process)
+
+
+async def run_history_import_expiry(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Delete the rows of History import drafts untouched for 30 days.
+
+    A draft holds a roster file's personal data, and an abandoned one should
+    not keep it indefinitely. Safe to run twice: an expired draft is no longer
+    a draft, so the second run finds nothing to do.
+    """
+    from app.services.history_import_service import HistoryImportService
+
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        expired = await HistoryImportService(db_session).expire_drafts(str(org.id))
+        await db_session.commit()
+        if expired:
+            logger.info(
+                "history_import_expiry: expired {} draft(s) for org {}",
+                expired,
+                org.id,
+            )
+        return expired
+
+    return await _for_each_org(db, "history_import_expiry", process)
 
 
 #: `NotificationLog.category` of the overdue-gear email, and so the key of its
@@ -8614,6 +8658,7 @@ TASK_RUNNERS = {
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
     "inventory_audit_digest": run_inventory_audit_digest,
     "nfc_card_tap_purge": run_nfc_card_tap_purge,
+    "history_import_expiry": run_history_import_expiry,
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
     "supply_expiration_alerts": run_supply_expiration_alerts,
     "weather_alert_poll": run_weather_alert_poll,
@@ -8715,6 +8760,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Checked daily; sends at most weekly per org (see run_inventory_audit_digest).
     "inventory_audit_digest": 86400,
     "nfc_card_tap_purge": 86400,
+    "history_import_expiry": 86400,
     "property_return_reminders": 86400,
     "storefront_payment_reminders": 86400,
     "paypal_capture_backfill": 86400,

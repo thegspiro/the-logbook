@@ -7,7 +7,7 @@
  * Supports review workflow, visibility controls, and configurable rating scales.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   FileText,
@@ -85,6 +85,7 @@ import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { EmptyState } from '../../components/ux/EmptyState';
 import { attributionName } from '../../utils/memberName';
 import { evaluationAverageLabel, formatEvaluationAverage } from '../../utils/shiftEvaluations';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'department' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
@@ -166,6 +167,9 @@ export const ShiftReportsTab: React.FC = () => {
   // Who on the selected shift needs a shift evaluation; null until loaded or
   // when the department has none to ask for.
   const [evaluationRoster, setEvaluationRoster] = useState<ShiftEvaluationRoster | null>(null);
+  // The shift whose roster was asked for last: a slower answer for a shift
+  // the officer has since moved off must not overwrite the current one.
+  const rosterFor = useRef<string | null>(null);
   // Department rule: only each shift's assigned officer files its reports.
   // The server enforces it; this only keeps the form from offering shifts the
   // viewer would be refused on.
@@ -356,6 +360,10 @@ export const ShiftReportsTab: React.FC = () => {
     async (shiftId: string) => {
       setLoadingCrew(true);
       setCrewLoadError(false);
+      // The previous shift's evaluation lines go at once: they link to that
+      // shift's evaluations.
+      rosterFor.current = shiftId;
+      setEvaluationRoster(null);
       try {
         // The author is left off their own crew list: a report about yourself
         // is refused server-side, and offering the checkbox would only turn it
@@ -377,9 +385,10 @@ export const ShiftReportsTab: React.FC = () => {
       // Loaded on its own so a failure here leaves the crew list working; the
       // close-out check still names any evaluation that is missing.
       try {
-        setEvaluationRoster(await shiftEvaluationService.getRoster(shiftId));
+        const roster = await shiftEvaluationService.getRoster(shiftId);
+        if (rosterFor.current === shiftId) setEvaluationRoster(roster);
       } catch {
-        setEvaluationRoster(null);
+        if (rosterFor.current === shiftId) setEvaluationRoster(null);
       }
     },
     [userId]
@@ -955,7 +964,7 @@ export const ShiftReportsTab: React.FC = () => {
         <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
           <TrendingUp className="h-4 w-4 text-violet-500" /> My Shift Progress
         </h3>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatGrid columns={4}>
           <div className="rounded-lg border border-violet-500/15 bg-violet-500/5 p-3 text-center">
             <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{traineeStats.total_reports}</p>
             <p className="text-theme-text-muted mt-0.5 text-xs">Reports</p>
@@ -993,7 +1002,7 @@ export const ShiftReportsTab: React.FC = () => {
               <p className="text-theme-text-muted mt-0.5 text-xs">{evaluationAverageLabel(average)}</p>
             </div>
           ))}
-        </div>
+        </StatGrid>
         {traineeStats.monthly.length > 1 && (
           <div>
             <p className="text-theme-text-secondary mb-2 text-xs font-medium">Monthly Hours</p>

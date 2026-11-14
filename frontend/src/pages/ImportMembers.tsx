@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router';
 import { Upload, Download, FileText, CheckCircle, AlertTriangle, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { CSVMemberRow } from '../types/member';
-import { userService, roleService } from '../services/api';
+import { userService, roleService, organizationService } from '../services/api';
 import { mirrorsRank } from '../utils/positions';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { displayNameOf } from '../utils/memberName';
-import { canonicalMemberStatus, memberClassAndStatusFor } from '../utils/membership';
+import { canonicalMemberStatus, isAdministrativeMember, memberClassAndStatusFor } from '../utils/membership';
 import { MemberClass } from '../constants/enums';
 
 /**
@@ -527,6 +527,13 @@ const validateRow = (data: CSVMemberRow): string[] => {
   if (data.memberStatus?.trim() && (!memberStatus || !MEMBER_STATUS_SHAPE.test(memberStatus))) {
     problems.push(`memberStatus "${data.memberStatus}" is not a membership status or tier id`);
   }
+  // The create endpoint refuses this pair; the same helper greys out Add
+  // Member's rank field, so the two screens agree on who is administrative.
+  if (data.rank?.trim() && isAdministrativeMember(data.memberClass, data.membershipType)) {
+    problems.push(
+      `rank "${data.rank}" is set on an administrative member, who holds no operational rank — clear the rank or make the member operational`
+    );
+  }
 
   return problems;
 };
@@ -741,6 +748,18 @@ const ImportMembers: React.FC = () => {
       })
       .catch(() => {
         // Non-critical: see above.
+      });
+  }, []);
+  // The number a blank membershipNumber would receive. The server assigns one
+  // only when automatic numbering is on, and the preview's next_id is set
+  // exactly then. undefined until known; null when nothing is assigned.
+  const [nextMembershipId, setNextMembershipId] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    organizationService
+      .previewNextMembershipId()
+      .then(({ next_id }) => setNextMembershipId(next_id))
+      .catch(() => {
+        // Unknown: the instruction falls back to the conditional wording.
       });
   }, []);
   /** Read inside the import loop, so a ref rather than state — a re-render would not reach it. */
@@ -1077,7 +1096,13 @@ const ImportMembers: React.FC = () => {
             </li>
             <li>Replace the sample row — it is imported like any other row if left in</li>
             <li>Wrap any value containing a comma in double quotes, or its row will be rejected</li>
-            <li>Leave membershipNumber blank to have the system assign one</li>
+            <li>
+              {nextMembershipId
+                ? `Leave membershipNumber blank to have the system assign one, starting at ${nextMembershipId}`
+                : nextMembershipId === null
+                  ? 'This department does not assign membership numbers automatically, so fill in membershipNumber — a blank one imports the member without a number. Automatic numbering is set under Members Administration → Settings → Membership IDs.'
+                  : 'A blank membershipNumber is filled in only if the department assigns membership numbers automatically (Members Administration → Settings → Membership IDs)'}
+            </li>
             <li>membershipType is probationary, regular, life or administrative; blank imports as regular</li>
             <li>
               memberClass (operational, administrative or social) and memberStatus (a membership status or one of your

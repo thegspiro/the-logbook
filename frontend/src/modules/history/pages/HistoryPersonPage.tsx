@@ -5,7 +5,7 @@
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { Edit2, Landmark, Trash2 } from 'lucide-react';
+import { Edit2, GitMerge, Landmark, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Breadcrumbs } from '../../../components/ux/Breadcrumbs';
 import { EmptyState } from '../../../components/ux/EmptyState';
@@ -15,6 +15,7 @@ import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { historyService } from '../services/api';
 import { ClearanceSteps } from '../components/ClearanceSteps';
 import { PersonDetails } from '../components/PersonDetails';
+import { PersonMediaStrip } from '../components/PersonMediaStrip';
 import { PublicationBadge } from '../components/PublicationBadge';
 import { RelationsEditor } from '../components/RelationsEditor';
 import { RevisionList } from '../components/RevisionList';
@@ -42,6 +43,12 @@ export const HistoryPersonPage: React.FC = () => {
   const load = useCallback(async () => {
     try {
       const loaded = await historyService.getPerson(personId);
+      if (loaded.redirected_from && loaded.id !== personId) {
+        // A record merged into another: the server forwarded the old address,
+        // so show the kept record under its own address.
+        void navigate(`/history/people/${loaded.id}`, { replace: true });
+        return;
+      }
       setPerson(loaded);
       setRevisionKey((k) => k + 1);
       if (loaded.view === 'full') {
@@ -51,7 +58,7 @@ export const HistoryPersonPage: React.FC = () => {
       if (toAppError(err).status === 404) setMissing(true);
       else setError(getErrorMessage(err, 'Unable to load this person.'));
     }
-  }, [personId]);
+  }, [personId, navigate]);
 
   useEffect(() => {
     void load();
@@ -148,6 +155,13 @@ export const HistoryPersonPage: React.FC = () => {
               <Edit2 className="h-4 w-4" aria-hidden="true" />
               Edit
             </Link>
+            <Link
+              to={`/history/people/${full.id}/merge`}
+              className="btn-secondary inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm"
+            >
+              <GitMerge className="h-4 w-4" aria-hidden="true" />
+              Merge with…
+            </Link>
             {full.publication_level === 'draft' && (
               <button
                 type="button"
@@ -165,6 +179,7 @@ export const HistoryPersonPage: React.FC = () => {
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="card space-y-6 p-4">
           <PersonDetails person={person} />
+          <PersonMediaStrip personId={person.id} />
 
           {full?.can_edit && (
             <section aria-labelledby="edit-service-heading" className="border-theme-surface-border border-t pt-4">

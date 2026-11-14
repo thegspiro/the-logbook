@@ -93,3 +93,88 @@ Seen and left: a duplicate email in the file is reported as a _username_ collisi
 | black --check            | n/a                                                                           |
 | frontend tests (touched) | ✅ full suite: 604 files, 8199 tests; the changed cases failed before the fix |
 | backend tests (touched)  | n/a                                                                           |
+
+## Second pass — the import after class and status split and step-up (2026-11-10)
+
+**Driven:** 2026-11-10 · **As:** `admin`, with `member2` refused · **Viewports:** 1280×900, 390×844
+**Commit:** `f877e25` plus this pass's fixes · **Database:** continued from the W08 second pass; no reset
+
+The owner asked to continue with W09. Since the first pass:
+
+- the template gained `memberClass` and `memberStatus` columns (2026-10-29);
+- a create that grants a rank or position asks the officer to confirm it's them.
+
+### What was driven
+
+1. As `admin`, Members Administration → Import Members. Downloaded the template.
+2. Uploaded a nine-row file:
+   - a full row with rank Captain, position Safety Officer and a quoted address containing a comma;
+   - `MM/DD/YYYY` dates with `membershipType` probationary;
+   - `memberClass` administrative with rank Captain;
+   - the phone "call me maybe";
+   - `membershipType` "wizard";
+   - the email "not-an-email";
+   - the email of the member added in W08;
+   - a first name beginning with `+`;
+   - the date of birth `13/45/2001`.
+3. Imported, confirmed "Confirm it's you" when it opened mid-run, and downloaded the error report.
+4. Read each created record through the API, and the audit rows.
+5. After the fixes, re-uploaded the administrative-with-rank row, then the whole file again.
+6. As `member2`, opened the Import tab.
+7. At 390×844, uploaded the file.
+
+### Held up ✅
+
+- **The pre-check named four bad rows before anything was sent**, each with the column and value: membership type, email, date, and the existing member's email and username.
+- **Step-up mid-import:** the first row with a position was refused with `LB-AUTH-013`. "Confirm it's you" opened, and once confirmed the run carried on from that row; nothing was skipped or sent twice.
+- **Everything imported was stored as written:**
+  - `05/09/1994` became `1994-05-09`;
+  - `"7 Ladder Ct, Apt 3"` kept its comma;
+  - rank and position, platoon and emergency contact were saved;
+  - `probationary` became the probationary class and status.
+- **Rows the server refused come back in the error report**, with the server's reason in the first column. The report is not limited to the pre-check's rows.
+- **Re-uploading the file** flagged every imported row as already on the roster.
+- **Audited:** `stepup_verified` and one `user_created` per member, each stamped with the department, the IP and (since W08-8) the starting status.
+- **`member2` is refused** the Import tab.
+- **Phone:** no sideways scroll. The only control under 44px is the inline "Set it up now" link, which is exempt; the 16px checkbox sits inside a full-width label.
+
+### W09-4 — LOW — The pre-check passed an administrative member with a rank — ✅ FIXED
+
+**Saw:** the preview counted the `memberClass` administrative / rank Captain row as one to import. The import then failed it: "Administrative members do not hold an operational rank."
+**Where:** `validateRow` in `ImportMembers.tsx`.
+**Fix:** the pre-check flags the row: `rank "Captain" is set on an administrative member, who holds no operational rank — clear the rank or make the member operational`. It uses the `isAdministrativeMember` helper that greys out Add Member's rank field, so `membershipType` administrative counts too. Re-driven.
+**Test:** `ImportMembers.test.tsx`, whose two new cases failed before the fix.
+
+### W09-5 — LOW — "Leave membershipNumber blank to have the system assign one" was not true here — ✅ FIXED
+
+**Saw:** all three imported members have no membership number. The server assigns one only when automatic numbering is on, and in this install it is off.
+**Fix:** the instruction reads the same preview Add Member reads:
+
+- with numbering on, it names the next number ("… starting at FD-0042");
+- with numbering off, it says a blank imports the member without a number, and where numbering is set;
+- if the preview can't be read, it states the condition.
+
+Re-driven.
+**Test:** `ImportMembers.test.tsx`, whose two new cases failed before the fix.
+
+### W09-6 — MED — Add Member requires a membership number; the import does not — FLAGGED
+
+With numbering off, Add Member refuses to save without a number, but the import creates the member with none. `POST /users` accepts either, so the rule lives only in one form. Should it be required, and on the endpoint? And what happens to members already stored without one? Recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+### W09-7 — LOW — A bad phone passes the pre-check — LEAD
+
+**Saw:** "call me maybe" passed the pre-check. The server refused it with the W04-7 phone rule, and the row came back in the error report.
+**Why not fixed:** the rule is defined only on the server (`app/utils/phone_numbers.py`). Copying it into the pre-check would give it two definitions (CLAUDE.md pitfall 29). The outcome is correct, just late. A shared definition, or a server-side dry run of the file, would let the pre-check catch it.
+
+### Checklist
+
+| Section                 | Result                                                               |
+| ----------------------- | -------------------------------------------------------------------- |
+| 1. The job gets done    | ✅ template → check → import (with step-up) → records stored exactly |
+| 2. The right people     | ✅ `member2` refused                                                 |
+| 3. Wrong input, failure | ✅ bad rows named; W09-4 fixed; W09-7 a lead                         |
+| 4. Browser signals      | ✅ only the provoked `400`, `403` and `422`                          |
+| 5. Coming back to it    | ✅ re-upload flags every imported row                                |
+| 6. On a phone           | ✅ clean                                                             |
+| 7. Everyone can use it  | ✅ reasons in text; the report is a plain CSV                        |
+| 8. What happens around  | ✅ every create audited; W09-5 fixed, W09-6 flagged                  |

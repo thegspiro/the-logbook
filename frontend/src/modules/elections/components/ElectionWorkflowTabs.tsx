@@ -18,7 +18,7 @@ interface Tab {
   id: string;
   label: string;
   icon: React.ElementType;
-  badge?: number;
+  badge?: number | undefined;
   show: boolean;
 }
 
@@ -27,6 +27,8 @@ interface ElectionWorkflowTabsProps {
   canManage: boolean;
   activeTab: string;
   onTabChange: (tabId: string, options?: { replace?: boolean }) => void;
+  /** Nominees on the Candidates tab; undefined until the page has counted them. */
+  candidateCount?: number | undefined;
 }
 
 export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
@@ -34,6 +36,7 @@ export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
   canManage,
   activeTab,
   onTabChange,
+  candidateCount,
 }) => {
   const tabs = useMemo((): Tab[] => {
     const isDraft = election.status === ElectionStatus.DRAFT;
@@ -64,6 +67,7 @@ export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
         id: 'candidates',
         label: 'Candidates',
         icon: Users,
+        badge: candidateCount,
         show: canManage,
       },
       {
@@ -76,7 +80,10 @@ export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
         id: 'attendance',
         label: 'Attendance',
         icon: FileText,
-        show: canManage && !isCancelled && (isDraft || isNominations || isOpen),
+        // Kept after close, read-only (MeetingAttendance drops its controls
+        // when closed): the check-ins decided who could vote on an item that
+        // required attendance, and stay reviewable from the result (W50-79).
+        show: canManage && !isCancelled,
       },
       {
         id: 'overrides',
@@ -103,7 +110,7 @@ export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
         show: resultsAvailable,
       },
     ].filter((t) => t.show);
-  }, [election, canManage]);
+  }, [election, canManage, candidateCount]);
 
   // Auto-select first visible tab if active tab is hidden
   const validActiveTab = tabs.find((t) => t.id === activeTab) ? activeTab : (tabs[0]?.id ?? 'ballot');

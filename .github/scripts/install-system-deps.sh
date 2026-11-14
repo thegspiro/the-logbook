@@ -3,7 +3,8 @@
 # Install the shared libraries the backend needs at import time (currently
 # libmagic, required by python-magic in backend/requirements.txt, which
 # app/api/v1/endpoints/{documents,users,storefront,...}.py import for upload
-# content-type sniffing).
+# content-type sniffing), and the commands it runs (ffmpeg and ffprobe, which
+# strip History audio and video; backend/Dockerfile installs the same).
 #
 # This exists because the bare form it replaces —
 #
@@ -52,6 +53,14 @@ DEPENDENCIES=(
     "libmagic.so.1:libmagic1t64 libmagic1"
 )
 
+# command:package. Checked with `command -v`, the same lookup the backend's
+# shutil.which makes. The ubuntu-latest image ships ffmpeg; this installs it
+# only on an image that does not.
+COMMAND_DEPENDENCIES=(
+    "ffmpeg:ffmpeg"
+    "ffprobe:ffmpeg"
+)
+
 ldconfig_bin=$(command -v ldconfig || echo /sbin/ldconfig)
 
 # `ldconfig -p` prints one tab-indented entry per line:
@@ -94,6 +103,17 @@ for dep in "${DEPENDENCIES[@]}"; do
     else
         package=$(resolve_package "${candidates[@]}")
         echo "Missing ${soname}; will install ${package}."
+        missing_packages+=("$package")
+    fi
+done
+
+for dep in "${COMMAND_DEPENDENCIES[@]}"; do
+    command_name="${dep%%:*}"
+    package="${dep#*:}"
+    if command -v "$command_name" >/dev/null 2>&1; then
+        echo "Found ${command_name} (provided by the runner image); no install needed."
+    elif [[ " ${missing_packages[*]} " != *" ${package} "* ]]; then
+        echo "Missing ${command_name}; will install ${package}."
         missing_packages+=("$package")
     fi
 done

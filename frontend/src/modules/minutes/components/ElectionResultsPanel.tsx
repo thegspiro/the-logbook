@@ -25,6 +25,7 @@ import type {
   MinutesElectionResult,
   FiledPositionResult,
 } from '../types/minutes';
+import { voterRuleExceptionText } from '../../elections/eligibilityRules';
 
 interface ElectionResultsPanelProps {
   minutesId: string;
@@ -256,7 +257,11 @@ export const ElectionResultsPanel: React.FC<ElectionResultsPanelProps> = ({
               <p className="text-theme-text-secondary mt-2 text-xs">
                 {[
                   snapshot.total_eligible_voters !== undefined ? `${snapshot.total_eligible_voters} eligible` : null,
-                  snapshot.total_votes !== undefined ? `${snapshot.total_votes} ballots cast` : null,
+                  // total_votes counts votes, one per race a ballot marked, not
+                  // ballots (W50-76, as the certified results PDF labels it).
+                  snapshot.total_votes !== undefined
+                    ? `${snapshot.total_votes} ${snapshot.total_votes === 1 ? 'vote' : 'votes'} cast`
+                    : null,
                   snapshot.voter_turnout_percentage !== undefined
                     ? `${snapshot.voter_turnout_percentage}% turnout`
                     : null,
@@ -271,6 +276,16 @@ export const ElectionResultsPanel: React.FC<ElectionResultsPanelProps> = ({
                   .filter(Boolean)
                   .join(' · ')}
               </p>
+              {(snapshot.voter_rule_exceptions ?? []).length > 0 && (
+                <div className="mt-2 text-xs" data-testid="filed-voter-rule-exceptions">
+                  <p className="text-theme-text-primary font-medium">Voter rules that differed from the defaults</p>
+                  <ul className="text-theme-text-secondary list-disc pl-5">
+                    {(snapshot.voter_rule_exceptions ?? []).map((exception) => (
+                      <li key={`${exception.scope}-${exception.title}`}>{voterRuleExceptionText(exception)}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {contests.map((contest) => (
                 <CandidateTable
                   key={contest.position}

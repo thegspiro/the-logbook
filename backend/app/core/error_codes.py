@@ -168,9 +168,9 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
             "are reachable until enrollment completes."
         ),
         resolution=(
-            "Have the member finish MFA setup under Profile → Security.",
+            "Have the member finish MFA setup under My Account → Security.",
             "An administrator can temporarily lift the org-wide MFA "
-            "requirement in Organization Settings → Security if needed.",
+            "requirement in Settings → Authentication → MFA Policy if needed.",
         ),
     ),
     ErrorCode.AUTH_INVALID_CREDENTIALS: ErrorCodeInfo(

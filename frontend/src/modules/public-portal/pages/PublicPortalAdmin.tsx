@@ -126,8 +126,8 @@ const PublicPortalAdmin: React.FC = () => {
                     }}
                     className={`btn-md font-medium transition-colors ${
                       config?.enabled
-                        ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30'
-                        : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30'
+                        ? 'bg-red-100 text-red-900 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/30'
+                        : 'bg-green-100 text-green-900 hover:bg-green-200 dark:bg-green-500/20 dark:text-green-300 dark:hover:bg-green-500/30'
                     }`}
                   >
                     {config?.enabled ? 'Disable Portal' : 'Enable Portal'}
@@ -144,7 +144,7 @@ const PublicPortalAdmin: React.FC = () => {
             <div className="flex">
               <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-600" />
               <div className="ml-3">
-                <p className="text-sm text-yellow-800 dark:text-yellow-400">
+                <p className="text-sm text-yellow-900 dark:text-yellow-300">
                   The portal is disabled. External websites can't read any of your data until you enable it, create an
                   API key, and turn on the fields to share under Data Control.
                 </p>

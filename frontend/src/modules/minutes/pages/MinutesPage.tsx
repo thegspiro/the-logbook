@@ -43,6 +43,7 @@ import TimeQuarterHour from '../../../components/ux/TimeQuarterHour';
 import { asArray } from '../../../utils/asArray';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { GovernancePageHeader } from '../../../components/governance/GovernancePageHeader';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
   {
@@ -438,7 +439,7 @@ const MinutesPage: React.FC = () => {
         />
 
         {/* Quick Stats */}
-        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4">
+        <StatGrid columns={4} gap={4} className="mb-8">
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Total Meetings</p>
             <p className="text-theme-text-primary mt-1 text-2xl font-bold">{summary?.total_meetings ?? 0}</p>
@@ -464,7 +465,7 @@ const MinutesPage: React.FC = () => {
                 the meeting summary's own figure never moved (W51-2). */}
             <p className="mt-1 text-2xl font-bold text-orange-700">{minutesStats?.pending_approval ?? 0}</p>
           </div>
-        </div>
+        </StatGrid>
 
         <MyActionItemsPanel />
 
@@ -786,13 +787,13 @@ const MinutesPage: React.FC = () => {
                     Structured templates for recording meeting minutes with attendees, motions, and votes.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800 dark:text-cyan-400">
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-900 dark:text-cyan-300">
                       Roll Call
                     </span>
-                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800 dark:text-cyan-400">
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-900 dark:text-cyan-300">
                       Motions
                     </span>
-                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800 dark:text-cyan-400">
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-900 dark:text-cyan-300">
                       Votes
                     </span>
                   </div>
@@ -804,13 +805,13 @@ const MinutesPage: React.FC = () => {
                     Track action items from meetings with assignees, due dates, and completion status.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-900 dark:text-green-300">
                       Assignees
                     </span>
-                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-900 dark:text-green-300">
                       Due Dates
                     </span>
-                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-900 dark:text-green-300">
                       Follow-up
                     </span>
                   </div>
@@ -822,10 +823,10 @@ const MinutesPage: React.FC = () => {
                     Search past meetings by title, or by any words in their minutes.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-400">
+                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-900 dark:text-amber-300">
                       Search
                     </span>
-                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-400">
+                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-900 dark:text-amber-300">
                       Publish to Documents
                     </span>
                   </div>

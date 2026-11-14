@@ -12,7 +12,7 @@ import { ArrowRight, CheckCircle2, Circle, Loader2, RotateCcw, Vote, XCircle } f
 import { electionService } from '../../../services/api';
 import type { Election, ElectionListItem } from '../../../types/election';
 import { ElectionStatus } from '../../../constants/enums';
-import { getStatusBadgeClass } from '../../../utils/electionHelpers';
+import { getStatusBadgeClass, getStatusLabel } from '../../../utils/electionHelpers';
 
 interface RunoffChainProps {
   election: Election;
@@ -140,8 +140,10 @@ export const RunoffChain: React.FC<RunoffChainProps> = ({ election }) => {
                       {node.runoff_round === 0 ? 'Original' : `Runoff ${node.runoff_round}`}
                     </div>
                     <div className="text-theme-text-muted text-xs">
-                      {node.status}
-                      {node.total_votes != null && node.total_votes > 0 ? ` · ${node.total_votes} votes` : ''}
+                      {getStatusLabel(node.status)}
+                      {node.total_votes != null && node.total_votes > 0
+                        ? ` · ${node.total_votes} ${node.total_votes === 1 ? 'vote' : 'votes'}`
+                        : ''}
                     </div>
                   </div>
                 </Link>

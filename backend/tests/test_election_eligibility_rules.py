@@ -211,7 +211,13 @@ class TestStoredValues:
 
     def test_invalid_stored_defaults_fall_back_rather_than_fail(self):
         stored = {"election_eligibility": {"rules": {"attendance": {"mode": "?"}}}}
-        assert _eligibility_defaults(stored) == EligibilityDefaults()
+        # The built-in defaults, as the version 2 rows an empty ladder implies.
+        assert _eligibility_defaults(stored) == _eligibility_defaults({})
+        assert _eligibility_defaults({}).rules.types["regular"].model_dump() == {
+            "may_vote": True,
+            "wait": None,
+            "attendance": [],
+        }
 
     def test_tier_rules_report_what_the_ballot_check_applies(self):
         rules = _tier_voting_rules(
@@ -285,7 +291,8 @@ class TestSettingsEndpoints:
     async def test_get_reports_built_in_defaults_when_nothing_is_stored(self):
         db, _ = _settings_db({})
         response = await get_election_settings(db=db, current_user=Mock())
-        assert response["eligibility"] == EligibilityDefaults().model_dump()
+        assert response["eligibility"] == _eligibility_defaults({}).model_dump()
+        assert response["eligibility"]["rules"]["version"] == 2
         assert response["tier_voting_rules"] == []
 
     async def test_patch_stores_eligibility_and_leaves_other_settings_alone(self):
@@ -921,6 +928,78 @@ class TestOffTheFrozenRoll:
 
 
 @pytest.mark.integration
+class TestOfficerViewsNameTheRuleOffTheRoll:
+    """The eligibility roster and the ballot send's skipped list give an
+    off-roll member the rule they still fail, as the in-app check does
+    (W50-R3); the frozen roll is named only for one who now passes.
+
+    Both used to say "Not on the voter roll frozen when the election
+    opened" for every member missing from the snapshot. They still say the
+    same thing as each other: the roster states before a send what the send
+    will record after it (W50-55).
+    """
+
+    async def _setup(self, db_session):
+        org = await _org(db_session)
+        settled = await _typed_member(
+            db_session, org, "settled", "administrative", "regular", _ago(months=13)
+        )
+        recent = await _typed_member(
+            db_session, org, "recent", "administrative", "regular", _ago(months=2)
+        )
+        election = await _election(
+            db_session,
+            org,
+            settled,
+            _waits(administrative=ADMIN_A_YEAR),
+            eligible_roster_snapshot=[],
+        )
+        return org, settled, recent, election
+
+    async def test_the_roster_names_the_waiting_period(self, db_session):
+        org, settled, recent, election = await self._setup(db_session)
+
+        roster = await ElectionService(db_session).get_eligibility_roster(
+            election.id, org.id
+        )
+        rows = {r["user_id"]: r for r in roster["roster"]}
+
+        assert rows[str(recent.id)]["will_receive_ballot"] is False
+        assert rows[str(recent.id)]["ineligibility_reason"].startswith(
+            "Administrative members may vote 12 months after becoming "
+            "administrative; eligible from "
+        )
+        assert rows[str(settled.id)]["will_receive_ballot"] is False
+        assert (
+            rows[str(settled.id)]["ineligibility_reason"]
+            == ElectionService.NOT_ON_FROZEN_ROLL
+        )
+
+    async def test_the_send_records_the_same_reasons(self, db_session, monkeypatch):
+        org, settled, recent, election = await self._setup(db_session)
+        monkeypatch.setattr(
+            "app.services.email_service.EmailService.send_batch",
+            AsyncMock(side_effect=lambda batch: [True] * len(batch)),
+        )
+
+        _sent, _failed, _skipped, details, _ids = await ElectionService(
+            db_session
+        ).send_ballot_emails(
+            election.id, org.id, base_ballot_url="https://example.test/ballot"
+        )
+        reasons = {d["user_id"]: d["reason"] for d in details}
+
+        roster = await ElectionService(db_session).get_eligibility_roster(
+            election.id, org.id
+        )
+        for row in roster["roster"]:
+            if row["user_id"] in reasons:
+                assert reasons[row["user_id"]] == row["ineligibility_reason"]
+        assert reasons[str(recent.id)].startswith("Administrative members may vote")
+        assert reasons[str(settled.id)] == ElectionService.NOT_ON_FROZEN_ROLL
+
+
+@pytest.mark.integration
 class TestCreateAndUpdate:
     def _payload(self, **extra):
         now = datetime.now(timezone.utc)
@@ -953,17 +1032,28 @@ class TestCreateAndUpdate:
             current_user=admin,
         )
         assert response.eligibility_rules is not None
-        assert response.eligibility_rules.model_dump() == {
-            "attendance": {
-                "mode": "count",
-                "min_meetings": 2,
-                "of_last_meetings": 3,
-                "min_pct": None,
-                "period_months": None,
-                "meeting_types": None,
-            },
-            "waiting_periods": {},
+        # The stored version 1 rule, copied as the version 2 row every
+        # member type carries.
+        rules = response.eligibility_rules
+        assert rules.version == 2
+        assert rules.types["regular"].model_dump() == {
+            "may_vote": True,
+            "wait": None,
+            "attendance": [
+                {
+                    "mode": "count",
+                    "min_meetings": 2,
+                    "of_last_meetings": 3,
+                    "min_pct": None,
+                    "period_months": None,
+                    "meeting_types": None,
+                }
+            ],
         }
+        assert {
+            row.model_dump()["attendance"][0]["min_meetings"]
+            for row in rules.types.values()
+        } == {2}
         # "chief" matches the configured "Chief"; Secretary is not configured.
         assert {k: v.voter_types for k, v in response.position_eligibility.items()} == {
             "chief": ["operational"]
@@ -973,12 +1063,16 @@ class TestCreateAndUpdate:
         org, admin = await self._admin_org(db_session)
         response = await create_election(
             election=ElectionCreate.model_validate(
-                self._payload(eligibility_rules=None)
+                self._payload(
+                    eligibility_rules=None,
+                    eligibility_override_reason="No rules apply to this vote",
+                )
             ),
             db=db_session,
             current_user=admin,
         )
         assert response.eligibility_rules is None
+        assert response.eligibility_override_reason == "No rules apply to this vote"
 
     async def test_explicit_position_rules_win(self, db_session):
         org, admin = await self._admin_org(db_session)
@@ -1003,8 +1097,9 @@ class TestCreateAndUpdate:
         org.settings = {"election_eligibility": EligibilityDefaults().model_dump()}
         await db_session.flush()
         election = await db_session.get(Election, str(response.id))
-        assert election.eligibility_rules["attendance"]["mode"] == "count"
-        assert election.eligibility_rules["attendance"]["min_meetings"] == 2
+        regular = election.eligibility_rules["types"]["regular"]
+        assert regular["attendance"][0]["mode"] == "count"
+        assert regular["attendance"][0]["min_meetings"] == 2
 
     async def test_a_draft_election_can_change_its_rules(self, db_session):
         org, admin = await self._admin_org(db_session)
@@ -1020,7 +1115,8 @@ class TestCreateAndUpdate:
                         "waiting_periods": {
                             "administrative": {"mode": "months", "months": 12}
                         },
-                    }
+                    },
+                    "eligibility_override_reason": "Bylaws Article IV",
                 }
             ),
             db=db_session,
@@ -1108,6 +1204,11 @@ class TestAnnualSettings:
         assert response["annual_eligibility"] is None
 
 
+def _regular_row(response):
+    """The regular members' row of an election's version 2 rules."""
+    return response.eligibility_rules.types["regular"]
+
+
 @pytest.mark.integration
 class TestMeetingKind:
     def _payload(self, **extra):
@@ -1151,8 +1252,8 @@ class TestMeetingKind:
         response = await self._create(db_session, admin, meeting_kind="annual")
 
         assert response.meeting_kind == "annual"
-        assert response.eligibility_rules.waiting_periods["administrative"].months == 12
-        assert response.eligibility_rules.attendance.min_meetings == 3
+        assert response.eligibility_rules.types["administrative"].wait.months == 12
+        assert _regular_row(response).attendance[0].min_meetings == 3
         assert {k: v.voter_types for k, v in response.position_eligibility.items()} == {
             "Secretary": ["regular", "life"]
         }
@@ -1162,7 +1263,7 @@ class TestMeetingKind:
         response = await self._create(db_session, admin)
 
         assert response.meeting_kind == "regular"
-        assert response.eligibility_rules.attendance.min_meetings == 2
+        assert _regular_row(response).attendance[0].min_meetings == 2
         assert set(response.position_eligibility) == {"Chief"}
 
     async def test_the_kind_follows_a_linked_annual_meeting(self, db_session):
@@ -1174,7 +1275,7 @@ class TestMeetingKind:
             db_session, admin, meeting_id=str(annual_meeting.id)
         )
         assert response.meeting_kind == "annual"
-        assert response.eligibility_rules.waiting_periods["administrative"].months == 12
+        assert response.eligibility_rules.types["administrative"].wait.months == 12
 
     async def test_an_explicit_kind_wins_over_the_linked_meeting(self, db_session):
         org, admin = await self._org_with(db_session)
@@ -1196,7 +1297,7 @@ class TestMeetingKind:
         response = await self._create(db_session, admin, meeting_kind="annual")
 
         assert response.meeting_kind == "annual"
-        assert response.eligibility_rules.attendance.min_meetings == 2
+        assert _regular_row(response).attendance[0].min_meetings == 2
 
     async def test_changing_the_kind_reapplies_that_kinds_rules(self, db_session):
         org, admin = await self._org_with(db_session)
@@ -1209,7 +1310,7 @@ class TestMeetingKind:
             current_user=admin,
         )
         assert response.meeting_kind == "annual"
-        assert response.eligibility_rules.waiting_periods["administrative"].months == 12
+        assert response.eligibility_rules.types["administrative"].wait.months == 12
         # The regular meeting's Chief rule does not survive the move.
         assert set(response.position_eligibility) == {"Secretary"}
 
@@ -1220,7 +1321,11 @@ class TestMeetingKind:
         response = await update_election(
             election_id=created.id,
             election_update=ElectionUpdate.model_validate(
-                {"meeting_kind": "annual", "eligibility_rules": None}
+                {
+                    "meeting_kind": "annual",
+                    "eligibility_rules": None,
+                    "eligibility_override_reason": "Open to every member",
+                }
             ),
             db=db_session,
             current_user=admin,
