@@ -26,6 +26,10 @@ const HistoryMediaItemPage = lazyWithRetry(() => import('./pages/HistoryMediaIte
 const HistoryMediaEditPage = lazyWithRetry(() => import('./pages/HistoryMediaEditPage'));
 const HistoryAlbumsPage = lazyWithRetry(() => import('./pages/HistoryAlbumsPage'));
 const HistoryAlbumPage = lazyWithRetry(() => import('./pages/HistoryAlbumPage'));
+const HistoryDocumentsPage = lazyWithRetry(() => import('./pages/HistoryDocumentsPage'));
+const HistoryDocumentUploadPage = lazyWithRetry(() => import('./pages/HistoryDocumentUploadPage'));
+const HistoryDocumentPage = lazyWithRetry(() => import('./pages/HistoryDocumentPage'));
+const HistoryDocumentEditPage = lazyWithRetry(() => import('./pages/HistoryDocumentEditPage'));
 
 export function getHistoryRoutes() {
   return (
@@ -107,6 +111,38 @@ export function getHistoryRoutes() {
         element={
           <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
             <HistoryMediaEditPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/documents"
+        element={
+          <ProtectedRoute requiredModule="history" moduleLabel="History">
+            <HistoryDocumentsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/documents/upload"
+        element={
+          <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
+            <HistoryDocumentUploadPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/documents/:documentId"
+        element={
+          <ProtectedRoute requiredModule="history" moduleLabel="History">
+            <HistoryDocumentPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/documents/:documentId/edit"
+        element={
+          <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
+            <HistoryDocumentEditPage />
           </ProtectedRoute>
         }
       />

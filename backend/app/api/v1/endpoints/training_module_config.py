@@ -56,6 +56,7 @@ from app.services.training_compliance import (
     NOT_YET_HELD_STATUS,
     get_org_include_current_month,
     load_credited_shift_dates,
+    load_evaluation_credits,
     load_held_sessions,
     member_join_date,
     requirement_applies_to_member,
@@ -351,6 +352,11 @@ async def _evaluate_member_requirements(
             full_history=True,
         )
     ).get(user_id, [])
+    evaluation_credits = (
+        await load_evaluation_credits(
+            db, str(org_id), [user_id], applicable, today, org_include_current
+        )
+    ).get(user_id, {})
     held_sessions = await load_held_sessions(db, str(org_id), applicable)
     course_catalog = (
         await load_required_course_catalog(db, str(org_id), applicable)
@@ -376,6 +382,7 @@ async def _evaluate_member_requirements(
             shift_dates=shift_dates,
             held_sessions=held_sessions,
             course_catalog=course_catalog,
+            evaluation_credits=evaluation_credits,
         )
         requirements_detail.append(detail)
         # Listed with its deadline, but left out of the summary until the

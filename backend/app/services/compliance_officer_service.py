@@ -45,6 +45,7 @@ from app.services.training_compliance import (
     compute_org_compliance_pct,
     evaluate_member_requirement,
     load_credited_shift_dates,
+    load_evaluation_credits,
     load_graded_records,
     load_held_sessions,
     member_join_date,
@@ -981,6 +982,14 @@ class AnnualComplianceReportService:
             today,
             org_include_current,
         )
+        evaluations_by_user = await load_evaluation_credits(
+            self.db,
+            organization_id,
+            member_ids,
+            requirements,
+            today,
+            org_include_current,
+        )
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), requirements
         )
@@ -995,6 +1004,13 @@ class AnnualComplianceReportService:
             shifts_by_user = {
                 uid: [d for d in dates if d <= today]
                 for uid, dates in shifts_by_user.items()
+            }
+            evaluations_by_user = {
+                uid: {
+                    req_id: [(d, units) for d, units in credits if d <= today]
+                    for req_id, credits in by_req.items()
+                }
+                for uid, by_req in evaluations_by_user.items()
             }
 
         # Build per-user record lookup
@@ -1048,6 +1064,7 @@ class AnnualComplianceReportService:
                     join_date=join_date,
                     shift_dates=shifts_by_user.get(str(member.id), []),
                     held_sessions=held_sessions,
+                    evaluation_credits=evaluations_by_user.get(str(member.id), {}),
                 )[0]
                 for req in applicable_reqs
             )
@@ -1140,6 +1157,7 @@ class AnnualComplianceReportService:
                     join_date=member_join_date(member),
                     shift_dates=shifts_by_user.get(str(member.id), []),
                     held_sessions=held_sessions,
+                    evaluation_credits=evaluations_by_user.get(str(member.id), {}),
                 )[0]
                 for member in applicable_members
             )

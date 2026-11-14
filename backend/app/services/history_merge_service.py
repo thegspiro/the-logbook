@@ -38,6 +38,7 @@ from app.models.history import (
     PublicationLevel,
 )
 from app.services.history_clearance_service import HistoryClearanceService
+from app.services.history_document_service import HistoryDocumentService
 from app.services.history_media_service import HistoryMediaService
 from app.services.history_service import (
     RECORD_MEMBER,
@@ -272,9 +273,10 @@ class HistoryMergeService:
 
         await self._move_periods(keep, other)
         await self._move_relations(keep, other)
-        # Photo and media tags follow the person; an item tagged with both
-        # keeps one tag.
+        # Photo, media and document tags follow the person; an item tagged
+        # with both keeps one tag.
         await HistoryMediaService(self.db).move_tags(other.id, keep.id)
+        await HistoryDocumentService(self.db).move_tags(other.id, keep.id)
         await self._move_references(keep, other, actor_id)
 
         # A plain DELETE: the periods and links have already moved, and the

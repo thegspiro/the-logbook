@@ -153,7 +153,7 @@ def _webp(image: Image.Image, bound: tuple[int, int]) -> bytes:
     return out.getvalue()
 
 
-def make_photo_copies(content: bytes) -> PhotoCopies:
+def make_photo_copies(content: bytes, max_pixels: Optional[int] = None) -> PhotoCopies:
     """The viewing copy and thumbnail of an accepted photo.
 
     Blocking (Pillow): call through ``asyncio.to_thread``. Runs only on bytes
@@ -162,10 +162,11 @@ def make_photo_copies(content: bytes) -> PhotoCopies:
     try:
         with Image.open(io.BytesIO(content)) as probe:
             width, height = probe.size
-            if width * height > MAX_PIXELS:
+            limit = MAX_PIXELS if max_pixels is None else max_pixels
+            if width * height > limit:
                 raise UnreadableImage(
                     f"The image is {width}×{height} pixels; the archive accepts up "
-                    f"to {MAX_PIXELS // 1_000_000} million"
+                    f"to {limit // 1_000_000} million"
                 )
             probe.verify()
         with Image.open(io.BytesIO(content)) as image:

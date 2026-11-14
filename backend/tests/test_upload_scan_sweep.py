@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 from app.services import attendance_waiver_attachments, module_documents
+from app.services.history_document_service import HistoryDocumentService
 from app.services.history_media_service import HistoryMediaService
 
 pytestmark = pytest.mark.unit
@@ -42,6 +43,9 @@ SCANNING_CALLS = {
     # app.services.history_media_service: stores through store_bytes (see the
     # guard below).
     "store_media_upload",
+    # app.services.history_document_service: stores (and so scans) through
+    # store_bytes before pypdf or PDFium reads a byte (see the guard below).
+    "store_document_upload",
 }
 
 
@@ -131,3 +135,13 @@ def test_the_history_media_entry_point_routes_through_the_scanning_service():
     """The history media entry above is trusted only while this holds."""
     source = inspect.getsource(HistoryMediaService.store_media_upload)
     assert ".store_bytes(" in source
+
+
+def test_the_history_document_entry_point_scans_before_it_parses():
+    """The history document entry above is trusted only while this holds, and
+    the scan must come before the PDF or image is opened: pypdf and PDFium
+    parse attacker-supplied bytes."""
+    source = inspect.getsource(HistoryDocumentService.store_document_upload)
+    scan = source.index(".store_bytes(")
+    assert scan < source.index("make_pdf_copies")
+    assert scan < source.index("make_scan_copies")

@@ -44,7 +44,12 @@ from app.models.document import Document
 from app.models.email_template import EmailAttachment, EmailTemplate
 from app.models.evaluation import EvaluationDocument
 from app.models.event import Event
-from app.models.history import HistoryMedia, HistoryMediaFile
+from app.models.history import (
+    HistoryDocument,
+    HistoryDocumentFile,
+    HistoryMedia,
+    HistoryMediaFile,
+)
 from app.models.membership_pipeline import ProspectDocument, ProspectiveMember
 from app.models.minute import MinutesAttachment
 from app.models.suggestion import SuggestionAttachment
@@ -454,6 +459,34 @@ async def collect_references(
                 row.file_path,
             )
         )
+    # History documents' stripped copies and previews, beside the photos. The
+    # originals are ``documents`` rows, collected above with every other one.
+    for row in (
+        await db.execute(
+            scoped(
+                select(
+                    HistoryDocumentFile.id,
+                    HistoryDocument.organization_id,
+                    HistoryDocumentFile.document_id,
+                    HistoryDocumentFile.file_path,
+                ).join(
+                    HistoryDocument,
+                    HistoryDocument.document_id == HistoryDocumentFile.document_id,
+                ),
+                HistoryDocument.organization_id,
+            )
+        )
+    ).all():
+        refs.append(
+            Reference(
+                "history_document_files",
+                str(row.id),
+                str(row.organization_id),
+                StorageArea.HISTORY_MEDIA,
+                str(row.document_id),
+                row.file_path,
+            )
+        )
     return refs
 
 
@@ -544,6 +577,7 @@ _SCALAR_TABLES: dict[str, tuple[type[Any], str]] = {
     "evaluation_documents": (EvaluationDocument, "file_path"),
     "attendance_waiver_attachments": (AttendanceWaiverAttachment, "file_path"),
     "history_media_files": (HistoryMediaFile, "file_path"),
+    "history_document_files": (HistoryDocumentFile, "file_path"),
 }
 
 

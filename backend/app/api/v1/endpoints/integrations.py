@@ -815,6 +815,41 @@ def _secrets_to_clear_for_base_url_change(
     return {secret_key} if config[secret_key] == "" else set()
 
 
+def _require_credentials_for_environment_change(
+    integration: Integration, config: dict[str, Any]
+) -> None:
+    """Refuse to move stored PayPal credentials to the other environment.
+
+    Sandbox and live credentials are separate REST apps. A save that switches
+    ``environment`` and leaves the credential boxes blank would keep the old
+    pair under the new environment, and every webhook PayPal sends would then
+    fail verification and be rejected, with nothing on the card to say why.
+    A first connection has no stored pair, so it is not affected.
+    """
+    if integration.integration_type != "paypal" or "environment" not in config:
+        return
+    stored = (integration.config or {}).get("environment", "sandbox")
+    if config["environment"] == stored:
+        return
+    if not (
+        integration.get_secret("client_id") or integration.get_secret("client_secret")
+    ):
+        return
+    supplied = [
+        key
+        for key in ("client_id", "client_secret")
+        if isinstance(config.get(key), str) and config[key].strip()
+    ]
+    if len(supplied) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                "Changing PayPal between sandbox and live needs the Client ID "
+                "and Client Secret of that environment's app"
+            ),
+        )
+
+
 # The one setting without which these integrations have nothing to send to.
 _DESTINATION_KEYS = {
     "slack": "webhook_url",
@@ -1200,6 +1235,7 @@ async def connect_integration(
         and config["refresh_token"] == ""
     )
     secrets_to_clear = _secrets_to_clear_for_base_url_change(integration, config)
+    _require_credentials_for_environment_change(integration, config)
     # Validate config schema
     config = _validate_config(integration.integration_type, config)
     _require_destination(integration, config)
@@ -1428,6 +1464,7 @@ async def update_integration(
         and config["refresh_token"] == ""
     )
     secrets_to_clear = _secrets_to_clear_for_base_url_change(integration, config)
+    _require_credentials_for_environment_change(integration, config)
     # PATCH validation includes stored public settings so callers can update or
     # clear one secret without resending unrelated required configuration.
     _require_available(integration)

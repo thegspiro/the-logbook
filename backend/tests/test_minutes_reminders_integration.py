@@ -6,16 +6,19 @@ members, which items, whether the item is marked reminded, and that a refused
 or failed send leaves it to be tried again.
 """
 
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.email_template import EmailTemplate, EmailTemplateType
 from app.models.minute import ActionItem, MeetingMinutes
 from app.models.user import Organization
+from app.services.email_service import EmailService
 from app.services.minutes_reminder_service import MinutesReminderService
 from tests.minutes_support import (
     _approve,
@@ -64,13 +67,17 @@ async def world(db_session: AsyncSession) -> _World:
 
 @pytest.fixture
 def mail():
-    """Replace the mail service; ``mail.send`` records every email."""
+    """Replace the send; ``mail.send`` records every email.
+
+    Only ``send_email`` is replaced, so each body is rendered from the
+    department's template exactly as it would be mailed.
+    """
     send = AsyncMock(return_value=(1, []))
-    service = MagicMock()
-    service.send_email = send
-    with patch(
-        "app.services.minutes_reminder_service.EmailService", return_value=service
-    ):
+
+    class Recording(EmailService):
+        send_email = send
+
+    with patch("app.services.minutes_reminder_service.EmailService", Recording):
         yield send
 
 
@@ -495,3 +502,87 @@ async def test_the_scheduled_task_runs_both_emails_for_every_department(world, m
     recipients = _sent_to(mail)
     assert world.assignee.email in recipients
     assert world.secretary.email in recipients
+
+
+async def _store_template(
+    world: _World,
+    template_type: EmailTemplateType,
+    *,
+    subject: str = "Edited",
+    active: bool = True,
+) -> None:
+    world.db.add(
+        EmailTemplate(
+            id=str(uuid.uuid4()),
+            organization_id=world.org_id,
+            template_type=template_type,
+            name=f"Edited {template_type.value}",
+            subject=subject,
+            html_body="<p>Edited body</p>{{action_items_html}}{{open_items_html}}",
+            text_body="Edited text",
+            is_active=active,
+        )
+    )
+    await world.db.flush()
+
+
+class TestTheDepartmentsTemplate:
+    """The reminder and the digest are the department's templates (2026-11-14)."""
+
+    async def test_the_reminder_uses_the_departments_wording(self, world, mail):
+        await _store_template(
+            world,
+            EmailTemplateType.MINUTES_ACTION_ITEM_REMINDER,
+            subject="Heads up: {{reminder_summary}}",
+        )
+        await _approved(world, [_item("Order hose", world.assignee, 2)])
+
+        assert await _run(world) == 1
+        assert mail.await_args.kwargs["subject"] == (
+            "Heads up: 1 action item(s) due soon"
+        )
+        assert "Order hose" in mail.await_args.kwargs["html_body"]
+
+    async def test_a_switched_off_reminder_sends_nothing_and_marks_nothing(
+        self, world, mail
+    ):
+        await _store_template(
+            world, EmailTemplateType.MINUTES_ACTION_ITEM_REMINDER, active=False
+        )
+        await _approved(world, [_item("Order hose", world.assignee, 2)])
+
+        assert await _run(world) == 0
+        mail.assert_not_awaited()
+        assert await _reminded(world, "Order hose") is None
+
+    async def test_a_switched_off_digest_sends_nothing_and_starts_no_week(
+        self, world, mail
+    ):
+        await _store_template(
+            world, EmailTemplateType.MINUTES_OPEN_ITEMS_DIGEST, active=False
+        )
+        await _approved(world, [_item("Order hose", world.assignee, 5)])
+
+        sent = await MinutesReminderService(world.db).send_open_items_digest(
+            await _org(world)
+        )
+
+        assert sent == 0
+        mail.assert_not_awaited()
+        org = await _org(world)
+        assert "last_open_items_digest_on" not in (org.settings or {}).get(
+            "minutes", {}
+        )
+
+    async def test_the_digest_uses_the_departments_wording(self, world, mail):
+        await _store_template(
+            world,
+            EmailTemplateType.MINUTES_OPEN_ITEMS_DIGEST,
+            subject="Weekly: {{open_count}} open",
+        )
+        await _approved(world, [_item("Order hose", world.assignee, 5)])
+
+        await MinutesReminderService(world.db).send_open_items_digest(await _org(world))
+
+        assert mail.await_args.kwargs["subject"] == "Weekly: 1 open"
+        assert "Order hose" in mail.await_args.kwargs["html_body"]

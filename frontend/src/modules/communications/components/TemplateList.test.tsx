@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -91,6 +93,55 @@ describe('TemplateList', () => {
     expect(screen.getByText('Prospective Members')).toBeInTheDocument();
     expect(screen.queryByText('Members & Accounts')).not.toBeInTheDocument();
     expect(screen.queryByText('Other')).not.toBeInTheDocument();
+  });
+
+  // Every type the backend can seed must land in a named category: "Other" is
+  // a safety net for a type this screen has not caught up with yet, and three
+  // evaluation notices sat in it unnoticed because nothing compared the lists.
+  it('files every backend template type in a named category', () => {
+    const model = readFileSync(resolve(__dirname, '../../../../../backend/app/models/email_template.py'), 'utf8');
+    const enumBody = model.split('class EmailTemplateType')[1]?.split('\nclass ')[0] ?? '';
+    const types = [...enumBody.matchAll(/^\s+[A-Z_]+ = "([a-z_]+)"$/gm)]
+      .map((m) => m[1] ?? '')
+      .filter((t) => t !== 'custom');
+    expect(types.length).toBeGreaterThan(60);
+
+    const templates = types.map((t, i) => makeTemplate({ id: String(i), name: `n-${t}`, template_type: t }));
+    render(<TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />);
+
+    expect(screen.queryByText('Other')).not.toBeInTheDocument();
+  });
+
+  it('labels the amended, response and deleted evaluation notices under Performance Evaluations', () => {
+    const templates = [
+      makeTemplate({ id: '1', name: 'Our Amended', template_type: 'evaluation_amended' }),
+      makeTemplate({ id: '2', name: 'Our Response', template_type: 'evaluation_response' }),
+      makeTemplate({ id: '3', name: 'Our Deleted', template_type: 'evaluation_deleted' }),
+    ];
+
+    render(<TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />);
+
+    expect(screen.getByText('Performance Evaluations')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Our Amended/ })).toHaveAttribute('title', 'Evaluation Amended');
+    expect(screen.getByRole('button', { name: /Our Response/ })).toHaveAttribute('title', 'Evaluation Response');
+    expect(screen.getByRole('button', { name: /Our Deleted/ })).toHaveAttribute('title', 'Evaluation Deleted');
+  });
+
+  // The API orders by the MySQL ENUM's declaration index, which follows the
+  // order types were added rather than the order a reader expects.
+  it("lists a category's templates in the category's order, not the API's", () => {
+    const templates = [
+      makeTemplate({ id: '1', name: 'Shift Reminder', template_type: 'shift_reminder' }),
+      makeTemplate({ id: '2', name: 'Event Cancellation', template_type: 'event_cancellation' }),
+      makeTemplate({ id: '3', name: 'Event Reminder', template_type: 'event_reminder' }),
+    ];
+
+    render(<TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />);
+
+    const names = screen
+      .getAllByRole('button', { name: /Shift Reminder|Event Cancellation|Event Reminder/ })
+      .map((b) => b.getAttribute('title'));
+    expect(names).toEqual(['Event Reminder', 'Event Cancellation', 'Shift Reminder']);
   });
 
   it('files an unrecognised template type under Other', () => {

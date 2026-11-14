@@ -34,6 +34,7 @@ from app.models.history import (
     HistoryClearanceDecision,
     HistoryClearanceRequest,
     HistoryClearanceStep,
+    HistoryDocument,
     HistoryMedia,
     HistoryRevision,
     RevisionKind,
@@ -43,6 +44,7 @@ from app.models.user import Position, User, user_positions
 RECORD_PATHS = {
     "member": "/history/people/{id}",
     "media": "/history/media/{id}",
+    "document": "/history/documents/{id}",
 }
 REVIEW_PATH = "/history/clearance/{id}"
 
@@ -260,16 +262,21 @@ class HistoryClearanceService:
 
     async def submit(
         self,
-        person: Union[HistoricalMember, HistoryMedia],
+        person: Union[HistoricalMember, HistoryMedia, HistoryDocument],
         purpose: ClearancePurpose,
         actor_id: str,
     ) -> tuple[HistoryClearanceRequest, list[str]]:
-        """Open a request for the record's current revision: a person, or a
-        photo or media item.
+        """Open a request for the record's current revision: a person, a
+        photo or media item, or a document.
 
         Returns the request and the members to tell it is their turn.
         """
-        record_type = "media" if isinstance(person, HistoryMedia) else "member"
+        if isinstance(person, HistoryDocument):
+            record_type = "document"
+        elif isinstance(person, HistoryMedia):
+            record_type = "media"
+        else:
+            record_type = "member"
         steps = await self.list_steps(person.organization_id)
         if not steps:
             raise ValueError(
