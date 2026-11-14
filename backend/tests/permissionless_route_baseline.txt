@@ -706,3 +706,18 @@ app/api/v1/endpoints/member_status.py::get_membership_tier_names
 # scheduling.manage OR the requester's current supervisor, re-checked in
 # SchedulingService under a row lock on the request; anyone else gets 403.
 app/api/v1/endpoints/scheduling.py::review_time_off_request
+# Leave requests (2026-11-14): who decides is the department's approver
+# positions (falling back to the Chief, then members.manage), not a permission,
+# so LeaveRequestService decides inside the handler. config returns one flag
+# for the caller's own department; create and withdraw act on the caller's own
+# request; list-me returns the caller's own; list and get return only requests
+# the caller may decide (every one for members.manage), 404 for any other; a
+# vote by anyone outside the request's approvers is 404 (409 for the member or
+# a members.manage holder who is not one of them).
+app/api/v1/endpoints/leave_requests.py::create_leave_request
+app/api/v1/endpoints/leave_requests.py::get_leave_request
+app/api/v1/endpoints/leave_requests.py::get_leave_request_config
+app/api/v1/endpoints/leave_requests.py::list_leave_requests_to_decide
+app/api/v1/endpoints/leave_requests.py::list_my_leave_requests
+app/api/v1/endpoints/leave_requests.py::vote_on_leave_request
+app/api/v1/endpoints/leave_requests.py::withdraw_leave_request
