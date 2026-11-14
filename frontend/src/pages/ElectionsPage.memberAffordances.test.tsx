@@ -129,6 +129,25 @@ describe('ElectionsPage member affordances', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('names the settings link in the header for a secretary', async () => {
+    mockCanManage = true;
+
+    renderWithRouter(<ElectionsPage />);
+
+    const settings = await screen.findByRole('link', { name: 'Election Settings' });
+    expect(settings).toHaveAttribute('href', '/elections/settings');
+    expect(settings).toHaveTextContent('Election Settings');
+  });
+
+  it('does not offer the settings link to a member', async () => {
+    renderWithRouter(<ElectionsPage />);
+
+    await waitFor(() => {
+      expect(mockGetElections).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole('link', { name: 'Election Settings' })).not.toBeInTheDocument();
+  });
+
   it('requests create-dialog support data for a secretary', async () => {
     mockCanManage = true;
 

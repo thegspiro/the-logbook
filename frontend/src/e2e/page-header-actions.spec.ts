@@ -75,17 +75,26 @@ test.describe('page header buttons on a phone', () => {
     expect(admin.width).toBeGreaterThan(200);
   });
 
-  test('an icon-only link a manager is shown stays square', async ({ page }) => {
-    // The Elections settings link sits straight in the header and was styled
-    // by hand, without btn-icon-sm; the rule above stretched it across the
-    // row. Only managers see it, so a fixture without the grant never did.
+  test("a manager's labelled Elections settings link fills its row above Create Election", async ({ page }) => {
+    // The settings link was an unlabelled gear that officers missed; it now
+    // carries its name like Facilities' and Minutes'. Only managers see it, so
+    // the grant is what puts it in the header at all.
     await open(page, '/elections', 390, ['elections.manage']);
-    const settings = page.getByRole('link', { name: 'Election settings' });
-    await expect(settings).toBeVisible();
-    const rect = await settings.boundingBox();
+    const settings = await box(page, 'Election Settings');
+    const create = await box(page, 'Create Election');
 
-    expect(Math.round(rect?.width ?? 0)).toBe(44);
-    expect(Math.round(rect?.height ?? 0)).toBe(44);
+    const attendance = page.getByRole('link', { name: 'Meeting attendance' });
+    await expect(attendance).toBeVisible();
+    const icon = await attendance.boundingBox();
+
+    // The help and attendance icons keep their squares on the named link's
+    // row, and the named link fills what is left of it, so it reads as a
+    // button rather than a 44px gear; Create Election takes the next row.
+    expect(Math.round(icon?.width ?? 0)).toBe(44);
+    expect(Math.round(icon?.y ?? -1)).toBe(settings.y);
+    expect(settings.width).toBeGreaterThan(200);
+    expect(create.y).toBeGreaterThan(settings.y);
+    expect(create.width).toBeGreaterThan(settings.width);
   });
 });
 
