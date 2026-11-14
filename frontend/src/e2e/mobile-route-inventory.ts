@@ -254,7 +254,7 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet',
   },
   {
-    path: '/elections/:electionId',
+    path: '/elections/:electionId/*',
     source: 'src/modules/elections/routes.tsx',
     coverage: 'exempt',
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',

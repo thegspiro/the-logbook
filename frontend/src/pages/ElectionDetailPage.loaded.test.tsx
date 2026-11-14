@@ -114,13 +114,13 @@ describe('ElectionDetailPage, loaded', () => {
     expect(within(progress).getByRole('listitem', { current: 'step' })).toHaveTextContent('Voting Open');
   });
 
-  // aria-controls pointed at panels that did not exist.
-  it('renders the selected tab in a panel the tab controls', async () => {
+  // Sections are addresses now, so the header links to them and marks the
+  // open one; the Overview is the election's own address.
+  it('links each section from the header and marks the Overview as open', async () => {
     await renderPage();
-    const panel = screen.getByRole('tabpanel');
-    const tab = screen.getByRole('tab', { selected: true });
-    expect(tab).toHaveAttribute('aria-controls', panel.id);
-    expect(panel).toHaveAttribute('aria-labelledby', tab.id);
+    const sections = screen.getByRole('navigation', { name: 'Election sections' });
+    expect(within(sections).getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
+    expect(within(sections).getByRole('link', { name: /^Ballot/ })).toHaveAttribute('href', '/elections/e-1/ballot');
   });
 
   // The reason was a hover title on a disabled button.

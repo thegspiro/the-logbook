@@ -1190,7 +1190,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | URL                     | Page                        | Permission         |
 | ----------------------- | --------------------------- | ------------------ |
 | `/elections`            | Elections List              | Authenticated      |
-| `/elections/:id`        | Election Detail             | Authenticated      |
+| `/elections/:id/*`      | Election Detail             | Authenticated      |
 | `/elections/settings`   | Election Settings           | `elections.manage` |
 | `/elections/attendance` | Election Meeting Attendance | `elections.manage` |
 

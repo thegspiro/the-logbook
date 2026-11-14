@@ -1,194 +1,84 @@
 /**
  * Election Workflow Tabs
  *
- * Organizes the ElectionDetailPage secretary controls into a tabbed
- * interface so the secretary can focus on one task at a time instead
- * of scrolling through a monolithic page.
- *
- * Tabs adapt based on election status — e.g., "Ballot" tab only shows
- * in draft, "Results" tab only shows when results are available.
+ * The section links in an election's header: Overview, then every section
+ * this viewer may open. Links, not ARIA tabs: each section is its own route
+ * (`electionSectionPath`), so the row is a `<nav>` marking the open one with
+ * `aria-current="page"`, and a section can be bookmarked, shared, refreshed
+ * into and reached with the Back button. Which sections show is decided by
+ * `visibleElectionSections`, which the page also uses to refuse a section
+ * this viewer may not open.
  */
 
-import React, { useEffect, useMemo } from 'react';
-import { ClipboardList, Users, Vote, BarChart3, Shield, UserCheck, Handshake, FileText, Megaphone } from 'lucide-react';
+import React, { useId } from 'react';
+import { Link } from 'react-router';
+import { LayoutDashboard } from 'lucide-react';
 import type { Election } from '../../../types/election';
-import { ElectionStatus } from '../../../constants/enums';
-
-interface Tab {
-  id: string;
-  label: string;
-  icon: React.ElementType;
-  badge?: number | undefined;
-  show: boolean;
-}
+import { ScrollCueRow } from '../../../components/ux/ScrollCueRow';
+import { electionSectionPath, visibleElectionSections, type ElectionSection } from '../electionSections';
 
 interface ElectionWorkflowTabsProps {
+  electionId: string;
   election: Election;
   canManage: boolean;
-  activeTab: string;
-  onTabChange: (tabId: string, options?: { replace?: boolean }) => void;
-  /** Nominees on the Candidates tab; undefined until the page has counted them. */
+  /** The open section; null is the Overview. */
+  activeSection: ElectionSection | null;
   candidateCount?: number | undefined;
 }
 
 export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
+  electionId,
   election,
   canManage,
-  activeTab,
-  onTabChange,
+  activeSection,
   candidateCount,
 }) => {
-  const tabs = useMemo((): Tab[] => {
-    const isDraft = election.status === ElectionStatus.DRAFT;
-    const isNominations = election.status === ElectionStatus.NOMINATIONS;
-    const isOpen = election.status === ElectionStatus.OPEN;
-    const isClosed = election.status === ElectionStatus.CLOSED;
-    const isCancelled = election.status === ElectionStatus.CANCELLED;
-    const resultsAvailable = isClosed || election.results_visible_immediately;
-    const ballotItemCount = election.ballot_items?.length ?? 0;
-
-    return [
-      {
-        id: 'ballot',
-        label: 'Ballot',
-        icon: ClipboardList,
-        badge: ballotItemCount,
-        show: canManage && !isCancelled,
-      },
-      {
-        id: 'nominations',
-        label: 'Nominations',
-        icon: Megaphone,
-        // Members see the tab while nominations are open; managers keep it
-        // in draft too so they can review pending acceptances.
-        show: isNominations || (canManage && isDraft),
-      },
-      {
-        id: 'candidates',
-        label: 'Candidates',
-        icon: Users,
-        badge: candidateCount,
-        show: canManage,
-      },
-      {
-        id: 'eligibility',
-        label: 'Eligibility',
-        icon: UserCheck,
-        show: canManage && !isCancelled,
-      },
-      {
-        id: 'attendance',
-        label: 'Attendance',
-        icon: FileText,
-        // Kept after close, read-only (MeetingAttendance drops its controls
-        // when closed): the check-ins decided who could vote on an item that
-        // required attendance, and stay reviewable from the result (W50-79).
-        show: canManage && !isCancelled,
-      },
-      {
-        id: 'overrides',
-        label: 'Overrides',
-        icon: Shield,
-        show: canManage && !isCancelled,
-      },
-      {
-        id: 'proxies',
-        label: 'Proxy Voting',
-        icon: Handshake,
-        show: canManage && !isCancelled,
-      },
-      {
-        id: 'voting',
-        label: 'Cast Vote',
-        icon: Vote,
-        show: isOpen,
-      },
-      {
-        id: 'results',
-        label: 'Results',
-        icon: BarChart3,
-        show: resultsAvailable,
-      },
-    ].filter((t) => t.show);
-  }, [election, canManage, candidateCount]);
-
-  // Auto-select first visible tab if active tab is hidden
-  const validActiveTab = tabs.find((t) => t.id === activeTab) ? activeTab : (tabs[0]?.id ?? 'ballot');
-
-  // Sync the corrected tab back to the parent: the parent renders the panels
-  // off its own activeTab state, so without this a non-manager (whose visible
-  // tab set excludes the parent's default 'ballot') would see a highlighted
-  // tab with no panel rendered beneath it. The correction replaces rather
-  // than pushes: a pushed entry would make Back return to the forbidden tab,
-  // which re-triggers this effect — a loop the user cannot escape.
-  useEffect(() => {
-    if (validActiveTab !== activeTab) {
-      onTabChange(validActiveTab, { replace: true });
-    }
-  }, [validActiveTab, activeTab, onTabChange]);
-
-  // Only the selected tab is in the tab order (tabIndex -1 on the rest), so
-  // the arrow keys are the one way a keyboard reaches the others — the
-  // WAI-ARIA tabs pattern, with selection following focus.
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    const index = tabs.findIndex((tab) => tab.id === validActiveTab);
-    let next: number;
-    if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
-    else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
-    else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = tabs.length - 1;
-    else return;
-    event.preventDefault();
-    const target = tabs[next];
-    if (!target) return;
-    onTabChange(target.id);
-    document.getElementById(`tab-${target.id}`)?.focus();
-  };
+  const labelId = useId();
+  const items = [
+    { id: null, label: 'Overview', icon: LayoutDashboard, badge: undefined },
+    ...visibleElectionSections(election, canManage, candidateCount),
+  ];
 
   return (
-    <div className="mb-6">
-      <nav
-        className="border-theme-surface-border flex gap-1 overflow-x-auto border-b pb-1"
-        role="tablist"
-        aria-label="Election management sections"
-        onKeyDown={handleKeyDown}
+    <nav aria-labelledby={labelId} className="border-theme-surface-border border-t">
+      {/* One name for the landmark and its scrolling row, as SectionNav does:
+          the mobile sweep wants a scroll region labelled, and pointing both at
+          one heading names it without saying it twice. */}
+      <span id={labelId} className="sr-only">
+        Election sections
+      </span>
+      <ScrollCueRow
+        className="flex gap-1 px-2"
+        revealKey={activeSection ?? 'overview'}
+        aria-labelledby={labelId}
+        data-mobile-scroll-region
       >
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = validActiveTab === tab.id;
+        {items.map((item) => {
+          const Icon = item.icon;
+          const isActive = item.id === activeSection;
           return (
-            <button
-              key={tab.id}
-              id={`tab-${tab.id}`}
-              role="tab"
-              aria-selected={isActive}
-              aria-controls={`panel-${tab.id}`}
-              tabIndex={isActive ? 0 : -1}
-              onClick={() => onTabChange(tab.id)}
-              className={`flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
+            <Link
+              key={item.id ?? 'overview'}
+              to={electionSectionPath(electionId, item.id)}
+              aria-current={isActive ? 'page' : undefined}
+              className={`focus:ring-theme-focus-ring touch:min-h-11 -mb-px flex items-center gap-1.5 border-b-2 px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
                 isActive
-                  ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                  : 'text-theme-text-muted hover:text-theme-text-secondary hover:border-theme-surface-border border-transparent'
+                  ? 'text-theme-text-primary border-red-800'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
               }`}
             >
-              <Icon className="h-4 w-4" aria-hidden="true" />
-              {tab.label}
-              {tab.badge != null && tab.badge > 0 && (
-                <span
-                  className={`ml-1 rounded-full px-1.5 py-0.5 text-xs ${
-                    isActive
-                      ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400'
-                      : 'bg-theme-surface-secondary text-theme-text-muted'
-                  }`}
-                >
-                  {tab.badge}
+              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {item.label}
+              {item.badge != null && item.badge > 0 && (
+                <span className="bg-theme-surface-secondary text-theme-text-muted ml-1 rounded-full px-1.5 py-0.5 text-xs">
+                  {item.badge}
                 </span>
               )}
-            </button>
+            </Link>
           );
         })}
-      </nav>
-    </div>
+      </ScrollCueRow>
+    </nav>
   );
 };
 

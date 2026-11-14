@@ -1,10 +1,10 @@
 /**
- * W50-69 — a clone lands on the draft's Ballot tab.
+ * W50-69 — a clone lands on the draft's Ballot section.
  *
- * `fetchElection` auto-selects Results when the URL names no tab and the
- * election has results to show. The clone is a draft with no ballot yet, so
- * the navigation after `POST /elections/{id}/clone` must name `?tab=ballot`
- * rather than hand the officer a "Quorum Met / 0 votes" Results panel.
+ * The clone is a draft with no ballot yet, so the navigation after
+ * `POST /elections/{id}/clone` names the Ballot section: setting up the ballot
+ * is what the officer does next, and a "Quorum Met / 0 votes" Results panel
+ * (which the old auto-select used to show) is not.
  *
  * Rendered rather than source-asserted: the behaviour is the page's clone
  * handler and the modal's submit together.
@@ -114,7 +114,7 @@ describe('ElectionDetailPage clone landing (W50-69)', () => {
     window.history.replaceState({}, '', '/elections/e-1?tab=results');
   });
 
-  it('navigates to the new draft with ?tab=ballot after a successful clone', async () => {
+  it("navigates to the new draft's Ballot section after a successful clone", async () => {
     const user = userEvent.setup();
     renderWithRouter(<ElectionDetailPage />);
 
@@ -126,7 +126,7 @@ describe('ElectionDetailPage clone landing (W50-69)', () => {
 
     expect(cloneElection).toHaveBeenCalledWith('e-1', expect.objectContaining({ title: 'Officer Election (Copy)' }));
     expect(toastSuccess).toHaveBeenCalledWith('Draft election created');
-    expect(mockNavigate).toHaveBeenCalledWith('/elections/e-2?tab=ballot');
+    expect(mockNavigate).toHaveBeenCalledWith('/elections/e-2/ballot');
   });
 
   it('stays put and shows the error when the clone is refused', async () => {

@@ -1,16 +1,17 @@
 /**
- * ElectionWorkflowTabs — tab validity sync tests
+ * ElectionWorkflowTabs — the section links in an election's header.
  *
- * The parent (ElectionDetailPage) renders panels off its own activeTab
- * state, which defaults to the manager-only 'ballot' tab. For a
- * non-manager the component must push the corrected tab back up via
- * onTabChange, otherwise no panel renders under the highlighted tab.
+ * Each section is its own address, so these are links marking the open one
+ * with aria-current, not ARIA tabs; which sections appear is
+ * visibleElectionSections' decision, covered in electionSections.test.ts.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { ElectionWorkflowTabs } from './ElectionWorkflowTabs';
 import type { Election } from '../../../types/election';
+import type { ElectionSection } from '../electionSections';
 
 const baseElection = {
   id: 'el1',
@@ -36,79 +37,59 @@ const baseElection = {
   updated_at: '2026-06-01T00:00:00Z',
 } as unknown as Election;
 
-describe('ElectionWorkflowTabs', () => {
-  const onTabChange = vi.fn();
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('redirects a non-manager away from the hidden ballot tab to the first visible tab', () => {
-    render(
-      <ElectionWorkflowTabs election={baseElection} canManage={false} activeTab="ballot" onTabChange={onTabChange} />
-    );
-
-    // Non-managers viewing an OPEN election only see 'voting' (results are
-    // hidden until close), so the parent must be told to switch to it.
-    expect(onTabChange).toHaveBeenCalledWith('voting', { replace: true });
-  });
-
-  it('keeps a manager on the ballot tab', () => {
-    render(
-      <ElectionWorkflowTabs election={baseElection} canManage={true} activeTab="ballot" onTabChange={onTabChange} />
-    );
-
-    expect(onTabChange).not.toHaveBeenCalled();
-  });
-
-  it('redirects when the active tab becomes hidden after a status change', () => {
-    const closedElection = {
-      ...baseElection,
-      status: 'closed',
-    } as unknown as Election;
-
-    render(
-      <ElectionWorkflowTabs election={closedElection} canManage={true} activeTab="voting" onTabChange={onTabChange} />
-    );
-
-    // 'voting' (Cast Vote) only shows while voting is open; the first
-    // visible tab for a closed election is 'ballot'. Attendance was the
-    // example here until it stayed, read-only, after close (W50-79).
-    expect(onTabChange).toHaveBeenCalledWith('ballot', { replace: true });
-  });
-
-  // W50-79: a membership item's attendance rule decided who could vote, so
-  // the attendance stays reviewable from the closed election.
-  it('keeps the Attendance tab on a closed election', () => {
-    const closedElection = { ...baseElection, status: 'closed' } as unknown as Election;
-
-    render(
+const renderLinks = (
+  activeSection: ElectionSection | null,
+  election: Election = baseElection,
+  candidateCount?: number
+) =>
+  render(
+    <MemoryRouter>
       <ElectionWorkflowTabs
-        election={closedElection}
-        canManage={true}
-        activeTab="attendance"
-        onTabChange={onTabChange}
+        electionId="el1"
+        election={election}
+        canManage
+        activeSection={activeSection}
+        candidateCount={candidateCount}
       />
-    );
+    </MemoryRouter>
+  );
 
-    expect(screen.getByRole('tab', { name: /Attendance/ })).toBeInTheDocument();
-    expect(onTabChange).not.toHaveBeenCalled();
+describe('ElectionWorkflowTabs', () => {
+  it('links the Overview and each section to its own address', () => {
+    renderLinks(null);
+    const nav = screen.getByRole('navigation', { name: 'Election sections' });
+
+    expect(within(nav).getByRole('link', { name: 'Overview' })).toHaveAttribute('href', '/elections/el1');
+    expect(within(nav).getByRole('link', { name: 'Eligibility' })).toHaveAttribute(
+      'href',
+      '/elections/el1/eligibility'
+    );
+    expect(within(nav).getByRole('link', { name: 'Integrity & Audit' })).toHaveAttribute(
+      'href',
+      '/elections/el1/integrity'
+    );
   });
 
-  // Only the selected tab is focusable, so without arrow keys a keyboard user
-  // could never leave it.
-  it('moves between tabs with the arrow keys, Home and End', () => {
-    render(
-      <ElectionWorkflowTabs election={baseElection} canManage={true} activeTab="ballot" onTabChange={onTabChange} />
-    );
-    const ballot = screen.getByRole('tab', { name: /Ballot/ });
-    fireEvent.keyDown(ballot, { key: 'ArrowRight' });
-    expect(onTabChange).toHaveBeenLastCalledWith('candidates');
-    fireEvent.keyDown(ballot, { key: 'ArrowLeft' });
-    expect(onTabChange).toHaveBeenLastCalledWith('voting');
-    fireEvent.keyDown(ballot, { key: 'End' });
-    expect(onTabChange).toHaveBeenLastCalledWith('voting');
-    fireEvent.keyDown(ballot, { key: 'Home' });
-    expect(onTabChange).toHaveBeenLastCalledWith('ballot');
+  it('marks the Overview as the open page when no section is', () => {
+    renderLinks(null);
+    expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Eligibility' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('marks the open section and only that one', () => {
+    renderLinks('proxies');
+    expect(screen.getByRole('link', { name: 'Proxy Voting' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('keeps the Attendance link on a closed election', () => {
+    renderLinks(null, { ...baseElection, status: 'closed' });
+    expect(screen.getByRole('link', { name: 'Attendance' })).toHaveAttribute('href', '/elections/el1/attendance');
+    expect(screen.getByRole('link', { name: 'Results' })).toBeInTheDocument();
+  });
+
+  it('shows the nominee count beside Candidates', () => {
+    renderLinks(null, baseElection, 3);
+    expect(screen.getByRole('link', { name: /^Candidates\s*3$/ })).toBeInTheDocument();
   });
 });
