@@ -64,6 +64,7 @@ from app.schemas.training_program import (
 )
 from app.services.notifications_service import NotificationsService
 from app.services.program_requirement_deadlines import notify_completed_requirements
+from app.services.shift_evaluation_template_service import INACTIVE_FORM_MESSAGE
 from app.services.training_compliance import (
     RequirementEvaluation,
     evaluate_member_requirement_detail,
@@ -89,7 +90,7 @@ from app.utils.checklist import (
 from app.utils.json_ids import json_array_contains, normalize_id_list
 from app.utils.model_updates import apply_updates
 from app.utils.org_locks import PROGRAM_ENROLLMENT, lock_organization_scope
-from app.utils.org_scoping import assert_all_in_org, is_in_org
+from app.utils.org_scoping import assert_all_in_org
 from app.utils.org_timezone import (
     local_date,
     resolve_org_today,
@@ -602,19 +603,31 @@ class TrainingProgramService:
         return None
 
     async def _validate_evaluation_template(
-        self, template_id: Any, organization_id: UUID | str
+        self,
+        template_id: Any,
+        organization_id: UUID | str,
+        current: Any = None,
     ) -> Optional[str]:
-        """Refuse an evaluation template that is not this department's.
+        """Refuse an evaluation template that is not this department's, or
+        one deactivated (unless it is the program's form already).
 
         None is "no form" and always allowed. The message does not say whether
         the id exists elsewhere, so it is no cross-tenant oracle (XC-1).
         """
         if template_id is None:
             return None
-        if not await is_in_org(
-            self.db, ShiftEvaluationTemplate, template_id, organization_id
-        ):
+        is_active = (
+            await self.db.execute(
+                select(ShiftEvaluationTemplate.is_active).where(
+                    ShiftEvaluationTemplate.id == str(template_id),
+                    ShiftEvaluationTemplate.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        if is_active is None:
             return "Invalid shift evaluation template"
+        if not is_active and str(template_id) != str(current or ""):
+            return INACTIVE_FORM_MESSAGE
         return None
 
     async def _validate_target_roles(
@@ -1481,7 +1494,9 @@ class TrainingProgramService:
             data["prerequisite_program_ids"] = list(prerequisite_ids) or None
         if "shift_evaluation_template_id" in data:
             template_error = await self._validate_evaluation_template(
-                data["shift_evaluation_template_id"], organization_id
+                data["shift_evaluation_template_id"],
+                organization_id,
+                current=program.shift_evaluation_template_id,
             )
             if template_error:
                 return None, template_error
