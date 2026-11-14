@@ -798,6 +798,37 @@ Phase 3, photos and media (2026-11-13), ships with these:
 - **Documents (letters, minutes, scanned PDFs) are phase 4.** The media
   upload refuses PDF and office files.
 
+## Department Store — Decisions for the Owner (2026-11-13)
+
+From the department store follow-up
+([W67b](workflow-review/W67b-department-store-follow-up.md)). Both were seen in
+the browser. Neither is fixed, because each changes what departments already
+see or rely on.
+
+- **Tracked stock is sold again in every order window (W67b-1, HIGH).**
+  Remaining stock is `stock_quantity` minus the units ordered in the current
+  window. Nothing decrements `stock_quantity`, so a unit sold in one window is
+  offered again in the next, or in a second window open at the same time. One
+  M hoodie with stock 1 was sold twice. **Decision needed:** what "stock"
+  means.
+  - (a) Units on hand: decrement on order and restore on cancel.
+  - (b) Count every non-cancelled order across all windows.
+
+  Either changes the availability existing departments see.
+
+- **Money on an order the member cancels drops out of the books (W67b-2,
+  HIGH).**
+  - A part payment leaves an order at "Awaiting payment", which a member may
+    cancel.
+  - Once cancelled, the order leaves every collected and outstanding total.
+  - My Orders files it as settled, and no admin is notified.
+  - A cancel while a reported payment is pending leaves money that can be
+    neither recorded nor refunded.
+
+  **Decision needed:** whether a member may cancel once money is recorded or
+  reported. The likely shape is to refuse it, notify staff on any member
+  cancel, and list "cancelled with money held" on the admin hub.
+
 ## Medical Screening — Gaps for the Owner (2026-11-02, updated 2026-11-03)
 
 From the medical-screening deep dive

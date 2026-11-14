@@ -159,6 +159,49 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 ## Log
 
+### W67b — The department store, follow-up — 2026-11-13
+
+The owner asked for a review of the department store. Driven as
+`quartermaster`, `member` and `member2` at 1280×900 on a fresh database.
+
+It covered what W67 did not reach: shipping, embroidery, part payments, a
+member cancelling a part-paid order, status moves out of order, and stock
+across two open windows. It also read the backend paths no earlier pass
+covered.
+
+Held:
+
+- the cart, checkout and server agree on tax and totals;
+- the saved cart survives a reload;
+- the member's cancel asks first;
+- a cancelled order refuses a payment;
+- the browser signals were clean.
+
+Nothing was changed. Flagged, mirrored to KNOWN_LIMITATIONS:
+
+- W67b-1 (HIGH): tracked stock is sold again in every order window.
+- W67b-2 (HIGH): money on an order the member cancels drops out of the
+  collected totals, and nobody is told.
+
+Open:
+
+- W67b-3 (HIGH): no screen shows a shipped order's address, the delivery
+  choice or the member's notes;
+- W67b-4 (MED): order status can move backwards, or to Cancelled without
+  the cancel record;
+- W67b-5 (MED): no admin cancel button;
+- W67b-6 (MED): sizes can be priced below zero;
+- W67b-7 (MED): overpayment is accepted;
+- W67b-8 (LOW): refund is one tap and always refunds everything;
+- W67b-9 (LOW): a pickup order keeps a home address it does not need;
+- W67b-10 (LOW): loading checkout directly bounces to the store.
+
+Read from code, not driven: W67b-11 to W67b-17 (window lifecycle, vendor
+order, payment reports and notification gaps). Details in
+[`W67b-department-store-follow-up.md`](./W67b-department-store-follow-up.md).
+
+Gate: documentation only, no suite needed.
+
 ### W09 second pass — Import members from a spreadsheet — 2026-11-10
 
 The owner asked to continue with W09. Driven as `admin` at 1280×900 and
