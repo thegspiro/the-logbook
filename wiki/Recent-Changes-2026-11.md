@@ -5,6 +5,18 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 14, 2026 (PayPal)
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-paypal-settings-november-14-2026).
+
+- **PayPal**: a connected PayPal card has a **Settings** button. Change the
+  environment, credentials, Webhook ID or automatic settlement without
+  disconnecting; blank credential boxes keep the saved ones.
+- **Sandbox and live**: switching PayPal between them now needs that
+  environment's Client ID and Client Secret in the same save. Before, the old
+  pair was kept and every payment would have been rejected.
+
 ## Recent changes: November 13, 2026 (Zeffy)
 
 The engineering audit is

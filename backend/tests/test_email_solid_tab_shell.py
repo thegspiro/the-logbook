@@ -95,6 +95,16 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.MEETING_WAIVER_REQUESTED.value: "1c6632035ccd",
     EmailTemplateType.MEETING_WAIVER_DECIDED.value: "1c6632035ccd",
     EmailTemplateType.MEETING_WAIVER_WITHDRAWN.value: "1c6632035ccd",
+    EmailTemplateType.ELECTION_NOMINATIONS_OPEN.value: "c4e81b7a2d95",
+    EmailTemplateType.ELECTION_NOMINATED.value: "c4e81b7a2d95",
+    EmailTemplateType.ELECTION_NOMINATION_ACCEPTED_FOR_YOU.value: "c4e81b7a2d95",
+    EmailTemplateType.ELECTION_PROXY_AUTHORIZED.value: "c4e81b7a2d95",
+    EmailTemplateType.PRE_MEETING_PACKAGE.value: "c4e81b7a2d95",
+    EmailTemplateType.MINUTES_CIRCULATED.value: "c4e81b7a2d95",
+    EmailTemplateType.MINUTES_ACTION_ITEMS.value: "c4e81b7a2d95",
+    EmailTemplateType.MINUTES_ACTION_ITEM_REMINDER.value: "c4e81b7a2d95",
+    EmailTemplateType.MINUTES_OPEN_ITEMS_DIGEST.value: "c4e81b7a2d95",
+    EmailTemplateType.MEETING_ACTION_ITEM_REMINDER.value: "c4e81b7a2d95",
 }
 
 

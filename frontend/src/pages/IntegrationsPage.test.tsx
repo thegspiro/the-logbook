@@ -702,6 +702,53 @@ describe('IntegrationsPage', () => {
       expect(mockConnectIntegration).not.toHaveBeenCalled();
     });
 
+    it('opens Settings on a connected PayPal card, prefilled, and saves only what was typed', async () => {
+      const user = userEvent.setup();
+      const paypalConnected = {
+        ...paypalAvailable,
+        status: 'connected' as const,
+        enabled: true,
+        config: { environment: 'live', webhook_id: 'WH-LIVE', auto_apply_payments: true },
+      };
+      mockGetIntegrations.mockResolvedValue([paypalConnected]);
+      mockUpdateIntegration.mockResolvedValue(paypalConnected);
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-paypal');
+      await user.click(within(card).getByRole('button', { name: 'PayPal settings' }));
+
+      const dialog = await screen.findByRole('dialog', { name: 'PayPal settings' });
+      // PayPal cannot connect without both credentials, so a pair is stored.
+      expect(within(dialog).getByLabelText('Client ID')).toHaveAttribute(
+        'placeholder',
+        'Leave blank to keep the current ID'
+      );
+      expect(within(dialog).getByLabelText('Client Secret')).toHaveAttribute(
+        'placeholder',
+        'Leave blank to keep the current secret'
+      );
+      expect(within(dialog).getByLabelText('Environment')).toHaveValue('live');
+      expect(within(dialog).getByLabelText('Webhook ID')).toHaveValue('WH-LIVE');
+      expect(dialog).toHaveTextContent('Changing it needs the Client ID and Client Secret of that environment’s app.');
+      expect(dialog).toHaveTextContent(
+        'Saved settings apply to the next payment PayPal reports. The webhook address does not change.'
+      );
+
+      const webhookId = within(dialog).getByLabelText('Webhook ID');
+      await user.clear(webhookId);
+      await user.type(webhookId, 'WH-NEW');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('pp-1', {
+        environment: 'live',
+        client_id: undefined,
+        client_secret: undefined,
+        webhook_id: 'WH-NEW',
+        auto_apply_payments: true,
+      });
+      expect(mockConnectIntegration).not.toHaveBeenCalled();
+    });
+
     it('does not tell a first PayPal connection that a secret is already stored', async () => {
       const user = userEvent.setup();
       mockGetIntegrations.mockResolvedValue([paypalAvailable]);
