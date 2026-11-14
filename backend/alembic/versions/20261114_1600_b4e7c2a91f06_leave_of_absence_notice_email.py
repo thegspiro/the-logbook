@@ -10,8 +10,12 @@ twice.
 
 Downgrade deletes any rows of the new type, then narrows the enum.
 
+Also joins the two heads ``main`` carries: ``4d8e2b6f1c93`` (history
+documents) and ``c4e81b7a2d95`` (election and minutes templates), so this
+widening builds on the latter's type list rather than beside it.
+
 Revision ID: b4e7c2a91f06
-Revises: 7a3c9e1d5b42
+Revises: 4d8e2b6f1c93, c4e81b7a2d95
 Create Date: 2026-11-14 16:00:00
 """
 
@@ -22,14 +26,14 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "b4e7c2a91f06"
-down_revision: Union[str, None] = "7a3c9e1d5b42"
+down_revision: Union[str, Sequence[str], None] = ("4d8e2b6f1c93", "c4e81b7a2d95")
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 _NEW_TEMPLATE_TYPES = ("leave_of_absence_notice",)
 
-# EmailTemplateType as this revision finds it (533f8aba187e's ALL_TYPES,
-# reached through 7a3c9e1d5b42). Written out rather than imported so a later
+# EmailTemplateType as this revision finds it (c4e81b7a2d95's ALL_TYPES).
+# Written out rather than imported so a later
 # edit to the enum cannot rewrite this step.
 _EXISTING_TEMPLATE_TYPES = (
     "welcome",
@@ -98,6 +102,16 @@ _EXISTING_TEMPLATE_TYPES = (
     "meeting_waiver_decided",
     "meeting_waiver_withdrawn",
     "shift_evaluation_preceptor_link",
+    "election_nominations_open",
+    "election_nominated",
+    "election_nomination_accepted_for_you",
+    "election_proxy_authorized",
+    "pre_meeting_package",
+    "minutes_circulated",
+    "minutes_action_items",
+    "minutes_action_item_reminder",
+    "minutes_open_items_digest",
+    "meeting_action_item_reminder",
     "custom",
 )
 

@@ -1281,6 +1281,26 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'history.manage',
         module: 'history',
       },
+      { path: '/history/documents', label: 'Documents', module: 'history' },
+      {
+        path: '/history/documents/upload',
+        label: 'Upload documents',
+        permission: 'history.manage',
+        module: 'history',
+        note: 'PDFs and scans, up to 25 at once; a Word file is refused with a note to convert it to PDF.',
+      },
+      {
+        path: '/history/documents/:documentId',
+        label: 'Document',
+        module: 'history',
+        note: 'Open shows the stripped copy in a new tab; keepers also see the original download and research notes.',
+      },
+      {
+        path: '/history/documents/:documentId/edit',
+        label: 'Edit a document',
+        permission: 'history.manage',
+        module: 'history',
+      },
       { path: '/history/albums', label: 'Albums', module: 'history' },
       { path: '/history/albums/:albumId', label: 'Album', module: 'history' },
       {

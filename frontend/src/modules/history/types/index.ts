@@ -211,7 +211,7 @@ export interface ClearanceStepState {
 
 export interface ClearanceRequest {
   id: string;
-  record_type: 'member' | 'media';
+  record_type: 'member' | 'media' | 'document';
   record_id: string;
   record_label: string;
   revision_number: number;
@@ -337,9 +337,9 @@ export interface ClearanceStep {
 
 export interface ClearanceReview {
   request: ClearanceRequest;
-  /** A person or a photo/media item, as members would read it: which one is
-   * `request.record_type`. */
-  record: HistoricalMemberMemberView | MediaMemberView;
+  /** A person, a photo/media item or a document, as members would read it:
+   * which one is `request.record_type`. */
+  record: HistoricalMemberMemberView | MediaMemberView | DocumentMemberView;
 }
 
 export interface PeopleQuery {
@@ -650,9 +650,23 @@ export interface AlbumSummary {
   item_count: number;
 }
 
+export interface AlbumEntry {
+  kind: 'media' | 'document';
+  media: MediaSummary | null;
+  document: DocumentSummary | null;
+}
+
 export interface AlbumDetail extends AlbumSummary {
+  /** The album's photos (kept for the phase 3 screens). */
   items: MediaSummary[];
+  /** Photos and documents, in the album's one order. */
+  entries: AlbumEntry[];
   can_edit: boolean;
+}
+
+export interface AlbumEntryRef {
+  kind: 'media' | 'document';
+  id: string;
 }
 
 export interface MediaQuery {
@@ -665,3 +679,129 @@ export interface MediaQuery {
   limit?: number | undefined;
   offset?: number | undefined;
 }
+
+// --- Documents ---
+
+export const DocumentKind = {
+  PDF: 'pdf',
+  IMAGE: 'image',
+} as const;
+export type DocumentKind = (typeof DocumentKind)[keyof typeof DocumentKind];
+
+export interface DocumentSummary {
+  id: string;
+  kind: DocumentKind;
+  title: string;
+  taken_date: string | null;
+  taken_date_precision: DatePrecision;
+  taken_date_circa: boolean;
+  document_type_name: string | null;
+  page_count: number | null;
+  has_thumbnail: boolean;
+  publication_level: PublicationLevel;
+}
+
+export interface DocumentList {
+  items: DocumentSummary[];
+  total: number;
+}
+
+interface DocumentCatalogue {
+  id: string;
+  kind: DocumentKind;
+  title: string;
+  description: string | null;
+  taken_date: string | null;
+  taken_date_precision: DatePrecision;
+  taken_date_circa: boolean;
+  place: string | null;
+  document_type_id: string | null;
+  document_type_name: string | null;
+  author: string | null;
+  recipient: string | null;
+  source_id: string | null;
+  source_name: string | null;
+  rights_note: string | null;
+  accession_number: string | null;
+  original_location: string | null;
+  transcription: string | null;
+  /** A long PDF was read only in part, so search covers part of it. */
+  text_truncated: boolean;
+  page_count: number | null;
+  width: number | null;
+  height: number | null;
+  has_thumbnail: boolean;
+  mime_type: string | null;
+  publication_level: PublicationLevel;
+}
+
+export interface DocumentMemberView extends DocumentCatalogue {
+  view: 'member';
+  tags: MediaTag[];
+}
+
+export interface DocumentFullView extends DocumentCatalogue {
+  view: 'full';
+  research_notes: string | null;
+  original_filename: string;
+  original_mime_type: string | null;
+  original_size_bytes: number | null;
+  batch_id: string | null;
+  tags: MediaTag[];
+  published_at: string | null;
+  revision_number: number;
+  public_revision_number: number | null;
+  public_changes_pending: boolean;
+  clearance_required: boolean;
+  cleared_for_public: boolean;
+  clearance: ClearanceRequest | null;
+  can_edit: boolean;
+  can_publish: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DocumentView = DocumentFullView | DocumentMemberView;
+
+/** The catalogue fields a keeper sets. Update payloads send `null` to clear. */
+export interface DocumentFields extends Omit<MediaFields, 'creator'> {
+  document_type_id?: string | null | undefined;
+  author?: string | null | undefined;
+  recipient?: string | null | undefined;
+  transcription?: string | null | undefined;
+}
+
+export interface DocumentUploadFields extends DocumentFields {
+  tag_member_ids?: string[] | undefined;
+}
+
+export interface DocumentUpdate extends DocumentFields {
+  edit_kind?: EditKind | undefined;
+  edit_note?: string | undefined;
+}
+
+/** A department's managed list entry: a source or a document type. */
+export interface HistoryDocumentType {
+  id: string;
+  name: string;
+  sort_order: number;
+  is_retired: boolean;
+  usage_count: number;
+}
+
+export interface DocumentQuery {
+  search?: string | undefined;
+  document_type_id?: string | undefined;
+  decade?: number | undefined;
+  album_id?: string | undefined;
+  member_id?: string | undefined;
+  level?: PublicationLevel | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
+}
+
+/** Whether a clearance review's record is a document: its kind is a
+ * document's, not a photo's. */
+export const isDocumentRecord = (
+  record: HistoricalMemberMemberView | MediaMemberView | DocumentMemberView
+): record is DocumentMemberView => 'kind' in record && (record.kind === 'pdf' || record.kind === 'image');

@@ -38,6 +38,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings as app_settings
+from app.models.email_template import EmailTemplateType
 from app.models.meeting import ActionItemStatus, Meeting, MeetingActionItem
 from app.models.user import Organization, User
 from app.services.email_policy import (
@@ -45,8 +46,7 @@ from app.services.email_policy import (
     department_required_kinds,
     recipients_for,
 )
-from app.services.email_service import EmailService, wrap_email_body
-from app.services.email_theme import ACCENT_INDIGO, action
+from app.services.email_service import EmailService
 
 OPEN_STATUSES = (ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value)
 
@@ -173,19 +173,26 @@ async def _email(
     days_by_item: Dict[str, int],
 ) -> bool:
     ordered = sorted(items, key=lambda pair: days_by_item[str(pair[0].id)])
-    lines = "".join(
-        f"<li>{html.escape(item.description)} — "
-        f"{html.escape(urgency(days_by_item[str(item.id)]))}"
-        + (
+
+    def when(item: MeetingActionItem) -> str:
+        due = (
             f" ({item.due_date.strftime('%b %d, %Y')})"
             if item.due_date is not None
             else ""
         )
-        + f"<br><small>{html.escape(meeting_title or '')}</small></li>"
+        return f"{urgency(days_by_item[str(item.id)])}{due}"
+
+    lines = "".join(
+        f"<li>{html.escape(item.description)} — {html.escape(when(item))}"
+        f"<br><small>{html.escape(meeting_title or '')}</small></li>"
+        for item, meeting_title in ordered
+    )
+    text = "\n".join(
+        f"- {item.description} — {when(item)}"
+        + (f"\n  {meeting_title}" if meeting_title else "")
         for item, meeting_title in ordered
     )
     link = f"{app_settings.FRONTEND_URL.rstrip('/')}/action-items"
-    body = f"<ul>{lines}</ul>" + action(html.escape(link), "View your action items")
 
     first = ordered[0][0]
     if len(ordered) == 1:
@@ -196,18 +203,27 @@ async def _email(
             f", {overdue} overdue" if overdue else ""
         )
     try:
-        sent, _failed = await EmailService().send_email(
+        email_service = EmailService(organization)
+        rendered = await email_service.render_notice(
+            EmailTemplateType.MEETING_ACTION_ITEM_REMINDER,
+            {
+                "reminder_summary": subject,
+                "action_items_html": f"<ul>{lines}</ul>",
+                "action_items_text": text,
+                "action_items_url": link,
+            },
+            db,
+        )
+        if rendered is None:
+            return False
+        rendered_subject, html_body, text_body = rendered
+        sent, _failed = await email_service.send_email(
             to_emails=[member.email],
-            subject=subject,
-            html_body=wrap_email_body(
-                organization,
-                "Action item reminder",
-                body,
-                header_color=ACCENT_INDIGO,
-                chip="Meetings",
-            ),
+            subject=rendered_subject,
+            html_body=html_body,
+            text_body=text_body,
             db=db,
-            template_type="meeting_action_item_reminder",
+            template_type=EmailTemplateType.MEETING_ACTION_ITEM_REMINDER.value,
         )
         return bool(sent)
     except Exception as exc:

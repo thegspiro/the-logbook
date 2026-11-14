@@ -795,8 +795,42 @@ Phase 3, photos and media (2026-11-13), ships with these:
 - **A batch upload is not one transaction.** Each file is its own request; if
   the browser is closed part way, the files already sent stay as drafts and
   the rest were never uploaded. The shared `batch_id` identifies the set.
-- **Documents (letters, minutes, scanned PDFs) are phase 4.** The media
-  upload refuses PDF and office files.
+- **Documents (letters, minutes, scanned PDFs) are phase 4.** ✅ Shipped
+  2026-11-14; the media upload still refuses PDF and office files, which go
+  through the documents upload instead.
+
+Phase 4, documents (2026-11-14), ships with these:
+
+- **A PDF opens in a new tab, not inside the page.** The app is served with
+  `frame-ancestors 'none'` everywhere, and loosening it for one viewer would
+  loosen it for the whole app. The document page shows the first-page preview
+  and an Open link.
+- **What "stripped" covers for a PDF.** The copy members open is rebuilt from
+  its pages: no document information or XMP metadata, no JavaScript, automatic
+  actions, form scripts, embedded files or file-attachment annotations, and the
+  JPEG images inside lose their EXIF (and GPS). Not covered: text or a stamp
+  drawn on the page, a picture's own content, and image formats other than
+  JPEG inside the PDF, which are drawn as they are. The Historian still reads
+  a document before publishing it.
+- **No OCR.** Typed and already-OCR'd PDFs are searchable by their own text; a
+  scan is found by its catalogue and transcription (owner decision,
+  2026-11-14).
+- **Long PDFs are read in part.** Search reads at most 2,000 pages and 2 MB of
+  text; the document page says when a document ran past that.
+- **Word and other office files are refused.** Converted to PDF first, so
+  members can view them and their hidden author and edit history never reach
+  anyone (owner decision 3).
+- **A password-protected PDF is refused.** It can be neither stripped, read
+  nor previewed; remove the password and upload it again. A PDF restricted only
+  by its owner (it opens without a password) is accepted, and the copy members
+  open carries no restriction.
+- **The transcription and a PDF's text are stored unencrypted**, so they can be
+  searched; research notes stay encrypted and are not searched.
+- **A catalogued document is managed in History.** The Documents module
+  downloads it but will not rename, move or delete it, and nothing is uploaded
+  or moved into the History folder from there.
+- **New dependency: pypdfium2** (PDFium bindings, 5.15.2) draws the first
+  page; pypdf was already installed.
 
 ## Medical Screening — Gaps for the Owner (2026-11-02, updated 2026-11-03)
 
@@ -10274,16 +10308,28 @@ beyond the feature.
   already submitted are kept but no longer required, new ones are required,
   and close-out waits for them. Freezing the set at close-out would need a
   stored snapshot.
-- **No-show and pending crew are asked for an evaluation.** The rule mirrors
-  the trainee-report gate (only declined and cancelled seats are left out),
-  so the two agree; excusing no-shows would mean changing both.
+- ~~**No-show and pending crew are asked for an evaluation.**~~ Resolved
+  2026-11-14 (owner decision): only Assigned and Confirmed crew need a trainee
+  report or a shift evaluation, and close-out drafts reports for them alone
+  (`WORKING_ASSIGNMENT_STATUSES`).
 - **No requirement type counts the calls an evaluation records.** Evaluated
   shifts, transports and refusals are credited; the existing Calls type is
   still fed by shift reports.
-- **A department requirement of an evaluation type, linked into a program
+- ~~**A department requirement of an evaluation type, linked into a program
   with "Link existing", is not credited by evaluations.** A linked row is
   graded by the compliance engine, which has no branch for these types and
-  falls back to matching training records by type.
+  falls back to matching training records by type.~~ Resolved 2026-11-14
+  (owner decision: credit it, like a program's own): the compliance grader
+  counts the member's submitted evaluations for evaluated shifts, transports
+  and refusals (`load_evaluation_credits`), only once the member can see them
+  and worth the same units as program credit — both read the rules in
+  `app/services/shift_evaluation_rules.py` — windowed and prorated for leave
+  as shifts worked are. A training record no longer satisfies these types.
+  Every compliance screen reads the same count, so a linked row, My Training
+  and the matrix agree, and a submission, edit or revocation re-reads the
+  member's linked rows. An evaluation scoped to several programs counts once
+  toward a department requirement, and a general-form evaluation counts too:
+  the requirement is the member's, not one enrollment's.
 
 **Accepted for now**
 
@@ -10292,10 +10338,10 @@ beyond the feature.
   remarks and the narrative; calls, ratings and the rest reload empty. The
   restore logic predates evaluations, which now make leaving the report
   routine.
-- **Two evaluation credits to the same requirement at the same moment can
-  lose one.** The shared credit primitive computes the new value from an
-  unlocked read. It is shared by every credit source, so it is not changed
-  here.
+- ~~**Two evaluation credits to the same requirement at the same moment can
+  lose one.**~~ Resolved 2026-11-14: crediting and reversing lock the
+  progress row and the ledger lookup, and re-read the row rather than using
+  the session's copy (`tests/test_requirement_credit_locking.py`).
 - **Credit is not re-stated when a requirement's crediting rule changes**
   (its type, or "leave out the lowest rating"), **when an evaluation's
   combined scope shrinks**, or **when its shift is deleted, an outside entry
