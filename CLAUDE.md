@@ -1950,6 +1950,22 @@ plus an offset that can cross a date boundary: a record "made now" for a shift
 `date.today()`, `datetime.now()` or `datetime.utcnow()` under `backend/tests/`,
 and on a parameter default that names one of a module's `_clock()` values.
 
+**The nightly Clock Shift workflow** (`.github/workflows/clock-shift.yml`) runs
+the clock-sensitive tests with the clock moved to the hours this class fails at:
+around UTC midnight and US Eastern midnight for the backend
+(`backend/tests/clock_shift.py`), and the US evening in New York and UTC for the
+frontend (`frontend/src/test/clockShift.ts`). A red leg names a test that will
+fail on a real run at that hour. To reproduce one locally:
+
+```bash
+cd backend && CLOCK_SHIFT_AT=00:30 python -m pytest -p tests.clock_shift tests/<file>.py
+cd frontend && TZ=America/New_York CLOCK_SHIFT_AT=19:30 npx vitest run --config vitest.clock-shift.config.ts <file>
+```
+
+The backend plugin swaps the `datetime`/`date` classes the way freezegun does,
+so a test that compares a type by identity (`python_type is datetime`) cannot
+see through it; write `issubclass(python_type, datetime)`.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.
