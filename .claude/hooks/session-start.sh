@@ -213,6 +213,41 @@ log "building the schema (alembic upgrade head, then repair_schema)"
   # names its interpreter by absolute path, so it is immune to this PATH
   # ordering.
   if ! alembic upgrade head >/tmp/session-alembic.log 2>&1; then
+    # The database survives between sessions in one container, so a session
+    # that ran a branch's migrations leaves it stamped at a revision a later
+    # checkout does not have. Alembic then cannot place the database on this
+    # chain at all. That is not a broken chain and CI cannot see it, so say
+    # so plainly rather than sending the reader to the advice below, which is
+    # about a chain that really fails.
+    unknown_rev=$(sed -n "s/.*Can't locate revision identified by '\([0-9a-f]*\)'.*/\1/p" \
+      /tmp/session-alembic.log | sed -n 1p)
+    if [ -n "$unknown_rev" ]; then
+      # Revision files are named YYYYMMDD_HHMM_<rev>_<slug>.py, so the id in a
+      # file name finds the branches carrying it without reading any file.
+      # Plain grep, not grep -q, in these pipelines: under pipefail an early
+      # grep exit can kill the writer with SIGPIPE and turn a match into a
+      # failure (and `head` would do the same to the sed above).
+      carriers=""
+      for ref in $(git -C "$REPO" for-each-ref --format='%(refname:short)' refs/heads refs/remotes); do
+        if git -C "$REPO" ls-tree -r --name-only "$ref" -- backend/alembic/versions 2>/dev/null \
+          | grep "_${unknown_rev}_" >/dev/null; then
+          carriers="$carriers $ref"
+        fi
+      done
+      log "ERROR: $DB_NAME is at migration $unknown_rev, which this checkout does"
+      log "       not have. An earlier session applied another branch's migration"
+      log "       to this database; the migration chain itself is not at fault."
+      if [ -n "$carriers" ]; then
+        log "       Branches that have it:$carriers"
+      else
+        log "       No branch fetched here has it."
+      fi
+      log "       Either check out a branch that has it (or wait until one merges"
+      log "       into this branch's base) and re-run this hook, or drop the"
+      log "       database and re-run it to start from this checkout:"
+      log "         mysql -u root -e 'DROP DATABASE $DB_NAME'"
+      exit 1
+    fi
     log "ERROR: alembic upgrade head failed."
     log "       CI migrates an empty database, so this reproduces there ONLY if"
     log "       $DB_NAME was empty. If a previous session left tables behind,"
