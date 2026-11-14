@@ -210,6 +210,15 @@ export interface TrainingProgressReport {
 // Report Data: Annual Training
 // ============================================================================
 
+/** A leave of absence that touches a report's period. Never carries the reason or type. */
+export interface ReportLeavePeriod {
+  start_date: string;
+  /** Null for a leave with no end date. */
+  end_date: string | null;
+  /** False for a leave an officer marked exempt: requirements stayed in force. */
+  excuses_training: boolean;
+}
+
 export interface AnnualTrainingEntry {
   member_id: string;
   member_name: string;
@@ -220,6 +229,12 @@ export interface AnnualTrainingEntry {
   shifts_completed: number;
   calls_responded: number;
   avg_performance_rating?: number;
+  /**
+   * Months of the year leave excused, by the department's leave month rule
+   * and through today. Absent from a server that predates it.
+   */
+  leave_months?: number;
+  leave_periods?: ReportLeavePeriod[];
 }
 
 export interface AnnualTrainingSummary {
@@ -402,6 +417,10 @@ export interface ComplianceMemberEntry {
   compliance_percentage: number | null;
   overdue_items: string[];
   upcoming_deadlines: Array<{ name: string; due_date: string }>;
+  /** Leave in the past year. Changes no figure on this report. Absent from an older server. */
+  leave_periods?: ReportLeavePeriod[];
+  /** A leave covers today. */
+  on_leave?: boolean;
 }
 
 export interface ComplianceStatusReport {

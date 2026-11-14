@@ -95,6 +95,7 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.MEETING_WAIVER_REQUESTED.value: "1c6632035ccd",
     EmailTemplateType.MEETING_WAIVER_DECIDED.value: "1c6632035ccd",
     EmailTemplateType.MEETING_WAIVER_WITHDRAWN.value: "1c6632035ccd",
+    EmailTemplateType.LEAVE_OF_ABSENCE_NOTICE.value: "b4e7c2a91f06",
 }
 
 

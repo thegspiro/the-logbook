@@ -3406,6 +3406,44 @@ class EmailService:
 
         return success_count > 0
 
+    async def send_leave_of_absence_notice_email(
+        self,
+        to_email: str,
+        context: Dict[str, Any],
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell one member an officer recorded, changed or removed their leave.
+
+        *context* carries the template variables, built by
+        ``leave_of_absence_notices``; it never holds the leave's reason.
+        """
+        from app.services.email_templates_leave import HTML, SUBJECT, TEXT
+
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.LEAVE_OF_ABSENCE_NOTICE,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=SUBJECT,
+            default_html=HTML,
+            default_text=TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.LEAVE_OF_ABSENCE_NOTICE.value,
+        )
+
+        return success_count > 0
+
     async def send_training_record_notice_email(
         self,
         template_type: EmailTemplateType,

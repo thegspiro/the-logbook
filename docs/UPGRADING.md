@@ -802,6 +802,27 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Members are emailed about their leave of absence (2026-11-14)
+
+Nothing blocks a restart. Migration `b4e7c2a91f06` widens the template type
+list by one value; no existing row changes.
+
+- **A member is emailed when an officer records, changes or removes their
+  leave of absence**, with the dates and what the leave does to their training
+  requirements. The email never includes the leave's reason or type. It is
+  sent under _Changes to your training record_, which members cannot switch
+  off. Only leaves changed after the upgrade are emailed; nothing is sent for
+  leaves already on file. Word the new _Leave of Absence Notice_ template
+  (Communications → Email Templates → Training & Certifications) before
+  upgrading if the default does not suit.
+- **Two reports gain a Leave column.** The Annual Training report's CSV gains
+  _Months on Leave_ and _Leave Periods_; Program Requirement Progress gains
+  _On Leave Now_ and _Leave in Past Year_. No existing figure changes. A
+  spreadsheet or script that reads either CSV by column position should be
+  checked.
+- **Downgrading** deletes the new template's rows (a department's edits to it
+  included) and narrows the type list again.
+
 ### Waiver requests nobody decides close after seven days (2026-11-13)
 
 Nothing blocks a restart, and no migration is involved.
