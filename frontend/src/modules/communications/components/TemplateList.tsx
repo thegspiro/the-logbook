@@ -540,9 +540,9 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
 
   return (
     <div className="space-y-1">
-      <h3 className="text-theme-text-muted mb-2 px-3 text-xs font-semibold tracking-wider uppercase">
+      <h2 className="text-theme-text-muted mb-2 px-3 text-xs font-semibold tracking-wider uppercase">
         Email Templates
-      </h3>
+      </h2>
       {templates.length > 8 && (
         <div className="relative mb-2 px-3">
           <Search className="text-theme-text-muted absolute top-1/2 left-5 h-3.5 w-3.5 -translate-y-1/2" />
@@ -626,7 +626,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
                     <div className="min-w-0 flex-1">
                       <p
                         className={`truncate text-sm font-medium ${
-                          isSelected ? 'text-red-700 dark:text-red-400' : 'text-theme-text-primary'
+                          isSelected ? 'text-red-900 dark:text-red-300' : 'text-theme-text-primary'
                         }`}
                       >
                         {template.name}

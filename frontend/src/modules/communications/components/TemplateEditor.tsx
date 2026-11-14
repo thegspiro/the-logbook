@@ -231,7 +231,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                   aria-label={option.label}
                   title={option.label}
                   style={{ backgroundColor: option.accent }}
-                  className={`h-[22px] w-[22px] rounded-md transition-shadow ${
+                  className={`touch:h-11 touch:w-11 h-[22px] w-[22px] rounded-md transition-shadow ${
                     isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-current' : ''
                   }`}
                 />
@@ -279,7 +279,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
       <div>
         <button
           onClick={() => setShowRecipients(!showRecipients)}
-          className="text-theme-text-secondary hover:text-theme-text-primary flex items-center space-x-2 text-sm transition-colors"
+          className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 flex items-center space-x-2 text-sm transition-colors"
         >
           {showRecipients ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           <span>Default CC / BCC Recipients</span>
@@ -349,7 +349,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
         <div className="card-secondary">
           <button
             onClick={() => setShowVariables(!showVariables)}
-            className="text-theme-text-secondary hover:text-theme-text-primary flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors"
+            className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors"
           >
             <span className="flex items-center space-x-2">
               <Variable className="h-4 w-4" />
@@ -385,7 +385,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
         <div className="card-secondary">
           <button
             onClick={() => setShowOfficerVariables(!showOfficerVariables)}
-            className="text-theme-text-secondary hover:text-theme-text-primary flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors"
+            className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors"
           >
             <span className="flex items-center space-x-2">
               <UserCheck className="h-4 w-4" />
@@ -436,7 +436,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
       <div>
         <button
           onClick={() => setShowTextBody(!showTextBody)}
-          className="text-theme-text-secondary hover:text-theme-text-primary flex items-center space-x-2 text-sm transition-colors"
+          className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 flex items-center space-x-2 text-sm transition-colors"
         >
           {showTextBody ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           <span>Plain-Text Body (Fallback)</span>
