@@ -7,10 +7,11 @@ Endpoints for election management including elections, candidates, voting, and r
 import copy
 import hashlib
 import unicodedata
-from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, List, Optional
+from datetime import date, datetime, timezone
+from typing import Any, Awaitable, Callable, List, Optional, Tuple
 from uuid import UUID, uuid4
 
+from dateutil.relativedelta import relativedelta
 from fastapi import (
     APIRouter,
     Body,
@@ -23,7 +24,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,6 +54,7 @@ from app.models.meeting import Meeting, MeetingAttendee, MeetingType
 from app.models.user import Organization, User
 from app.schemas.column_bounds import INT32_MAX
 from app.schemas.election import (
+    VALID_MEETING_TYPES,
     VALID_QUORUM_TYPES,
     VALID_VICTORY_CONDITIONS,
     VALID_VOTING_METHODS,
@@ -74,10 +76,11 @@ from app.schemas.election import (
     CandidateResponse,
     CandidateUpdate,
     CloneElectionRequest,
+    ElectionAttendanceResponse,
     ElectionCreate,
     ElectionDelete,
     ElectionDeleteResponse,
-    ElectionEligibilityRules,
+    ElectionEligibilityRulesRead,
     ElectionListResponse,
     ElectionReportResponse,
     ElectionResponse,
@@ -87,6 +90,8 @@ from app.schemas.election import (
     ElectionSettingsResponse,
     ElectionStats,
     ElectionUpdate,
+    ElectoratePreviewRequest,
+    ElectoratePreviewResponse,
     EligibilityDefaults,
     EligibilityRosterResponse,
     EmailBallot,
@@ -97,6 +102,7 @@ from app.schemas.election import (
     ManualBallotsResponse,
     MemberBallotResponse,
     MemberBallotSubmission,
+    MemberMeetingsResponse,
     MemberVotingEligibilityResponse,
     MemberVotingEligibilityUpdate,
     MemberWaitOutcome,
@@ -145,6 +151,18 @@ from app.services.ballot_send_jobs import (
     latest_job,
     queue_automatic_send,
 )
+from app.services.election_attendance_service import (
+    MAX_PERIOD_DAYS as MAX_ATTENDANCE_PERIOD_DAYS,
+)
+from app.services.election_attendance_service import ElectionAttendanceService
+from app.services.election_defaults import (
+    _KIND_ELIGIBILITY_KEYS,
+    _OWN_DEFAULT_KINDS,
+    _REGULAR_ELIGIBILITY_KEY,
+    _defaults_for_kind,
+    _eligibility_defaults,
+    _stored_eligibility,
+)
 from app.services.election_service import (
     ElectionService,
     ballot_item_candidate_positions,
@@ -154,7 +172,6 @@ from app.services.election_service import (
 from app.services.membership_tier_service import MembershipTierService
 from app.services.voter_rules import (
     RowWait,
-    as_type_rules,
     row_labels,
     row_wait_reason,
     row_waits,
@@ -171,6 +188,7 @@ from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import (
     local_date,
     org_today,
+    resolve_org_today,
     resolve_scheduling_timezone,
     today_in,
 )
@@ -529,6 +547,7 @@ async def create_election(
         },
         user_id=str(current_user.id),
     )
+    await _audit_voter_rule_reasons(db, new_election, None, {}, current_user)
 
     return await _build_election_response(db, new_election)
 
@@ -1100,76 +1119,6 @@ def _feature_flag(features: dict, name: str) -> bool:
     return value if isinstance(value, bool) else True
 
 
-_REGULAR_ELIGIBILITY_KEY = "election_eligibility"
-# Where each other meeting kind keeps its own defaults; absent means it uses
-# the regular ones.
-_KIND_ELIGIBILITY_KEYS = {
-    "annual": "election_eligibility_annual",
-    "bylaws": "election_eligibility_bylaws",
-    "special": "election_eligibility_special",
-}
-_OWN_DEFAULT_KINDS = tuple(_KIND_ELIGIBILITY_KEYS)
-
-
-def _as_type_rule_defaults(
-    defaults: EligibilityDefaults, org_settings: dict
-) -> EligibilityDefaults:
-    """``defaults`` with its rules as a version 2 (per-type) rule set.
-
-    A department that has not saved version 2 rules yet still has version
-    1 rules and tier voting benefits; ``as_type_rules`` turns the two into
-    the rows that judge every member the same way, so what the settings
-    screen shows and what a new election copies is what applies. Nothing is
-    written back until the secretary saves.
-    """
-    if defaults.rules.version == 2:
-        return defaults
-    converted = as_type_rules(
-        defaults.rules.model_dump(), configured_tiers(org_settings)
-    )
-    return defaults.model_copy(
-        update={"rules": ElectionEligibilityRules.model_validate(converted)}
-    )
-
-
-def _stored_eligibility(org_settings: dict, key: str) -> Optional[EligibilityDefaults]:
-    """One set of the department's stored eligibility defaults, as version 2
-    rules, or None.
-
-    The value is validated on every write, but ``organizations.settings`` is
-    free-form JSON, so a stored value that no longer validates reads as
-    absent rather than failing every create and settings read.
-    """
-    raw = org_settings.get(key)
-    if not isinstance(raw, dict):
-        return None
-    try:
-        stored = EligibilityDefaults.model_validate(raw)
-    except ValidationError:
-        logger.warning("Stored {} is invalid; ignoring it", key)
-        return None
-    return _as_type_rule_defaults(stored, org_settings)
-
-
-def _eligibility_defaults(org_settings: dict) -> EligibilityDefaults:
-    """The regular-meeting defaults, else the built-in ones (check-in
-    required on new items, and the rules the tier ladder implies)."""
-    return _stored_eligibility(
-        org_settings, _REGULAR_ELIGIBILITY_KEY
-    ) or _as_type_rule_defaults(EligibilityDefaults(), org_settings)
-
-
-def _defaults_for_kind(org_settings: dict, meeting_kind: str) -> EligibilityDefaults:
-    """The defaults an election held at ``meeting_kind`` copies: that
-    kind's own when the department set them, else the regular ones."""
-    key = _KIND_ELIGIBILITY_KEYS.get(meeting_kind)
-    if key is not None:
-        own = _stored_eligibility(org_settings, key)
-        if own is not None:
-            return own
-    return _eligibility_defaults(org_settings)
-
-
 def _seeded_position_eligibility(
     positions: Optional[list], defaults: EligibilityDefaults
 ) -> Optional[dict]:
@@ -1266,6 +1215,152 @@ async def _meeting_kind_of_link(
     return "regular"
 
 
+def _normalized_rules(rules: Optional[dict]) -> Optional[dict]:
+    """``rules`` in the one spelling two equal rule sets share, or None for
+    "no rules", so a comparison is not thrown by a key order or a default
+    the client left out."""
+    active = _active_rules_or_none(rules)
+    if active is None:
+        return None
+    return ElectionEligibilityRulesRead.model_validate(active).model_dump()
+
+
+def _rules_differ(rules: Optional[dict], defaults: EligibilityDefaults) -> bool:
+    """Whether ``rules`` are other than what ``defaults`` would copy."""
+    return _normalized_rules(rules) != _normalized_rules(defaults.rules.model_dump())
+
+
+def _settle_override_reason(
+    rules: Optional[dict],
+    defaults: EligibilityDefaults,
+    reason: Optional[str],
+    what: str,
+) -> Optional[str]:
+    """The reason to store beside ``rules``: required when they differ from
+    ``defaults``, and dropped when they do not, so a stored reason always
+    explains a difference that is really there.
+
+    ``what`` names the rules in the refusal ("This election's", "Ballot item
+    'Bylaws'").
+    """
+    reason = (reason or "").strip() or None
+    if not _rules_differ(rules, defaults):
+        return None
+    if reason is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"{what} voter rules differ from the department's defaults in "
+                "Election Settings. Give the reason they differ."
+            ),
+        )
+    return reason
+
+
+_ITEM_RULE_KEYS = (
+    "eligibility_kind",
+    "eligibility_rules",
+    "eligibility_override_reason",
+)
+
+
+def _settle_ballot_item_rules(
+    items: Optional[list], org_settings: dict, election_kind: str
+) -> List[dict]:
+    """Settle each ballot item's own voter rules, in place, and return the
+    items that carry a reason for differing.
+
+    An item naming a kind without rules takes that kind's defaults, copied
+    rather than referenced, as an election does. An item with rules of its
+    own is checked against the defaults of the kind it names, or of the
+    election's kind when it names none, and needs a reason when they
+    differ. An item with neither follows the election's rules.
+    """
+    explained: List[dict] = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        kind = item.get("eligibility_kind")
+        if item.get("eligibility_rules") is None:
+            if kind:
+                item["eligibility_rules"] = _defaults_for_kind(
+                    org_settings, kind
+                ).rules.model_dump()
+            item["eligibility_override_reason"] = None
+        else:
+            title = str(item.get("title") or item.get("id") or "")
+            item["eligibility_override_reason"] = _settle_override_reason(
+                item["eligibility_rules"],
+                _defaults_for_kind(org_settings, kind or election_kind),
+                item.get("eligibility_override_reason"),
+                f"Ballot item '{title[:200]}':",
+            )
+            if item["eligibility_override_reason"]:
+                explained.append(item)
+        # An item without a carve-out is stored exactly as before these keys
+        # existed: the ballot-change check compares a resubmitted ballot with
+        # the stored one, and three new nulls would read as an edit and
+        # retire every ballot link already sent (W50-47).
+        for key in _ITEM_RULE_KEYS:
+            if item.get(key) is None:
+                item.pop(key, None)
+    return explained
+
+
+def _item_reasons(items: Optional[list]) -> dict:
+    """ballot item id -> the reason its own voter rules differ, for the
+    items that carry one."""
+    return {
+        str(item.get("id")): item["eligibility_override_reason"]
+        for item in items or []
+        if isinstance(item, dict) and item.get("eligibility_override_reason")
+    }
+
+
+async def _audit_voter_rule_reasons(
+    db: AsyncSession,
+    election: Election,
+    previous_reason: Optional[str],
+    previous_item_reasons: dict,
+    current_user: User,
+) -> None:
+    """Record each reason given for voter rules that differ from the
+    defaults, when it is new or changed, so the audit log holds who decided
+    an election's electorate would differ and why."""
+    item_reasons = _item_reasons(election.ballot_items)
+    changed_items = {
+        item_id: reason
+        for item_id, reason in item_reasons.items()
+        if previous_item_reasons.get(item_id) != reason
+    }
+    reason = election.eligibility_override_reason
+    reason_changed = reason is not None and reason != previous_reason
+    if not reason_changed and not changed_items:
+        return
+    await log_audit_event(
+        db=db,
+        event_type="election_voter_rules_customized",
+        event_category="elections",
+        severity="info",
+        event_data={
+            "election_id": str(election.id),
+            "meeting_kind": election.meeting_kind,
+            "reason": reason if reason_changed else None,
+            "ballot_item_reasons": changed_items,
+        },
+        user_id=str(current_user.id),
+    )
+
+
+async def _org_settings(db: AsyncSession, organization_id: Any) -> dict:
+    """The organization's settings, or {} when it has none."""
+    result = await db.execute(
+        select(Organization).where(Organization.id == str(organization_id))
+    )
+    org = result.scalar_one_or_none()
+    return (org.settings or {}) if org else {}
+
+
 async def _apply_eligibility_defaults(
     db: AsyncSession,
     organization_id: Any,
@@ -1297,10 +1392,22 @@ async def _apply_eligibility_defaults(
         election_data["eligibility_rules"] = _active_rules_or_none(
             election_data.get("eligibility_rules")
         )
+        election_data["eligibility_override_reason"] = _settle_override_reason(
+            election_data["eligibility_rules"],
+            defaults,
+            election_data.get("eligibility_override_reason"),
+            "This election's",
+        )
     else:
         election_data["eligibility_rules"] = _active_rules_or_none(
             defaults.rules.model_dump()
         )
+        election_data["eligibility_override_reason"] = None
+    _settle_ballot_item_rules(
+        election_data.get("ballot_items"),
+        (org.settings or {}) if org else {},
+        election_data["meeting_kind"],
+    )
 
     if election_data.get("position_eligibility") is None:
         seeded = _seeded_position_eligibility(election_data.get("positions"), defaults)
@@ -1367,6 +1474,39 @@ def _settings_response(org_settings: dict) -> dict:
         "voter_rows": voter_rows(configured_tiers(org_settings)),
         "tier_voting_rules": _tier_voting_rules(org_settings),
     }
+
+
+@router.post("/eligibility-preview", response_model=ElectoratePreviewResponse)
+async def preview_electorate(
+    preview: ElectoratePreviewRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Count how many of the department's active members a new election with
+    these voter rules would admit today, so a secretary customizing an
+    election sees the effect before creating it. Judged by the same check
+    the ballot send applies. With no rules given, previews the defaults the
+    meeting kind would copy.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    if "eligibility_rules" in preview.model_fields_set:
+        rules = _active_rules_or_none(
+            preview.eligibility_rules.model_dump()
+            if preview.eligibility_rules
+            else None
+        )
+    else:
+        org_settings = await _org_settings(db, current_user.organization_id)
+        rules = _active_rules_or_none(
+            _defaults_for_kind(org_settings, preview.meeting_kind).rules.model_dump()
+        )
+    eligible, total = await ElectionService(db).preview_rules_electorate(
+        current_user.organization_id, rules
+    )
+    return ElectoratePreviewResponse(eligible=eligible, total=total)
 
 
 @router.get("/settings", response_model=ElectionSettingsResponse)
@@ -1884,6 +2024,35 @@ async def update_election(
         update_data["eligibility_rules"] = _active_rules_or_none(
             update_data["eligibility_rules"]
         )
+    previous_reason = election.eligibility_override_reason
+    previous_item_reasons = _item_reasons(election.ballot_items)
+    # Judged only when the PATCH touches the rules, the kind or the reason:
+    # the department's defaults can change after an election copied them, and
+    # an unrelated edit (a title) must not start demanding a reason for that.
+    if {"eligibility_rules", "meeting_kind", "eligibility_override_reason"} & set(
+        update_data
+    ) or "ballot_items" in update_data:
+        org_settings = await _org_settings(db, election.organization_id)
+        kind = update_data.get("meeting_kind") or election.meeting_kind or "regular"
+        if {"eligibility_rules", "meeting_kind", "eligibility_override_reason"} & set(
+            update_data
+        ):
+            update_data["eligibility_override_reason"] = _settle_override_reason(
+                (
+                    update_data["eligibility_rules"]
+                    if "eligibility_rules" in update_data
+                    else election.eligibility_rules
+                ),
+                _defaults_for_kind(org_settings, kind),
+                (
+                    update_data["eligibility_override_reason"]
+                    if "eligibility_override_reason" in update_data
+                    else election.eligibility_override_reason
+                ),
+                "This election's",
+            )
+        if "ballot_items" in update_data:
+            _settle_ballot_item_rules(update_data["ballot_items"], org_settings, kind)
 
     # Update fields — explicit allowlist prevents writing to read-only columns
     # (e.g. organization_id, created_by, voter_anonymity_salt) if the Pydantic
@@ -1899,6 +2068,7 @@ async def update_election(
         # above refuse every field but their own, so a running election's
         # electorate is never redrawn after ballots have gone out.
         "eligibility_rules",
+        "eligibility_override_reason",
         "meeting_kind",
         "meeting_date",
         "meeting_id",
@@ -2074,6 +2244,9 @@ async def update_election(
             "ballot_links_invalidated": links_invalidated,
         },
         user_id=str(current_user.id),
+    )
+    await _audit_voter_rule_reasons(
+        db, election, previous_reason, previous_item_reasons, current_user
     )
 
     return await _build_election_response(db, election)
@@ -4109,6 +4282,128 @@ async def get_eligibility_roster(
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
     return result
+
+
+def _attendance_period(
+    start: Optional[date], end: Optional[date], meeting_types: List[str], today: date
+) -> Tuple[date, date, Optional[List[str]]]:
+    """The period and meeting types an attendance read covers, defaulting to
+    the last 12 months of every meeting type."""
+    end = end or today
+    start = start or end - relativedelta(months=12)
+    if start > end:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The start of the period must be on or before its end",
+        )
+    if (end - start).days > MAX_ATTENDANCE_PERIOD_DAYS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The period can be at most five years",
+        )
+    unknown = sorted(set(meeting_types) - VALID_MEETING_TYPES)
+    if unknown:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=list_within_detail_limit("Unknown meeting type(s): ", unknown),
+        )
+    return start, end, sorted(set(meeting_types)) or None
+
+
+@router.get(
+    "/{election_id}/attendance",
+    response_model=ElectionAttendanceResponse,
+)
+async def get_election_attendance(
+    election_id: UUID,
+    start: Optional[date] = Query(None, description="First day of the period"),
+    end: Optional[date] = Query(None, description="Last day of the period"),
+    meeting_type: List[str] = Query(
+        default=[], description="Meeting types to count; none means all"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Each active member's meeting attendance over a period the secretary
+    chooses, and whether they may vote in this election -- the election's
+    eligibility roster's answer, the one its ballots are sent by. The
+    period only chooses which meetings are counted here; the election's
+    rules keep their own look-back.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    election = await ElectionService(db).get_election(
+        election_id, current_user.organization_id
+    )
+    if not election:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
+    period_start, period_end, types = _attendance_period(
+        start,
+        end,
+        meeting_type,
+        await resolve_org_today(db, str(current_user.organization_id)),
+    )
+    return ElectionAttendanceResponse.model_validate(
+        await ElectionAttendanceService(db).members_attendance(
+            election,
+            str(current_user.organization_id),
+            period_start,
+            period_end,
+            types,
+        )
+    )
+
+
+@router.get(
+    "/{election_id}/attendance/{user_id}/meetings",
+    response_model=MemberMeetingsResponse,
+)
+async def get_member_meetings(
+    election_id: UUID,
+    user_id: UUID,
+    start: Optional[date] = Query(None, description="First day of the period"),
+    end: Optional[date] = Query(None, description="Last day of the period"),
+    meeting_type: List[str] = Query(
+        default=[], description="Meeting types to list; none means all"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    One member's meetings over the period, newest first: how each counted
+    (present, absent, excused or on leave), when they checked in, and who
+    recorded it.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    election = await ElectionService(db).get_election(
+        election_id, current_user.organization_id
+    )
+    if not election:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
+    member = await _org_member(db, user_id, current_user.organization_id)
+    period_start, period_end, types = _attendance_period(
+        start,
+        end,
+        meeting_type,
+        await resolve_org_today(db, str(current_user.organization_id)),
+    )
+    return MemberMeetingsResponse.model_validate(
+        await ElectionAttendanceService(db).member_meetings(
+            member,
+            str(current_user.organization_id),
+            period_start,
+            period_end,
+            types,
+        )
+    )
 
 
 # ============================================

@@ -4,8 +4,8 @@ Tests for the attendance dashboard service
 
 Covers the per-member attendance math (attended / waived / on-leave /
 eligible / percentage), the permanent-leave (end_date=None) regression that
-previously raised TypeError and crashed the whole dashboard, tier-driven
-voting eligibility, and the waiver grant/list paths. DB mocked; no MySQL.
+previously raised TypeError and crashed the whole dashboard, the voting
+column's use of the ballot gate, and the waiver grant/list paths. DB mocked; no MySQL.
 """
 
 from datetime import date, datetime, timezone
@@ -25,6 +25,20 @@ def _fixed_today(monkeypatch):
         "app.services.attendance_dashboard_service.today_in",
         lambda _tz: date(2026, 9, 1),
     )
+
+
+@pytest.fixture(autouse=True)
+def voting_gate(monkeypatch):
+    """The ballot gate the Voting column reports, stubbed: these tests are
+    about the dashboard, and the gate makes queries the mocked session does
+    not script. Defaults to "may vote"."""
+    gate = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        "app.services.attendance_dashboard_service.ElectionService."
+        "voting_reason_under_rules",
+        lambda self, *args, **kwargs: gate(*args, **kwargs),
+    )
+    return gate
 
 
 def _one(obj):
@@ -187,48 +201,56 @@ class TestLeaveOfAbsence:
 
 
 class TestVotingEligibility:
-    async def test_tier_blocks_voting(self):
-        tiers = [{"id": "social", "benefits": {"voting_eligible": False}}]
-        db = _dash_db(_org(tiers), [_member(membership_type="social")], [], [], [])
+    """The Voting column reports the gate the ballot send applies, under the
+    department's regular business meeting rules (pitfall #29); it no longer
+    reads the tier ladder itself. That gate's own behaviour is covered in
+    test_voter_type_rules.py."""
+
+    async def test_reports_the_ballot_gate_answer(self, voting_gate):
+        voting_gate.return_value = "Probationary members may not vote"
+        db = _dash_db(_org(), [_member()], [], [], [])
         row = (await AttendanceDashboardService(db).get_dashboard("org-1"))["members"][
             0
         ]
         assert row["voting_eligible"] is False
-        assert "not eligible to vote" in row["voting_blocked_reason"]
+        assert row["voting_blocked_reason"] == "Probationary members may not vote"
+
+    async def test_the_gate_is_given_the_regular_rules_with_the_tiers_folded_in(
+        self, voting_gate
+    ):
+        tiers = [{"id": "probationary", "benefits": {"voting_eligible": False}}]
+        member = _member(membership_type="probationary")
+        db = _dash_db(_org(tiers), [member], [], [], [])
+        await AttendanceDashboardService(db).get_dashboard("org-1")
+        judged, organization_id, rules, _org_arg = voting_gate.call_args.args
+        assert judged is member
+        assert organization_id == "org-1"
+        assert rules["version"] == 2
+        assert rules["types"]["probationary"]["may_vote"] is False
+
+    async def test_summary_counts_members_held_back_by_attendance(self, voting_gate):
+        voting_gate.side_effect = [
+            "Attended 1 of the last 2 meetings; 2 required to vote",
+            "Probationary members may not vote",
+            None,
+        ]
+        members = [_member("u1"), _member("u2"), _member("u3")]
+        db = _dash_db(_org(), members, [], [], [])
+        out = await AttendanceDashboardService(db).get_dashboard("org-1")
+        assert out["summary"]["voting_eligible_count"] == 1
+        assert out["summary"]["voting_blocked_by_attendance"] == 1
 
     async def test_tier_is_found_by_status_for_an_administrative_member(self):
         # An administrative Life member's legacy value is "administrative";
-        # the Life tier's rule must still apply to them.
-        tiers = [{"id": "life", "benefits": {"voting_eligible": False}}]
+        # the tier column must still name the Life tier.
+        tiers = [{"id": "life", "name": "Life Member"}]
         member = _member(membership_type="administrative", member_status="life")
         db = _dash_db(_org(tiers), [member], [], [], [])
         row = (await AttendanceDashboardService(db).get_dashboard("org-1"))["members"][
             0
         ]
-        assert row["voting_eligible"] is False
         assert row["membership_tier"] == "life"
-
-    async def test_attendance_threshold_blocks_voting(self):
-        tiers = [
-            {
-                "id": "active",
-                "benefits": {
-                    "voting_requires_meeting_attendance": True,
-                    "voting_min_attendance_pct": 75.0,
-                },
-            }
-        ]
-        meetings = [_meeting("m1", date(2026, 1, 1)), _meeting("m2", date(2026, 2, 1))]
-        attendance = [
-            _att("u1", "m1", present=True),
-            _att("u1", "m2", present=False),
-        ]  # 50%
-        db = _dash_db(_org(tiers), [_member()], meetings, attendance, [])
-        row = (await AttendanceDashboardService(db).get_dashboard("org-1"))["members"][
-            0
-        ]
-        assert row["voting_eligible"] is False
-        assert "below minimum" in row["voting_blocked_reason"]
+        assert row["tier_name"] == "Life Member"
 
     async def test_summary_aggregates(self):
         meetings = [_meeting("m1", date(2026, 1, 1))]

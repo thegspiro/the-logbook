@@ -83,12 +83,18 @@ test.describe('page header buttons on a phone', () => {
     const settings = await box(page, 'Election Settings');
     const create = await box(page, 'Create Election');
 
-    // The help icon keeps its square and the named link fills the rest of
-    // that row, so it reads as a button rather than a 44px gear; Create
-    // Election takes the next row, ending at the same right edge.
+    const attendance = page.getByRole('link', { name: 'Meeting attendance' });
+    await expect(attendance).toBeVisible();
+    const icon = await attendance.boundingBox();
+
+    // The help and attendance icons keep their squares on the named link's
+    // row, and the named link fills what is left of it, so it reads as a
+    // button rather than a 44px gear; Create Election takes the next row.
+    expect(Math.round(icon?.width ?? 0)).toBe(44);
+    expect(Math.round(icon?.y ?? -1)).toBe(settings.y);
     expect(settings.width).toBeGreaterThan(200);
     expect(create.y).toBeGreaterThan(settings.y);
-    expect(create.x + create.width).toBe(settings.x + settings.width);
+    expect(create.width).toBeGreaterThan(settings.width);
   });
 });
 

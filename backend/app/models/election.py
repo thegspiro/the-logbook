@@ -135,10 +135,17 @@ class Election(Base):
         JSON, nullable=True
     )
 
-    # "regular" (a business meeting) or "annual". Decides which of the
-    # department's eligibility defaults the election copies: the annual
-    # meeting may carry its own (organizations.settings
-    # ["election_eligibility_annual"]).
+    # Why ``eligibility_rules`` differ from the defaults ``meeting_kind``
+    # copies, as the secretary gave it. Required by the API whenever they
+    # differ, and cleared when they match again.
+    eligibility_override_reason: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )
+
+    # "regular" (a business meeting), "annual", "bylaws" or "special".
+    # Decides which of the department's eligibility defaults the election
+    # copies: each kind but "regular" may carry its own
+    # (organizations.settings["election_eligibility_<kind>"]).
     meeting_kind: Mapped[str] = mapped_column(
         String(20), nullable=False, default="regular", server_default="regular"
     )

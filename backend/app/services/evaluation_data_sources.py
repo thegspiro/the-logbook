@@ -71,7 +71,7 @@ DATA_SOURCES: tuple[DataSource, ...] = (
         "events.meeting_attendance_pct",
         "Business meeting attendance",
         "percent",
-        "events",
+        "meetings",
         "Business meetings attended out of those held.",
     ),
     DataSource(
