@@ -101,6 +101,22 @@ class EmailTemplateType(str, enum.Enum):
     MEETING_WAIVER_DECIDED = "meeting_waiver_decided"
     MEETING_WAIVER_WITHDRAWN = "meeting_waiver_withdrawn"
     SHIFT_EVALUATION_PRECEPTOR_LINK = "shift_evaluation_preceptor_link"
+    # Election and minutes notices that were built in code until 2026-11-14.
+    # Where a sender already logged under a name of its own (the minutes
+    # notices, the pre-meeting package), the value is that name, so the
+    # department's send log stays continuous across the move. The three
+    # election-manager delivery alarms stay in code: they report mail failing,
+    # and must not depend on a template a department can switch off.
+    ELECTION_NOMINATIONS_OPEN = "election_nominations_open"
+    ELECTION_NOMINATED = "election_nominated"
+    ELECTION_NOMINATION_ACCEPTED_FOR_YOU = "election_nomination_accepted_for_you"
+    ELECTION_PROXY_AUTHORIZED = "election_proxy_authorized"
+    PRE_MEETING_PACKAGE = "pre_meeting_package"
+    MINUTES_CIRCULATED = "minutes_circulated"
+    MINUTES_ACTION_ITEMS = "minutes_action_items"
+    MINUTES_ACTION_ITEM_REMINDER = "minutes_action_item_reminder"
+    MINUTES_OPEN_ITEMS_DIGEST = "minutes_open_items_digest"
+    MEETING_ACTION_ITEM_REMINDER = "meeting_action_item_reminder"
     CUSTOM = "custom"
 
 

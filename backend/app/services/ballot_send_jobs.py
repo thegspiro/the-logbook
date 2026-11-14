@@ -638,6 +638,19 @@ class NominationsAnnouncementSend:
                     "it was not sent."
                 ),
             )
+        if counts.get("switched_off"):
+            return EmailBallotResponse(
+                success=True,
+                recipients_count=0,
+                failed_count=0,
+                skipped_count=0,
+                skipped_details=[],
+                message=(
+                    "The Nominations Open email is switched off in "
+                    "Communications → Email Templates, so the announcement "
+                    "was not sent."
+                ),
+            )
         unreached = counts["unreached_count"]
         sent = counts["recipient_count"] - unreached
         if unreached:
