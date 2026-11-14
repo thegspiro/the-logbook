@@ -50,8 +50,10 @@ from app.models.user import ACTIVE_ACCOUNT_STATUSES, Position, User
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
     NOT_YET_HELD_STATUS,
+    EvaluationCredits,
     HeldSession,
     load_credited_shift_dates,
+    load_evaluation_credits,
     load_held_sessions,
     member_join_date,
     requirement_applies_to_user,
@@ -137,6 +139,7 @@ def _requirement_cells(
     shift_dates: List[date],
     held_sessions: Mapping[str, Sequence[HeldSession]],
     waivers: Sequence[WaiverPeriod],
+    evaluation_credits: EvaluationCredits,
 ) -> List[str]:
     """One export cell per requirement column for ``user``.
 
@@ -161,6 +164,7 @@ def _requirement_cells(
             join_date=join_date,
             shift_dates=shift_dates,
             held_sessions=held_sessions,
+            evaluation_credits=evaluation_credits,
         )
         if detail.get("catch_up_deadline"):
             cells.append(f"Due {detail['catch_up_deadline']}")
@@ -1226,6 +1230,9 @@ class ReportExportService:
         shifts_by_user = await load_credited_shift_dates(
             self.db, organization_id, [u.id for u in users], requirements, today, True
         )
+        evaluations_by_user = await load_evaluation_credits(
+            self.db, organization_id, [u.id for u in users], requirements, today, True
+        )
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), requirements
         )
@@ -1272,6 +1279,7 @@ class ReportExportService:
                         shifts_by_user.get(str(user.id), []),
                         held_sessions,
                         waivers_by_user.get(str(user.id), []),
+                        evaluations_by_user.get(str(user.id), {}),
                     )
                 )
 
@@ -1424,6 +1432,14 @@ class ReportExportService:
             True,
             full_history=True,
         )
+        evaluations_by_user = await load_evaluation_credits(
+            self.db,
+            organization_id,
+            [u.id for u in users],
+            all_requirements,
+            today,
+            True,
+        )
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), all_requirements
         )
@@ -1462,6 +1478,7 @@ class ReportExportService:
                     join_date=join_date,
                     shift_dates=shifts_by_user.get(str(user.id), []),
                     held_sessions=held_sessions,
+                    evaluation_credits=evaluations_by_user.get(str(user.id), {}),
                 )
                 statuses.append(_detail_status(detail))
                 if (
@@ -1588,6 +1605,14 @@ class ReportExportService:
             generated_on,
             True,
         )
+        evaluations_by_user = await load_evaluation_credits(
+            self.db,
+            organization_id,
+            [u.id for u in users],
+            requirements,
+            generated_on,
+            True,
+        )
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), requirements
         )
@@ -1623,6 +1648,7 @@ class ReportExportService:
                         shifts_by_user.get(str(user.id), []),
                         held_sessions,
                         waivers_by_user.get(str(user.id), []),
+                        evaluations_by_user.get(str(user.id), {}),
                     ),
                 )
             )
