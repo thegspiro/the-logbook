@@ -150,6 +150,15 @@ DATA_SOURCES: tuple[DataSource, ...] = (
         "Qualifications held at the end of the period, with expiration dates.",
     ),
     DataSource(
+        "certifications.expiring_soon",
+        "Certifications expiring soon",
+        "list",
+        "training",
+        "Qualifications held at the end of the period that expire within 90 "
+        "days after it, with their expiration dates: the same window the "
+        "member's training stats call expiring soon.",
+    ),
+    DataSource(
         "positions.held",
         "Positions held",
         "list",

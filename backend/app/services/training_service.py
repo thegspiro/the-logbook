@@ -44,6 +44,11 @@ from app.utils.org_timezone import resolve_org_today
 if TYPE_CHECKING:
     from app.services.training_compliance import HeldSession
 
+#: How far ahead a certification counts as "expiring soon": the member's
+#: training stats count these, and the evaluation data source
+#: ``certifications.expiring_soon`` lists the same window, so the two agree.
+CERTIFICATION_EXPIRING_SOON_DAYS = 90
+
 # What a requirement check reads from a completed record; the preload that
 # serves a page of checks loads these and nothing else.
 _PROGRESS_RECORD_COLUMNS = (
@@ -118,7 +123,7 @@ class TrainingService:
         total_certifications = len(certifications)
 
         # Count active, expiring soon, and expired
-        ninety_days = today + timedelta(days=90)
+        ninety_days = today + timedelta(days=CERTIFICATION_EXPIRING_SOON_DAYS)
 
         active_certifications = sum(
             1 for r in certifications if r.expiration_date and r.expiration_date > today

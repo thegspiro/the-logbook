@@ -81,7 +81,10 @@ from app.services.training_compliance import (
     tally_session_attendance,
     tally_standing,
 )
-from app.services.training_service import TrainingService
+from app.services.training_service import (
+    CERTIFICATION_EXPIRING_SOON_DAYS,
+    TrainingService,
+)
 from app.services.training_waiver_service import fetch_user_waivers
 from app.utils.org_timezone import (
     local_date,
@@ -461,6 +464,8 @@ class EvaluationDataService:
             return await self._skills_passed(org_id, member, coverage, tz)
         if key == "certifications.current":
             return await self._certifications(org_id, member, coverage)
+        if key == "certifications.expiring_soon":
+            return await self._certifications_expiring(org_id, member, coverage)
         if key == "positions.held":
             return await self._positions(org_id, member, coverage, tz)
         raise ValueError(f"No calculation for data source '{key}'")
@@ -917,9 +922,12 @@ class EvaluationDataService:
         )
         return _value(int(count or 0))
 
-    async def _certifications(
+    async def _held_certifications(
         self, org_id: str, member: User, coverage: Coverage
-    ) -> Dict[str, Any]:
+    ) -> List[Tuple[str, Optional[date]]]:
+        """``(code, expires_on)`` for each qualification in force at coverage
+        end, sorted by label. Shared by both certification sources so they
+        cannot disagree on what the member held."""
         windows = await QualificationService(self.db).get_member_code_windows(
             member.id, org_id
         )
@@ -934,16 +942,43 @@ class EvaluationDataService:
                     current is not None and (expires is None or expires > current)
                 ):
                     held[code] = expires
-        items = [
-            {
-                "label": qualification_label(code),
-                "expires_on": expires.isoformat() if expires else None,
-            }
-            for code, expires in sorted(
-                held.items(), key=lambda kv: qualification_label(kv[0])
-            )
-        ]
-        return _value(items)
+        return sorted(held.items(), key=lambda kv: qualification_label(kv[0]))
+
+    async def _certifications(
+        self, org_id: str, member: User, coverage: Coverage
+    ) -> Dict[str, Any]:
+        held = await self._held_certifications(org_id, member, coverage)
+        return _value(
+            [
+                {
+                    "label": qualification_label(code),
+                    "expires_on": expires.isoformat() if expires else None,
+                }
+                for code, expires in held
+            ]
+        )
+
+    async def _certifications_expiring(
+        self, org_id: str, member: User, coverage: Coverage
+    ) -> Dict[str, Any]:
+        """Qualifications held at coverage end that lapse within
+        ``CERTIFICATION_EXPIRING_SOON_DAYS`` after it (owner decision,
+        2026-11-14: the training stats' window, counted from the end of the
+        period, so the figure reads the same whenever it is opened). One
+        expiring on the last day itself is included: it was in force that
+        day and lapses the next."""
+        horizon = coverage.end + timedelta(days=CERTIFICATION_EXPIRING_SOON_DAYS)
+        held = await self._held_certifications(org_id, member, coverage)
+        return _value(
+            [
+                {
+                    "label": qualification_label(code),
+                    "expires_on": expires.isoformat(),
+                }
+                for code, expires in held
+                if expires is not None and expires <= horizon
+            ]
+        )
 
     async def _positions(
         self, org_id: str, member: User, coverage: Coverage, tz: ZoneInfo
