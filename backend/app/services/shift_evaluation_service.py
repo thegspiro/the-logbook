@@ -1409,9 +1409,7 @@ class ShiftEvaluationService:
                     ShiftAssignment.user_id == evaluation.member_id,
                     ShiftAssignment.organization_id == str(organization_id),
                     # The close-out roster's rule: crew who took the shift.
-                    ShiftAssignment.assignment_status.in_(
-                        (AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED)
-                    ),
+                    ShiftAssignment.assignment_status.in_(WORKING_ASSIGNMENT_STATUSES),
                 )
                 .limit(1)
             )
@@ -1456,7 +1454,7 @@ class ShiftEvaluationService:
         ).all()
         if not progress_rows:
             return
-        if requirement.requirement_type not in _CREDITED_TYPES:
+        if requirement.requirement_type not in CREDITED_TYPES:
             program_service = TrainingProgramService(self.db)
             credits = (
                 await self.db.execute(
