@@ -307,7 +307,7 @@ export const ShiftTemplatesPage: React.FC = () => {
           aria-selected={activeTab === 'templates'}
           className={`px-4 py-3 text-sm font-medium ${
             activeTab === 'templates'
-              ? 'border-b-2 border-red-500 text-red-700 dark:text-red-500'
+              ? 'border-b-2 border-red-500 text-red-900 dark:text-red-300'
               : 'text-theme-text-muted hover:text-theme-text-primary'
           }`}
         >
@@ -320,7 +320,7 @@ export const ShiftTemplatesPage: React.FC = () => {
           aria-selected={activeTab === 'patterns'}
           className={`px-4 py-3 text-sm font-medium ${
             activeTab === 'patterns'
-              ? 'border-b-2 border-red-500 text-red-700 dark:text-red-500'
+              ? 'border-b-2 border-red-500 text-red-900 dark:text-red-300'
               : 'text-theme-text-muted hover:text-theme-text-primary'
           }`}
         >
@@ -414,8 +414,8 @@ export const ShiftTemplatesPage: React.FC = () => {
                               <span
                                 className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium whitespace-nowrap ${
                                   cat.value === 'specialty'
-                                    ? 'bg-orange-500/10 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
-                                    : 'bg-purple-500/10 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400'
+                                    ? 'bg-orange-500/10 text-orange-900 dark:bg-orange-500/20 dark:text-orange-300'
+                                    : 'bg-purple-500/10 text-purple-900 dark:bg-purple-500/20 dark:text-purple-300'
                                 }`}
                               >
                                 <CatIcon className="mr-1 h-3 w-3" aria-hidden="true" />
@@ -426,13 +426,13 @@ export const ShiftTemplatesPage: React.FC = () => {
                           return null;
                         })()}
                         {template.is_default && (
-                          <span className="inline-flex items-center rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
+                          <span className="inline-flex items-center rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-900 dark:bg-green-500/20 dark:text-green-300">
                             <CheckCircle className="mr-1 h-3 w-3" aria-hidden="true" />
                             Default
                           </span>
                         )}
                         {!template.is_active && (
-                          <span className="inline-flex items-center rounded-sm bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-400">
+                          <span className="inline-flex items-center rounded-sm bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-900 dark:bg-red-500/20 dark:text-red-300">
                             Inactive
                           </span>
                         )}
@@ -493,7 +493,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                                   const EvIcon = evType.icon;
                                   return <EvIcon className="h-3.5 w-3.5 text-purple-500" />;
                                 })()}
-                                <span className="text-xs font-medium text-purple-700 dark:text-purple-400">
+                                <span className="text-xs font-medium text-purple-900 dark:text-purple-300">
                                   {evType.label}
                                 </span>
                               </div>
@@ -550,7 +550,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                                   key={i}
                                   className={`rounded-sm px-2 py-0.5 text-xs capitalize ${
                                     slot.required
-                                      ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+                                      ? 'bg-red-500/10 text-red-900 dark:text-red-300'
                                       : 'bg-theme-surface-hover text-theme-text-muted'
                                   }`}
                                 >
@@ -590,7 +590,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                           void handleDeleteTemplate(template.id);
                         }}
                         disabled={deletingTemplateId === template.id}
-                        className="bg-theme-surface hover:bg-theme-surface-hover touch:min-h-11 flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm text-red-700 disabled:opacity-50 dark:text-red-400"
+                        className="bg-theme-surface hover:bg-theme-surface-hover touch:min-h-11 flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm text-red-900 disabled:opacity-50 dark:text-red-300"
                         aria-label={`Delete ${template.name}`}
                       >
                         {deletingTemplateId === template.id ? (
@@ -628,8 +628,8 @@ export const ShiftTemplatesPage: React.FC = () => {
                       <span
                         className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
                           pattern.is_active
-                            ? 'bg-green-500/10 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-                            : 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400'
+                            ? 'bg-green-500/10 text-green-900 dark:bg-green-500/20 dark:text-green-300'
+                            : 'bg-red-500/10 text-red-900 dark:bg-red-500/20 dark:text-red-300'
                         }`}
                       >
                         {pattern.is_active ? 'Active' : 'Paused'}
@@ -709,7 +709,7 @@ export const ShiftTemplatesPage: React.FC = () => {
                         void handleDeletePattern(pattern.id);
                       }}
                       disabled={deletingPatternId === pattern.id}
-                      className="bg-theme-surface hover:bg-theme-surface-hover touch:min-h-11 flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm text-red-700 disabled:opacity-50 dark:text-red-400"
+                      className="bg-theme-surface hover:bg-theme-surface-hover touch:min-h-11 flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm text-red-900 disabled:opacity-50 dark:text-red-300"
                       aria-label={`Delete ${pattern.name}`}
                     >
                       {deletingPatternId === pattern.id ? (

@@ -562,6 +562,56 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/scheduling/admin/planning', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
   { path: '/scheduling/admin/closeout', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
   { path: '/scheduling/admin/reports', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
+  // Measured once helpers.ts served templates, patterns, history imports, the
+  // platoon overview and the position roster; before, three drew empty states
+  // and Platoons and Positions threw on the catch-all's `{}`.
+  {
+    path: '/scheduling/admin/planning/templates',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: '24-Hour Engine Company Platoon Rotation',
+  },
+  {
+    path: '/scheduling/admin/planning/patterns',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'A/B/C 24/48 Rotation',
+  },
+  {
+    path: '/scheduling/admin/history-import',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'Legacy CAD export Jan-Jun 2024 (Stations 1-3).csv',
+  },
+  // With platoons on: off, the page leads with a banner saying so, and the
+  // groups under it are not what a department using platoons sees.
+  {
+    path: '/scheduling/admin/platoons',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    fixture: { platoonsEnabled: true },
+    expectText: 'Christopher Montgomery-Vasquez-Whitfield',
+  },
+  {
+    path: '/scheduling/admin/positions',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'Christopher Montgomery-Vasquez-Whitfield',
+  },
+  // A shift is named in the URL, as the QR code on the apparatus names one; the
+  // bare path asks "Which shift?" and has nothing else to measure.
+  {
+    path: '/scheduling/checkin?shift=e2e-shift-checkin',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'Shift Check-In',
+  },
   { path: '/admin-hours', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory', maxSmallTargets: 0, maxTinyText: 0 },
