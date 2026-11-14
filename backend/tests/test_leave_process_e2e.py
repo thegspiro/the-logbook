@@ -417,3 +417,54 @@ class TestSettingChangesAreAudited:
             "changed": True
         }
         assert "chief@example.com" not in str(entry.event_data)
+
+
+class TestShiftAndCallBreakdown:
+    async def test_a_call_requirement_shows_its_months_and_the_leave(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        officer, member, _ = await _seed(db_session, org_id)
+        calls = TrainingRequirement(
+            organization_id=org_id,
+            name="Calls Answered",
+            requirement_type="calls",
+            required_calls=24,
+            training_type=TrainingType.CERTIFICATION,
+            frequency="annual",
+            due_date_type="rolling",
+            rolling_period_months=12,
+        )
+        db_session.add(calls)
+        for day in (date(2025, 12, 3), date(2025, 12, 20), date(2026, 10, 2)):
+            db_session.add(
+                TrainingRecord(
+                    organization_id=org_id,
+                    user_id=member.id,
+                    course_name="Call",
+                    training_type=TrainingType.CERTIFICATION,
+                    status=TrainingStatus.COMPLETED,
+                    completion_date=day,
+                    hours_completed=1,
+                )
+            )
+        await db_session.flush()
+        await _record_leave(db_session, officer, member)
+
+        detail = await _my_requirement(db_session, member, str(calls.id))
+
+        assert detail["monthly_hours"] is None
+        months = {m["month"]: m for m in detail["monthly_counts"]}
+        assert months["2025-12"] == {
+            "month": "2025-12",
+            "count": 2,
+            "waived": True,
+            "waived_share": 1.0,
+            "on_leave": True,
+            "on_waiver": False,
+        }
+        assert months["2026-10"]["count"] == 1
+        assert months["2026-10"]["waived"] is False
+        assert sum(m["count"] for m in detail["monthly_counts"]) == 3
+        # 24 a year with 11 months on leave: 2 owed, rounded down.
+        assert detail["required_hours"] == 2.0

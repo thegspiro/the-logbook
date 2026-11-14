@@ -1239,6 +1239,7 @@ class TestEvaluateRequirementDetailFields:
             "window_end",
             "window_months",
             "monthly_hours",
+            "monthly_counts",
             "course_checklist",
         }
         assert set(result.keys()) == expected_fields
@@ -1730,6 +1731,30 @@ class TestMonthlyHours:
         ]
         months = monthly_hours(records, date(2025, 11, 1), date(2026, 1, 31))
         assert sum(m["hours"] for m in months) == 3.0
+
+
+class TestMonthlyCounts:
+    def test_counts_per_month_with_leave_flagged(self):
+        from app.services.training_compliance import monthly_counts
+        from app.services.training_waiver_service import month_waivers
+
+        excused = month_waivers(
+            [WaiverPeriod(date(2026, 1, 1), date(2026, 1, 31), source="leave")],
+            date(2025, 12, 1),
+            date(2026, 2, 28),
+        )
+        months = monthly_counts(
+            [date(2025, 12, 3), date(2025, 12, 20), date(2026, 1, 9), None],
+            date(2025, 12, 1),
+            date(2026, 2, 28),
+            excused,
+        )
+        assert [(m["month"], m["count"], m["on_leave"]) for m in months] == [
+            ("2025-12", 2, False),
+            ("2026-01", 1, True),
+            ("2026-02", 0, False),
+        ]
+        assert "hours" not in months[0]
 
 
 class TestRollingHoursDetail:

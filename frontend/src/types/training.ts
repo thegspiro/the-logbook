@@ -2442,6 +2442,12 @@ export interface RequirementDetail {
    */
   monthly_hours?: RequirementMonth[] | null;
   /**
+   * Shifts worked or calls run per calendar month, for a shift or call
+   * requirement: `monthly_hours`' counterpart, with `count` in place of
+   * `hours` and the same leave fields. Null for every other type.
+   */
+  monthly_counts?: RequirementCountMonth[] | null;
+  /**
    * For a `courses` requirement: each required course, in the requirement's
    * order, ticked by the same test the count uses. Null for every other type.
    */
@@ -2456,6 +2462,11 @@ export interface RequirementCourseEntry {
   completed: boolean;
   /** Latest completion inside the window; null when the record carries no date. */
   completed_on: string | null;
+}
+
+/** A month of a shift or call requirement: `RequirementMonth` with a count. */
+export interface RequirementCountMonth extends Omit<RequirementMonth, 'hours'> {
+  count: number;
 }
 
 export interface RequirementMonth {

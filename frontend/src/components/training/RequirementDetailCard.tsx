@@ -38,6 +38,7 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
     !notYetHeld && req.days_until_due != null && req.days_until_due <= 30 && req.days_until_due >= 0 && !req.is_met;
   const self = audience === 'self';
   const unitFor = (count: number) => requirementUnitSuffix(req.requirement_type, count);
+  const breakdown = req.monthly_hours?.length ? req.monthly_hours : (req.monthly_counts ?? []);
   // A shift or call target is rounded down to whole units, so enough months
   // of leave can bring it to zero. That is met, and reads as such, not 0/0.
   const nothingOwed =
@@ -170,8 +171,8 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
             <span className={isDueSoon ? 'text-yellow-700 dark:text-yellow-400' : ''}>
               Due: {formatDate(req.due_date, timezone)} ({req.days_until_due} days)
             </span>
-          ) : req.monthly_hours && req.monthly_hours.length > 0 ? (
-            <span>Counting {countingWindowLabel(req.monthly_hours)}</span>
+          ) : breakdown.length > 0 ? (
+            <span>Counting {countingWindowLabel(breakdown)}</span>
           ) : null}
         </div>
       </div>

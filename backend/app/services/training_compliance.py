@@ -186,6 +186,37 @@ def monthly_hours(
             continue
         key = (when.year, when.month)
         totals[key] = totals.get(key, 0.0) + float(record.hours_completed or 0)
+    return _month_rows(totals, start, end, excused, "hours")
+
+
+def monthly_counts(
+    dates: Iterable[date],
+    start: date,
+    end: date,
+    excused: Optional[Dict[Tuple[int, int], MonthWaiver]] = None,
+) -> List[Dict]:
+    """Shifts or calls per calendar month, ``monthly_hours``' counterpart.
+
+    ``dates`` are the shifts worked or records already counted toward the
+    requirement, one date each, so the months add up to the count it reports.
+    Each row carries ``count`` in place of ``hours`` and the same leave fields.
+    """
+    totals: Dict[Tuple[int, int], float] = {}
+    for when in dates:
+        if when is None or not start <= when <= end:
+            continue
+        key = (when.year, when.month)
+        totals[key] = totals.get(key, 0) + 1
+    return _month_rows(totals, start, end, excused, "count")
+
+
+def _month_rows(
+    totals: Dict[Tuple[int, int], float],
+    start: date,
+    end: date,
+    excused: Optional[Dict[Tuple[int, int], MonthWaiver]],
+    value_key: str,
+) -> List[Dict]:
     months: List[Dict] = []
     year, month = start.year, start.month
     while (year, month) <= (end.year, end.month):
@@ -193,7 +224,9 @@ def monthly_hours(
         months.append(
             {
                 "month": f"{year:04d}-{month:02d}",
-                "hours": totals.get((year, month), 0.0),
+                value_key: totals.get(
+                    (year, month), 0.0 if value_key == "hours" else 0
+                ),
                 "waived": mw is not None,
                 "waived_share": round(mw.share, 4) if mw else 0.0,
                 "on_leave": bool(mw and SOURCE_LEAVE in mw.sources),
