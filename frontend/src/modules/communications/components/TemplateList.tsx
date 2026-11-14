@@ -157,6 +157,17 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
     label: 'Evaluation Finalized',
     color: 'text-green-700 dark:text-green-600',
   },
+  evaluation_amended: {
+    icon: ClipboardPen,
+    label: 'Evaluation Amended',
+    color: 'text-amber-700 dark:text-amber-600',
+  },
+  evaluation_response: {
+    icon: MessageSquare,
+    label: 'Evaluation Response',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
+  evaluation_deleted: { icon: Trash2, label: 'Evaluation Deleted', color: 'text-red-600' },
   suggestion_submitted: { icon: Lightbulb, label: 'Suggestion Submitted', color: 'text-amber-700 dark:text-amber-600' },
   equipment_request_update: {
     icon: PackageCheck,
@@ -313,7 +324,15 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
   {
     id: 'evaluations',
     label: 'Performance Evaluations',
-    types: ['evaluation_step_waiting', 'evaluation_deadline_reminder', 'evaluation_overdue', 'evaluation_finalized'],
+    types: [
+      'evaluation_step_waiting',
+      'evaluation_deadline_reminder',
+      'evaluation_overdue',
+      'evaluation_finalized',
+      'evaluation_amended',
+      'evaluation_response',
+      'evaluation_deleted',
+    ],
   },
   {
     id: 'suggestions',
@@ -346,6 +365,18 @@ const CATEGORY_BY_TYPE: Record<string, string> = Object.fromEntries(
 
 function categoryIdFor(templateType: string): string {
   return CATEGORY_BY_TYPE[templateType] ?? OTHER_CATEGORY_ID;
+}
+
+// The API orders by template_type, a MySQL ENUM, which sorts by declaration
+// index — the order types happened to be added, not the order above.
+const RANK_BY_TYPE: Record<string, number> = Object.fromEntries(
+  TEMPLATE_CATEGORIES.flatMap((c) => c.types.map((t, i) => [t, i]))
+);
+
+function compareWithinCategory(a: EmailTemplate, b: EmailTemplate): number {
+  const rank = (RANK_BY_TYPE[a.template_type] ?? Infinity) - (RANK_BY_TYPE[b.template_type] ?? Infinity);
+  if (rank !== 0 && !Number.isNaN(rank)) return rank;
+  return (a.name ?? '').localeCompare(b.name ?? '');
 }
 
 interface TemplateListProps {
@@ -411,11 +442,11 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
     const ordered = TEMPLATE_CATEGORIES.filter((c) => byCategory.has(c.id)).map((c) => ({
       id: c.id,
       label: c.label,
-      templates: byCategory.get(c.id) ?? [],
+      templates: [...(byCategory.get(c.id) ?? [])].sort(compareWithinCategory),
     }));
     const other = byCategory.get(OTHER_CATEGORY_ID);
     if (other) {
-      ordered.push({ id: OTHER_CATEGORY_ID, label: 'Other', templates: other });
+      ordered.push({ id: OTHER_CATEGORY_ID, label: 'Other', templates: [...other].sort(compareWithinCategory) });
     }
     return ordered;
   }, [filtered]);
