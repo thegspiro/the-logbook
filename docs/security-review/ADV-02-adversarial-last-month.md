@@ -1,0 +1,155 @@
+# ADV-02 — Adversarial Pass Over a Month of Commits (2026-11-14)
+
+A one-off review outside the feature rotation, like ADV-01. Everything merged
+between 2026-10-14 and 2026-11-14 (diff base `80d92defd`, about 576 non-merge
+commits) was attacked from the positions of an outsider, a session thief, a
+baseline member, and an officer holding a narrow delegated permission. The
+work was split six ways:
+
+- public, token and webhook surfaces;
+- authentication, step-up, MFA, passkeys and OAuth integrations;
+- uploads, imports, PDF and email rendering;
+- two authorization/IDOR sweeps across the new and changed endpoints;
+- the frontend and the deployment configuration.
+
+Every finding below was traced in the code end to end before it was accepted,
+and every fix ships with a test seen to fail without it. The rotation's
+`PROGRESS.md` is not edited by this pass, so it does not contend with the
+rotation's own open pull request.
+
+## Findings
+
+| ID      | Persona       | Severity | Finding                                                                                                                                                            | Status |
+| ------- | ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| ADV2-1  | Session thief | High     | A passkey-only member's session could enroll an authenticator app with no step-up, replace the recovery codes, then pass step-up with TOTP in place of the passkey | Fixed  |
+| ADV2-2  | Session thief | Medium   | A member's own login email changed with no step-up, so a stolen session plus forgot-password set a new password                                                    | Fixed  |
+| ADV2-3  | Officer       | Medium   | A shift-report role reviewer could approve a report they filed, and review drafts or already-released reports by id                                                | Fixed  |
+| ADV2-4  | Officer       | Medium   | One officer could conduct, calibrate and approve the same personnel evaluation                                                                                     | Owner  |
+| ADV2-5  | Officer       | Low–Med  | The Chief could grant a training-requirement override to themselves                                                                                                | Fixed  |
+| ADV2-6  | Officer       | Low      | `members.manage` could repoint the personal email of a member above its ceiling and collect a retried directory-account password                                   | Fixed  |
+| ADV2-7  | Member        | Low      | Draft events were still reachable through the QR payload, self-check-in, the event folder and the training-session lookup                                          | Fixed  |
+| ADV2-8  | Officer       | Low      | A shift officer without `scheduling.manage` can write their own close-out hours (predates the window)                                                              | Owner  |
+| ADV2-9  | Officer       | Low      | An officer with `members.manage` + `scheduling.assign` can grant themselves a leave, which creates their own training waiver (predates the window)                 | Owner  |
+| ADV2-10 | Applicant     | Low      | An applicant can set their own follow-up-form email (or name and birth date) to a coordinator's, so the coordinator's self-access guard hides the file from them   | Owner  |
+| ADV2-11 | Outsider      | Info     | A Zeffy dues payment credits whichever member's email the payer typed, and overpayment becomes a donation in that member's name                                    | Owner  |
+
+## Fixes
+
+- **ADV2-1**: `POST /auth/mfa/setup` and `/auth/mfa/verify-setup` now call
+  `_require_stepup_once_enrolled`, as the passkey routes already did. A
+  first-factor enrollment is unchanged. `verify-setup` checks after the
+  idempotent replay, so a retry of a first enrollment is not asked to step up.
+  Tests: `TestAuthenticatorEnrollmentNeedsStepUpOverAPasskey` in
+  `tests/test_auth_mfa_endpoints.py`.
+- **ADV2-2**: `PATCH /users/{id}/contact-info` requires a fresh step-up for
+  every email change, the member's own included. A colleague's change keeps its
+  ceiling. The frontend's API client already answers `LB-AUTH-013` with the
+  step-up prompt and retries, so no UI change is needed. Tests:
+  `TestOwnEmailChange` in `tests/test_contact_info_email_takeover.py`.
+- **ADV2-3**: For a role reviewer (not `training.manage`), `_not_about_reviewer`
+  now also excludes reports the reviewer filed, from the queue as well as from
+  review. Both review routes accept only `pending_review` or `flagged` reports
+  and answer 409 otherwise, which is the set the read path already limited them
+  to. Tests: `tests/test_shift_report_reviewer_role.py`.
+- **ADV2-5**: `RequirementOverrideService.grant` refuses
+  `user_id == granted_by`. The Chief's own absence goes through the
+  attendance-waiver workflow, which routes it to someone else. Test:
+  `test_the_chief_cannot_override_their_own_requirement`.
+- **ADV2-6**: A colleague's `personal_email` change in `PATCH /users/{id}` takes
+  `_enforce_account_reset_ceiling`. Tests: `tests/test_personal_email_ceiling.py`.
+- **ADV2-7**: `EventService.get_qr_check_in_data` and `self_check_in` refuse a
+  draft outright. Nothing can be checked into before publication, and this
+  covers the NFC and kiosk taps that route through the same service. The folder
+  and training-session reads answer a non-organizer as for a missing event.
+  Tests: `tests/test_draft_event_side_paths.py`.
+
+Separately, `main` had two Alembic heads (`7a3c9e1d5b42`, `c4e81b7a2d95`), so
+`alembic upgrade head` refused to run. Merge revision `e2b7d94c1a63` joins them.
+
+## Awaiting an owner decision
+
+- **ADV2-4**: `_signable` excludes only the subject from an approval step, and
+  `complete_calibration` excludes only the subject. A Captain who conducts an
+  evaluation on a template whose approval step is "Captain" can sign it. If
+  they also hold `evaluations.view_all`, they can complete its calibration too.
+  Refusing the evaluator is the obvious fix, but nothing can reassign or skip an
+  approval step. A department with one Captain, or a Chief who is both
+  evaluator and the only `view_all` holder, would then have evaluations that
+  cannot finish. The options:
+  1. Refuse, and accept that those evaluations stall.
+  2. Refuse, and add a manager's reassign-step action.
+  3. Accept the current behaviour.
+- **ADV2-8**: `PATCH /shifts/{id}/closeout/attendance` lets the shift officer set
+  any member's times, their own included. Pre-shift work and event attendance
+  both refuse the self case. A one-person shift has no one else to record it.
+- **ADV2-9**: `MemberLeaveService.create_leave` has no self check, and a leave
+  auto-creates a training waiver.
+- **ADV2-10**: Checking that the new email is not a current member's would cover
+  the email half. The name-and-birth-date half would remain, so the fix needs a
+  decision on whether self-detection should trust applicant-editable fields at
+  all (for example, only `transferred_user_id` once the applicant has edited
+  them).
+- **ADV2-11**: Accept the current behaviour, or record dues credits from Zeffy as
+  unmatched until a treasurer confirms them.
+
+## Checked and clean
+
+- **Public surfaces**:
+  - Zeffy webhook: HMAC over the raw body, replay window, idempotent on the
+    payment id.
+  - Follow-up form and preceptor links: hashed 256-bit tokens, single use, one
+    404 for every refusal.
+  - Event guest QR and kiosk.
+  - Department and applicant ICS feeds.
+  - Finance approval links.
+  - Public minutes (allowlisted projection, nh3 plus DOMPurify).
+  - Embed origins (exact https origins, re-validated on read).
+  - Public portal stats.
+- **Authentication**:
+  - Passkeys: challenges single use and bound to the user and purpose, rpId and
+    origin pinned, UV required.
+  - MFA login binding and lockout, refresh rotation.
+  - Step-up stamped per session.
+  - Admin MFA and passkey reset ceilings.
+  - Role and rank grant ceilings.
+  - Calendar and QuickBooks OAuth state binding, with PKCE and encrypted tokens.
+  - MCP tools mirror the REST visibility filters.
+- **Files and rendering**:
+  - History media: extension and content agree; ffmpeg runs with forced
+    demuxers, `-protocol_whitelist file` and a timeout; images re-encoded and
+    EXIF stripped.
+  - Path containment in `file_storage_service.resolve`.
+  - Content-Disposition built through RFC 5987.
+  - Rich text and markdown sanitized with nh3.
+  - Every ReportLab field escaped; no URL-fetching renderer.
+  - No Jinja.
+  - CSV imports byte- and row-capped, with no XLSX or zip parsing.
+  - Exports through `SafeCsvChunks`.
+- **Authorization**:
+  - Finance approvals and the second approval.
+  - Elections and proxies.
+  - Waivers.
+  - Evaluations: reads and the other writes.
+  - NFC card issuance.
+  - Audit, error and platform analytics: org-scoped.
+  - Forms' sensitive answers.
+- **Frontend and infrastructure**:
+  - DOMPurify instances allowlisted.
+  - Post-login redirect same-origin only.
+  - No tokens in browser storage.
+  - New GET routes covered by `UNCACHEABLE_PREFIXES`.
+  - Release workflow: tag-triggered, SHA-pinned actions, no untrusted
+    interpolation.
+  - The combined image binds uvicorn to loopback and refuses `*` for forwarded
+    IPs.
+  - Redis requires its password.
+
+## Notes below the bar
+
+- `utils/minutes_pdf_attachments.py` copies a filed PDF's pages, annotations
+  included, into the minutes export. Only `minutes.manage` holders upload these
+  files, and every reader could already download the original. Flattening or
+  stripping `/AA` and JavaScript actions is optional hardening.
+- `EMAIL_ATTACHMENT_RULES` accepts SVG. No route serves that storage area from
+  the app origin today. If one is ever added, it must serve SVG as an
+  attachment.
