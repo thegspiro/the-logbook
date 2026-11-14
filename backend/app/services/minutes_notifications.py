@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.models.email_template import EmailTemplateType
 from app.models.minute import ActionItem, MeetingMinutes, MinutesMeetingType
 from app.models.user import Organization, User
 from app.services.email_policy import (
@@ -31,8 +32,7 @@ from app.services.email_policy import (
     department_required_kinds,
     recipients_for,
 )
-from app.services.email_service import EmailService, wrap_email_body
-from app.services.email_theme import ACCENT_INDIGO, action
+from app.services.email_service import EmailService
 from app.utils.org_timezone import stored_calendar_day
 
 
@@ -72,32 +72,38 @@ async def notify_action_item_assignees(
     )
 
     link = f"{settings.FRONTEND_URL.rstrip('/')}/minutes/{minutes.id}"
+    email_service = EmailService(organization)
     sent_total = 0
     for member in recipients:
         rows = []
+        lines = []
         for item in by_assignee[str(member.id)]:
             # A due date is a calendar day, not an instant: shown as stored.
             due_on = stored_calendar_day(item.due_date)
             due = f" — due {due_on.strftime('%b %d, %Y')}" if due_on else ""
             rows.append(f"<li>{html.escape(item.description)}{html.escape(due)}</li>")
-        body = (
-            f"<p>You were assigned work at <strong>{html.escape(minutes.title)}"
-            "</strong>.</p>"
-            f"<ul>{''.join(rows)}</ul>" + action(html.escape(link), "View the minutes")
-        )
+            lines.append(f"- {item.description}{due}")
         try:
-            sent, _failed = await EmailService().send_email(
+            rendered = await email_service.render_notice(
+                EmailTemplateType.MINUTES_ACTION_ITEMS,
+                {
+                    "minutes_title": minutes.title,
+                    "action_items_html": f"<ul>{''.join(rows)}</ul>",
+                    "action_items_text": "\n".join(lines),
+                    "minutes_url": link,
+                },
+                db,
+            )
+            if rendered is None:
+                return sent_total
+            subject, html_body, text_body = rendered
+            sent, _failed = await email_service.send_email(
                 to_emails=[member.email],
-                subject=f"Action items assigned to you — {minutes.title}",
-                html_body=wrap_email_body(
-                    organization,
-                    "Action items assigned to you",
-                    body,
-                    header_color=ACCENT_INDIGO,
-                    chip="Meeting minutes",
-                ),
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
                 db=db,
-                template_type="minutes_action_items",
+                template_type=EmailTemplateType.MINUTES_ACTION_ITEMS.value,
             )
             sent_total += sent
         except Exception as exc:
@@ -142,31 +148,29 @@ async def notify_minutes_circulated(db: AsyncSession, minutes: MeetingMinutes) -
         department_required_kinds(organization),
     )
 
+    if not recipients:
+        return 0
     link = f"{settings.FRONTEND_URL.rstrip('/')}/minutes/{minutes.id}"
-    body = (
-        f"<p>The minutes of <strong>{html.escape(minutes.title)}</strong> are "
-        "ready for your review.</p>"
-        "<p>Read them in Minutes and use <em>Suggest a change</em> if "
-        "something is wrong or missing. The secretary will work in what is "
-        "accepted before the minutes are adopted.</p>"
-        + action(html.escape(link), "Review the minutes")
+    email_service = EmailService(organization)
+    # One body for everyone: nothing in it is per member.
+    rendered = await email_service.render_notice(
+        EmailTemplateType.MINUTES_CIRCULATED,
+        {"minutes_title": minutes.title, "minutes_url": link},
+        db,
     )
-    html_body = wrap_email_body(
-        organization,
-        "Minutes ready for review",
-        body,
-        header_color=ACCENT_INDIGO,
-        chip="Meeting minutes",
-    )
+    if rendered is None:
+        return 0
+    subject, html_body, text_body = rendered
     sent_total = 0
     for member in recipients:
         try:
-            sent, _failed = await EmailService().send_email(
+            sent, _failed = await email_service.send_email(
                 to_emails=[member.email],
-                subject=f"Minutes for review — {minutes.title}",
+                subject=subject,
                 html_body=html_body,
+                text_body=text_body,
                 db=db,
-                template_type="minutes_circulated",
+                template_type=EmailTemplateType.MINUTES_CIRCULATED.value,
             )
             sent_total += sent
         except Exception as exc:

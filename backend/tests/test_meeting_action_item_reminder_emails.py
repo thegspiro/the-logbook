@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy import func, select
 
+from app.models.email_template import EmailTemplate, EmailTemplateType
 from app.models.meeting import ActionItemStatus, Meeting, MeetingActionItem
 from app.models.notification import NotificationLog
 from app.models.user import Organization, User
@@ -68,6 +69,7 @@ async def _world(db, *, days_until: int, preferences=None):
     # Plain values: the task commits and the test expires the session, after
     # which reading an attribute off these rows would be a lazy load.
     return SimpleNamespace(
+        org_id=str(org.id),
         today=org_today(org),
         user_id=str(assignee.id),
         email=assignee.email,
@@ -183,3 +185,48 @@ class TestOptOut:
         await run_action_item_reminders(db_session)
 
         assert _emails_to(mail, w.email) == []
+
+
+class TestTheDepartmentsTemplate:
+    """The reminder is the department's template (2026-11-14)."""
+
+    @staticmethod
+    async def _store(db, org_id: str, *, subject="Edited", active=True) -> None:
+        db.add(
+            EmailTemplate(
+                id=str(uuid.uuid4()),
+                organization_id=org_id,
+                template_type=EmailTemplateType.MEETING_ACTION_ITEM_REMINDER,
+                name="Edited meeting reminder",
+                subject=subject,
+                html_body="<p>Edited</p>{{action_items_html}}",
+                text_body="Edited text",
+                is_active=active,
+            )
+        )
+        await db.flush()
+
+    async def test_the_departments_wording_is_sent(self, db_session, mail):
+        w = await _world(db_session, days_until=1)
+        await self._store(
+            db_session, w.org_id, subject="Reminder: {{reminder_summary}}"
+        )
+
+        await run_action_item_reminders(db_session)
+
+        (sent,) = _emails_to(mail, w.email)
+        assert sent.kwargs["subject"] == "Reminder: Action item due tomorrow"
+        assert "Inspect ladder truck" in sent.kwargs["html_body"]
+        assert sent.kwargs["template_type"] == "meeting_action_item_reminder"
+
+    async def test_switched_off_rings_the_bell_but_sends_and_stamps_nothing(
+        self, db_session, mail
+    ):
+        w = await _world(db_session, days_until=1)
+        await self._store(db_session, w.org_id, active=False)
+
+        await run_action_item_reminders(db_session)
+
+        assert _emails_to(mail, w.email) == []
+        assert await _bells(db_session, w.user_id) == 1
+        assert await _stamp(db_session, w.item_id) is None

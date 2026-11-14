@@ -10278,16 +10278,28 @@ beyond the feature.
   worked out by the rules of the day and joins the stored set. Before the
   shift ends, and on outside shifts, it is worked out live as before.
   `tests/test_frozen_evaluation_requirements.py`.
-- **No-show and pending crew are asked for an evaluation.** The rule mirrors
-  the trainee-report gate (only declined and cancelled seats are left out),
-  so the two agree; excusing no-shows would mean changing both.
+- ~~**No-show and pending crew are asked for an evaluation.**~~ Resolved
+  2026-11-14 (owner decision): only Assigned and Confirmed crew need a trainee
+  report or a shift evaluation, and close-out drafts reports for them alone
+  (`WORKING_ASSIGNMENT_STATUSES`).
 - **No requirement type counts the calls an evaluation records.** Evaluated
   shifts, transports and refusals are credited; the existing Calls type is
   still fed by shift reports.
-- **A department requirement of an evaluation type, linked into a program
+- ~~**A department requirement of an evaluation type, linked into a program
   with "Link existing", is not credited by evaluations.** A linked row is
   graded by the compliance engine, which has no branch for these types and
-  falls back to matching training records by type.
+  falls back to matching training records by type.~~ Resolved 2026-11-14
+  (owner decision: credit it, like a program's own): the compliance grader
+  counts the member's submitted evaluations for evaluated shifts, transports
+  and refusals (`load_evaluation_credits`), only once the member can see them
+  and worth the same units as program credit — both read the rules in
+  `app/services/shift_evaluation_rules.py` — windowed and prorated for leave
+  as shifts worked are. A training record no longer satisfies these types.
+  Every compliance screen reads the same count, so a linked row, My Training
+  and the matrix agree, and a submission, edit or revocation re-reads the
+  member's linked rows. An evaluation scoped to several programs counts once
+  toward a department requirement, and a general-form evaluation counts too:
+  the requirement is the member's, not one enrollment's.
 
 **Accepted for now**
 
@@ -10296,10 +10308,10 @@ beyond the feature.
   remarks and the narrative; calls, ratings and the rest reload empty. The
   restore logic predates evaluations, which now make leaving the report
   routine.
-- **Two evaluation credits to the same requirement at the same moment can
-  lose one.** The shared credit primitive computes the new value from an
-  unlocked read. It is shared by every credit source, so it is not changed
-  here.
+- ~~**Two evaluation credits to the same requirement at the same moment can
+  lose one.**~~ Resolved 2026-11-14: crediting and reversing lock the
+  progress row and the ledger lookup, and re-read the row rather than using
+  the session's copy (`tests/test_requirement_credit_locking.py`).
 - **Credit is not re-stated when a requirement's crediting rule changes**
   (its type, or "leave out the lowest rating"), **when an evaluation's
   combined scope shrinks**, or **when its shift is deleted, an outside entry

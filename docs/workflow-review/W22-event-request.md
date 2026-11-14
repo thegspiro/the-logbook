@@ -112,10 +112,16 @@ add a `{{status_link}}` to the default acknowledgement (a department's
 customised template would not carry it), or both. Mirrored into
 `docs/KNOWN_LIMITATIONS.md`.
 
-### W22-5 — NIT — "Go to Forms to edit and publish" is plain text — OPEN
+### W22-5 — NIT — "Go to Forms to edit and publish" is plain text — ✅ FIXED
 
-**Where:** `frontend/src/pages/events-settings/FormSection.tsx:151`.
-The section's own "View all forms" link below does the job, so this is left.
+**Where:** `frontend/src/pages/events-settings/FormSection.tsx`.
+A draft form's notice named the action but did not offer it, so the officer
+had to find "View all forms" further down. The phrase is now a button that
+opens Forms. It opens the list, as "View all forms" does, because Forms has
+no per-form route. Each button's accessible name includes its form's name,
+so a page with two drafts doesn't have two buttons with the same name. At
+390px the button is 44px tall. `FormSection.test.tsx` covers it, and both
+tests failed before the change.
 
 ## Checklist
 

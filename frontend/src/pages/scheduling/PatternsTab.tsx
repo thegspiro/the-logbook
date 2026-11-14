@@ -498,14 +498,14 @@ export const PatternsTab: React.FC = () => {
             onClick={() => {
               void loadData();
             }}
-            className="text-theme-text-muted hover:text-theme-text-primary rounded-lg p-2 transition-colors"
+            className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone rounded-lg p-2 transition-colors"
             aria-label="Refresh patterns"
           >
             <RefreshCw className="h-4 w-4" />
           </button>
           <button
             onClick={() => setShowCreate(!showCreate)}
-            className="flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
+            className="touch:min-h-11 flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
           >
             <Plus className="h-4 w-4" /> New Pattern
           </button>
@@ -551,7 +551,7 @@ export const PatternsTab: React.FC = () => {
                   }}
                   className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition-all ${
                     creationMode === mode
-                      ? 'border-violet-500 bg-violet-500/10 text-violet-700 dark:text-violet-300'
+                      ? 'border-violet-500 bg-violet-500/10 text-violet-900 dark:text-violet-300'
                       : 'border-theme-surface-border text-theme-text-muted hover:border-violet-500/40'
                   }`}
                 >
@@ -824,7 +824,7 @@ export const PatternsTab: React.FC = () => {
                     <div className="space-y-3">
                       <p className="text-theme-text-muted flex items-center gap-1.5 text-xs">
                         <Sun className="h-3.5 w-3.5 text-amber-500" />
-                        <Moon className="h-3.5 w-3.5 text-indigo-700 dark:text-indigo-400" />
+                        <Moon className="h-3.5 w-3.5 text-indigo-900 dark:text-indigo-300" />
                         This pattern uses day and night shifts. Select a template for each.
                       </p>
                       <div className="form-grid-2">
@@ -861,7 +861,7 @@ export const PatternsTab: React.FC = () => {
                             className="text-theme-text-secondary mb-1 block text-xs font-medium"
                             htmlFor="pattern-night-template"
                           >
-                            <Moon className="mr-1 inline h-3 w-3 text-indigo-700 dark:text-indigo-400" />
+                            <Moon className="mr-1 inline h-3 w-3 text-indigo-900 dark:text-indigo-300" />
                             Night Shift Template *
                           </label>
                           <select
@@ -912,7 +912,7 @@ export const PatternsTab: React.FC = () => {
                         ))}
                       </select>
                       {activeTemplates.length === 0 && (
-                        <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">
+                        <p className="mt-1 text-[11px] text-amber-900 dark:text-amber-300">
                           No templates found. Create one in the Templates tab first.
                         </p>
                       )}
@@ -998,7 +998,7 @@ export const PatternsTab: React.FC = () => {
                       void handleCreate();
                     }}
                     disabled={creating}
-                    className="flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
+                    className="touch:min-h-11 flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
                   >
                     {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                     Create Pattern
@@ -1022,7 +1022,7 @@ export const PatternsTab: React.FC = () => {
           </p>
           <button
             onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm text-white hover:bg-violet-800"
+            className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm text-white hover:bg-violet-800"
           >
             <Plus className="h-4 w-4" /> Create First Pattern
           </button>
@@ -1053,10 +1053,13 @@ export const PatternsTab: React.FC = () => {
                     behind a glyph that said nothing about what it hid. The
                     toggle names itself, and the one action worth taking sits on
                     the row. */}
-                <div className="flex items-start gap-2 sm:items-center">
+                {/* Below 640px the toggle takes the whole row and Generate wraps
+                    under it: side by side, the pattern's name and dates got
+                    32px of a 390px phone and spilled out of their box. */}
+                <div className="flex flex-wrap items-start gap-x-2 sm:flex-nowrap sm:items-center">
                   <button
                     onClick={() => setExpandedId(isExpanded ? null : pattern.id)}
-                    className="flex min-w-0 flex-1 items-start justify-between gap-3 p-4 text-left sm:items-center sm:p-5"
+                    className="flex min-w-0 flex-1 basis-full items-start justify-between gap-3 p-4 text-left sm:basis-0 sm:items-center sm:p-5"
                     aria-expanded={isExpanded}
                     aria-controls={`pattern-details-${pattern.id}`}
                   >
@@ -1073,7 +1076,7 @@ export const PatternsTab: React.FC = () => {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="text-theme-text-primary text-sm font-semibold">{pattern.name}</p>
-                          <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-700 capitalize dark:text-violet-400">
+                          <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-900 capitalize dark:text-violet-300">
                             {PATTERN_TYPE_LABELS[pattern.pattern_type] ?? pattern.pattern_type}
                           </span>
                           {!pattern.is_active && (
@@ -1111,7 +1114,7 @@ export const PatternsTab: React.FC = () => {
                                   key={i}
                                   className={`flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium ${
                                     weekdays.includes(i)
-                                      ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400'
+                                      ? 'bg-violet-500/10 text-violet-900 dark:text-violet-300'
                                       : 'text-theme-text-muted opacity-40'
                                   }`}
                                 >
@@ -1121,7 +1124,7 @@ export const PatternsTab: React.FC = () => {
                                   )}
                                   {shifts.includes('night') && (
                                     <Moon
-                                      className="h-2.5 w-2.5 text-indigo-700 dark:text-indigo-400"
+                                      className="h-2.5 w-2.5 text-indigo-900 dark:text-indigo-300"
                                       aria-hidden="true"
                                     />
                                   )}
@@ -1153,7 +1156,7 @@ export const PatternsTab: React.FC = () => {
                       setGenerateForm({ start_date: '', end_date: '' });
                     }}
                     disabled={!canGenerate}
-                    className="mr-4 flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-50 max-sm:mt-4 sm:mr-5"
+                    className="touch:min-h-11 flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-800 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-900 disabled:opacity-50 max-sm:mx-4 max-sm:mb-4 sm:mr-5"
                   >
                     <Play className="h-3.5 w-3.5" aria-hidden="true" />
                     {/* Never sr-only: hiding the text on a phone leaves the same
@@ -1241,9 +1244,9 @@ export const PatternsTab: React.FC = () => {
                         <div className="flex flex-wrap gap-1">
                           {cyclePattern.map((entry, i) => {
                             let cls = 'bg-theme-surface-hover text-theme-text-muted';
-                            if (entry === 'on') cls = 'bg-violet-500/20 text-violet-600 dark:text-violet-400';
-                            else if (entry === 'day') cls = 'bg-amber-500/20 text-amber-800 dark:text-amber-400';
-                            else if (entry === 'night') cls = 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-400';
+                            if (entry === 'on') cls = 'bg-violet-500/20 text-violet-600 dark:text-violet-300';
+                            else if (entry === 'day') cls = 'bg-amber-500/20 text-amber-900 dark:text-amber-300';
+                            else if (entry === 'night') cls = 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-300';
                             return (
                               <span key={i} className={`rounded-sm px-2 py-1 text-[10px] font-semibold ${cls}`}>
                                 D{i + 1}: {String(entry).charAt(0).toUpperCase() + String(entry).slice(1)}
@@ -1337,7 +1340,7 @@ export const PatternsTab: React.FC = () => {
                             setGenerateForm({ start_date: '', end_date: '' });
                           }}
                           disabled={!canGenerate}
-                          className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-sm text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
+                          className="touch:min-h-11 flex items-center gap-1.5 rounded-lg bg-emerald-800 px-3 py-2 text-sm text-white transition-colors hover:bg-emerald-900 disabled:opacity-50"
                         >
                           <Play className="h-3.5 w-3.5" /> Generate Shifts
                         </button>
@@ -1378,7 +1381,7 @@ export const PatternsTab: React.FC = () => {
                         ) : (
                           <button
                             onClick={() => setConfirmingDelete(pattern.id)}
-                            className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
+                            className="touch:min-h-11 flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-900 transition-colors hover:bg-red-500/10 dark:text-red-300"
                           >
                             <Trash2 className="h-3.5 w-3.5" /> Delete
                           </button>
