@@ -68,7 +68,7 @@ describe('visibleElectionSections', () => {
 
   it('counts the ballot items and the nominees it is given', () => {
     const sections = visibleElectionSections(
-      election('draft', { ballot_items: [{}, {}] as unknown as Election['ballot_items'] }),
+      election('draft', { ballot_items: [{}, {}] as unknown as NonNullable<Election['ballot_items']> }),
       true,
       4
     );
