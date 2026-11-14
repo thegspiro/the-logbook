@@ -57,8 +57,14 @@ app/api/v1/endpoints/apparatus.py::list_driver_exception_approvers
 # pending request (403 for a decider, 404 for anyone else); a download needs
 # the member or may_decide, is a 404 to anyone who may not see the request,
 # and submit-with-attachments acts only on current_user like submit.
+# Confirm (2026-11-13): confirming a moved session is the member's alone, on
+# their own request (403 for a decider, 404 for anyone else), as withdraw is.
+# Questions (2026-11-13): asking needs may_decide, as approve does (never the
+# requester); answering is the member's alone, on their own pending request
+# (403 for a decider, 404 for anyone else).
 app/api/v1/endpoints/attendance_waiver_requests.py::add_attendance_waiver_attachments
 app/api/v1/endpoints/attendance_waiver_requests.py::approve_attendance_waiver_request
+app/api/v1/endpoints/attendance_waiver_requests.py::confirm_attendance_waiver_request
 app/api/v1/endpoints/attendance_waiver_requests.py::deny_attendance_waiver_request
 app/api/v1/endpoints/attendance_waiver_requests.py::download_attendance_waiver_attachment
 app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_eligibility
@@ -67,6 +73,8 @@ app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_reques
 app/api/v1/endpoints/attendance_waiver_requests.py::list_attendance_waiver_requests
 app/api/v1/endpoints/attendance_waiver_requests.py::list_my_attendance_waiver_requests
 app/api/v1/endpoints/attendance_waiver_requests.py::override_attendance_waiver_request
+app/api/v1/endpoints/attendance_waiver_requests.py::request_attendance_waiver_info
+app/api/v1/endpoints/attendance_waiver_requests.py::respond_attendance_waiver_request
 app/api/v1/endpoints/attendance_waiver_requests.py::submit_attendance_waiver_request
 app/api/v1/endpoints/attendance_waiver_requests.py::submit_attendance_waiver_request_with_attachments
 app/api/v1/endpoints/attendance_waiver_requests.py::withdraw_attendance_waiver_request
@@ -319,7 +327,10 @@ app/api/v1/endpoints/medical_screening.py::get_my_compliance
 # requires meetings.manage). Eligibility, submit and /mine act only on
 # current_user; the queue and a request by id follow may_decide or ownership,
 # 404 otherwise; withdraw is the member's alone; override needs a Chief.
+# Asking the member a question needs may_decide; answering it is the
+# member's alone, as for training.
 app/api/v1/endpoints/meeting_waiver_requests.py::approve_meeting_waiver_request
+app/api/v1/endpoints/meeting_waiver_requests.py::confirm_meeting_waiver_request
 app/api/v1/endpoints/meeting_waiver_requests.py::deny_meeting_waiver_request
 app/api/v1/endpoints/meeting_waiver_requests.py::get_meeting_waiver_eligibility
 app/api/v1/endpoints/meeting_waiver_requests.py::get_meeting_waiver_policy
@@ -327,6 +338,8 @@ app/api/v1/endpoints/meeting_waiver_requests.py::get_meeting_waiver_request
 app/api/v1/endpoints/meeting_waiver_requests.py::list_meeting_waiver_requests
 app/api/v1/endpoints/meeting_waiver_requests.py::list_my_meeting_waiver_requests
 app/api/v1/endpoints/meeting_waiver_requests.py::override_meeting_waiver_request
+app/api/v1/endpoints/meeting_waiver_requests.py::request_meeting_waiver_info
+app/api/v1/endpoints/meeting_waiver_requests.py::respond_meeting_waiver_request
 app/api/v1/endpoints/meeting_waiver_requests.py::submit_meeting_waiver_request
 app/api/v1/endpoints/meeting_waiver_requests.py::withdraw_meeting_waiver_request
 
@@ -461,6 +474,12 @@ app/api/v1/endpoints/shift_evaluations.py::list_my_shift_evaluations
 # training.manage, the evaluator, or the evaluated member once visible to
 # them; anyone else gets the same 404 as a missing row.
 app/api/v1/endpoints/shift_evaluations.py::get_shift_evaluation
+# Preceptor links: the member who logged the outside shift, or training.manage
+# (_entry_for_link); anyone else gets the same 404 as a missing shift.
+app/api/v1/endpoints/shift_evaluations.py::create_preceptor_link
+app/api/v1/endpoints/shift_evaluations.py::get_preceptor_link
+app/api/v1/endpoints/shift_evaluations.py::revoke_preceptor_link
+app/api/v1/endpoints/shift_evaluations.py::send_preceptor_link
 
 app/api/v1/endpoints/shift_completion.py::acknowledge_report
 app/api/v1/endpoints/shift_completion.py::batch_create_shift_reports

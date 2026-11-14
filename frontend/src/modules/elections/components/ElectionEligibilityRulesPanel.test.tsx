@@ -98,6 +98,17 @@ describe('ElectionEligibilityRulesPanel', () => {
     expect(screen.getByRole('button', { name: 'Save voter rules' })).toBeDisabled();
   });
 
+  it('says a waived meeting shortens the meeting-count look-back (owner decision, 2026-11-13)', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ElectionEligibilityRulesPanel election={baseElection} onUpdate={vi.fn()} />);
+
+    const hint = /6 of the last 12 with one waived means 6 of the other 11/;
+    expect(screen.getByText(hint)).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Requirement'), 'percent');
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
+  });
+
   it('shows the rules as fixed once voting is open', () => {
     renderWithRouter(
       <ElectionEligibilityRulesPanel election={{ ...baseElection, status: 'open' }} onUpdate={vi.fn()} />

@@ -7,6 +7,7 @@ const mockListMine = vi.fn();
 vi.mock('../../services/attendanceWaiverService', () => ({
   attendanceWaiverService: { listMine: (...args: unknown[]) => mockListMine(...args) as unknown },
 }));
+vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
 
 import MyAttendanceWaiverRequests from './MyAttendanceWaiverRequests';
 
@@ -27,6 +28,11 @@ const request = (over: Partial<AttendanceWaiverRequest> = {}): AttendanceWaiverR
   decided_by: 'u2',
   decided_by_name: 'Lt. Smith',
   chief_override: false,
+  info_requested_at: null,
+  reconfirm_requested_at: null,
+  can_respond: false,
+  can_confirm: false,
+  can_request_info: false,
   can_withdraw: false,
   can_decide: false,
   can_override: false,
@@ -66,5 +72,20 @@ describe('MyAttendanceWaiverRequests', () => {
     expect(screen.getByText('Deleted Drill')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Deleted Drill' })).not.toBeInTheDocument();
     expect(screen.getByText('Withdrawn')).toBeInTheDocument();
+  });
+
+  it('says when a pending request closes undecided, and lists an expired one by its status', async () => {
+    mockListMine.mockResolvedValue([
+      request({
+        status: 'pending',
+        decided_by_name: null,
+        expires_at: '2026-11-28T05:00:00Z',
+      }),
+      request({ id: 'req-2', event_title: 'Pump Drill', status: 'expired', decided_by_name: null, expires_at: null }),
+    ]);
+    renderWithRouter(<MyAttendanceWaiverRequests wrap={wrap} />);
+    expect(await screen.findByText(/^Closes undecided on Saturday, November 28, 2026/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Closes undecided/)).toHaveLength(1);
+    expect(screen.getByText('Expired')).toBeInTheDocument();
   });
 });

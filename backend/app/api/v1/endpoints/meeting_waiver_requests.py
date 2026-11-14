@@ -19,19 +19,26 @@ be medical.
 
 GET    /meetings/waiver-requests/policy             - The department's policy
 PUT    /meetings/waiver-requests/policy             - Save it (meetings.manage)
+GET    /meetings/waiver-requests/policy/alternate   - Who may be the officers'
+                                                      alternate (meetings.manage)
+GET    /meetings/waiver-requests/policy/positions   - The positions to choose
+                                                      from (meetings.manage)
 GET    /meetings/waiver-requests/eligibility        - May I ask about this meeting?
 POST   /meetings/waiver-requests                    - Ask to be excused
 GET    /meetings/waiver-requests/mine               - My requests
 GET    /meetings/waiver-requests                    - Requests I decide or decided
 GET    /meetings/waiver-requests/{id}               - One request
 POST   /meetings/waiver-requests/{id}/withdraw      - Withdraw my pending request
+POST   /meetings/waiver-requests/{id}/confirm       - My moved meeting still needs it
 POST   /meetings/waiver-requests/{id}/approve       - Approve a pending request
 POST   /meetings/waiver-requests/{id}/deny          - Deny a pending request
 POST   /meetings/waiver-requests/{id}/override      - The Chief approves a denial
+POST   /meetings/waiver-requests/{id}/request-info  - Ask the member a question
+POST   /meetings/waiver-requests/{id}/respond       - Answer the open question
 
 Who may decide is a matter of holding a position (the department picks the
 positions; the Secretary and meetings managers are the fallback, and a Chief
-may always decide), so every route but the policy save is signed-in only and
+or President may always decide), so every route but the policy save is signed-in only and
 the service decides. A request is answered 404 to anyone who is neither its
 member nor someone who may decide it.
 """
@@ -50,15 +57,19 @@ from app.models.attendance_waiver import (
 )
 from app.models.user import User
 from app.schemas.attendance_waiver import (
+    AttendanceWaiverAlternateOptions,
     AttendanceWaiverDecision,
     AttendanceWaiverEligibilityResponse,
+    AttendanceWaiverMessage,
     AttendanceWaiverOverride,
     AttendanceWaiverPolicy,
+    AttendanceWaiverPositionOptions,
     AttendanceWaiverRequestPage,
     AttendanceWaiverRequestResponse,
     AttendanceWaiverSubmit,
 )
 from app.services.attendance_waiver_service import AttendanceWaiverService
+from app.services.compliance_config_service import ComplianceConfigService
 
 router = APIRouter()
 
@@ -89,8 +100,8 @@ async def save_meeting_waiver_policy(
 ):
     """
     Save the department's policy for business-meeting waiver requests, so the
-    Secretary can change it without settings.manage. Approver positions must
-    belong to the department (400 otherwise).
+    Secretary can change it without settings.manage. Approver and copy-to
+    (CC) positions must belong to the department (400 otherwise).
 
     **Requires permission: meetings.manage**
     """
@@ -98,6 +109,38 @@ async def save_meeting_waiver_policy(
         return await _service(db).save_policy(
             str(current_user.organization_id), body, current_user
         )
+
+
+@router.get("/policy/positions", response_model=AttendanceWaiverPositionOptions)
+async def get_meeting_waiver_position_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("meetings.manage")),
+):
+    """
+    For the settings screen: the department's positions, by id and name, to
+    choose who decides and who is copied on decisions.
+
+    **Requires permission: meetings.manage**
+    """
+    positions = await ComplianceConfigService(db).get_available_positions(
+        str(current_user.organization_id)
+    )
+    return {"positions": positions}
+
+
+@router.get("/policy/alternate", response_model=AttendanceWaiverAlternateOptions)
+async def get_meeting_waiver_alternate_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("meetings.manage")),
+):
+    """
+    For the settings: the current members who may be named to decide the
+    Chief's or President's own request when the other office is vacant, and
+    whether the stored alternate is still a current member.
+
+    **Requires permission: meetings.manage**
+    """
+    return await _service(db).alternate_options(str(current_user.organization_id))
 
 
 @router.get("/eligibility", response_model=AttendanceWaiverEligibilityResponse)
@@ -154,7 +197,8 @@ async def list_my_meeting_waiver_requests(
     current_user: User = Depends(get_current_user),
 ):
     """
-    The caller's own business-meeting requests, newest first.
+    The caller's own business-meeting requests, newest first, each with its
+    decision log, so a decider's question can be read and answered.
 
     **Authentication required**
     """
@@ -163,7 +207,9 @@ async def list_my_meeting_waiver_requests(
     requests = await service.list_mine(org_id, current_user)
     return [
         AttendanceWaiverRequestResponse(**body)
-        for body in await service.describe(org_id, current_user, requests)
+        for body in await service.describe(
+            org_id, current_user, requests, with_actions=True
+        )
     ]
 
 
@@ -236,6 +282,28 @@ async def withdraw_meeting_waiver_request(
     return await _one(service, current_user, request)
 
 
+@router.post("/{request_id}/confirm", response_model=AttendanceWaiverRequestResponse)
+async def confirm_meeting_waiver_request(
+    request_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Confirm that the caller's own request still stands after its meeting
+    moved, which sends it back to the deciders. 400 when it is not waiting on
+    a confirmation, or the new date no longer needs a waiver; 403 for a
+    decider, 404 for anyone else.
+
+    **Authentication required**
+    """
+    service = _service(db)
+    with _refusals():
+        request = await service.confirm(
+            str(current_user.organization_id), current_user, request_id
+        )
+    return await _one(service, current_user, request)
+
+
 @router.post("/{request_id}/approve", response_model=AttendanceWaiverRequestResponse)
 async def approve_meeting_waiver_request(
     request_id: str,
@@ -294,6 +362,52 @@ async def override_meeting_waiver_request(
     service = _service(db)
     with _refusals():
         request = await service.chief_override(
+            str(current_user.organization_id), current_user, request_id, body.note
+        )
+    return await _one(service, current_user, request)
+
+
+@router.post(
+    "/{request_id}/request-info", response_model=AttendanceWaiverRequestResponse
+)
+async def request_meeting_waiver_info(
+    request_id: str,
+    body: AttendanceWaiverMessage,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Ask the member a question about their pending request. Only someone who
+    may decide it; the request stays pending and may still be decided. 400
+    when it is no longer pending or a question is already open.
+
+    **Authentication required**
+    """
+    service = _service(db)
+    with _refusals():
+        request = await service.request_info(
+            str(current_user.organization_id), current_user, request_id, body.note
+        )
+    return await _one(service, current_user, request)
+
+
+@router.post("/{request_id}/respond", response_model=AttendanceWaiverRequestResponse)
+async def respond_meeting_waiver_request(
+    request_id: str,
+    body: AttendanceWaiverMessage,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The member answers the open question on their own pending request, and
+    its deciders are asked again. 400 when no question is open; 403 for a
+    decider, 404 for anyone else.
+
+    **Authentication required**
+    """
+    service = _service(db)
+    with _refusals():
+        request = await service.respond(
             str(current_user.organization_id), current_user, request_id, body.note
         )
     return await _one(service, current_user, request)

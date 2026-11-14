@@ -54,8 +54,9 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
 
         <div className="px-6 pt-6">
           <p className="text-theme-text-secondary text-sm">
-            Make a selection for each item below. You can vote for an option, write in your own choice where allowed, or
-            abstain on any item.
+            {(election.ballot_items || []).some((item) => itemAllowsWriteIn(item, election.allow_write_ins))
+              ? 'Make a selection for each item below. You can vote for an option, write in your own choice where offered, or abstain on any item.'
+              : 'Make a selection for each item below. You can vote for an option or abstain on any item.'}
           </p>
         </div>
 

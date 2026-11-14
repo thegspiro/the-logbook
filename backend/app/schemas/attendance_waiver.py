@@ -94,6 +94,12 @@ class AttendanceWaiverPolicy(BaseModel):
         le=MAX_ATTACHMENT_RETENTION_DAYS,
     )
     approver_position_ids: List[str] = Field(default_factory=list)
+    # Positions told of each final decision. Informed only: they cannot decide
+    # and are never shown the member's reason.
+    cc_position_ids: List[str] = Field(default_factory=list)
+    # The member who decides the Chief's own request when no one holds the
+    # President's office (and the President's when no one holds the Chief's).
+    chief_alternate_user_id: Optional[str] = Field(default=None, max_length=36)
 
     @field_validator("categories")
     @classmethod
@@ -119,15 +125,20 @@ class AttendanceWaiverPolicy(BaseModel):
             raise ValueError(f"At most {MAX_CATEGORIES} categories")
         return cleaned
 
-    @field_validator("approver_position_ids")
+    @field_validator("approver_position_ids", "cc_position_ids")
     @classmethod
     def _clean_position_ids(cls, value: List[str]) -> List[str]:
         ids = list(dict.fromkeys(str(v).strip() for v in value))
         if any(not i or len(i) > 36 for i in ids):
             raise ValueError("Invalid position")
         if len(ids) > MAX_APPROVER_POSITIONS:
-            raise ValueError(f"At most {MAX_APPROVER_POSITIONS} approver positions")
+            raise ValueError(f"At most {MAX_APPROVER_POSITIONS} positions")
         return ids
+
+    @field_validator("chief_alternate_user_id")
+    @classmethod
+    def _clean_alternate(cls, value: Optional[str]) -> Optional[str]:
+        return (value or "").strip() or None
 
     @model_validator(mode="after")
     def _category_required_needs_categories(self) -> "AttendanceWaiverPolicy":
@@ -168,6 +179,13 @@ class AttendanceWaiverDecision(BaseModel):
 
 
 class AttendanceWaiverOverride(BaseModel):
+    # Blank is refused by the service, which trims first.
+    note: str = Field(..., max_length=MAX_TEXT_LENGTH)
+
+
+class AttendanceWaiverMessage(BaseModel):
+    """A decider's question to the member, or the member's answer to it."""
+
     # Blank is refused by the service, which trims first.
     note: str = Field(..., max_length=MAX_TEXT_LENGTH)
 
@@ -250,7 +268,19 @@ class AttendanceWaiverRequestResponse(UTCResponseBase):
     decided_by: Optional[str] = None
     decided_by_name: Optional[str] = None
     chief_override: bool
+    # When a pending request closes undecided (expires_at_for); None once it
+    # is settled. Screens show it rather than working it out.
+    expires_at: Optional[datetime] = None
+    # Open while a decider's question waits on the member's answer.
+    info_requested_at: Optional[datetime] = None
+    # Open while a rescheduled session waits on the member to confirm.
+    reconfirm_requested_at: Optional[datetime] = None
     can_withdraw: bool = False
+    # The member may answer the open question / confirm the new date.
+    can_respond: bool = False
+    can_confirm: bool = False
+    # The viewer may ask the member a question (a decider, while pending).
+    can_request_info: bool = False
     can_decide: bool = False
     can_override: bool = False
     # Whether the viewer may file another document now: the member, while the
@@ -266,3 +296,41 @@ class AttendanceWaiverRequestPage(UTCResponseBase):
     total: int
     skip: int
     limit: int
+
+
+class AttendanceWaiverAlternateMember(BaseModel):
+    id: str
+    name: str
+
+
+class AttendanceWaiverAlternateStored(BaseModel):
+    """The policy's stored alternate. ``current`` is false once the member is no
+    longer an active or probationary member of the department; while it is,
+    nobody stands in for a vacant Chief or President, and the settings screen
+    warns."""
+
+    id: str
+    name: Optional[str] = None
+    current: bool
+
+
+class AttendanceWaiverPositionOption(BaseModel):
+    id: str
+    name: str
+
+
+class AttendanceWaiverPositionOptions(BaseModel):
+    """The department's positions, for the settings screen's "who decides" and
+    "copy decisions to" pickers. Served under each workflow's own manage
+    permission, so a Secretary who holds meetings.manage but not
+    training.manage or compliance.manage can still set the meeting policy."""
+
+    positions: List[AttendanceWaiverPositionOption]
+
+
+class AttendanceWaiverAlternateOptions(BaseModel):
+    """What the settings screen's alternate picker offers: the department's
+    current members, and how the stored choice stands."""
+
+    members: List[AttendanceWaiverAlternateMember]
+    alternate: Optional[AttendanceWaiverAlternateStored] = None

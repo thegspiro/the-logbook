@@ -180,6 +180,13 @@ from app.utils.org_timezone import (
 
 router = APIRouter()
 
+
+def _leadership_notified(count: int) -> str:
+    """ "1 leadership member" / "3 leadership members", for the delete and
+    roll-back notices, which read "1 leadership members" (W50-76)."""
+    return f"{count} leadership {'member' if count == 1 else 'members'}"
+
+
 # ELEC-12 (owner decision 2026-10-05): every Ballot Builder load returns the
 # whole list, so the bound is on creation rather than on the response — a cap
 # leaves the list contract untouched. 200 is far above any department's real
@@ -2458,7 +2465,10 @@ async def delete_election(
     if election_status == "draft":
         message = "Election deleted successfully"
     else:
-        message = f"Election deleted. {notifications_sent} leadership members have been notified."
+        message = (
+            f"Election deleted. {_leadership_notified(notifications_sent)} "
+            f"{'has' if notifications_sent == 1 else 'have'} been notified."
+        )
 
     return ElectionDeleteResponse(
         success=True,
@@ -3097,7 +3107,10 @@ async def rollback_election(
     return ElectionRollbackResponse(
         success=True,
         election=election,
-        message=f"Election rolled back successfully. {notifications_sent} leadership members notified.",
+        message=(
+            "Election rolled back successfully. "
+            f"{_leadership_notified(notifications_sent)} notified."
+        ),
         notifications_sent=notifications_sent,
     )
 

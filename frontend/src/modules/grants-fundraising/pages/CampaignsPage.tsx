@@ -40,11 +40,11 @@ const CAMPAIGN_TYPE_LABELS: Record<string, string> = {
 
 const CAMPAIGN_TYPE_COLORS: Record<string, string> = {
   general: 'bg-theme-surface-secondary text-theme-text-secondary',
-  equipment: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-  training: 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400',
-  community: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400',
-  memorial: 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400',
-  event: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400',
+  equipment: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  training: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  community: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
+  memorial: 'bg-purple-100 text-purple-900 dark:bg-purple-500/20 dark:text-purple-300',
+  event: 'bg-indigo-100 text-indigo-900 dark:bg-indigo-500/20 dark:text-indigo-300',
   other: 'bg-theme-surface-secondary text-theme-text-secondary',
 };
 
@@ -699,7 +699,7 @@ const CampaignsPage: React.FC = () => {
                 {/* Campaign Name & Badges */}
                 <div>
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-theme-text-primary text-lg font-bold">{campaign.name}</h3>
+                    <h2 className="text-theme-text-primary text-lg font-bold">{campaign.name}</h2>
                     {canManage && (
                       <button
                         type="button"

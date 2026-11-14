@@ -794,6 +794,7 @@ section had no scheduling entry at all. That row is gone.
 | `/scheduling/checkin`                                                | Shift Check-In                 | Authenticated       |
 | `/scheduling/shift-reports/:shiftId/evaluations/:memberId/:scopeKey` | Shift Evaluation               | Authenticated       |
 | `/scheduling/outside-shifts/:entryId/evaluations/:scopeKey`          | Outside Shift Evaluation       | Authenticated       |
+| `/shift-evaluation/:token`                                           | Preceptor Shift Evaluation     | None (token-based)  |
 
 > **The old URLs are gone, with no redirect.** `/scheduling/templates`,
 > `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/platoons`,
@@ -1201,13 +1202,28 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Minutes
 
-| URL                   | Page                         | Permission        |
-| --------------------- | ---------------------------- | ----------------- |
-| `/minutes`            | Minutes List                 | Authenticated     |
-| `/minutes/attendance` | Meeting Attendance Dashboard | `meetings.manage` |
-| `/minutes/outlines`   | Meeting Outlines             | `minutes.manage`  |
-| `/minutes/settings`   | Minutes Settings             | `minutes.manage`  |
-| `/minutes/:minutesId` | Minutes Detail               | Authenticated     |
+| URL                                   | Page                                     | Permission        |
+| ------------------------------------- | ---------------------------------------- | ----------------- |
+| `/minutes`                            | Minutes List                             | Authenticated     |
+| `/minutes/attendance`                 | Meeting Attendance Dashboard             | `meetings.manage` |
+| `/minutes/attendance/waiver-settings` | Meeting Waiver Request Settings          | `meetings.manage` |
+| `/minutes/outlines`                   | Meeting Outlines                         | `minutes.manage`  |
+| `/minutes/settings`                   | Minutes Settings                         | `minutes.manage`  |
+| `/minutes/:minutesId`                 | Minutes Detail                           | Authenticated     |
+| `/meetings/waiver-requests`           | Meeting Waiver Requests (approver queue) | Authenticated     |
+| `/meetings/waiver-requests/:id`       | Meeting Waiver Decision                  | Authenticated     |
+
+> **`/meetings/waiver-requests` and `/meetings/waiver-requests/:id` are the
+> business-meeting waiver request screens** _(2026-11-13)_. They are the session
+> waiver screens above, bound to the meeting workflow. A member asks to be
+> excused from a business meeting on its event page, and answers an officer's
+> question or confirms a moved meeting on that same card. Neither route names a
+> permission: who decides is the positions chosen in the meeting waiver settings,
+> the Chief and President, then the Secretary and, failing both, the members who
+> manage meetings, and the API scopes the queue and answers 404 for a request the
+> viewer may not see. The paths are the backend's `decider_path`, which the
+> deciders' emails link to. The settings live under the attendance dashboard and
+> need `meetings.manage`, the permission the API saves the policy under.
 
 ---
 

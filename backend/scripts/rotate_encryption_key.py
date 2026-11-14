@@ -74,6 +74,11 @@ _PLAIN_COLUMNS = [
         ["responses", "closing_comments"],
     ),
     (
+        "shift_evaluation_links",
+        "id",
+        ["token", "preceptor_email"],
+    ),
+    (
         "users",
         "id",
         [

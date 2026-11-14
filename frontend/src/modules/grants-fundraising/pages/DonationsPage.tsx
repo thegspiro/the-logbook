@@ -15,11 +15,11 @@ import { getErrorMessage } from '@/utils/errorHandling';
 const LIST_LIMIT = 1000;
 
 const PAYMENT_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
-  completed: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  failed: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  pending: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
+  completed: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  failed: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
   refunded: 'bg-theme-surface-secondary text-theme-text-secondary',
-  cancelled: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
+  cancelled: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
 };
 
 const DonationsPage: React.FC = () => {
@@ -250,7 +250,7 @@ const DonationsPage: React.FC = () => {
                     </td>
                     <td data-label="Receipt" className="px-4 py-3 whitespace-nowrap">
                       {donation.receiptSent ? (
-                        <span className="flex items-center gap-1 text-xs text-green-700 dark:text-green-600">
+                        <span className="flex items-center gap-1 text-xs text-green-800 dark:text-green-300">
                           <Receipt className="h-3 w-3" /> Sent
                         </span>
                       ) : (

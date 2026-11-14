@@ -39,6 +39,68 @@ export function formatFigure(entry: DataEntry | undefined, unit: EvaluationDataS
   }
 }
 
+const num = (v: unknown): number | undefined => (typeof v === 'number' ? v : undefined);
+const count = (n: number, one: string, many: string): string => `${formatNumber(n)} ${n === 1 ? one : many}`;
+
+/**
+ * The counts behind a measured figure, in words, or null: 75% of four
+ * meetings is not 75% of twenty, and a waiver count says nothing of what
+ * became of the requests. Read from the extras each source stores beside its
+ * value, so an older snapshot without them shows no detail. The PDF words the
+ * same details in `figure_detail` (backend
+ * `services/evaluation_document_service.py`); change both together.
+ */
+export function figureDetail(key: string, entry: DataEntry | undefined): string | null {
+  if (!entry?.available) return null;
+  if (key === 'training.requirements_met_pct') {
+    const met = num(entry.met);
+    const total = num(entry.total);
+    if (met !== undefined && total !== undefined) {
+      return `${formatNumber(met)} of ${count(total, 'requirement', 'requirements')} met`;
+    }
+  }
+  if (key === 'training.session_attendance_pct') {
+    const attended = num(entry.attended);
+    const held = num(entry.held);
+    const excused = num(entry.excused) ?? 0;
+    if (attended !== undefined && held !== undefined) {
+      let text = `${formatNumber(attended)} of ${count(held - excused, 'session', 'sessions')} attended`;
+      if (excused) text += ` (${formatNumber(excused)} excused)`;
+      if (typeof entry.requirement === 'string' && entry.requirement) {
+        text += `; ${entry.requirement} requires ${formatNumber(num(entry.required_pct) ?? 0)}%`;
+      }
+      return text;
+    }
+  }
+  if (key === 'events.meeting_attendance_pct') {
+    const attended = num(entry.attended);
+    const held = num(entry.held);
+    if (attended !== undefined && held !== undefined) {
+      return `${formatNumber(attended)} of ${count(held, 'meeting', 'meetings')} attended`;
+    }
+  }
+  if (key === 'calls.response_pct') {
+    const responses = num(entry.responses);
+    const calls = num(entry.department_calls);
+    if (responses !== undefined && calls !== undefined) {
+      let text = `${count(responses, 'response', 'responses')} to ${count(calls, 'department call', 'department calls')}`;
+      if (entry.capped === true) {
+        text += "; shown as 100% because shift call credit exceeds the department's call log";
+      }
+      return text;
+    }
+  }
+  if (key === 'shifts.hours') {
+    const external = num(entry.external_hours);
+    if (external) return `Not included: ${formatNumber(external, { maximumFractionDigits: 2 })} h for other agencies`;
+  }
+  if (key === 'shifts.count') {
+    const external = num(entry.external_shifts);
+    if (external) return `Not included: ${count(external, 'shift', 'shifts')} for other agencies`;
+  }
+  return typeof entry.breakdown === 'string' && entry.breakdown ? entry.breakdown : null;
+}
+
 /** The items a part answers: a self-evaluation answers only the items its
  * template includes in it. */
 export function partItems(definition: TemplateDefinition, kind: EvaluationPartKind): TemplateItem[] {

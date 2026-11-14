@@ -88,6 +88,7 @@ import { GuestCheckInQRCard } from '../components/events/GuestCheckInQRCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
 import AttendanceWaiverCard from '../components/event-detail/AttendanceWaiverCard';
+import { MEETING_WAIVER_WORKFLOW } from '../utils/attendanceWaiverWorkflows';
 import EventTransferModal from '../components/event-detail/EventTransferModal';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { formatHoursExact } from '../utils/hoursFormatting';
@@ -1763,6 +1764,14 @@ export const EventDetailPage: React.FC = () => {
             {/* Whether the session counts against this member is the server's
                 answer; the card renders nothing when it does not. */}
             {isTrainingEvent && <AttendanceWaiverCard eventId={event.id} eventTitle={event.title} timezone={tz} />}
+            {event.event_type === EventTypeEnum.BUSINESS_MEETING && (
+              <AttendanceWaiverCard
+                eventId={event.id}
+                eventTitle={event.title}
+                timezone={tz}
+                workflow={MEETING_WAIVER_WORKFLOW}
+              />
+            )}
 
             {attendancePetitionsOpen && <EventAttendancePetitionPrompt eventId={event.id} timezone={tz} />}
 

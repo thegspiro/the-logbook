@@ -147,6 +147,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       { path: '/event-request/status/:token', label: 'Event request status', isPublic: true },
       {
+        path: '/shift-evaluation/:token',
+        label: 'Preceptor shift evaluation',
+        note: 'Token-based; reached from a preceptor link QR code or email',
+        isPublic: true,
+      },
+      {
         path: '/display/:code',
         label: 'Location kiosk display',
         note: 'Room QR display for a wall tablet',
@@ -1000,6 +1006,24 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         label: 'Meeting attendance dashboard',
         permission: 'meetings.manage',
         module: 'minutes',
+      },
+      {
+        path: '/minutes/attendance/waiver-settings',
+        label: 'Meeting waiver request settings',
+        permission: 'meetings.manage',
+        module: 'minutes',
+      },
+      {
+        path: '/meetings/waiver-requests',
+        label: 'Meeting waiver requests',
+        module: 'minutes',
+        note: 'Only requests the viewer may decide or has decided',
+      },
+      {
+        path: '/meetings/waiver-requests/:id',
+        label: 'Meeting waiver decision',
+        module: 'minutes',
+        note: 'Opened from the approver email; ?action=approve|deny pre-selects only',
       },
       {
         path: '/minutes/outlines',

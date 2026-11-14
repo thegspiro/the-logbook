@@ -53,6 +53,7 @@ from app.models.shift_evaluation import (
     GENERAL_SCOPE,
     SHIFT_OCCASION,
     ShiftEvaluation,
+    ShiftEvaluationLink,
     ShiftEvaluationTemplate,
 )
 from app.models.training import (
@@ -83,7 +84,11 @@ from app.schemas.shift_evaluation import (
     ShiftEvaluationSummary,
     TemplateOption,
 )
-from app.services.training_program_service import TrainingProgramService
+from app.schemas.training_program import RequirementProgressUpdate
+from app.services.training_program_service import (
+    EVALUATION_REQUIREMENT_TARGETS,
+    TrainingProgramService,
+)
 from app.utils.org_timezone import local_date, resolve_scheduling_timezone
 from app.utils.positions import canonical_position
 
@@ -107,19 +112,44 @@ _SNAPSHOT_FIELDS = (
 )
 
 
+# Logged outside shifts that call for an evaluation: counted ones, and ones
+# awaiting an officer's approval. A rejected one calls for none.
+_EVALUATED_ENTRY_STATUSES = (
+    ExternalShiftHoursStatus.COUNTED.value,
+    ExternalShiftHoursStatus.PENDING.value,
+)
+
 # The requirement types an evaluation credits.
 _CREDITED_TYPES = (
     RequirementType.EVALUATED_SHIFTS,
     RequirementType.TRANSPORTS,
     RequirementType.REFUSALS,
 )
-# A progress row in one of these states takes no new credit: the member is
-# already done, or the requirement was set aside for them.
+# A progress row in one of these states takes no new credit: an officer
+# signed it off, or the requirement was set aside for the member. A COMPLETED
+# row keeps counting: an evaluation taken back later would otherwise leave the
+# member short of a target their other evaluations had met.
 _CLOSED_PROGRESS = (
-    RequirementProgressStatus.COMPLETED,
     RequirementProgressStatus.VERIFIED,
     RequirementProgressStatus.WAIVED,
 )
+
+
+def _met_by_value(progress: Any, requirement: Any) -> bool:
+    """Whether the row's own value had reached the requirement's target.
+
+    A COMPLETED status pins the percentage at 100 whatever the value, so the
+    value is what tells a completion the credit earned from an officer's.
+    """
+    column = EVALUATION_REQUIREMENT_TARGETS.get(requirement.requirement_type)
+    target = getattr(requirement, column, None) if column else None
+    if not target:
+        return False
+    return float(progress.progress_value or 0) >= float(target)
+
+
+def _is_viewer(member_id: Any, viewer_id: Optional[str]) -> bool:
+    return viewer_id is not None and str(member_id) == str(viewer_id)
 
 
 def credit_units(evaluation: ShiftEvaluation, requirement: Any) -> float:
@@ -179,13 +209,33 @@ class _Scope:
     enrollments: list[ProgramEnrollment]
     program_names: list[str]
     templates: list[ShiftEvaluationTemplate]
+    # Each enrollment's program form, parallel to ``enrollments``.
+    template_ids: list[str] = field(default_factory=list)
 
-    def started_by(self, cutoff: tuple[date, Any]) -> bool:
-        """Whether any of its enrollments began on or before the shift's date."""
+    def as_of(self, cutoff: tuple[date, Any]) -> Optional["_Scope"]:
+        """The scope narrowed to the enrollments begun by the shift's date.
+
+        A shift counts only toward programs the member had joined by then, so
+        a combined evaluation drops a program joined afterwards rather than
+        crediting it (None when no enrollment is left).
+        """
         shift_date, tz = cutoff
-        return any(
-            e.enrolled_at is None or local_date(e.enrolled_at, tz) <= shift_date
-            for e in self.enrollments
+        kept = [
+            i
+            for i, e in enumerate(self.enrollments)
+            if e.enrolled_at is None or local_date(e.enrolled_at, tz) <= shift_date
+        ]
+        if len(kept) == len(self.enrollments):
+            return self
+        if not kept:
+            return None
+        kept_template_ids = {self.template_ids[i] for i in kept}
+        return _Scope(
+            scope_key=self.scope_key,
+            enrollments=[self.enrollments[i] for i in kept],
+            program_names=[self.program_names[i] for i in kept],
+            templates=[t for t in self.templates if str(t.id) in kept_template_ids],
+            template_ids=[self.template_ids[i] for i in kept],
         )
 
 
@@ -388,6 +438,9 @@ class ShiftEvaluationService:
                         enrollments=[e for e, _ in pairs],
                         program_names=[p.name for _, p in pairs],
                         templates=options,
+                        template_ids=[
+                            str(p.shift_evaluation_template_id) for _, p in pairs
+                        ],
                     )
                 ]
             elif pairs:
@@ -399,6 +452,7 @@ class ShiftEvaluationService:
                         templates=[
                             templates[str(program.shift_evaluation_template_id)]
                         ],
+                        template_ids=[str(program.shift_evaluation_template_id)],
                     )
                     for enrollment, program in pairs
                 ]
@@ -461,9 +515,12 @@ class ShiftEvaluationService:
             entry = occasion.entry
             if entry is None:
                 raise ValueError("An outside-shift occasion needs its entry")
-            # An outside shift is evaluated only while it counts and only on
-            # an agency the department asked to evaluate.
-            if entry.status == ExternalShiftHoursStatus.COUNTED.value and (
+            # An outside shift is evaluated only while it counts, or awaits an
+            # officer's approval, and only on an agency the department asked
+            # to evaluate. A pending one is evaluated without waiting, since a
+            # preceptor's link closes days after the shift; the member sees it,
+            # and credit lands, once the shift is approved (visible_to_member).
+            if entry.status in _EVALUATED_ENTRY_STATUSES and (
                 str(entry.external_apparatus_id or "")
                 in await self._evaluated_apparatus_ids(org)
             ):
@@ -498,9 +555,9 @@ class ShiftEvaluationService:
         result: list[_Requirement] = []
         for member_id, (seat, user) in members.items():
             member_scopes = [
-                scope
+                narrowed
                 for scope in scopes.get(member_id, [])
-                if cutoff is None or scope.started_by(cutoff)
+                if (narrowed := scope.as_of(cutoff)) is not None
             ]
             if member_scopes:
                 for scope in member_scopes:
@@ -573,16 +630,14 @@ class ShiftEvaluationService:
 
     async def _enrollment_cutoff(
         self, occasion: "_Occasion", organization_id: str
-    ) -> Optional[tuple[date, Any]]:
-        """For an outside shift, its date and the department's timezone.
+    ) -> tuple[date, Any]:
+        """The shift's date and the department's timezone.
 
-        A department shift is evaluated as it closes, so whoever is enrolled
-        then is evaluated. An outside shift is logged afterwards, sometimes
-        long afterwards; a shift from before the member joined the program is
-        not one the program asks to have evaluated.
+        A shift counts only toward programs the member had joined by its
+        date, department and outside shifts alike (owner decision,
+        2026-11-13): an evaluation submitted or re-saved later must not
+        credit a program the member joined after the shift.
         """
-        if occasion.kind != EXTERNAL_OCCASION:
-            return None
         return (
             occasion.shift_date,
             await resolve_scheduling_timezone(self.db, organization_id),
@@ -610,8 +665,10 @@ class ShiftEvaluationService:
     # -- Responses ---------------------------------------------------------
 
     def _requirement_response(
-        self, requirement: _Requirement, users: dict[str, User]
+        self, requirement: _Requirement, users: dict[str, User], own: bool = False
     ) -> ShiftEvaluationRequirement:
+        """One roster row. ``own``: the viewer is the evaluated member, who
+        sees where it stands (close-out depends on it) but not its scores."""
         evaluation = requirement.evaluation
         options = [TemplateOption(id=t.id, name=t.name) for t in requirement.templates]
         if evaluation is not None and not options:
@@ -633,9 +690,9 @@ class ShiftEvaluationService:
                 ShiftEvaluationSummary(
                     id=evaluation.id,
                     status=evaluation.status,
-                    average_rating=evaluation.average_rating,
-                    rated_count=evaluation.rated_count,
-                    low_rating_count=evaluation.low_rating_count,
+                    average_rating=None if own else evaluation.average_rating,
+                    rated_count=0 if own else evaluation.rated_count,
+                    low_rating_count=0 if own else evaluation.low_rating_count,
                     evaluator_name=_name(users.get(str(evaluation.evaluator_id))),
                     submitted_at=evaluation.submitted_at,
                     updated_at=evaluation.updated_at,
@@ -659,19 +716,32 @@ class ShiftEvaluationService:
         return {str(u.id): u for u in rows.scalars()}
 
     async def roster(
-        self, shift: Shift, organization_id: UUID | str
+        self,
+        shift: Shift,
+        organization_id: UUID | str,
+        viewer_id: Optional[str] = None,
     ) -> ShiftEvaluationRoster:
         return await self._roster(
-            await self.occasion_for_shift(shift, organization_id), organization_id
+            await self.occasion_for_shift(shift, organization_id),
+            organization_id,
+            viewer_id,
         )
 
     async def entry_roster(
-        self, entry: ExternalShiftHours, organization_id: UUID | str
+        self,
+        entry: ExternalShiftHours,
+        organization_id: UUID | str,
+        viewer_id: Optional[str] = None,
     ) -> ShiftEvaluationRoster:
-        return await self._roster(self.occasion_for_entry(entry), organization_id)
+        return await self._roster(
+            self.occasion_for_entry(entry), organization_id, viewer_id
+        )
 
     async def _roster(
-        self, occasion: _Occasion, organization_id: UUID | str
+        self,
+        occasion: _Occasion,
+        organization_id: UUID | str,
+        viewer_id: Optional[str] = None,
     ) -> ShiftEvaluationRoster:
         requirements = await self._requirements(occasion, organization_id)
         users = await self._users(
@@ -693,7 +763,12 @@ class ShiftEvaluationService:
             shift_end=occasion.end,
             unit_label=occasion.unit_label,
             platoon=occasion.platoon,
-            requirements=[self._requirement_response(r, users) for r in requirements],
+            requirements=[
+                self._requirement_response(
+                    r, users, own=_is_viewer(r.member.id, viewer_id)
+                )
+                for r in requirements
+            ],
         )
 
     async def detail(
@@ -708,6 +783,14 @@ class ShiftEvaluationService:
             for key, value in (evaluation.responses or {}).items()
             if isinstance(value, dict)
         }
+        link = (
+            await self.db.execute(
+                select(ShiftEvaluationLink).where(
+                    ShiftEvaluationLink.evaluation_id == evaluation.id,
+                    ShiftEvaluationLink.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
         return ShiftEvaluationDetail(
             id=evaluation.id,
             member_id=str(evaluation.member_id),
@@ -720,6 +803,8 @@ class ShiftEvaluationService:
             shift_id=evaluation.shift_id,
             external_shift_id=evaluation.external_shift_id,
             preceptor_name=evaluation.preceptor_name,
+            via_preceptor_link=link is not None,
+            link_created_by_member=bool(link is not None and link.created_by_member),
             shift_date=evaluation.shift_date,
             shift_start=evaluation.shift_start,
             shift_end=evaluation.shift_end,
@@ -791,6 +876,7 @@ class ShiftEvaluationService:
         scope_key: str,
         organization_id: UUID | str,
         template_id: Optional[str] = None,
+        viewer_id: Optional[str] = None,
     ) -> ShiftEvaluationForm:
         return await self._form(
             await self.occasion_for_shift(shift, organization_id),
@@ -798,6 +884,7 @@ class ShiftEvaluationService:
             scope_key,
             organization_id,
             template_id,
+            viewer_id,
         )
 
     async def entry_form(
@@ -806,6 +893,7 @@ class ShiftEvaluationService:
         scope_key: str,
         organization_id: UUID | str,
         template_id: Optional[str] = None,
+        viewer_id: Optional[str] = None,
     ) -> ShiftEvaluationForm:
         return await self._form(
             self.occasion_for_entry(entry),
@@ -813,6 +901,7 @@ class ShiftEvaluationService:
             scope_key,
             organization_id,
             template_id,
+            viewer_id,
         )
 
     async def _form(
@@ -822,10 +911,16 @@ class ShiftEvaluationService:
         scope_key: str,
         organization_id: UUID | str,
         template_id: Optional[str] = None,
+        viewer_id: Optional[str] = None,
     ) -> ShiftEvaluationForm:
         requirement = await self._find_requirement(
             occasion, member_id, scope_key, organization_id
         )
+        if _is_viewer(member_id, viewer_id):
+            # The page opens a member's own evaluation read-only, to say
+            # someone else must fill it out; it must not carry the answers a
+            # draft, or one still waiting on review, already holds.
+            requirement.evaluation = None
         users = await self._users(
             (
                 {str(requirement.evaluation.evaluator_id)}
@@ -908,8 +1003,10 @@ class ShiftEvaluationService:
         if "calls" in statistics:
             outcomes = statistics.get("transports", 0) + statistics.get("refusals", 0)
             if outcomes > statistics["calls"]:
-                raise ValueError(
-                    "Transports and refusals together cannot exceed the number of calls"
+                # A submission's rule, not a draft's: refusing the draft would
+                # stop every later autosave until the counts were fixed.
+                problems.append(
+                    "Transports and refusals together cannot exceed the number of calls."
                 )
 
         responses: dict[str, dict[str, Any]] = {}
@@ -988,7 +1085,7 @@ class ShiftEvaluationService:
         scope_key: str,
         organization_id: UUID | str,
         body: ShiftEvaluationSave,
-        evaluator: User,
+        evaluator: Optional[User],
     ) -> ShiftEvaluation:
         """Enter the outside preceptor's evaluation of a logged outside shift.
 
@@ -1014,9 +1111,14 @@ class ShiftEvaluationService:
         scope_key: str,
         organization_id: UUID | str,
         body: ShiftEvaluationSave,
-        evaluator: User,
+        evaluator: Optional[User],
+        *,
+        retry_conflict: bool = True,
     ) -> ShiftEvaluation:
-        if str(member_id) == str(evaluator.id):
+        # No evaluator: an outside preceptor submitting through a link, who
+        # has no account here (ShiftEvaluationLinkService.submit).
+        evaluator_id = str(evaluator.id) if evaluator is not None else None
+        if evaluator_id is not None and str(member_id) == evaluator_id:
             raise ValueError("You cannot evaluate yourself")
         requirement = await self._find_requirement(
             occasion, member_id, scope_key, organization_id
@@ -1041,6 +1143,21 @@ class ShiftEvaluationService:
             template_id = evaluation.template_id
             version = evaluation.template_version
 
+        if (
+            evaluation is not None
+            and evaluation.status == "submitted"
+            and not body.submit
+        ):
+            # A submitted evaluation stays one: an edit to it is held to the
+            # submission's rules, or a draft save could empty it while it
+            # still counted for close-out and credit.
+            body = body.model_copy(update={"submit": True})
+        if (
+            occasion.kind == EXTERNAL_OCCASION
+            and body.submit
+            and not body.preceptor_name
+        ):
+            raise ValueError("Enter the name of the preceptor who evaluated the shift")
         answers = self._settle_answers(snapshot, body)
 
         if evaluation is None:
@@ -1062,7 +1179,7 @@ class ShiftEvaluationService:
         evaluation.unit_label = occasion.unit_label
         if occasion.kind == EXTERNAL_OCCASION:
             evaluation.preceptor_name = body.preceptor_name
-        evaluation.evaluator_id = str(evaluator.id)
+        evaluation.evaluator_id = evaluator_id
         evaluation.enrollment_ids = list(requirement.enrollment_ids)
         evaluation.program_names = list(requirement.program_names)
         evaluation.template_id = template_id
@@ -1083,19 +1200,67 @@ class ShiftEvaluationService:
             # Two officers opened the same evaluation and both created it: the
             # unique key kept one row; apply this save to it (Pitfall #36).
             await self.db.rollback()
+            # Once: a conflict that survives the retry is not the race this
+            # handles, and retrying it again would only recurse.
+            if not retry_conflict:
+                raise
+            # The rollback expired every loaded row, the shift, entry and
+            # evaluator included, and an expired row cannot be read lazily
+            # here: reload what the retry needs from plain ids.
+            reloaded = await self._reload_occasion(
+                occasion.kind, occasion.id, organization_id
+            )
+            evaluator = (
+                await self._reload_user(evaluator_id, organization_id)
+                if evaluator_id is not None
+                else None
+            )
+            if reloaded is None or (evaluator_id is not None and evaluator is None):
+                raise
+            occasion = reloaded
             requirement = await self._find_requirement(
                 occasion, member_id, scope_key, organization_id
             )
             if requirement.evaluation is None:
                 raise
             return await self._save(
-                occasion, member_id, scope_key, organization_id, body, evaluator
+                occasion,
+                member_id,
+                scope_key,
+                organization_id,
+                body,
+                evaluator,
+                retry_conflict=False,
             )
         await self.db.refresh(evaluation)
         if evaluation.status == "submitted":
             await self.sync_credit(evaluation, organization_id)
             await self.db.refresh(evaluation)
         return evaluation
+
+    async def _reload_occasion(
+        self, kind: str, occasion_id: str, organization_id: UUID | str
+    ) -> Optional[_Occasion]:
+        if kind == EXTERNAL_OCCASION:
+            entry = await self.get_entry(occasion_id, organization_id)
+            return self.occasion_for_entry(entry) if entry is not None else None
+        shift = await self.get_shift(occasion_id, organization_id)
+        return (
+            await self.occasion_for_shift(shift, organization_id)
+            if shift is not None
+            else None
+        )
+
+    async def _reload_user(
+        self, user_id: str, organization_id: UUID | str
+    ) -> Optional[User]:
+        return (
+            await self.db.execute(
+                select(User).where(
+                    User.id == user_id, User.organization_id == str(organization_id)
+                )
+            )
+        ).scalar_one_or_none()
 
     # -- Program credit ------------------------------------------------------
 
@@ -1161,13 +1326,22 @@ class ShiftEvaluationService:
                 str(progress.id) in credited,
                 enrollment.status == EnrollmentStatus.ACTIVE
                 and progress.status not in _CLOSED_PROGRESS,
+                progress.status == RequirementProgressStatus.NOT_STARTED,
+                _met_by_value(progress, requirement),
             )
             for progress, requirement, enrollment in rows
         ]
         evaluation_id = str(evaluation.id)
         evaluator_id = evaluation.evaluator_id
         program_service = TrainingProgramService(self.db)
-        for progress_id, units, has_credit, open_for_credit in plan:
+        for (
+            progress_id,
+            units,
+            has_credit,
+            open_for_credit,
+            not_started,
+            met_before,
+        ) in plan:
             if units > 0 and (has_credit or open_for_credit):
                 _, error = await program_service.apply_requirement_credit(
                     progress_id=progress_id,
@@ -1177,7 +1351,9 @@ class ShiftEvaluationService:
                     units=units,
                     verified_by=evaluator_id,
                     applied_by=evaluator_id,
-                    mark_in_progress=not has_credit,
+                    # Only a row not yet begun is started: marking a COMPLETED
+                    # one in progress would undo an officer's sign-off.
+                    mark_in_progress=not has_credit and not_started,
                     restate=True,
                 )
             elif units <= 0 and has_credit:
@@ -1196,6 +1372,10 @@ class ShiftEvaluationService:
                     evaluation_id,
                     progress_id,
                     error,
+                )
+            elif met_before:
+                await self._reopen_if_short(
+                    program_service, progress_id, organization_id
                 )
 
     async def sync_credit_for_shift_member(
@@ -1221,6 +1401,62 @@ class ShiftEvaluationService:
             evaluation = await self.get(evaluation_id, organization_id)
             if evaluation is not None:
                 await self.sync_credit(evaluation, organization_id)
+
+    async def _reopen_if_short(
+        self,
+        program_service: TrainingProgramService,
+        progress_id: str,
+        organization_id: UUID | str,
+    ) -> None:
+        """Owner decision (2026-11-13): a requirement its credit had completed
+        goes back to In progress once that credit falls below the target.
+
+        Only called for a row whose value had met the target before this
+        change, so one an officer marked complete below target is left alone.
+        """
+        progress = (
+            await self.db.execute(
+                select(RequirementProgress).where(RequirementProgress.id == progress_id)
+            )
+        ).scalar_one_or_none()
+        if (
+            progress is None
+            or progress.status != RequirementProgressStatus.COMPLETED
+            or (progress.progress_percentage or 0.0) >= 100.0
+        ):
+            return
+        _, error = await program_service.update_requirement_progress(
+            progress_id=progress_id,
+            organization_id=organization_id,
+            updates=RequirementProgressUpdate(
+                status=RequirementProgressStatus.IN_PROGRESS.value
+            ),
+            # Bookkeeping, like the reversal that led here.
+            enforce_prerequisites=False,
+        )
+        if error:
+            logger.error(
+                "Reopening progress {} after its credit fell failed: {}",
+                progress_id,
+                error,
+            )
+
+    async def sync_credit_for_shift(
+        self, shift_id: UUID | str, organization_id: UUID | str
+    ) -> None:
+        """Re-sync after the shift was finalized or reopened."""
+        evaluation_ids = list(
+            (
+                await self.db.execute(
+                    select(ShiftEvaluation.id).where(
+                        ShiftEvaluation.organization_id == str(organization_id),
+                        ShiftEvaluation.shift_id == str(shift_id),
+                        ShiftEvaluation.status == "submitted",
+                    )
+                )
+            ).scalars()
+        )
+        await self._sync_ids(evaluation_ids, organization_id)
 
     async def sync_credit_for_entry(
         self, entry_id: UUID | str, organization_id: UUID | str
@@ -1281,7 +1517,7 @@ class ShiftEvaluationService:
         ``draft`` while one is started but not submitted, ``submitted`` once
         every one is in, and None when the shift calls for none. Worked out
         for the whole page at once from the same rule ``_requirements``
-        applies to one shift (``_program_scopes``, ``_Scope.started_by``).
+        applies to one shift (``_program_scopes``, ``_Scope.as_of``).
         """
         org = str(organization_id)
         # entry_id -> (status, the first scope still to submit)
@@ -1306,7 +1542,7 @@ class ShiftEvaluationService:
         candidates = [
             e
             for e in entries
-            if e.status == ExternalShiftHoursStatus.COUNTED.value
+            if e.status in _EVALUATED_ENTRY_STATUSES
             and str(e.external_apparatus_id or "") in evaluated
         ]
         scopes = (
@@ -1324,7 +1560,7 @@ class ShiftEvaluationService:
                 [
                     scope.scope_key
                     for scope in scopes.get(str(entry.user_id), [])
-                    if scope.started_by((entry.shift_date, tz))
+                    if scope.as_of((entry.shift_date, tz)) is not None
                 ]
                 if entry_id in candidate_ids
                 else []
@@ -1390,8 +1626,7 @@ class ShiftEvaluationService:
                     select(ExternalShiftHours)
                     .where(
                         ExternalShiftHours.organization_id == org,
-                        ExternalShiftHours.status
-                        == ExternalShiftHoursStatus.COUNTED.value,
+                        ExternalShiftHours.status.in_(_EVALUATED_ENTRY_STATUSES),
                         ExternalShiftHours.external_apparatus_id.in_(evaluated),
                         ExternalShiftHours.user_id.in_(member_ids),
                     )
@@ -1465,7 +1700,7 @@ class ShiftEvaluationService:
             return True
         if not evaluation.shift_id:
             return False
-        status = (
+        report = (
             await self.db.execute(
                 select(ShiftCompletionReport.review_status).where(
                     ShiftCompletionReport.shift_id == evaluation.shift_id,
@@ -1473,8 +1708,22 @@ class ShiftEvaluationService:
                     ShiftCompletionReport.organization_id == str(organization_id),
                 )
             )
+        ).first()
+        if report is not None:
+            return report[0] == "approved"
+        # No report of their own to wait for (a general-form seat, or a
+        # department that does not ask trainees for one): visible once the
+        # shift is closed out (owner decision, 2026-11-13). Finalize and
+        # reopen re-sync credit through sync_credit_for_shift.
+        finalized = (
+            await self.db.execute(
+                select(Shift.is_finalized).where(
+                    Shift.id == evaluation.shift_id,
+                    Shift.organization_id == str(organization_id),
+                )
+            )
         ).scalar_one_or_none()
-        return status == "approved"
+        return bool(finalized)
 
     async def list_for_member(
         self,

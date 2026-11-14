@@ -349,6 +349,7 @@ Flagged:
 - W03-14 (NIT): two pieces of copy.
 
 Gate: typecheck and lint clean; flake8, black and isort clean on the backend files; 24 backend and 116 frontend tests pass, and every new case failed before its fix. Next: none pending; the owner may name the next second pass.
+
 ### W80 — Training event lifecycle: create, credit, correct, excuse, move — 2026-11-08
 
 Owner-requested, outside the rotation. Driven as: `training_officer` at
@@ -1785,6 +1786,10 @@ Driven as `secretary`, `membership_coordinator`, `member` and `treasurer` on a f
 - Fixed: W50-R1 (MED — Escape in the position suggestions discarded the create form), W50-R2 (LOW — a future count-from date was accepted).
 - W50-R3 (LOW — an ineligible member is told only that they are not on the frozen roll): flagged, then fixed 2026-11-02 on the owner's decision.
 - Fixed 2026-11-01: W50-R4 and W50-R5 (NIT).
+- 2026-11-13, the remaining September items:
+  - Re-checked on `main`: W50-75 and W50-91 were already fixed. W50-12 needed no change.
+  - Fixed W50-13, W50-74, W50-76, W50-77, W50-79, W50-80, W50-81 and W50-92.
+  - Owner decisions: W50-78 (document only) and W50-82 (keep the automatic copy, relabel the button).
 
 ### W50 — An election: create, nominate, vote by ballot link, close, results — 2026-09-30
 

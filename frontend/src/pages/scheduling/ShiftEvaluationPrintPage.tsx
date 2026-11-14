@@ -19,6 +19,7 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { shiftEvaluationService } from '../../services/api';
 import type { ShiftEvaluationDetail } from '../../types/training';
 import { formatCalendarDate, formatDateCustom, formatTime } from '../../utils/dateFormatting';
+import { evaluatedByLabel } from '../../utils/shiftEvaluations';
 
 /** Settle time for layout and webfonts before the print dialog opens. */
 const PRINT_DELAY_MS = 600;
@@ -109,7 +110,7 @@ const ShiftEvaluationPrintPage: React.FC = () => {
             </div>
             <div className="col-span-2">
               <dt className="inline font-semibold">Evaluated by: </dt>
-              <dd className="inline">{evaluation.evaluator_name ?? 'A former member'}</dd>
+              <dd className="inline">{evaluatedByLabel(evaluation)}</dd>
             </div>
           </dl>
 
