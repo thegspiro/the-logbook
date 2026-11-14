@@ -24,7 +24,12 @@ from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
-from app.models.history import HistoricalMember, HistoryMedia, PublicationLevel
+from app.models.history import (
+    HistoricalMember,
+    HistoryDocument,
+    HistoryMedia,
+    PublicationLevel,
+)
 from app.models.user import Position, User
 from app.schemas.history import (
     ClearanceDecide,
@@ -33,6 +38,7 @@ from app.schemas.history import (
     ClearanceStepResponse,
     ClearanceStepsReplace,
     ClearanceSubmit,
+    DocumentMemberView,
     HistoricalMemberCreate,
     HistoricalMemberFullView,
     HistoricalMemberList,
@@ -61,6 +67,10 @@ from app.services.history_clearance_service import (
     HistoryClearanceService,
     record_path,
     review_path,
+)
+from app.services.history_document_service import (
+    RECORD_DOCUMENT,
+    HistoryDocumentService,
 )
 from app.services.history_media_service import RECORD_MEDIA, HistoryMediaService
 from app.services.history_merge_service import HistoryMergeService
@@ -148,12 +158,17 @@ async def _managed_person(
 
 async def _clearance_record(
     db: AsyncSession, organization_id: str, record_type: str, record_id: str
-) -> tuple[Optional[Union[HistoricalMember, HistoryMedia]], str]:
-    """The person or media item a clearance request is about, in the
-    department, and the label its notices and review page use."""
+) -> tuple[Optional[Union[HistoricalMember, HistoryMedia, HistoryDocument]], str]:
+    """The person, media item or document a clearance request is about, in
+    the department, and the label its notices and review page use."""
     if record_type == RECORD_MEDIA:
         item = await HistoryMediaService(db).get_media(organization_id, record_id)
         return (item, item.title) if item else (None, "")
+    if record_type == RECORD_DOCUMENT:
+        paper = await HistoryDocumentService(db).get_document(
+            organization_id, record_id
+        )
+        return (paper, paper.title) if paper else (None, "")
     person = await HistoryService(db).get_person(organization_id, record_id)
     return (person, display_name(person)) if person else (None, "")
 
@@ -1088,8 +1103,15 @@ async def review_clearance_request(
     )
     if record is None:
         raise HTTPException(status_code=404, detail="Record not found")
-    review_view: Union[HistoricalMemberMemberView, MediaMemberView]
-    if isinstance(record, HistoryMedia):
+    review_view: Union[HistoricalMemberMemberView, MediaMemberView, DocumentMemberView]
+    if isinstance(record, HistoryDocument):
+        # As for a photo: the reviewer reads what members will read.
+        review_view = DocumentMemberView(
+            **HistoryDocumentService(db).member_view(
+                replace(viewer, can_view_archive=True), record
+            )
+        )
+    elif isinstance(record, HistoryMedia):
         # A reviewer reads the item as members will, draft or not: they
         # cannot clear what they cannot see.
         review_view = MediaMemberView(
