@@ -10291,12 +10291,19 @@ beyond the feature.
   lose one.** The shared credit primitive computes the new value from an
   unlocked read. It is shared by every credit source, so it is not changed
   here.
-- **Credit is not re-stated when a requirement's crediting rule changes**
-  (its type, or "leave out the lowest rating"), **when an evaluation's
-  combined scope shrinks**, or **when its shift is deleted, an outside entry
-  moves to an agency that does not evaluate, or the member is removed from the
-  shift.** Each leaves earlier credit standing until the evaluation is saved
-  again.
+- **Credit is not re-stated when an outside entry moves to an agency that
+  does not evaluate shifts.** Resolved 2026-11-14 for the rest: a change to a
+  requirement's crediting rule (its type, or leaving out the lowest rating)
+  restates every evaluation's credit, or removes it where evaluations no
+  longer count; a member taken off a shift, or marked No-show, loses that
+  shift's evaluation credit. A shift that has started cannot be deleted, so an
+  evaluated one never is. The agency case is left: tying credit to the
+  agency's switch would also take back every past credit when an agency is
+  switched off, which needs an owner ruling.
+- **Credit is not re-stated when an evaluation's combined scope shrinks.** An
+  evaluation re-saved after one of its programs drops out of the combined
+  scope (its form cleared while the enrollment stays active) keeps the credit
+  it gave that program until the evaluation is saved again with it.
 - **A deactivated evaluation form is still offered and required** where a
   program or the department settings still name it.
 - **Two administrators creating forms with the same name at the same moment

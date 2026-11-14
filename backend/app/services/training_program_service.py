@@ -1003,6 +1003,13 @@ class TrainingProgramService:
         active_changed = updates.get("active") is not None and (
             updates["active"] is True
         ) != (requirement.active is True)
+        # What an evaluation is worth toward this requirement: its type, and
+        # whether the lowest rating is left out. A change restates every
+        # evaluation's credit, or removes it where evaluations no longer count.
+        crediting_changed = any(
+            field in updates and updates[field] != getattr(requirement, field)
+            for field in ("requirement_type", "evaluation_excludes_lowest_rating")
+        )
 
         # `updates` is built with exclude_unset, so a None here was sent
         # deliberately: the officer cleared the field. That applies to every
@@ -1020,6 +1027,13 @@ class TrainingProgramService:
             await self._recompute_progress_for_requirement(requirement)
         if active_changed:
             await self.recalculate_enrollments_for_requirement(
+                requirement.id, organization_id
+            )
+        if crediting_changed:
+            # Imported here: the evaluation service imports this module.
+            from app.services.shift_evaluation_service import ShiftEvaluationService
+
+            await ShiftEvaluationService(self.db).sync_credit_for_requirement(
                 requirement.id, organization_id
             )
 
