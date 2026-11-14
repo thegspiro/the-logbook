@@ -1,5 +1,6 @@
-import { BookOpen, BookOpenCheck, ClipboardCheck, ClipboardList, GraduationCap, Layers } from 'lucide-react';
+import { BookOpen, BookOpenCheck, CalendarX, ClipboardCheck, ClipboardList, GraduationCap, Layers } from 'lucide-react';
 import type { SectionNavItem } from './sectionNavigation';
+import type { AttendanceWaiverAttention } from '../../types/attendanceWaiver';
 
 /**
  * The Training destinations, in one list for the side navigation, the top
@@ -13,8 +14,17 @@ import type { SectionNavItem } from './sectionNavigation';
  *
  * Skills Testing is dropped for a department that records practical skills on
  * shift reports instead; see `offersSkillsTesting`.
+ *
+ * Waiver Requests is offered to the members who decide session waiver
+ * requests, which the server answers (`waivers`, from `useWaiverAttention`):
+ * most decide by holding a chosen position or an office, not a permission the
+ * menu could check. Its route has no permission gate, so no member who sees it
+ * is refused; the count is the requests waiting on them now.
  */
-export function trainingNavItems(showsSkillsTesting: boolean): SectionNavItem[] {
+export function trainingNavItems(
+  showsSkillsTesting: boolean,
+  waivers?: AttendanceWaiverAttention | null
+): SectionNavItem[] {
   return [
     { label: 'My Training', path: '/training/my-training', icon: GraduationCap, aliases: ['/training'] },
     { label: 'Submit Training', path: '/training/submit', icon: ClipboardList },
@@ -24,5 +34,16 @@ export function trainingNavItems(showsSkillsTesting: boolean): SectionNavItem[] 
       ? [{ label: 'Skills Testing', path: '/training/skills-testing', icon: ClipboardCheck }]
       : []),
     { label: 'Knowledge Tests', path: '/training/knowledge-tests', icon: BookOpenCheck },
+    ...(waivers?.decides
+      ? [
+          {
+            label: 'Waiver Requests',
+            path: '/attendance-waivers',
+            icon: CalendarX,
+            count: waivers.pending,
+            countLabel: 'waiting on you',
+          },
+        ]
+      : []),
   ];
 }

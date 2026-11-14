@@ -33,6 +33,7 @@ import { formatCalendarDate, formatDateTime } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { awaitsReconfirmation, closesUndecidedText } from '../../utils/attendanceWaivers';
 import { TRAINING_WAIVER_WORKFLOW, type AttendanceWaiverWorkflow } from '../../utils/attendanceWaiverWorkflows';
+import { useWaiverAttentionStore } from '../../hooks/useWaiverAttention';
 
 /** The backend's largest page (`MAX_PAGE`): every pending request in one call. */
 const PENDING_LIMIT = 200;
@@ -91,6 +92,7 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
 }) => {
   const tz = useTimezone();
   const { service } = workflow;
+  const refreshAttention = useWaiverAttentionStore((s) => s.refresh);
   const [pending, setPending] = useState<AttendanceWaiverRequest[]>([]);
   const [pendingTotal, setPendingTotal] = useState(0);
   const [decided, setDecided] = useState<AttendanceWaiverRequest[]>([]);
@@ -126,6 +128,8 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
         if (cancelled) return;
         setPending(page.items);
         setPendingTotal(page.total);
+        // The navigation's waiting count follows what this queue shows.
+        void refreshAttention(workflow.key);
         await loadDecided(0);
       } catch (err: unknown) {
         if (!cancelled) setError(getErrorMessage(err, 'Waiver requests could not be loaded.'));
@@ -137,7 +141,7 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
     return () => {
       cancelled = true;
     };
-  }, [loadDecided, service]);
+  }, [loadDecided, service, refreshAttention, workflow.key]);
 
   const showMore = async () => {
     setLoadingMore(true);

@@ -113,20 +113,23 @@ describe('navigation gates match the routes they target', () => {
   it('draws the Governance rows on both surfaces from the one shared list', () => {
     for (const surface of NAV_SURFACES) {
       expect(read(surface), `${surface}: Governance rows are not the shared list`).toContain(
-        'subItems: governanceNavItems(isModuleOn)'
+        // With the waiver answer, so every surface offers Waiver Requests alike.
+        'subItems: governanceNavItems(isModuleOn, waivers.meetings)'
       );
     }
-    expect(read('components/governance/GovernancePageHeader.tsx')).toContain('governanceNavItems(isModuleOn)');
+    expect(read('components/governance/GovernancePageHeader.tsx')).toContain(
+      'governanceNavItems(isModuleOn, waivers.meetings)'
+    );
   });
 
   it('draws the Training rows on both surfaces from the one shared list', () => {
     for (const surface of NAV_SURFACES) {
       expect(read(surface), `${surface}: Training rows are not the shared list`).toContain(
-        'subItems: trainingNavItems(offersSkillsTesting(practicalSkillsMethod))'
+        'subItems: trainingNavItems(offersSkillsTesting(practicalSkillsMethod), waivers.training)'
       );
     }
     expect(read('components/training/TrainingPageHeader.tsx')).toContain(
-      'trainingNavItems(offersSkillsTesting(practicalSkillsMethod))'
+      'trainingNavItems(offersSkillsTesting(practicalSkillsMethod), waivers.training)'
     );
   });
 

@@ -37,6 +37,12 @@ export interface AttendanceWaiverPolicy {
   chief_alternate_user_id: string | null;
 }
 
+/** `GET .../attention`: whether the caller decides requests, and how many wait on them now. */
+export interface AttendanceWaiverAttention {
+  decides: boolean;
+  pending: number;
+}
+
 /** A position the settings screen offers, from `GET .../policy/positions`. */
 export interface AttendanceWaiverPositionOption {
   id: string;

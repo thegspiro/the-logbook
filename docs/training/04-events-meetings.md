@@ -2297,9 +2297,12 @@ answered on that card, and a moved meeting is confirmed or withdrawn there
 too, since meetings have no list like My Training's.
 
 **Deciding.** Everyone who decides is emailed a link to the request. The list
-of requests waiting for you is at **Waiver requests** on Meeting Attendance (or
-the link in the email), and each request opens the same decision page as a
-training request. An approved request is written onto the meeting's minutes
+of requests waiting for you is **Governance → Waiver Requests**, which appears
+for everyone who decides meeting requests (by a chosen position, as Chief,
+President or Secretary, as the alternate, or by managing meetings), with the
+number waiting on you badged on it at the top of every Governance page. It is
+also on Meeting Attendance as **Waiver requests**. Each request opens the same
+decision page as a training request. An approved request is written onto the meeting's minutes
 roll call as an excused absence.
 
 ### Business-meeting waiver requests: asking for more information _(2026-11-13)_

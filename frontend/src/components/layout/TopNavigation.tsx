@@ -39,6 +39,7 @@ import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './fina
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 import { useHasAssignedApplicants } from '../../modules/prospective-members/hooks/useHasAssignedApplicants';
 import { useHasCrew } from '../../hooks/useHasCrew';
+import { useWaiverAttention } from '../../hooks/useWaiverAttention';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -107,6 +108,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     !modulesLoading && isModuleOn('prospective_members')
   );
   const hasCrew = useHasCrew(currentUser?.id);
+  const waivers = useWaiverAttention(currentUser?.id, {
+    training: !modulesLoading && isModuleOn('training'),
+    meetings: !modulesLoading && isModuleOn('minutes'),
+  });
   const plansNextYear = usePlansNextYear(currentUser?.id, !modulesLoading && isModuleOn('finance'));
 
   // The mobile bottom bar's "More" button asks us to open the menu; a second
@@ -205,10 +210,12 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
             path: '/training/my-training',
             // One list with SideNavigation and the section strip on every
             // Training page; see trainingNavigation.ts.
-            subItems: trainingNavItems(offersSkillsTesting(practicalSkillsMethod)).map(({ label, path }) => ({
-              label,
-              path,
-            })),
+            subItems: trainingNavItems(offersSkillsTesting(practicalSkillsMethod), waivers.training).map(
+              ({ label, path }) => ({
+                label,
+                path,
+              })
+            ),
           } as NavItem,
         ]
       : []),
@@ -239,7 +246,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
       path: '/governance/org-chart',
       // One list with SideNavigation and the section strip on every
       // Governance page; see governanceNavigation.ts.
-      subItems: governanceNavItems(isModuleOn).map(({ label, path, permission, anyPermission }) => ({
+      subItems: governanceNavItems(isModuleOn, waivers.meetings).map(({ label, path, permission, anyPermission }) => ({
         label,
         path,
         ...(permission ? { permission } : {}),
