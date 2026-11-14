@@ -12,7 +12,7 @@
 
 import { openIndexedDb } from './offlineDb';
 import type { OwnedQueueEntry } from './offlineQueueOwner';
-import type { SkillTestCreate, SkillTestUpdate } from '../types/skillsTesting';
+import type { SkillTest, SkillTestCreate, SkillTestUpdate } from '../types/skillsTesting';
 
 export const DB_NAME = 'logbook-offline-skills';
 export const DB_VERSION = 1;
@@ -71,6 +71,12 @@ export interface CachedRow<T> extends OwnedQueueEntry {
   id: string;
   value: T;
   cachedAt: number;
+  /**
+   * The version a drain's save produced for this test — the page's drain or
+   * the service worker's. Set only by recordDrainedVersion and dropped by any
+   * other write to the row, so it is only ever this device's own write.
+   */
+  drainedVersion?: number | undefined;
 }
 
 export function openSkillsDb(): Promise<IDBDatabase> {
@@ -239,6 +245,47 @@ export async function releaseHeldSkillsEntries(member: string): Promise<void> {
           pending.put(released);
         }
       }
+    };
+  });
+}
+
+/**
+ * Record the version a drain's save produced, beside the cached copy of a
+ * test still being examined.
+ *
+ * A drain can send a test's last queued save and remove the entry before an
+ * open screen hears about it — the worker's report is a message that arrives
+ * when it arrives. The screen's next save then goes straight to the server
+ * against the version it loaded, which the drain's save has consumed, and is
+ * refused as a conflict with nobody. The store reads this to save against the
+ * version its own queued save produced instead (see updateTest).
+ *
+ * The drained copy also replaces the cached one, since it is the server's
+ * record after this device's save. Another member's row is left alone.
+ */
+export async function recordDrainedVersion(owner: string, test: SkillTest): Promise<void> {
+  if (test.status !== 'draft' && test.status !== 'in_progress') return;
+  const db = await openSkillsDb();
+  await new Promise<void>((resolve, reject) => {
+    const store = db.transaction(STORE_TESTS, 'readwrite').objectStore(STORE_TESTS);
+    const read = store.get(test.id);
+    read.onerror = () => reject(read.error ?? new Error('IndexedDB request failed'));
+    read.onsuccess = () => {
+      const existing = read.result as CachedRow<SkillTest> | undefined;
+      if (existing && existing.ownerId !== owner) {
+        resolve();
+        return;
+      }
+      const row: CachedRow<SkillTest> = {
+        id: test.id,
+        ownerId: owner,
+        value: test,
+        cachedAt: Date.now(),
+        drainedVersion: test.version,
+      };
+      const write = store.put(row);
+      write.onsuccess = () => resolve();
+      write.onerror = () => reject(write.error ?? new Error('IndexedDB request failed'));
     };
   });
 }

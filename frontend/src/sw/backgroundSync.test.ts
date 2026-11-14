@@ -20,7 +20,7 @@ import {
   txStore,
   type QueuedCheck,
 } from '../utils/equipmentCheckOfflineStore';
-import { STORE_PENDING, allRows, putRow, type SkillsPendingEntry } from '../utils/skillsTestOfflineStore';
+import { STORE_PENDING, STORE_TESTS, allRows, putRow, type SkillsPendingEntry } from '../utils/skillsTestOfflineStore';
 
 // fake-indexeddb's structured clone does not keep a jsdom Blob: it comes back
 // as an empty object (see offlineQueue.test.ts). A real browser keeps it, and
@@ -475,6 +475,19 @@ describe('runBackgroundSync', () => {
       expect(notices[0]?.skillsSynced).toEqual([
         { testId: 't1', test: skillTest({ version: 3, status: 'completed' }), completed: true },
       ]);
+    });
+
+    it('records the version its save produced, for an open screen’s next save', async () => {
+      await putSkills({ testId: 't1', update: { notes: 'x' }, baseVersion: 2 });
+      const { env } = makeEnv({
+        'GET /auth/me': meOk,
+        'PUT /training/skills-testing/tests/t1': () => json(200, skillTest({ version: 3 })),
+      });
+
+      await runBackgroundSync(env);
+
+      const [cached] = await allRows<{ id: string; drainedVersion?: number }>(STORE_TESTS);
+      expect(cached).toMatchObject({ id: 't1', drainedVersion: 3 });
     });
 
     it('keeps a refused evaluation, marked failed, and names it', async () => {

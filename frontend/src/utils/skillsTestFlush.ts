@@ -15,6 +15,7 @@ import {
   STORE_TESTS,
   deleteRow,
   mutatePendingAs,
+  recordDrainedVersion,
   type SkillsPendingEntry,
 } from './skillsTestOfflineStore';
 
@@ -97,6 +98,7 @@ export async function flushSkillsEntry(
       if (transport.isNetworkError(err)) return { kind: 'offline' };
       return markFailedOrRetry(ctx, entry, err);
     }
+    await recordDrainedVersion(ctx.owner(), latest).catch(() => undefined);
     const createdVersion = latest.version;
     entry = await mutate(ctx, entry.testId, (existing) =>
       existing ? { ...existing, create: undefined, baseVersion: createdVersion } : undefined
@@ -115,6 +117,7 @@ export async function flushSkillsEntry(
       if (transport.isNetworkError(err)) return { kind: 'offline' };
       return markFailedOrRetry(ctx, entry, err);
     }
+    await recordDrainedVersion(ctx.owner(), latest).catch(() => undefined);
     const savedVersion = latest.version;
     entry = await mutate(ctx, entry.testId, (existing) => {
       if (!existing) return undefined;
