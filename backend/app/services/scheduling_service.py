@@ -11035,9 +11035,12 @@ class SchedulingService:
                     ShiftEvaluationService,
                 )
 
+                # store=False: committing here would release the lock on the
+                # shift mid-close-out. The evaluations it checked are set on
+                # the shift and stored by this close-out's own commit.
                 missing_evaluations = await ShiftEvaluationService(
                     self.db
-                ).missing_required(shift_id, organization_id)
+                ).missing_required(shift_id, organization_id, store=False)
                 if missing_evaluations:
                     return None, list_within_detail_limit(
                         "A shift evaluation is still needed for: ",

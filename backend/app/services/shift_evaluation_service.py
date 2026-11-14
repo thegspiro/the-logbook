@@ -201,6 +201,32 @@ class _Requirement:
     evaluation: Optional[ShiftEvaluation] = None
 
 
+def _has_ended(shift: Shift) -> bool:
+    """Whether the shift's end has passed, after which its evaluations are fixed.
+
+    A shift with no end time stays live. MySQL hands a DATETIME back naive,
+    and everything is stored as UTC, so a naive value is read as UTC.
+    """
+    end = shift.end_time
+    if end is None:
+        return False
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+    return end <= datetime.now(timezone.utc)
+
+
+def _stored_entry(requirement: _Requirement) -> dict[str, Any]:
+    """One requirement in ``Shift.evaluation_requirements``' stored shape."""
+    return {
+        "scope_key": requirement.scope_key,
+        "required": requirement.required,
+        "seat": requirement.seat,
+        "enrollment_ids": list(requirement.enrollment_ids),
+        "program_names": list(requirement.program_names),
+        "template_ids": [str(t.id) for t in requirement.templates],
+    }
+
+
 @dataclass
 class _Scope:
     """One evaluation a program member is due, before it is matched to a shift."""
@@ -468,10 +494,12 @@ class ShiftEvaluationService:
         )
 
     async def requirements(
-        self, shift: Shift, organization_id: UUID | str
+        self, shift: Shift, organization_id: UUID | str, *, store: bool = True
     ) -> list[_Requirement]:
         return await self._requirements(
-            await self.occasion_for_shift(shift, organization_id), organization_id
+            await self.occasion_for_shift(shift, organization_id),
+            organization_id,
+            store=store,
         )
 
     async def entry_requirements(
@@ -480,8 +508,18 @@ class ShiftEvaluationService:
         return await self._requirements(self.occasion_for_entry(entry), organization_id)
 
     async def _requirements(
-        self, occasion: "_Occasion", organization_id: UUID | str
+        self,
+        occasion: "_Occasion",
+        organization_id: UUID | str,
+        *,
+        store: bool = True,
     ) -> list[_Requirement]:
+        """Every evaluation the occasion calls for, and any on file it no
+        longer does.
+
+        ``store``: commit the end-of-shift snapshot when this read writes it.
+        Only close-out passes False; see the comment where it is written.
+        """
         org = str(organization_id)
         # member_id -> (seat, user)
         members: dict[str, tuple[Optional[str], User]] = {}
@@ -546,50 +584,52 @@ class ShiftEvaluationService:
             ).scalars()
         }
 
-        program_scopes = await self._program_scopes(list(members), org)
-        scopes = program_scopes.by_member
-        general = program_scopes.general
-        general_required = program_scopes.general_required
-        cutoff = await self._enrollment_cutoff(occasion, org)
+        shift = occasion.shift
+        if shift is not None and _has_ended(shift):
+            # Fixed at the end of the shift (owner decision, 2026-11-14): a
+            # member already stored is read back from the shift, so a setting
+            # changed or a program joined since cannot orphan evaluations on
+            # file or re-block close-out. The crew itself stays live: the
+            # members loop above decides who is asked for, so a stored member
+            # who is no longer crew is simply not read, and one added since is
+            # worked out by today's rules and joins the stored set.
+            stored: dict[str, Any] = dict(shift.evaluation_requirements or {})
+            known = {m: v for m, v in members.items() if m in stored}
+            fresh = {m: v for m, v in members.items() if m not in stored}
+            by_member = await self._stored_requirements(stored, known, org)
+            by_member.update(await self._live_requirements(occasion, fresh, org))
+            if shift.evaluation_requirements is None or fresh:
+                # A fresh dict, so the change is seen (Pitfall #12).
+                shift.evaluation_requirements = {
+                    **stored,
+                    **{
+                        member_id: [
+                            _stored_entry(r) for r in by_member.get(member_id, [])
+                        ]
+                        for member_id in fresh
+                    },
+                }
+                # Committed here, before the caller changes anything, so a
+                # roster or a form that only reads still keeps it; every such
+                # caller reaches this point with nothing else pending (save
+                # looks the requirement up before it touches the evaluation).
+                # Close-out cannot commit mid-transaction without releasing
+                # its lock on the shift, so it passes ``store=False`` and the
+                # value rides on its own commit (or is dropped with a refused
+                # close-out and stored on the next read). Two first reads at
+                # once both write: the content is the same, and the last write
+                # wins; a member one of them missed is not stored and is
+                # simply worked out again, and stored, on the next read.
+                if store:
+                    await self.db.commit()
+        else:
+            by_member = await self._live_requirements(occasion, members, org)
 
-        result: list[_Requirement] = []
-        for member_id, (seat, user) in members.items():
-            member_scopes = [
-                narrowed
-                for scope in scopes.get(member_id, [])
-                if (narrowed := scope.as_of(cutoff)) is not None
-            ]
-            if member_scopes:
-                for scope in member_scopes:
-                    result.append(
-                        _Requirement(
-                            member=user,
-                            seat=seat,
-                            scope_key=scope.scope_key,
-                            required=True,
-                            enrollment_ids=[str(e.id) for e in scope.enrollments],
-                            program_names=list(scope.program_names),
-                            templates=list(scope.templates),
-                        )
-                    )
-            elif (
-                general is not None
-                and occasion.shift is not None
-                and member_id not in scopes
-                and seat
-                and seat in (general.evaluated_seats or [])
-            ):
-                # The general form is chosen by seat, which only a
-                # department shift has.
-                result.append(
-                    _Requirement(
-                        member=user,
-                        seat=seat,
-                        scope_key=GENERAL_SCOPE,
-                        required=general_required,
-                        templates=[general],
-                    )
-                )
+        result: list[_Requirement] = [
+            requirement
+            for member_id in members
+            for requirement in by_member.get(member_id, [])
+        ]
 
         for requirement in result:
             requirement.evaluation = existing.pop(
@@ -628,6 +668,117 @@ class ShiftEvaluationService:
                 )
         return result
 
+    async def _live_requirements(
+        self,
+        occasion: "_Occasion",
+        members: dict[str, tuple[Optional[str], User]],
+        organization_id: str,
+    ) -> dict[str, list[_Requirement]]:
+        """The members' evaluations by today's settings and enrollments."""
+        if not members:
+            return {}
+        program_scopes = await self._program_scopes(list(members), organization_id)
+        scopes = program_scopes.by_member
+        general = program_scopes.general
+        general_required = program_scopes.general_required
+        cutoff = await self._enrollment_cutoff(occasion, organization_id)
+
+        result: dict[str, list[_Requirement]] = {}
+        for member_id, (seat, user) in members.items():
+            member_scopes = [
+                narrowed
+                for scope in scopes.get(member_id, [])
+                if (narrowed := scope.as_of(cutoff)) is not None
+            ]
+            if member_scopes:
+                result[member_id] = [
+                    _Requirement(
+                        member=user,
+                        seat=seat,
+                        scope_key=scope.scope_key,
+                        required=True,
+                        enrollment_ids=[str(e.id) for e in scope.enrollments],
+                        program_names=list(scope.program_names),
+                        templates=list(scope.templates),
+                    )
+                    for scope in member_scopes
+                ]
+            elif (
+                general is not None
+                and occasion.shift is not None
+                and member_id not in scopes
+                and seat
+                and seat in (general.evaluated_seats or [])
+            ):
+                # The general form is chosen by seat, which only a
+                # department shift has.
+                result[member_id] = [
+                    _Requirement(
+                        member=user,
+                        seat=seat,
+                        scope_key=GENERAL_SCOPE,
+                        required=general_required,
+                        templates=[general],
+                    )
+                ]
+        return result
+
+    async def _stored_requirements(
+        self,
+        stored: dict[str, Any],
+        members: dict[str, tuple[Optional[str], User]],
+        organization_id: str,
+    ) -> dict[str, list[_Requirement]]:
+        """The members' evaluations as stored on the shift when it ended.
+
+        Forms are re-read by id, in the stored order; one deleted since drops
+        out of the options (and with none left, opening the evaluation says
+        its form no longer exists, as it does for a live one).
+        """
+        entries = {
+            member_id: [e for e in (stored.get(member_id) or []) if isinstance(e, dict)]
+            for member_id in members
+        }
+        template_ids = {
+            str(template_id)
+            for member_entries in entries.values()
+            for entry in member_entries
+            for template_id in entry.get("template_ids") or []
+        }
+        templates: dict[str, ShiftEvaluationTemplate] = {}
+        if template_ids:
+            for template in (
+                await self.db.execute(
+                    select(ShiftEvaluationTemplate).where(
+                        ShiftEvaluationTemplate.id.in_(template_ids),
+                        ShiftEvaluationTemplate.organization_id == organization_id,
+                    )
+                )
+            ).scalars():
+                templates[str(template.id)] = template
+
+        result: dict[str, list[_Requirement]] = {}
+        for member_id, member_entries in entries.items():
+            user = members[member_id][1]
+            result[member_id] = [
+                _Requirement(
+                    member=user,
+                    seat=entry.get("seat"),
+                    scope_key=str(entry.get("scope_key")),
+                    required=bool(entry.get("required")),
+                    enrollment_ids=[str(i) for i in entry.get("enrollment_ids") or []],
+                    program_names=[str(n) for n in entry.get("program_names") or []],
+                    templates=[
+                        templates[str(t)]
+                        for t in entry.get("template_ids") or []
+                        if str(t) in templates
+                    ],
+                )
+                for entry in member_entries
+                if entry.get("scope_key")
+            ]
+        return result
+
     async def _enrollment_cutoff(
         self, occasion: "_Occasion", organization_id: str
     ) -> tuple[date, Any]:
@@ -644,14 +795,19 @@ class ShiftEvaluationService:
         )
 
     async def missing_required(
-        self, shift_id: UUID | str, organization_id: UUID | str
+        self, shift_id: UUID | str, organization_id: UUID | str, *, store: bool = True
     ) -> list[tuple[str, str]]:
-        """Required evaluations not yet submitted, as ``(member_id, label)``."""
+        """Required evaluations not yet submitted, as ``(member_id, label)``.
+
+        ``store=False`` from close-out, which holds the shift locked: the
+        end-of-shift snapshot is set on the shift but committed with the
+        close-out itself rather than here.
+        """
         shift = await self.get_shift(shift_id, organization_id)
         if shift is None:
             return []
         missing = []
-        for requirement in await self.requirements(shift, organization_id):
+        for requirement in await self.requirements(shift, organization_id, store=store):
             if not requirement.required:
                 continue
             if requirement.evaluation and requirement.evaluation.status == "submitted":

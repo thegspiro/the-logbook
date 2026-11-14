@@ -4082,6 +4082,20 @@ class Shift(Base):
     # ongoing incidents, etc.).
     pass_down_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # The evaluations each crew member was due when the shift ended (owner
+    # decision, 2026-11-14), so a setting changed or a program joined later
+    # does not re-scope a shift that is over. NULL means not stored yet: it is
+    # written on the first read after ``end_time``. One canonical shape
+    # (Pitfall #20), written by ShiftEvaluationService only, always as a fresh
+    # dict (Pitfall #12):
+    #   {"<member_id>": [{"scope_key": str, "required": bool,
+    #                     "seat": str | None, "enrollment_ids": [str],
+    #                     "program_names": [str], "template_ids": [str]}]}
+    # A member due nothing is stored with an empty list.
+    evaluation_requirements: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+
     # When True, all members (including non-operational types) can self-signup.
     # Copied from ShiftTemplate when a shift is created from a template.
     open_to_all_members: Mapped[bool] = mapped_column(
