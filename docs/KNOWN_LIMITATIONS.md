@@ -10269,9 +10269,10 @@ beyond the feature.
   already submitted are kept but no longer required, new ones are required,
   and close-out waits for them. Freezing the set at close-out would need a
   stored snapshot.
-- **No-show and pending crew are asked for an evaluation.** The rule mirrors
-  the trainee-report gate (only declined and cancelled seats are left out),
-  so the two agree; excusing no-shows would mean changing both.
+- ~~**No-show and pending crew are asked for an evaluation.**~~ Resolved
+  2026-11-14 (owner decision): only Assigned and Confirmed crew need a trainee
+  report or a shift evaluation, and close-out drafts reports for them alone
+  (`WORKING_ASSIGNMENT_STATUSES`).
 - **No requirement type counts the calls an evaluation records.** Evaluated
   shifts, transports and refusals are credited; the existing Calls type is
   still fed by shift reports.
