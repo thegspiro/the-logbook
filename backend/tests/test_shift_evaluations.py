@@ -264,6 +264,12 @@ class TestWhoIsEvaluated:
         driver_enrollment = await _enroll(
             db_session, scene.org_id, scene.trainee, driver
         )
+        # Joined before the shift, like the scene's own enrollment: left at
+        # now, it postdates a shift that started 14 hours ago whenever that
+        # start falls on the previous UTC date (00:00-14:00 UTC), and the
+        # joined-by-the-shift-date rule rightly leaves the program out.
+        driver_enrollment.enrolled_at = datetime.now(timezone.utc) - timedelta(days=30)
+        await db_session.flush()
 
         reqs = await _requirements(db_session, scene)
 
@@ -289,6 +295,12 @@ class TestWhoIsEvaluated:
         driver_enrollment = await _enroll(
             db_session, scene.org_id, scene.trainee, driver
         )
+        # Joined before the shift, like the scene's own enrollment: left at
+        # now, it postdates a shift that started 14 hours ago whenever that
+        # start falls on the previous UTC date (00:00-14:00 UTC), and the
+        # joined-by-the-shift-date rule rightly leaves the program out.
+        driver_enrollment.enrolled_at = datetime.now(timezone.utc) - timedelta(days=30)
+        await db_session.flush()
 
         reqs = await _requirements(db_session, scene)
 
