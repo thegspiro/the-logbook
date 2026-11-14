@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import { toLocalISODate } from '@/utils/dateFormatting';
+
 import { CheckSweepStop } from './CheckSweepStop';
 
 import type { CheckItemAnswer, CheckItemSpec } from './CheckItemControls';
@@ -17,7 +19,10 @@ const setup = (items: CheckItemSpec[], answers: AnswerMap = {}) => {
 
 /** A date far enough out that it is neither expired nor in the pull window. */
 const FAR = '2099-01-01';
-const YESTERDAY = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+// Local calendar dates, as the stop judges expiry (`daysUntil` against local
+// midnight). A UTC date is already tomorrow during a US evening, which made
+// "yesterday" today and four expired-item tests fail from 19:00 to midnight.
+const YESTERDAY = toLocalISODate(new Date(Date.now() - 86_400_000));
 
 describe('the count tally', () => {
   const gauze: CheckItemSpec = { id: 'gauze', name: '4×4 gauze', checkType: 'count', expectedQuantity: 10 };
@@ -250,7 +255,7 @@ describe('a switch that fails', () => {
 });
 
 describe('replacing what is expiring', () => {
-  const soon = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+  const soon = toLocalISODate(new Date(Date.now() + 5 * 86_400_000));
   const epi = (over: Partial<CheckItemSpec> = {}): CheckItemSpec => ({
     id: 'epi',
     name: 'Epi 1:1000',
@@ -630,7 +635,7 @@ describe('counts carried forward from the last check', () => {
 });
 
 describe('a seal over something that is expiring', () => {
-  const soon = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+  const soon = toLocalISODate(new Date(Date.now() + 5 * 86_400_000));
   const morphine: CheckItemSpec = { id: 'morphine', name: 'Morphine', checkType: 'count', expectedQuantity: 2 };
 
   const tray = (expiry: string, status?: 'intact' | 'broken'): LapStop => ({
