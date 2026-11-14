@@ -7,6 +7,7 @@ temporary upload directory standing in for the volume.
 import os
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -35,8 +36,17 @@ from app.services.scheduled_tasks import (
 from app.services.self_report_attachment_retention import (
     SelfReportAttachmentRetention,
 )
+from tests.clock_support import reread_each_test
 
-NOW = datetime.now(timezone.utc)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    return {"NOW": now}
+
+
+(NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 @pytest.fixture

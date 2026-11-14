@@ -10,10 +10,20 @@ Pure function under test; no DB.
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from typing import Any
 
 from app.services.scheduling_service import SchedulingService
+from tests.clock_support import reread_each_test
 
-NOW = datetime.now(timezone.utc)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    return {"NOW": now}
+
+
+(NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 def _shift(start_offset_hours: float, duration_hours: float = 12.0):

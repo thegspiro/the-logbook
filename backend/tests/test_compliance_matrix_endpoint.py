@@ -10,16 +10,26 @@ percentage.
 import json
 import uuid
 from datetime import date, datetime, timezone
+from typing import Any
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.training import get_compliance_matrix
+from tests.clock_support import reread_each_test
 
 pytestmark = [pytest.mark.integration]
 
-_NOW = datetime.now(timezone.utc)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    return {"_NOW": now}
+
+
+(_NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 def _today() -> date:

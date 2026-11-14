@@ -11,6 +11,7 @@ split — including the audit entries both must leave.
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import pytest
 from fastapi import HTTPException
@@ -24,16 +25,28 @@ from app.models.user import User
 from app.schemas.training import TrainingRequirementUpdate
 from app.services.training_compliance import CATCH_UP_STATUS, compute_org_compliance_pct
 from app.services.training_service import TrainingService
+from tests.clock_support import reread_each_test
 
 pytestmark = [pytest.mark.integration]
 
-_NOW = datetime.now(timezone.utc)
-# UTC, the org's timezone here: a local date ahead of UTC makes TODAY - 1 the
-# service's today, still inside an inclusive catch-up deadline.
-TODAY = _NOW.date()
-CUTOFF = TODAY - timedelta(days=10)
-VETERAN_HIRED = TODAY - timedelta(days=3650)
-RECRUIT_HIRED = TODAY - timedelta(days=2)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    # UTC, the org's timezone here: a local date ahead of UTC makes TODAY - 1
+    # the service's today, still inside an inclusive catch-up deadline.
+    today = now.date()
+    return {
+        "_NOW": now,
+        "TODAY": today,
+        "CUTOFF": today - timedelta(days=10),
+        "VETERAN_HIRED": today - timedelta(days=3650),
+        "RECRUIT_HIRED": today - timedelta(days=2),
+    }
+
+
+_NOW, TODAY, CUTOFF, VETERAN_HIRED, RECRUIT_HIRED = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 def _uid() -> str:

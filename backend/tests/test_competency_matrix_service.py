@@ -11,10 +11,12 @@ requirements). No DB.
 
 from datetime import date, timedelta
 from types import SimpleNamespace
+from typing import Any
 
 from app.models.training import RequirementFrequency, RequirementType, TrainingStatus
 from app.services.competency_matrix_service import CompetencyMatrixService
 from app.utils.training_match_key import training_match_key
+from tests.clock_support import reread_each_test
 
 
 def _svc():
@@ -56,8 +58,15 @@ def _rec(completion_date=None, expiration_date=None, **kw):
     )
 
 
-TODAY = date.today()
-THRESHOLD = TODAY + timedelta(days=90)
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    today = date.today()
+    threshold = today + timedelta(days=90)
+    return {"TODAY": today, "THRESHOLD": threshold}
+
+
+TODAY, THRESHOLD = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 def _evaluate(requirement, records):
