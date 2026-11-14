@@ -10300,6 +10300,10 @@ beyond the feature.
   evaluated one never is. The agency case is left: tying credit to the
   agency's switch would also take back every past credit when an agency is
   switched off, which needs an owner ruling.
+- **Credit is not re-stated when an evaluation's combined scope shrinks.** An
+  evaluation re-saved after one of its programs drops out of the combined
+  scope (its form cleared while the enrollment stays active) keeps the credit
+  it gave that program until the evaluation is saved again with it.
 - **A deactivated evaluation form is still offered and required** where a
   program or the department settings still name it.
 - **Two administrators creating forms with the same name at the same moment
