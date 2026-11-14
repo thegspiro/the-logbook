@@ -253,7 +253,7 @@ Existing tests call `update_order_status(CANCELLED)` as a supported path:
 `test_storefront_service.py`, `test_storefront_reconciliation.py`. So the
 change needs an owner nod.
 
-### W67b-5 — MED — Admins have no way to cancel an order on screen — OPEN
+### W67b-5 — MED — Admins have no way to cancel an order on screen — ✅ FIXED (2026-11-14)
 
 **Saw:** the order dialog has no Cancel action. Its status list is Awaiting
 payment, Paid, Ordered from vendor, Ready for pickup and Fulfilled.
@@ -264,6 +264,55 @@ The only ways to cancel are the member's own button and the status route in
 W67b-4, which records the cancel badly.
 
 **Where:** `components/OrderDetailModal.tsx`.
+
+**Fix:** the order dialog now has a "Cancel order" section with an optional
+reason, which the member is shown. It calls the existing
+`POST /store/orders/{id}/cancel`, so the cancel is recorded properly, with the
+date, the reason and the cancellation email. No backend change.
+
+- **It asks first:** "Cancel ORD-…? … cannot be reopened", with "Keep order"
+  and "Cancel order", as the member's own cancel does (W67-3).
+- **It names money already recorded.** Cancelling leaves `amount_paid`
+  alone, so the confirmation says "$N has been recorded on this order.
+  Cancelling does not refund it — use Refund to record the money going
+  back." That is the part of W67b-2 a screen can warn about. Whether a
+  cancel with money held should be allowed at all is still the owner's
+  decision.
+- **A cancelled order shows why it was cancelled.** The dialog shows the
+  date and the reason, and any amount still recorded as paid.
+- **It hides what the server refuses on a cancelled order:** Mark paid,
+  Record payment, Waive payment, Change status and the "Balance due" row.
+  Refund stays, since the server still accepts it.
+
+**Tests:** four new cases in `components/OrderDetailModal.test.tsx`:
+
+- cancelling sends the reason;
+- "Keep order" sends nothing;
+- the confirmation names money already recorded;
+- a cancelled order offers Refund and nothing the server refuses.
+
+All four failed against the unchanged dialog and pass now. The no-"Balance
+due" assertion was added after the re-drive below and also failed first.
+
+`StoreOrdersTab.test.tsx` now renders the tab inside `ConfirmProvider`, as
+the app shell does. The dialog it opens calls `useConfirm()`, which throws
+without one. No assertion there changed.
+
+**Re-driven:**
+
+1. As `quartermaster`, recorded $5.00 on ORD-2026-0007.
+2. In Manage, typed a reason and pressed Cancel order.
+3. The confirmation named the $5.00. After confirming, the order was stored
+   cancelled with its date and reason, with the $5.00 still recorded.
+4. The dialog then offered only Refund, Send update and Save notes.
+5. As `member`, My Orders showed the order as cancelled.
+
+No console errors and no failed API calls.
+
+**Seen while fixing, not changed:** `WriteOffsPage.tsx` and
+`ReorderRequestsPage.tsx` in the inventory module use a `btn-danger` class
+that `styles/index.css` does not define, so those buttons render unstyled.
+It is outside this module; it is recorded here as a lead.
 
 ### W67b-6 — MED — A size can be priced below zero — OPEN
 
@@ -402,14 +451,15 @@ install sends no email.
 
 ## Completion gate
 
-The review itself changed no code. The W67b-3 fix of 2026-11-14 is the only
-code change:
+The review itself changed no code. The W67b-3 and W67b-5 fixes of 2026-11-14
+are the only code changes. The figures below are for the tree with both
+applied:
 
-| Check                    | Result                                                                          |
-| ------------------------ | ------------------------------------------------------------------------------- |
-| npm run typecheck        | clean                                                                           |
-| npm run lint             | clean                                                                           |
-| prettier --check         | clean on the changed files                                                      |
-| frontend tests (touched) | `src/modules/storefront`: 243 passed, 4 of them new and each seen to fail first |
-| integrity suites         | dialog scroll, dialog dismiss, touch target and hover reveal: 15 passed         |
-| backend                  | not run; no backend file changed                                                |
+| Check                    | Result                                                                                                                                   |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| npm run typecheck        | clean                                                                                                                                    |
+| npm run lint             | clean                                                                                                                                    |
+| prettier --check         | clean on the changed files                                                                                                               |
+| frontend tests (touched) | `src/modules/storefront`: 247 passed; 8 new (4 for W67b-3, 4 for W67b-5), each seen to fail first                                        |
+| integrity suites         | dialog scroll, dialog dismiss, touch target, hover reveal and the stylesheet suites: all passed (313 in total with the storefront tests) |
+| backend                  | not run; no backend file changed                                                                                                         |

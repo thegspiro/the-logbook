@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import toast from 'react-hot-toast';
 import userEvent from '@testing-library/user-event';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 
 const mockGetOrders = vi.fn();
 const mockGetWindows = vi.fn();
@@ -49,7 +50,14 @@ const order = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const renderTab = (props: Record<string, unknown> = {}) => render(<StoreOrdersTab onChanged={vi.fn()} {...props} />);
+// ConfirmProvider is part of the app shell; the order dialog this tab opens
+// asks before cancelling an order.
+const renderTab = (props: Record<string, unknown> = {}) =>
+  render(
+    <ConfirmProvider>
+      <StoreOrdersTab onChanged={vi.fn()} {...props} />
+    </ConfirmProvider>
+  );
 
 describe('StoreOrdersTab payment handling', () => {
   beforeEach(() => {

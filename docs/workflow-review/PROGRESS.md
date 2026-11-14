@@ -188,12 +188,15 @@ Fixed 2026-11-14:
 - W67b-3 (HIGH): no screen showed a shipped order's address, the delivery
   choice or the member's notes. The admin order dialog and My Orders now
   show them, with the subtotal, tax and shipping lines.
+- W67b-5 (MED): there was no admin cancel button. The order dialog now
+  cancels through the existing endpoint, with a reason and a confirmation
+  that names any money already recorded. A cancelled order then offers
+  Refund and nothing the server refuses.
 
 Open:
 
 - W67b-4 (MED): order status can move backwards, or to Cancelled without
   the cancel record;
-- W67b-5 (MED): no admin cancel button;
 - W67b-6 (MED): sizes can be priced below zero;
 - W67b-7 (MED): overpayment is accepted;
 - W67b-8 (LOW): refund is one tap and always refunds everything;
@@ -206,8 +209,8 @@ Read from code, not driven: W67b-11 to W67b-17 (window lifecycle, vendor
 order, payment reports and notification gaps). Details in
 [`W67b-department-store-follow-up.md`](./W67b-department-store-follow-up.md).
 
-Gate for the W67b-3 fix: typecheck and lint clean, and the 243 storefront
-tests and 15 integrity tests pass.
+Gate for the W67b-3 and W67b-5 fixes: typecheck and lint clean, and 313
+storefront and integrity tests pass.
 
 ### W09 second pass — Import members from a spreadsheet — 2026-11-10
 

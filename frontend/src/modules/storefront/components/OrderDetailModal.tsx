@@ -7,9 +7,10 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { CircleDollarSign, MessageSquare, Undo2 } from 'lucide-react';
+import { Ban, CircleDollarSign, MessageSquare, Undo2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCurrency, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -43,6 +44,7 @@ const ADVANCEABLE_STATUSES: string[] = [
 
 export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onClose, onChanged }) => {
   const tz = useTimezone();
+  const { confirm } = useConfirm();
   const [order, setOrder] = useState<StoreOrder | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -60,6 +62,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
   const [notifyUpdateInApp, setNotifyUpdateInApp] = useState(true);
   const [adminNotes, setAdminNotes] = useState('');
   const [waiveReason, setWaiveReason] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
 
   const load = useCallback(async () => {
     if (!orderId) return;
@@ -191,6 +194,39 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
       }
     });
 
+  const cancelOrder = async () => {
+    if (!order) return;
+    const paid = Number(order.amountPaid);
+    const reason = cancelReason.trim();
+    // Cancelling leaves amount_paid alone, so money already recorded is still
+    // held by the department afterwards. Say so before the decision rather
+    // than after it (W67b-2).
+    const moneyNote =
+      paid > 0
+        ? ` ${formatCurrency(paid)} has been recorded on this order. Cancelling does not refund it — use Refund to record the money going back.`
+        : '';
+    const ok = await confirm({
+      title: `Cancel ${order.orderNumber}?`,
+      message: `The order is cancelled and cannot be reopened, and the member is told${reason ? ' why' : ''}.${moneyNote}`,
+      confirmLabel: 'Cancel order',
+      cancelLabel: 'Keep order',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    await withBusy(async () => {
+      try {
+        await storefrontService.cancelOrder(order.id, {
+          reason: reason || undefined,
+          notifyMember: true,
+        });
+        setCancelReason('');
+        toast.success(`${order.orderNumber} cancelled`);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Could not cancel the order'));
+      }
+    });
+  };
+
   const refund = () =>
     withBusy(async () => {
       if (!order) return;
@@ -203,6 +239,8 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
         toast.error(getErrorMessage(err, 'Could not record the refund'));
       }
     });
+
+  const cancelled = order?.status === StoreOrderStatus.CANCELLED;
 
   return (
     <Modal
@@ -293,10 +331,14 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                 <dt className="text-theme-text-muted">Paid</dt>
                 <dd className="text-theme-text-primary">{formatCurrency(Number(order.amountPaid))}</dd>
               </div>
-              <div className="flex justify-between">
-                <dt className="text-theme-text-muted">Balance due</dt>
-                <dd className="text-theme-text-primary font-medium">{formatCurrency(Number(order.balanceDue))}</dd>
-              </div>
+              {/* Cancelling leaves the balance on the record, but nobody owes it —
+                  the same reading My Orders gives the member. */}
+              {!cancelled && (
+                <div className="flex justify-between">
+                  <dt className="text-theme-text-muted">Balance due</dt>
+                  <dd className="text-theme-text-primary font-medium">{formatCurrency(Number(order.balanceDue))}</dd>
+                </div>
+              )}
               {order.paymentMethod && (
                 <div className="flex justify-between">
                   <dt className="text-theme-text-muted">Method</dt>
@@ -317,7 +359,16 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
               <OrderDeliveryDetails order={order} audience="staff" />
             </section>
 
-            {order.paymentStatus === 'pending_verification' && (
+            {cancelled && (
+              <div className="alert-danger text-sm">
+                Cancelled{order.cancelledAt ? ` ${formatDateTime(order.cancelledAt, tz)}` : ''}
+                {order.cancellationReason ? ` — ${order.cancellationReason}` : ''}.
+                {Number(order.amountPaid) > 0 &&
+                  ` ${formatCurrency(Number(order.amountPaid))} is still recorded as paid; use Refund to record it going back.`}
+              </div>
+            )}
+
+            {order.paymentStatus === 'pending_verification' && !cancelled && (
               <div className="alert-warning text-sm">
                 The member reported paying
                 {order.paymentReference ? ` (ref ${order.paymentReference})` : ''}. Confirm it against the department
@@ -325,99 +376,107 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
               </div>
             )}
 
-            <section className="card-secondary space-y-3 p-3">
-              <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
-                <CircleDollarSign className="h-4 w-4" />
-                Payment
-              </h3>
+            {(!cancelled || Number(order.amountPaid) > 0) && (
+              <section className="card-secondary space-y-3 p-3">
+                <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
+                  <CircleDollarSign className="h-4 w-4" />
+                  Payment
+                </h3>
 
-              {Number(order.balanceDue) > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    className="btn-success btn-md"
-                    disabled={busy}
-                    onClick={() => {
-                      void markPaidInFull();
-                    }}
-                  >
-                    Mark paid in full ({formatCurrency(Number(order.balanceDue))})
-                  </button>
-                  <span className="text-theme-text-muted text-xs">or record a partial amount below</span>
-                </div>
-              )}
-              <div className="flex flex-wrap items-end gap-2">
-                <div>
-                  <label htmlFor="payment-amount" className="form-label-sm">
-                    Amount
-                  </label>
-                  <input
-                    id="payment-amount"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(e.target.value)}
-                    className="form-input-sm w-28"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="payment-method" className="form-label-sm">
-                    Paid by
-                  </label>
-                  <select
-                    id="payment-method"
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="form-input-sm"
-                  >
-                    <option value="">Not recorded</option>
-                    {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="min-w-[10rem] flex-1">
-                  <label htmlFor="payment-ref" className="form-label-sm">
-                    Reference
-                  </label>
-                  <input
-                    id="payment-ref"
-                    type="text"
-                    value={paymentReference}
-                    onChange={(e) => setPaymentReference(e.target.value)}
-                    className="form-input-sm"
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="btn-success btn-md"
-                  disabled={busy}
-                  onClick={() => {
-                    void recordPayment();
-                  }}
-                >
-                  Record payment
-                </button>
-                {Number(order.amountPaid) > 0 && (
-                  <button
-                    type="button"
-                    className="btn-secondary btn-md"
-                    disabled={busy}
-                    onClick={() => {
-                      void refund();
-                    }}
-                  >
-                    <Undo2 className="h-4 w-4" />
-                    Refund
-                  </button>
+                {/* The server refuses a payment on a cancelled order; only the
+                  refund of what was already taken still applies. */}
+                {Number(order.balanceDue) > 0 && !cancelled && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className="btn-success btn-md"
+                      disabled={busy}
+                      onClick={() => {
+                        void markPaidInFull();
+                      }}
+                    >
+                      Mark paid in full ({formatCurrency(Number(order.balanceDue))})
+                    </button>
+                    <span className="text-theme-text-muted text-xs">or record a partial amount below</span>
+                  </div>
                 )}
-              </div>
-            </section>
+                <div className="flex flex-wrap items-end gap-2">
+                  {!cancelled && (
+                    <>
+                      <div>
+                        <label htmlFor="payment-amount" className="form-label-sm">
+                          Amount
+                        </label>
+                        <input
+                          id="payment-amount"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={paymentAmount}
+                          onChange={(e) => setPaymentAmount(e.target.value)}
+                          className="form-input-sm w-28"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="payment-method" className="form-label-sm">
+                          Paid by
+                        </label>
+                        <select
+                          id="payment-method"
+                          value={paymentMethod}
+                          onChange={(e) => setPaymentMethod(e.target.value)}
+                          className="form-input-sm"
+                        >
+                          <option value="">Not recorded</option>
+                          {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="min-w-[10rem] flex-1">
+                        <label htmlFor="payment-ref" className="form-label-sm">
+                          Reference
+                        </label>
+                        <input
+                          id="payment-ref"
+                          type="text"
+                          value={paymentReference}
+                          onChange={(e) => setPaymentReference(e.target.value)}
+                          className="form-input-sm"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-success btn-md"
+                        disabled={busy}
+                        onClick={() => {
+                          void recordPayment();
+                        }}
+                      >
+                        Record payment
+                      </button>
+                    </>
+                  )}
+                  {Number(order.amountPaid) > 0 && (
+                    <button
+                      type="button"
+                      className="btn-secondary btn-md"
+                      disabled={busy}
+                      onClick={() => {
+                        void refund();
+                      }}
+                    >
+                      <Undo2 className="h-4 w-4" />
+                      Refund
+                    </button>
+                  )}
+                </div>
+              </section>
+            )}
 
-            {order.paymentStatus !== 'waived' && Number(order.balanceDue) > 0 && (
+            {order.paymentStatus !== 'waived' && Number(order.balanceDue) > 0 && !cancelled && (
               <section className="card-secondary space-y-2 p-3">
                 <h3 className="text-theme-text-primary text-sm font-semibold">Waive payment</h3>
                 <p className="text-theme-text-muted text-xs">
@@ -451,50 +510,52 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
               </section>
             )}
 
-            <section className="card-secondary space-y-3 p-3">
-              <h3 className="text-theme-text-primary text-sm font-semibold">Change status</h3>
-              <div className="flex flex-wrap items-end gap-2">
-                <div>
-                  <label htmlFor="status-choice" className="form-label-sm">
-                    Status
-                  </label>
-                  <select
-                    id="status-choice"
-                    value={statusChoice}
-                    onChange={(e) => setStatusChoice(e.target.value)}
-                    className="form-input-sm"
+            {!cancelled && (
+              <section className="card-secondary space-y-3 p-3">
+                <h3 className="text-theme-text-primary text-sm font-semibold">Change status</h3>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <label htmlFor="status-choice" className="form-label-sm">
+                      Status
+                    </label>
+                    <select
+                      id="status-choice"
+                      value={statusChoice}
+                      onChange={(e) => setStatusChoice(e.target.value)}
+                      className="form-input-sm"
+                    >
+                      {ADVANCEABLE_STATUSES.map((value) => (
+                        <option key={value} value={value}>
+                          {ORDER_STATUS_LABELS[value] ?? value}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="min-w-[12rem] flex-1">
+                    <label htmlFor="status-message" className="form-label-sm">
+                      Note to the member (optional)
+                    </label>
+                    <input
+                      id="status-message"
+                      type="text"
+                      value={statusMessage}
+                      onChange={(e) => setStatusMessage(e.target.value)}
+                      className="form-input-sm"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-primary btn-md"
+                    disabled={busy}
+                    onClick={() => {
+                      void changeStatus();
+                    }}
                   >
-                    {ADVANCEABLE_STATUSES.map((value) => (
-                      <option key={value} value={value}>
-                        {ORDER_STATUS_LABELS[value] ?? value}
-                      </option>
-                    ))}
-                  </select>
+                    Update status
+                  </button>
                 </div>
-                <div className="min-w-[12rem] flex-1">
-                  <label htmlFor="status-message" className="form-label-sm">
-                    Note to the member (optional)
-                  </label>
-                  <input
-                    id="status-message"
-                    type="text"
-                    value={statusMessage}
-                    onChange={(e) => setStatusMessage(e.target.value)}
-                    className="form-input-sm"
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="btn-primary btn-md"
-                  disabled={busy}
-                  onClick={() => {
-                    void changeStatus();
-                  }}
-                >
-                  Update status
-                </button>
-              </div>
-            </section>
+              </section>
+            )}
 
             <section className="card-secondary space-y-3 p-3">
               <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
@@ -568,6 +629,45 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                 </button>
               </div>
             </section>
+
+            {!cancelled && (
+              <section className="card-secondary space-y-2 p-3">
+                <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
+                  <Ban className="h-4 w-4" aria-hidden="true" />
+                  Cancel order
+                </h3>
+                <p className="text-theme-text-muted text-xs">
+                  For an order that will not be filled. It cannot be reopened, and the member is emailed.
+                </p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="min-w-[12rem] flex-1">
+                    <label htmlFor="cancel-reason" className="form-label-sm">
+                      Reason for cancelling (shown to the member)
+                    </label>
+                    <input
+                      id="cancel-reason"
+                      type="text"
+                      maxLength={500}
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                      className="form-input-sm"
+                      placeholder="The vendor discontinued this item"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-md"
+                    disabled={busy}
+                    aria-label={`Cancel ${order.orderNumber}`}
+                    onClick={() => {
+                      void cancelOrder();
+                    }}
+                  >
+                    Cancel order
+                  </button>
+                </div>
+              </section>
+            )}
 
             {order.events.length > 0 && (
               <section>
