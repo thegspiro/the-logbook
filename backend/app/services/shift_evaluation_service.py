@@ -1276,7 +1276,9 @@ class ShiftEvaluationService:
         enrollment_ids = [str(e) for e in (evaluation.enrollment_ids or [])]
         if not enrollment_ids:
             return
-        visible = await self.visible_to_member(evaluation, organization_id)
+        visible = await self.visible_to_member(
+            evaluation, organization_id
+        ) and await self._still_on_crew(evaluation, organization_id)
         rows = (
             await self.db.execute(
                 select(RequirementProgress, TrainingRequirement, ProgramEnrollment)
@@ -1377,6 +1379,115 @@ class ShiftEvaluationService:
                 await self._reopen_if_short(
                     program_service, progress_id, organization_id
                 )
+
+    async def _still_on_crew(
+        self, evaluation: ShiftEvaluation, organization_id: UUID | str
+    ) -> bool:
+        """A department shift's evaluation credits while its member still holds
+        a seat they worked: taken off the shift, or marked No-show, the shift
+        is not one they did. Outside shifts follow their logged entry."""
+        if (evaluation.occasion or SHIFT_OCCASION) == EXTERNAL_OCCASION:
+            return True
+        if not evaluation.shift_id:
+            return False
+        return (
+            await self.db.execute(
+                select(ShiftAssignment.id)
+                .where(
+                    ShiftAssignment.shift_id == evaluation.shift_id,
+                    ShiftAssignment.user_id == evaluation.member_id,
+                    ShiftAssignment.organization_id == str(organization_id),
+                    # The close-out roster's rule: crew who took the shift.
+                    ShiftAssignment.assignment_status.in_(
+                        (AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED)
+                    ),
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none() is not None
+
+    async def sync_credit_for_requirement(
+        self, requirement_id: str, organization_id: UUID | str
+    ) -> None:
+        """Re-sync after a requirement's crediting rule changed.
+
+        Every submitted evaluation counted toward an enrollment that tracks the
+        requirement is restated; when the requirement no longer takes
+        evaluation credit at all, what evaluations credited it comes off.
+        """
+        org = str(organization_id)
+        requirement = (
+            await self.db.execute(
+                select(TrainingRequirement).where(
+                    TrainingRequirement.id == str(requirement_id),
+                    TrainingRequirement.organization_id == org,
+                )
+            )
+        ).scalar_one_or_none()
+        if requirement is None:
+            return
+        progress_rows = (
+            await self.db.execute(
+                select(
+                    RequirementProgress.id,
+                    ProgramEnrollment.id,
+                    ProgramEnrollment.user_id,
+                )
+                .join(
+                    ProgramEnrollment,
+                    ProgramEnrollment.id == RequirementProgress.enrollment_id,
+                )
+                .where(
+                    RequirementProgress.requirement_id == requirement.id,
+                    ProgramEnrollment.organization_id == org,
+                )
+            )
+        ).all()
+        if not progress_rows:
+            return
+        if requirement.requirement_type not in _CREDITED_TYPES:
+            program_service = TrainingProgramService(self.db)
+            credits = (
+                await self.db.execute(
+                    select(
+                        RequirementProgressCredit.progress_id,
+                        RequirementProgressCredit.source_id,
+                    ).where(
+                        RequirementProgressCredit.progress_id.in_(
+                            [str(p) for p, _, _ in progress_rows]
+                        ),
+                        RequirementProgressCredit.source_type
+                        == ProgressCreditSource.SHIFT_EVALUATION,
+                    )
+                )
+            ).all()
+            for progress_id, source_id in credits:
+                await program_service.revoke_requirement_credit(
+                    progress_id=progress_id,
+                    organization_id=org,
+                    source_type=ProgressCreditSource.SHIFT_EVALUATION,
+                    source_id=source_id,
+                )
+            return
+        enrollment_ids = {str(e) for _, e, _ in progress_rows}
+        member_ids = {str(m) for _, _, m in progress_rows}
+        evaluations = (
+            await self.db.execute(
+                select(ShiftEvaluation.id, ShiftEvaluation.enrollment_ids).where(
+                    ShiftEvaluation.organization_id == org,
+                    ShiftEvaluation.member_id.in_(member_ids),
+                    ShiftEvaluation.status == "submitted",
+                )
+            )
+        ).all()
+        await self._sync_ids(
+            [
+                str(evaluation_id)
+                for evaluation_id, counted_for in evaluations
+                if enrollment_ids.intersection(str(e) for e in (counted_for or []))
+            ],
+            organization_id,
+        )
 
     async def sync_credit_for_shift_member(
         self,

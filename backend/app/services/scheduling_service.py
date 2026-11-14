@@ -5938,6 +5938,11 @@ class SchedulingService:
             await self.db.refresh(assignment)
             if seat_vacated:
                 await self._cancel_swaps_for_vacated_seats(organization_id, [old_seat])
+            new_seat = (str(assignment.shift_id), str(assignment.user_id))
+            if old_status != assignment.assignment_status or new_seat != old_seat:
+                await self._resync_evaluation_credit(
+                    organization_id, {old_seat, new_seat}
+                )
 
             # Fire decline notification if status changed to declined
             new_status = assignment.assignment_status
@@ -6034,6 +6039,21 @@ class SchedulingService:
             parts.append(str(existing).strip())
         return " ".join(parts)
 
+    async def _resync_evaluation_credit(
+        self, organization_id: UUID | str, seats: set
+    ) -> None:
+        """A member's evaluation on a shift credits only while they hold a seat
+        they worked (ShiftEvaluationService._still_on_crew): re-sync it when
+        the seat changes, is marked No-show, or goes."""
+        # Imported here: the evaluation service imports this module.
+        from app.services.shift_evaluation_service import ShiftEvaluationService
+
+        evaluations = ShiftEvaluationService(self.db)
+        for shift_id, user_id in seats:
+            await evaluations.sync_credit_for_shift_member(
+                shift_id, user_id, organization_id
+            )
+
     async def delete_assignment(
         self,
         assignment_id: UUID,
@@ -6073,6 +6093,9 @@ class SchedulingService:
             await self.db.commit()
             await self._cancel_swaps_for_vacated_seats(
                 organization_id, [(shift_id, user_id)]
+            )
+            await self._resync_evaluation_credit(
+                organization_id, {(str(shift_id), str(user_id))}
             )
 
             # Fire removal notification
