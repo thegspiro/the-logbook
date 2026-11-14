@@ -10306,5 +10306,8 @@ beyond the feature.
 - **A preceptor-link submission that collides with an officer creating the
   same evaluation** retries once; the retry keeps the link marked used but
   loses the submitting device's address and browser from the record.
-- **Restoring a pending outside shift approves it**, without approve's
-  pending-only check (it still needs `scheduling.manage`).
+- ~~**Restoring a pending outside shift approves it**, without approve's
+  pending-only check (it still needs `scheduling.manage`).~~ Resolved
+  2026-11-14: restore now applies only to a rejected entry and answers 400
+  otherwise, as approve does for one that is not pending; restore, approve and
+  reject all read the entry under a row lock.
