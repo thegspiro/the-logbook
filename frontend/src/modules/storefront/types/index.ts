@@ -184,6 +184,11 @@ export const WINDOW_STATUS_BADGES: Record<string, string> = {
   cancelled: 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30',
 };
 
+export interface ConnectedPayPalAccount {
+  paypalMeUrl?: string | null;
+  accountEmail?: string | null;
+}
+
 export interface StoreSettings {
   id: string;
   organizationId: string;
@@ -198,6 +203,10 @@ export interface StoreSettings {
   venmoHandle?: string | null;
   paypalMeUrl?: string | null;
   paypalEmail?: string | null;
+  /** True: the PayPal button uses the connected PayPal integration's link and email. */
+  paypalUseConnected: boolean;
+  /** The connected PayPal integration's link and email; null when PayPal is not connected. */
+  connectedPaypal?: ConnectedPayPalAccount | null;
   cashAppCashtag?: string | null;
   zelleHandle?: string | null;
   zelleInstructions?: string | null;
@@ -265,6 +274,7 @@ export interface StoreSettingsUpdate {
   venmoHandle?: string | null;
   paypalMeUrl?: string | null;
   paypalEmail?: string | null;
+  paypalUseConnected?: boolean;
   cashAppCashtag?: string | null;
   zelleHandle?: string | null;
   zelleInstructions?: string | null;

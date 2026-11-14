@@ -475,6 +475,8 @@ const IntegrationsPage: React.FC = () => {
   const [paypalClientSecret, setPaypalClientSecret] = useState('');
   const [paypalWebhookId, setPaypalWebhookId] = useState('');
   const [paypalAutoApply, setPaypalAutoApply] = useState(true);
+  const [paypalMeUrl, setPaypalMeUrl] = useState('');
+  const [paypalAccountEmail, setPaypalAccountEmail] = useState('');
   const [zeffyApiKey, setZeffyApiKey] = useState('');
   const [zeffyWebhookSecret, setZeffyWebhookSecret] = useState('');
   const [mcpAccessMode, setMcpAccessMode] = useState<'read_only' | 'read_write'>('read_only');
@@ -677,6 +679,8 @@ const IntegrationsPage: React.FC = () => {
     setPaypalClientSecret('');
     setPaypalWebhookId(typeof stored['webhook_id'] === 'string' ? stored['webhook_id'] : '');
     setPaypalAutoApply(stored['auto_apply_payments'] !== false);
+    setPaypalMeUrl(typeof stored['paypal_me_url'] === 'string' ? stored['paypal_me_url'] : '');
+    setPaypalAccountEmail(typeof stored['account_email'] === 'string' ? stored['account_email'] : '');
     setZeffyApiKey('');
     setZeffyWebhookSecret('');
     // Every switch on this add-on defaults to off; reopening the form on a
@@ -768,6 +772,10 @@ const IntegrationsPage: React.FC = () => {
           client_secret: paypalClientSecret.trim() || undefined,
           webhook_id: paypalWebhookId.trim() || undefined,
           auto_apply_payments: paypalAutoApply,
+          // Public, and sent as typed: a blank box clears it, unlike the
+          // credentials, which are never echoed back.
+          paypal_me_url: paypalMeUrl.trim(),
+          account_email: paypalAccountEmail.trim(),
         };
       case 'zeffy':
         return {
@@ -2185,6 +2193,35 @@ const IntegrationsPage: React.FC = () => {
               <code className="bg-theme-surface-secondary text-theme-text-secondary mt-1 block rounded px-2 py-1 text-xs break-all">
                 {webhookCallbackUrl('paypal', integration.id)}
               </code>
+            </div>
+            <div>
+              <label htmlFor="paypal-me-url" className={labelClass}>
+                PayPal.Me link (optional)
+              </label>
+              <input
+                id="paypal-me-url"
+                type="text"
+                value={paypalMeUrl}
+                onChange={(e) => setPaypalMeUrl(e.target.value)}
+                placeholder="https://paypal.me/yourdept"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="paypal-account-email" className={labelClass}>
+                Account email (optional)
+              </label>
+              <input
+                id="paypal-account-email"
+                type="email"
+                value={paypalAccountEmail}
+                onChange={(e) => setPaypalAccountEmail(e.target.value)}
+                className={inputClass}
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Where members send money when the store is set to use the connected PayPal account (Store &rarr;
+                Settings &rarr; Payments). PayPal cannot report these, so enter them here.
+              </p>
             </div>
             <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
               <input

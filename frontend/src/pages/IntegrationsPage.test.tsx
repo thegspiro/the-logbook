@@ -708,7 +708,13 @@ describe('IntegrationsPage', () => {
         ...paypalAvailable,
         status: 'connected' as const,
         enabled: true,
-        config: { environment: 'live', webhook_id: 'WH-LIVE', auto_apply_payments: true },
+        config: {
+          environment: 'live',
+          webhook_id: 'WH-LIVE',
+          auto_apply_payments: true,
+          paypal_me_url: 'https://paypal.me/oakvillefd',
+          account_email: 'treasurer@oakvillefd.org',
+        },
       };
       mockGetIntegrations.mockResolvedValue([paypalConnected]);
       mockUpdateIntegration.mockResolvedValue(paypalConnected);
@@ -729,6 +735,8 @@ describe('IntegrationsPage', () => {
       );
       expect(within(dialog).getByLabelText('Environment')).toHaveValue('live');
       expect(within(dialog).getByLabelText('Webhook ID')).toHaveValue('WH-LIVE');
+      expect(within(dialog).getByLabelText('PayPal.Me link (optional)')).toHaveValue('https://paypal.me/oakvillefd');
+      expect(within(dialog).getByLabelText('Account email (optional)')).toHaveValue('treasurer@oakvillefd.org');
       expect(dialog).toHaveTextContent('Changing it needs the Client ID and Client Secret of that environment’s app.');
       expect(dialog).toHaveTextContent(
         'Saved settings apply to the next payment PayPal reports. The webhook address does not change.'
@@ -745,6 +753,8 @@ describe('IntegrationsPage', () => {
         client_secret: undefined,
         webhook_id: 'WH-NEW',
         auto_apply_payments: true,
+        paypal_me_url: 'https://paypal.me/oakvillefd',
+        account_email: 'treasurer@oakvillefd.org',
       });
       expect(mockConnectIntegration).not.toHaveBeenCalled();
     });

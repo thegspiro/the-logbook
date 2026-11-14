@@ -91,7 +91,7 @@ from app.services.email_theme import (
     TH_STYLE,
 )
 from app.utils.org_timezone import format_in_org_timezone
-from app.utils.storefront_payments import build_payment_options
+from app.utils.storefront_payments import PayPalAccount, build_payment_options
 
 # Header banner colour by notice kind. Aliased rather than re-declared so a
 # coded fallback and its default template cannot drift apart.
@@ -162,6 +162,10 @@ class StorefrontNotificationService:
         approved the preview would be approving something else.
         """
         self.db = db
+        # Filled by the owning StorefrontService's get_settings; see
+        # StorefrontService.connected_paypal. Empty means the store's own
+        # PayPal link and email, which is also the fallback.
+        self.connected_paypal: Dict[str, Optional[PayPalAccount]] = {}
         self._capture = capture
         self._templates: Dict[Tuple[str, str], Optional[EmailTemplate]] = {}
         self._switched_off_cache: Dict[Tuple[str, str], bool] = {}
@@ -307,7 +311,12 @@ class StorefrontNotificationService:
         if balance <= 0 or not settings:
             return ""
 
-        options = build_payment_options(settings, balance, order.order_number)
+        options = build_payment_options(
+            settings,
+            balance,
+            order.order_number,
+            self.connected_paypal.get(str(settings.organization_id)),
+        )
         lines: List[str] = [
             f"<p><strong>Balance due: {_money(balance, currency)}</strong></p>"
         ]

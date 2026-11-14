@@ -38,6 +38,7 @@ from app.models.storefront import (
 )
 from app.models.user import User
 from app.schemas.storefront import (
+    ConnectedPayPalAccount,
     StoreBulkPayment,
     StoreBulkStatusResult,
     StoreBulkStatusUpdate,
@@ -327,7 +328,9 @@ async def get_storefront(
         "shipping_flat_rate": settings.shipping_flat_rate,
         "tax_rate": settings.tax_rate,
         "accepted_payment_methods": settings.accepted_payment_methods or [],
-        "payment_methods": build_payment_method_summaries(settings),
+        "payment_methods": build_payment_method_summaries(
+            settings, service.paypal_account_for(settings)
+        ),
         "payment_instructions": settings.payment_instructions,
         "payment_policy": settings.payment_policy,
         "sends_order_confirmation": settings.send_order_confirmation,
@@ -495,6 +498,19 @@ async def cancel_my_order(
 # ==========================================================================
 
 
+def _settings_response(
+    service: StorefrontService, settings: StoreSettings
+) -> StoreSettingsResponse:
+    """The settings row plus the connected PayPal account it may use."""
+    response = StoreSettingsResponse.model_validate(settings)
+    account = service.paypal_account_for(settings)
+    if account is not None:
+        response.connected_paypal = ConnectedPayPalAccount(
+            paypal_me_url=account.paypal_me_url, account_email=account.email
+        )
+    return response
+
+
 @router.get("/settings", response_model=StoreSettingsResponse)
 async def get_store_settings(
     db: AsyncSession = Depends(get_db),
@@ -502,7 +518,8 @@ async def get_store_settings(
 ) -> Any:
     """Store configuration for administrators."""
     service = StorefrontService(db)
-    return await service.get_settings(str(current_user.organization_id))
+    settings = await service.get_settings(str(current_user.organization_id))
+    return _settings_response(service, settings)
 
 
 @router.put("/settings", response_model=StoreSettingsResponse)
@@ -533,7 +550,7 @@ async def update_store_settings(
         user_id=str(current_user.id),
         username=current_user.username,
     )
-    return settings
+    return _settings_response(service, settings)
 
 
 @router.get(
