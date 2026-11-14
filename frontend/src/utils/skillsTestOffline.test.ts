@@ -19,6 +19,7 @@ import {
   cacheSkillTest,
   discardSkillsPending,
   drainSkillsQueue,
+  drainedVersionFor,
   enqueueSkillsComplete,
   enqueueSkillsCreate,
   enqueueSkillsUpdate,
@@ -195,6 +196,15 @@ describe('skillsTestOffline', () => {
     const kept = await getOwnSkillsPending('t1');
     expect(kept?.update?.elapsed_seconds).toBe(2);
     expect(kept?.baseVersion).toBe(4);
+  });
+
+  it('records the version a sent save produced, for the screen’s next save', async () => {
+    await enqueueSkillsUpdate({ id: 't1', label: 'SCBA', version: 3 }, { elapsed_seconds: 1 });
+    const { axios } = fakeAxios(() => test({ id: 't1', status: 'in_progress', version: 4 }));
+
+    await drainSkillsQueue(axios);
+
+    expect(await drainedVersionFor('t1')).toBe(4);
   });
 
   it('drains under the lock the service worker takes for background sync', async () => {
