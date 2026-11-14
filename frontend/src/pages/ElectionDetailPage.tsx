@@ -4,7 +4,7 @@
  * Shows detailed information about an election including results.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { electionService, eventService, meetingsService } from '../services/api';
@@ -56,6 +56,7 @@ import {
   getVictoryDescription,
   describePackageSendError,
   electionCanEmailBallots,
+  nomineesOf,
 } from '../utils/electionHelpers';
 import SendBallotEmailsModal from '../components/election-detail/SendBallotEmailsModal';
 import RemindNonVotersModal from '../components/election-detail/RemindNonVotersModal';
@@ -254,6 +255,32 @@ export const ElectionDetailPage: React.FC = () => {
       }
     })();
   }, [canManage]);
+
+  // The Candidates tab's count. Loaded here because the tab's own list loads
+  // only once the tab is opened; while it is open it reports its rows back
+  // (onCandidatesChange), so an add or a removal moves the count with it.
+  const [tabCandidates, setTabCandidates] = useState<Candidate[] | null>(null);
+  useEffect(() => {
+    setTabCandidates(null);
+    if (!canManage || !electionId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await electionService.getCandidates(electionId);
+        if (!cancelled) setTabCandidates(rows);
+      } catch {
+        // The count is a convenience: without it the tab shows no badge, and
+        // the tab's own load reports a failure where the officer will see it.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage, electionId]);
+  const candidateCount = useMemo(
+    () => (tabCandidates ? nomineesOf(tabCandidates, election?.ballot_items).length : undefined),
+    [tabCandidates, election?.ballot_items]
+  );
 
   useEffect(() => {
     if (electionId) {
@@ -1898,6 +1925,7 @@ export const ElectionDetailPage: React.FC = () => {
               canManage={canManage}
               activeTab={activeTab}
               onTabChange={setActiveTab}
+              candidateCount={candidateCount}
             />
 
             <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
@@ -1999,7 +2027,11 @@ export const ElectionDetailPage: React.FC = () => {
               {/* Tab: Candidates */}
               {activeTab === 'candidates' && canManage && (
                 <div className="mb-6">
-                  <CandidateManagement electionId={electionId} election={election} />
+                  <CandidateManagement
+                    electionId={electionId}
+                    election={election}
+                    onCandidatesChange={setTabCandidates}
+                  />
                 </div>
               )}
 

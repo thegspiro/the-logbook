@@ -1208,12 +1208,16 @@ A2 step 9, B1 step 12, B3 step 3, A9, A10. `ElectionDetailPage.tsx:1123`. Show t
 **Left by design:**
 
 - **Draft rows show no vote count:** a draft cannot hold votes.
-- **The Candidates tab label has no count:** nothing at the tab bar knows it without a new API field or a second fetch, and the tab's heading already reads "Candidates (N)".
 - **The summary card counts a system runoff among its drafts:** it is a draft an officer still has to open.
 
-**Not changed here:** the minutes module's PDF and documents also print `total_votes` as "Ballots cast" (`minutes_pdf.py`, `document_service.py`). That is the same mislabel in another module.
-
 Tests: `test_w50_mail_wording.py`, `test_certified_results_pdf_layout.py`, `test_election_report_delivery.py`, `ballotChoices.test.ts`, `ElectionsPage.statusFilters.test.tsx`, `electionHelpers.test.ts`.
+
+**Done afterwards (2026-11-14):**
+
+- **The Candidates tab carries a count**, as the Ballot tab does. The detail page loads the candidate list for a manager and counts it with `nomineesOf`, the filter the tab's own list uses, so ballot-item options are left out of both; while the tab is open, `CandidateManagement` reports its rows back, so an add or a removal moves the count. No API change.
+- **The minutes module reads "Votes cast"** where it printed `total_votes` as "Ballots cast": the minutes PDF (`minutes_pdf.py`), the minutes document (`document_service.py`) and the filed-result panel, which also says "1 vote cast".
+
+Tests: `ElectionDetailPage.candidates-tab-count.test.tsx`, `ElectionResultsPanel.test.tsx`, `test_document_service.py`, `test_minutes_election_corrections_unit.py`.
 
 "1 votes", "1 leadership members notified", "Delete the 1 votes", "Type: general" in the report, "Approved: …" on a seat election's confirm, "write in your own choice where allowed" with write-ins off, "(candidate selection)" in mails, "Ballots cast 11" (= votes) in the PDF, "2 draft(s) to finalize" counting a system runoff, a "Runoff Round 1" badge duplicating the title, the Candidates tab label without a count, no vote count on draft rows, the list filter resetting on reload, "Results will be available when the election is closed." on a draft with nothing to vote on (A9, A10, B7, A8, A2, A6).
 

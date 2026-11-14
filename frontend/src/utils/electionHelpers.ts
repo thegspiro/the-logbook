@@ -172,6 +172,19 @@ export const isBallotItemOption = (
   itemTitles: Map<string, string>
 ): boolean => !candidate.is_write_in && candidate.position !== undefined && itemTitles.has(candidate.position);
 
+/**
+ * The candidates the Candidates tab lists: every row but a ballot item's
+ * Approve/Deny options. The tab's badge counts this same list, so the two
+ * cannot disagree.
+ */
+export const nomineesOf = <T extends Pick<Candidate, 'position' | 'is_write_in'>>(
+  candidates: T[],
+  ballotItems: BallotItem[] | undefined
+): T[] => {
+  const itemTitles = ballotItemTitlesById(ballotItems);
+  return candidates.filter((c) => !isBallotItemOption(c, itemTitles));
+};
+
 interface RecipientValidationEntry {
   field?: string;
   message?: string;
