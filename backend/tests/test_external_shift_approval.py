@@ -300,6 +300,32 @@ class TestApprovalRequired:
         )
         assert rejected["status"] == "rejected"
 
+    async def test_restoring_a_pending_entry_is_refused_not_approved(self, db_session):
+        # Restore undoes a rejection. On a pending entry it would approve it
+        # without approve's pending check, so it is refused like a second
+        # approval and the entry stays waiting, unreviewed.
+        org_id = await _org(db_session, require_approval=True)
+        member = await _person(db_session, org_id, "Casey")
+        officer = await _person(db_session, org_id, "Olive", officer=True)
+        entry_id = await _external(
+            db_session, org_id, member.id, date(2025, 6, 3), 480, status="pending"
+        )
+        # Committed so a refusal's rollback cannot take the entry with it.
+        await db_session.commit()
+
+        with pytest.raises(HTTPException) as exc:
+            await endpoint.restore_external_shift(
+                uuid.UUID(entry_id), db_session, officer
+            )
+
+        assert exc.value.status_code == 400
+        assert "not been rejected" in exc.value.detail
+        row = await db_session.get(ExternalShiftHours, entry_id)
+        await db_session.refresh(row)
+        assert row.status == "pending"
+        assert row.reviewed_by is None
+        assert row.reviewed_at is None
+
     async def test_the_officer_list_filters_to_pending(self, db_session):
         org_id = await _org(db_session, require_approval=True)
         member = await _person(db_session, org_id, "Casey")
