@@ -64,11 +64,13 @@ from app.schemas.training_program import (
 )
 from app.services.notifications_service import NotificationsService
 from app.services.program_requirement_deadlines import notify_completed_requirements
+from app.services.shift_evaluation_rules import EVALUATION_REQUIREMENT_TARGETS
 from app.services.training_compliance import (
     RequirementEvaluation,
     evaluate_member_requirement_detail,
     get_org_include_current_month,
     load_credited_shift_dates,
+    load_evaluation_credits,
     load_graded_records,
     load_held_sessions,
     member_join_date,
@@ -151,19 +153,6 @@ def prerequisite_refusal(missing_names: Sequence[str]) -> str:
     """The refusal for a member missing these prerequisite pipelines — the
     one wording every enrollment path and the eligibility picker give."""
     return f"Must first complete: {', '.join(missing_names)}"
-
-
-# Requirement types credited only by submitted shift evaluations, and the
-# column each one's target lives in. An evaluated-shift count reuses
-# required_shifts, as the form beside it does, and an evaluated-call count
-# reuses required_calls: a number of calls either way, and the CALLS grading
-# that reads that column checks the type before it does.
-EVALUATION_REQUIREMENT_TARGETS = {
-    RequirementType.EVALUATED_SHIFTS: "required_shifts",
-    RequirementType.TRANSPORTS: "required_transports",
-    RequirementType.REFUSALS: "required_refusals",
-    RequirementType.EVALUATED_CALLS: "required_calls",
-}
 
 
 def _evaluation_requirement_target(requirement: Any) -> Optional[float]:
@@ -3544,6 +3533,14 @@ class TrainingProgramService:
                 today,
                 include_current,
             )
+            evaluations_by_user = await load_evaluation_credits(
+                self.db,
+                org_id,
+                user_ids,
+                list(requirements.values()),
+                today,
+                include_current,
+            )
             held_sessions = await load_held_sessions(
                 self.db, str(org_id), list(requirements.values())
             )
@@ -3563,6 +3560,7 @@ class TrainingProgramService:
                     org_include_current_month=include_current,
                     join_date=member_join_date(member),
                     shift_dates=shifts_by_user.get(str(member.id), []),
+                    evaluation_credits=evaluations_by_user.get(str(member.id), {}),
                     held_sessions=held_sessions,
                 )
                 status, value, pct = compliance_projection(ev)
@@ -4174,10 +4172,16 @@ class TrainingProgramService:
         return progress, None
 
     async def _get_org_scoped_progress(
-        self, progress_id: Any, organization_id: UUID | str
+        self, progress_id: Any, organization_id: UUID | str, *, lock: bool = False
     ) -> Optional[RequirementProgress]:
-        """Fetch a requirement-progress row, scoped to the org via its program."""
-        result = await self.db.execute(
+        """Fetch a requirement-progress row, scoped to the org via its program.
+
+        ``lock``: for a read-then-write of ``progress_value`` (crediting and
+        reversing). The row is locked, and re-read rather than answered from
+        the session's copy, so two credits at once cannot both start from the
+        same value and lose one (Pitfall #27).
+        """
+        query = (
             select(RequirementProgress)
             .join(ProgramEnrollment)
             .join(TrainingProgram)
@@ -4186,6 +4190,11 @@ class TrainingProgramService:
                 TrainingProgram.organization_id == str(organization_id),
             )
         )
+        if lock:
+            query = query.with_for_update(of=RequirementProgress).execution_options(
+                populate_existing=True
+            )
+        result = await self.db.execute(query)
         requirement_progress: Optional[RequirementProgress] = (
             result.scalar_one_or_none()
         )
@@ -4238,7 +4247,9 @@ class TrainingProgramService:
         if units is None or units < 0 or (units == 0 and not mark_completed):
             return None, None
 
-        progress = await self._get_org_scoped_progress(progress_id, organization_id)
+        progress = await self._get_org_scoped_progress(
+            progress_id, organization_id, lock=True
+        )
         if progress is None:
             return None, "Requirement progress not found"
 
@@ -4274,12 +4285,16 @@ class TrainingProgramService:
         ):
             return None, "You are not authorized to update this training progress"
 
+        # A locking read: under REPEATABLE READ a plain one answers from the
+        # transaction's snapshot and can miss a credit committed meanwhile.
         existing = await self.db.execute(
-            select(RequirementProgressCredit).where(
+            select(RequirementProgressCredit)
+            .where(
                 RequirementProgressCredit.progress_id == str(progress_id),
                 RequirementProgressCredit.source_type == source_type,
                 RequirementProgressCredit.source_id == str(source_id),
             )
+            .with_for_update()
         )
         existing_credit = existing.scalar_one_or_none()
         if existing_credit is not None:
@@ -4306,7 +4321,10 @@ class TrainingProgramService:
             )
             if revoke_error:
                 return None, revoke_error
-            progress = await self._get_org_scoped_progress(progress_id, organization_id)
+            # The reversal committed, which released the lock: take it again.
+            progress = await self._get_org_scoped_progress(
+                progress_id, organization_id, lock=True
+            )
             if progress is None:
                 return None, "Requirement progress not found"
 
@@ -4412,16 +4430,22 @@ class TrainingProgramService:
         Idempotent — reversing a credit that was never recorded is a no-op. This
         is the primitive an officer's "un-apply" action builds on.
         """
-        progress = await self._get_org_scoped_progress(progress_id, organization_id)
+        progress = await self._get_org_scoped_progress(
+            progress_id, organization_id, lock=True
+        )
         if progress is None:
             return None, "Requirement progress not found"
 
+        # Locking, like the row above: a reversal that raced another to the
+        # same credit must find it gone, not subtract its units a second time.
         credit_result = await self.db.execute(
-            select(RequirementProgressCredit).where(
+            select(RequirementProgressCredit)
+            .where(
                 RequirementProgressCredit.progress_id == str(progress_id),
                 RequirementProgressCredit.source_type == source_type,
                 RequirementProgressCredit.source_id == str(source_id),
             )
+            .with_for_update()
         )
         credit = credit_result.scalar_one_or_none()
         if credit is None:

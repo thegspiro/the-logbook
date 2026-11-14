@@ -54,16 +54,29 @@ Copy the **Webhook ID** PayPal assigns.
 
 **Settings → Integrations → PayPal → Connect**, then fill in:
 
-| Field                       | Notes                                                                                    |
-| --------------------------- | ---------------------------------------------------------------------------------------- |
-| Environment                 | Must match which credentials you copied. Defaults to sandbox.                            |
-| Client ID / Secret          | Stored encrypted; never echoed back. Leave blank on a later edit to keep what is stored. |
-| Webhook ID                  | **Required.** Without it, deliveries cannot be verified and are rejected.                |
-| Settle orders automatically | On by default. See the matching rules below.                                             |
+| Field                       | Notes                                                                            |
+| --------------------------- | -------------------------------------------------------------------------------- |
+| Environment                 | Must match which credentials you copied. Defaults to sandbox.                    |
+| Client ID / Secret          | Stored encrypted; never echoed back. Blank in **Settings** keeps what is stored. |
+| Webhook ID                  | **Required.** Without it, deliveries cannot be verified and are rejected.        |
+| Settle orders automatically | On by default. See the matching rules below.                                     |
 
 **Test Connection** confirms the credentials work. It deliberately reports a
 warning rather than a plain success when the webhook ID is missing, because
 credentials alone reconcile nothing.
+
+### Changing the settings later
+
+**Settings** on the connected PayPal card edits every field above without
+disconnecting. It saves through `PATCH /integrations/{id}`, which stores only
+the fields sent: a blank Client ID or Secret keeps the stored one, and the
+webhook address does not change.
+
+Switching **Environment** needs the Client ID **and** Secret of the other
+environment's app in the same save. Without them the API answers 422 (the same
+on a reconnect after a disconnect), because the stored sandbox pair would be
+sent to live, or the reverse, and PayPal would reject every webhook
+verification.
 
 ## How a payment is matched
 
