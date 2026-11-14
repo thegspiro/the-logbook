@@ -179,7 +179,7 @@ the refund is surfaced, are owner decisions. The likely shape:
 - notify staff on any member cancel;
 - list "cancelled with money held" on the admin hub.
 
-### W67b-3 — HIGH — The quartermaster cannot see where to send a shipped order — OPEN
+### W67b-3 — HIGH — The quartermaster cannot see where to send a shipped order — ✅ FIXED (2026-11-14)
 
 **Did:** opened Manage on ORD-2026-0001 as `quartermaster`.
 **Saw:** the dialog lists the items, Total, Paid, Balance due and Method.
@@ -199,8 +199,30 @@ delivery choice either.
 member asked for, where the person fulfilling it works.
 
 **Where:** `components/OrderDetailModal.tsx`, `pages/MyOrdersPage.tsx`.
-**Fix (not applied):** frontend only. Render the fields the response already
-carries.
+**Fix:** frontend only. The API already returned every field. A new
+`components/OrderDeliveryDetails.tsx` holds two pieces that both screens use:
+
+- `OrderDeliveryDetails` shows pickup or ship, the address (shipped orders
+  only) and the member's notes. It reads "Ship to the member" and "Member's
+  notes" to staff, and "Ship to me" and "Your notes" to the member.
+- `OrderChargeRows` shows the subtotal, tax, shipping and discount lines above
+  the total. When the total is the subtotal alone it shows nothing, since a
+  "Subtotal" row equal to "Total" explains nothing.
+
+The address is left off a pickup order even when one is stored, so the order
+cannot read as one to ship. That hides W67b-9 on screen; it does not stop the
+address being stored.
+
+**Tests:** `components/OrderDetailModal.test.tsx` (new, three cases) and one
+new case in `pages/MyOrdersPage.test.tsx`. All four failed against the
+unchanged screens, on the missing text, and pass now.
+
+**Re-driven:** as `member`, checked out a Ball Cap with "Ship to me", a
+two-line address and a note (ORD-2026-0007). My Orders showed the $15.00
+subtotal, $5.00 shipping, the address and "Your notes". As `quartermaster`,
+Manage on the same order showed the same lines in a Delivery panel, at
+1280×900 and at 390×844 with no sideways overflow. No console errors and no
+failed API calls.
 
 ### W67b-4 — MED — An order's status can be moved anywhere, including backwards and to Cancelled — OPEN
 
@@ -316,6 +338,16 @@ unpersisted", which W67-6's fix of 2026-10-27 made untrue.
 
 **Where:** `pages/CheckoutPage.tsx`.
 
+### W67b-18 — LOW — The progress steps on a shipped order end at "Ready for pickup" — OPEN
+
+**Saw:** while re-driving W67b-3, the step list on My Orders for the shipped
+ORD-2026-0007 read Submitted, Payment due, Ordered, Ready for pickup.
+
+**Where:** `components/OrderStatusStepper.tsx` does not read
+`fulfillmentMethod`. The order statuses have no shipped state either, so a
+fix needs a decision on what a shipped order's last step is called and when it
+is reached.
+
 ### Read from code, not driven
 
 These came from a read of the backend paths no earlier pass covered. Each was
@@ -359,7 +391,7 @@ install sends no email.
 
 | Section                 | Result                                                                                                               |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| 1. The job gets done    | Shop, check out and pay held. A shipped order cannot be fulfilled from the screen (W67b-3).                          |
+| 1. The job gets done    | Shop, check out and pay held. A shipped order now shows its address and notes to staff (W67b-3, fixed).              |
 | 2. The right people     | Not re-tested; W67 held. No new refusal gap seen.                                                                    |
 | 3. Wrong input, failure | Negative prices, overpayment and backwards status moves are all accepted (W67b-4, -6, -7).                           |
 | 4. Browser signals      | Clean: no console errors and no failed API calls on any driven screen.                                               |
@@ -370,6 +402,14 @@ install sends no email.
 
 ## Completion gate
 
-No code changed. The only edits are this file, its PROGRESS log entry and the
-KNOWN_LIMITATIONS mirror of the flagged items. Under CLAUDE.md's "Match the
-Verification to the Change", that needs no local suite.
+The review itself changed no code. The W67b-3 fix of 2026-11-14 is the only
+code change:
+
+| Check                    | Result                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| npm run typecheck        | clean                                                                           |
+| npm run lint             | clean                                                                           |
+| prettier --check         | clean on the changed files                                                      |
+| frontend tests (touched) | `src/modules/storefront`: 243 passed, 4 of them new and each seen to fail first |
+| integrity suites         | dialog scroll, dialog dismiss, touch target and hover reveal: 15 passed         |
+| backend                  | not run; no backend file changed                                                |

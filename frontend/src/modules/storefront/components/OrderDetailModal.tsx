@@ -14,6 +14,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCurrency, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { storefrontService } from '../services/api';
+import { OrderChargeRows, OrderDeliveryDetails } from './OrderDeliveryDetails';
 import { ThreadSwatch } from './ThreadSwatch';
 import { methodLabel } from '../utils/personalization';
 import {
@@ -279,6 +280,11 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
             </div>
 
             <dl className="border-theme-surface-border space-y-1 border-t pt-3 text-sm">
+              <OrderChargeRows
+                order={order}
+                termClassName="text-theme-text-muted"
+                valueClassName="text-theme-text-primary"
+              />
               <div className="flex justify-between">
                 <dt className="text-theme-text-muted">Total</dt>
                 <dd className="text-theme-text-primary font-medium">{formatCurrency(Number(order.total))}</dd>
@@ -306,6 +312,10 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                 </div>
               )}
             </dl>
+
+            <section className="card-secondary p-3" aria-label="Delivery">
+              <OrderDeliveryDetails order={order} audience="staff" />
+            </section>
 
             {order.paymentStatus === 'pending_verification' && (
               <div className="alert-warning text-sm">

@@ -114,6 +114,30 @@ describe('MyOrdersPage', () => {
     expect(mockGetMyOrders).toHaveBeenCalledWith();
   });
 
+  it('shows the member how a shipped order reaches them, and what it cost to ship', async () => {
+    mockGetMyOrders.mockResolvedValue([
+      {
+        ...unpaidOrder,
+        fulfillmentMethod: 'ship',
+        shippingAddress: '12 Elm St, Springfield',
+        memberNotes: 'Leave it with the neighbour',
+        shippingAmount: '5.00',
+        total: '50.00',
+        balanceDue: '50.00',
+      },
+    ]);
+    renderPage();
+    await screen.findByRole('heading', { name: 'ORD-2026-0001' });
+
+    expect(screen.getByText('Ship to me')).toBeInTheDocument();
+    expect(screen.getByText('12 Elm St, Springfield')).toBeInTheDocument();
+    expect(screen.getByText('Your notes')).toBeInTheDocument();
+    const terms = screen.getAllByRole('term');
+    const shippingIndex = terms.findIndex((term) => term.textContent === 'Shipping');
+    expect(shippingIndex).toBeGreaterThanOrEqual(0);
+    expect(screen.getAllByRole('definition')[shippingIndex]).toHaveTextContent('$5.00');
+  });
+
   it('shows the balance due and a prefilled payment link', async () => {
     renderPage();
     await screen.findByRole('heading', { name: 'ORD-2026-0001' });

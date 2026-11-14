@@ -183,10 +183,14 @@ Nothing was changed. Flagged, mirrored to KNOWN_LIMITATIONS:
 - W67b-2 (HIGH): money on an order the member cancels drops out of the
   collected totals, and nobody is told.
 
+Fixed 2026-11-14:
+
+- W67b-3 (HIGH): no screen showed a shipped order's address, the delivery
+  choice or the member's notes. The admin order dialog and My Orders now
+  show them, with the subtotal, tax and shipping lines.
+
 Open:
 
-- W67b-3 (HIGH): no screen shows a shipped order's address, the delivery
-  choice or the member's notes;
 - W67b-4 (MED): order status can move backwards, or to Cancelled without
   the cancel record;
 - W67b-5 (MED): no admin cancel button;
@@ -194,13 +198,16 @@ Open:
 - W67b-7 (MED): overpayment is accepted;
 - W67b-8 (LOW): refund is one tap and always refunds everything;
 - W67b-9 (LOW): a pickup order keeps a home address it does not need;
-- W67b-10 (LOW): loading checkout directly bounces to the store.
+- W67b-10 (LOW): loading checkout directly bounces to the store;
+- W67b-18 (LOW): a shipped order's progress steps end at "Ready for
+  pickup".
 
 Read from code, not driven: W67b-11 to W67b-17 (window lifecycle, vendor
 order, payment reports and notification gaps). Details in
 [`W67b-department-store-follow-up.md`](./W67b-department-store-follow-up.md).
 
-Gate: documentation only, no suite needed.
+Gate for the W67b-3 fix: typecheck and lint clean, and the 243 storefront
+tests and 15 integrity tests pass.
 
 ### W09 second pass — Import members from a spreadsheet — 2026-11-10
 
