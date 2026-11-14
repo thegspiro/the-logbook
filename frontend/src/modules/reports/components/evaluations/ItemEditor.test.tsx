@@ -3,24 +3,24 @@
  * and must not fight the user while they type.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { ItemEditor } from './ItemEditor';
-import type { TemplateItem } from '../../types/evaluations';
+import type { EvaluationDataSource, TemplateItem } from '../../types/evaluations';
 import { newItem, withTool } from '../../utils/evaluationTemplate';
 
 const changes = vi.fn();
 
 /** Holds the item in state, as the sections editor does. */
-function Harness({ initial }: { initial: TemplateItem }) {
+function Harness({ initial, sources = [] }: { initial: TemplateItem; sources?: EvaluationDataSource[] }) {
   const [item, setItem] = useState(initial);
   return (
     <ItemEditor
       item={item}
       index={0}
       count={1}
-      dataSources={[]}
+      dataSources={sources}
       onChange={(next) => {
         changes(next);
         setItem(next);
@@ -64,5 +64,41 @@ describe('ItemEditor', () => {
 
     expect(box).toHaveValue('SCBA check\nRadio  check\n');
     expect(lastChange().checklist_options).toEqual(['SCBA check', 'Radio  check']);
+  });
+
+  it('offers the data sources grouped by module', () => {
+    const sources: EvaluationDataSource[] = [
+      {
+        key: 'training.hours',
+        label: 'Training hours',
+        unit: 'hours',
+        module: 'training',
+        description: '',
+        scoreable: true,
+      },
+      {
+        key: 'shifts.count',
+        label: 'Shifts worked',
+        unit: 'count',
+        module: 'scheduling',
+        description: '',
+        scoreable: true,
+      },
+    ];
+    render(<Harness initial={newItem('Training', [])} sources={sources} />);
+
+    const select = screen.getByLabelText(/data shown with this item/i);
+    const groups = within(select)
+      .getAllByRole('group')
+      .map((g) => [
+        g.getAttribute('label'),
+        within(g)
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ]);
+    expect(groups).toEqual([
+      ['Training', ['Training hours']],
+      ['Shifts', ['Shifts worked']],
+    ]);
   });
 });

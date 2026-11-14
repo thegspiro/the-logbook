@@ -16,6 +16,7 @@ from app.services.evaluation_data_service import (
     sources_used,
     suggested_score,
 )
+from app.services.evaluation_data_sources import DATA_SOURCES
 from app.services.evaluation_service import (
     completeness_errors,
     form_definition,
@@ -262,6 +263,18 @@ class TestCallResponseRate:
         )
         assert entry["available"] is False
         assert "expected to respond" in entry["note"]
+
+
+class TestCatalogModules:
+    def test_every_business_meeting_source_is_in_one_group(self):
+        """The builder groups sources by module, so meeting attendance and the
+        meeting waiver sources must agree on it."""
+        meeting_keys = {
+            "events.meeting_attendance_pct",
+            "meetings.waivers_summary",
+            "meetings.waiver_history",
+        }
+        assert {s.module for s in DATA_SOURCES if s.key in meeting_keys} == {"meetings"}
 
 
 class TestSuggestedScore:

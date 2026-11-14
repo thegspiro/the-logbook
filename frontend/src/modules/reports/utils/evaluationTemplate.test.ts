@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   defaultLevels,
   describeMatching,
+  groupDataSources,
   insertStep,
   makeKey,
   moveItem,
@@ -9,7 +10,7 @@ import {
   weightTotal,
   withTool,
 } from './evaluationTemplate';
-import type { TemplateDefinition, TemplateWorkflow } from '../types/evaluations';
+import type { EvaluationDataSource, TemplateDefinition, TemplateWorkflow } from '../types/evaluations';
 
 describe('makeKey', () => {
   it('turns a label into a key the backend accepts', () => {
@@ -138,5 +139,37 @@ describe('describeMatching', () => {
   it('reads as a sentence', () => {
     expect(describeMatching('operational', 'probationary')).toBe('Operational members · probationary only');
     expect(describeMatching(null, null)).toBe('All members');
+  });
+});
+
+describe('groupDataSources', () => {
+  const source = (key: string, module: string): EvaluationDataSource => ({
+    key,
+    label: key,
+    unit: 'count',
+    module,
+    description: '',
+    scoreable: true,
+  });
+
+  it('groups by module, keeping the catalog order of groups and of sources in each', () => {
+    const groups = groupDataSources([
+      source('training.hours', 'training'),
+      source('events.meeting_attendance_pct', 'meetings'),
+      source('shifts.hours', 'scheduling'),
+      source('skills.tests_passed', 'training'),
+      source('meetings.waivers_summary', 'meetings'),
+    ]);
+    expect(groups.map((g) => [g.label, g.sources.map((s) => s.key)])).toEqual([
+      ['Training', ['training.hours', 'skills.tests_passed']],
+      ['Business meetings', ['events.meeting_attendance_pct', 'meetings.waivers_summary']],
+      ['Shifts', ['shifts.hours']],
+    ]);
+  });
+
+  it('puts a module it has no name for under Other, not its slug', () => {
+    expect(groupDataSources([source('apparatus.runs', 'apparatus')])).toEqual([
+      { label: 'Other', sources: [source('apparatus.runs', 'apparatus')] },
+    ]);
   });
 });
