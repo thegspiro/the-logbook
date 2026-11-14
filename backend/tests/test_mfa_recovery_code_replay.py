@@ -174,6 +174,7 @@ class TestVerifySetupRetry:
             return await mfa_verify_setup(
                 data=MFAVerify(code=code),
                 background_tasks=MagicMock(),
+                request=MagicMock(),
                 current_user=user,
                 db=_db_for(user),
                 idempotency_key=_KEY,
@@ -189,6 +190,7 @@ class TestVerifySetupRetry:
         await mfa_verify_setup(
             data=MFAVerify(code=code),
             background_tasks=MagicMock(),
+            request=MagicMock(),
             current_user=user,
             db=_db_for(user),
             idempotency_key=_KEY,
