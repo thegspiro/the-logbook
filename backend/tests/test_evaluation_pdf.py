@@ -7,7 +7,7 @@ from io import BytesIO
 import pytest
 from pypdf import PdfReader
 
-from app.services.evaluation_document_service import format_figure
+from app.services.evaluation_document_service import figure_detail, format_figure
 from app.utils.evaluation_pdf import render_evaluation_pdf
 
 pytestmark = [pytest.mark.unit]
@@ -118,6 +118,69 @@ def test_a_member_cannot_inject_markup():
 )
 def test_figures_read_as_the_screens_show_them(entry, unit, expected):
     assert format_figure(entry, unit) == expected
+
+
+@pytest.mark.parametrize(
+    ("key", "entry", "expected"),
+    [
+        (
+            "events.meeting_attendance_pct",
+            {"available": True, "value": 75.0, "attended": 6, "held": 8},
+            "6 of 8 meetings attended",
+        ),
+        (
+            "training.requirements_met_pct",
+            {"available": True, "value": 100.0, "met": 1, "total": 1},
+            "1 of 1 requirement met",
+        ),
+        (
+            "training.session_attendance_pct",
+            {
+                "available": True,
+                "value": 90.0,
+                "attended": 9,
+                "held": 12,
+                "excused": 2,
+                "required_pct": 60.0,
+                "requirement": "Drill attendance",
+            },
+            "9 of 10 sessions attended (2 excused); Drill attendance requires 60%",
+        ),
+        (
+            "calls.response_pct",
+            {
+                "available": True,
+                "value": 100.0,
+                "responses": 130,
+                "department_calls": 120,
+                "capped": True,
+            },
+            "130 responses to 120 department calls; shown as 100% because shift "
+            "call credit exceeds the department's call log",
+        ),
+        (
+            "shifts.hours",
+            {"available": True, "value": 40.0, "external_hours": 12.5},
+            "Not included: 12.5 h for other agencies",
+        ),
+        (
+            "shifts.hours",
+            {"available": True, "value": 40.0, "external_hours": 0.0},
+            None,
+        ),
+        (
+            "meetings.waivers_summary",
+            {"available": True, "value": 3, "breakdown": "2 approved, 1 denied"},
+            "2 approved, 1 denied",
+        ),
+        # A snapshot taken before a source stored its counts has no detail,
+        # and an unavailable figure's note already says everything.
+        ("events.meeting_attendance_pct", {"available": True, "value": 75.0}, None),
+        ("calls.response_pct", {"available": False, "value": None, "note": "x"}, None),
+    ],
+)
+def test_figure_details_state_the_counts_behind_the_value(key, entry, expected):
+    assert figure_detail(key, entry) == expected
 
 
 def test_detail_values_print_as_written_not_as_escape_codes():

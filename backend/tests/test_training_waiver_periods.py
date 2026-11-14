@@ -21,6 +21,7 @@ from app.services.training_waiver_service import (
     SOURCE_LEAVE,
     SOURCE_WAIVER,
     WaiverPeriod,
+    _leave_and_waiver_periods,
     _to_waiver_period,
     adjust_required,
     count_waived_months,
@@ -278,3 +279,42 @@ if __name__ == "__main__":  # pragma: no cover
     import pytest
 
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+class TestLeaveAndWaiverPeriods:
+    """A recorded leave writes a linked waiver; the pair is one reason."""
+
+    @staticmethod
+    def _row(**kw):
+        defaults = {
+            "id": "row",
+            "user_id": "u1",
+            "start_date": date(2026, 3, 1),
+            "end_date": date(2026, 3, 31),
+            "requirement_ids": None,
+            "linked_training_waiver_id": None,
+            "exempt_from_training_waiver": False,
+        }
+        defaults.update(kw)
+        return SimpleNamespace(**defaults)
+
+    def test_a_leaves_linked_waiver_reads_as_the_leave(self):
+        leave = self._row(id="leave", linked_training_waiver_id="w1")
+        linked = self._row(id="w1")
+        periods = _leave_and_waiver_periods([linked], [leave], "full_month")
+        assert {p.source for _, p in periods} == {SOURCE_LEAVE}
+
+    def test_a_standalone_waiver_stays_a_waiver(self):
+        periods = _leave_and_waiver_periods([self._row(id="w2")], [], "full_month")
+        assert [p.source for _, p in periods] == [SOURCE_WAIVER]
+
+    def test_an_exempt_leave_excuses_nothing(self):
+        leave = self._row(id="leave", exempt_from_training_waiver=True)
+        assert _leave_and_waiver_periods([], [leave], "full_month") == []
+
+    def test_the_rule_and_member_are_carried(self):
+        [(uid, period)] = _leave_and_waiver_periods(
+            [], [self._row(user_id="u9")], "half"
+        )
+        assert uid == "u9"
+        assert period.month_rule == "half"

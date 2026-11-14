@@ -1724,6 +1724,38 @@ export const shiftEvaluationService = {
     return response.data;
   },
 
+  /** The open preceptor link for a logged outside shift, or null. */
+  async getPreceptorLink(entryId: string): Promise<import('../types/training').PreceptorLink | null> {
+    const response = await api.get<import('../types/training').PreceptorLink | null>(
+      `/training/shift-evaluations/preceptor-links/${encodeURIComponent(entryId)}`
+    );
+    return response.data ?? null;
+  },
+
+  /** A new preceptor link, revoking the open one; emailed when an address is given. */
+  async createPreceptorLink(
+    entryId: string,
+    preceptorEmail?: string
+  ): Promise<import('../types/training').PreceptorLink> {
+    const response = await api.post<import('../types/training').PreceptorLink>(
+      `/training/shift-evaluations/preceptor-links/${encodeURIComponent(entryId)}`,
+      preceptorEmail ? { preceptor_email: preceptorEmail } : {}
+    );
+    return response.data;
+  },
+
+  async sendPreceptorLink(entryId: string, preceptorEmail: string): Promise<import('../types/training').PreceptorLink> {
+    const response = await api.post<import('../types/training').PreceptorLink>(
+      `/training/shift-evaluations/preceptor-links/${encodeURIComponent(entryId)}/send`,
+      { preceptor_email: preceptorEmail }
+    );
+    return response.data;
+  },
+
+  async revokePreceptorLink(entryId: string): Promise<void> {
+    await api.delete(`/training/shift-evaluations/preceptor-links/${encodeURIComponent(entryId)}`);
+  },
+
   /** Logged outside shifts whose evaluation is missing or unfinished. */
   async listOutsideOutstanding(): Promise<import('../types/training').OutsideShiftAwaitingEvaluation[]> {
     const response = await api.get<import('../types/training').OutsideShiftAwaitingEvaluation[]>(

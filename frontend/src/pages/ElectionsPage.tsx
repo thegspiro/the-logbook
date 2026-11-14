@@ -5,7 +5,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { useSubmitGuard } from '../hooks/useSubmitGuard';
 import { electionService, eventService, meetingsService, ranksService, roleService } from '../services/api';
 import type { MeetingRecord, OperationalRankResponse } from '../services/api';
@@ -33,7 +33,7 @@ import {
 import { formatDate, formatForDateTimeInput, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
 import { HelpLink } from '../components/HelpLink';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
-import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
+import { getTimeRemaining, getStatusBadgeClass, getStatusLabel } from '../utils/electionHelpers';
 import { eventWindow, meetingWindow, type MeetingWindow } from '../utils/electionMeetingWindow';
 import { ElectionSummaryCards } from '../modules/elections/components/ElectionSummaryCards';
 import { CreateVoterRulesSection } from '../modules/elections/components/CreateVoterRulesSection';
@@ -133,7 +133,23 @@ const holdsBuiltInDefaults = (form: ElectionCreate): boolean =>
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
   const [filteredElections, setFilteredElections] = useState<ElectionListItem[]>([]);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  // The filter lives in ?status= so a reload or a shared link keeps it
+  // (W50-76). Replace, not push, as the settings screens do for their view
+  // state; anything that is not a real status reads as All.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusParam = searchParams.get('status');
+  const statusFilter =
+    statusParam && (Object.values(ElectionStatus) as string[]).includes(statusParam) ? statusParam : 'all';
+  const setStatusFilter = (next: string) =>
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === 'all') params.delete('status');
+        else params.set('status', next);
+        return params;
+      },
+      { replace: true }
+    );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -593,7 +609,7 @@ export const ElectionsPage: React.FC = () => {
                     : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
                 }`}
               >
-                {status.charAt(0).toUpperCase() + status.slice(1)}
+                {getStatusLabel(status)}
                 <span
                   className={`rounded-full px-1.5 py-0.5 text-xs ${
                     statusFilter === status
@@ -662,7 +678,7 @@ export const ElectionsPage: React.FC = () => {
                                   election.status
                                 )}`}
                               >
-                                {election.status}
+                                {getStatusLabel(election.status)}
                               </span>
                             </div>
 

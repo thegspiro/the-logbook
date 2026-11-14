@@ -547,9 +547,15 @@ under **Grants & Fundraising → Zeffy** — see
 | **API Key**                           | **Required.** The owner of the department's Zeffy account generates it in Zeffy under **Settings → Integrations**. Stored securely and never shown again |
 | **Webhook Signing Secret** (optional) | The secret Zeffy shows when you add the webhook (below). It starts with `whsec_`. Without it, payments still arrive, but only on the hourly sync         |
 
-Leave either box blank on a later edit to keep what is stored.
-
 ![Zeffy connect dialog: the read-only note linking to Grants & Fundraising, the API Key and Webhook Signing Secret (optional) fields, and the webhook address to add in Zeffy](./images/16-24-zeffy-connect.png)
+
+**To change the key or the signing secret later**, select **Settings** on the
+connected Zeffy card. Fill in only what changed: a box left blank keeps what is
+saved. The new key or secret is used from the next sync or webhook message, and
+the linked campaigns and the webhook address do not change. Zeffy stays
+connected throughout, so nothing is missed.
+
+![Zeffy settings on a connected card: the API Key box reading Leave blank to keep the current key, the Webhook Signing Secret box with its note that a blank box keeps the saved secret, the webhook address, and the notice that a new key or signing secret is used from the next sync or webhook message while linked campaigns and the webhook address do not change](./images/16-25-zeffy-settings.png)
 
 **Test** reads one campaign from Zeffy to prove the key works. It adds a note if
 no signing secret is set, because payments will then arrive only once an hour.
@@ -574,8 +580,10 @@ seconds, and so does a refund made weeks after the sale.
 > **Important.** Every message must carry Zeffy's signature, made with that
 > secret within the last five minutes; anything else is refused. The Logbook
 > then reads the payment again from Zeffy with your API key rather than trusting
-> the message itself. If you regenerate the secret in Zeffy, paste the new one
-> here **first** — Zeffy's old secret stops working immediately.
+> the message itself. If you regenerate the secret in Zeffy, enter the new one
+> straight away under **Settings** on the Zeffy card. Zeffy's old secret stops
+> working immediately, and messages are refused until The Logbook has the new
+> one.
 
 ### The Hourly Sync
 
@@ -1738,23 +1746,23 @@ key or email address.
 
 ## Troubleshooting
 
-| Problem                                                    | What to do                                                                                                                                                                 |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Test** reports a failure                                 | Check the details you entered have not expired or changed, then select **Test** again. Open **Details** for the last error                                                 |
-| Google Calendar or Outlook reads Coming Soon               | Calendar publishing is turned off on the server (`CALENDAR_SYNC_ENABLED`); Outlook cannot be connected yet either way. See [Calendar Integrations](#calendar-integrations) |
-| Google Calendar reads Reconnect required                   | Select **Reconnect with Google** on the card. See [Google Calendar](#google-calendar)                                                                                      |
-| Salesforce sync reports missing fields                     | Run **Check readiness**. Create the missing fields in Salesforce, or tick **Skip custom fields my Salesforce org hasn't created yet**                                      |
-| Webhook test never arrives                                 | Check the address is public and starts with `https://`. Ask whoever runs the receiving system to check it answers                                                          |
-| Weather alerts not showing                                 | Only Severe and Extreme alerts are shown, and only on the channels ticked in the integration's settings. Check the zone with **Test**                                      |
-| Shift feed or department feed not updating                 | Calendar apps check every so often, up to about an hour. Check the link is the current one, not one from before a **Reset link**                                           |
-| Slack, Discord or Teams posts not appearing                | Check the webhook address is still valid in the chat app. Open **Details** to see whether deliveries failed                                                                |
-| Documenso test fails                                       | Check the API token under **Settings > API** in Documenso, and the base URL if you run your own Documenso                                                                  |
-| Cal.com test fails                                         | Check the API key under **Settings > Developer > API keys** in Cal.com                                                                                                     |
-| Zeffy test fails                                           | Generate a new API key in Zeffy under **Settings → Integrations** (only the account owner can) and paste it in                                                             |
-| Zeffy payments arrive only once an hour                    | No webhook signing secret is set. Add the webhook in Zeffy and paste its `whsec_` secret. See [Adding the Zeffy Webhook](#adding-the-zeffy-webhook)                        |
-| Zeffy webhook deliveries are refused                       | The signing secret in The Logbook does not match Zeffy's current one, often after it was regenerated. Paste the new secret                                                 |
-| A signed document or booking did not move the applicant on | Check the Webhook Secret matches on both sides, the callback URL is right, the email matches the applicant, and the applicant's **current** stage uses that integration    |
-| A sign-in keeps expiring                                   | Most integrations renew it by themselves. If it keeps failing, disconnect and connect again                                                                                |
+| Problem                                                    | What to do                                                                                                                                                                                 |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Test** reports a failure                                 | Check the details you entered have not expired or changed, then select **Test** again. Open **Details** for the last error                                                                 |
+| Google Calendar or Outlook reads Coming Soon               | Calendar publishing is turned off on the server (`CALENDAR_SYNC_ENABLED`); Outlook cannot be connected yet either way. See [Calendar Integrations](#calendar-integrations)                 |
+| Google Calendar reads Reconnect required                   | Select **Reconnect with Google** on the card. See [Google Calendar](#google-calendar)                                                                                                      |
+| Salesforce sync reports missing fields                     | Run **Check readiness**. Create the missing fields in Salesforce, or tick **Skip custom fields my Salesforce org hasn't created yet**                                                      |
+| Webhook test never arrives                                 | Check the address is public and starts with `https://`. Ask whoever runs the receiving system to check it answers                                                                          |
+| Weather alerts not showing                                 | Only Severe and Extreme alerts are shown, and only on the channels ticked in the integration's settings. Check the zone with **Test**                                                      |
+| Shift feed or department feed not updating                 | Calendar apps check every so often, up to about an hour. Check the link is the current one, not one from before a **Reset link**                                                           |
+| Slack, Discord or Teams posts not appearing                | Check the webhook address is still valid in the chat app. Open **Details** to see whether deliveries failed                                                                                |
+| Documenso test fails                                       | Check the API token under **Settings > API** in Documenso, and the base URL if you run your own Documenso                                                                                  |
+| Cal.com test fails                                         | Check the API key under **Settings > Developer > API keys** in Cal.com                                                                                                                     |
+| Zeffy test fails                                           | Generate a new API key in Zeffy under **Settings → Integrations** (only the account owner can), then enter it under **Settings** on the Zeffy card                                         |
+| Zeffy payments arrive only once an hour                    | No webhook signing secret is set. Add the webhook in Zeffy, then enter its `whsec_` secret under **Settings** on the Zeffy card. See [Adding the Zeffy Webhook](#adding-the-zeffy-webhook) |
+| Zeffy webhook deliveries are refused                       | The signing secret in The Logbook does not match Zeffy's current one, often after it was regenerated. Enter the new secret under **Settings** on the Zeffy card                            |
+| A signed document or booking did not move the applicant on | Check the Webhook Secret matches on both sides, the callback URL is right, the email matches the applicant, and the applicant's **current** stage uses that integration                    |
+| A sign-in keeps expiring                                   | Most integrations renew it by themselves. If it keeps failing, disconnect and connect again                                                                                                |
 
 ---
 

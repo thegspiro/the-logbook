@@ -513,6 +513,12 @@ Choose a **Requirement**:
   Waived meetings and meetings during a leave of absence are left out.
 - A member who has had fewer meetings than the look-back is held to the same
   proportion. For example, 6 of 12 becomes 2 of 4.
+- **In the recent-meetings rule, a waived meeting shortens the look-back**
+  _(2026-11-13, owner decision)_. 6 of the last 12 with one waived means 6 of
+  the other 11; it no longer reaches back to an older meeting. When waivers
+  leave fewer meetings than required, the requirement is the meetings left. A
+  meeting during a leave of absence still reaches back one more. See
+  [A Waived Meeting and the Meeting-Count Voting Rule](./04-events-meetings.md#a-waived-meeting-and-the-meeting-count-voting-rule-2026-11-13).
 - **Meetings attended** cannot be more than **Out of the last**. The screen
   says so and keeps the saved rule.
 

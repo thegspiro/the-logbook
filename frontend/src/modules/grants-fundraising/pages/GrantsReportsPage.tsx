@@ -319,7 +319,7 @@ const GrantsReportsPage: React.FC = () => {
 
               {/* Compliance Summary */}
               <div className="card p-5">
-                <h3 className="text-theme-text-primary mb-3 font-semibold">Compliance Summary</h3>
+                <h2 className="text-theme-text-primary mb-3 font-semibold">Compliance Summary</h2>
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   <div className="flex items-center gap-2">
                     <span className="bg-theme-surface-secondary text-theme-text-secondary inline-flex rounded-full px-2 py-0.5 text-xs font-medium">
@@ -362,7 +362,7 @@ const GrantsReportsPage: React.FC = () => {
               {/* Spending by Category */}
               {spendingByCategory.length > 0 && (
                 <div className="card p-5">
-                  <h3 className="text-theme-text-primary mb-4 font-semibold">Spending by Category</h3>
+                  <h2 className="text-theme-text-primary mb-4 font-semibold">Spending by Category</h2>
                   <HorizontalBarChart items={spendingByCategory} formatValue={formatCurrencyWhole} />
                 </div>
               )}
@@ -420,7 +420,7 @@ const GrantsReportsPage: React.FC = () => {
               {/* Donations by Payment Method */}
               {donationsByMethod.length > 0 && (
                 <div className="card p-5">
-                  <h3 className="text-theme-text-primary mb-4 font-semibold">Donations by Payment Method</h3>
+                  <h2 className="text-theme-text-primary mb-4 font-semibold">Donations by Payment Method</h2>
                   <ul className="divide-theme-surface-border divide-y">
                     {donationsByMethod.map(([method, amount]) => {
                       const pct = donationsByMethodTotal > 0 ? (Number(amount) / donationsByMethodTotal) * 100 : 0;
@@ -448,7 +448,7 @@ const GrantsReportsPage: React.FC = () => {
               {/* Monthly Totals */}
               {monthlyTotals.length > 0 && (
                 <div className="card p-5">
-                  <h3 className="text-theme-text-primary mb-4 font-semibold">Monthly Totals</h3>
+                  <h2 className="text-theme-text-primary mb-4 font-semibold">Monthly Totals</h2>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>

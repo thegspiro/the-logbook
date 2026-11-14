@@ -32,8 +32,10 @@ from app.models.attendance_waiver import (
     AttendanceWaiverAction,
     AttendanceWaiverEmailSend,
     AttendanceWaiverRequestAction,
+    AttendanceWaiverWorkflow,
 )
 from app.models.email_template import EmailTemplate, EmailTemplateType
+from app.services import attendance_waiver_email_service as email_engine
 from app.services import attendance_waiver_service as engine
 from app.services.attendance_waiver_email_service import (
     NOT_IN_COPY,
@@ -46,6 +48,7 @@ from app.services.attendance_waiver_service import (
     MEETING_WORKFLOW,
     AttendanceWaiverService,
 )
+from app.services.email_policy import EmailKind
 from app.services.email_service import EmailService
 from app.services.email_templates_attendance_waivers import DEFAULT_TEMPLATE_DEFS
 from tests.waiver_request_support import (
@@ -625,11 +628,11 @@ class TestTheRenderedEmail:
 
 
 @pytest.mark.unit
-class TestOnlyTheTrainingWorkflowSends:
-    """The meeting templates are catalogued; their sends come with the
-    meetings frontend, so the meeting workflow mails nothing yet."""
+class TestBothWorkflowsSend:
+    """The meeting screens arrived with #4266, which turned the meeting
+    templates' sends on; until then the meeting workflow mailed nothing."""
 
-    async def test_the_meeting_workflow_sends_no_email(self):
+    async def test_the_meeting_workflow_sends(self):
         send = AsyncMock(return_value=1)
         db = MagicMock()
         db.refresh = AsyncMock()
@@ -638,7 +641,7 @@ class TestOnlyTheTrainingWorkflowSends:
                 "org-1", SimpleNamespace(id="req-1"), "act-1"
             )
 
-        send.assert_not_awaited()
+        send.assert_awaited_once_with("org-1", "act-1")
 
     async def test_the_training_workflow_does(self):
         send = AsyncMock(return_value=1)
@@ -650,3 +653,20 @@ class TestOnlyTheTrainingWorkflowSends:
             )
 
         send.assert_awaited_once_with("org-1", "act-1")
+
+    def test_a_meeting_uses_the_meeting_templates(self):
+        assert email_engine._TEMPLATES[MEETING_WORKFLOW] == {
+            "requested": EmailTemplateType.MEETING_WAIVER_REQUESTED,
+            "decided": EmailTemplateType.MEETING_WAIVER_DECIDED,
+            "withdrawn": EmailTemplateType.MEETING_WAIVER_WITHDRAWN,
+        }
+
+    def test_a_meeting_follows_the_event_email_kinds(self):
+        assert email_engine._KINDS[MEETING_WORKFLOW] == (
+            EmailKind.EVENT_DUTIES,
+            EmailKind.EVENT_CHANGES,
+        )
+        assert email_engine._KINDS[AttendanceWaiverWorkflow.TRAINING_SESSION] == (
+            EmailKind.TRAINING_DUTIES,
+            EmailKind.TRAINING_RECORD_CHANGES,
+        )

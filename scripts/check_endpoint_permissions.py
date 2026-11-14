@@ -80,6 +80,9 @@ BODY_AUTHORIZERS = {
     # shift_evaluations.py's wrapper: authorizes through the helper above,
     # then loads the shift.
     "_shift_for_filing",
+    # shift_evaluations.py's preceptor-link gate: training.manage (through
+    # `_manages_training`), or the member who logged the outside shift.
+    "_entry_for_link",
     # The training.manage half of the officer-or-trainer checks, called inline
     # where the other half is a row comparison (shift_completion.py).
     "_manages_training",

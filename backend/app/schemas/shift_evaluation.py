@@ -17,8 +17,12 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
+from app.models.shift_evaluation import (
+    DEFAULT_PRECEPTOR_LINK_DAYS,
+    MAX_PRECEPTOR_LINK_DAYS,
+)
 from app.schemas.base import UTCResponseBase
 from app.utils.positions import canonical_position
 
@@ -286,6 +290,7 @@ class ShiftEvaluationSettingsResponse(BaseModel):
     general_shift_evaluation_template_id: Optional[str] = None
     general_shift_evaluation_mode: GeneralShiftEvaluationMode = "off"
     one_shift_evaluation_for_multiple_programs: bool = False
+    shift_evaluation_link_days: int = DEFAULT_PRECEPTOR_LINK_DAYS
 
 
 class ShiftEvaluationSettingsUpdate(BaseModel):
@@ -294,6 +299,10 @@ class ShiftEvaluationSettingsUpdate(BaseModel):
     general_shift_evaluation_template_id: Optional[uuid.UUID] = None
     general_shift_evaluation_mode: Optional[GeneralShiftEvaluationMode] = None
     one_shift_evaluation_for_multiple_programs: Optional[bool] = None
+    # Days after an outside shift ends that a preceptor link stays open.
+    shift_evaluation_link_days: Optional[int] = Field(
+        None, ge=1, le=MAX_PRECEPTOR_LINK_DAYS
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -306,12 +315,14 @@ MAX_HEADER_VALUE_LENGTH = 200
 MAX_STATISTIC_VALUE = 1000
 
 
-class EvaluationItemResponse(BaseModel):
-    """One item's answer: a rating, or N/A, and an optional comment."""
-
+class _EvaluationItemFields(BaseModel):
     rating: Optional[int] = Field(None, ge=0, le=100)
     not_applicable: bool = False
     comment: Optional[str] = Field(None, max_length=MAX_COMMENT_LENGTH)
+
+
+class EvaluationItemResponse(_EvaluationItemFields):
+    """One item's answer: a rating, or N/A, and an optional comment."""
 
     @model_validator(mode="after")
     def _settle(self) -> "EvaluationItemResponse":
@@ -352,6 +363,40 @@ class ShiftEvaluationSave(BaseModel):
         self.closing_comments = _clean_text(self.closing_comments)
         self.preceptor_name = _clean_text(self.preceptor_name)
         return self
+
+
+class PreceptorItemAnswer(_EvaluationItemFields):
+    """One item's answer as a preceptor link sends it.
+
+    The same fields and limits as EvaluationItemResponse, without its
+    cross-field rule: that rule is applied once the link is known to be
+    usable (see PreceptorEvaluationSubmit).
+    """
+
+
+class PreceptorEvaluationSubmit(BaseModel):
+    """What a preceptor link's page sends to submit the evaluation.
+
+    Only what the preceptor fills in: the form is the one the link names, and
+    a link only ever submits. Every rule the published schema cannot state
+    is applied after the link is resolved, so an unusable link reads as not
+    found or used, never as an answer to correct; the service builds a
+    ShiftEvaluationSave from this then.
+    """
+
+    header_values: dict[str, str] = Field(
+        default_factory=dict, max_length=MAX_HEADER_FIELDS
+    )
+    statistics: dict[str, Annotated[int, Field(ge=0, le=MAX_STATISTIC_VALUE)]] = Field(
+        default_factory=dict, max_length=3
+    )
+    responses: dict[str, PreceptorItemAnswer] = Field(
+        default_factory=dict, max_length=MAX_ITEMS_TOTAL
+    )
+    closing_comments: Optional[str] = Field(
+        None, max_length=MAX_CLOSING_COMMENTS_LENGTH
+    )
+    preceptor_name: Optional[str] = Field(None, max_length=MAX_PRECEPTOR_NAME_LENGTH)
 
 
 class TemplateOption(BaseModel):
@@ -406,6 +451,10 @@ class ShiftEvaluationDetail(UTCResponseBase):
     shift_id: Optional[str] = None
     external_shift_id: Optional[str] = None
     preceptor_name: Optional[str] = None
+    # Submitted by the preceptor through a no-login link, and whether the
+    # evaluated member made that link themselves.
+    via_preceptor_link: bool = False
+    link_created_by_member: bool = False
     shift_date: date
     shift_start: Optional[datetime] = None
     shift_end: Optional[datetime] = None
@@ -463,3 +512,54 @@ class OutsideShiftAwaitingEvaluation(UTCResponseBase):
     evaluation_status: str
     # The evaluation to open first: the first one not yet submitted.
     scope_key: str
+
+
+# ---------------------------------------------------------------------------
+# Preceptor links
+# ---------------------------------------------------------------------------
+
+
+class PreceptorLinkCreate(BaseModel):
+    """Make a link for one of a logged outside shift's evaluations.
+
+    ``scope_key`` omitted: the first evaluation the shift still needs. An
+    email sends the link to the preceptor as well.
+    """
+
+    scope_key: Optional[str] = Field(None, max_length=40)
+    preceptor_email: Optional[EmailStr] = None
+
+
+class PreceptorLinkSend(BaseModel):
+    preceptor_email: EmailStr
+
+
+class PreceptorLinkResponse(UTCResponseBase):
+    id: str
+    scope_key: str
+    # The link itself: shown as a QR code and copied. A bearer credential.
+    url: str
+    expires_at: datetime
+    created_at: datetime
+    created_by_member: bool = False
+    preceptor_email: Optional[str] = None
+    last_sent_at: Optional[datetime] = None
+    # Whether this request's email went out.
+    email_sent: bool = False
+
+
+class PublicShiftEvaluationView(UTCResponseBase):
+    """What the preceptor's page shows: the member, the shift and the form."""
+
+    organization_name: str
+    member_name: str
+    shift_date: date
+    shift_start: Optional[datetime] = None
+    shift_end: Optional[datetime] = None
+    unit_label: Optional[str] = None
+    template: dict
+    expires_at: datetime
+
+
+class PublicShiftEvaluationSubmitted(UTCResponseBase):
+    submitted_at: datetime

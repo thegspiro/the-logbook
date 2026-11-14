@@ -22,6 +22,7 @@ import type {
 } from '../types/election';
 import type { EventListItem } from '../types/event';
 import { ElectionResults } from '../components/ElectionResults';
+import { VerifyReceipt } from '../components/VerifyReceipt';
 import { CandidateManagement } from '../components/CandidateManagement';
 import { BallotBuilder } from '../components/BallotBuilder';
 import { MeetingAttendance } from '../components/MeetingAttendance';
@@ -50,6 +51,8 @@ import { groupVoidedVotes } from '../utils/electionForensics';
 import {
   getTimeRemaining,
   getStatusBadgeClass,
+  getStatusLabel,
+  titleNamesRunoffRound,
   getVictoryDescription,
   describePackageSendError,
   electionCanEmailBallots,
@@ -822,7 +825,11 @@ export const ElectionDetailPage: React.FC = () => {
         setBallotsMustBeResent(true);
       }
 
-      toast.success(`Election rolled back. ${response.notifications_sent} leadership members notified.`);
+      toast.success(
+        `Election rolled back. ${response.notifications_sent} leadership ${
+          response.notifications_sent === 1 ? 'member' : 'members'
+        } notified.`
+      );
     } catch (err: unknown) {
       setRollbackError(getErrorMessage(err, 'Failed to roll back election'));
     } finally {
@@ -1139,7 +1146,7 @@ export const ElectionDetailPage: React.FC = () => {
           title={
             <span className="flex flex-wrap items-center gap-2">
               <span className="min-w-0 break-words">{election.title}</span>
-              {election.is_runoff && (
+              {election.is_runoff && !titleNamesRunoffRound(election.title, election.runoff_round) && (
                 <span className="rounded-sm bg-purple-100 px-2 py-1 text-xs font-semibold text-purple-800 dark:bg-purple-500/20 dark:text-purple-400">
                   Runoff Round {election.runoff_round}
                 </span>
@@ -1167,7 +1174,7 @@ export const ElectionDetailPage: React.FC = () => {
                 election.status
               )}`}
             >
-              {election.status}
+              {getStatusLabel(election.status)}
             </span>
           }
         />
@@ -2049,6 +2056,14 @@ export const ElectionDetailPage: React.FC = () => {
               {activeTab === 'results' && resultsAvailable && (
                 <div className="mb-6">
                   <ElectionResults electionId={electionId} election={election} />
+                  {/* The Cast Vote tab, which carries the receipt form while
+                      voting is open, goes at close; a receipt saved during
+                      voting stays checkable here (W50-92). */}
+                  {election.status === ElectionStatus.CLOSED && (
+                    <div className="mt-6">
+                      <VerifyReceipt electionId={electionId} />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2056,7 +2071,9 @@ export const ElectionDetailPage: React.FC = () => {
         )}
 
         {/* Message if results not available (non-tabbed fallback for non-admin users) */}
-        {!canManage && !resultsAvailable && (
+        {/* Only while voting is open: a draft or a nominations phase has
+            nothing to vote on yet, so "when the election is closed" misled. */}
+        {!canManage && !resultsAvailable && election.status === ElectionStatus.OPEN && (
           <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
             <p className="text-sm text-blue-700 dark:text-blue-300">
               Results will be available when the election is closed.
@@ -2327,7 +2344,9 @@ export const ElectionDetailPage: React.FC = () => {
                             {Object.entries(forensicsReport.anomaly_detection.suspicious_ips).map(([ip, count]) => (
                               <div key={ip} className="flex justify-between py-1 text-sm">
                                 <code className="text-red-700 dark:text-red-300">{ip}</code>
-                                <span className="font-semibold text-red-700 dark:text-red-300">{count} votes</span>
+                                <span className="font-semibold text-red-700 dark:text-red-300">
+                                  {count} {count === 1 ? 'vote' : 'votes'}
+                                </span>
                               </div>
                             ))}
                           </div>

@@ -12,7 +12,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { AlertCircle, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { AlertCircle, Loader2, Pencil, Plus, QrCode, Trash2 } from 'lucide-react';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ExternalShiftEntry } from '../../modules/scheduling/services/api';
 import { useConfirm } from '../../contexts/ConfirmContext';
@@ -20,6 +20,7 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { formatHours } from '../../utils/hoursFormatting';
+import { PreceptorLinkDialog } from '../../components/training/PreceptorLinkDialog';
 import { ExternalShiftFormModal } from './ExternalShiftFormModal';
 import { externalShiftTimeRange } from './externalShiftTimes';
 import { ExternalShiftEvaluationBadge } from './ExternalShiftEvaluationBadge';
@@ -38,6 +39,7 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ExternalShiftEntry | null>(null);
+  const [linkFor, setLinkFor] = useState<ExternalShiftEntry | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -162,6 +164,15 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
                 </div>
                 {!rejected && (
                   <div className="split-row-aside flex flex-wrap gap-1">
+                    {(entry.evaluation_status === 'needed' || entry.evaluation_status === 'draft') && (
+                      <button
+                        type="button"
+                        className="btn-secondary inline-flex items-center gap-1"
+                        onClick={() => setLinkFor(entry)}
+                      >
+                        <QrCode className="h-4 w-4" aria-hidden="true" /> Preceptor link
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn-icon"
@@ -192,6 +203,17 @@ export const MyExternalShifts: React.FC<MyExternalShiftsProps> = ({ onChanged })
         <p className="text-theme-text-muted mt-2 text-xs">Showing your {entries.length} most recent entries.</p>
       )}
 
+      {linkFor && (
+        <PreceptorLinkDialog
+          isOpen
+          onClose={() => {
+            setLinkFor(null);
+            void load();
+          }}
+          entryId={linkFor.id}
+          shiftLabel={`${linkFor.agency_name} ${linkFor.apparatus_name} · ${formatCalendarDate(linkFor.shift_date)}`}
+        />
+      )}
       <ExternalShiftFormModal
         isOpen={formOpen}
         entry={editing}

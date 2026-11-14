@@ -43,6 +43,8 @@ describe('attendanceWaiverService response shapes', () => {
     await expect(attendanceWaiverService.getPolicy()).resolves.toEqual({
       categories: [],
       approver_position_ids: [],
+      cc_position_ids: [],
+      chief_alternate_user_id: null,
       attachment: 'off',
       attachment_retention_days: 365,
     });

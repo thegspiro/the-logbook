@@ -20,7 +20,9 @@
  * The server decides who may open it (the shift's officer or training.manage;
  * training.manage alone for an outside shift) and whether the evaluation is
  * still called for; this page shows what it answers. Drafts save as the
- * officer goes, so a locked phone loses nothing.
+ * officer goes: every 30 seconds while there are unsaved edits, and again when
+ * the officer moves to another evaluation, leaves the page or puts the phone
+ * away, so a locked phone loses nothing.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -29,13 +31,13 @@ import { ArrowLeft, Check, Loader2, Save, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ShiftEvaluationFields } from '../../components/training/ShiftEvaluationFields';
 import { AUTO_SAVE_INTERVAL_MS } from '../../constants/config';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import { useTimezone } from '../../hooks/useTimezone';
 import { shiftEvaluationService } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import type {
   ShiftEvaluationFormResponse,
   ShiftEvaluationRoster,
-  ShiftEvaluationSaveBody,
   ShiftEvaluationStatistic,
 } from '../../types/training';
 import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
@@ -43,7 +45,7 @@ import { getErrorMessage } from '../../utils/errorHandling';
 import {
   OUTSIDE_SHIFT_EVALUATIONS_LIST_PATH,
   outsideShiftEvaluationPagePath,
-  parseCount,
+  shiftEvaluationBody,
   shiftEvaluationPagePath,
   shiftEvaluationProblems,
   type ShiftEvaluationDraft,
@@ -81,33 +83,6 @@ function draftFrom(form: ShiftEvaluationFormResponse): ShiftEvaluationDraft {
   return { header_values, statistics, responses: {}, closing_comments: '' };
 }
 
-function bodyFrom(
-  draft: ShiftEvaluationDraft,
-  submit: boolean,
-  templateId: string | null,
-  preceptorName: string | null
-): ShiftEvaluationSaveBody {
-  const statistics: ShiftEvaluationSaveBody['statistics'] = {};
-  (Object.keys(draft.statistics) as ShiftEvaluationStatistic[]).forEach((stat) => {
-    const count = parseCount(draft.statistics[stat]);
-    if (count !== undefined) statistics[stat] = count;
-  });
-  return {
-    template_id: templateId || undefined,
-    header_values: draft.header_values,
-    statistics,
-    responses: Object.fromEntries(
-      Object.entries(draft.responses).map(([key, answer]) => [
-        key,
-        { rating: answer.rating, not_applicable: answer.not_applicable, comment: answer.comment?.trim() || null },
-      ])
-    ),
-    closing_comments: draft.closing_comments.trim() || null,
-    ...(preceptorName !== null ? { preceptor_name: preceptorName.trim() || null } : {}),
-    submit,
-  };
-}
-
 const ShiftEvaluationPage: React.FC = () => {
   const { shiftId = '', entryId = '', memberId: memberParam = '', scopeKey = '' } = useParams();
   // An outside shift's evaluation is addressed by the logged entry; the
@@ -127,7 +102,21 @@ const ShiftEvaluationPage: React.FC = () => {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [showErrors, setShowErrors] = useState(false);
   const [preceptorName, setPreceptorName] = useState('');
+  const { confirm } = useConfirm();
   const dirty = useRef(false);
+  // Bumped by every edit, so a save that finishes after another edit does not
+  // mark that newer edit as saved.
+  const editVersion = useRef(0);
+  const inFlight = useRef(false);
+  const problemsRef = useRef<HTMLDivElement>(null);
+  // Read by save() when it starts rather than captured with it, so save keeps
+  // one identity per evaluation and the autosave timer is not restarted by
+  // every keystroke.
+  const latest = useRef({ draft, templateId, preceptorName });
+  latest.current = { draft, templateId, preceptorName };
+  const routeKey = [outside ? 'outside' : 'shift', shiftId, entryId, memberParam, scopeKey].join('|');
+  const currentRoute = useRef(routeKey);
+  currentRoute.current = routeKey;
 
   const backPath = outside
     ? OUTSIDE_SHIFT_EVALUATIONS_LIST_PATH
@@ -175,24 +164,34 @@ const ShiftEvaluationPage: React.FC = () => {
 
   const save = useCallback(
     async (submit: boolean): Promise<boolean> => {
-      if (!form) return false;
+      // This evaluation's address, fixed when the save starts: the officer
+      // may move to another crew member before it finishes.
+      const savedRoute = [outside ? 'outside' : 'shift', shiftId, entryId, memberParam, scopeKey].join('|');
+      const startedAt = editVersion.current;
+      const { draft: body, templateId: chosen, preceptorName: preceptor } = latest.current;
+      inFlight.current = true;
       setSaving(submit ? 'submit' : 'draft');
       try {
         const saved = outside
           ? await shiftEvaluationService.saveOutside(
               entryId,
               scopeKey,
-              bodyFrom(draft, submit, templateId, preceptorName)
+              shiftEvaluationBody(body, submit, chosen, preceptor)
             )
           : await shiftEvaluationService.save(
               shiftId,
               memberParam,
               scopeKey,
-              bodyFrom(draft, submit, templateId, null)
+              shiftEvaluationBody(body, submit, chosen, null)
             );
-        dirty.current = false;
+        // The page has moved on to another evaluation: this one is saved,
+        // and none of it belongs on the screen now showing.
+        if (currentRoute.current !== savedRoute) return true;
+        if (editVersion.current === startedAt) dirty.current = false;
         setSavedAt(saved.updated_at);
-        setForm({ ...form, evaluation: saved, template: saved.template, template_id: saved.template_id });
+        setForm((shown) =>
+          shown ? { ...shown, evaluation: saved, template: saved.template, template_id: saved.template_id } : shown
+        );
         return true;
       } catch (err: unknown) {
         toast.error(
@@ -200,26 +199,85 @@ const ShiftEvaluationPage: React.FC = () => {
         );
         return false;
       } finally {
+        inFlight.current = false;
         setSaving(null);
       }
     },
-    [form, draft, templateId, preceptorName, outside, entryId, shiftId, memberParam, scopeKey]
+    [outside, entryId, shiftId, memberParam, scopeKey]
   );
 
-  // Autosave a draft that has changed, on the app's usual cadence. A
-  // submitted evaluation is saved only on purpose, so an edit to it is never
-  // committed by a timer.
+  // A draft the officer may save: not their own evaluation, and not one
+  // already submitted, which is saved only on purpose so an edit to it is
+  // never committed by a timer.
+  const draftSavable =
+    !!form && form.evaluation?.status !== 'submitted' && currentUserId !== form.requirement.member_id;
+  const draftSavableRef = useRef(draftSavable);
+  draftSavableRef.current = draftSavable;
+
+  // Autosave on the app's usual cadence while there are unsaved edits.
   useEffect(() => {
-    if (!form || form.evaluation?.status === 'submitted') return;
+    if (!draftSavable) return;
     const timer = window.setInterval(() => {
-      if (dirty.current && !saving) void save(false);
+      if (dirty.current && !inFlight.current) void save(false);
     }, AUTO_SAVE_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [form, save, saving]);
+  }, [draftSavable, save]);
+
+  // Save what is unsaved when the officer leaves this evaluation: another
+  // crew member's chip, the back link, or closing the page. The cleanup runs
+  // with this evaluation's own save, before the next one loads.
+  useEffect(
+    () => () => {
+      if (dirty.current && draftSavableRef.current) void save(false);
+    },
+    [save]
+  );
+
+  // And when the phone is locked or the tab put away, which iOS may follow by
+  // discarding the page without another chance.
+  useEffect(() => {
+    const flush = () => {
+      if (document.visibilityState === 'hidden' && dirty.current && draftSavableRef.current && !inFlight.current) {
+        void save(false);
+      }
+    };
+    document.addEventListener('visibilitychange', flush);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', flush);
+      window.removeEventListener('pagehide', flush);
+    };
+  }, [save]);
+
+  const markEdited = () => {
+    dirty.current = true;
+    editVersion.current += 1;
+  };
 
   const change = (next: ShiftEvaluationDraft) => {
-    dirty.current = true;
+    markEdited();
     setDraft(next);
+  };
+
+  const switchTemplate = async (next: string) => {
+    if (
+      dirty.current &&
+      !(await confirm({
+        title: 'Switch to another form?',
+        message: 'The answers on this form have not been saved and will be cleared.',
+        confirmLabel: 'Switch form',
+        cancelLabel: 'Keep this form',
+      }))
+    ) {
+      return;
+    }
+    try {
+      // The selector follows the form only once it has loaded, so a failed
+      // switch leaves both on the form whose answers are on screen.
+      await load(next);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'That form could not be opened'));
+    }
   };
 
   const submit = async () => {
@@ -228,6 +286,8 @@ const ShiftEvaluationPage: React.FC = () => {
     if (problems.length > 0) {
       setShowErrors(true);
       toast.error(problems[0] ?? 'Finish the evaluation first');
+      // The list sits beside the Submit bar; bring it into view on a phone.
+      window.setTimeout(() => problemsRef.current?.focus(), 0);
       return;
     }
     if (await save(true)) {
@@ -352,11 +412,7 @@ const ShiftEvaluationPage: React.FC = () => {
             className="form-input"
             value={templateId ?? ''}
             onChange={(e) => {
-              const next = e.target.value;
-              setTemplateId(next);
-              void load(next).catch((err: unknown) =>
-                toast.error(getErrorMessage(err, 'That form could not be opened'))
-              );
+              void switchTemplate(e.target.value);
             }}
           >
             {requirement.template_options.map((option) => (
@@ -368,17 +424,6 @@ const ShiftEvaluationPage: React.FC = () => {
           <p className="text-theme-text-muted mt-1 text-xs">
             This evaluation counts for {requirement.program_names.join(' and ')}. Choose which form to fill out.
           </p>
-        </div>
-      )}
-
-      {problems.length > 0 && (
-        <div role="alert" className="alert-danger text-theme-alert-danger-text text-sm">
-          <p className="font-semibold">Before submitting:</p>
-          <ul className="ml-5 list-disc">
-            {problems.slice(0, 8).map((problem) => (
-              <li key={problem}>{problem}</li>
-            ))}
-          </ul>
         </div>
       )}
 
@@ -400,7 +445,7 @@ const ShiftEvaluationPage: React.FC = () => {
             aria-required="true"
             aria-describedby="se-preceptor-hint"
             onChange={(e) => {
-              dirty.current = true;
+              markEdited();
               setPreceptorName(e.target.value);
             }}
           />
@@ -414,6 +459,17 @@ const ShiftEvaluationPage: React.FC = () => {
       <fieldset disabled={isSelf} className="min-w-0">
         <ShiftEvaluationFields form={form.template} draft={draft} onChange={change} showErrors={showErrors} />
       </fieldset>
+
+      {problems.length > 0 && (
+        <div ref={problemsRef} tabIndex={-1} role="alert" className="alert-danger text-theme-alert-danger-text text-sm">
+          <p className="font-semibold">Before submitting:</p>
+          <ul className="ml-5 list-disc">
+            {problems.slice(0, 8).map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="surface-opaque border-theme-surface-border action-bar-safe sticky bottom-0 z-20 flex flex-wrap items-center gap-2 rounded-lg border p-3 shadow-sm">
         <Link to={backPath} className="btn-secondary inline-flex items-center gap-1">

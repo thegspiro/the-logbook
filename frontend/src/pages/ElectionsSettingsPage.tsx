@@ -189,10 +189,10 @@ export const ElectionsSettingsPage: React.FC = () => {
   }, [loadData]);
 
   const handleSendTestBallot = async () => {
-    if (!selectedTestElection) {
-      toast.error('Select a draft election first');
-      return;
-    }
+    // The button is disabled until a draft is chosen and says so beneath it
+    // (W50-77), so this is only a guard: the toast it once raised was never
+    // reachable.
+    if (!selectedTestElection) return;
     try {
       setSendingTest(true);
       const result = await electionService.sendTestBallot(selectedTestElection);
@@ -555,11 +555,16 @@ export const ElectionsSettingsPage: React.FC = () => {
               title="Test Ballot"
               description="Send yourself a test ballot to preview the voting experience. Test votes are clearly marked and excluded from real results."
             />
+            <label htmlFor="test-ballot-election" className="text-theme-text-primary mb-1 block text-sm font-medium">
+              Draft election
+            </label>
             <div className="flex flex-col gap-3 sm:flex-row">
               <select
+                id="test-ballot-election"
                 className={selectClass + ' flex-1'}
                 value={selectedTestElection}
                 onChange={(e) => setSelectedTestElection(e.target.value)}
+                aria-describedby="test-ballot-help"
               >
                 <option value="">Select a draft election...</option>
                 {elections.map((e) => (
@@ -579,6 +584,13 @@ export const ElectionsSettingsPage: React.FC = () => {
                 Send Test Ballot
               </button>
             </div>
+            {!selectedTestElection && (
+              <p id="test-ballot-help" className="text-theme-text-muted mt-2 text-xs">
+                {elections.length === 0
+                  ? 'There is no draft election to preview. Create one, then send its test ballot from here.'
+                  : 'Choose a draft election to send yourself its test ballot.'}
+              </p>
+            )}
           </div>
         );
 

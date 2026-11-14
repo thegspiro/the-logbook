@@ -17,6 +17,7 @@ An evaluation records a copy of the template it was filled out on, so editing
 a template never rewrites a submitted evaluation.
 """
 
+import hashlib
 from datetime import date, datetime
 from typing import Any, Optional
 
@@ -322,3 +323,108 @@ class ShiftEvaluation(Base):
 
     def __repr__(self) -> str:
         return f"<ShiftEvaluation(member={self.member_id}, shift={self.shift_id}, scope={self.scope_key})>"
+
+
+#: How long, by default, a preceptor link stays open after the shift ends.
+DEFAULT_PRECEPTOR_LINK_DAYS = 7
+#: The longest a department may keep a preceptor link open after the shift.
+MAX_PRECEPTOR_LINK_DAYS = 60
+
+
+class ShiftEvaluationLink(Base):
+    """A no-login link an outside preceptor fills one evaluation out through.
+
+    For a shift a member logged on an outside agency's unit: the preceptor
+    belongs to the other agency and has no account. The member or a training
+    officer creates the link and shows it as a QR code, copies it, or emails
+    it. It works once, until ``expires_at``; creating another revokes it.
+
+    The token is a bearer credential, stored like the follow-up form's:
+    ``token_hash`` (SHA-256) is the only column a lookup matches on, and
+    ``token`` is kept encrypted only so the same link can be shown again.
+    """
+
+    __tablename__ = "shift_evaluation_links"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    # CASCADE: a link to a logged shift that no longer exists has nothing to
+    # evaluate. The evaluation it produced keeps its own snapshot.
+    external_shift_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("external_shift_hours.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    member_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    scope_key: Mapped[str] = mapped_column(String(40), nullable=False)
+
+    token: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Where it was emailed, if it was. An outside person's address.
+    preceptor_email: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    last_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # SET NULL: deleting the officer or member who made it keeps the link's
+    # record of having existed.
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # Whether the evaluated member made it themselves, which officers see on
+    # the evaluation it produces.
+    created_by_member: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    used_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    evaluation_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey(
+            "shift_evaluations.id",
+            ondelete="SET NULL",
+            name="fk_shift_evaluation_links_evaluation",
+        ),
+        nullable=True,
+    )
+    submitted_ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    submitted_user_agent: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_shift_evaluation_link_token_hash"),
+        Index(
+            "idx_shift_evaluation_link_entry",
+            "organization_id",
+            "external_shift_id",
+            "scope_key",
+        ),
+        Index("idx_shift_evaluation_link_evaluation", "evaluation_id"),
+    )
+
+    @staticmethod
+    def hash_token(token: str) -> str:
+        """The lookup key for a link token: hex SHA-256."""
+        return hashlib.sha256(token.encode()).hexdigest()

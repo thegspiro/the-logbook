@@ -82,7 +82,11 @@ const DeleteElectionModal: React.FC<DeleteElectionModalProps> = ({
                       </li>
                       {(election.total_votes ?? 0) > 0 && (
                         <li>
-                          Delete the <strong>{election.total_votes} votes</strong> already cast
+                          Delete the{' '}
+                          <strong>
+                            {election.total_votes} {election.total_votes === 1 ? 'vote' : 'votes'}
+                          </strong>{' '}
+                          already cast
                         </li>
                       )}
                     </ul>

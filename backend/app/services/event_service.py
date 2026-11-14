@@ -472,6 +472,9 @@ class EventService:
         # the caller commits its whole batch once and then runs
         # ``complete_deferred_writes``.
         self._deferred_reversals: List[Tuple[Any, Tuple[str, Optional[str]]]] = []
+        # Waiver-request emails owed by a move made with ``defer_commit=True``,
+        # sent by ``complete_deferred_writes`` once the batch has committed.
+        self._deferred_waiver_notices: List[Any] = []
 
     async def _organizer_columns(
         self,
@@ -1318,6 +1321,10 @@ class EventService:
                 updated_by,
                 previous_titles={str(event.id): old_title},
             )
+        # After the refusals above, so a refused save writes nothing here.
+        waiver_notices = await self._reconfirm_waiver_requests_if_moved(
+            {str(event.id): old_start}, [event], organization_id
+        )
 
         if updated_by:
             event.updated_by = str(updated_by)
@@ -1327,6 +1334,7 @@ class EventService:
             await self.db.flush()
             if training_follow_up:
                 self._deferred_reversals.append(training_follow_up)
+            self._deferred_waiver_notices.extend(waiver_notices)
             return event
 
         await self.db.commit()
@@ -1335,6 +1343,7 @@ class EventService:
             await self._reverse_pipeline_after_commit(
                 [training_follow_up], organization_id
             )
+        await self._send_waiver_notices(waiver_notices, organization_id)
 
         return event
 
@@ -1470,6 +1479,8 @@ class EventService:
         """
         pending, self._deferred_reversals = self._deferred_reversals, []
         await self._reverse_pipeline_after_commit(pending, organization_id)
+        notices, self._deferred_waiver_notices = self._deferred_waiver_notices, []
+        await self._send_waiver_notices(notices, organization_id)
 
     async def publish_event(
         self, event_id: UUID, organization_id: UUID | str
@@ -1664,11 +1675,13 @@ class EventService:
 
         training_follow_ups = []
         previous_titles: Dict[str, str] = {}
+        previous_starts: Dict[str, Optional[datetime]] = {}
         for event in future_events:
             was_training = self.event_credits_training(event)
             old_title = event.title
             previous_titles[str(event.id)] = old_title
             old_start = event.start_datetime
+            previous_starts[str(event.id)] = old_start
             for field, value in update_data.items():
                 if field == "custom_fields":
                     value = self._with_own_lifecycle_markers(event, value)
@@ -1707,11 +1720,16 @@ class EventService:
                 previous_titles=previous_titles,
             )
 
+        waiver_notices = await self._reconfirm_waiver_requests_if_moved(
+            previous_starts, list(future_events), organization_id
+        )
+
         if updated_count > 0:
             await self.db.commit()
             await self._reverse_pipeline_after_commit(
                 training_follow_ups, organization_id
             )
+            await self._send_waiver_notices(waiver_notices, organization_id)
 
         return updated_count
 
@@ -1979,10 +1997,14 @@ class EventService:
             for rsvp in event.rsvps
             if rsvp.status in (RSVPStatus.GOING, RSVPStatus.MAYBE)
         ]
+        waiver_notices = await self._reconfirm_waiver_requests_if_moved(
+            {str(event.id): old_start}, [event], organization_id
+        )
 
         await self.db.commit()
         await self.db.refresh(event)
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
+        await self._send_waiver_notices(waiver_notices, organization_id)
 
         if send_notifications and notify_ids:
             await self._notify_postponement(
@@ -3790,6 +3812,47 @@ class EventService:
         await void_pending_for_events(
             self.db, str(organization_id), [str(e.id) for e in events], cause
         )
+
+    async def _reconfirm_waiver_requests_if_moved(
+        self,
+        previous_starts: Dict[str, Optional[datetime]],
+        events: List[Event],
+        organization_id: UUID | str,
+    ) -> List[Any]:
+        """Send the waiver requests of events whose start moved back to their
+        members (attendance_waiver_service.reconfirm_for_rescheduled_events).
+
+        Inside the caller's transaction, while it holds the events; an event
+        whose start is where it was is skipped without a query. Returns the
+        emails owed once the caller commits (``_send_waiver_notices``).
+        """
+        moved = [
+            str(e.id)
+            for e in events
+            if self._as_utc(e.start_datetime)
+            != self._as_utc(previous_starts.get(str(e.id)))
+        ]
+        if not moved:
+            return []
+        # Local import, as in _void_waiver_requests.
+        from app.services.attendance_waiver_service import (
+            reconfirm_for_rescheduled_events,
+        )
+
+        return list(
+            await reconfirm_for_rescheduled_events(self.db, str(organization_id), moved)
+        )
+
+    async def _send_waiver_notices(
+        self, notices: List[Any], organization_id: UUID | str
+    ) -> None:
+        """The emails ``_reconfirm_waiver_requests_if_moved`` owes, after the
+        commit; a failure is logged there and never fails the move."""
+        if not notices:
+            return
+        from app.services.attendance_waiver_service import send_reschedule_notices
+
+        await send_reschedule_notices(self.db, str(organization_id), notices)
 
     @staticmethod
     async def _reverse_pipeline_after_commit(

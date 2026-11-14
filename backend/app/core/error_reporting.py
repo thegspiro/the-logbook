@@ -60,6 +60,12 @@ TOKEN_PATH_PATTERNS = (
     # /follow-up-forms/{token}/....
     re.compile(r"(/application-form/)[^/?#]+", re.IGNORECASE),
     re.compile(r"(/follow-up-forms/)[^/?#]+", re.IGNORECASE),
+    # A preceptor link token: the page is singular, /shift-evaluation/{token};
+    # the public API is /public/v1/shift-evaluations/{token}/.... The API
+    # pattern names the public prefix so the authenticated
+    # /training/shift-evaluations/{id} routes keep their ids.
+    re.compile(r"(/shift-evaluation/)[^/?#]+", re.IGNORECASE),
+    re.compile(r"(/public/v1/shift-evaluations/)[^/?#]+", re.IGNORECASE),
 )
 
 # ``error_logs.error_type`` is String(50); a longer value fails the insert and
