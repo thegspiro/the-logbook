@@ -93,6 +93,9 @@ vi.mock('react-router', async () => {
 beforeEach(() => {
   vi.clearAllMocks();
   searchParams = new URLSearchParams();
+  // A report saves its draft when it closes, so one test's draft would
+  // otherwise be restored into the next test's report for the same shift.
+  localStorage.clear();
   // No department form unless a block says otherwise.
   mockGetEvaluationRoster.mockReset();
   mockGetEvaluationRoster.mockResolvedValue({ shift_id: 'sh1', requirements: [] });
@@ -966,5 +969,84 @@ describe('ShiftReportsTab — a trainee evaluated on a department form', () => {
 
     expect(await screen.findByRole('button', { name: /Evaluate/ })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /evaluation for Marcus Bell/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('ShiftReportsTab — the report draft survives a trip to an evaluation', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    mockGetShift.mockReset();
+    mockGetShift.mockResolvedValue({
+      id: 'sh1',
+      shift_date: '2026-10-03',
+      start_time: '2026-10-03T11:00:00Z',
+      end_time: '2026-10-03T23:00:00Z',
+      apparatus_name: 'Ambulance 106',
+      call_count: 5,
+    });
+    mockGetShiftCrewStatus.mockReset();
+    mockGetShiftCrewStatus.mockResolvedValue([
+      {
+        user_id: 'u2',
+        user_name: 'Marcus Bell',
+        has_active_enrollment: true,
+        enrollment_id: 'en-1',
+        program_name: 'EMT Field Internship',
+        has_existing_report: false,
+        calls_responded: 5,
+        calls_source: 'closeout',
+      },
+    ]);
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+  });
+
+  it('keeps calls typed for a member just before leaving', async () => {
+    const user = userEvent.setup();
+    const view = renderWithRouter(<ShiftReportsTab />);
+
+    const calls = await screen.findByLabelText('Calls for Marcus Bell');
+    await user.clear(calls);
+    await user.type(calls, '9');
+    // Straight to the evaluation page, inside the autosave's one-second wait.
+    view.unmount();
+
+    renderWithRouter(<ShiftReportsTab />);
+    await waitFor(() => expect(screen.getByLabelText('Calls for Marcus Bell')).toHaveValue(9));
+  });
+
+  it('brings back a trainee’s ratings saved in the draft', async () => {
+    localStorage.setItem(
+      'shift-report-draft-sh1',
+      JSON.stringify({
+        shiftId: 'sh1',
+        shiftLabel: '',
+        formData: { shift_id: 'sh1' },
+        crewSelections: ['u2'],
+        traineeEvals: {
+          u2: { user_id: 'u2', performance_rating: 4, areas_of_strength: 'Calm on scene' },
+        },
+        crewRemarks: {},
+        memberCalls: {},
+        savedAt: Date.now(),
+      })
+    );
+    renderWithRouter(<ShiftReportsTab />);
+    await screen.findByLabelText('Calls for Marcus Bell');
+
+    await waitFor(
+      () => {
+        const saved = JSON.parse(localStorage.getItem('shift-report-draft-sh1') ?? '{}') as {
+          traineeEvals?: Record<string, { areas_of_strength?: string }>;
+        };
+        expect(saved.traineeEvals?.u2?.areas_of_strength).toBe('Calm on scene');
+      },
+      { timeout: 3000 }
+    );
+    // And it is the draft's, not merely left over: the autosave has run since.
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const saved = JSON.parse(localStorage.getItem('shift-report-draft-sh1') ?? '{}') as {
+      traineeEvals?: Record<string, { areas_of_strength?: string }>;
+    };
+    expect(saved.traineeEvals?.u2?.areas_of_strength).toBe('Calm on scene');
   });
 });
