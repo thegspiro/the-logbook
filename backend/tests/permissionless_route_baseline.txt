@@ -673,6 +673,24 @@ app/api/v1/endpoints/history_media.py::list_sources
 app/api/v1/endpoints/history_media.py::media_thumbnail
 app/api/v1/endpoints/history_media.py::media_view_file
 app/api/v1/endpoints/history_media.py::person_media
+# History documents (2026-11-14), the same rule as photos: published documents
+# are read by any signed-in member. Every query filters the caller's
+# organization and HistoryDocumentService.can_read hides drafts from anyone
+# without history.view/manage/publish, through the list, a document, its
+# preview and its stripped copy (list_documents, get_document,
+# document_thumbnail, document_view_file) and a person's documents
+# (person_documents, which also requires the person to be readable).
+# list_document_types is the department's own type names (and creates the
+# starting list on first read). list_document_revisions refuses unless the
+# caller holds history.view/manage or a clearance-step position. The original
+# file is not here: it requires history.manage.
+app/api/v1/endpoints/history_documents.py::document_thumbnail
+app/api/v1/endpoints/history_documents.py::document_view_file
+app/api/v1/endpoints/history_documents.py::get_document
+app/api/v1/endpoints/history_documents.py::list_document_revisions
+app/api/v1/endpoints/history_documents.py::list_document_types
+app/api/v1/endpoints/history_documents.py::list_documents
+app/api/v1/endpoints/history_documents.py::person_documents
 
 # Added 2026-11-04 (owner decisions of 2026-11-01). Each is meant for every
 # member and scoped inside the handler:

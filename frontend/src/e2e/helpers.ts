@@ -2173,6 +2173,42 @@ const routes = ({
     }),
   ],
 
+  // History documents: a letter and a scan with no preview, so the list is
+  // measured with its tiles and not with broken image requests.
+  ['**/api/v1/history/document-types**', () => []],
+  [
+    '**/api/v1/history/documents**',
+    () => ({
+      items: [
+        {
+          id: 'e2e-document-1',
+          kind: 'pdf',
+          title: 'Letter of thanks from the mayor, 1962',
+          taken_date: '1962-07-01',
+          taken_date_precision: 'month',
+          taken_date_circa: false,
+          document_type_name: 'Letter',
+          page_count: 2,
+          has_thumbnail: false,
+          publication_level: 'members',
+        },
+        {
+          id: 'e2e-document-2',
+          kind: 'image',
+          title: 'Minutes of the first company meeting',
+          taken_date: '1923-01-01',
+          taken_date_precision: 'year',
+          taken_date_circa: true,
+          document_type_name: 'Minutes',
+          page_count: 1,
+          has_thumbnail: false,
+          publication_level: 'public',
+        },
+      ],
+      total: 2,
+    }),
+  ],
+
   // Three pages now reject a payload that is valid JSON but not their declared
   // type, rather than substituting empty lists: an audit log that reads "no
   // events" over a broken endpoint, or a check-in board showing blank totals as
