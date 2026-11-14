@@ -10297,8 +10297,10 @@ beyond the feature.
   moves to an agency that does not evaluate, or the member is removed from the
   shift.** Each leaves earlier credit standing until the evaluation is saved
   again.
-- **A deactivated evaluation form is still offered and required** where a
-  program or the department settings still name it.
+- ~~**A deactivated evaluation form is still offered and required**~~
+  Resolved 2026-11-14 (owner decision): a form a program or the general-form
+  setting uses cannot be deactivated, and an inactive form cannot be newly
+  chosen for either.
 - **Two administrators creating forms with the same name at the same moment
   get a 500** rather than the duplicate-name 400.
 - **A preceptor-link submission that collides with an officer creating the
