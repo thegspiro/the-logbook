@@ -15,6 +15,7 @@ import { WaiverAttachmentMode, waiverAttachmentService } from './waiverAttachmen
 import type { AttendanceWaiverStatus } from '../constants/enums';
 import type {
   AttendanceWaiverAlternateOptions,
+  AttendanceWaiverAttention,
   AttendanceWaiverEligibility,
   AttendanceWaiverPolicy,
   AttendanceWaiverPositionOption,
@@ -113,6 +114,15 @@ export const createAttendanceWaiverService = (BASE: string, { takesDocuments }: 
   async addAttachments(requestId: string, files: readonly File[]): Promise<AttendanceWaiverRequest> {
     if (!takesDocuments) throw new Error('Documents cannot be filed with this request.');
     return normalizeRequest(await waiverAttachmentService.addAttachments<AttendanceWaiverRequest>(requestId, files));
+  },
+
+  /** Whether the caller decides requests in this workflow, and how many wait on them: for the navigation. */
+  async getAttention(): Promise<AttendanceWaiverAttention> {
+    const response = await api.get<AttendanceWaiverAttention>(`${BASE}/attention`);
+    return {
+      decides: response.data.decides === true,
+      pending: typeof response.data.pending === 'number' ? response.data.pending : 0,
+    };
   },
 
   async listMine(): Promise<AttendanceWaiverRequest[]> {

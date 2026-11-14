@@ -18,6 +18,7 @@ GET    /training/waivers/requests/policy/positions   - The positions to choose
 GET    /training/waivers/requests/eligibility        - May I ask about this session?
 POST   /training/waivers/requests                    - Ask to be excused
 POST   /training/waivers/requests/with-attachments   - Ask, filing documents
+GET    /training/waivers/requests/attention          - Do I decide any? How many wait?
 GET    /training/waivers/requests/mine               - My requests
 GET    /training/waivers/requests                    - Requests I decide or decided
 GET    /training/waivers/requests/{id}               - One request
@@ -65,6 +66,7 @@ from app.schemas.attendance_waiver import (
     MAX_CATEGORY_LENGTH,
     MAX_TEXT_LENGTH,
     AttendanceWaiverAlternateOptions,
+    AttendanceWaiverAttention,
     AttendanceWaiverDecision,
     AttendanceWaiverEligibilityResponse,
     AttendanceWaiverMessage,
@@ -266,6 +268,23 @@ async def submit_attendance_waiver_request_with_attachments(
             files,
         )
     return await _one(AttendanceWaiverService(db), current_user, request)
+
+
+@router.get("/attention", response_model=AttendanceWaiverAttention)
+async def get_attendance_waiver_attention(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    For the navigation: whether the caller decides training session requests, and how
+    many pending ones they may decide now. Answers only about the caller, so
+    every member may ask; the queue itself lists only what they may decide.
+
+    **Authentication required**
+    """
+    return await AttendanceWaiverService(db).attention(
+        str(current_user.organization_id), current_user
+    )
 
 
 @router.get("/mine", response_model=List[AttendanceWaiverRequestResponse])

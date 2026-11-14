@@ -52,6 +52,7 @@ import {
   waiverConversation,
 } from '../../utils/attendanceWaivers';
 import { TRAINING_WAIVER_WORKFLOW, type AttendanceWaiverWorkflow } from '../../utils/attendanceWaiverWorkflows';
+import { useWaiverAttentionStore } from '../../hooks/useWaiverAttention';
 
 type Choice = 'approve' | 'deny';
 type DecisionField = 'choice' | 'note';
@@ -90,6 +91,7 @@ export const AttendanceWaiverDecisionPage: React.FC<AttendanceWaiverDecisionPage
 }) => {
   const { id = '' } = useParams<{ id: string }>();
   const { service } = workflow;
+  const refreshAttention = useWaiverAttentionStore((s) => s.refresh);
   const [searchParams] = useSearchParams();
   const tz = useTimezone();
   const { confirm } = useConfirm();
@@ -133,6 +135,15 @@ export const AttendanceWaiverDecisionPage: React.FC<AttendanceWaiverDecisionPage
       cancelled = true;
     };
   }, [id, service]);
+
+  // The navigation's waiting count follows each change to this request: a
+  // decision, a question asked or answered, a moved session confirmed.
+  const status = request?.status;
+  const asked = request?.info_requested_at;
+  const moved = request?.reconfirm_requested_at;
+  useEffect(() => {
+    if (status) void refreshAttention(workflow.key);
+  }, [status, asked, moved, refreshAttention, workflow.key]);
 
   // A refusal can mean the request moved on under us (another approver
   // decided it first); the server's current copy replaces ours.

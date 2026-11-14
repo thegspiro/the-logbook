@@ -2551,6 +2551,17 @@ denial.
 - **In the annual review** the waiver summary counts them as **expired**, on
   their own, not as denials.
 
+### Finding the requests you decide _(2026-11-14)_
+
+**Who sees it:** anyone who decides session waiver requests: a holder of a
+position chosen under **Who decides**, the Chief or President, the alternate,
+or a training manager when the chain reaches them.
+
+**Training → Waiver Requests** lists the requests waiting on you and the ones
+you have decided. It appears only for members who decide requests; at the top
+of every Training page it carries the number waiting on you. The email about
+each new request links to it too.
+
 ### Asking a member for more information _(2026-11-13)_
 
 **Who can do this:** anyone who decides a member's request to be excused.
