@@ -82,6 +82,23 @@ describe('SizePreferencesModal', () => {
     await waitFor(() => expect(mockUpsertMy).toHaveBeenCalledTimes(1));
   });
 
+  it('starts from a blank, save-ready form when the endpoint answers null (no sizes saved)', async () => {
+    // The member's own endpoint now answers 200 with null rather than 404.
+    // Reading fields off null would land in the load-failure branch and
+    // block Save for every member who has never saved sizes.
+    mockGetMy.mockResolvedValue(null);
+    const user = userEvent.setup();
+    render(<SizePreferencesModal isOpen onClose={onClose} />);
+
+    expect(await pantWaist()).toHaveValue('');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    const saveButton = screen.getByRole('button', { name: 'Save Sizes' });
+    expect(saveButton).not.toBeDisabled();
+
+    await user.click(saveButton);
+    await waitFor(() => expect(mockUpsertMy).toHaveBeenCalledTimes(1));
+  });
+
   it('blocks saving after a non-404 load failure, instead of clearing unseen preferences', async () => {
     // Regression test for the bug Codex found on the pass-4 correction round
     // (PR #2422): before this fix, ANY load failure — not just the expected

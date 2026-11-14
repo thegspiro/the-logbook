@@ -2,6 +2,7 @@
  * inventoryService — extracted from services/api.ts
  */
 
+import { AxiosError } from 'axios';
 import api from './apiClient';
 import type { Symbology } from './labelService';
 import type { InventoryAuditFrequency, InventoryNfcTagKind, InventoryNfcTagStatus } from '../constants/enums';
@@ -1556,9 +1557,20 @@ export const inventoryService = {
     return response.data;
   },
 
-  async getMySizePreferences(): Promise<MemberSizePreferences> {
-    const response = await api.get<MemberSizePreferences>('/inventory/my/size-preferences');
-    return response.data;
+  /** The signed-in member's own sizes, or null when they have saved none. */
+  async getMySizePreferences(): Promise<MemberSizePreferences | null> {
+    try {
+      // The endpoint answers 200 with a null body for a member with no sizes
+      // saved. It used to answer 404, which logged a failed request on a
+      // normal first opening of My Sizes.
+      const response = await api.get<MemberSizePreferences | null>('/inventory/my/size-preferences');
+      return response.data ?? null;
+    } catch (err: unknown) {
+      // Still read as "none saved": a backend from before the change answers
+      // 404, and a frontend can reach one during a rolling upgrade.
+      if (err instanceof AxiosError && err.response?.status === 404) return null;
+      throw err;
+    }
   },
 
   async upsertMySizePreferences(data: MemberSizePreferencesCreate): Promise<MemberSizePreferences> {

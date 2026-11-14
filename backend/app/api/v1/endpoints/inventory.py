@@ -7553,19 +7553,24 @@ async def upsert_member_size_preferences(
 
 @router.get(
     "/my/size-preferences",
-    response_model=MemberSizePreferencesResponse,
+    response_model=MemberSizePreferencesResponse | None,
 )
 async def get_my_size_preferences(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get the current user's own size preferences.
+    Get the current user's own size preferences, or ``null`` if none are saved.
 
     A member's own uniform sizes, like the gear issued to them and the
     requests they raise, are their own record — every sibling endpoint behind
     "My Issued Gear" requires only authentication, and these two are
     documented as "self, login required".
+
+    Having no sizes saved is the normal state for a new member, and My Sizes
+    asks on every opening: a 404 here logged a failed request on an ordinary
+    first visit. The officer-facing read of another member's sizes keeps its
+    404 for the same case.
 
     **Authentication required**
     """
@@ -7574,7 +7579,7 @@ async def get_my_size_preferences(
         UUID(current_user.id), current_user.organization_id
     )
     if not prefs:
-        raise HTTPException(status_code=404, detail="Size preferences not set")
+        return None
     return MemberSizePreferencesResponse.model_validate(prefs)
 
 
