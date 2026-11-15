@@ -16,8 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Branch `claude/security-review-auth-session-lifecycle`** (PR number to
-follow in a second commit on this same branch, per Step 8): Feature 01
+**PR [#4334](https://github.com/thegspiro/the-logbook/pull/4334)** (branch
+`claude/security-review-auth-session-lifecycle`): Feature 01
 (Auth & session lifecycle), pass 16, a watchdog pickup (the dedicated
 `/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
 has been unreachable for 5+ hours). PR #4328 (Feature 00, Cross-cutting
