@@ -365,6 +365,14 @@ describe('TrainingSessionLinkageCard', () => {
       expect(screen.queryByText('Hose drill')).not.toBeInTheDocument();
     });
 
+    it('names a one-off course called as the event is by its code, not as filed under the title', async () => {
+      mockGetSessionByEvent.mockResolvedValue({ ...SESSION, course_name: 'Hose drill', course_code: 'HD1' });
+      renderCard();
+
+      expect(await screen.findByText('HD1 - Hose drill')).toBeInTheDocument();
+      expect(screen.queryByText('No course yet (filed under the event title)')).not.toBeInTheDocument();
+    });
+
     it('names a library course with its code', async () => {
       mockGetSessionByEvent.mockResolvedValue({ ...SESSION, course_id: 'course-1', course_code: 'CPR' });
       renderCard();

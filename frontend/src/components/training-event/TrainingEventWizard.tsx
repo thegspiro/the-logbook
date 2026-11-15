@@ -348,7 +348,8 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
         prev,
         course,
         members,
-        linkageData.programs.map((p) => p.id)
+        linkageData.programs.map((p) => p.id),
+        prev.course_mode === 'library' ? courses.find((c) => c.id === prev.course_id) : undefined
       )
     );
     setTrainingErrors(({ course_id: _picked, ...rest }) => rest);

@@ -324,6 +324,67 @@ describe('applyLibraryCourse', () => {
       instructor: 'Capt. Owen Kittredge',
     });
   });
+
+  describe('switching to a course that lacks what the first one carried', () => {
+    const {
+      credit_hours: _hours,
+      duration_hours: _duration,
+      expiration_months: _expiry,
+      program_id: _program,
+      ...rest
+    } = COURSE;
+    const BARE: TrainingCourse = { ...rest, id: 'course-bare', name: 'Hose Rolling', instructor: '', category_ids: [] };
+
+    it("drops the first course's hours, instructor and expiry rather than filing them under the second", () => {
+      const first = applyLibraryCourse(form(), COURSE, members);
+      const second = applyLibraryCourse(first, BARE, members, undefined, COURSE);
+      expect(second).toMatchObject({
+        course_id: 'course-bare',
+        credit_hours_source: 'duration',
+        instructor_id: '',
+        instructor: '',
+        expiration_months: '',
+        issues_certification: false,
+      });
+      const payload = toAttachPayload(second, 1.5);
+      expect(payload).toMatchObject({ course_id: 'course-bare', issues_certification: false });
+      expect(payload.credit_hours).toBeUndefined();
+      expect(payload.instructor).toBeUndefined();
+      expect(payload.instructor_id).toBeUndefined();
+      expect(payload.expiration_months).toBeUndefined();
+    });
+
+    it('keeps what the officer changed after the first course filled it', () => {
+      const first = {
+        ...applyLibraryCourse(form(), COURSE, members),
+        credit_hours: '5',
+        credit_hours_source: 'manual' as const,
+        instructor_id: 'm-other',
+        instructor: 'Lt. Dana Price',
+        expiration_months: '12',
+      };
+      expect(applyLibraryCourse(first, BARE, members, undefined, COURSE)).toMatchObject({
+        credit_hours: '5',
+        credit_hours_source: 'manual',
+        instructor_id: 'm-other',
+        instructor: 'Lt. Dana Price',
+        expiration_months: '12',
+        issues_certification: true,
+      });
+    });
+
+    it("on an edit, sends hours stored equal to the session's course back to the length", () => {
+      const loaded = form({
+        course_mode: 'library',
+        course_id: 'course-pump',
+        credit_hours: '2',
+        credit_hours_source: 'manual',
+      });
+      expect(applyLibraryCourse(loaded, BARE, members, undefined, COURSE)).toMatchObject({
+        credit_hours_source: 'duration',
+      });
+    });
+  });
 });
 
 describe('fromSession', () => {
@@ -341,6 +402,16 @@ describe('fromSession', () => {
       course_mode: 'oneoff',
       course_name: 'Ladder Ops',
       credit_hours_source: 'manual',
+    });
+  });
+
+  it('reads a session filed under the title but carrying a code as a one-off, and keeps the code on save', () => {
+    const coded = { ...SESSION, course_code: 'X1' };
+    const loaded = fromSession(coded, EVENT);
+    expect(loaded).toMatchObject({ course_mode: 'oneoff', course_name: 'Monday Night Drill', course_code: 'X1' });
+    expect(toUpdatePayload(loaded, 2, loaded)).toMatchObject({
+      course_name: 'Monday Night Drill',
+      course_code: 'X1',
     });
   });
 

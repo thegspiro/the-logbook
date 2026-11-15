@@ -136,7 +136,13 @@ export const applyLibraryCourse = (
    * outside it is not filled in: the picker would read "No program" while
    * the save carried it.
    */
-  listedProgramIds?: readonly string[]
+  listedProgramIds?: readonly string[],
+  /**
+   * The library course this one replaces. What it filled in and the officer
+   * left alone describes that course, not this one, so a value this course
+   * does not replace is cleared rather than saved under it.
+   */
+  previousCourse?: TrainingCourse
 ): TrainingDetailsForm => {
   const courseProgram =
     course.program_id && (listedProgramIds === undefined || listedProgramIds.includes(course.program_id))
@@ -160,15 +166,33 @@ export const applyLibraryCourse = (
   if (courseHours !== undefined && courseHours !== null) {
     next.credit_hours = String(courseHours);
     next.credit_hours_source = 'course';
+  } else if (value.credit_hours_source === 'course' || creditHoursFromCourse(value, previousCourse)) {
+    // The scheduled length is what a course-less figure falls back to, here
+    // and in the backend's own fallback for a course without hours.
+    next.credit_hours_source = 'duration';
   }
+  const previousInstructor = previousCourse?.instructor?.trim();
   if (course.instructor?.trim()) {
     const member = members.find((m) => sameName(m.name, course.instructor ?? ''));
     next.instructor_id = member?.id ?? '';
     next.instructor = member?.name ?? course.instructor.trim();
+  } else if (previousInstructor && sameName(value.instructor, previousInstructor)) {
+    next.instructor_id = '';
+    next.instructor = '';
   }
   if (course.expiration_months) {
     next.expiration_months = String(course.expiration_months);
     next.issues_certification = true;
+  } else if (
+    previousCourse?.expiration_months &&
+    value.expiration_months === String(previousCourse.expiration_months)
+  ) {
+    next.expiration_months = '';
+    // The previous course's expiry is what ticked it. Left ticked only when
+    // the officer has since given the certification details of their own.
+    if (!value.issuing_agency.trim() && !value.certification_number_prefix.trim()) {
+      next.issues_certification = false;
+    }
   }
   return next;
 };
@@ -238,6 +262,21 @@ export const withCourseChoice = (
   return value;
 };
 
+/**
+ * Whether a course-less session holds a one-off course rather than being
+ * filed under the event's title. A stored code marks one even when its name
+ * equals the title: a session filed under the title carries no code, and
+ * reading it as No course yet would clear the code on the next save. The
+ * event page's training card reads the session the same way.
+ */
+export const isOneOffCourse = (
+  session: Pick<TrainingSessionResponse, 'course_id' | 'course_name' | 'course_code'>,
+  eventTitle: string
+): boolean =>
+  !session.course_id &&
+  Boolean(session.course_name) &&
+  (session.course_name !== eventTitle || Boolean(session.course_code?.trim()));
+
 /** The ISO instants' length in hours, for a stored event. */
 const storedHours = (startIso: string, endIso: string): number | null => {
   const ms = new Date(endIso).getTime() - new Date(startIso).getTime();
@@ -256,7 +295,7 @@ export const fromSession = (
   const length = storedHours(event.start_datetime, event.end_datetime);
   const courseMode: CourseMode = session.course_id
     ? 'library'
-    : session.course_name && session.course_name !== event.title
+    : isOneOffCourse(session, event.title)
       ? 'oneoff'
       : 'none';
   const followsLength = !session.course_id && length !== null && roundHours(session.credit_hours) === length;

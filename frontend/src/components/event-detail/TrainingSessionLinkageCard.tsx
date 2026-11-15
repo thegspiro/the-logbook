@@ -8,6 +8,7 @@ import { formatDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { TRAINING_TYPE_LABELS } from '../../constants/enums';
 import SessionAttendanceRequirements from './SessionAttendanceRequirements';
+import { isOneOffCourse } from '../training-event/trainingDetailsModel';
 
 interface TrainingSessionLinkageCardProps {
   eventId: string;
@@ -217,9 +218,10 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
   const typeLabel = TRAINING_TYPE_LABELS[session.training_type] ?? session.training_type;
 
   // A session with no course carries the event's title as its course name;
-  // naming it as a course would read as one the department never made.
+  // naming it as a course would read as one the department never made. The
+  // wizard reads it the same way (isOneOffCourse).
   const courseLabel =
-    !session.course_id && session.course_name === eventTitle
+    !session.course_id && !isOneOffCourse(session, eventTitle)
       ? 'No course yet (filed under the event title)'
       : `${session.course_code ? `${session.course_code} - ` : ''}${session.course_name}`;
 
