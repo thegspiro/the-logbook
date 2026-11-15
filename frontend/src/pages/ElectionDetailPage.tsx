@@ -5,7 +5,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useSearchParams, Link, useNavigate } from 'react-router';
+import { useParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { electionService, eventService, meetingsService } from '../services/api';
 import type { MeetingRecord } from '../services/api';
@@ -34,7 +34,13 @@ import { defaultsForKind } from '../modules/elections/eligibilityRules';
 import { RunoffChain } from '../modules/elections/components/RunoffChain';
 import { PublishResultsPanel } from '../modules/elections/components/PublishResultsPanel';
 import { NominationsAnnouncementStatus } from '../modules/elections/components/NominationsAnnouncementStatus';
-import { ElectionWorkflowTabs } from '../modules/elections/components/ElectionWorkflowTabs';
+import { ElectionHeaderCard } from '../modules/elections/components/ElectionHeaderCard';
+import {
+  electionSectionPath,
+  isElectionSection,
+  visibleElectionSections,
+  type ElectionSection,
+} from '../modules/elections/electionSections';
 import { useAuthStore } from '../stores/authStore';
 import { ElectionBallot } from '../components/ElectionBallot';
 import { ElectionStatus, MeetingKind, VotingMethod } from '../constants/enums';
@@ -49,11 +55,9 @@ import { eventWindow, meetingWindow, type MeetingWindow } from '../utils/electio
 import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
 import { groupVoidedVotes } from '../utils/electionForensics';
 import {
-  getTimeRemaining,
   getStatusBadgeClass,
   getStatusLabel,
   titleNamesRunoffRound,
-  getVictoryDescription,
   describePackageSendError,
   electionCanEmailBallots,
   nomineesOf,
@@ -91,7 +95,13 @@ const VOTING_METHOD_LABELS: Record<string, string> = {
 };
 
 export const ElectionDetailPage: React.FC = () => {
-  const { electionId } = useParams<{ electionId: string }>();
+  // The route is `/elections/:electionId/*`: the splat's first segment names
+  // the section, and no segment is the Overview. One route for all of them,
+  // so moving between sections keeps this component — and every vote receipt,
+  // dialog and loaded panel in it — mounted.
+  const { electionId, '*': sectionPath = '' } = useParams<{ electionId: string; '*': string }>();
+  const requestedSection = sectionPath.split('/')[0] ?? '';
+  const activeSection: ElectionSection | null = isElectionSection(requestedSection) ? requestedSection : null;
   const navigate = useNavigate();
   const { confirm } = useConfirm();
   // Core election state
@@ -143,7 +153,6 @@ export const ElectionDetailPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Forensics & Integrity state
-  const [showForensics, setShowForensics] = useState(false);
   const [forensicsReport, setForensicsReport] = useState<ForensicsReport | null>(null);
   const [loadingForensics, setLoadingForensics] = useState(false);
   const [integrityResult, setIntegrityResult] = useState<VoteIntegrityResult | null>(null);
@@ -159,26 +168,9 @@ export const ElectionDetailPage: React.FC = () => {
   const [previewCandidates, setPreviewCandidates] = useState<Candidate[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
 
-  // Tabbed workflow state
-  // Addressable, so a secretary can send "the eligibility roster for this
-  // election" as a link. Plain state before, which also broke the Back button
-  // after a tab change and pinned the screenshot harness to Ballot. Sixth page
-  // to get this treatment, after Email Templates, Notifications, Medical
-  // Screening, Compliance Config and Item Detail.
-  //
-  // Derived from the URL rather than mirrored into state: mirroring reads the
-  // parameter once, on mount, so every later URL change — which is what Back
-  // is — would be ignored. `ElectionWorkflowTabs` already falls back to its
-  // first visible tab when the active one is not one this viewer may see, so
-  // an unknown or forbidden `?tab=` lands somewhere sensible rather than on a
-  // blank panel.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get('tab') ?? 'ballot';
-  // The fallback in ElectionWorkflowTabs corrects a forbidden `?tab=` with
-  // `replace`, so Back leaves the page rather than re-landing on the URL that
-  // triggers the correction again. Click-driven changes keep the default push.
-  const setActiveTab = (tab: string, options?: { replace?: boolean }) =>
-    options?.replace ? setSearchParams({ tab }, { replace: true }) : setSearchParams({ tab });
+  const goToSection = (section: ElectionSection | null) => {
+    if (electionId) void navigate(electionSectionPath(electionId, section));
+  };
 
   // Pending election packages state
   const [pendingPackages, setPendingPackages] = useState<ElectionPackage[]>([]);
@@ -304,20 +296,44 @@ export const ElectionDetailPage: React.FC = () => {
       setError(null);
       const data = await electionService.getElection(electionId);
       setElection(data);
-
-      // Auto-select results only when the URL names no section: an explicit
-      // `?tab=` deep link is honoured, and refreshes (every vote, close,
-      // publish) no longer yank the viewer off the tab they are on. Replace so
-      // the initial landing does not add a history entry.
-      if (!searchParams.get('tab') && (data.status === ElectionStatus.CLOSED || data.results_visible_immediately)) {
-        setActiveTab('results', { replace: true });
-      }
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load election'));
     } finally {
       setLoading(false);
     }
   };
+
+  // A section this viewer may not open, or one that does not exist, falls back
+  // to the Overview. Replace, not push: a pushed entry would make Back return
+  // to the refused address, which would redirect again — a loop.
+  useEffect(() => {
+    if (!election || !electionId || election.id !== electionId || !sectionPath) return;
+    const allowed =
+      activeSection !== null && visibleElectionSections(election, canManage).some((s) => s.id === activeSection);
+    if (!allowed) void navigate(electionSectionPath(electionId, null), { replace: true });
+  }, [election, electionId, sectionPath, activeSection, canManage, navigate]);
+
+  // Integrity & Audit loads its report on arrival, as opening the old
+  // collapsible block did; the section is that block.
+  useEffect(() => {
+    if (activeSection !== 'integrity' || !canManage || !electionId) return;
+    let cancelled = false;
+    setLoadingForensics(true);
+    electionService
+      .getForensics(electionId)
+      .then((report) => {
+        if (!cancelled) setForensicsReport(report);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) toast.error(getErrorMessage(err, 'Failed to load forensics report'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingForensics(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, canManage, electionId]);
 
   const fetchUpcomingEvents = async () => {
     try {
@@ -528,7 +544,7 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       const updated = await electionService.closeElection(electionId);
       setElection(updated);
-      setActiveTab('results');
+      goToSection('results');
       toast.success('Election closed');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to close election'));
@@ -554,7 +570,7 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       const updated = await electionService.openNominations(electionId);
       setElection(updated);
-      setActiveTab('nominations');
+      goToSection('nominations');
       toast.success('Nominations opened');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to open nominations'));
@@ -684,11 +700,8 @@ export const ElectionDetailPage: React.FC = () => {
       });
       setShowCloneModal(false);
       toast.success('Draft election created');
-      // Name the tab explicitly: the source was cloned from an open or closed
-      // election, and a bare draft URL lets the auto-select in fetchElection
-      // land on Results — a tally of nothing on an election with no ballot
-      // yet (W50-69). Ballot setup is what the officer does next.
-      void navigate(`/elections/${clone.id}?tab=ballot`);
+      // Ballot setup is what the officer does next on a fresh draft (W50-69).
+      void navigate(electionSectionPath(clone.id, 'ballot'));
     } catch (err: unknown) {
       setCloneError(getErrorMessage(err, 'Failed to clone election'));
     } finally {
@@ -1137,32 +1150,15 @@ export const ElectionDetailPage: React.FC = () => {
 
   const resultsAvailable = election.status === ElectionStatus.CLOSED || election.results_visible_immediately;
   const isDraft = election.status === ElectionStatus.DRAFT;
-  const isActiveOrCompleted = election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED;
 
   const canEmailBallots = electionCanEmailBallots(election);
 
-  // ── Lifecycle stepper config ────────────────────────────────────
-  const lifecycleSteps = [
-    { key: 'draft', label: 'Draft', description: 'Configure ballot & candidates' },
-    ...(election.status === ElectionStatus.NOMINATIONS
-      ? [{ key: 'nominations', label: 'Nominations', description: 'Members nominate candidates' }]
-      : []),
-    { key: 'open', label: 'Voting Open', description: 'Members can cast votes' },
-    { key: 'closed', label: 'Closed', description: 'Results finalized' },
-  ];
-
-  /** Determines whether a lifecycle step is completed, current, or upcoming based on election status. */
-  const getStepStatus = (stepKey: string): 'completed' | 'current' | 'upcoming' => {
-    const order =
-      election.status === ElectionStatus.NOMINATIONS
-        ? ['draft', 'nominations', 'open', 'closed']
-        : ['draft', 'open', 'closed'];
-    const currentIdx = election.status === ElectionStatus.CANCELLED ? -1 : order.indexOf(election.status);
-    const stepIdx = order.indexOf(stepKey);
-    if (stepIdx < currentIdx) return 'completed';
-    if (stepIdx === currentIdx) return 'current';
-    return 'upcoming';
-  };
+  const visibleSectionIds = new Set(visibleElectionSections(election, canManage, candidateCount).map((s) => s.id));
+  // A manager sees one section at a time, at its own address. A member has no
+  // section links, so their Overview stacks every section they may open;
+  // their own addresses (the shared results link) still show one alone.
+  const showsSection = (id: ElectionSection) =>
+    visibleSectionIds.has(id) && (activeSection === id || (!canManage && activeSection === null));
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -1196,104 +1192,70 @@ export const ElectionDetailPage: React.FC = () => {
             ) : undefined
           }
           actions={
-            <span
-              className={`inline-flex shrink-0 rounded-full px-3 py-1 text-sm leading-5 font-semibold ${getStatusBadgeClass(
-                election.status
-              )}`}
-            >
-              {getStatusLabel(election.status)}
-            </span>
+            <>
+              <span
+                className={`inline-flex shrink-0 rounded-full px-3 py-1 text-sm leading-5 font-semibold ${getStatusBadgeClass(
+                  election.status
+                )}`}
+              >
+                {getStatusLabel(election.status)}
+              </span>
+              {/* The one step that moves this election forward, kept in the
+                  header so it is in reach from every section. The rest of the
+                  controls stay on the Overview with their explanations. */}
+              {canManage && election.status === ElectionStatus.DRAFT && (
+                <button
+                  onClick={() => {
+                    void handleOpenElection();
+                  }}
+                  className="btn-primary text-sm"
+                >
+                  Open Election
+                </button>
+              )}
+              {canManage && election.status === ElectionStatus.NOMINATIONS && (
+                <button
+                  onClick={() => {
+                    void handleCloseNominations();
+                  }}
+                  className="btn-primary text-sm"
+                >
+                  Close Nominations
+                </button>
+              )}
+              {canManage && election.status === ElectionStatus.OPEN && (
+                <button
+                  onClick={() => {
+                    void handleCloseElection();
+                  }}
+                  className="btn-primary text-sm"
+                >
+                  Close Election
+                </button>
+              )}
+              {canManage && election.status === ElectionStatus.CLOSED && (
+                <button
+                  onClick={() => {
+                    void handleDownloadCertifiedResults();
+                  }}
+                  className="btn-primary text-sm"
+                >
+                  Certified Results (PDF)
+                </button>
+              )}
+            </>
           }
         />
 
-        {/* Election Lifecycle Stepper */}
-        {election.status !== ElectionStatus.CANCELLED && (
-          <div className="bg-theme-surface mb-6 rounded-lg p-4 shadow-sm backdrop-blur-xs">
-            <div className="flex items-center justify-between" role="list" aria-label="Election progress">
-              {lifecycleSteps.map((step, idx) => {
-                const status = getStepStatus(step.key);
-                return (
-                  <React.Fragment key={step.key}>
-                    {idx > 0 && (
-                      <div
-                        aria-hidden="true"
-                        className={`mx-2 h-0.5 flex-1 ${
-                          status === 'upcoming' ? 'bg-theme-surface-border' : 'bg-blue-500'
-                        }`}
-                      />
-                    )}
-                    <div
-                      role="listitem"
-                      className="flex shrink-0 items-center gap-2"
-                      aria-current={status === 'current' ? 'step' : undefined}
-                    >
-                      <div
-                        aria-hidden="true"
-                        className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
-                          status === 'completed'
-                            ? 'bg-blue-600 text-white'
-                            : status === 'current'
-                              ? 'bg-blue-600 text-white ring-4 ring-blue-600/20'
-                              : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border border'
-                        }`}
-                      >
-                        {status === 'completed' ? (
-                          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                            <path
-                              fillRule="evenodd"
-                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        ) : (
-                          idx + 1
-                        )}
-                      </div>
-                      {/* Hidden visually on a phone, where the circles alone fit, but
-                          kept for a screen reader: without it the stepper read as
-                          bare numbers with nothing saying which step is current. */}
-                      <div className="sr-only sm:not-sr-only">
-                        <div
-                          className={`text-sm font-medium ${
-                            status === 'upcoming' ? 'text-theme-text-muted' : 'text-theme-text-primary'
-                          }`}
-                        >
-                          {step.label}
-                        </div>
-                        <div className="text-theme-text-muted sr-only text-xs lg:not-sr-only">{step.description}</div>
-                      </div>
-                    </div>
-                  </React.Fragment>
-                );
-              })}
-            </div>
-            {/* Time remaining for open elections */}
-            {election.status === ElectionStatus.OPEN && (
-              <div className="border-theme-surface-border mt-3 flex items-center justify-center gap-2 border-t pt-3 text-sm">
-                <svg
-                  className="text-theme-text-muted h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                {getTimeRemaining(election.end_date) ? (
-                  <span className="font-medium text-green-700 dark:text-green-400">
-                    {getTimeRemaining(election.end_date)}
-                  </span>
-                ) : (
-                  <span className="font-medium text-red-700 dark:text-red-400">Voting period has ended</span>
-                )}
-              </div>
-            )}
-          </div>
+        {electionId && (
+          <ElectionHeaderCard
+            electionId={electionId}
+            election={election}
+            canManage={canManage}
+            activeSection={activeSection}
+            candidateCount={candidateCount}
+            tz={tz}
+          />
         )}
 
         {/* Integrity Alert Banner */}
@@ -1320,7 +1282,15 @@ export const ElectionDetailPage: React.FC = () => {
                 {!integrityResult.chain_verified
                   ? 'Vote chain is broken — votes may have been deleted or reordered. '
                   : ''}
-                Review the Forensics & Integrity section below for details.
+                Review the details in{' '}
+                {electionId ? (
+                  <Link to={electionSectionPath(electionId, 'integrity')} className="underline">
+                    Integrity &amp; Audit
+                  </Link>
+                ) : (
+                  'Integrity & Audit'
+                )}
+                .
               </p>
             </div>
           </div>
@@ -1406,531 +1376,488 @@ export const ElectionDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* Election Info */}
-        <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-sm backdrop-blur-xs">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <div className="text-theme-text-muted text-sm">Start Date</div>
-              <div className="text-theme-text-primary mt-1 text-sm font-medium">
-                {formatDateTime(election.start_date, tz)}
-              </div>
-            </div>
-            <div>
-              <div className="text-theme-text-muted text-sm">
-                {election.status === ElectionStatus.CLOSED ? 'Scheduled End' : 'End Date'}
-              </div>
-              <div className="text-theme-text-primary mt-1 text-sm font-medium">
-                {formatDateTime(election.end_date, tz)}
-              </div>
-              {election.status === ElectionStatus.CLOSED && (
-                <div className="text-theme-text-secondary mt-1 text-sm">
-                  <ElectionCloseStamp election={election} showActor />
+        {activeSection === null && (
+          <>
+            {/* Election Info */}
+            <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-sm backdrop-blur-xs">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <div className="text-theme-text-muted text-sm">Start Date</div>
+                  <div className="text-theme-text-primary mt-1 text-sm font-medium">
+                    {formatDateTime(election.start_date, tz)}
+                  </div>
                 </div>
-              )}
-            </div>
-            {election.positions && election.positions.length > 0 && (
-              // md:col-span-2, not col-span-2: on the single-column phone grid an
-              // unconditional span forces an implicit second track, which is
-              // what collapsed "Start Date" to 0px and drew "Voting Method"
-              // over "Anonymous Voting" at 390px (W50-62).
-              <div className="md:col-span-2">
-                <div className="text-theme-text-muted text-sm">Positions</div>
-                <div className="mt-1 flex flex-wrap gap-2">
-                  {election.positions.map((position) => (
-                    <span
-                      key={position}
-                      className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-sm text-blue-800 dark:bg-blue-500/20 dark:text-blue-400"
-                    >
-                      {position}
-                    </span>
-                  ))}
+                <div>
+                  <div className="text-theme-text-muted text-sm">
+                    {election.status === ElectionStatus.CLOSED ? 'Scheduled End' : 'End Date'}
+                  </div>
+                  <div className="text-theme-text-primary mt-1 text-sm font-medium">
+                    {formatDateTime(election.end_date, tz)}
+                  </div>
+                  {election.status === ElectionStatus.CLOSED && (
+                    <div className="text-theme-text-secondary mt-1 text-sm">
+                      <ElectionCloseStamp election={election} showActor />
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
-            <div>
-              <div className="text-theme-text-muted text-sm">Voting Method</div>
-              <div className="text-theme-text-primary mt-1 text-sm font-medium">
-                {VOTING_METHOD_LABELS[election.voting_method] ?? election.voting_method}
-              </div>
-            </div>
-            <div>
-              <div className="text-theme-text-muted text-sm">Winner</div>
-              <div className="text-theme-text-primary mt-1 text-sm font-medium">{getVictoryDescription(election)}</div>
-            </div>
-            {(election.seats_per_position ?? 1) > 1 && (
-              <div>
-                <div className="text-theme-text-muted text-sm">Seats per Race</div>
-                <div className="text-theme-text-primary mt-1 text-sm font-medium">
-                  {`${election.seats_per_position} elected per race`}
+                {election.positions && election.positions.length > 0 && (
+                  // md:col-span-2, not col-span-2: on the single-column phone grid an
+                  // unconditional span forces an implicit second track, which is
+                  // what collapsed "Start Date" to 0px and drew "Voting Method"
+                  // over "Anonymous Voting" at 390px (W50-62).
+                  <div className="md:col-span-2">
+                    <div className="text-theme-text-muted text-sm">Positions</div>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {election.positions.map((position) => (
+                        <span
+                          key={position}
+                          className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-sm text-blue-800 dark:bg-blue-500/20 dark:text-blue-400"
+                        >
+                          {position}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <div className="text-theme-text-muted text-sm">Voting Method</div>
+                  <div className="text-theme-text-primary mt-1 text-sm font-medium">
+                    {VOTING_METHOD_LABELS[election.voting_method] ?? election.voting_method}
+                  </div>
                 </div>
-              </div>
-            )}
-            <div>
-              <div className="text-theme-text-muted text-sm">Anonymous Voting</div>
-              <div className="text-theme-text-primary mt-1 text-sm font-medium">
-                {election.anonymous_voting ? 'Yes' : 'No'}
-              </div>
-            </div>
-            <div>
-              <div className="text-theme-text-muted text-sm">Linked Meeting</div>
-              <div className="text-theme-text-primary mt-1 text-sm font-medium">
-                {election.meeting_id ? (
-                  <div className="flex items-center gap-2">
-                    {/* Text, not a link: there is no meeting detail screen to
+                {(election.seats_per_position ?? 1) > 1 && (
+                  <div>
+                    <div className="text-theme-text-muted text-sm">Seats per Race</div>
+                    <div className="text-theme-text-primary mt-1 text-sm font-medium">
+                      {`${election.seats_per_position} elected per race`}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <div className="text-theme-text-muted text-sm">Anonymous Voting</div>
+                  <div className="text-theme-text-primary mt-1 text-sm font-medium">
+                    {election.anonymous_voting ? 'Yes' : 'No'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-theme-text-muted text-sm">Linked Meeting</div>
+                  <div className="text-theme-text-primary mt-1 text-sm font-medium">
+                    {election.meeting_id ? (
+                      <div className="flex items-center gap-2">
+                        {/* Text, not a link: there is no meeting detail screen to
                         link to. /minutes/:minutesId is not one — it takes a
                         *minutes* id, and MinutesPage lists meetings without
                         linking to any. This was a <Link> to /meetings/:id,
                         which matches no route and fell through App.tsx's
                         catch-all to the dashboard, so naming the linked
                         meeting cost the reader their place. */}
-                    <span className="text-theme-text-primary">{election.meeting_title || 'Linked'}</span>
-                    {canManage && election.status === ElectionStatus.DRAFT && (
-                      <button
-                        onClick={() => {
-                          void fetchAvailableMeetings();
-                          setShowMeetingSelector(true);
-                        }}
-                        className="text-theme-text-muted hover:text-theme-text-secondary text-xs"
-                        title="Change linked meeting"
-                      >
-                        (change)
-                      </button>
+                        <span className="text-theme-text-primary">{election.meeting_title || 'Linked'}</span>
+                        {canManage && election.status === ElectionStatus.DRAFT && (
+                          <button
+                            onClick={() => {
+                              void fetchAvailableMeetings();
+                              setShowMeetingSelector(true);
+                            }}
+                            className="text-theme-text-muted hover:text-theme-text-secondary text-xs"
+                            title="Change linked meeting"
+                          >
+                            (change)
+                          </button>
+                        )}
+                      </div>
+                    ) : election.event_id ? (
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to={`/events/${election.event_id}`}
+                          className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          View Event &rarr;
+                        </Link>
+                        {canManage && election.status === ElectionStatus.DRAFT && (
+                          <button
+                            onClick={() => {
+                              void fetchAvailableMeetings();
+                              setShowMeetingSelector(true);
+                            }}
+                            className="text-theme-text-muted hover:text-theme-text-secondary text-xs"
+                            title="Change linked meeting"
+                          >
+                            (change)
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-theme-text-muted">None</span>
+                        {canManage && election.status === ElectionStatus.DRAFT && (
+                          <button
+                            onClick={() => {
+                              void fetchAvailableMeetings();
+                              setShowMeetingSelector(true);
+                            }}
+                            className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                          >
+                            Link a meeting
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
-                ) : election.event_id ? (
-                  <div className="flex items-center gap-2">
-                    <Link
-                      to={`/events/${election.event_id}`}
-                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                    >
-                      View Event &rarr;
-                    </Link>
-                    {canManage && election.status === ElectionStatus.DRAFT && (
-                      <button
-                        onClick={() => {
-                          void fetchAvailableMeetings();
-                          setShowMeetingSelector(true);
-                        }}
-                        className="text-theme-text-muted hover:text-theme-text-secondary text-xs"
-                        title="Change linked meeting"
-                      >
-                        (change)
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="text-theme-text-muted">None</span>
-                    {canManage && election.status === ElectionStatus.DRAFT && (
-                      <button
-                        onClick={() => {
-                          void fetchAvailableMeetings();
-                          setShowMeetingSelector(true);
-                        }}
-                        className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                      >
-                        Link a meeting
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-              {election.meeting_id && election.meeting_date && (
-                <div className="text-theme-text-muted mt-0.5 text-xs">
-                  {election.meeting_type && (
-                    <span className="capitalize">{election.meeting_type.replace('_', ' ')}</span>
+                  {election.meeting_id && election.meeting_date && (
+                    <div className="text-theme-text-muted mt-0.5 text-xs">
+                      {election.meeting_type && (
+                        <span className="capitalize">{election.meeting_type.replace('_', ' ')}</span>
+                      )}
+                      {election.meeting_type && ' — '}
+                      {formatDate(election.meeting_date, tz)}
+                    </div>
                   )}
-                  {election.meeting_type && ' — '}
-                  {formatDate(election.meeting_date, tz)}
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Meeting Selector Modal (inline) */}
-          {showMeetingSelector && canManage && (
-            <div className="bg-theme-surface-secondary border-theme-surface-border mt-4 rounded-lg border p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <h4 className="text-theme-text-primary text-sm font-medium">Link Meeting or Event</h4>
-                <button
-                  onClick={() => setShowMeetingSelector(false)}
-                  className="text-theme-text-muted hover:text-theme-text-secondary text-sm"
-                >
-                  Cancel
-                </button>
               </div>
-              <select
-                value={
-                  election.meeting_id
-                    ? `meeting:${election.meeting_id}`
-                    : election.event_id
-                      ? `event:${election.event_id}`
-                      : ''
-                }
-                onChange={(e) => void handleMeetingChange(e.target.value)}
-                aria-label="Linked meeting or event"
-                className="form-input shadow-xs"
-              >
-                <option value="">No linked meeting</option>
-                {upcomingEvents.map((event) => (
-                  <option key={`event-${event.id}`} value={`event:${event.id}`}>
-                    {event.title} ({formatDate(event.start_datetime, tz)})
-                  </option>
-                ))}
-                {availableMeetings.length > 0 && (
-                  <optgroup label="Meeting Minutes">
-                    {availableMeetings.map((meeting) => (
-                      <option key={`meeting-${meeting.id}`} value={`meeting:${meeting.id}`}>
-                        {meeting.title} ({formatDate(meeting.meeting_date, tz)})
+
+              {/* Meeting Selector Modal (inline) */}
+              {showMeetingSelector && canManage && (
+                <div className="bg-theme-surface-secondary border-theme-surface-border mt-4 rounded-lg border p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h4 className="text-theme-text-primary text-sm font-medium">Link Meeting or Event</h4>
+                    <button
+                      onClick={() => setShowMeetingSelector(false)}
+                      className="text-theme-text-muted hover:text-theme-text-secondary text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <select
+                    value={
+                      election.meeting_id
+                        ? `meeting:${election.meeting_id}`
+                        : election.event_id
+                          ? `event:${election.event_id}`
+                          : ''
+                    }
+                    onChange={(e) => void handleMeetingChange(e.target.value)}
+                    aria-label="Linked meeting or event"
+                    className="form-input shadow-xs"
+                  >
+                    <option value="">No linked meeting</option>
+                    {upcomingEvents.map((event) => (
+                      <option key={`event-${event.id}`} value={`event:${event.id}`}>
+                        {event.title} ({formatDate(event.start_datetime, tz)})
                       </option>
                     ))}
-                  </optgroup>
-                )}
-              </select>
-            </div>
-          )}
+                    {availableMeetings.length > 0 && (
+                      <optgroup label="Meeting Minutes">
+                        {availableMeetings.map((meeting) => (
+                          <option key={`meeting-${meeting.id}`} value={`meeting:${meeting.id}`}>
+                            {meeting.title} ({formatDate(meeting.meeting_date, tz)})
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                </div>
+              )}
 
-          {/* Import Attendees from Linked Meeting or Event */}
-          {(election.meeting_id || election.event_id) && canManage && election.status === ElectionStatus.DRAFT && (
-            <div className="mt-4">
-              <button
-                onClick={() => void handleImportMeetingAttendees()}
-                disabled={isImportingAttendees}
-                className="rounded-md bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {isImportingAttendees
-                  ? 'Importing...'
-                  : `Import Attendees from ${election.meeting_id ? 'Meeting' : 'Event'}`}
-              </button>
-              <p className="text-theme-text-muted mt-1 text-xs">
-                {election.meeting_id
-                  ? 'Copy the attendance list from the linked meeting into this election.'
-                  : 'Copy checked-in attendees (or RSVPs) from the linked event into this election.'}
-              </p>
-            </div>
-          )}
+              {/* Import Attendees from Linked Meeting or Event */}
+              {(election.meeting_id || election.event_id) && canManage && election.status === ElectionStatus.DRAFT && (
+                <div className="mt-4">
+                  <button
+                    onClick={() => void handleImportMeetingAttendees()}
+                    disabled={isImportingAttendees}
+                    className="rounded-md bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {isImportingAttendees
+                      ? 'Importing...'
+                      : `Import Attendees from ${election.meeting_id ? 'Meeting' : 'Event'}`}
+                  </button>
+                  <p className="text-theme-text-muted mt-1 text-xs">
+                    {election.meeting_id
+                      ? 'Copy the attendance list from the linked meeting into this election.'
+                      : 'Copy checked-in attendees (or RSVPs) from the linked event into this election.'}
+                  </p>
+                </div>
+              )}
 
-          {/* Secretary Controls */}
-          {canManage && (
-            <div className="border-theme-surface-border mt-6 space-y-4 border-t pt-6">
-              {/* Lifecycle Actions */}
-              <div>
-                <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">Lifecycle</h4>
-                {/* open_election refuses a draft with no accepted candidate or
+              {/* Secretary Controls */}
+              {canManage && (
+                <div className="border-theme-surface-border mt-6 space-y-4 border-t pt-6">
+                  {/* Lifecycle Actions */}
+                  <div>
+                    <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
+                      Lifecycle
+                    </h4>
+                    {/* open_election refuses a draft with no accepted candidate or
                     ballot item, and opening never emails ballots, so a first
                     election stalls at one or the other without this. */}
-                {election.status === ElectionStatus.DRAFT && (
-                  <p className="text-theme-text-secondary mb-3 text-sm">
-                    Next: add at least one candidate on the Candidates tab, or a ballot item on the Ballot tab, then
-                    select Open Election. Opening does not email ballots; send them with Send Ballot Emails once voting
-                    is open.
-                  </p>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  {election.ballot_items && election.ballot_items.length > 0 && (
-                    <button
-                      onClick={() => {
-                        void handleOpenPreview();
-                      }}
-                      disabled={loadingPreview}
-                      className="rounded-md bg-cyan-700 px-4 py-2 text-sm text-white hover:bg-cyan-800 disabled:opacity-50"
-                    >
-                      {loadingPreview ? 'Loading Preview...' : 'Preview Ballot'}
-                    </button>
-                  )}
-
-                  {election.status === ElectionStatus.DRAFT && (
-                    <>
-                      <button
-                        onClick={() => {
-                          setShowEditDatesModal(true);
-                        }}
-                        className="rounded-md bg-purple-600 px-4 py-2 text-sm text-white hover:bg-purple-700"
-                      >
-                        Edit Dates
-                      </button>
-                      {featureFlags.nominations_enabled && (election.positions?.length ?? 0) > 0 && (
-                        <button
-                          onClick={() => {
-                            void handleOpenNominations();
-                          }}
-                          className="rounded-md bg-amber-700 px-4 py-2 text-sm text-white hover:bg-amber-800"
-                        >
-                          Open Nominations
-                        </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          void handleOpenElection();
-                        }}
-                        className="btn-success rounded-md text-sm"
-                      >
-                        Open Election
-                      </button>
-                    </>
-                  )}
-
-                  {election.status === ElectionStatus.NOMINATIONS && (
-                    <button
-                      onClick={() => {
-                        void handleCloseNominations();
-                      }}
-                      className="rounded-md bg-amber-700 px-4 py-2 text-sm text-white hover:bg-amber-800"
-                    >
-                      Close Nominations
-                    </button>
-                  )}
-
-                  {election.status === ElectionStatus.OPEN && (
-                    <>
-                      <button
-                        onClick={() => setShowTurnout((s) => !s)}
-                        className="rounded-md bg-sky-700 px-4 py-2 text-sm text-white hover:bg-sky-800"
-                      >
-                        {showTurnout ? 'Hide Live Turnout' : 'Live Turnout'}
-                      </button>
-                      {featureFlags.paper_ballots_enabled && (
-                        <button
-                          onClick={() => {
-                            void handleShowPaperBallots();
-                          }}
-                          className="rounded-md bg-teal-700 px-4 py-2 text-sm text-white hover:bg-teal-800"
-                        >
-                          Record Paper Ballots
-                        </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          setShowExtendModal(true);
-                        }}
-                        className="rounded-md bg-purple-600 px-4 py-2 text-sm text-white hover:bg-purple-700"
-                      >
-                        Extend Time
-                      </button>
-                      <button
-                        onClick={() => {
-                          void handleCloseElection();
-                        }}
-                        className="btn-primary rounded-md text-sm"
-                      >
-                        Close Election
-                      </button>
-                    </>
-                  )}
-
-                  {(election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED) && (
-                    <>
-                      <button
-                        onClick={() => setShowRollbackModal(true)}
-                        disabled={rollbackBlockedReason !== null}
-                        aria-describedby={rollbackBlockedReason !== null ? 'rollback-blocked-reason' : undefined}
-                        className="rounded-md bg-orange-700 px-4 py-2 text-sm text-white hover:bg-orange-800 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Roll Back
-                      </button>
-                      {rollbackBlockedReason !== null && (
-                        <p id="rollback-blocked-reason" className="text-theme-text-muted basis-full text-xs">
-                          {rollbackBlockedReason}
-                        </p>
-                      )}
-                    </>
-                  )}
-
-                  {/* A ballot built only in the Ballot Builder (motions, membership
-                      votes) has no plain positions but still prints: the server
-                      accepts positions or ballot items, and so does the button. */}
-                  {election.status !== ElectionStatus.CLOSED &&
-                    election.status !== ElectionStatus.CANCELLED &&
-                    ((election.positions?.length ?? 0) > 0 || (election.ballot_items?.length ?? 0) > 0) && (
-                      <button
-                        onClick={() => {
-                          void handleDownloadPrintableBallot();
-                        }}
-                        className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm"
-                      >
-                        Print Blank Ballots
-                      </button>
-                    )}
-
-                  {election.status === ElectionStatus.CLOSED && (
-                    <button
-                      onClick={() => {
-                        void handleDownloadCertifiedResults();
-                      }}
-                      className="rounded-md bg-emerald-700 px-4 py-2 text-sm text-white hover:bg-emerald-800"
-                    >
-                      Certified Results (PDF)
-                    </button>
-                  )}
-
-                  {election.allow_write_ins &&
-                    (election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED) && (
-                      <button
-                        onClick={() => {
-                          void handleShowMergeWriteIns();
-                        }}
-                        className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm"
-                      >
-                        Merge Write-Ins
-                      </button>
-                    )}
-
-                  <button
-                    onClick={() => {
-                      setCloneError(null);
-                      setShowCloneModal(true);
-                    }}
-                    className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm"
-                  >
-                    Clone Election
-                  </button>
-                </div>
-              </div>
-
-              {/* Communication Actions — pre-meeting package is available while
-                drafting; ballot emails only once voting is open */}
-              {(election.status === ElectionStatus.DRAFT || election.status === ElectionStatus.OPEN) && (
-                <div>
-                  <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
-                    Communication
-                  </h4>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={() => setShowPackageModal(true)}
-                      className="rounded-md bg-teal-700 px-4 py-2 text-sm text-white hover:bg-teal-800"
-                    >
-                      Pre-Meeting Package
-                    </button>
-                    {election.status === ElectionStatus.OPEN && (
-                      <button
-                        onClick={() => setShowSendEmailModal(true)}
-                        disabled={!canEmailBallots}
-                        aria-describedby={canEmailBallots ? undefined : 'send-ballot-unavailable'}
-                        className="btn-primary text-sm"
-                      >
-                        {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
-                      </button>
-                    )}
-                    {/* The emailed ballot carries ballot items and plain positions.
-                        The reason used to be a hover title on a disabled button,
-                        which a phone, a keyboard and a screen reader never show. */}
-                    {/* The sent stamp below only appears after a send; without
-                        this an opened election looks finished while no member
-                        has been told voting is open. */}
-                    {election.status === ElectionStatus.OPEN && canEmailBallots && !election.email_sent && (
-                      <p className="text-theme-text-secondary w-full text-sm">
-                        Ballots have not been emailed yet. Members can already vote on this page; Send Ballot Emails
-                        tells them voting is open and gives each a ballot link.
+                    {election.status === ElectionStatus.DRAFT && (
+                      <p className="text-theme-text-secondary mb-3 text-sm">
+                        Next: add at least one candidate on the Candidates tab, or a ballot item on the Ballot tab, then
+                        select Open Election at the top of the page. Opening does not email ballots; send them with Send
+                        Ballot Emails once voting is open.
                       </p>
                     )}
-                    {election.status === ElectionStatus.OPEN && !canEmailBallots && (
-                      <p id="send-ballot-unavailable" className="text-theme-text-muted w-full text-xs">
-                        Ballot emails need ballot items or positions, and the ballot cannot change while voting is open.
-                        Members can vote in the app.
-                      </p>
-                    )}
-                    {/* email_sent_at is the ballot-send stamp only: a reminder
-                      stamps reminder_sent_at and leaves it alone (W50-27), so the
-                      two are shown as two stamps rather than one that moves. */}
-                    {election.status === ElectionStatus.OPEN && election.email_sent && (
-                      <span className="text-theme-text-muted inline-flex items-center gap-1 text-xs">
-                        <svg
-                          className="h-4 w-4 text-green-700 dark:text-green-600"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                          aria-hidden="true"
+                    <div className="flex flex-wrap gap-2">
+                      {election.ballot_items && election.ballot_items.length > 0 && (
+                        <button
+                          onClick={() => {
+                            void handleOpenPreview();
+                          }}
+                          disabled={loadingPreview}
+                          className="rounded-md bg-cyan-700 px-4 py-2 text-sm text-white hover:bg-cyan-800 disabled:opacity-50"
                         >
-                          <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-                          <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-                        </svg>
-                        Ballots sent {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'N/A'}
-                      </span>
-                    )}
-                    {featureFlags.reminders_enabled &&
-                      election.status === ElectionStatus.OPEN &&
-                      election.email_sent && (
+                          {loadingPreview ? 'Loading Preview...' : 'Preview Ballot'}
+                        </button>
+                      )}
+
+                      {election.status === ElectionStatus.DRAFT && (
                         <>
                           <button
                             onClick={() => {
-                              void handleOpenRemindModal();
+                              setShowEditDatesModal(true);
                             }}
-                            disabled={isLoadingNonVoters}
-                            className="rounded-md bg-amber-700 px-4 py-2 text-sm text-white hover:bg-amber-800 disabled:opacity-50"
+                            className="rounded-md bg-purple-600 px-4 py-2 text-sm text-white hover:bg-purple-700"
                           >
-                            {isLoadingNonVoters ? 'Loading...' : 'Remind Non-Voters'}
+                            Edit Dates
                           </button>
-                          {election.reminder_sent_at && (
-                            <span className="text-theme-text-muted inline-flex items-center gap-1 text-xs">
-                              Reminder sent {formatDateTime(election.reminder_sent_at, tz)}
-                            </span>
+                          {featureFlags.nominations_enabled && (election.positions?.length ?? 0) > 0 && (
+                            <button
+                              onClick={() => {
+                                void handleOpenNominations();
+                              }}
+                              className="rounded-md bg-amber-700 px-4 py-2 text-sm text-white hover:bg-amber-800"
+                            >
+                              Open Nominations
+                            </button>
                           )}
                         </>
                       )}
-                  </div>
-                </div>
-              )}
 
-              {/* Danger Zone */}
-              {election.status !== ElectionStatus.CANCELLED && (
-                <div>
-                  <h4 className="mb-2 text-xs font-semibold tracking-wider text-red-800 uppercase dark:text-red-300">
-                    Danger Zone
-                  </h4>
-                  <button
-                    onClick={() => setShowDeleteModal(true)}
-                    className={`rounded-md px-4 py-2 text-sm ${
-                      isDraft
-                        ? 'bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface-secondary'
-                        : 'bg-red-800 text-white hover:bg-red-900'
-                    }`}
-                  >
-                    Delete Election
-                  </button>
+                      {election.status === ElectionStatus.OPEN && (
+                        <>
+                          <button
+                            onClick={() => setShowTurnout((s) => !s)}
+                            className="rounded-md bg-sky-700 px-4 py-2 text-sm text-white hover:bg-sky-800"
+                          >
+                            {showTurnout ? 'Hide Live Turnout' : 'Live Turnout'}
+                          </button>
+                          {featureFlags.paper_ballots_enabled && (
+                            <button
+                              onClick={() => {
+                                void handleShowPaperBallots();
+                              }}
+                              className="rounded-md bg-teal-700 px-4 py-2 text-sm text-white hover:bg-teal-800"
+                            >
+                              Record Paper Ballots
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setShowExtendModal(true);
+                            }}
+                            className="rounded-md bg-purple-600 px-4 py-2 text-sm text-white hover:bg-purple-700"
+                          >
+                            Extend Time
+                          </button>
+                        </>
+                      )}
+
+                      {(election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED) && (
+                        <>
+                          <button
+                            onClick={() => setShowRollbackModal(true)}
+                            disabled={rollbackBlockedReason !== null}
+                            aria-describedby={rollbackBlockedReason !== null ? 'rollback-blocked-reason' : undefined}
+                            className="rounded-md bg-orange-700 px-4 py-2 text-sm text-white hover:bg-orange-800 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Roll Back
+                          </button>
+                          {rollbackBlockedReason !== null && (
+                            <p id="rollback-blocked-reason" className="text-theme-text-muted basis-full text-xs">
+                              {rollbackBlockedReason}
+                            </p>
+                          )}
+                        </>
+                      )}
+
+                      {/* A ballot built only in the Ballot Builder (motions, membership
+                      votes) has no plain positions but still prints: the server
+                      accepts positions or ballot items, and so does the button. */}
+                      {election.status !== ElectionStatus.CLOSED &&
+                        election.status !== ElectionStatus.CANCELLED &&
+                        ((election.positions?.length ?? 0) > 0 || (election.ballot_items?.length ?? 0) > 0) && (
+                          <button
+                            onClick={() => {
+                              void handleDownloadPrintableBallot();
+                            }}
+                            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm"
+                          >
+                            Print Blank Ballots
+                          </button>
+                        )}
+
+                      {election.allow_write_ins &&
+                        (election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED) && (
+                          <button
+                            onClick={() => {
+                              void handleShowMergeWriteIns();
+                            }}
+                            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm"
+                          >
+                            Merge Write-Ins
+                          </button>
+                        )}
+
+                      <button
+                        onClick={() => {
+                          setCloneError(null);
+                          setShowCloneModal(true);
+                        }}
+                        className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm"
+                      >
+                        Clone Election
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Communication Actions — pre-meeting package is available while
+                drafting; ballot emails only once voting is open */}
+                  {(election.status === ElectionStatus.DRAFT || election.status === ElectionStatus.OPEN) && (
+                    <div>
+                      <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
+                        Communication
+                      </h4>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => setShowPackageModal(true)}
+                          className="rounded-md bg-teal-700 px-4 py-2 text-sm text-white hover:bg-teal-800"
+                        >
+                          Pre-Meeting Package
+                        </button>
+                        {election.status === ElectionStatus.OPEN && (
+                          <button
+                            onClick={() => setShowSendEmailModal(true)}
+                            disabled={!canEmailBallots}
+                            aria-describedby={canEmailBallots ? undefined : 'send-ballot-unavailable'}
+                            className="btn-primary text-sm"
+                          >
+                            {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
+                          </button>
+                        )}
+                        {/* The emailed ballot carries ballot items and plain positions.
+                        The reason used to be a hover title on a disabled button,
+                        which a phone, a keyboard and a screen reader never show. */}
+                        {/* The sent stamp below only appears after a send; without
+                        this an opened election looks finished while no member
+                        has been told voting is open. */}
+                        {election.status === ElectionStatus.OPEN && canEmailBallots && !election.email_sent && (
+                          <p className="text-theme-text-secondary w-full text-sm">
+                            Ballots have not been emailed yet. Members can already vote on this page; Send Ballot Emails
+                            tells them voting is open and gives each a ballot link.
+                          </p>
+                        )}
+                        {election.status === ElectionStatus.OPEN && !canEmailBallots && (
+                          <p id="send-ballot-unavailable" className="text-theme-text-muted w-full text-xs">
+                            Ballot emails need ballot items or positions, and the ballot cannot change while voting is
+                            open. Members can vote in the app.
+                          </p>
+                        )}
+                        {/* email_sent_at is the ballot-send stamp only: a reminder
+                      stamps reminder_sent_at and leaves it alone (W50-27), so the
+                      two are shown as two stamps rather than one that moves. */}
+                        {election.status === ElectionStatus.OPEN && election.email_sent && (
+                          <span className="text-theme-text-muted inline-flex items-center gap-1 text-xs">
+                            <svg
+                              className="h-4 w-4 text-green-700 dark:text-green-600"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                              aria-hidden="true"
+                            >
+                              <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                              <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                            </svg>
+                            Ballots sent {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'N/A'}
+                          </span>
+                        )}
+                        {featureFlags.reminders_enabled &&
+                          election.status === ElectionStatus.OPEN &&
+                          election.email_sent && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  void handleOpenRemindModal();
+                                }}
+                                disabled={isLoadingNonVoters}
+                                className="rounded-md bg-amber-700 px-4 py-2 text-sm text-white hover:bg-amber-800 disabled:opacity-50"
+                              >
+                                {isLoadingNonVoters ? 'Loading...' : 'Remind Non-Voters'}
+                              </button>
+                              {election.reminder_sent_at && (
+                                <span className="text-theme-text-muted inline-flex items-center gap-1 text-xs">
+                                  Reminder sent {formatDateTime(election.reminder_sent_at, tz)}
+                                </span>
+                              )}
+                            </>
+                          )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Danger Zone */}
+                  {election.status !== ElectionStatus.CANCELLED && (
+                    <div>
+                      <h4 className="mb-2 text-xs font-semibold tracking-wider text-red-800 uppercase dark:text-red-300">
+                        Danger Zone
+                      </h4>
+                      <button
+                        onClick={() => setShowDeleteModal(true)}
+                        className={`rounded-md px-4 py-2 text-sm ${
+                          isDraft
+                            ? 'bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface-secondary'
+                            : 'bg-red-800 text-white hover:bg-red-900'
+                        }`}
+                      >
+                        Delete Election
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
 
-        {/* Runoff Chain (multi-stage elections) */}
-        <RunoffChain election={election} />
+            {/* Runoff Chain (multi-stage elections) */}
+            <RunoffChain election={election} />
 
-        {/* Publish Results Panel (secretary - open/closed elections) */}
-        {canManage && electionId && <PublishResultsPanel electionId={electionId} election={election} />}
+            {/* Publish Results Panel (secretary - open/closed elections) */}
+            {canManage && electionId && <PublishResultsPanel electionId={electionId} election={election} />}
 
-        {/* Live turnout dashboard (secretary, meeting night) */}
-        {canManage && showTurnout && election.status === ElectionStatus.OPEN && electionId && (
-          <LiveTurnoutPanel electionId={electionId} election={election} />
+            {/* Live turnout dashboard (secretary, meeting night) */}
+            {canManage && showTurnout && election.status === ElectionStatus.OPEN && electionId && (
+              <LiveTurnoutPanel electionId={electionId} election={election} />
+            )}
+
+            {/* Paper-ballot batches + attestation trail (secretary) */}
+            {canManage && featureFlags.paper_ballots_enabled && paperBatches.length > 0 && (
+              <PaperBallotBatchesPanel
+                batches={paperBatches}
+                currentUserId={currentUser?.id ?? null}
+                electionOpen={election.status === ElectionStatus.OPEN}
+                attestingBatchId={attestingBatchId}
+                onAttest={(batchId) => {
+                  void handleAttestPaperBatch(batchId);
+                }}
+                onVoid={(batchId) => setVoidBatchId(batchId)}
+              />
+            )}
+          </>
         )}
 
-        {/* Paper-ballot batches + attestation trail (secretary) */}
-        {canManage && featureFlags.paper_ballots_enabled && paperBatches.length > 0 && (
-          <PaperBallotBatchesPanel
-            batches={paperBatches}
-            currentUserId={currentUser?.id ?? null}
-            electionOpen={election.status === ElectionStatus.OPEN}
-            attestingBatchId={attestingBatchId}
-            onAttest={(batchId) => {
-              void handleAttestPaperBatch(batchId);
-            }}
-            onVoid={(batchId) => setVoidBatchId(batchId)}
-          />
-        )}
-
-        {/* Tabbed Workflow (secretary) */}
+        {/* The open section. A member sees no section links: their Overview
+            carries whichever of nominations, voting and results applies. */}
         {electionId && (
           <>
-            <ElectionWorkflowTabs
-              election={election}
-              canManage={canManage}
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-              candidateCount={candidateCount}
-            />
-
-            <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+            <div>
               {/* Tab: Ballot Builder */}
-              {activeTab === 'ballot' && canManage && election.status !== ElectionStatus.CANCELLED && (
+              {showsSection('ballot') && canManage && election.status !== ElectionStatus.CANCELLED && (
                 <div className="mb-6 space-y-6">
                   <BallotBuilder
                     electionId={electionId}
@@ -2004,7 +1931,7 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {/* Tab: Nominations */}
-              {activeTab === 'nominations' && election.status !== ElectionStatus.CANCELLED && (
+              {showsSection('nominations') && election.status !== ElectionStatus.CANCELLED && (
                 <div className="mb-6 space-y-4">
                   {canManage && election.nominations_announcement && (
                     <NominationsAnnouncementStatus
@@ -2025,7 +1952,7 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {/* Tab: Candidates */}
-              {activeTab === 'candidates' && canManage && (
+              {showsSection('candidates') && canManage && (
                 <div className="mb-6">
                   <CandidateManagement
                     electionId={electionId}
@@ -2036,7 +1963,7 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {/* Tab: Eligibility Roster */}
-              {activeTab === 'eligibility' && canManage && election.status !== ElectionStatus.CANCELLED && (
+              {showsSection('eligibility') && canManage && election.status !== ElectionStatus.CANCELLED && (
                 <div className="mb-6 space-y-6">
                   <ElectionEligibilityRulesPanel
                     key={`${election.status}:${election.meeting_kind ?? MeetingKind.REGULAR}:${JSON.stringify(election.eligibility_rules ?? null)}`}
@@ -2051,28 +1978,28 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {/* Tab: Attendance */}
-              {activeTab === 'attendance' && canManage && election.status !== ElectionStatus.CANCELLED && (
+              {showsSection('attendance') && canManage && election.status !== ElectionStatus.CANCELLED && (
                 <div className="mb-6">
                   <MeetingAttendance electionId={electionId} election={election} onUpdate={setElection} />
                 </div>
               )}
 
               {/* Tab: Voter Overrides */}
-              {activeTab === 'overrides' && canManage && election.status !== ElectionStatus.CANCELLED && (
+              {showsSection('overrides') && canManage && election.status !== ElectionStatus.CANCELLED && (
                 <div className="mb-6">
                   <VoterOverrideManagement electionId={electionId} canManage={canManage} />
                 </div>
               )}
 
               {/* Tab: Proxy Voting */}
-              {activeTab === 'proxies' && canManage && election.status !== ElectionStatus.CANCELLED && (
+              {showsSection('proxies') && canManage && election.status !== ElectionStatus.CANCELLED && (
                 <div className="mb-6">
                   <ProxyVotingManagement electionId={electionId} canManage={canManage} />
                 </div>
               )}
 
               {/* Tab: Cast Vote (when election is open) */}
-              {activeTab === 'voting' && election.status === ElectionStatus.OPEN && (
+              {showsSection('voting') && election.status === ElectionStatus.OPEN && (
                 <div className="mb-6">
                   <ElectionBallot
                     electionId={electionId}
@@ -2085,7 +2012,7 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {/* Tab: Results */}
-              {activeTab === 'results' && resultsAvailable && (
+              {showsSection('results') && resultsAvailable && (
                 <div className="mb-6">
                   <ElectionResults electionId={electionId} election={election} />
                   {/* The Cast Vote tab, which carries the receipt form while
@@ -2105,7 +2032,7 @@ export const ElectionDetailPage: React.FC = () => {
         {/* Message if results not available (non-tabbed fallback for non-admin users) */}
         {/* Only while voting is open: a draft or a nominations phase has
             nothing to vote on yet, so "when the election is closed" misled. */}
-        {!canManage && !resultsAvailable && election.status === ElectionStatus.OPEN && (
+        {!canManage && activeSection === null && !resultsAvailable && election.status === ElectionStatus.OPEN && (
           <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
             <p className="text-sm text-blue-700 dark:text-blue-300">
               Results will be available when the election is closed.
@@ -2116,247 +2043,371 @@ export const ElectionDetailPage: React.FC = () => {
         {/* ==================== */}
         {/* Forensics & Integrity (Admin) */}
         {/* ==================== */}
-        {canManage && electionId && isActiveOrCompleted && (
-          <div className="mt-6">
-            <button
-              onClick={() => {
-                setShowForensics(!showForensics);
-                if (!showForensics && !forensicsReport) {
-                  void handleLoadForensics();
-                }
-              }}
-              className="bg-theme-surface hover:bg-theme-surface-hover flex w-full items-center justify-between rounded-lg p-4 shadow-sm backdrop-blur-xs"
-            >
-              <span className="text-theme-text-primary text-lg font-medium">Forensics &amp; Integrity</span>
-              <svg
-                className={`text-theme-text-muted h-6 w-6 transform transition-transform ${
-                  showForensics ? 'rotate-180' : ''
-                }`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+        {showsSection('integrity') && electionId && (
+          <div className="mb-6">
+            <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">Integrity &amp; Audit</h2>
+            <div className="bg-theme-surface space-y-6 rounded-lg p-6 shadow-sm backdrop-blur-xs">
+              {/* Integrity Check */}
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-md text-theme-text-primary font-semibold">Vote Integrity Check</h3>
+                  <button
+                    onClick={() => {
+                      void handleRunIntegrityCheck();
+                    }}
+                    disabled={loadingIntegrity}
+                    className="btn-info rounded-md px-3 py-1.5 text-sm"
+                  >
+                    {loadingIntegrity ? 'Checking...' : integrityResult ? 'Re-run Check' : 'Run Check'}
+                  </button>
+                </div>
 
-            {showForensics && (
-              <div className="bg-theme-surface mt-2 space-y-6 rounded-lg p-6 shadow-sm backdrop-blur-xs">
-                {/* Integrity Check */}
-                <div>
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-md text-theme-text-primary font-semibold">Vote Integrity Check</h3>
-                    <button
-                      onClick={() => {
-                        void handleRunIntegrityCheck();
-                      }}
-                      disabled={loadingIntegrity}
-                      className="btn-info rounded-md px-3 py-1.5 text-sm"
-                    >
-                      {loadingIntegrity ? 'Checking...' : integrityResult ? 'Re-run Check' : 'Run Check'}
-                    </button>
-                  </div>
-
-                  {integrityResult && (
-                    <div
-                      className={`rounded-lg border p-4 ${
-                        integrityResult.integrity_status === 'PASS'
-                          ? 'border-green-500/30 bg-green-500/10'
-                          : 'border-red-500/30 bg-red-500/10'
-                      }`}
-                    >
-                      <div className="mb-2 flex items-center gap-2">
-                        <span
-                          className={`text-lg font-bold ${
-                            integrityResult.integrity_status === 'PASS'
-                              ? 'text-green-700 dark:text-green-300'
-                              : 'text-red-700 dark:text-red-300'
-                          }`}
-                        >
-                          {integrityResult.integrity_status}
-                        </span>
-                        <span className="text-theme-text-secondary text-sm">
-                          ({integrityResult.valid_signatures}/{integrityResult.total_votes} valid signatures)
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
-                        <div>
-                          <span className="text-theme-text-muted">Votes checked:</span>{' '}
-                          <span className="text-theme-text-primary font-medium">{integrityResult.total_votes}</span>{' '}
-                          {/* Every chained row is checked, but only counted
+                {integrityResult && (
+                  <div
+                    className={`rounded-lg border p-4 ${
+                      integrityResult.integrity_status === 'PASS'
+                        ? 'border-green-500/30 bg-green-500/10'
+                        : 'border-red-500/30 bg-red-500/10'
+                    }`}
+                  >
+                    <div className="mb-2 flex items-center gap-2">
+                      <span
+                        className={`text-lg font-bold ${
+                          integrityResult.integrity_status === 'PASS'
+                            ? 'text-green-700 dark:text-green-300'
+                            : 'text-red-700 dark:text-red-300'
+                        }`}
+                      >
+                        {integrityResult.integrity_status}
+                      </span>
+                      <span className="text-theme-text-secondary text-sm">
+                        ({integrityResult.valid_signatures}/{integrityResult.total_votes} valid signatures)
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+                      <div>
+                        <span className="text-theme-text-muted">Votes checked:</span>{' '}
+                        <span className="text-theme-text-primary font-medium">{integrityResult.total_votes}</span>{' '}
+                        {/* Every chained row is checked, but only counted
                               votes are in the tally (W50-65) */}
-                          <span className="text-theme-text-muted">
-                            ({integrityResult.counted_votes} counted, {integrityResult.pending_paper_votes} pending
-                            paper, {integrityResult.test_votes} test)
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-theme-text-muted">Valid:</span>{' '}
-                          <span className="font-medium text-green-700 dark:text-green-300">
-                            {integrityResult.valid_signatures}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-theme-text-muted">Unsigned:</span>{' '}
-                          <span className="font-medium text-yellow-700 dark:text-yellow-300">
-                            {integrityResult.unsigned_votes}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-theme-text-muted">Tampered:</span>{' '}
-                          <span
-                            className={`font-medium ${integrityResult.tampered_votes > 0 ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}
-                          >
-                            {integrityResult.tampered_votes}
-                          </span>
-                        </div>
+                        <span className="text-theme-text-muted">
+                          ({integrityResult.counted_votes} counted, {integrityResult.pending_paper_votes} pending paper,{' '}
+                          {integrityResult.test_votes} test)
+                        </span>
                       </div>
-                      {/* Vote chain verification status */}
-                      <div className="mt-3 flex items-center gap-2 text-sm">
-                        <span className="text-theme-text-muted">Vote Chain:</span>
-                        {integrityResult.chain_verified ? (
-                          <span className="font-medium text-green-700 dark:text-green-300">Verified</span>
-                        ) : (
-                          <span className="font-medium text-red-700 dark:text-red-300">
-                            Broken{integrityResult.chain_break_at ? ` at vote ${integrityResult.chain_break_at}` : ''}
-                          </span>
-                        )}
+                      <div>
+                        <span className="text-theme-text-muted">Valid:</span>{' '}
+                        <span className="font-medium text-green-700 dark:text-green-300">
+                          {integrityResult.valid_signatures}
+                        </span>
                       </div>
-                      {/* A sanctioned void stays in the chain and is verified
-                          with it, so it is listed here rather than reading as
-                          a broken chain (W50-31). */}
-                      {(integrityResult.voids ?? []).length > 0 && (
-                        <ul className="text-theme-text-secondary mt-3 space-y-1 text-sm" data-testid="integrity-voids">
-                          {(integrityResult.voids ?? []).map((v) => (
-                            <li key={`${v.voided_by ?? ''}-${v.reason}-${v.voided_at ?? ''}`}>
-                              {v.count} vote(s) voided by {v.voided_by_name || 'an officer'}:{' '}
-                              {v.reason || 'no reason recorded'}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      {integrityResult.tampered_vote_ids.length > 0 && (
-                        <div className="mt-3 rounded-sm bg-red-500/20 p-3">
-                          <p className="mb-1 text-sm font-semibold text-red-700 dark:text-red-300">
-                            Tampered Vote IDs:
-                          </p>
-                          <div className="space-y-1">
-                            {integrityResult.tampered_vote_ids.map((id) => (
-                              <div key={id} className="flex items-center gap-2">
-                                <code className="rounded-sm bg-red-500/10 px-2 py-0.5 text-xs text-red-700 dark:text-red-300">
-                                  {id}
-                                </code>
-                                <button
-                                  onClick={() => setVoidVoteId(id)}
-                                  className="text-xs text-red-600 underline hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                                >
-                                  Void this vote
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                      <div>
+                        <span className="text-theme-text-muted">Unsigned:</span>{' '}
+                        <span className="font-medium text-yellow-700 dark:text-yellow-300">
+                          {integrityResult.unsigned_votes}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-theme-text-muted">Tampered:</span>{' '}
+                        <span
+                          className={`font-medium ${integrityResult.tampered_votes > 0 ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}
+                        >
+                          {integrityResult.tampered_votes}
+                        </span>
+                      </div>
+                    </div>
+                    {/* Vote chain verification status */}
+                    <div className="mt-3 flex items-center gap-2 text-sm">
+                      <span className="text-theme-text-muted">Vote Chain:</span>
+                      {integrityResult.chain_verified ? (
+                        <span className="font-medium text-green-700 dark:text-green-300">Verified</span>
+                      ) : (
+                        <span className="font-medium text-red-700 dark:text-red-300">
+                          Broken{integrityResult.chain_break_at ? ` at vote ${integrityResult.chain_break_at}` : ''}
+                        </span>
                       )}
                     </div>
-                  )}
-                </div>
-
-                {/* Void Vote Form */}
-                <div className="border-theme-surface-border border-t pt-4">
-                  <h3 className="text-md text-theme-text-primary mb-3 font-semibold">Void a Vote</h3>
-                  <p className="text-theme-text-muted mb-3 text-sm">
-                    Removes a vote from the results. The vote record is kept, and the void is logged in the audit trail.
-                  </p>
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <input
-                      type="text"
-                      value={voidVoteId}
-                      onChange={(e) => setVoidVoteId(e.target.value)}
-                      placeholder="Vote ID (UUID)"
-                      aria-label="Vote ID (UUID)"
-                      className="form-input flex-1 shadow-xs"
-                    />
-                    <input
-                      type="text"
-                      value={voidVoteReason}
-                      onChange={(e) => setVoidVoteReason(e.target.value)}
-                      placeholder="Reason for voiding"
-                      aria-label="Reason for voiding"
-                      className="form-input flex-1 shadow-xs"
-                    />
-                    <button
-                      onClick={() => {
-                        void handleVoidVote();
-                      }}
-                      disabled={isVoidingVote || !voidVoteId.trim() || !voidVoteReason.trim()}
-                      className="btn-primary rounded-md text-sm whitespace-nowrap"
-                    >
-                      {isVoidingVote ? 'Voiding...' : 'Void Vote'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Forensics Report Detail */}
-                {loadingForensics && (
-                  <div className="text-theme-text-muted py-4 text-center" role="status" aria-live="polite">
-                    Loading forensics report...
+                    {/* A sanctioned void stays in the chain and is verified
+                          with it, so it is listed here rather than reading as
+                          a broken chain (W50-31). */}
+                    {(integrityResult.voids ?? []).length > 0 && (
+                      <ul className="text-theme-text-secondary mt-3 space-y-1 text-sm" data-testid="integrity-voids">
+                        {(integrityResult.voids ?? []).map((v) => (
+                          <li key={`${v.voided_by ?? ''}-${v.reason}-${v.voided_at ?? ''}`}>
+                            {v.count} vote(s) voided by {v.voided_by_name || 'an officer'}:{' '}
+                            {v.reason || 'no reason recorded'}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {integrityResult.tampered_vote_ids.length > 0 && (
+                      <div className="mt-3 rounded-sm bg-red-500/20 p-3">
+                        <p className="mb-1 text-sm font-semibold text-red-700 dark:text-red-300">Tampered Vote IDs:</p>
+                        <div className="space-y-1">
+                          {integrityResult.tampered_vote_ids.map((id) => (
+                            <div key={id} className="flex items-center gap-2">
+                              <code className="rounded-sm bg-red-500/10 px-2 py-0.5 text-xs text-red-700 dark:text-red-300">
+                                {id}
+                              </code>
+                              <button
+                                onClick={() => setVoidVoteId(id)}
+                                className="text-xs text-red-600 underline hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                              >
+                                Void this vote
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
+              </div>
 
-                {forensicsReport && (
-                  <>
-                    {/* Deleted Votes */}
+              {/* Void Vote Form */}
+              <div className="border-theme-surface-border border-t pt-4">
+                <h3 className="text-md text-theme-text-primary mb-3 font-semibold">Void a Vote</h3>
+                <p className="text-theme-text-muted mb-3 text-sm">
+                  Removes a vote from the results. The vote record is kept, and the void is logged in the audit trail.
+                </p>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <input
+                    type="text"
+                    value={voidVoteId}
+                    onChange={(e) => setVoidVoteId(e.target.value)}
+                    placeholder="Vote ID (UUID)"
+                    aria-label="Vote ID (UUID)"
+                    className="form-input flex-1 shadow-xs"
+                  />
+                  <input
+                    type="text"
+                    value={voidVoteReason}
+                    onChange={(e) => setVoidVoteReason(e.target.value)}
+                    placeholder="Reason for voiding"
+                    aria-label="Reason for voiding"
+                    className="form-input flex-1 shadow-xs"
+                  />
+                  <button
+                    onClick={() => {
+                      void handleVoidVote();
+                    }}
+                    disabled={isVoidingVote || !voidVoteId.trim() || !voidVoteReason.trim()}
+                    className="btn-primary rounded-md text-sm whitespace-nowrap"
+                  >
+                    {isVoidingVote ? 'Voiding...' : 'Void Vote'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Forensics Report Detail */}
+              {loadingForensics && (
+                <div className="text-theme-text-muted py-4 text-center" role="status" aria-live="polite">
+                  Loading forensics report...
+                </div>
+              )}
+
+              {forensicsReport && (
+                <>
+                  {/* Deleted Votes */}
+                  <div className="border-theme-surface-border border-t pt-4">
+                    <h3 className="text-md text-theme-text-primary mb-2 font-semibold">
+                      Voided Votes ({forensicsReport.deleted_votes.count})
+                      {forensicsReport.deleted_votes.paper_batch_count > 0 &&
+                        ` — ${forensicsReport.deleted_votes.paper_batch_count} paper batch${forensicsReport.deleted_votes.paper_batch_count === 1 ? '' : 'es'} voided`}
+                    </h3>
+                    {forensicsReport.deleted_votes.count === 0 ? (
+                      <p className="text-theme-text-muted text-sm">No votes have been voided.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm" aria-label="Voided votes">
+                          <thead className="bg-theme-surface-secondary">
+                            <tr>
+                              <th scope="col" className="text-theme-text-muted px-3 py-2 text-left text-xs font-medium">
+                                Vote ID
+                              </th>
+                              <th scope="col" className="text-theme-text-muted px-3 py-2 text-left text-xs font-medium">
+                                Position
+                              </th>
+                              <th scope="col" className="text-theme-text-muted px-3 py-2 text-left text-xs font-medium">
+                                Reason
+                              </th>
+                              <th scope="col" className="text-theme-text-muted px-3 py-2 text-left text-xs font-medium">
+                                Voided At
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-theme-surface-border divide-y">
+                            {groupVoidedVotes(forensicsReport.deleted_votes.records).map((v) => (
+                              <tr key={v.key}>
+                                <td className="px-3 py-2 font-mono text-xs">
+                                  {v.batch_size !== null
+                                    ? `paper batch voided (${v.batch_size} ballot${v.batch_size === 1 ? '' : 's'})`
+                                    : `${v.vote_id.slice(0, 8)}...`}
+                                </td>
+                                <td className="px-3 py-2">{v.position || '—'}</td>
+                                <td className="px-3 py-2">{v.deletion_reason || '—'}</td>
+                                <td className="px-3 py-2">{v.deleted_at ? formatDateTime(v.deleted_at, tz) : '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Anomaly Detection */}
+                  {forensicsReport.anomaly_detection &&
+                    Object.keys(forensicsReport.anomaly_detection.suspicious_ips || {}).length > 0 && (
+                      <div className="border-theme-surface-border border-t pt-4">
+                        <h3 className="text-md mb-2 font-semibold text-red-700 dark:text-red-300">
+                          Suspicious IP Addresses
+                        </h3>
+                        <div className="rounded-sm border border-red-500/30 bg-red-500/10 p-3">
+                          {Object.entries(forensicsReport.anomaly_detection.suspicious_ips).map(([ip, count]) => (
+                            <div key={ip} className="flex justify-between py-1 text-sm">
+                              <code className="text-red-700 dark:text-red-300">{ip}</code>
+                              <span className="font-semibold text-red-700 dark:text-red-300">
+                                {count} {count === 1 ? 'vote' : 'votes'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                  {/* Voting Timeline */}
+                  {forensicsReport.voting_timeline && Object.keys(forensicsReport.voting_timeline).length > 0 && (
                     <div className="border-theme-surface-border border-t pt-4">
                       <h3 className="text-md text-theme-text-primary mb-2 font-semibold">
-                        Voided Votes ({forensicsReport.deleted_votes.count})
-                        {forensicsReport.deleted_votes.paper_batch_count > 0 &&
-                          ` — ${forensicsReport.deleted_votes.paper_batch_count} paper batch${forensicsReport.deleted_votes.paper_batch_count === 1 ? '' : 'es'} voided`}
+                        Voting Timeline
+                        {/* Buckets are keyed in the zone the backend chose,
+                              so the key is printed as sent and the zone named
+                              instead of re-converting it (W50-65) */}
+                        {forensicsReport.voting_timeline_timezone && (
+                          <span className="text-theme-text-muted ml-2 text-sm font-normal">
+                            (times in {forensicsReport.voting_timeline_timezone})
+                          </span>
+                        )}
                       </h3>
-                      {forensicsReport.deleted_votes.count === 0 ? (
-                        <p className="text-theme-text-muted text-sm">No votes have been voided.</p>
+                      <div className="space-y-1">
+                        {Object.entries(forensicsReport.voting_timeline)
+                          .sort(([a], [b]) => a.localeCompare(b))
+                          .map(([hour, count]) => (
+                            <div key={hour} className="flex items-center gap-3 text-sm">
+                              <span className="text-theme-text-muted w-40 font-mono">{hour}</span>
+                              <div className="bg-theme-surface h-4 flex-1 rounded-full">
+                                <div
+                                  className="h-4 rounded-full bg-blue-600"
+                                  style={{
+                                    width: `${Math.min(
+                                      100,
+                                      (Number(count) /
+                                        Math.max(...Object.values(forensicsReport.voting_timeline).map(Number))) *
+                                        100
+                                    )}%`,
+                                  }}
+                                />
+                              </div>
+                              <span className="text-theme-text-secondary w-8 text-right font-medium">{count}</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Token Summary */}
+                  <div className="border-theme-surface-border border-t pt-4">
+                    <h3 className="text-md text-theme-text-primary mb-2 font-semibold">Ballot Tokens</h3>
+                    {/* issued = live + superseded + used (+ expired); a
+                          resent ballot's old token is superseded, not
+                          "unused" (W50-65) */}
+                    <StatGrid columns={5} className="text-sm">
+                      <div className="bg-theme-surface-secondary rounded-sm p-3">
+                        <div className="text-theme-text-muted">Issued</div>
+                        <div className="text-theme-text-primary text-xl font-semibold">
+                          {forensicsReport.voting_tokens.total_issued}
+                        </div>
+                      </div>
+                      <div className="bg-theme-surface-secondary rounded-sm p-3">
+                        <div className="text-theme-text-muted">Live</div>
+                        <div className="text-theme-text-primary text-xl font-semibold">
+                          {forensicsReport.voting_tokens.total_live}
+                        </div>
+                      </div>
+                      <div className="bg-theme-surface-secondary rounded-sm p-3">
+                        <div className="text-theme-text-muted">Superseded</div>
+                        <div className="text-theme-text-primary text-xl font-semibold">
+                          {forensicsReport.voting_tokens.total_superseded}
+                        </div>
+                      </div>
+                      <div className="bg-theme-surface-secondary rounded-sm p-3">
+                        <div className="text-theme-text-muted">Used</div>
+                        <div className="text-theme-text-primary text-xl font-semibold">
+                          {forensicsReport.voting_tokens.total_used}
+                        </div>
+                      </div>
+                      <div className="bg-theme-surface-secondary rounded-sm p-3">
+                        <div className="text-theme-text-muted">Expired</div>
+                        <div className="text-theme-text-primary text-xl font-semibold">
+                          {forensicsReport.voting_tokens.total_expired}
+                        </div>
+                      </div>
+                    </StatGrid>
+                  </div>
+
+                  {/* Audit Log Summary */}
+                  {forensicsReport.audit_log && (
+                    <div className="border-theme-surface-border border-t pt-4">
+                      <h3 className="text-md text-theme-text-primary mb-2 font-semibold">
+                        Audit Log ({forensicsReport.audit_log.total_entries} entries)
+                      </h3>
+                      {(forensicsReport.audit_log.entries || []).length === 0 ? (
+                        <p className="text-theme-text-muted text-sm">No audit entries.</p>
                       ) : (
-                        <div className="overflow-x-auto">
-                          <table className="min-w-full text-sm" aria-label="Voided votes">
-                            <thead className="bg-theme-surface-secondary">
+                        <div className="max-h-64 overflow-x-auto overflow-y-auto">
+                          <table className="min-w-full text-sm" aria-label="Audit log entries">
+                            <thead className="surface-secondary-opaque sticky top-0">
                               <tr>
                                 <th
                                   scope="col"
                                   className="text-theme-text-muted px-3 py-2 text-left text-xs font-medium"
                                 >
-                                  Vote ID
+                                  Time
                                 </th>
                                 <th
                                   scope="col"
                                   className="text-theme-text-muted px-3 py-2 text-left text-xs font-medium"
                                 >
-                                  Position
+                                  Event
                                 </th>
                                 <th
                                   scope="col"
                                   className="text-theme-text-muted px-3 py-2 text-left text-xs font-medium"
                                 >
-                                  Reason
-                                </th>
-                                <th
-                                  scope="col"
-                                  className="text-theme-text-muted px-3 py-2 text-left text-xs font-medium"
-                                >
-                                  Voided At
+                                  Severity
                                 </th>
                               </tr>
                             </thead>
                             <tbody className="divide-theme-surface-border divide-y">
-                              {groupVoidedVotes(forensicsReport.deleted_votes.records).map((v) => (
-                                <tr key={v.key}>
-                                  <td className="px-3 py-2 font-mono text-xs">
-                                    {v.batch_size !== null
-                                      ? `paper batch voided (${v.batch_size} ballot${v.batch_size === 1 ? '' : 's'})`
-                                      : `${v.vote_id.slice(0, 8)}...`}
+                              {(forensicsReport.audit_log.entries || []).slice(0, 50).map((entry, i) => (
+                                <tr key={entry.id || i}>
+                                  <td className="text-theme-text-muted px-3 py-2 text-xs whitespace-nowrap">
+                                    {entry.timestamp ? formatDateTime(entry.timestamp, tz) : '—'}
                                   </td>
-                                  <td className="px-3 py-2">{v.position || '—'}</td>
-                                  <td className="px-3 py-2">{v.deletion_reason || '—'}</td>
-                                  <td className="px-3 py-2">{v.deleted_at ? formatDateTime(v.deleted_at, tz) : '—'}</td>
+                                  <td className="px-3 py-2 text-xs">{entry.event_type}</td>
+                                  <td className="px-3 py-2">
+                                    <span
+                                      className={`rounded px-2 py-0.5 text-xs ${
+                                        entry.severity === 'critical'
+                                          ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+                                          : entry.severity === 'warning'
+                                            ? 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400'
+                                            : 'bg-theme-surface-secondary text-theme-text-muted'
+                                      }`}
+                                    >
+                                      {entry.severity || 'info'}
+                                    </span>
+                                  </td>
                                 </tr>
                               ))}
                             </tbody>
@@ -2364,184 +2415,22 @@ export const ElectionDetailPage: React.FC = () => {
                         </div>
                       )}
                     </div>
+                  )}
 
-                    {/* Anomaly Detection */}
-                    {forensicsReport.anomaly_detection &&
-                      Object.keys(forensicsReport.anomaly_detection.suspicious_ips || {}).length > 0 && (
-                        <div className="border-theme-surface-border border-t pt-4">
-                          <h3 className="text-md mb-2 font-semibold text-red-700 dark:text-red-300">
-                            Suspicious IP Addresses
-                          </h3>
-                          <div className="rounded-sm border border-red-500/30 bg-red-500/10 p-3">
-                            {Object.entries(forensicsReport.anomaly_detection.suspicious_ips).map(([ip, count]) => (
-                              <div key={ip} className="flex justify-between py-1 text-sm">
-                                <code className="text-red-700 dark:text-red-300">{ip}</code>
-                                <span className="font-semibold text-red-700 dark:text-red-300">
-                                  {count} {count === 1 ? 'vote' : 'votes'}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                    {/* Voting Timeline */}
-                    {forensicsReport.voting_timeline && Object.keys(forensicsReport.voting_timeline).length > 0 && (
-                      <div className="border-theme-surface-border border-t pt-4">
-                        <h3 className="text-md text-theme-text-primary mb-2 font-semibold">
-                          Voting Timeline
-                          {/* Buckets are keyed in the zone the backend chose,
-                              so the key is printed as sent and the zone named
-                              instead of re-converting it (W50-65) */}
-                          {forensicsReport.voting_timeline_timezone && (
-                            <span className="text-theme-text-muted ml-2 text-sm font-normal">
-                              (times in {forensicsReport.voting_timeline_timezone})
-                            </span>
-                          )}
-                        </h3>
-                        <div className="space-y-1">
-                          {Object.entries(forensicsReport.voting_timeline)
-                            .sort(([a], [b]) => a.localeCompare(b))
-                            .map(([hour, count]) => (
-                              <div key={hour} className="flex items-center gap-3 text-sm">
-                                <span className="text-theme-text-muted w-40 font-mono">{hour}</span>
-                                <div className="bg-theme-surface h-4 flex-1 rounded-full">
-                                  <div
-                                    className="h-4 rounded-full bg-blue-600"
-                                    style={{
-                                      width: `${Math.min(
-                                        100,
-                                        (Number(count) /
-                                          Math.max(...Object.values(forensicsReport.voting_timeline).map(Number))) *
-                                          100
-                                      )}%`,
-                                    }}
-                                  />
-                                </div>
-                                <span className="text-theme-text-secondary w-8 text-right font-medium">{count}</span>
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Token Summary */}
-                    <div className="border-theme-surface-border border-t pt-4">
-                      <h3 className="text-md text-theme-text-primary mb-2 font-semibold">Ballot Tokens</h3>
-                      {/* issued = live + superseded + used (+ expired); a
-                          resent ballot's old token is superseded, not
-                          "unused" (W50-65) */}
-                      <StatGrid columns={5} className="text-sm">
-                        <div className="bg-theme-surface-secondary rounded-sm p-3">
-                          <div className="text-theme-text-muted">Issued</div>
-                          <div className="text-theme-text-primary text-xl font-semibold">
-                            {forensicsReport.voting_tokens.total_issued}
-                          </div>
-                        </div>
-                        <div className="bg-theme-surface-secondary rounded-sm p-3">
-                          <div className="text-theme-text-muted">Live</div>
-                          <div className="text-theme-text-primary text-xl font-semibold">
-                            {forensicsReport.voting_tokens.total_live}
-                          </div>
-                        </div>
-                        <div className="bg-theme-surface-secondary rounded-sm p-3">
-                          <div className="text-theme-text-muted">Superseded</div>
-                          <div className="text-theme-text-primary text-xl font-semibold">
-                            {forensicsReport.voting_tokens.total_superseded}
-                          </div>
-                        </div>
-                        <div className="bg-theme-surface-secondary rounded-sm p-3">
-                          <div className="text-theme-text-muted">Used</div>
-                          <div className="text-theme-text-primary text-xl font-semibold">
-                            {forensicsReport.voting_tokens.total_used}
-                          </div>
-                        </div>
-                        <div className="bg-theme-surface-secondary rounded-sm p-3">
-                          <div className="text-theme-text-muted">Expired</div>
-                          <div className="text-theme-text-primary text-xl font-semibold">
-                            {forensicsReport.voting_tokens.total_expired}
-                          </div>
-                        </div>
-                      </StatGrid>
-                    </div>
-
-                    {/* Audit Log Summary */}
-                    {forensicsReport.audit_log && (
-                      <div className="border-theme-surface-border border-t pt-4">
-                        <h3 className="text-md text-theme-text-primary mb-2 font-semibold">
-                          Audit Log ({forensicsReport.audit_log.total_entries} entries)
-                        </h3>
-                        {(forensicsReport.audit_log.entries || []).length === 0 ? (
-                          <p className="text-theme-text-muted text-sm">No audit entries.</p>
-                        ) : (
-                          <div className="max-h-64 overflow-x-auto overflow-y-auto">
-                            <table className="min-w-full text-sm" aria-label="Audit log entries">
-                              <thead className="surface-secondary-opaque sticky top-0">
-                                <tr>
-                                  <th
-                                    scope="col"
-                                    className="text-theme-text-muted px-3 py-2 text-left text-xs font-medium"
-                                  >
-                                    Time
-                                  </th>
-                                  <th
-                                    scope="col"
-                                    className="text-theme-text-muted px-3 py-2 text-left text-xs font-medium"
-                                  >
-                                    Event
-                                  </th>
-                                  <th
-                                    scope="col"
-                                    className="text-theme-text-muted px-3 py-2 text-left text-xs font-medium"
-                                  >
-                                    Severity
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-theme-surface-border divide-y">
-                                {(forensicsReport.audit_log.entries || []).slice(0, 50).map((entry, i) => (
-                                  <tr key={entry.id || i}>
-                                    <td className="text-theme-text-muted px-3 py-2 text-xs whitespace-nowrap">
-                                      {entry.timestamp ? formatDateTime(entry.timestamp, tz) : '—'}
-                                    </td>
-                                    <td className="px-3 py-2 text-xs">{entry.event_type}</td>
-                                    <td className="px-3 py-2">
-                                      <span
-                                        className={`rounded px-2 py-0.5 text-xs ${
-                                          entry.severity === 'critical'
-                                            ? 'bg-red-500/10 text-red-700 dark:text-red-400'
-                                            : entry.severity === 'warning'
-                                              ? 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400'
-                                              : 'bg-theme-surface-secondary text-theme-text-muted'
-                                        }`}
-                                      >
-                                        {entry.severity || 'info'}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="border-theme-surface-border border-t pt-3">
-                      <button
-                        onClick={() => {
-                          void handleLoadForensics();
-                        }}
-                        disabled={loadingForensics}
-                        className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50 dark:text-blue-400 dark:hover:text-blue-300"
-                      >
-                        {loadingForensics ? 'Refreshing...' : 'Refresh Forensics Report'}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+                  <div className="border-theme-surface-border border-t pt-3">
+                    <button
+                      onClick={() => {
+                        void handleLoadForensics();
+                      }}
+                      disabled={loadingForensics}
+                      className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      {loadingForensics ? 'Refreshing...' : 'Refresh Forensics Report'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         )}
 

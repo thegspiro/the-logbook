@@ -30,9 +30,11 @@ vi.mock('../modules/prospective-members/services/api', () => ({
   electionPackageService: { getPendingPackages: vi.fn().mockResolvedValue([]) },
   applicantService: { assignToElection: vi.fn() },
 }));
+// The section open in the test; the Overview unless a test opens one.
+let mockParams: Record<string, string> = { electionId: 'e-1' };
 vi.mock('react-router', async () => {
   const actual = await vi.importActual<typeof import('react-router')>('react-router');
-  return { ...actual, useParams: () => ({ electionId: 'e-1' }) };
+  return { ...actual, useParams: () => mockParams };
 });
 vi.mock('../stores/authStore', () => {
   const state = { checkPermission: () => true, user: { id: 'u-1' } };
@@ -123,30 +125,32 @@ describe('ElectionDetailPage Candidates tab count', () => {
     getElection.mockResolvedValue(draft);
     getCandidates.mockReset();
     getCandidates.mockResolvedValue([...nominees, itemOption]);
+    mockParams = { electionId: 'e-1' };
   });
 
   it('counts the nominees on the tab, leaving out ballot-item options', async () => {
     renderWithRouter(<ElectionDetailPage />);
 
-    expect(await screen.findByRole('tab', { name: /^Candidates\s*2$/ })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /^Candidates\s*2$/ })).toBeInTheDocument();
   });
 
   it('follows the list as the officer changes it', async () => {
     const user = userEvent.setup();
+    mockParams = { electionId: 'e-1', '*': 'candidates' };
     renderWithRouter(<ElectionDetailPage />);
 
-    await user.click(await screen.findByRole('tab', { name: /^Candidates\s*2$/ }));
+    await screen.findByRole('link', { name: /^Candidates\s*2$/ });
     await user.click(screen.getByRole('button', { name: 'Add a nominee' }));
 
-    expect(screen.getByRole('tab', { name: /^Candidates\s*3$/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Candidates\s*3$/ })).toBeInTheDocument();
   });
 
   it('shows no count while there are no nominees', async () => {
     getCandidates.mockResolvedValue([itemOption]);
     renderWithRouter(<ElectionDetailPage />);
 
-    const tab = await screen.findByRole('tab', { name: /^Candidates/ });
+    const link = await screen.findByRole('link', { name: /^Candidates/ });
     await waitFor(() => expect(getCandidates).toHaveBeenCalled());
-    expect(tab).toHaveAccessibleName('Candidates');
+    expect(link).toHaveAccessibleName('Candidates');
   });
 });

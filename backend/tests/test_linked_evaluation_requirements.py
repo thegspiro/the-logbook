@@ -135,6 +135,19 @@ class TestALinkedRequirementIsCreditedByEvaluations:
         assert float(row.progress_value or 0) == 2
         assert row.status == RequirementProgressStatus.COMPLETED
 
+    async def test_a_linked_evaluated_calls_row_counts_the_calls(self, db_session):
+        scene = await _scene(db_session)
+        calls = await _linked(
+            db_session, scene, RequirementType.EVALUATED_CALLS, required_calls=14
+        )
+
+        await _submit(db_session, scene)
+
+        row = await _row(db_session, calls)
+        assert float(row.progress_value or 0) == 7
+        assert row.progress_percentage == 50
+        assert row.status == RequirementProgressStatus.IN_PROGRESS
+
     async def test_the_lowest_rating_withholds_the_shift_when_asked(self, db_session):
         scene = await _scene(db_session)
         counted = await _linked(

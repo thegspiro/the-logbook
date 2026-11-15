@@ -1329,6 +1329,29 @@ the owner, because closing them changes how members get into their accounts:
   is; the email change itself is now ceiling-bound, step-up gated, audited and
   reported to the previous address.
 
+## Separation of Duties — Five Decisions Left Open (ADV-02, 2026-11-14)
+
+The adversarial pass over the month to 2026-11-14 found these items. Its
+findings are in `docs/security-review/ADV-02-adversarial-last-month.md`. Each
+fix changes a workflow some departments rely on, so the owner decides:
+
+- **One officer can conduct, calibrate and approve a personnel evaluation
+  (ADV2-4).** Only the subject is barred from the approval step and from
+  calibration. Refusing the evaluator stalls every evaluation where they are
+  the only holder of the step's position, because no action reassigns or skips
+  a step.
+- **A shift officer can write their own close-out hours (ADV2-8).** Pre-shift
+  work and event attendance refuse the self case. On a one-person shift nobody
+  else could record it.
+- **An officer can grant themselves a leave, and with it a training waiver
+  (ADV2-9).** This needs `members.manage` and `scheduling.assign`.
+- **An applicant's edited email or name and birth date can make a coordinator's
+  self-access guard hide their file (ADV2-10).** Refusing a member's email
+  covers half of it. The rest turns on whether self-detection should trust
+  fields the applicant can edit.
+- **A Zeffy dues payment credits whichever member's email the payer typed
+  (ADV2-11).** Overpayment is recorded as that member's donation.
+
 ## Authentication & Security
 
 | Item                                                                                                                                                                                                                                                                                                  | Status                                                                                                                                   | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -10330,21 +10353,37 @@ beyond the feature.
 
 **For the owner to decide**
 
-- **The evaluations a shift calls for follow today's settings, not the
+- ~~**The evaluations a shift calls for follow today's settings, not the
   shift's.** Who needs which evaluation is worked out on every read from the
   current "one evaluation for several programs" setting and the member's
   current enrollments. Switching that setting, or enrolling a member in a
   second program, while a shift is still open re-scopes it: evaluations
   already submitted are kept but no longer required, new ones are required,
   and close-out waits for them. Freezing the set at close-out would need a
-  stored snapshot.
+  stored snapshot.~~ Resolved 2026-11-14 (owner decision: fixed when the
+  shift ends). The first read after a department shift's end time stores
+  each crew member's evaluations on the shift
+  (`shifts.evaluation_requirements`, migration `611204dcf8d1`), and later
+  reads use that set, so a setting changed or a program joined afterwards
+  neither orphans a submitted evaluation nor re-blocks close-out. The crew
+  stays live: a member taken off it is not asked for, and one added later is
+  worked out by the rules of the day and joins the stored set. Before the
+  shift ends, and on outside shifts, it is worked out live as before.
+  `tests/test_frozen_evaluation_requirements.py`.
 - ~~**No-show and pending crew are asked for an evaluation.**~~ Resolved
   2026-11-14 (owner decision): only Assigned and Confirmed crew need a trainee
   report or a shift evaluation, and close-out drafts reports for them alone
   (`WORKING_ASSIGNMENT_STATUSES`).
-- **No requirement type counts the calls an evaluation records.** Evaluated
+- ~~**No requirement type counts the calls an evaluation records.** Evaluated
   shifts, transports and refusals are credited; the existing Calls type is
-  still fed by shift reports.
+  still fed by shift reports.~~ **✅ Resolved 2026-11-14 (owner decision):
+  a new Evaluated Calls type.** An `evaluated_calls` requirement counts the
+  calls each submitted evaluation records, against `required_calls`, the way
+  Transports counts the evaluation's transports and only once the member can
+  see the evaluation. The Calls type is unchanged and still fed by shift
+  reports, so no call is counted by both. Migration `9d044fc1d81b` widens the
+  `requirement_type` ENUM; its downgrade turns requirements of the new type
+  into checklists.
 - ~~**A department requirement of an evaluation type, linked into a program
   with "Link existing", is not credited by evaluations.** A linked row is
   graded by the compliance engine, which has no branch for these types and
@@ -10378,8 +10417,10 @@ beyond the feature.
   moves to an agency that does not evaluate, or the member is removed from the
   shift.** Each leaves earlier credit standing until the evaluation is saved
   again.
-- **A deactivated evaluation form is still offered and required** where a
-  program or the department settings still name it.
+- ~~**A deactivated evaluation form is still offered and required**~~
+  Resolved 2026-11-14 (owner decision): a form a program or the general-form
+  setting uses cannot be deactivated, and an inactive form cannot be newly
+  chosen for either.
 - ~~**Two administrators creating forms with the same name at the same moment
   get a 500** rather than the duplicate-name 400.~~ Resolved 2026-11-14: a
   create or rename whose commit meets the per-department unique key now rolls
