@@ -1317,6 +1317,96 @@ describe('EventEditPage', () => {
       });
     });
 
+    // A library course with no hours is credited the event's length on
+    // create (credit_hours left out; the backend falls back to it). Read back
+    // as typed, the edit froze that figure: moving the event's times kept the
+    // old length, and nothing said the figure was the event's length.
+    describe('with a library course that has no hours', () => {
+      const NO_HOURS = {
+        id: 'course-nohours',
+        organization_id: 'org-1',
+        name: 'Ladder Drills',
+        code: 'LADDER',
+        training_type: 'skills_practice',
+        credit_hours: null,
+        duration_hours: null,
+        is_active: true,
+      };
+      const PUMP = { ...NO_HOURS, id: 'course-pump', name: 'Pump Operations', code: 'PUMP', credit_hours: 2 };
+
+      /** The two-hour event, its session on `courseId` with `storedHours`, opened on Training Info once courses load. */
+      async function open(courseId: string, storedHours: number, optionName: string) {
+        vi.mocked(trainingService.getCourses).mockResolvedValue([NO_HOURS, PUMP] as never);
+        vi.mocked(trainingSessionService.getSessionByEvent).mockResolvedValue({
+          ...session,
+          course_id: courseId,
+          course_name: 'Stored name',
+          credit_hours: storedHours,
+        });
+        window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+        await screen.findByRole('option', { name: optionName });
+        return user;
+      }
+      async function save(user: User) {
+        await toReview(user);
+        await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+        await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+      }
+
+      it("follows the event's length when the stored hours are that length", async () => {
+        const user = await open('course-nohours', 2, 'LADDER - Ladder Drills');
+
+        await waitFor(() =>
+          expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
+            expect.stringContaining("Follows the event's length (2 hours) until you change it.")
+          )
+        );
+        await toReview(user);
+        expect(screen.getByText("2 hours (the event's length)")).toBeInTheDocument();
+        // Nothing the officer changed, so nothing reads as changed.
+        expect(screen.queryByText('was 2 hours')).not.toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+        await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+        // Null is the event's own length to the backend, whatever its times become.
+        expect(sent()?.training_details).toMatchObject({ course_id: 'course-nohours', credit_hours: null });
+      });
+
+      // Reading the stored hours once the courses load is not an edit.
+      it('leaves on Cancel without asking, once the hours read as the length', async () => {
+        const user = await open('course-nohours', 2, 'LADDER - Ladder Drills');
+        await waitFor(() =>
+          expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
+            expect.stringContaining("Follows the event's length")
+          )
+        );
+
+        await user.click(screen.getAllByRole('button', { name: 'Cancel' })[0] as HTMLElement);
+
+        expect(screen.queryByText('Discard your changes?')).not.toBeInTheDocument();
+        expect(mockNavigate).toHaveBeenCalledWith('/events/evt-1');
+      });
+
+      it('keeps hours unlike the length as typed', async () => {
+        const user = await open('course-nohours', 5, 'LADDER - Ladder Drills');
+
+        expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(5);
+        await save(user);
+        expect(sent()?.training_details).toMatchObject({ course_id: 'course-nohours', credit_hours: 5 });
+      });
+
+      it('keeps the stored hours of a course that has hours of its own', async () => {
+        const user = await open('course-pump', 2, 'PUMP - Pump Operations');
+
+        expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
+          expect.stringContaining('From the course (2 hours).')
+        );
+        await save(user);
+        expect(sent()?.training_details).toMatchObject({ course_id: 'course-pump', credit_hours: 2 });
+      });
+    });
+
     it('says on Review that attachments are managed on the event page', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue({
         ...trainingEvent,

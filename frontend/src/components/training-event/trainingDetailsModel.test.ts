@@ -11,6 +11,7 @@ import {
   toUpdatePayload,
   validateTrainingDetails,
   withCourseChoice,
+  withLoadedCourseHours,
   type TrainingDetailsForm,
 } from './trainingDetailsModel';
 
@@ -421,6 +422,33 @@ describe('fromSession', () => {
       course_id: 'course-pump',
       course_name: '',
     });
+  });
+});
+
+describe('withLoadedCourseHours', () => {
+  // Neither credit hours nor a duration: create credits the event's length.
+  const { credit_hours: _hours, ...withoutHours } = COURSE;
+  const NO_HOURS: TrainingCourse = { ...withoutHours, id: 'course-ladder' };
+  const loaded = (courseId: string, creditHours: number) =>
+    fromSession({ ...SESSION, course_id: courseId, credit_hours: creditHours }, EVENT);
+
+  it('reads hours equal to the length as the length under a course that has none, as create credited them', () => {
+    expect(withLoadedCourseHours(loaded('course-ladder', 2), [NO_HOURS, COURSE], 2)).toMatchObject({
+      credit_hours: '2',
+      credit_hours_source: 'duration',
+    });
+  });
+
+  it('leaves the hours of a course that has hours as stored', () => {
+    const value = loaded('course-pump', 2);
+    expect(withLoadedCourseHours(value, [NO_HOURS, COURSE], 2)).toBe(value);
+  });
+
+  it('leaves hours unlike the length, and a course the list no longer holds, as stored', () => {
+    const unlike = loaded('course-ladder', 3);
+    expect(withLoadedCourseHours(unlike, [NO_HOURS], 2)).toBe(unlike);
+    const gone = loaded('course-ladder', 2);
+    expect(withLoadedCourseHours(gone, [COURSE], 2)).toBe(gone);
   });
 });
 

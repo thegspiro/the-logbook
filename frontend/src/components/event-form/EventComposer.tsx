@@ -17,7 +17,7 @@
  * a type change swaps the form in either direction as it does on create.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeftRight } from 'lucide-react';
 import type { EventCreate, EventType, EventUpdate, RecurringEventCreate } from '../../types/event';
 import { EventType as EventTypeEnum } from '../../constants/enums';
@@ -125,11 +125,12 @@ export const EventComposer: React.FC<EventComposerProps> = ({
   const [training, setTraining] = useState<TrainingDetailsForm>(editing?.initialTraining ?? DEFAULT_TRAINING_DETAILS);
   // What the form opened with, so the training form's Cancel asks only when
   // there is something to lose. Recurrence and Mandatory for live outside
-  // formData, so they are part of it too.
+  // formData, so they are part of it too. The training details are kept apart
+  // so the wizard's reading of the stored ones once the Course Library loads
+  // (withLoadedCourseHours) is applied to both, and is not taken for an edit.
   const snapshot = () =>
     JSON.stringify([
       model.formData,
-      training,
       model.organizerId,
       model.alternateId,
       model.mandatoryScope,
@@ -144,6 +145,11 @@ export const EventComposer: React.FC<EventComposerProps> = ({
       model.recurrenceExceptions,
     ]);
   const [openedWith] = useState(snapshot);
+  const [openedTraining, setOpenedTraining] = useState(training);
+  const readStoredTraining = useCallback((read: (value: TrainingDetailsForm) => TrainingDetailsForm) => {
+    setTraining(read);
+    setOpenedTraining(read);
+  }, []);
   // The type the officer left when picking Training, for the way back. Null
   // when the form opened on Training (a Training template, or Training Admin).
   const [switchedFrom, setSwitchedFrom] = useState<EventType | null>(null);
@@ -258,7 +264,7 @@ export const EventComposer: React.FC<EventComposerProps> = ({
         onSubmit={onSubmit}
         onSubmitRecurring={onSubmitRecurring}
         onCancel={onCancel}
-        isDirty={snapshot() !== openedWith}
+        isDirty={snapshot() !== openedWith || JSON.stringify(training) !== JSON.stringify(openedTraining)}
         typeLocked={Boolean(lockedType)}
         typeNote={typeNote}
         typeHint={editing ? editTypeHint : undefined}
@@ -279,6 +285,7 @@ export const EventComposer: React.FC<EventComposerProps> = ({
               storedCourseName: editing.storedCourseName,
               initialStep: storedTraining && !typeSwapped ? editing.initialStep : undefined,
               organizerNames: editing.organizerNames,
+              onReadStoredTraining: readStoredTraining,
               scopeChoice: scope && <SeriesScopeReview {...scope} />,
               seriesOccurrence: scope && {
                 occurrenceStart: scope.occurrenceStart,

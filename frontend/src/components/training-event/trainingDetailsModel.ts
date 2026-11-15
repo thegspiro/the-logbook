@@ -286,7 +286,9 @@ const storedHours = (startIso: string, endIso: string): number | null => {
 /**
  * The form value for an event's stored session. Credit Hours count as
  * untouched — still following the length — when they equal the stored length,
- * so moving the event's times keeps them in step as it did on create.
+ * so moving the event's times keeps them in step as it did on create. A
+ * library session's are read as typed until the Course Library has loaded
+ * (`withLoadedCourseHours`).
  */
 export const fromSession = (
   session: TrainingSessionResponse,
@@ -323,6 +325,31 @@ export const fromSession = (
     require_completion_confirmation: session.require_completion_confirmation,
     approval_deadline_days: String(session.approval_deadline_days),
   };
+};
+
+/**
+ * An edited library session's Credit Hours, read again once the Course
+ * Library has loaded. `fromSession` reads a library session's hours as typed,
+ * since only the course list tells whether the course has hours. A course
+ * with none is credited the event's scheduled length on create (the payload
+ * leaves the hours out and the backend falls back to the length), so stored
+ * hours equal to the stored length are that length, read as a course-less
+ * session's are: they follow the event's times again, and the hint says so.
+ * A course with hours of its own, one the list no longer holds, or hours
+ * unlike the length are left as they are.
+ */
+export const withLoadedCourseHours = (
+  value: TrainingDetailsForm,
+  courses: readonly TrainingCourse[],
+  storedLength: number | null
+): TrainingDetailsForm => {
+  if (value.course_mode !== 'library' || value.credit_hours_source !== 'manual' || storedLength === null) {
+    return value;
+  }
+  const course = courses.find((c) => c.id === value.course_id);
+  if (!course || courseCreditHours(course) !== undefined) return value;
+  if (value.credit_hours.trim() === '' || roundHours(Number(value.credit_hours)) !== storedLength) return value;
+  return { ...value, credit_hours_source: 'duration' };
 };
 
 const toNumber = (text: string): number | undefined => {

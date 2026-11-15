@@ -74,6 +74,7 @@ import {
   toUpdatePayload,
   validateTrainingDetails,
   withCourseChoice,
+  withLoadedCourseHours,
   withoutSessionSettingCopies,
   type InstructorOption,
   type TrainingDetailsForm,
@@ -231,6 +232,12 @@ interface TrainingEventWizardProps {
   seriesOccurrence?: SeriesOccurrence | undefined;
   /** Told whether Event Details is the open step, for what the host draws above the steps. */
   onDetailsStepChange?: ((onDetails: boolean) => void) | undefined;
+  /**
+   * Applies a reading of the stored details (not an edit) to the host's
+   * training value and to what it compares that value with for unsaved
+   * changes. Without it the reading goes through `setTraining`.
+   */
+  onReadStoredTraining?: ((read: (value: TrainingDetailsForm) => TrainingDetailsForm) => void) | undefined;
 }
 
 export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
@@ -259,6 +266,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   organizerNames,
   seriesOccurrence,
   onDetailsStepChange,
+  onReadStoredTraining,
 }) => {
   // Every rank, not only the active ladder: a member can still hold a rank the
   // department has since retired, and it should read as its name, not its code.
@@ -275,6 +283,11 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   const [trainingErrors, setTrainingErrors] = useState<TrainingErrors>({});
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
   const [coursesLoaded, setCoursesLoaded] = useState(false);
+  // The event's length as the form opened on it: the stored length, which a
+  // library course without hours credited (withLoadedCourseHours).
+  const [lengthAtOpen] = useState(() =>
+    scheduledHours(model.formData.start_datetime, model.formData.end_datetime, model.tz)
+  );
   const [users, setUsers] = useState<User[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Focus is moved after the step it targets has rendered: to the first
@@ -386,6 +399,34 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
         return { id: user.id, name, label: user.rank ? `${name} (${formatRank(user.rank)})` : name };
       }),
     [users, formatRank]
+  );
+
+  // Once the Course Library has loaded, an edited library session's hours
+  // equal to the stored length follow the length again when its course has
+  // none, as a course-less session's do. Only while untouched, and only on an
+  // editable step: a locked one shows and keeps the hours as stored.
+  const libraryHoursRead = useRef(false);
+  useEffect(() => {
+    if (!coursesLoaded || libraryHoursRead.current) return;
+    libraryHoursRead.current = true;
+    if (!originalTraining || trainingAccess !== 'edit') return;
+    (onReadStoredTraining ?? setTraining)((prev) =>
+      prev.course_mode === originalTraining.course_mode &&
+      prev.course_id === originalTraining.course_id &&
+      prev.credit_hours === originalTraining.credit_hours &&
+      prev.credit_hours_source === originalTraining.credit_hours_source
+        ? withLoadedCourseHours(prev, courses, lengthAtOpen)
+        : prev
+    );
+  }, [coursesLoaded, courses, originalTraining, trainingAccess, lengthAtOpen, onReadStoredTraining, setTraining]);
+  // The stored details read the same way, so Review does not call the
+  // reading a change the officer made.
+  const original = useMemo(
+    () =>
+      originalTraining && trainingAccess === 'edit'
+        ? withLoadedCourseHours(originalTraining, courses, lengthAtOpen)
+        : originalTraining,
+    [originalTraining, trainingAccess, courses, lengthAtOpen]
   );
 
   const linkageData = useTrainingLinkageData(training.program_id || undefined);
@@ -652,7 +693,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
    */
   const trainingUpdate = () => {
     if (trainingAccess === 'readonly') return undefined;
-    const full = toUpdatePayload(training, durationHours, originalTraining);
+    const full = toUpdatePayload(training, durationHours, original);
     return trainingAccess === 'finalized' ? strippedForFinalized(full) : full;
   };
 
@@ -967,7 +1008,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
                 linkageData={linkageData}
                 onEdit={(target) => goTo(REVIEW, REVIEW_TARGET_STEP[target])}
                 editing={editing}
-                original={originalTraining}
+                original={original}
                 scopeChoice={scopeChoice}
                 organizerNames={organizerNames}
                 storedCourseName={storedCourseName}
