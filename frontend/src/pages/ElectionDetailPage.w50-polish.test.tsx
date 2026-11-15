@@ -23,7 +23,9 @@ describe('ElectionDetailPage W50 polish', () => {
 
   // W50-76: a draft or a nominations phase has nothing to vote on yet.
   it('says results come at close only while voting is open', () => {
-    expect(page).toContain('{!canManage && !resultsAvailable && election.status === ElectionStatus.OPEN && (');
+    expect(page).toContain(
+      '{!canManage && activeSection === null && !resultsAvailable && election.status === ElectionStatus.OPEN && ('
+    );
   });
 
   // W50-74: the badge reads the same word as the filter pills.
