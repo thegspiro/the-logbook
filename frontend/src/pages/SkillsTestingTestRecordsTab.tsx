@@ -128,7 +128,7 @@ const TestCard: React.FC<{
               <button
                 type="button"
                 onClick={onClick}
-                className="text-theme-text-primary focus-visible:after:ring-theme-focus-ring min-w-0 text-left font-medium break-words after:absolute after:inset-0 after:rounded-lg focus-visible:outline-hidden focus-visible:after:ring-2 sm:truncate"
+                className="text-theme-text-primary focus-visible:after:ring-theme-focus-ring touch:min-h-11 touch:py-2.5 min-w-0 text-left font-medium break-words after:absolute after:inset-0 after:rounded-lg focus-visible:outline-hidden focus-visible:after:ring-2 sm:truncate"
               >
                 {test.template_name}
               </button>
@@ -189,7 +189,7 @@ const TestCard: React.FC<{
                 e.stopPropagation();
                 onDelete();
               }}
-              className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+              className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
               aria-label={`Delete practice attempt for ${test.candidate_name}`}
             >
               <Trash2 className="h-4 w-4" />
@@ -205,7 +205,7 @@ const TestCard: React.FC<{
                     e.stopPropagation();
                     onValidate();
                   }}
-                  className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-purple-50 hover:text-purple-600 dark:hover:bg-purple-900/20"
+                  className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-purple-50 hover:text-purple-600 dark:hover:bg-purple-900/20"
                   aria-label={`Validate result for ${test.candidate_name}`}
                 >
                   <CheckCircle2 className="h-4 w-4" />
@@ -221,7 +221,7 @@ const TestCard: React.FC<{
                     e.stopPropagation();
                     onRelease();
                   }}
-                  className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20"
+                  className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20"
                   aria-label={`Release results to ${test.candidate_name}`}
                 >
                   <Send className="h-4 w-4" />
@@ -232,7 +232,7 @@ const TestCard: React.FC<{
                   e.stopPropagation();
                   onVoid();
                 }}
-                className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20"
+                className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20"
                 aria-label={`Void test for ${test.candidate_name}`}
               >
                 <Ban className="h-4 w-4" />
@@ -244,7 +244,7 @@ const TestCard: React.FC<{
                 e.stopPropagation();
                 onCancel();
               }}
-              className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20"
+              className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20"
               aria-label={`Cancel unfinished test for ${test.candidate_name}`}
             >
               <CircleSlash className="h-4 w-4" />

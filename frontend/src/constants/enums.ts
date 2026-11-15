@@ -966,11 +966,11 @@ export const COHORT_STATUS_LABELS: Record<string, string> = {
 };
 
 export const COHORT_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20',
-  scheduled: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
-  in_progress: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
-  completed: 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20',
-  cancelled: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
+  draft: 'bg-gray-500/10 text-gray-900 dark:text-gray-300 border-gray-500/20',
+  scheduled: 'bg-blue-500/10 text-blue-900 dark:text-blue-300 border-blue-500/20',
+  in_progress: 'bg-green-500/10 text-green-900 dark:text-green-300 border-green-500/20',
+  completed: 'bg-purple-500/10 text-purple-900 dark:text-purple-300 border-purple-500/20',
+  cancelled: 'bg-red-500/10 text-red-900 dark:text-red-300 border-red-500/20',
 };
 
 /** Status of a single scheduled class within a cohort. */
