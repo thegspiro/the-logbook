@@ -884,3 +884,103 @@ class TestTheEndpoints:
             "action": "attendance_requirements_set",
             "attendance_requirement_ids": [dept["drills"]],
         }
+
+    @staticmethod
+    def _training_entries(audit) -> list:
+        return [
+            call.kwargs["event_data"]
+            for call in audit.await_args_list
+            if call.kwargs["event_type"] == "training_session_updated"
+        ]
+
+    async def test_re_sending_the_stored_form_audits_nothing(
+        self, db_session, dept, audit
+    ):
+        # The edit form sends every field it owns on every save (pitfall #1),
+        # so a description fix restates the links. Recording that as a "set"
+        # buried the saves that changed which sessions count (TR14-2).
+        event_id = await _event(
+            db_session,
+            dept,
+            {
+                "instructor": "Lt. Okafor",
+                "attendance_requirement_ids": [dept["drills"]],
+            },
+        )
+        officer = await self._user(db_session, dept["officer"])
+
+        await events_endpoint.update_event(
+            event_id=uuid.UUID(event_id),
+            event_data=EventUpdate(
+                description="Bring gloves",
+                training_details=TrainingSessionDetailsUpdate(
+                    instructor="Lt. Okafor",
+                    attendance_requirement_ids=[dept["drills"]],
+                ),
+            ),
+            db=db_session,
+            current_user=officer,
+        )
+
+        assert self._training_entries(audit) == []
+
+    async def test_only_what_changed_is_audited(self, db_session, dept, audit):
+        event_id = await _event(
+            db_session,
+            dept,
+            {
+                "instructor": "Lt. Okafor",
+                "attendance_requirement_ids": [dept["drills"]],
+            },
+        )
+        officer = await self._user(db_session, dept["officer"])
+
+        await events_endpoint.update_event(
+            event_id=uuid.UUID(event_id),
+            event_data=EventUpdate(
+                training_details=TrainingSessionDetailsUpdate(
+                    instructor="Capt. Reyes",
+                    attendance_requirement_ids=[dept["drills"]],
+                ),
+            ),
+            db=db_session,
+            current_user=officer,
+        )
+
+        assert self._training_entries(audit) == [
+            {"event_id": event_id, "scope": "this_event", "fields": ["instructor"]}
+        ]
+
+    async def test_a_series_edit_audits_the_links_once_they_change(
+        self, db_session, dept, audit
+    ):
+        ids = await TestASeries()._series(
+            db_session, dept, {"attendance_requirement_ids": [dept["drills"]]}
+        )
+        officer = await self._user(db_session, dept["officer"])
+
+        async def edit_future(links):
+            await events_endpoint.update_future_events(
+                event_id=uuid.UUID(ids[2]),
+                event_data=EventUpdate(
+                    training_details=TrainingSessionDetailsUpdate(
+                        attendance_requirement_ids=links
+                    )
+                ),
+                db=db_session,
+                current_user=officer,
+            )
+
+        await edit_future([dept["drills"]])
+        assert self._training_entries(audit) == []
+
+        await edit_future([dept["drills"], dept["meetings"]])
+        assert self._training_entries(audit) == [
+            {
+                "event_id": ids[2],
+                "scope": "this_and_future",
+                "fields": ["attendance_requirement_ids"],
+                "action": "attendance_requirements_set",
+                "attendance_requirement_ids": [dept["drills"], dept["meetings"]],
+            }
+        ]

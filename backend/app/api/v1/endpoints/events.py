@@ -8,7 +8,7 @@ import copy
 import uuid as uuid_lib
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Sequence, Set
 from uuid import UUID
 
 from fastapi import (
@@ -137,7 +137,10 @@ from app.services.qr_check_in_analytics import (
     record_check_in_outcome,
     record_qr_scan,
 )
-from app.services.training_session_service import TrainingSessionService
+from app.services.training_session_service import (
+    SessionDetailsPlan,
+    TrainingSessionService,
+)
 from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.contact_visibility import load_contact_policy
@@ -377,23 +380,42 @@ async def _audit_training_details_updated(
     db: AsyncSession,
     current_user: User,
     event_id: UUID,
-    event_data: EventUpdate,
+    plans: Sequence[SessionDetailsPlan],
     scope: str,
 ) -> None:
-    details = event_data.training_details
-    if details is None:
+    """Record what an edit's training details changed, if anything.
+
+    Judged from the plans the save applied, not from the payload: the edit
+    form sends every field it owns on every save (pitfall #1), so a
+    description fix restates the attendance links, and recording each of
+    those as a "set" buried the saves that changed which sessions count
+    toward an attendance requirement (TR14-2). The links are recorded only
+    when the set changes on some session.
+    """
+    fields: Set[str] = set()
+    links: Optional[List[str]] = None
+    for plan in plans:
+        fields.update(plan.changes)
+        if plan.link_ids is not None:
+            links = plan.link_ids
+        if plan.attach is not None:
+            attached = plan.attach.model_dump(exclude_unset=True, exclude_none=True)
+            attached_links = attached.pop("attendance_requirement_ids", None)
+            fields.update(attached)
+            if attached_links:
+                links = [str(r) for r in attached_links]
+    if links is not None:
+        fields.add("attendance_requirement_ids")
+    if not fields:
         return
-    sent = details.model_dump(exclude_unset=True)
     entry: Dict[str, Any] = {
         "event_id": str(event_id),
         "scope": scope,
-        "fields": sorted(sent),
+        "fields": sorted(fields),
     }
-    if "attendance_requirement_ids" in sent:
+    if links is not None:
         entry["action"] = "attendance_requirements_set"
-        entry["attendance_requirement_ids"] = [
-            str(r) for r in details.attendance_requirement_ids or []
-        ]
+        entry["attendance_requirement_ids"] = links
     await log_audit_event(
         db=db,
         event_type="training_session_updated",
@@ -1691,7 +1713,7 @@ async def update_event(
             username=current_user.username,
         )
         await _audit_training_details_updated(
-            db, current_user, event_id, event_data, scope="this_event"
+            db, current_user, event_id, service.last_training_plans, scope="this_event"
         )
 
         # Notify RSVP'd members if significant fields changed
@@ -1805,7 +1827,11 @@ async def update_future_events(
             username=current_user.username,
         )
         await _audit_training_details_updated(
-            db, current_user, event_id, event_data, scope="this_and_future"
+            db,
+            current_user,
+            event_id,
+            service.last_training_plans,
+            scope="this_and_future",
         )
 
         return {
