@@ -283,14 +283,14 @@ reminders when an event's start changes, so they go out again for the new
 time; an edit that keeps the start keeps them.
 `test_event_edit_resets_reminders.py`.
 
-### W80-12 — NIT — The review step omits "Counts toward attendance" — ✅ FIXED (#4186)
+### W80-12 — NIT — The review step omits "Counts toward attendance" — ✅ FIXED (#4186; kept by the training-event form, 2026-11-11)
 
 The wizard's review lists the requirement link but not the attendance
 requirements ticked on step 2, which were saved (checked through the API).
 **Fix (#4186):** the review step lists the ticked attendance requirements.
 
-**Fix:** fixed by the one training-event form (owner decision 2026-11-10),
-which replaced this wizard. Its Review step lists every ticked requirement
+**Then:** the one training-event form (owner decision 2026-11-10) replaced
+this wizard, and its Review step lists every ticked requirement
 under **Counts toward attendance** with its percentage, or **None**.
 `frontend/src/components/training-event/TrainingReviewStep.tsx`; asserted in
 `CreateTrainingSessionPage.test.tsx` ("attendance requirements").
@@ -303,8 +303,7 @@ after a minute was credited nothing. The field is the session's planned length.
 **Fix (#4186):** the hint now says credit follows the time each attendee was
 there.
 
-**Fix:** the hint had already been reworded on the old wizard without this entry
-being updated. The training-event form that replaced it (2026-11-11) keeps that
+**Then:** the training-event form that replaced it (2026-11-11) keeps that
 meaning: "Each attendee is credited with the time they actually attended, from
 check-in to check-out or as corrected, not this figure."
 `frontend/src/components/training-event/TrainingInfoStep.tsx`.

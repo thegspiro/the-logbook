@@ -64,13 +64,16 @@ describe('event form date/time bindings', () => {
 describe('event form date/time labels', () => {
   // The visible "Start Date & Time" text was a bare <label> with no `for`, so
   // the date input had no accessible name and a screen reader announced the
-  // start, end and RSVP pickers identically as "date". Each control now takes
-  // its id and description from the FormField that draws its label.
-  it('takes every date/time control id from its FormField', () => {
-    const controls = dateTimeControls();
-    expect(controls).toHaveLength(3);
-    for (const props of controls) {
-      expect(props).toContain('{...field}');
-    }
+  // start, end and RSVP pickers identically as "date". Each picker now sits in
+  // a FormField, which renders the label with `htmlFor` set to its `id` and
+  // hands that id (and the error's aria-describedby) to the control.
+  it('wraps every date/time control in a FormField whose id it receives', () => {
+    const wrapped = sections.flatMap((source) => [
+      ...source.matchAll(
+        /<FormField\s+id="([^"]+)"(?:(?!<FormField)[\s\S])*?\{\(field\) => \(\s*<DateTimeQuarterHour\s+\{\.\.\.field\}/g
+      ),
+    ]);
+    expect(wrapped).toHaveLength(dateTimeValueBindings().length);
+    expect(wrapped.map((m) => m[1])).toEqual(['start-datetime', 'end-datetime', 'rsvp-deadline']);
   });
 });
