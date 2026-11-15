@@ -21,7 +21,7 @@ as it was signed (owner decision 2026-11-02).
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
@@ -467,11 +467,7 @@ class EvaluationDocumentService:
                 if evaluation.coverage_start and evaluation.coverage_end
                 else None
             ),
-            "excluded": [
-                f"{'Leave of absence' if r.get('reason') == 'leave' else 'Not a member'}, "
-                f"{r.get('start')} – {r.get('end')}"
-                for r in evaluation.excluded_ranges or []
-            ],
+            "excluded": [excluded_line(r) for r in evaluation.excluded_ranges or []],
             "figures": figures,
             "sections": sections,
             "overall": overall,
@@ -512,6 +508,26 @@ class EvaluationDocumentService:
             ),
             "generated_at": _moment(datetime.now(timezone.utc), tz),
         }
+
+
+def excluded_line(excluded: Dict[str, Any]) -> str:
+    """A left-out range as the PDF's Details block prints it, its dates
+    written like every other date on the page ("Aug 10, 2026")."""
+    reason = "Leave of absence" if excluded.get("reason") == "leave" else "Not a member"
+    return (
+        f"{reason}, {_iso_day(excluded.get('start'))} – {_iso_day(excluded.get('end'))}"
+    )
+
+
+def _iso_day(value: Any) -> str:
+    """``_day`` for a date stored as ISO text; anything unreadable is printed
+    as stored rather than dropped from a permanent record."""
+    if not value:
+        return "—"
+    try:
+        return _day(date.fromisoformat(str(value)))
+    except ValueError:
+        return str(value)
 
 
 def _standing(grade: Dict[str, Any]) -> str:
