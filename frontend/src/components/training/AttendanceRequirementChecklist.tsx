@@ -18,20 +18,25 @@ interface AttendanceRequirementChecklistProps {
  * vocabulary, so the words are never looked up as tiers here; which tiers a
  * requirement stands for is the backend's projection
  * (mandatory_tiers_for_requirements), which Mandatory for's pre-fill shows.
+ *
+ * The order is the grader's, requirement_applies_to_member in
+ * app/services/training_compliance.py: applies_to_all, then member
+ * categories, then rank or position, and a requirement naming none of them
+ * applies to nobody (pitfall #29). That last state is reachable, since
+ * applies_to_all and the scope lists are independent fields; reading it as
+ * "all members" told an officer the opposite of what the grader does.
  */
 const appliesTo = (requirement: TrainingRequirement): string => {
+  if (requirement.applies_to_all) return 'Applies to all members';
   const types = requirement.required_membership_types ?? [];
-  if (
-    requirement.applies_to_all ||
-    (!types.length && !requirement.required_roles?.length && !requirement.required_positions?.length)
-  ) {
-    return 'Applies to all members';
-  }
   if (types.length) {
     const label = (type: string) => MEMBERSHIP_TYPE_LABELS[type] ?? type.replace(/_/g, ' ');
     return `Member categories: ${types.map(label).join(', ')}`;
   }
-  return 'Applies to members by rank or position';
+  if (requirement.required_roles?.length || requirement.required_positions?.length) {
+    return 'Applies to members by rank or position';
+  }
+  return 'Applies to no members: no member categories, ranks or positions are set';
 };
 
 /**
