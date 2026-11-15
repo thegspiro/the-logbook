@@ -617,6 +617,59 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: SCHEDULING_ADMIN,
     expectText: 'Shift Check-In',
   },
+  // Communications, measured once helpers.ts served templates, the member-email
+  // policy and opt-outs, the photo-use roster, suggestion boxes and department
+  // messages; before, Messages threw on the catch-all's `{}` and the rest drew
+  // empty states. One grant set for all seven, so they share a sign-in.
+  {
+    path: '/communications/email-templates',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
+    expectText: 'Start-of-Shift Briefing',
+  },
+  {
+    path: '/communications/member-emails',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
+    expectText: 'Required by your department',
+  },
+  {
+    path: '/communications/member-emails/opt-outs',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
+    expectText: 'Linh Nguyen',
+  },
+  {
+    path: '/communications/photo-use-consent',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
+    expectText: 'Christopher Montgomery-Vasquez-Whitfield',
+  },
+  {
+    path: '/communications/suggestion-boxes',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
+    expectText: 'Confidential Concerns',
+  },
+  {
+    path: '/suggestions',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
+    expectText: 'Suggestion box',
+  },
+  {
+    path: '/communications/messages',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
+    expectText: 'County burn ban in effect through Sunday',
+  },
   { path: '/admin-hours', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory', maxSmallTargets: 0, maxTinyText: 0 },

@@ -586,9 +586,14 @@ const EmailTemplatesPage: React.FC = () => {
         )}
         {/* Templates Tab: list / editor / live preview */}
         {activeTab === 'templates' && (
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[296px_minmax(0,1fr)_468px]">
+          <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[296px_minmax(0,1fr)] 2xl:grid-cols-[296px_minmax(0,1fr)_468px]">
+            {/* Three columns only from 2xl. They need ~812px before the editor
+              gets any: from lg with the sidebar open that left the editor
+              ~0px, its HTML body one character wide, and the preview spilled
+              past the screen. From xl the editor and preview share the second
+              column and the strip below switches them. */}
             {/* Column 1 — template list */}
-            <div className="card p-4 lg:sticky lg:top-28">
+            <div className="card p-4 xl:sticky xl:top-28 xl:row-span-2 2xl:row-span-1">
               <TemplateList
                 templates={templates}
                 selectedId={selectedTemplate?.id ?? null}
@@ -598,15 +603,16 @@ const EmailTemplatesPage: React.FC = () => {
 
             {selectedTemplate ? (
               <>
-                {/* Below `lg` the two panes stack, so they need a way to
-                      swap. From `lg` up both are visible and this strip is
-                      gone — there is nothing left for it to switch. */}
-                <div className="tab-scroll lg:hidden">
+                {/* Below `2xl` the editor and preview share one column, so
+                      they need a way to swap. From `2xl` up both are visible
+                      and this strip is gone — there is nothing left for it to
+                      switch. */}
+                <div className="tab-scroll xl:col-start-2 xl:row-start-1 2xl:hidden">
                   <button
                     onClick={() => setEditorView('edit')}
-                    className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                    className={`touch:min-h-11 flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
                       editorView === 'edit'
-                        ? 'border-red-500 text-red-600 dark:text-red-400'
+                        ? 'border-red-500 text-red-900 dark:text-red-300'
                         : 'text-theme-text-secondary hover:text-theme-text-primary border-transparent'
                     }`}
                   >
@@ -615,9 +621,9 @@ const EmailTemplatesPage: React.FC = () => {
                   </button>
                   <button
                     onClick={() => setEditorView('preview')}
-                    className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                    className={`touch:min-h-11 flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
                       editorView === 'preview'
-                        ? 'border-red-500 text-red-600 dark:text-red-400'
+                        ? 'border-red-500 text-red-900 dark:text-red-300'
                         : 'text-theme-text-secondary hover:text-theme-text-primary border-transparent'
                     }`}
                   >
@@ -628,7 +634,7 @@ const EmailTemplatesPage: React.FC = () => {
 
                 {/* Column 2 — editor */}
                 <div
-                  className={`${editorView === 'edit' ? 'block' : 'hidden'} card lg:col-start-2 lg:row-start-1 lg:block`}
+                  className={`${editorView === 'edit' ? 'block' : 'hidden'} card xl:col-start-2 xl:row-start-2 2xl:row-start-1 2xl:block`}
                 >
                   {/* Template meta bar */}
                   <div className="split-row border-theme-surface-border gap-3 border-b px-5 pt-5 pb-4 sm:items-center">
@@ -644,7 +650,7 @@ const EmailTemplatesPage: React.FC = () => {
                       <button
                         onClick={() => setShowResetConfirm(true)}
                         disabled={isResetting}
-                        className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50"
+                        className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50"
                         title="Restore default content"
                       >
                         {isResetting ? (
@@ -666,7 +672,7 @@ const EmailTemplatesPage: React.FC = () => {
                           void handleToggleActive();
                         }}
                         disabled={isTogglingActive || selectedTemplate.always_sent === true}
-                        className="text-theme-text-muted hover:text-theme-text-primary transition-colors disabled:opacity-50"
+                        className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone transition-colors disabled:opacity-50"
                         aria-label={selectedTemplate.is_active ? 'Switch this email off' : 'Switch this email on'}
                         title={
                           selectedTemplate.always_sent
@@ -701,10 +707,10 @@ const EmailTemplatesPage: React.FC = () => {
                     {selectedTemplate.allow_attachments && (
                       <div className="border-theme-surface-border mt-6 border-t pt-4">
                         <div className="mb-3 flex items-center justify-between">
-                          <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
+                          <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
                             <Paperclip className="h-4 w-4" />
                             Attachments
-                          </h4>
+                          </h3>
                           <label className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex cursor-pointer items-center space-x-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors">
                             {uploadingAttachment ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -738,7 +744,7 @@ const EmailTemplatesPage: React.FC = () => {
                                 </div>
                                 <button
                                   onClick={() => setAttachmentToDelete(att)}
-                                  className="ml-2 shrink-0 text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                                  className="touch-target-phone ml-2 shrink-0 text-red-900 hover:text-red-950 dark:text-red-300 dark:hover:text-red-200"
                                   aria-label={`Remove attachment ${att.filename}`}
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -759,7 +765,7 @@ const EmailTemplatesPage: React.FC = () => {
 
                 {/* Column 3 — live preview */}
                 <div
-                  className={`${editorView === 'preview' ? 'block' : 'hidden'} lg:sticky lg:top-28 lg:col-start-3 lg:row-start-1 lg:block`}
+                  className={`${editorView === 'preview' ? 'block' : 'hidden'} xl:col-start-2 xl:row-start-2 2xl:sticky 2xl:top-28 2xl:col-start-3 2xl:row-start-1 2xl:block`}
                 >
                   <TemplatePreview
                     preview={preview}
@@ -772,7 +778,7 @@ const EmailTemplatesPage: React.FC = () => {
                 </div>
               </>
             ) : (
-              <div className="card p-12 text-center lg:col-span-2">
+              <div className="card p-12 text-center 2xl:col-span-2">
                 <Mail className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
                 <h3 className="text-theme-text-primary mb-2 text-xl font-bold">Select a Template</h3>
                 <p className="text-theme-text-secondary">

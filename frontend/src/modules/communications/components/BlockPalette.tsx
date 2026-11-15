@@ -43,7 +43,7 @@ export const BlockPalette: React.FC<BlockPaletteProps> = ({ onInsert }) => (
             key={block.id}
             type="button"
             onClick={() => onInsert(block.html)}
-            className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] transition-colors hover:border-red-500/40"
+            className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] transition-colors hover:border-red-500/40"
           >
             <Icon className="h-3.5 w-3.5" aria-hidden="true" />
             {block.label}
