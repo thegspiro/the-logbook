@@ -14,6 +14,9 @@ const mockGetDeletionImpact = vi.fn();
 const mockPreviewRegistry = vi.fn();
 
 vi.mock('../services/api', () => ({
+  eventService: {
+    getVisibleEventTypesWithCategories: vi.fn().mockResolvedValue({ membership_types: [] }),
+  },
   trainingService: {
     getRequirements: (...args: unknown[]) => mockGetRequirements(...args) as unknown,
     getCategories: (...args: unknown[]) => mockGetCategories(...args) as unknown,

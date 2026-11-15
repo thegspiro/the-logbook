@@ -29,6 +29,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -37,6 +38,7 @@ from app.core.encrypted_types import EncryptedDate, EncryptedJSON, EncryptedText
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
+    from app.models.document import Document
     from app.models.user import User
 
 
@@ -156,6 +158,11 @@ class MediaFileRole(str, enum.Enum):
     ORIGINAL = "original"
     DISPLAY = "display"
     THUMBNAIL = "thumbnail"
+
+
+class DocumentKind(str, enum.Enum):
+    PDF = "pdf"
+    IMAGE = "image"
 
 
 class AlbumLevel(str, enum.Enum):
@@ -1115,3 +1122,267 @@ class HistoryAlbumItem(Base):
     )
 
     __table_args__ = (Index("ix_history_album_items_media", "media_id"),)
+
+
+# --- Documents ---
+
+#: A PDF's text is read for search up to 2 MB, past TEXT's 64 KB ceiling.
+_LONG_TEXT = Text().with_variant(mysql.MEDIUMTEXT(), "mysql")
+
+
+class HistoryDocumentType(Base):
+    """One entry in a department's managed list of document types (letter,
+    minutes, newspaper clipping, ...). Managed like sources: retired or
+    merged, never deleted."""
+
+    __tablename__ = "history_document_types"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    name_key: Mapped[str] = mapped_column(String(150), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_retired: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "name_key", name="uq_history_document_type_key"
+        ),
+    )
+
+
+class HistoryDocument(Base):
+    """The archive's catalogue of one document, one-to-one with its row in the
+    Documents module (phase 1 decision: the file lives in the protected History
+    folder, the catalogue beside it).
+
+    The ``documents`` row holds the original, which only ``history.manage``
+    downloads; everyone else reads the stripped copy in
+    ``history_document_files``. Published like a photo, under
+    ``record_type = "document"``, with ``document_id`` as the record id.
+    """
+
+    __tablename__ = "history_documents"
+
+    document_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[DocumentKind] = mapped_column(_enum(DocumentKind), nullable=False)
+
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Named as on photos so the catalogue form and partial-date rules are
+    # shared; for a document it is the date it was written or printed.
+    taken_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    taken_date_precision: Mapped[DatePrecision] = mapped_column(
+        _enum(DatePrecision), nullable=False, default=DatePrecision.YEAR
+    )
+    taken_date_circa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    place: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    document_type_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("history_document_types.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    author: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    recipient: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    source_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("history_sources.id", ondelete="SET NULL"), nullable=True
+    )
+    rights_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    accession_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    original_location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    research_notes: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    # Stored as plain text, unlike research notes, because both are searched
+    # and encrypted text cannot be (owner-approved spec, 2026-11-14).
+    transcription: Mapped[Optional[str]] = mapped_column(_LONG_TEXT, nullable=True)
+    #: The text a PDF carries, read from the stripped copy for search.
+    extracted_text: Mapped[Optional[str]] = mapped_column(_LONG_TEXT, nullable=True)
+    #: True when a PDF ran past the reading limits, so search covers part of it.
+    text_truncated: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    page_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    #: The uploader's file name, shown to keepers; never a path component.
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    batch_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+
+    publication_level: Mapped[PublicationLevel] = mapped_column(
+        _enum(PublicationLevel), nullable=False, default=PublicationLevel.DRAFT
+    )
+    published_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    published_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    public_snapshot: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+    public_revision_number: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    substantial_revision_number: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    revision_number: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    @property
+    def id(self) -> str:
+        """The record id the change history, clearance and the API use: the
+        Documents row's id, since the catalogue is one-to-one with it. Read
+        only; queries name ``document_id``."""
+        return self.document_id
+
+    document: Mapped["Document"] = relationship("Document")
+    source: Mapped[Optional["HistorySource"]] = relationship("HistorySource")
+    document_type: Mapped[Optional["HistoryDocumentType"]] = relationship(
+        "HistoryDocumentType"
+    )
+    files: Mapped[list["HistoryDocumentFile"]] = relationship(
+        "HistoryDocumentFile",
+        back_populates="history_document",
+        cascade="all, delete-orphan",
+    )
+    tags: Mapped[list["HistoryDocumentTag"]] = relationship(
+        "HistoryDocumentTag",
+        back_populates="history_document",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("ix_history_documents_org_level", "organization_id", "publication_level"),
+        Index("ix_history_documents_org_type", "organization_id", "document_type_id"),
+        Index("ix_history_documents_org_date", "organization_id", "taken_date"),
+        Index("ix_history_documents_source", "source_id"),
+    )
+
+
+class HistoryDocumentFile(Base):
+    """A derived file of a document: the stripped copy readers open, or its
+    preview. The original is the ``documents`` row's own file. One row per
+    file, so the storage tools can rewrite each path.
+
+    No ``organization_id``: reached only through its document, which has one.
+    """
+
+    __tablename__ = "history_document_files"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    document_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_documents.document_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role: Mapped[MediaFileRole] = mapped_column(_enum(MediaFileRole), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    history_document: Mapped["HistoryDocument"] = relationship(
+        "HistoryDocument", back_populates="files"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("document_id", "role", name="uq_history_document_file_role"),
+    )
+
+
+class HistoryDocumentTag(Base):
+    """A person a document is about, by, to or names."""
+
+    __tablename__ = "history_document_tags"
+
+    document_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_documents.document_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    member_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("historical_members.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    history_document: Mapped["HistoryDocument"] = relationship(
+        "HistoryDocument", back_populates="tags"
+    )
+    member: Mapped["HistoricalMember"] = relationship("HistoricalMember")
+
+    __table_args__ = (Index("ix_history_document_tags_member", "member_id"),)
+
+
+class HistoryAlbumDocument(Base):
+    """One document's place in one album. ``position`` shares one sequence
+    with ``history_album_items`` so an album interleaves photos and
+    documents."""
+
+    __tablename__ = "history_album_documents"
+
+    album_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_albums.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    document_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_documents.document_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (Index("ix_history_album_documents_document", "document_id"),)
