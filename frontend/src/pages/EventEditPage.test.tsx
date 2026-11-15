@@ -1689,5 +1689,28 @@ describe('EventEditPage', () => {
       expect(sent()).toEqual(expect.objectContaining({ event_type: 'business_meeting' }));
       expect(sent()).not.toHaveProperty('training_details');
     });
+
+    // ?step=training opens the wizard on Training Info once. Brought back
+    // from another type, it starts on Event Details, where the type picker
+    // that was just used is; on Training Info the picker focus moves to is
+    // not drawn, and focus fell to the page.
+    it('comes back to Event Details, picker focused, after a detour through another type from ?step=training', async () => {
+      vi.mocked(eventService.getVisibleEventTypesWithCategories).mockResolvedValue({
+        ...visibleTypesWith(),
+        visible_event_types: ['business_meeting', 'training'],
+      });
+      window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await screen.findByText('Step 2 of 4 · Training Info');
+      await user.click(screen.getByRole('button', { name: 'Previous' }));
+      await user.selectOptions(screen.getByLabelText(/event type/i), 'business_meeting');
+      expect(screen.getByText(/Saving takes the event out of training/)).toBeInTheDocument();
+      await user.selectOptions(screen.getByLabelText(/event type/i), 'training');
+
+      expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByLabelText(/event type/i)).toHaveFocus());
+    });
   });
 });

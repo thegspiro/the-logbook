@@ -158,6 +158,11 @@ export const EventComposer: React.FC<EventComposerProps> = ({
   // to the new form's picker, so a keyboard or screen-reader user carries on
   // from where they were rather than from the top of the page.
   const swapped = useRef(false);
+  // An edit opened with ?step=training starts the wizard on Training Info
+  // only on the form's first mount. Brought back from another type, it starts
+  // on Event Details: the type picker just used is there, and the focus move
+  // above has nowhere to land on Training Info.
+  const [typeSwapped, setTypeSwapped] = useState(false);
   useEffect(() => {
     if (!swapped.current) return;
     swapped.current = false;
@@ -172,6 +177,7 @@ export const EventComposer: React.FC<EventComposerProps> = ({
     // Each form places its own errors; the other's would point at nothing.
     model.clearErrors();
     setSwitchedFrom(nextIsTraining ? previous : null);
+    setTypeSwapped(true);
     swapped.current = true;
   };
   const composed = { ...model, handleEventTypeChange: changeType };
@@ -271,7 +277,7 @@ export const EventComposer: React.FC<EventComposerProps> = ({
               readOnlyNotice: storedTraining ? editing.readOnlyNotice : undefined,
               originalTraining: storedTraining ? editing.initialTraining : undefined,
               storedCourseName: editing.storedCourseName,
-              initialStep: storedTraining ? editing.initialStep : undefined,
+              initialStep: storedTraining && !typeSwapped ? editing.initialStep : undefined,
               organizerNames: editing.organizerNames,
               scopeChoice: scope && <SeriesScopeReview {...scope} />,
               seriesOccurrence: scope && {
