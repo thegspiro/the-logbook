@@ -167,6 +167,46 @@ class TestTheProjection:
             )
         ]
 
+    # All members covers every requirement that grades someone, but not one
+    # that grades no one: the form's checklist says it "Applies to no
+    # members", so it is still named, never read as a source of All members.
+    # Either order, since the projection used to stop at the first
+    # applies_to_all and drop what it had collected.
+    @pytest.mark.parametrize(
+        ("no_one", "reason"),
+        [
+            (
+                _req("Empty"),
+                "It applies to no members, since no member categories, ranks "
+                "or positions are set",
+            ),
+            (
+                _req("Empty", types=["", "  "]),
+                "It applies to no members, since no member categories, ranks "
+                "or positions are set",
+            ),
+            (
+                _req("Empty", active=False, types=["senior"]),
+                "It is no longer active, so it grades no members",
+            ),
+        ],
+        ids=["no-scope", "blank-categories", "inactive"],
+    )
+    @pytest.mark.parametrize("all_first", [True, False], ids=["all-first", "all-last"])
+    def test_all_members_still_names_a_requirement_that_grades_no_one(
+        self, no_one, reason, all_first
+    ):
+        everyone = _req("All", applies_to_all=True)
+        admin = _req("Admin", types=["administrative"])
+        ordered = [everyone, no_one, admin] if all_first else [admin, no_one, everyone]
+
+        tiers = mandatory_tiers_for_requirements(ordered, DEFAULT_LADDER)
+
+        assert (tiers.everyone, tiers.tier_ids) == (True, [])
+        assert tiers.unmapped == [
+            UnmappedRequirement("req-empty", "Empty", reason, applies_to_no_one=True)
+        ]
+
     # Only a requirement that grades no one says so: one whose members no
     # tier stands for still grades them, and the form offers All members.
     def test_a_requirement_no_tier_stands_for_still_grades_someone(self):

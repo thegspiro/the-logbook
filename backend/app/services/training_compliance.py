@@ -2271,7 +2271,8 @@ def mandatory_tiers_for_requirements(
     :func:`requirement_applies_to_member`, which decides who a requirement
     actually grades; keep the two in step (pitfall #29).
 
-    - ``applies_to_all`` means everyone, which covers every other requirement.
+    - ``applies_to_all`` means everyone, which covers every other requirement
+      that grades someone; one that grades no one (below) is still reported.
     - Each ``required_membership_types`` word becomes the tiers it canonically
       stands on. ``probationary`` also takes a ``junior`` tier, because a
       junior member's legacy membership type derives to probationary.
@@ -2293,6 +2294,7 @@ def mandatory_tiers_for_requirements(
     """
     tiers: List[str] = []
     unmapped: List[UnmappedRequirement] = []
+    everyone = False
     by_standing: Dict[str, List[str]] = {}
     for tier_id in ladder:
         standing = canonical_member_status(tier_id)
@@ -2312,7 +2314,8 @@ def mandatory_tiers_for_requirements(
             )
             continue
         if req.applies_to_all:
-            return MandatoryTiers(everyone=True, tier_ids=[], unmapped=[])
+            everyone = True
+            continue
         if req.required_membership_types:
             words = [
                 key
@@ -2360,6 +2363,16 @@ def mandatory_tiers_for_requirements(
         else:
             unmapped.append(_applies_to_no_one(req_id, name))
 
+    if everyone:
+        # All members covers every requirement that grades someone, whether or
+        # not a tier stands for them; one that grades no one is still named,
+        # or the form would list it as a source of All members. The loop runs
+        # to the end for it, whatever the order.
+        return MandatoryTiers(
+            everyone=True,
+            tier_ids=[],
+            unmapped=[u for u in unmapped if u.applies_to_no_one],
+        )
     picked = set(tiers)
     return MandatoryTiers(
         everyone=False,

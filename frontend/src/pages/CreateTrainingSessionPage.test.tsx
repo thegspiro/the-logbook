@@ -1279,6 +1279,46 @@ describe('CreateTrainingSessionPage mandatory pre-fill', () => {
     expect(screen.getByText('Company Drill Attendance → All members.')).toBeInTheDocument();
   });
 
+  // The backend names a requirement that grades no one beside All members
+  // (mandatory_tiers_for_requirements); the note must not list it as a source
+  // of All members, since the checklist says it applies to no members.
+  it('leaves a requirement that grades no one out of the sources of All members, and says it adds no one', async () => {
+    linkageRequirements.value = [
+      DRILLS,
+      { id: 'req-empty', name: 'Unscoped Attendance', requirement_type: 'session_attendance' },
+    ];
+    getMandatoryTiers.mockResolvedValue({
+      everyone: true,
+      tier_ids: [],
+      unmapped: [
+        {
+          requirement_id: 'req-empty',
+          name: 'Unscoped Attendance',
+          reason: 'It applies to no members, since no member categories, ranks or positions are set',
+          applies_to_no_one: true,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    await toTrainingInfo(user);
+    await tick(user, /Unscoped Attendance/);
+    await tick(user, /Company Drill Attendance/);
+    await waitFor(() => expect(getMandatoryTiers).toHaveBeenLastCalledWith(['req-empty', 'req-drills']));
+    await next(user);
+    await user.click(screen.getByRole('checkbox', { name: 'Mandatory attendance' }));
+
+    expect(screen.getByRole('radio', { name: 'All members' })).toBeChecked();
+    expect(screen.getByText('Company Drill Attendance → All members.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.tagName === 'P' &&
+          element.textContent ===
+            'Unscoped Attendance: It applies to no members, since no member categories, ranks or positions are set, so it adds no one to Mandatory for.'
+      )
+    ).toBeInTheDocument();
+  });
+
   it('leaves Mandatory for as it was when no ticked requirement maps, and says why', async () => {
     const user = userEvent.setup();
     await toTrainingInfo(user);
