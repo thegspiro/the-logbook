@@ -163,6 +163,35 @@ describe('DocumentsPage', () => {
     expect(within(uploadedCard).getByTitle('Download document')).toBeInTheDocument();
   });
 
+  it('sends a History document to History instead of offering to delete it', async () => {
+    const user = userEvent.setup();
+    mockGetDocuments.mockResolvedValue({
+      documents: [
+        makeDocument({ id: 'd-plain', name: 'Roster.pdf' }),
+        makeDocument({ id: 'd-history', name: 'Letter of thanks', source_type: 'history_document' }),
+      ],
+      total: 2,
+      skip: 0,
+      limit: 20,
+    });
+
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+
+    const historyCard = await screen.findByTestId('document-card-d-history');
+    expect(within(historyCard).getByRole('link', { name: 'Managed in History' })).toHaveAttribute(
+      'href',
+      '/history/documents/d-history'
+    );
+    expect(within(historyCard).queryByTitle('Delete document')).not.toBeInTheDocument();
+    // Its file can still be downloaded by whoever may open the folder.
+    expect(within(historyCard).getByTitle('Download document')).toBeInTheDocument();
+
+    const plainCard = screen.getByTestId('document-card-d-plain');
+    expect(within(plainCard).getByTitle('Delete document')).toBeInTheDocument();
+    expect(within(plainCard).queryByRole('link', { name: 'Managed in History' })).not.toBeInTheDocument();
+  });
+
   it('downloads a document via the service when Download is clicked', async () => {
     const user = userEvent.setup();
     mockGetDocuments.mockResolvedValue({

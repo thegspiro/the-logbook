@@ -548,10 +548,27 @@ class ExternalShiftHoursService:
     # Officer review
     # ------------------------------------------------------------------
 
+    async def _get_for_review(
+        self, organization_id: str, entry_id: str
+    ) -> Optional[ExternalShiftHours]:
+        # Locked so officers reviewing the same entry at once serialize: each
+        # decision reads the status the previous one committed, rather than
+        # both deciding from the same stale row and re-stamping the review.
+        result = await self.db.execute(
+            select(ExternalShiftHours)
+            .where(
+                ExternalShiftHours.id == str(entry_id),
+                ExternalShiftHours.organization_id == str(organization_id),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return result.scalar_one_or_none()
+
     async def reject(
         self, organization_id: str, entry_id: str, reviewer_id: str, reason: str
     ) -> Optional[ExternalShiftHours]:
-        entry = await self.get(organization_id, entry_id)
+        entry = await self._get_for_review(organization_id, entry_id)
         if entry is None:
             return None
         entry.status = _REJECTED
@@ -580,15 +597,7 @@ class ExternalShiftHoursService:
         Locked so two officers approving at once serialize: the second finds
         it already counted and is told so, rather than re-stamping the review.
         """
-        result = await self.db.execute(
-            select(ExternalShiftHours)
-            .where(
-                ExternalShiftHours.id == str(entry_id),
-                ExternalShiftHours.organization_id == str(organization_id),
-            )
-            .with_for_update()
-        )
-        entry: Optional[ExternalShiftHours] = result.scalar_one_or_none()
+        entry = await self._get_for_review(organization_id, entry_id)
         if entry is None:
             return None
         if entry.status != _PENDING:
@@ -608,9 +617,17 @@ class ExternalShiftHoursService:
     async def restore(
         self, organization_id: str, entry_id: str, reviewer_id: str
     ) -> Optional[ExternalShiftHours]:
-        entry = await self.get(organization_id, entry_id)
+        """Undo a rejection. ``ValueError`` unless the entry is rejected.
+
+        Only a rejected entry: on a pending one this would approve it without
+        approve's pending check, and on a counted one re-stamp the review.
+        """
+        entry = await self._get_for_review(organization_id, entry_id)
         if entry is None:
             return None
+        if entry.status != _REJECTED:
+            await self.db.rollback()
+            raise ValueError("This shift has not been rejected")
         entry.status = _COUNTED
         entry.reviewed_by = str(reviewer_id)
         entry.reviewed_at = datetime.now(timezone.utc)

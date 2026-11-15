@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Link } from 'react-router';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { FormField } from '../components/ux/FormField';
 import { useDiscardGuard } from '../hooks/useDiscardGuard';
@@ -58,6 +59,10 @@ type ViewMode = 'grid' | 'list';
 // all; uploads and moves now always file into a folder, General Documents by
 // default.)
 const ALL_DOCUMENTS = '__all__';
+// A document catalogued in History: History keeps its catalogue, the copy
+// members read and its change history, so it is changed there and the server
+// refuses a rename, move or delete from here.
+const HISTORY_DOCUMENT_SOURCE = 'history_document';
 const DOCUMENTS_PAGE_SIZE = 50;
 // Folders are cards in a three-column grid, so a page is sized to fill whole
 // rows at every breakpoint (1, 2 and 3 across) rather than leave a ragged tail.
@@ -895,7 +900,16 @@ const DocumentsPage: React.FC = () => {
                                   <Download className="h-4 w-4" />
                                 </button>
                               )}
-                              {canManage && (
+                              {doc.source_type === HISTORY_DOCUMENT_SOURCE && (
+                                <Link
+                                  to={`/history/documents/${doc.id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-theme-text-muted touch-target-phone p-1 text-xs underline"
+                                >
+                                  Managed in History
+                                </Link>
+                              )}
+                              {canManage && doc.source_type !== HISTORY_DOCUMENT_SOURCE && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -1008,7 +1022,15 @@ const DocumentsPage: React.FC = () => {
                                   <Download className="h-4 w-4" />
                                 </button>
                               )}
-                              {canManage && (
+                              {doc.source_type === HISTORY_DOCUMENT_SOURCE && (
+                                <Link
+                                  to={`/history/documents/${doc.id}`}
+                                  className="text-theme-text-muted p-1 text-xs underline"
+                                >
+                                  Managed in History
+                                </Link>
+                              )}
+                              {canManage && doc.source_type !== HISTORY_DOCUMENT_SOURCE && (
                                 <button
                                   onClick={() => setDeleteConfirm(doc.id)}
                                   className="text-theme-text-muted p-1 transition-colors hover:text-red-800 dark:hover:text-red-400"

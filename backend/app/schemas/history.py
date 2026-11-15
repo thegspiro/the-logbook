@@ -19,6 +19,7 @@ from app.models.history import (
     ClearancePurpose,
     ClearanceStatus,
     DatePrecision,
+    DocumentKind,
     FieldVisibility,
     HistoryImportDecision,
     HistoryImportStatus,
@@ -369,7 +370,7 @@ class PositionOption(BaseModel):
 
 
 class ClearanceSubmit(BaseModel):
-    record_type: Literal["member", "media"]
+    record_type: Literal["member", "media", "document"]
     record_id: str
     purpose: ClearancePurpose = ClearancePurpose.PUBLIC
 
@@ -392,9 +393,9 @@ class ClearanceReview(BaseModel):
     """A request with the record as members would read it, for its reviewers."""
 
     request: ClearanceRequestResponse
-    #: A person or a photo/media item, as members would read it; which one
-    #: is ``request.record_type``.
-    record: Union[HistoricalMemberMemberView, "MediaMemberView"]
+    #: A person, a photo/media item or a document, as members would read it;
+    #: which one is ``request.record_type``.
+    record: Union[HistoricalMemberMemberView, "MediaMemberView", "DocumentMemberView"]
 
 
 class MarkdownRender(BaseModel):
@@ -723,8 +724,19 @@ class AlbumSummary(BaseModel):
     item_count: int
 
 
+class AlbumEntry(BaseModel):
+    """One entry of an album, photo or document, in the album's order."""
+
+    kind: Literal["media", "document"]
+    media: Optional[MediaSummary] = None
+    document: Optional["DocumentSummary"] = None
+
+
 class AlbumDetail(AlbumSummary):
+    #: The album's photos the viewer may read (kept for phase 3 callers).
     items: list[MediaSummary]
+    #: Photos and documents the viewer may read, in the album's one order.
+    entries: list[AlbumEntry] = Field(default_factory=list)
     can_edit: bool
 
 
@@ -741,8 +753,175 @@ class AlbumUpdate(BaseModel):
     cover_media_id: Optional[str] = None
 
 
+class AlbumEntryRef(BaseModel):
+    kind: Literal["media", "document"]
+    id: str = Field(min_length=1, max_length=36)
+
+
 class AlbumItemsReplace(BaseModel):
-    media_ids: list[str] = Field(max_length=1000)
+    """Either the phase 3 list of photo ids (the album's documents stay), or
+    an ordered list of photos and documents that replaces everything."""
+
+    media_ids: Optional[list[str]] = Field(default=None, max_length=1000)
+    entries: Optional[list[AlbumEntryRef]] = Field(default=None, max_length=1000)
+
+    @model_validator(mode="after")
+    def _one_list(self) -> "AlbumItemsReplace":
+        if (self.media_ids is None) == (self.entries is None):
+            raise ValueError("Send either media_ids or entries")
+        return self
+
+
+# --- Documents ---
+
+#: A transcription of a long document: well past a description's limit, and
+#: within MEDIUMTEXT.
+_TRANSCRIPTION = Field(default=None, max_length=1_000_000)
+
+
+class DocumentTagMember(BaseModel):
+    member_id: str
+    display_name: str
+
+
+class _DocumentCatalogue(BaseModel):
+    id: str
+    kind: DocumentKind
+    title: str
+    description: Optional[str]
+    taken_date: Optional[date]
+    taken_date_precision: DatePrecision
+    taken_date_circa: bool
+    place: Optional[str]
+    document_type_id: Optional[str]
+    document_type_name: Optional[str]
+    author: Optional[str]
+    recipient: Optional[str]
+    source_id: Optional[str]
+    source_name: Optional[str]
+    rights_note: Optional[str]
+    accession_number: Optional[str]
+    original_location: Optional[str]
+    transcription: Optional[str]
+    #: True when a PDF ran past the reading limits, so search covers part.
+    text_truncated: bool
+    page_count: Optional[int]
+    width: Optional[int]
+    height: Optional[int]
+    has_thumbnail: bool
+    #: The type of what ``/view`` returns: the stripped PDF, or a scan's WebP.
+    mime_type: Optional[str]
+    publication_level: PublicationLevel
+
+
+class DocumentMemberView(_DocumentCatalogue):
+    """What a member reading published history receives: no research notes,
+    no original file, and tags only for people they may read."""
+
+    view: Literal["member"] = "member"
+    tags: list[DocumentTagMember]
+
+
+class DocumentFullView(_DocumentCatalogue):
+    view: Literal["full"] = "full"
+    research_notes: Optional[str]
+    original_filename: str
+    original_mime_type: Optional[str]
+    original_size_bytes: Optional[int]
+    batch_id: Optional[str]
+    tags: list[DocumentTagMember]
+    published_at: Optional[datetime]
+    revision_number: int
+    public_revision_number: Optional[int]
+    public_changes_pending: bool
+    clearance_required: bool
+    cleared_for_public: bool
+    clearance: Optional[ClearanceRequestResponse]
+    can_edit: bool
+    can_publish: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+DocumentView = Union[DocumentFullView, DocumentMemberView]
+
+
+class DocumentSummary(BaseModel):
+    id: str
+    kind: DocumentKind
+    title: str
+    taken_date: Optional[date]
+    taken_date_precision: DatePrecision
+    taken_date_circa: bool
+    document_type_name: Optional[str]
+    page_count: Optional[int]
+    has_thumbnail: bool
+    publication_level: PublicationLevel
+
+
+class DocumentList(BaseModel):
+    items: list[DocumentSummary]
+    total: int
+
+
+class _DocumentFields(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    description: Optional[str] = _TEXT
+    taken_date: Optional[date] = None
+    taken_date_precision: Optional[DatePrecision] = None
+    taken_date_circa: Optional[bool] = None
+    place: Optional[str] = Field(default=None, max_length=255)
+    document_type_id: Optional[str] = Field(default=None, max_length=36)
+    author: Optional[str] = Field(default=None, max_length=255)
+    recipient: Optional[str] = Field(default=None, max_length=255)
+    source_id: Optional[str] = Field(default=None, max_length=36)
+    rights_note: Optional[str] = _TEXT
+    accession_number: Optional[str] = Field(default=None, max_length=100)
+    original_location: Optional[str] = Field(default=None, max_length=255)
+    research_notes: Optional[str] = _TEXT
+    transcription: Optional[str] = _TRANSCRIPTION
+
+
+class DocumentUploadFields(_DocumentFields):
+    """The catalogue sent with each file of a batch, as a JSON form field."""
+
+    tag_member_ids: list[str] = Field(default_factory=list, max_length=200)
+
+
+class DocumentUpdate(_DocumentFields):
+    #: Forced to substantial when the title, description, date, author,
+    #: recipient or transcription changes.
+    edit_kind: EditKind = "minor"
+    edit_note: Optional[str] = Field(default=None, max_length=2000)
+
+
+class DocumentTagsReplace(BaseModel):
+    member_ids: list[str] = Field(max_length=200)
+
+
+# --- Document types ---
+
+
+class HistoryDocumentTypeResponse(BaseModel):
+    id: str
+    name: str
+    sort_order: int
+    is_retired: bool
+    usage_count: int = 0
+
+
+class HistoryDocumentTypeCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=150)
+
+
+class HistoryDocumentTypeUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=150)
+    is_retired: Optional[bool] = None
+
+
+class HistoryDocumentTypeMerge(BaseModel):
+    into_type_id: str
 
 
 ClearanceReview.model_rebuild()
+AlbumEntry.model_rebuild()

@@ -5,7 +5,9 @@ past-members roster, the managed title list, family links, the Honor Roll, the
 change history and the department clearance list. Phase 2 (2026-11-13) adds
 roster import and person merge. Phase 3 (2026-11-13) adds photos, audio and
 video, with albums, a managed source list and tags on past-member records.
-Later phases add documents (4), events and
+Phase 4 (2026-11-14) adds documents: letters, minutes, clippings and other
+papers, kept in a protected History folder in Documents. Later phases add
+events and
 timelines with historical apparatus (5), articles with PDF/Word export (6),
 and publishing outward — the public portal feed and the "Today in history"
 widget (7).
@@ -225,13 +227,84 @@ at once with one catalogue and one set of tags. Each file is its own request,
 sent one after another under a shared `batch_id`, so a refused file is marked
 and the rest carry on. Every file becomes a draft.
 
-**Albums** (`/history/albums`) are named, ordered lists of items, at draft or
-members level; an album lists only the items its reader may see. **Sources**
-are managed in History settings; two sources for one donor can be merged.
+**Albums** (`/history/albums`) are named, ordered lists of photos and
+documents in one order, at draft or members level; an album lists only the
+entries its reader may see. **Sources** are managed in History settings and
+shared by photos and documents; two sources for one donor can be merged.
 
 **Deleting** an item is allowed only while it is a draft. Its files are removed
 after the delete commits, so a failed commit never leaves a row pointing at a
 missing file.
+
+## Documents
+
+`/history/documents`. A document is a row in the Documents module, filed in
+the protected **History** system folder (`required_permissions =
+["history.manage"]`), with its catalogue beside it, one-to-one, in
+`history_documents` (phase 1 decision). The `documents` row holds the original;
+its `source_type` is `history_document`, which the Documents module treats as
+read-only: it may be downloaded there by anyone who can open the folder, but a
+rename, move or delete is refused with 409 (and `DocumentsService.delete_document`
+refuses it whichever path calls it). Nothing is uploaded or moved into the
+History folder from Documents: it would sit there uncatalogued and unstripped.
+
+**The catalogue** is the photo catalogue's fields (title, description, a
+partial date, place, source or donor, rights note, accession number, where the
+original is kept, research notes) plus a **document type** from a managed list
+(a department starts with Letter, Minutes, Newspaper clipping, Certificate,
+Programme, Report and Other, made the first time the list is read), **author
+or sender**, **recipient** and a **transcription**. Research notes are
+encrypted; the transcription and the text a PDF carries are not, because both
+are searched. A change to the title, description, date, author, recipient,
+transcription or tags is always substantial. Tags point at past-member
+records; there is no photo-use consent warning (owner decision: a letter
+naming someone is not a photo of them).
+
+**What is stored.** PDFs and image scans (JPEG, PNG, WebP), up to 50 MB; a
+scan up to 60 megapixels. Word and other office files are refused with a note
+to convert them to PDF, and so is a PDF that needs a password to open (one
+merely restricted by its owner opens without one and is accepted). Every file
+is type-checked from its bytes and malware-scanned before pypdf or PDFium
+reads a byte.
+
+| File                                       | PDF                                          | Image scan                          |
+| ------------------------------------------ | -------------------------------------------- | ----------------------------------- |
+| original (`documents` row, Documents area) | the upload, byte for byte                    | the upload                          |
+| `display` (`history_document_files`)       | rebuilt from its pages alone, see below      | WebP, 2048 px, upright, no EXIF/GPS |
+| `thumbnail`                                | the first page drawn by PDFium, WebP, 400 px | WebP, 400 px                        |
+
+**The members' copy of a PDF** (`history_document_files.make_pdf_copies`) is
+built by copying the pages into a new file, so nothing in the document
+catalogue comes across: no document information, XMP, open action, document
+JavaScript, embedded files, outline or form scripts. Each page is cleaned
+_before_ it is copied (deleting a reference afterwards would leave the object
+it pointed to in the file, orphaned but readable): its own actions and
+metadata go, file-attachment and media annotations go, a kept annotation keeps
+only a link or in-document jump, and a form field's scripts go. Every JPEG
+image inside loses its EXIF, XMP, IPTC and comment segments without being
+re-encoded. Pages, text, images and annotations are kept. PDFium is not
+thread-safe, so its use is serialized behind a lock.
+
+**Search** covers the title, description, place, author, recipient,
+accession number, transcription and the PDF's text, read from the stripped
+copy: at most 2,000 pages and 2 MB of text, past which the document page says
+search covers only its first pages. There is no OCR, so the words inside a
+scan are found through its transcription.
+
+**Viewing.** The whole app is served with `frame-ancestors 'none'`, so a PDF
+cannot be shown inside an app page. The document page shows the first-page
+preview and an **Open** link that opens `/view` (the stripped copy, inline) in
+a new tab, in the browser's own viewer. Chrome refuses to show a PDF sent with
+the CSP sandbox header, so the protection against a script in the file is the
+rebuilt copy, not a header. `/original` is always an attachment and
+`history.manage` only.
+
+**Upload, publication and delete** are as for photos: up to 25 files a batch,
+one request each; draft, members or public with the clearance list
+(`record_type = "document"`); delete only while a draft, removing the
+`documents` row (its catalogue, files, tags and album places follow by
+cascade) and every stored file after the delete commits. A person merge moves
+document tags to the kept record.
 
 ## API
 
@@ -239,20 +312,25 @@ missing file.
 caller's department, and every client-sent id (account, title, relative,
 position) is checked against it before it is stored.
 
-| Path                                                                                                                                                                                                                             | Gate                                                     |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `GET /people`, `GET /people/{id}`, `GET /honor-roll`, `GET /titles`, `GET /clearance/steps`, `GET /clearance/queue`                                                                                                              | signed in                                                |
-| `GET /people/check`, `POST /people`, `POST /people/from-member/{user_id}`, `PATCH /people/{id}`, `PUT /people/{id}/periods`, `DELETE /people/{id}`, relations, title writes, `POST /clearance/requests`, `POST /render-markdown` | `history.manage`                                         |
-| `GET /people/{id}/merge-preview`, `POST /people/{id}/merge`, everything under `/imports`                                                                                                                                         | `history.manage`                                         |
-| `POST /people/{id}/publish`, `/unpublish`                                                                                                                                                                                        | `history.publish`                                        |
-| `GET /people/{id}/revisions`                                                                                                                                                                                                     | `history.view` / `history.manage`, or a clearer          |
-| `GET /clearance/positions`, `PUT /clearance/steps`                                                                                                                                                                               | `history.manage` or `settings.manage`                    |
-| `GET /clearance/requests/{id}`                                                                                                                                                                                                   | keepers, the submitter, or a holder of a step's position |
-| `POST /clearance/requests/{id}/decide`                                                                                                                                                                                           | a holder of the current step's position                  |
-| `GET /media`, `GET /media/{id}`, `/thumbnail`, `/view`, `GET /people/{id}/media`, `GET /sources`, `GET /albums`, `GET /albums/{id}`                                                                                              | signed in (drafts to the keepers only)                   |
-| `POST /media`, `PATCH /media/{id}`, `PUT /media/{id}/tags`, `DELETE /media/{id}`, `GET /media/{id}/original`, source and album writes                                                                                            | `history.manage`                                         |
-| `POST /media/{id}/publish`, `/unpublish`                                                                                                                                                                                         | `history.publish`                                        |
-| `GET /media/{id}/revisions`                                                                                                                                                                                                      | `history.view` / `history.manage`, or a clearer          |
+| Path                                                                                                                                                                                                                             | Gate                                                                                                                 |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `GET /people`, `GET /people/{id}`, `GET /honor-roll`, `GET /titles`, `GET /clearance/steps`, `GET /clearance/queue`                                                                                                              | signed in                                                                                                            |
+| `GET /people/check`, `POST /people`, `POST /people/from-member/{user_id}`, `PATCH /people/{id}`, `PUT /people/{id}/periods`, `DELETE /people/{id}`, relations, title writes, `POST /clearance/requests`, `POST /render-markdown` | `history.manage`                                                                                                     |
+| `GET /people/{id}/merge-preview`, `POST /people/{id}/merge`, everything under `/imports`                                                                                                                                         | `history.manage`                                                                                                     |
+| `POST /people/{id}/publish`, `/unpublish`                                                                                                                                                                                        | `history.publish`                                                                                                    |
+| `GET /people/{id}/revisions`                                                                                                                                                                                                     | `history.view` / `history.manage`, or a clearer                                                                      |
+| `GET /clearance/positions`, `PUT /clearance/steps`                                                                                                                                                                               | `history.manage` or `settings.manage`                                                                                |
+| `GET /clearance/requests/{id}`                                                                                                                                                                                                   | keepers, the submitter, or a holder of a step's position                                                             |
+| `POST /clearance/requests/{id}/decide`                                                                                                                                                                                           | a holder of the current step's position                                                                              |
+| `GET /media`, `GET /media/{id}`, `/thumbnail`, `/view`, `GET /people/{id}/media`, `GET /sources`, `GET /albums`, `GET /albums/{id}`                                                                                              | signed in (drafts to the keepers only)                                                                               |
+| `POST /media`, `PATCH /media/{id}`, `PUT /media/{id}/tags`, `DELETE /media/{id}`, `GET /media/{id}/original`, source and album writes                                                                                            | `history.manage`                                                                                                     |
+| `POST /media/{id}/publish`, `/unpublish`                                                                                                                                                                                         | `history.publish`                                                                                                    |
+| `GET /media/{id}/revisions`                                                                                                                                                                                                      | `history.view` / `history.manage`, or a clearer                                                                      |
+| `GET /documents`, `GET /documents/{id}`, `/thumbnail`, `/view`, `GET /people/{id}/documents`, `GET /document-types`                                                                                                              | signed in (drafts to the keepers only)                                                                               |
+| `POST /documents`, `PATCH /documents/{id}`, `PUT /documents/{id}/tags`, `DELETE /documents/{id}`, `GET /documents/{id}/original`, document-type writes                                                                           | `history.manage`                                                                                                     |
+| `POST /documents/{id}/publish`, `/unpublish`                                                                                                                                                                                     | `history.publish`                                                                                                    |
+| `GET /documents/{id}/revisions`                                                                                                                                                                                                  | `history.view` / `history.manage`, or a clearer                                                                      |
+| `PUT /albums/{id}/items`                                                                                                                                                                                                         | `history.manage`; `entries` (photos and documents in order) or the earlier `media_ids` (photos only; documents stay) |
 
 Markdown is rendered on the server (`app/utils/markdown_render.py`:
 `markdown-it-py` with raw HTML and images off, then `nh3` against an
@@ -267,7 +345,9 @@ allowlist (`modules/history/utils/historyFormat.ts`).
 `/history/import`, `/history/import/:importId`, `/history/honor-roll`,
 `/history/clearance/:requestId`, `/history/settings`, `/history/media`,
 `/history/media/upload`, `/history/media/:mediaId`,
-`/history/media/:mediaId/edit`, `/history/albums`,
+`/history/media/:mediaId/edit`, `/history/documents`,
+`/history/documents/upload`, `/history/documents/:documentId`,
+`/history/documents/:documentId/edit`, `/history/albums`,
 `/history/albums/:albumId`. Every route carries
 `requiredModule="history"`; the API client is `createApiClient`, and `/history`
 URLs are never cached (`UNCACHEABLE_SUBSTRINGS`).

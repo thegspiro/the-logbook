@@ -34,6 +34,7 @@ import type {
   MergePreview,
   RemoveRecordsResult,
   AlbumDetail,
+  AlbumEntryRef,
   AlbumLevel,
   AlbumSummary,
   HistorySource,
@@ -45,6 +46,14 @@ import type {
   MediaUpdate,
   MediaUploadFields,
   MediaView,
+  DocumentFullView,
+  DocumentList,
+  DocumentQuery,
+  DocumentSummary,
+  DocumentUpdate,
+  DocumentUploadFields,
+  DocumentView,
+  HistoryDocumentType,
 } from '../types';
 
 const api = createApiClient();
@@ -196,7 +205,7 @@ export const historyService = {
   async submitForClearance(
     recordId: string,
     purpose: ClearancePurpose,
-    recordType: 'member' | 'media' = 'member'
+    recordType: 'member' | 'media' | 'document' = 'member'
   ): Promise<ClearanceRequest> {
     const { data } = await api.post<ClearanceRequest>(`${BASE}/clearance/requests`, {
       record_type: recordType,
@@ -317,7 +326,9 @@ export const historyMediaService = {
 
   async getMedia(id: string): Promise<MediaView> {
     const { data } = await api.get<MediaView>(`${BASE}/media/${id}`);
-    return { ...data, tags: asArray(data.tags) } as MediaView;
+    // Narrowed first: a spread of the union would lose which view it is.
+    if (data.view === 'full') return { ...data, tags: asArray(data.tags) };
+    return { ...data, tags: asArray(data.tags) };
   },
 
   /** One file of a batch. Each goes in its own request: the server accepts 60 MB
@@ -418,7 +429,7 @@ export const historyMediaService = {
 
   async getAlbum(id: string): Promise<AlbumDetail> {
     const { data } = await api.get<AlbumDetail>(`${BASE}/albums/${id}`);
-    return { ...data, items: asArray(data.items) };
+    return normalizeAlbum(data);
   },
 
   async createAlbum(payload: {
@@ -427,7 +438,7 @@ export const historyMediaService = {
     level?: AlbumLevel | undefined;
   }): Promise<AlbumDetail> {
     const { data } = await api.post<AlbumDetail>(`${BASE}/albums`, payload);
-    return { ...data, items: asArray(data.items) };
+    return normalizeAlbum(data);
   },
 
   async updateAlbum(
@@ -440,16 +451,137 @@ export const historyMediaService = {
     }
   ): Promise<AlbumDetail> {
     const { data } = await api.patch<AlbumDetail>(`${BASE}/albums/${id}`, payload);
-    return { ...data, items: asArray(data.items) };
+    return normalizeAlbum(data);
   },
 
   async setAlbumItems(id: string, mediaIds: string[]): Promise<AlbumDetail> {
     const { data } = await api.put<AlbumDetail>(`${BASE}/albums/${id}/items`, { media_ids: mediaIds });
-    return { ...data, items: asArray(data.items) };
+    return normalizeAlbum(data);
+  },
+
+  /** Photos and documents together, in order: replaces the whole album. */
+  async setAlbumEntries(id: string, entries: AlbumEntryRef[]): Promise<AlbumDetail> {
+    const { data } = await api.put<AlbumDetail>(`${BASE}/albums/${id}/items`, { entries });
+    return normalizeAlbum(data);
   },
 
   async deleteAlbum(id: string): Promise<void> {
     await api.delete(`${BASE}/albums/${id}`);
+  },
+};
+
+function normalizeAlbum(data: AlbumDetail): AlbumDetail {
+  return { ...data, items: asArray(data.items), entries: asArray(data.entries) };
+}
+
+/** Where a document's preview and readable copy are read from: plain URLs, so
+ * an <img> loads the preview and a link opens the PDF in the browser's own
+ * viewer, in its own tab. The original is not here: it is downloaded through
+ * the authenticated client by history.manage alone. */
+const DOCUMENT_FILE_BASE = `/api/v1${BASE}/documents`;
+
+export const documentFileUrl = (id: string, which: 'thumbnail' | 'view'): string =>
+  `${DOCUMENT_FILE_BASE}/${encodeURIComponent(id)}/${which}`;
+
+export const historyDocumentService = {
+  async listDocuments(query: DocumentQuery = {}): Promise<DocumentList> {
+    const { data } = await api.get<DocumentList>(`${BASE}/documents`, { params: query });
+    return { items: asArray(data.items), total: data.total };
+  },
+
+  async getDocument(id: string): Promise<DocumentView> {
+    const { data } = await api.get<DocumentView>(`${BASE}/documents/${id}`);
+    if (data.view === 'full') return { ...data, tags: asArray(data.tags) };
+    return { ...data, tags: asArray(data.tags) };
+  },
+
+  async uploadDocument(
+    file: File,
+    catalogue: DocumentUploadFields,
+    batchId: string,
+    onProgress?: (fraction: number) => void
+  ): Promise<DocumentFullView> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('catalogue', JSON.stringify(catalogue));
+    form.append('batch_id', batchId);
+    const { data } = await api.post<DocumentFullView>(`${BASE}/documents`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      // A 50 MB scan over a slow connection outlasts the default timeout.
+      timeout: 0,
+      onUploadProgress: (event) => {
+        if (onProgress && event.total) onProgress(event.loaded / event.total);
+      },
+    });
+    return data;
+  },
+
+  async updateDocument(id: string, payload: DocumentUpdate): Promise<DocumentFullView> {
+    const { data } = await api.patch<DocumentFullView>(`${BASE}/documents/${id}`, payload);
+    return data;
+  },
+
+  async replaceTags(id: string, memberIds: string[]): Promise<DocumentFullView> {
+    const { data } = await api.put<DocumentFullView>(`${BASE}/documents/${id}/tags`, { member_ids: memberIds });
+    return data;
+  },
+
+  async deleteDocument(id: string): Promise<void> {
+    await api.delete(`${BASE}/documents/${id}`);
+  },
+
+  async publish(id: string, level: 'members' | 'public'): Promise<DocumentFullView> {
+    const { data } = await api.post<DocumentFullView>(`${BASE}/documents/${id}/publish`, { level });
+    return data;
+  },
+
+  async unpublish(id: string, level: 'draft' | 'members'): Promise<DocumentFullView> {
+    const { data } = await api.post<DocumentFullView>(`${BASE}/documents/${id}/unpublish`, { level });
+    return data;
+  },
+
+  async listRevisions(id: string): Promise<Revision[]> {
+    const { data } = await api.get<Revision[]>(`${BASE}/documents/${id}/revisions`);
+    return asArray(data);
+  },
+
+  async personDocuments(personId: string): Promise<DocumentSummary[]> {
+    const { data } = await api.get<DocumentSummary[]>(`${BASE}/people/${personId}/documents`);
+    return asArray(data);
+  },
+
+  async downloadOriginal(id: string): Promise<Blob> {
+    const { data } = await api.get<Blob>(`${BASE}/documents/${id}/original`, { responseType: 'blob' });
+    return data;
+  },
+
+  // --- Document types ---
+
+  async listTypes(includeRetired = false): Promise<HistoryDocumentType[]> {
+    const { data } = await api.get<HistoryDocumentType[]>(`${BASE}/document-types`, {
+      params: { include_retired: includeRetired },
+    });
+    return asArray(data);
+  },
+
+  async createType(name: string): Promise<HistoryDocumentType> {
+    const { data } = await api.post<HistoryDocumentType>(`${BASE}/document-types`, { name });
+    return data;
+  },
+
+  async updateType(
+    id: string,
+    changes: { name?: string | undefined; is_retired?: boolean | undefined }
+  ): Promise<HistoryDocumentType> {
+    const { data } = await api.patch<HistoryDocumentType>(`${BASE}/document-types/${id}`, changes);
+    return data;
+  },
+
+  async mergeType(id: string, intoTypeId: string): Promise<HistoryDocumentType> {
+    const { data } = await api.post<HistoryDocumentType>(`${BASE}/document-types/${id}/merge`, {
+      into_type_id: intoTypeId,
+    });
+    return data;
   },
 };
 
