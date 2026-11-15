@@ -674,8 +674,9 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
           filter makes it the containing block of anything fixed inside it,
           which pinned the bar to the card's bottom edge, over the step's last
           control, instead of to the viewport. The form's own bottom padding
-          lets that control scroll clear of the bar. From 768px the form is
-          the card and the navigation sits at its foot. */}
+          lets that control scroll clear of the bar, and its controls' scroll
+          margin keeps one reached by Tab from coming to rest behind it. From
+          768px the form is the card and the navigation sits at its foot. */}
       <form
         noValidate
         onSubmit={(e) => {
@@ -683,7 +684,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
           if (step < REVIEW) handleNext();
           else void handleSubmit();
         }}
-        className="md:card space-y-8 max-md:pb-24 md:p-8"
+        className="md:card max-md:clear-of-action-bar space-y-8 max-md:pb-24 md:p-8"
       >
         <div className="max-md:card space-y-8 p-4 sm:p-8 md:p-0">
           {/* The caption is the phone stepper's: from 768px the stepper names

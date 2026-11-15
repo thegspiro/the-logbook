@@ -2035,6 +2035,20 @@
   );
 }
 
+@utility clear-of-action-bar {
+  /* For the content scrolling under a fixed `action-bar-safe` bar of one row
+     of buttons. A control that takes focus by Tab (a hardware keyboard, switch
+     access) is scrolled only as far as the viewport's edge, which is behind
+     the bar, and one already in view behind it is not scrolled at all (WCAG
+     2.4.11, Focus Not Obscured). Its scroll margin is the bar's height: the
+     paddings `action-bar-safe` owns plus a 44px button, and a little room. */
+  & :is(a[href], button, input, select, textarea, [tabindex]) {
+    scroll-margin-bottom: calc(
+      5rem + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px) + var(--bottom-nav-height, 0px)
+    );
+  }
+}
+
 @utility sticky-action-bar {
   /* #29 Bottom-pinned summary + CTA bar (the phone cart/checkout bar). Its
      shadow points upward — the inverse of --shadow-card — because the surface

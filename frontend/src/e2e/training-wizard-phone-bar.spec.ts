@@ -77,4 +77,40 @@ test.describe('training-event form on a phone', () => {
     await saveAsDraft.click();
     await expect(saveAsDraft).toBeChecked();
   });
+  // WCAG 2.4.11: a control reached by Tab, from a hardware keyboard or switch
+  // access, is scrolled only as far as the viewport's edge, which is behind
+  // the bar unless the bar's height is reserved for it.
+  test('keeps a control reached by Tab clear of the bar', async ({ page }) => {
+    // Instant scrolling, so each rect is read where the focus scroll ended.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await openWizard(page);
+    await page.getByLabel(/^Title/).fill('Ladder Drill');
+    await page.getByLabel(/Start Date & Time/).fill('2030-05-01');
+    await next(page).click();
+    await expect(page.getByText('Step 2 of 4 · Training Info')).toBeVisible();
+
+    const barTop = (await page.getByRole('group', { name: 'Step navigation' }).boundingBox())?.y ?? 0;
+    expect(barTop).toBeGreaterThan(0);
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    await page.locator('#training-wizard-step').focus();
+
+    const obscured: string[] = [];
+    let checked = 0;
+    for (let press = 0; press < 40; press += 1) {
+      await page.keyboard.press('Tab');
+      const focused = await page.evaluate(() => {
+        const el = document.activeElement;
+        if (!(el instanceof HTMLElement) || !el.closest('form')) return null;
+        if (el.closest('[role="group"][aria-label="Step navigation"]')) return null;
+        const rect = el.getBoundingClientRect();
+        return { name: el.id || el.getAttribute('name') || el.textContent?.trim() || el.tagName, bottom: rect.bottom };
+      });
+      if (!focused) continue;
+      checked += 1;
+      if (focused.bottom > barTop)
+        obscured.push(`${focused.name} (bottom ${Math.round(focused.bottom)} > ${Math.round(barTop)})`);
+    }
+    expect(checked).toBeGreaterThan(3);
+    expect(obscured).toEqual([]);
+  });
 });
