@@ -4,6 +4,7 @@ import { GraduationCap, Pencil, Lock, Plus, ShieldCheck, Clock } from 'lucide-re
 import type { TrainingApprovalSummary, TrainingSessionResponse } from '../../services/api';
 import { trainingSessionService } from '../../services/api';
 import { useTrainingLinkageData } from '../../hooks/useTrainingLinkageData';
+import { useRetiredAttendanceRequirements } from '../../hooks/useRetiredAttendanceRequirements';
 import { formatDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { TRAINING_TYPE_LABELS } from '../../constants/enums';
@@ -66,6 +67,8 @@ const notAppliedEntries = (session: TrainingSessionResponse, legacy: Record<stri
   return entries;
 };
 
+const NO_IDS: readonly string[] = [];
+
 const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
 const linkClass =
@@ -111,8 +114,13 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
   const [loadFailed, setLoadFailed] = useState(false);
   const tz = useTimezone();
 
-  const { categories, requirements, programs, phases, requirementsLoaded } = useTrainingLinkageData(
-    session?.program_id
+  const linkageData = useTrainingLinkageData(session?.program_id);
+  const { categories, requirements, programs, phases, requirementsLoaded } = linkageData;
+  // Named as the training form names them, so a retired link is not
+  // "a requirement no longer active" here and named there.
+  const retiredAttendanceNames = useRetiredAttendanceRequirements(
+    session?.attendance_requirement_ids ?? NO_IDS,
+    linkageData
   );
 
   useEffect(() => {
@@ -363,6 +371,7 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
         session={session}
         requirements={requirements}
         loaded={requirementsLoaded ?? true}
+        retiredNames={retiredAttendanceNames}
       />
     </div>
   );

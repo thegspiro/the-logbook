@@ -277,6 +277,38 @@ describe('TrainingSessionLinkageCard', () => {
     expect(screen.getByText('Company Drill Attendance (60%)')).toBeInTheDocument();
   });
 
+  // The training form names the same link "<name> (no longer active)"; the
+  // card read only the active list and fell back to a generic label.
+  it('names a linked requirement that is no longer active, as the training form does', async () => {
+    const attendance = {
+      organization_id: 'org-1',
+      requirement_type: 'session_attendance',
+      source: 'department',
+      frequency: 'annual',
+      applies_to_all: true,
+      due_date_type: 'calendar_period',
+      created_at: '',
+      updated_at: '',
+    };
+    const active = {
+      ...attendance,
+      id: 'r-cda',
+      name: 'Company Drill Attendance',
+      required_attendance_pct: 50,
+      active: true,
+    };
+    const retired = { ...attendance, id: 'r-old', name: 'Legacy Night Drill Attendance', active: false };
+    mockGetRequirements.mockImplementation((params?: { active_only?: boolean }) =>
+      Promise.resolve(params?.active_only === false ? [active, retired] : [active])
+    );
+    mockGetSessionByEvent.mockResolvedValue({ ...SESSION, attendance_requirement_ids: ['r-cda', 'r-old'] });
+    renderCard();
+
+    expect(await screen.findByText('Legacy Night Drill Attendance (no longer active)')).toBeInTheDocument();
+    expect(screen.getByText('Company Drill Attendance (50%)')).toBeInTheDocument();
+    expect(screen.queryByText('A requirement no longer active')).not.toBeInTheDocument();
+  });
+
   describe('an event with no training details', () => {
     beforeEach(() => {
       mockGetSessionByEvent.mockResolvedValue(null);

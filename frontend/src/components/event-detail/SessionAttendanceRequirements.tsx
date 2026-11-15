@@ -3,6 +3,7 @@ import { ClipboardCheck } from 'lucide-react';
 import type { TrainingSessionResponse } from '../../services/api';
 import type { TrainingRequirement } from '../../types/training';
 import { attendanceRequirements } from '../../utils/attendanceRequirements';
+import { linkedAttendanceLabel } from '../../hooks/useRetiredAttendanceRequirements';
 
 interface SessionAttendanceRequirementsProps {
   session: TrainingSessionResponse;
@@ -10,6 +11,8 @@ interface SessionAttendanceRequirementsProps {
   requirements: TrainingRequirement[];
   /** Whether `requirements` has loaded: until then a linked id is not known to be retired. */
   loaded?: boolean | undefined;
+  /** Linked requirements no longer active, id to name (useRetiredAttendanceRequirements). */
+  retiredNames?: Readonly<Record<string, string>> | undefined;
 }
 
 /**
@@ -25,6 +28,7 @@ const SessionAttendanceRequirements: React.FC<SessionAttendanceRequirementsProps
   session,
   requirements,
   loaded = true,
+  retiredNames = {},
 }) => {
   const linked = session.attendance_requirement_ids ?? [];
   const options = attendanceRequirements(requirements);
@@ -33,13 +37,7 @@ const SessionAttendanceRequirements: React.FC<SessionAttendanceRequirementsProps
 
   if (options.length === 0 && linked.length === 0) return null;
 
-  const names = linked.map((id) => {
-    const requirement = options.find((r) => r.id === id);
-    if (!requirement) return 'A requirement no longer active';
-    return requirement.required_attendance_pct
-      ? `${requirement.name} (${requirement.required_attendance_pct}%)`
-      : requirement.name;
-  });
+  const names = linked.map((id) => linkedAttendanceLabel(id, options, retiredNames));
 
   return (
     <div className="border-theme-surface-border mt-6 border-t pt-4">

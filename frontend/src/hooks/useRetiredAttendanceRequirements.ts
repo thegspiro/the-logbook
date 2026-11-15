@@ -8,6 +8,30 @@ import type { TrainingLinkageData } from './useTrainingLinkageData';
 export const UNNAMED_RETIRED_REQUIREMENT = 'A requirement no longer active';
 
 /**
+ * A linked attendance requirement as it is listed: with its percentage while
+ * active, "<name> (no longer active)" once retired, and the generic label
+ * only when even its name cannot be found. The event page's training card and
+ * the training form's Review both name a link through this, so the two
+ * screens describe the same link alike.
+ */
+export const linkedAttendanceLabel = (
+  id: string,
+  active: readonly TrainingRequirement[],
+  retiredNames: Readonly<Record<string, string>>
+): string => {
+  const requirement = active.find((r) => r.id === id);
+  if (requirement) {
+    return requirement.required_attendance_pct
+      ? `${requirement.name} (${requirement.required_attendance_pct}%)`
+      : requirement.name;
+  }
+  const retired = retiredNames[id];
+  return retired && retired !== UNNAMED_RETIRED_REQUIREMENT
+    ? `${retired} (no longer active)`
+    : UNNAMED_RETIRED_REQUIREMENT;
+};
+
+/**
  * The names of linked attendance requirements the form no longer offers,
  * keyed by id: one deactivated since it was linked. The option lists hold
  * active requirements only, yet the link is kept by every save, so the form

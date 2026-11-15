@@ -29,7 +29,7 @@ import { getEventTypeBadgeColor, getEventTypeLabel } from '../../utils/eventHelp
 import { formatCalendarDate, formatDateCustom, localToUTC } from '../../utils/dateFormatting';
 import type { EventFormModel } from '../event-form/useEventFormModel';
 import { MONTHS, ORDINALS, RECURRENCE_PATTERNS, WEEKDAYS } from '../event-form/eventFormConstants';
-import { UNNAMED_RETIRED_REQUIREMENT } from '../../hooks/useRetiredAttendanceRequirements';
+import { linkedAttendanceLabel } from '../../hooks/useRetiredAttendanceRequirements';
 import type { TrainingDetailsForm } from './trainingDetailsModel';
 import { creditHoursFromCourse, effectiveCreditHours } from './trainingDetailsModel';
 
@@ -275,16 +275,9 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
     return before === label(training) ? undefined : before;
   };
 
-  const attendanceNames = training.attendance_requirement_ids.map((id) => {
-    const req = requirements.find((r) => r.id === id);
-    if (!req) {
-      const retired = retiredAttendanceNames[id];
-      return retired && retired !== UNNAMED_RETIRED_REQUIREMENT
-        ? `${retired} (no longer active)`
-        : UNNAMED_RETIRED_REQUIREMENT;
-    }
-    return req.required_attendance_pct ? `${req.name} (${req.required_attendance_pct}%)` : req.name;
-  });
+  const attendanceNames = training.attendance_requirement_ids.map((id) =>
+    linkedAttendanceLabel(id, requirements, retiredAttendanceNames)
+  );
 
   const mandatoryFor = (() => {
     if (model.mandatoryForEveryone) return 'All members';
