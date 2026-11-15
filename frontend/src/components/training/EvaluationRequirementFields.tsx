@@ -1,7 +1,8 @@
 /**
  * Targets for the requirement types credited by shift evaluations: evaluated
- * shifts, transports and refusals. Shared by every requirement editor so the
- * three say the same thing about how they are counted.
+ * shifts, evaluated calls, transports and refusals. Shared by every
+ * requirement editor so they all say the same thing about how they are
+ * counted.
  */
 import React from 'react';
 
@@ -11,10 +12,12 @@ interface EvaluationRequirementFieldsProps {
   idPrefix: string;
   type: string;
   shifts: string;
+  calls: string;
   transports: string;
   refusals: string;
   excludesLowest: boolean;
   onShiftsChange: (value: string) => void;
+  onCallsChange: (value: string) => void;
   onTransportsChange: (value: string) => void;
   onRefusalsChange: (value: string) => void;
   onExcludesLowestChange: (value: boolean) => void;
@@ -27,10 +30,12 @@ export const EvaluationRequirementFields: React.FC<EvaluationRequirementFieldsPr
   idPrefix,
   type,
   shifts,
+  calls,
   transports,
   refusals,
   excludesLowest,
   onShiftsChange,
+  onCallsChange,
   onTransportsChange,
   onRefusalsChange,
   onExcludesLowestChange,
@@ -44,6 +49,13 @@ export const EvaluationRequirementFields: React.FC<EvaluationRequirementFieldsPr
       value: shifts,
       onChange: onShiftsChange,
       placeholder: 'e.g., 10',
+    },
+    evaluated_calls: {
+      id: `${idPrefix}-required-evaluated-calls`,
+      label: 'Required evaluated calls',
+      value: calls,
+      onChange: onCallsChange,
+      placeholder: 'e.g., 25',
     },
     transports: {
       id: `${idPrefix}-required-transports`,

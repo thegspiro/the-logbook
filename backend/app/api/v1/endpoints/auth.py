@@ -1456,7 +1456,9 @@ async def mfa_login(
 
 @router.post("/mfa/setup")
 async def mfa_setup(
+    request: Request,
     current_user: User = Depends(get_current_active_user),
+    access_token_cookie: str | None = Cookie(None, alias="access_token"),
     db: AsyncSession = Depends(get_db),
 ):
     """Begin TOTP enrollment: generate a secret and provisioning URI.
@@ -1465,6 +1467,10 @@ async def mfa_setup(
     """
     if current_user.mfa_enabled:
         raise HTTPException(status_code=400, detail="MFA is already enabled")
+    # A member who already has a passkey is adding a second factor, not
+    # setting up a first one: a stolen session must not be able to plant its
+    # own authenticator and then use it to step up past the passkey.
+    await _require_stepup_once_enrolled(db, current_user, request, access_token_cookie)
 
     secret = mfa_service.generate_secret()
     current_user.mfa_secret = secret
@@ -1506,7 +1512,9 @@ def _replay_is_current(user: User, replayed: dict) -> bool:
 async def mfa_verify_setup(
     data: MFAVerify,
     background_tasks: BackgroundTasks,
+    request: Request,
     current_user: User = Depends(get_current_active_user),
+    access_token_cookie: str | None = Cookie(None, alias="access_token"),
     db: AsyncSession = Depends(get_db),
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ):
@@ -1526,6 +1534,10 @@ async def mfa_verify_setup(
         raise HTTPException(status_code=400, detail="MFA is already enabled")
     if not current_user.mfa_secret:
         raise HTTPException(status_code=400, detail="Start setup first")
+    # Checked again here, after the replay above (by then a retry's account
+    # has MFA on, which would wrongly demand step-up of a first enrollment):
+    # this is the step that enables the factor and replaces the recovery codes.
+    await _require_stepup_once_enrolled(db, current_user, request, access_token_cookie)
     if not await _verify_and_consume_totp(db, current_user, data.code):
         raise CodedHTTPException(
             status_code=400,

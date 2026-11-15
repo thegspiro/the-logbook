@@ -153,13 +153,33 @@ class TestColleagueEmailChange:
 
 
 class TestOwnEmailChange:
-    async def test_no_step_up_but_the_old_address_is_told(self):
+    """A stolen session must not be enough to repoint the member's own login
+    email: forgot-password would then mail the thief a reset link."""
+
+    async def test_it_requires_step_up_and_the_old_address_is_told(self):
         member = _person(uuid4(), ["members.view"], "m@fd.example")
 
         result = await _save(member, member, {"email": "mine@fd.example"})
 
         assert member.email == "mine@fd.example"
         assert member.email_verified is False
-        result.stepup.assert_not_awaited()
+        result.stepup.assert_awaited_once()
         assert result.notify.await_args.kwargs["to_email"] == "m@fd.example"
         assert result.audit.await_args.kwargs["severity"] == "info"
+
+    async def test_without_step_up_the_address_is_unchanged(self):
+        member = _person(uuid4(), ["members.view"], "m@fd.example")
+        refusal = AsyncMock(side_effect=HTTPException(status_code=403))
+
+        with pytest.raises(HTTPException):
+            await _save(member, member, {"email": "thief@evil.example"}, stepup=refusal)
+
+        refusal.assert_awaited_once()
+        assert member.email == "m@fd.example"
+
+    async def test_a_phone_only_edit_of_ones_own_record_needs_no_step_up(self):
+        member = _person(uuid4(), ["members.view"], "m@fd.example")
+
+        result = await _save(member, member, {"phone": "555-0199"})
+
+        result.stepup.assert_not_awaited()

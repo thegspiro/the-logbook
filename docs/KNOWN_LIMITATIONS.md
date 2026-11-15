@@ -1330,6 +1330,29 @@ the owner, because closing them changes how members get into their accounts:
   is; the email change itself is now ceiling-bound, step-up gated, audited and
   reported to the previous address.
 
+## Separation of Duties — Five Decisions Left Open (ADV-02, 2026-11-14)
+
+The adversarial pass over the month to 2026-11-14 found these items. Its
+findings are in `docs/security-review/ADV-02-adversarial-last-month.md`. Each
+fix changes a workflow some departments rely on, so the owner decides:
+
+- **One officer can conduct, calibrate and approve a personnel evaluation
+  (ADV2-4).** Only the subject is barred from the approval step and from
+  calibration. Refusing the evaluator stalls every evaluation where they are
+  the only holder of the step's position, because no action reassigns or skips
+  a step.
+- **A shift officer can write their own close-out hours (ADV2-8).** Pre-shift
+  work and event attendance refuse the self case. On a one-person shift nobody
+  else could record it.
+- **An officer can grant themselves a leave, and with it a training waiver
+  (ADV2-9).** This needs `members.manage` and `scheduling.assign`.
+- **An applicant's edited email or name and birth date can make a coordinator's
+  self-access guard hide their file (ADV2-10).** Refusing a member's email
+  covers half of it. The rest turns on whether self-detection should trust
+  fields the applicant can edit.
+- **A Zeffy dues payment credits whichever member's email the payer typed
+  (ADV2-11).** Overpayment is recorded as that member's donation.
+
 ## Authentication & Security
 
 | Item                                                                                                                                                                                                                                                                                                  | Status                                                                                                                                   | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -10352,9 +10375,16 @@ beyond the feature.
   2026-11-14 (owner decision): only Assigned and Confirmed crew need a trainee
   report or a shift evaluation, and close-out drafts reports for them alone
   (`WORKING_ASSIGNMENT_STATUSES`).
-- **No requirement type counts the calls an evaluation records.** Evaluated
+- ~~**No requirement type counts the calls an evaluation records.** Evaluated
   shifts, transports and refusals are credited; the existing Calls type is
-  still fed by shift reports.
+  still fed by shift reports.~~ **✅ Resolved 2026-11-14 (owner decision):
+  a new Evaluated Calls type.** An `evaluated_calls` requirement counts the
+  calls each submitted evaluation records, against `required_calls`, the way
+  Transports counts the evaluation's transports and only once the member can
+  see the evaluation. The Calls type is unchanged and still fed by shift
+  reports, so no call is counted by both. Migration `9d044fc1d81b` widens the
+  `requirement_type` ENUM; its downgrade turns requirements of the new type
+  into checklists.
 - ~~**A department requirement of an evaluation type, linked into a program
   with "Link existing", is not credited by evaluations.** A linked row is
   graded by the compliance engine, which has no branch for these types and

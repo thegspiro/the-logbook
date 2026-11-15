@@ -603,16 +603,17 @@ _EVALUATION_TYPE_UNITS = {
     RequirementType.EVALUATED_SHIFTS.value: "evaluated shifts",
     RequirementType.TRANSPORTS.value: "transports",
     RequirementType.REFUSALS.value: "refusals",
+    RequirementType.EVALUATED_CALLS.value: "evaluated calls",
 }
 
 
 def is_evaluation_credited(req) -> bool:
     """Whether ``req`` is counted from the member's shift evaluations.
 
-    Owner decision (2026-11-14): evaluated shifts, transports and refusals are
-    credited only by submitted evaluations the member can see, whether the
-    requirement is a program's own (the credit ledger) or the department's
-    (this grader). A training record never stands in for one.
+    Owner decision (2026-11-14): evaluated shifts and calls, transports and
+    refusals are credited only by submitted evaluations the member can see,
+    whether the requirement is a program's own (the credit ledger) or the
+    department's (this grader). A training record never stands in for one.
     """
     req_type = getattr(req, "requirement_type", None)
     req_type = getattr(req_type, "value", req_type)
@@ -1041,7 +1042,7 @@ def _grade_member_requirement(
                       (:func:`counts_shift_attendance`), or matching records
                       when the requirement is not shift-credited
     - CALLS:          Count matching records within date window
-    - EVALUATED_SHIFTS, TRANSPORTS, REFUSALS:
+    - EVALUATED_SHIFTS, TRANSPORTS, REFUSALS, EVALUATED_CALLS:
                       Sum the units of the member's visible shift
                       evaluations within the window
                       (:func:`load_evaluation_credits`); never records

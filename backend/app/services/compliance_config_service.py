@@ -362,10 +362,10 @@ class ComplianceReportService:
         except Exception as e:
             elapsed_ms = int((time.monotonic() - start_time) * 1000)
             report.status = ReportStatus.FAILED.value
-            report.error_message = str(e)
+            report.error_message = safe_error_detail(e)
             report.generation_duration_ms = elapsed_ms
             await self.db.flush()
-            logger.error(f"Report generation failed: {e}")
+            logger.error("Report generation failed: {}", e)
             raise
 
     async def auto_report_exists(
