@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**385 tables · 6161 columns · 1286 foreign keys**
+**388 tables · 6187 columns · 1294 foreign keys**
 
 ---
 
@@ -466,6 +466,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`label_printers`](#label_printers) | `LabelPrinter` | 17 | A ZPL-capable network label printer belonging to an organization. |
+
+### Leave_Request
+
+<sub>`app/models/leave_request.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`leave_notice_sends`](#leave_notice_sends) | `LeaveNoticeSend` | 5 | A scheduled leave email claimed before it is sent. |
+| [`leave_request_votes`](#leave_request_votes) | `LeaveRequestVote` | 7 | One approver's vote on one request. One per approver, by constraint. |
+| [`leave_requests`](#leave_requests) | `LeaveRequest` | 14 | One member's request for a leave of absence. |
 
 ### Legal
 
@@ -2840,7 +2850,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -2904,7 +2914,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `custom`) | no |  |  |  |
 | `to_emails` | TEXT | no |  |  |  |
 | `cc_emails` | TEXT | yes |  |  |  |
 | `bcc_emails` | TEXT | yes |  |  |  |
@@ -7882,6 +7892,79 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - UNIQUE `uq_label_printer_org_name` (`organization_id`, `name`)
+
+## Leave_Request
+
+### `leave_notice_sends`
+
+**LeaveNoticeSend** · `app/models/leave_request.py`
+
+> A scheduled leave email claimed before it is sent. ``kind`` names the email and ``key`` what it was about: a leave's id and end date for the ending reminder (so moving the end date earns a new reminder), the month for the open-ended digest. The claim is taken and committed before the email goes out and released if the send fails, so a process that dies after claiming sends nothing (at most once): a missed reminder costs the member a nudge, a repeated one their trust in the mail.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `kind` | VARCHAR(40) | no |  |  |  |
+| `key` | VARCHAR(120) | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_leave_notice_send` (`organization_id`, `kind`, `key`)
+
+### `leave_request_votes`
+
+**LeaveRequestVote** · `app/models/leave_request.py`
+
+> One approver's vote on one request. One per approver, by constraint.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `request_id` | VARCHAR(36) | no | FK, IDX |  | → `leave_requests.id` ON DELETE CASCADE |
+| `voter_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `vote` | ENUM(`approve`, `deny`) | no |  |  |  |
+| `note` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_leave_request_votes_org_request` (`organization_id`, `request_id`)
+- `ix_leave_request_votes_request_id` (`request_id`)
+
+**Constraints**
+
+- UNIQUE `uq_leave_request_vote` (`request_id`, `voter_id`)
+
+### `leave_requests`
+
+**LeaveRequest** · `app/models/leave_request.py`
+
+> One member's request for a leave of absence. ``decision_rule`` is the department's rule when the request was made, kept on the row so a later change to the setting does not move the bar for a request already being voted on. ``reason`` is encrypted at rest: members explain a leave in their own words, often medical or family detail. ``leave_id`` is the leave an approval created; SET NULL so the request stays on record if that leave is later deleted.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `leave_type` | ENUM(`leave_of_absence`, `medical`, `military`, `personal`, `administrative`, `new_member`, `other`) | no |  | `leave_of_absence` |  |
+| `start_date` | DATE | no |  |  |  |
+| `end_date` | DATE | yes |  |  |  |
+| `reason` | TEXT | yes |  |  |  |
+| `status` | ENUM(`pending`, `approved`, `denied`, `withdrawn`) | no |  | `pending` |  |
+| `decision_rule` | ENUM(`any`, `majority`, `all`) | no |  | `any` |  |
+| `decided_at` | DATETIME | yes |  |  |  |
+| `decided_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `leave_id` | VARCHAR(36) | yes | FK |  | → `member_leaves_of_absence.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_leave_requests_org_status` (`organization_id`, `status`)
+- `ix_leave_requests_org_user` (`organization_id`, `user_id`)
 
 ## Legal
 
@@ -13203,7 +13286,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (470 references)
+### → `users` (473 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13460,6 +13543,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `knowledge_test_attempts` | `user_id` | CASCADE | no |
 | `knowledge_tests` | `created_by` | SET NULL | yes |
 | `label_printers` | `created_by_id` | SET NULL | yes |
+| `leave_request_votes` | `voter_id` | CASCADE | no |
+| `leave_requests` | `decided_by` | SET NULL | yes |
+| `leave_requests` | `user_id` | CASCADE | no |
 | `legal_document_revisions` | `created_by` | SET NULL | yes |
 | `legal_document_revisions` | `edited_by` | SET NULL | yes |
 | `legal_document_revisions` | `published_by` | SET NULL | yes |
@@ -13678,7 +13764,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (313 references)
+### → `organizations` (316 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13853,6 +13939,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `knowledge_test_questions` | `organization_id` | CASCADE | no |
 | `knowledge_tests` | `organization_id` | CASCADE | no |
 | `label_printers` | `organization_id` | CASCADE | no |
+| `leave_notice_sends` | `organization_id` | CASCADE | no |
+| `leave_request_votes` | `organization_id` | CASCADE | no |
+| `leave_requests` | `organization_id` | CASCADE | no |
 | `legal_document_revisions` | `organization_id` | CASCADE | no |
 | `locations` | `organization_id` | CASCADE | no |
 | `maintenance_records` | `organization_id` | CASCADE | no |
@@ -15099,6 +15188,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `inventory_items` | `variant_group_id` | SET NULL | yes |
 
+### → `leave_requests` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `leave_request_votes` | `request_id` | CASCADE | no |
+
 ### → `maintenance_records` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -15122,6 +15217,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `minutes_closed_sessions` | `motion_id` | SET NULL | yes |
+
+### → `member_leaves_of_absence` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `leave_requests` | `leave_id` | SET NULL | yes |
 
 ### → `minutes_action_items` (1 references)
 

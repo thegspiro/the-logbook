@@ -105,6 +105,12 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.MINUTES_ACTION_ITEM_REMINDER.value: "c4e81b7a2d95",
     EmailTemplateType.MINUTES_OPEN_ITEMS_DIGEST.value: "c4e81b7a2d95",
     EmailTemplateType.MEETING_ACTION_ITEM_REMINDER.value: "c4e81b7a2d95",
+    EmailTemplateType.LEAVE_OF_ABSENCE_NOTICE.value: "b4e7c2a91f06",
+    EmailTemplateType.LEAVE_ENDING_REMINDER.value: "c8d2f61a7e34",
+    EmailTemplateType.LEAVE_ENDING_OFFICER_NOTICE.value: "c8d2f61a7e34",
+    EmailTemplateType.OPEN_ENDED_LEAVE_DIGEST.value: "c8d2f61a7e34",
+    EmailTemplateType.LEAVE_REQUEST_SUBMITTED.value: "c8d2f61a7e34",
+    EmailTemplateType.LEAVE_REQUEST_DENIED.value: "c8d2f61a7e34",
 }
 
 
