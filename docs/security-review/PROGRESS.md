@@ -16,6 +16,58 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Branch `claude/security-review-auth-session-lifecycle`** (PR number to
+follow in a second commit on this same branch, per Step 8): Feature 01
+(Auth & session lifecycle), pass 16, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session, `session_011T1ZyyLrD5HagusgK9uDw2`,
+has been unreachable for 5+ hours). PR #4328 (Feature 00, Cross-cutting
+baseline, pass 17) had already merged, resetting the rotation table to `⬜`
+except row 00 (`✅`); a fresh `list_pull_requests` (state `open`) found no
+head branch starting `claude/security-review-`, and row 01 was the next
+`⬜` row, confirmed on a freshly fetched, fast-forwarded `main`.
+
+**0 fixed, 0 new findings.** Baseline `9e16fbae0` (PR #4021's merge, pass
+15). Of this feature's eighteen tracked files, eight carry real,
+already-merged deltas (`dependencies.py`, `auth.py`, `security.py`,
+`schemas/auth.py`, `auth_service.py`, `consent_service.py`, `apiClient.ts`,
+`authStore.ts`); ten are byte-identical to pass 15. All eight deltas traced
+and verified sound rather than newly authored: a constant-time dummy-password
+helper replacing three duplicated inline versions; a Pitfall #33 log-format
+fix; `UserLogin.password`'s `min_length` lowered 8→1 (sign-in only —
+registration/change/reset schemas still require 12) so a short guess can no
+longer skip the account-lockout counter; MFA-code whitespace-stripping that
+cannot widen acceptance; the passkey step-up gate extended to first-time TOTP
+enrollment, correctly ordered relative to the idempotency-replay check and
+the TOTP consume step; `forgot_password`'s audit events now fingerprint
+rather than store the submitted email and stamp the `organization_id`
+column; a post-expired-session redirect through `loginPathReturningTo`,
+read in full and confirmed open-redirect-safe; and the client-side login
+lockout moved from per-tab to a capped, evicting per-account map. Route
+inventory re-walked by AST: still 38 routes, unchanged from pass 15. See
+`docs/security-review/AUTH-01-auth-session.md`'s **Pass 16** section for
+the full trace.
+
+**Pre-existing, out-of-scope, flagged not fixed:** `main` has 2 forked
+Alembic heads (`9d044fc1d81b`, `611204dcf8d1`) — two migrations both chained
+onto the same parent, merged within minutes of each other. PR #4331 is open
+with the one join revision these two need; not merged as of this pass. This
+PR does not add a competing (third-head) merge revision.
+`validate_migrations.py --strict` fails for this reason only.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+**fails, pre-existing 2-head fork, tracked by PR #4331**; scoped backend
+suite (`-k "auth or mfa or oauth or session"`) — 1113 passed, 1 pre-existing
+skip; standing guards — 293 passed; `npm run typecheck` — 0 errors; `npm run
+lint` — 0 errors/warnings.
+
+Row 01 → ✅ (pending this PR's merge). Next is Feature 02 (Permissions &
+roles) — re-check for an open security-review PR fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 17, PR #4328, merged), preserved for history</summary>
+
 **PR [#4328](https://github.com/thegspiro/the-logbook/pull/4328)** (branch
 `claude/security-review-cross-cutting-p17`): Feature 00 (Cross-cutting
 baseline), pass 17, opening a fresh rotation lap. PR #4259 (Feature 34,
@@ -64,6 +116,8 @@ passed, 1 pre-existing skip; `npm run typecheck` — 0 errors; `npm run lint` �
 **Every row below is reset to `⬜` for this new rotation lap except Feature
 00, now `✅`.** Next is Feature 01 (Auth & session lifecycle) — re-check for
 an open security-review PR fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 15, PR #4259, merged), preserved for history</summary>
@@ -26127,7 +26181,7 @@ iteration's commit" rule.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                                                                                                                           | Status |
 | --- | ------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                                                                                                                            | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                                                                                             | ⬜     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                                                                                             | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                                                                                              | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (49 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py` (added pass 15)                                                                                                           | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                       | ⬜     |
@@ -26204,6 +26258,51 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-15 — Feature 01 (Auth & session lifecycle, pass 16): 0 fixed, 0 new findings; eight already-merged deltas verified sound
+
+Watchdog pickup (the dedicated `/loop 30m /security-review` session,
+`session_011T1ZyyLrD5HagusgK9uDw2`, has been unreachable for 5+ hours).
+`list_pull_requests` (state `open`) returned no head branch starting
+`claude/security-review-`. PR #4328 (Feature 00, Cross-cutting baseline,
+pass 17) had already merged, resetting the rotation table to `⬜` except
+row 00 (`✅`); row 01 was the next `⬜`.
+
+Diffed all eighteen of this feature's tracked files against baseline
+`9e16fbae0` (PR #4021's merge, pass 15): eight carry real, already-merged
+deltas (`dependencies.py`, `auth.py`, `security.py`, `schemas/auth.py`,
+`auth_service.py`, `consent_service.py`, `apiClient.ts`, `authStore.ts`),
+ten are byte-identical. Each delta traced and verified correct: a
+constant-cost dummy-password-verification helper replacing three duplicated
+inline versions; a Pitfall #33 log-format fix; `UserLogin.password`'s
+`min_length` lowered from 8 to 1 (sign-in only — registration/change/reset
+schemas still require 12) to stop a short guess from skipping the lockout
+counter; MFA-code whitespace-stripping that cannot widen acceptance; the
+passkey-enrollment step-up gate extended to first-time TOTP setup, correctly
+ordered after the idempotency-replay check and before the TOTP code is
+consumed; `forgot_password`'s audit events now fingerprint rather than
+store the submitted email and stamp the `organization_id` column; a
+post-expired-session redirect through `loginPathReturningTo`, read in full
+and confirmed open-redirect-safe; and the client-side login lockout moved
+from per-tab to a capped, evicting per-account map. Route inventory
+re-walked by AST: still 38 routes, same set as pass 15. No new finding;
+AUTH-23 and all other prior findings remain resolved/closed per
+`docs/KNOWN_LIMITATIONS.md`.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+**fails, pre-existing 2-head fork (`9d044fc1d81b`/`611204dcf8d1`), tracked
+by PR #4331 (open, not yet merged)**; scoped backend suite
+(`-k "auth or mfa or oauth or session"`) — 1113 passed, 1 pre-existing
+skip; standing guards — 293 passed; `npm run typecheck` — 0 errors (after
+`npm ci` repaired a corrupted `typescript-native` optional-platform binary
+in the sandbox, unrelated to this feature); `npm run lint` — 0
+errors/warnings. See `docs/security-review/AUTH-01-auth-session.md`'s
+**Pass 16** section for the full trace.
+
+Row 01 → ✅ (pending this PR's merge). Next is Feature 02 (Permissions &
+roles) — re-check for an open security-review PR fresh rather than trusting
+this note.
 
 ### 2026-11-15 — Full rotation lap closes (PR #4259 merged, docs-only); Feature 00 (Cross-cutting baseline) reviewed as pass 17: 1 fixed (LOW), 0 flagged beyond the standing pre-existing items
 
