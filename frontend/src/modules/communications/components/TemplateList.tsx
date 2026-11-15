@@ -15,6 +15,7 @@ import {
   UserPlus,
   KeyRound,
   CalendarX,
+  CalendarOff,
   CalendarClock,
   GraduationCap,
   Vote,
@@ -54,6 +55,14 @@ import {
   ClipboardPen,
   BellRing,
   MessageSquare,
+  Megaphone,
+  UserCheck,
+  UserCog,
+  Handshake,
+  FileStack,
+  ScrollText,
+  ListTodo,
+  ClipboardList,
 } from 'lucide-react';
 import { formatNumber } from '../../../utils/dateFormatting';
 import type { EmailTemplate } from '../types';
@@ -80,6 +89,56 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   inactivity_warning: { icon: AlertTriangle, label: 'Inactivity Warning', color: 'text-yellow-500' },
   election_rollback: { icon: RotateCcw, label: 'Election Rollback', color: 'text-orange-700 dark:text-orange-600' },
   election_deleted: { icon: Trash2, label: 'Election Deleted', color: 'text-red-500' },
+  election_nominations_open: {
+    icon: Megaphone,
+    label: 'Nominations Open',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  election_nominated: {
+    icon: UserCheck,
+    label: "You've Been Nominated",
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  election_nomination_accepted_for_you: {
+    icon: UserCog,
+    label: 'Nomination Accepted for You',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  election_proxy_authorized: {
+    icon: Handshake,
+    label: 'Proxy Authorized',
+    color: 'text-amber-700 dark:text-amber-600',
+  },
+  pre_meeting_package: {
+    icon: FileStack,
+    label: 'Pre-Meeting Package',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  minutes_circulated: {
+    icon: ScrollText,
+    label: 'Minutes Ready for Review',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  minutes_action_items: {
+    icon: ListTodo,
+    label: 'Action Items Assigned',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  minutes_action_item_reminder: {
+    icon: BellRing,
+    label: 'Action Item Reminder (Minutes)',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  minutes_open_items_digest: {
+    icon: ClipboardList,
+    label: 'Open Action Items Digest',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  meeting_action_item_reminder: {
+    icon: BellRing,
+    label: 'Action Item Reminder (Meetings)',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
   member_archived: { icon: Archive, label: 'Member Archived', color: 'text-theme-text-muted' },
   event_request_status: { icon: CalendarCheck, label: 'Event Request Status', color: 'text-cyan-500' },
   it_password_notification: { icon: Lock, label: 'IT Password Reset', color: 'text-blue-600' },
@@ -157,6 +216,17 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
     label: 'Evaluation Finalized',
     color: 'text-green-700 dark:text-green-600',
   },
+  evaluation_amended: {
+    icon: ClipboardPen,
+    label: 'Evaluation Amended',
+    color: 'text-amber-700 dark:text-amber-600',
+  },
+  evaluation_response: {
+    icon: MessageSquare,
+    label: 'Evaluation Response',
+    color: 'text-blue-700 dark:text-blue-400',
+  },
+  evaluation_deleted: { icon: Trash2, label: 'Evaluation Deleted', color: 'text-red-600' },
   suggestion_submitted: { icon: Lightbulb, label: 'Suggestion Submitted', color: 'text-amber-700 dark:text-amber-600' },
   equipment_request_update: {
     icon: PackageCheck,
@@ -174,6 +244,12 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   session_waiver_requested: { icon: ClipboardCheck, label: 'Training Waiver Requested', color: 'text-purple-500' },
   session_waiver_decided: { icon: BadgeCheck, label: 'Training Waiver Decided', color: 'text-purple-500' },
   session_waiver_withdrawn: { icon: Undo2, label: 'Training Waiver Withdrawn', color: 'text-purple-500' },
+  leave_of_absence_notice: { icon: CalendarOff, label: 'Leave of Absence Notice', color: 'text-purple-500' },
+  leave_ending_reminder: { icon: CalendarOff, label: 'Leave Ending Reminder', color: 'text-purple-500' },
+  leave_ending_officer_notice: { icon: CalendarOff, label: 'Leave Ending (Officers)', color: 'text-purple-500' },
+  open_ended_leave_digest: { icon: CalendarOff, label: 'Open-Ended Leave Digest', color: 'text-purple-500' },
+  leave_request_submitted: { icon: CalendarOff, label: 'Leave Request Submitted', color: 'text-purple-500' },
+  leave_request_denied: { icon: CalendarOff, label: 'Leave Request Denied', color: 'text-purple-500' },
   meeting_waiver_requested: {
     icon: ClipboardCheck,
     label: 'Meeting Waiver Requested',
@@ -287,19 +363,39 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
       'session_waiver_requested',
       'session_waiver_decided',
       'session_waiver_withdrawn',
+      'leave_of_absence_notice',
+      'leave_ending_reminder',
+      'leave_ending_officer_notice',
+      'open_ended_leave_digest',
+      'leave_request_submitted',
+      'leave_request_denied',
     ],
   },
   {
     id: 'meetings',
-    label: 'Business Meetings',
-    types: ['meeting_waiver_requested', 'meeting_waiver_decided', 'meeting_waiver_withdrawn'],
+    label: 'Meetings & Minutes',
+    types: [
+      'minutes_circulated',
+      'minutes_action_items',
+      'minutes_action_item_reminder',
+      'minutes_open_items_digest',
+      'meeting_action_item_reminder',
+      'meeting_waiver_requested',
+      'meeting_waiver_decided',
+      'meeting_waiver_withdrawn',
+    ],
   },
   {
     id: 'elections',
     label: 'Elections & Voting',
     types: [
+      'election_nominations_open',
+      'election_nominated',
+      'election_nomination_accepted_for_you',
+      'election_proxy_authorized',
       'ballot_notification',
       'ballot_eligibility_summary',
+      'pre_meeting_package',
       'election_report',
       'election_rollback',
       'election_deleted',
@@ -313,7 +409,15 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
   {
     id: 'evaluations',
     label: 'Performance Evaluations',
-    types: ['evaluation_step_waiting', 'evaluation_deadline_reminder', 'evaluation_overdue', 'evaluation_finalized'],
+    types: [
+      'evaluation_step_waiting',
+      'evaluation_deadline_reminder',
+      'evaluation_overdue',
+      'evaluation_finalized',
+      'evaluation_amended',
+      'evaluation_response',
+      'evaluation_deleted',
+    ],
   },
   {
     id: 'suggestions',
@@ -346,6 +450,18 @@ const CATEGORY_BY_TYPE: Record<string, string> = Object.fromEntries(
 
 function categoryIdFor(templateType: string): string {
   return CATEGORY_BY_TYPE[templateType] ?? OTHER_CATEGORY_ID;
+}
+
+// The API orders by template_type, a MySQL ENUM, which sorts by declaration
+// index — the order types happened to be added, not the order above.
+const RANK_BY_TYPE: Record<string, number> = Object.fromEntries(
+  TEMPLATE_CATEGORIES.flatMap((c) => c.types.map((t, i) => [t, i]))
+);
+
+function compareWithinCategory(a: EmailTemplate, b: EmailTemplate): number {
+  const rank = (RANK_BY_TYPE[a.template_type] ?? Infinity) - (RANK_BY_TYPE[b.template_type] ?? Infinity);
+  if (rank !== 0 && !Number.isNaN(rank)) return rank;
+  return (a.name ?? '').localeCompare(b.name ?? '');
 }
 
 interface TemplateListProps {
@@ -411,11 +527,11 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
     const ordered = TEMPLATE_CATEGORIES.filter((c) => byCategory.has(c.id)).map((c) => ({
       id: c.id,
       label: c.label,
-      templates: byCategory.get(c.id) ?? [],
+      templates: [...(byCategory.get(c.id) ?? [])].sort(compareWithinCategory),
     }));
     const other = byCategory.get(OTHER_CATEGORY_ID);
     if (other) {
-      ordered.push({ id: OTHER_CATEGORY_ID, label: 'Other', templates: other });
+      ordered.push({ id: OTHER_CATEGORY_ID, label: 'Other', templates: [...other].sort(compareWithinCategory) });
     }
     return ordered;
   }, [filtered]);
@@ -437,9 +553,9 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
 
   return (
     <div className="space-y-1">
-      <h3 className="text-theme-text-muted mb-2 px-3 text-xs font-semibold tracking-wider uppercase">
+      <h2 className="text-theme-text-muted mb-2 px-3 text-xs font-semibold tracking-wider uppercase">
         Email Templates
-      </h3>
+      </h2>
       {templates.length > 8 && (
         <div className="relative mb-2 px-3">
           <Search className="text-theme-text-muted absolute top-1/2 left-5 h-3.5 w-3.5 -translate-y-1/2" />
@@ -523,7 +639,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
                     <div className="min-w-0 flex-1">
                       <p
                         className={`truncate text-sm font-medium ${
-                          isSelected ? 'text-red-700 dark:text-red-400' : 'text-theme-text-primary'
+                          isSelected ? 'text-red-900 dark:text-red-300' : 'text-theme-text-primary'
                         }`}
                       >
                         {template.name}

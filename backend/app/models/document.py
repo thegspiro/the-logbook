@@ -94,6 +94,15 @@ FACILITY_ACCESS_PERMISSIONS = [
 ]
 FINANCE_FOLDER_PERMISSIONS = ["finance.view", "finance.manage", "finance.approve"]
 SEPARATIONS_FOLDER_PERMISSIONS = ["members.manage"]
+# History documents (owner-approved spec, 2026-11-14). history.manage alone,
+# not the view tier: the folder holds the originals, metadata and all, and
+# only history.manage downloads an original. history.view holders read the
+# stripped copies through the History pages instead.
+HISTORY_FOLDER_PERMISSIONS = ["history.manage"]
+#: ``Document.source_type`` of a History document: History owns its catalogue,
+#: stripped copy and change history, so the Documents module may download one
+#: but never rename, move or delete it.
+HISTORY_DOCUMENT_SOURCE_TYPE = "history_document"
 
 
 # System folders created automatically for each organization
@@ -225,6 +234,15 @@ SYSTEM_FOLDERS = [
         "icon": "receipt",
         "color": "text-lime-400",
         "required_permissions": FINANCE_FOLDER_PERMISSIONS,
+    },
+    {
+        "slug": "history",
+        "name": "History",
+        "description": "The archive's documents, catalogued in History",
+        "sort_order": 13,
+        "icon": "landmark",
+        "color": "text-yellow-400",
+        "required_permissions": HISTORY_FOLDER_PERMISSIONS,
     },
 ]
 

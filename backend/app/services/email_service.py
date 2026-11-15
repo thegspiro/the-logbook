@@ -607,6 +607,28 @@ class EmailService:
             attachments_out=attachments_out,
         )
 
+    async def render_notice(
+        self, template_type: EmailTemplateType, context: Dict[str, Any], db: Any
+    ) -> Optional[Tuple[str, str, Optional[str]]]:
+        """This organization's template for a notice, rendered with *context*.
+
+        The department's stored template when it has one, else the shipped
+        default; ``None`` when the department switched the notice off, which
+        the caller treats as "not sent". For the senders whose bodies moved
+        out of code on 2026-11-14 (elections and minutes), so none of them
+        restates the default it falls back to.
+        """
+        default = EmailTemplateService._default_definition(template_type)
+        return await self._render_unless_switched_off(
+            template_type=template_type,
+            context=context,
+            db=db,
+            organization_id=str(self.organization.id) if self.organization else None,
+            default_subject=default["subject"],
+            default_html=default["html"],
+            default_text=default["text"],
+        )
+
     async def _render_with_fallback(
         self,
         template_type: EmailTemplateType,
@@ -3402,6 +3424,87 @@ class EmailService:
             text_body=text_body,
             db=db,
             template_type=EmailTemplateType.EXTERNAL_COURSE_MATCH.value,
+        )
+
+        return success_count > 0
+
+    async def send_leave_workflow_email(
+        self,
+        template_type: EmailTemplateType,
+        to_email: str,
+        context: Dict[str, Any],
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Send one of the leave reminder, digest or request emails.
+
+        *template_type* is one of ``email_templates_leave_workflow.DEFAULTS``;
+        *context* carries its variables and never a leave's reason or type.
+        """
+        from app.services.email_templates_leave_workflow import DEFAULTS
+
+        if template_type.value not in DEFAULTS:
+            raise ValueError(f"Not a leave workflow email: {template_type}")
+        default_subject, default_html, default_text = DEFAULTS[template_type.value]
+
+        rendered = await self._render_unless_switched_off(
+            template_type=template_type,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=default_subject,
+            default_html=default_html,
+            default_text=default_text,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=template_type.value,
+        )
+
+        return success_count > 0
+
+    async def send_leave_of_absence_notice_email(
+        self,
+        to_email: str,
+        context: Dict[str, Any],
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell one member an officer recorded, changed or removed their leave.
+
+        *context* carries the template variables, built by
+        ``leave_of_absence_notices``; it never holds the leave's reason.
+        """
+        from app.services.email_templates_leave import HTML, SUBJECT, TEXT
+
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.LEAVE_OF_ABSENCE_NOTICE,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=SUBJECT,
+            default_html=HTML,
+            default_text=TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.LEAVE_OF_ABSENCE_NOTICE.value,
         )
 
         return success_count > 0

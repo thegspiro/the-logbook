@@ -30,7 +30,11 @@ from app.models.email_template import (
 )
 from app.services import email_footers as _footers
 from app.services import email_templates_attendance_waivers as _waiver_templates
+from app.services import email_templates_elections as _election_templates
 from app.services import email_templates_evaluations as _evaluation_templates
+from app.services import email_templates_leave as _leave_templates
+from app.services import email_templates_leave_workflow as _leave_workflow_templates
+from app.services import email_templates_minutes as _minutes_templates
 from app.services import email_templates_storefront as _storefront_templates
 from app.services.branding_service import email_logo_src
 from app.services.email_theme import (  # noqa: F401  (re-exported: many services import DEFAULT_CSS from here)
@@ -1053,6 +1057,10 @@ def _sample(*dicts: Dict[str, str]) -> Dict[str, str]:
 TEMPLATE_VARIABLES.update(_storefront_templates.TEMPLATE_VARIABLES)
 TEMPLATE_VARIABLES.update(_evaluation_templates.TEMPLATE_VARIABLES)
 TEMPLATE_VARIABLES.update(_waiver_templates.TEMPLATE_VARIABLES)
+TEMPLATE_VARIABLES.update(_election_templates.TEMPLATE_VARIABLES)
+TEMPLATE_VARIABLES.update(_minutes_templates.TEMPLATE_VARIABLES)
+TEMPLATE_VARIABLES.update(_leave_templates.TEMPLATE_VARIABLES)
+TEMPLATE_VARIABLES.update(_leave_workflow_templates.TEMPLATE_VARIABLES)
 
 SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
     "welcome": _sample(
@@ -1788,6 +1796,21 @@ SAMPLE_CONTEXT.update(
 SAMPLE_CONTEXT.update(
     {key: _sample(value) for key, value in _waiver_templates.SAMPLE_CONTEXT.items()}
 )
+SAMPLE_CONTEXT.update(
+    {key: _sample(value) for key, value in _election_templates.SAMPLE_CONTEXT.items()}
+)
+SAMPLE_CONTEXT.update(
+    {key: _sample(value) for key, value in _minutes_templates.SAMPLE_CONTEXT.items()}
+)
+SAMPLE_CONTEXT.update(
+    {key: _sample(value) for key, value in _leave_templates.SAMPLE_CONTEXT.items()}
+)
+SAMPLE_CONTEXT.update(
+    {
+        key: _sample(value)
+        for key, value in _leave_workflow_templates.SAMPLE_CONTEXT.items()
+    }
+)
 
 # The sample links' placeholder host. Only the host is replaced: each path is
 # the one the real sender builds (``/events/{id}``, ``/training/approve/…``),
@@ -1879,6 +1902,9 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
 }
 TEST_RECIPIENT_FIELDS.update(_evaluation_templates.TEST_RECIPIENT_FIELDS)
 TEST_RECIPIENT_FIELDS.update(_waiver_templates.TEST_RECIPIENT_FIELDS)
+TEST_RECIPIENT_FIELDS.update(_election_templates.TEST_RECIPIENT_FIELDS)
+TEST_RECIPIENT_FIELDS.update(_leave_templates.TEST_RECIPIENT_FIELDS)
+TEST_RECIPIENT_FIELDS.update(_leave_workflow_templates.TEST_RECIPIENT_FIELDS)
 
 _DATE_TIME = "%B %d, %Y at %I:%M %p"
 _DATE = "%B %d, %Y"
@@ -1983,6 +2009,32 @@ TEST_SAMPLE_DATES.update(
         for key, days in _waiver_templates.SAMPLE_SESSION_DAYS.items()
     }
 )
+# Nominations close a week out and the vote is a week after that, as a
+# department typically schedules them.
+TEST_SAMPLE_DATES.update(
+    {
+        "election_nominations_open": {
+            "nominations_close": (7, time(19, 0), _strf(_DATE_TIME)),
+        },
+        "election_nominated": {"respond_by": (7, time(19, 0), _strf(_DATE_TIME))},
+        "pre_meeting_package": {
+            "voting_opens": (14, time(19, 0), _strf(_DATE_TIME)),
+            "voting_closes": (14, time(21, 0), _strf(_DATE_TIME)),
+        },
+    }
+)
+TEST_SAMPLE_DATES.update(
+    {
+        key: {name: (days, None, _strf(_DATE)) for name, days in fields.items()}
+        for key, fields in _leave_templates.SAMPLE_LEAVE_DAYS.items()
+    }
+)
+TEST_SAMPLE_DATES.update(
+    {
+        key: {name: (days, None, _strf(_DATE)) for name, days in fields.items()}
+        for key, fields in _leave_workflow_templates.SAMPLE_DAYS.items()
+    }
+)
 
 
 # Dates that sit inside a prose value rather than a variable of their own:
@@ -1995,6 +2047,7 @@ TEST_SAMPLE_PROSE_DATES: Dict[str, Dict[str, int]] = {
     "storefront_vendor_order_placed": {"window_extra_html": 30},
     # The completion date of the record that was voided.
     "training_record_voided": {"details_html": -30, "details_text": -30},
+    **_leave_workflow_templates.SAMPLE_PROSE_DAYS,
     # The waiver notices' summary quotes the session's date.
     **{
         key: {"summary": days}
@@ -4410,6 +4463,21 @@ class EmailTemplateService:
             None,
         )
 
+    @classmethod
+    def _default_definition(cls, template_type: EmailTemplateType) -> Dict[str, Any]:
+        """The registered default for a type a sender renders; raises if none.
+
+        A sender asking for a type with no default is a wiring mistake, and an
+        empty body sent in its place would hide it.
+        """
+        defn = next(
+            (d for d in cls._DEFAULT_TEMPLATE_DEFS if d["type"] == template_type),
+            None,
+        )
+        if defn is None:
+            raise ValueError(f"no default template for {template_type!r}")
+        return defn
+
     def is_customized(self, template: EmailTemplate) -> bool:
         """Has a department changed anything Reset would put back?
 
@@ -5188,6 +5256,9 @@ class EmailTemplateService:
         }
         | _storefront_templates.RAW_HTML_VARIABLES
         | _waiver_templates.RAW_HTML_VARIABLES
+        | _election_templates.RAW_HTML_VARIABLES
+        | _minutes_templates.RAW_HTML_VARIABLES
+        | _leave_workflow_templates.RAW_HTML_VARIABLES
     )
 
     def _replace_variables(
@@ -5736,6 +5807,18 @@ class EmailTemplateService:
         # Attendance waiver requests, for training sessions and business
         # meetings; see email_templates_attendance_waivers.py.
         *_waiver_templates.DEFAULT_TEMPLATE_DEFS,
+        # Election notices and the pre-meeting package; see
+        # email_templates_elections.py.
+        *_election_templates.DEFAULT_TEMPLATE_DEFS,
+        # Minutes circulation and the action-item notices; see
+        # email_templates_minutes.py.
+        *_minutes_templates.DEFAULT_TEMPLATE_DEFS,
+        # A member's leave of absence recorded, changed or removed; see
+        # email_templates_leave.py.
+        *_leave_templates.DEFAULT_TEMPLATE_DEFS,
+        # Leave reminders, the open-ended digest and leave requests; see
+        # email_templates_leave_workflow.py.
+        *_leave_workflow_templates.DEFAULT_TEMPLATE_DEFS,
     ]
 
     # Stamp each definition with the colourway build_shell recorded for its

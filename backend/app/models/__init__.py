@@ -261,10 +261,15 @@ from app.models.history import (
     HistoricalMemberRelation,
     HistoricalMemberServicePeriod,
     HistoryAlbum,
+    HistoryAlbumDocument,
     HistoryAlbumItem,
     HistoryClearanceDecision,
     HistoryClearanceRequest,
     HistoryClearanceStep,
+    HistoryDocument,
+    HistoryDocumentFile,
+    HistoryDocumentTag,
+    HistoryDocumentType,
     HistoryImport,
     HistoryImportRow,
     HistoryImportTitleMapping,
@@ -349,6 +354,14 @@ from app.models.knowledge_test import (
     KnowledgeTestQuestion,
 )
 from app.models.label_printer import LabelPrinter
+from app.models.leave_request import (
+    LeaveDecisionRule,
+    LeaveNoticeSend,
+    LeaveRequest,
+    LeaveRequestStatus,
+    LeaveRequestVote,
+    LeaveVote,
+)
 from app.models.legal import (
     LegalDocumentRevision,
     LegalDocumentType,
@@ -658,6 +671,13 @@ __all__ = [
     "AttendanceWaiverEmailSend",
     "AttendanceWaiverStatus",
     "AttendanceWaiverWorkflow",
+    # Leave of absence requests and scheduled leave notices
+    "LeaveDecisionRule",
+    "LeaveNoticeSend",
+    "LeaveRequest",
+    "LeaveRequestStatus",
+    "LeaveRequestVote",
+    "LeaveVote",
     # Error log models
     "ErrorLog",
     # Apparatus models
@@ -900,8 +920,13 @@ __all__ = [
     "HistoryClearanceDecision",
     "HistoryClearanceRequest",
     "HistoryAlbum",
+    "HistoryAlbumDocument",
     "HistoryAlbumItem",
     "HistoryClearanceStep",
+    "HistoryDocument",
+    "HistoryDocumentFile",
+    "HistoryDocumentTag",
+    "HistoryDocumentType",
     "HistoryImport",
     "HistoryImportRow",
     "HistoryImportTitleMapping",

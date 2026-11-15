@@ -340,6 +340,19 @@ export async function cacheSkillTest(test: SkillTest): Promise<void> {
   }
 }
 
+/**
+ * The version a drain's save produced for this test, if a drain has sent one
+ * since the test was last cached any other way (see recordDrainedVersion).
+ */
+export async function drainedVersionFor(testId: string): Promise<number | null> {
+  try {
+    const row = await getRow<CachedRow<SkillTest>>(STORE_TESTS, testId);
+    return row && isOwnedByCurrentMember(row) ? (row.drainedVersion ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getCachedSkillTest(testId: string): Promise<SkillTest | null> {
   return getOwned<SkillTest>(STORE_TESTS, testId);
 }

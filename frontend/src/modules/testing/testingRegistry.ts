@@ -27,6 +27,7 @@ import {
   MEMBERS_SETTINGS_IDS_GATE,
   MEMBERS_SETTINGS_RANKS_GATE,
   MEMBERS_SETTINGS_TIERS_GATE,
+  MEMBERS_SETTINGS_LEAVE_GATE,
   MEMBERS_SETTINGS_VISIBILITY_GATE,
 } from '../membership/routes';
 
@@ -246,6 +247,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/members/:userId', label: 'Member profile' },
       { path: '/members/:userId/training', label: 'Member training history', module: 'training' },
       { path: '/members/my-crew', label: 'My crew' },
+      { path: '/members/leave-requests', label: 'Leave requests' },
       { path: '/members/:userId/id-card', label: 'Member ID card' },
       {
         path: '/members/print-labels',
@@ -288,6 +290,11 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         path: '/members/admin/settings/tiers',
         label: 'Members settings — membership tiers',
         anyPermission: MEMBERS_SETTINGS_TIERS_GATE,
+      },
+      {
+        path: '/members/admin/settings/leave',
+        label: 'Members settings — leave of absence',
+        anyPermission: MEMBERS_SETTINGS_LEAVE_GATE,
       },
       {
         path: '/members/admin/settings/evoc',
@@ -1271,6 +1278,26 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/history/media/:mediaId/edit',
         label: 'Edit a photo or media item',
+        permission: 'history.manage',
+        module: 'history',
+      },
+      { path: '/history/documents', label: 'Documents', module: 'history' },
+      {
+        path: '/history/documents/upload',
+        label: 'Upload documents',
+        permission: 'history.manage',
+        module: 'history',
+        note: 'PDFs and scans, up to 25 at once; a Word file is refused with a note to convert it to PDF.',
+      },
+      {
+        path: '/history/documents/:documentId',
+        label: 'Document',
+        module: 'history',
+        note: 'Open shows the stripped copy in a new tab; keepers also see the original download and research notes.',
+      },
+      {
+        path: '/history/documents/:documentId/edit',
+        label: 'Edit a document',
         permission: 'history.manage',
         module: 'history',
       },

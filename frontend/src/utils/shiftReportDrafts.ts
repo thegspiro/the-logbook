@@ -21,6 +21,8 @@ export interface ShiftReportDraft {
   crewSelections: string[];
   traineeEvals: Record<string, unknown>;
   crewRemarks: Record<string, string>;
+  /** Calls the officer typed over a member's derived figure, as typed. */
+  memberCalls?: Record<string, string>;
   savedAt: number;
 }
 

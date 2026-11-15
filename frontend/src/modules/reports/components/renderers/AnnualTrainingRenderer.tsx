@@ -3,11 +3,38 @@
  */
 
 import React from 'react';
-import type { AnnualTrainingReport } from '../../types';
+import type { AnnualTrainingEntry, AnnualTrainingReport } from '../../types';
 import { toStr } from '../../utils/export';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
 import { formatHours, formatHoursExact, sumHoursToQuarter } from '@/utils/hoursFormatting';
+import { leavePeriodText, leavePeriodsText } from '../../utils/leavePeriods';
+
+/** "8 months", "1 month", "8.5 months": one decimal, trailing zero dropped. */
+const monthsLabel = (months: number): string => {
+  const n = Math.round(months * 10) / 10;
+  return `${n} ${n === 1 ? 'month' : 'months'}`;
+};
+
+/**
+ * A member's leave beside their hours, so a short year reads as a year away
+ * rather than a shortfall. The months are the server's count, by the
+ * department's rule; nothing here re-derives them.
+ */
+const LeaveCell: React.FC<{ entry: AnnualTrainingEntry }> = ({ entry }) => {
+  const periods = entry.leave_periods ?? [];
+  if (periods.length === 0) return <>-</>;
+  return (
+    <div className="text-right">
+      <div>{monthsLabel(entry.leave_months ?? 0)}</div>
+      {periods.map((period) => (
+        <div key={`${period.start_date}-${period.end_date ?? ''}`} className="text-theme-text-muted text-xs">
+          {leavePeriodText(period)}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 interface Props {
   data: AnnualTrainingReport;
@@ -16,6 +43,7 @@ interface Props {
 
 export const AnnualTrainingRenderer: React.FC<Props> = ({ data, formatRank }) => {
   const { summary } = data;
+  const entriesById = new Map(data.entries.map((entry) => [entry.member_id, entry]));
 
   const columns = [
     { key: 'member_name', header: 'Member' },
@@ -39,6 +67,15 @@ export const AnnualTrainingRenderer: React.FC<Props> = ({ data, formatRank }) =>
     { key: 'courses_completed', header: 'Courses', align: 'right' as const },
     { key: 'shifts_completed', header: 'Shifts', align: 'right' as const },
     { key: 'calls_responded', header: 'Calls', align: 'right' as const },
+    {
+      key: 'leave_months',
+      header: 'Leave',
+      align: 'right' as const,
+      render: (_v: unknown, row: Record<string, unknown>) => {
+        const entry = entriesById.get(toStr(row.member_id));
+        return entry ? <LeaveCell entry={entry} /> : '-';
+      },
+    },
     {
       key: 'avg_performance_rating',
       header: 'Rating',
@@ -91,7 +128,14 @@ export function getAnnualTrainingExportData(data: AnnualTrainingReport) {
     { key: 'courses_completed', header: 'Courses Completed' },
     { key: 'shifts_completed', header: 'Shifts Completed' },
     { key: 'calls_responded', header: 'Calls Responded' },
+    { key: 'leave_months', header: 'Months on Leave' },
+    { key: 'leave_periods_text', header: 'Leave Periods' },
     { key: 'avg_performance_rating', header: 'Avg Rating' },
   ];
-  return { rows: data.entries as unknown as Array<Record<string, unknown>>, columns };
+  const rows = data.entries.map((entry) => ({
+    ...entry,
+    leave_months: entry.leave_months ?? 0,
+    leave_periods_text: leavePeriodsText(entry.leave_periods),
+  }));
+  return { rows: rows as unknown as Array<Record<string, unknown>>, columns };
 }

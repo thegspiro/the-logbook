@@ -174,6 +174,9 @@ Complete reference of all pages in the application, organized by module.
 | `/members/:userId`          | Member Profile          | Authenticated |
 | `/members/:userId/training` | Member Training History | Authenticated |
 | `/members/my-crew`          | My Crew                 | Authenticated |
+| `/members/leave-requests`   | Leave Requests          | Authenticated |
+
+> **Leave Requests (`/members/leave-requests`)** _(added 2026-11-14)_. A member asks for a leave of absence here, when the department has turned requests on under **Members Settings — Leave of Absence**, and sees where their requests stand. Members who may decide a request see it under **To decide**: the department's chosen approver positions, or, when nobody else holds them, the Chief, then everyone with `members.manage`. Authenticated with no permission: who decides is not a permission, and the server lists each caller only the requests they may see (`GET /users/leave-requests`, `GET /users/leave-requests/me`). The member's reason is shown to them and their approvers only, and is never emailed.
 
 > **My Crew (`/members/my-crew`)** _(added 2026-11-04)_. The members the signed-in member supervises today, by the dated Reports To assignments (owner decision 2026-11-01, crew views). Authenticated with no permission: the assignment is the grant, and the server lists only the caller's current crew (`GET /users/me/crew`). Each card shows the member's training standing from `GET /training/compliance-summary/{id}` and links to their training records; the page also lists the evaluations written about the crew (`GET /evaluations/crew`). The menu offers My Crew only to a member who supervises someone. Medical records and contact details are not part of crew access.
 
@@ -209,6 +212,7 @@ Member Management lists every member except the archived and dropped (voluntary 
 | `/members/admin/settings/ids`        | Members Settings — Membership IDs     | `members.manage`, `settings.edit` or `organization.update_settings`                                                                              |
 | `/members/admin/settings/ranks`      | Members Settings — Operational Ranks  | `members.manage` or `settings.manage`                                                                                                            |
 | `/members/admin/settings/tiers`      | Members Settings — Membership Tiers   | `members.manage`                                                                                                                                 |
+| `/members/admin/settings/leave`      | Members Settings — Leave of Absence   | `members.manage`                                                                                                                                 |
 | `/members/admin/settings/evoc`       | Members Settings — EVOC Levels        | `members.manage` or `apparatus.manage`                                                                                                           |
 | `/members/check-in-station`          | Check-In Station                      | `members.check_in`                                                                                                                               |
 
@@ -1240,27 +1244,31 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## History _(2026-11-03)_
 
-| URL                               | Page                       | Permission                            |
-| --------------------------------- | -------------------------- | ------------------------------------- |
-| `/history`                        | History home               | Authenticated                         |
-| `/history/people`                 | Past members               | Authenticated                         |
-| `/history/people/new`             | Add a past member          | `history.manage`                      |
-| `/history/people/:personId`       | Past member                | Authenticated                         |
-| `/history/people/:personId/edit`  | Edit a past member         | `history.manage`                      |
-| `/history/people/:personId/merge` | Merge two records          | `history.manage`                      |
-| `/history/import`                 | Import a roster            | `history.manage`                      |
-| `/history/media`                  | Photos and media           | Authenticated                         |
-| `/history/media/upload`           | Upload photos and media    | `history.manage`                      |
-| `/history/media/:mediaId`         | Photo or media item        | Authenticated                         |
-| `/history/media/:mediaId/edit`    | Edit a photo or media item | `history.manage`                      |
-| `/history/albums`                 | Albums                     | Authenticated                         |
-| `/history/albums/:albumId`        | Album                      | Authenticated                         |
-| `/history/import/:importId`       | Review a roster import     | `history.manage`                      |
-| `/history/honor-roll`             | Honor Roll                 | Authenticated                         |
-| `/history/clearance/:requestId`   | Clearance review           | Authenticated                         |
-| `/history/settings`               | Titles and clearance list  | `history.manage` or `settings.manage` |
+| URL                                   | Page                       | Permission                            |
+| ------------------------------------- | -------------------------- | ------------------------------------- |
+| `/history`                            | History home               | Authenticated                         |
+| `/history/people`                     | Past members               | Authenticated                         |
+| `/history/people/new`                 | Add a past member          | `history.manage`                      |
+| `/history/people/:personId`           | Past member                | Authenticated                         |
+| `/history/people/:personId/edit`      | Edit a past member         | `history.manage`                      |
+| `/history/people/:personId/merge`     | Merge two records          | `history.manage`                      |
+| `/history/import`                     | Import a roster            | `history.manage`                      |
+| `/history/media`                      | Photos and media           | Authenticated                         |
+| `/history/media/upload`               | Upload photos and media    | `history.manage`                      |
+| `/history/media/:mediaId`             | Photo or media item        | Authenticated                         |
+| `/history/media/:mediaId/edit`        | Edit a photo or media item | `history.manage`                      |
+| `/history/documents`                  | Documents                  | Authenticated                         |
+| `/history/documents/upload`           | Upload documents           | `history.manage`                      |
+| `/history/documents/:documentId`      | Document                   | Authenticated                         |
+| `/history/documents/:documentId/edit` | Edit a document            | `history.manage`                      |
+| `/history/albums`                     | Albums                     | Authenticated                         |
+| `/history/albums/:albumId`            | Album                      | Authenticated                         |
+| `/history/import/:importId`           | Review a roster import     | `history.manage`                      |
+| `/history/honor-roll`                 | Honor Roll                 | Authenticated                         |
+| `/history/clearance/:requestId`       | Clearance review           | Authenticated                         |
+| `/history/settings`                   | Titles and clearance list  | `history.manage` or `settings.manage` |
 
-> The department archive, off by default and turned on under Settings → Modules. Any signed-in member reads what is published to members; the server decides what each caller receives, so a member's response never carries a past member's birth date, addresses, verification sources or research notes, and each memorial detail (date of death, circumstances, resting place) only where its own visibility allows. `history.view` reads drafts and research without editing, `history.manage` creates and edits, and `history.publish` publishes. Publishing to the public needs the department's clearance list — each step a position, any one holder of which clears it — to have cleared the record's latest substantial revision; with no list, a publisher publishes directly. The review page opens for the archive's keepers, the member who submitted the record and holders of a step's position. Public records are stored now and appear on the department's website once the public feed ships. A roster CSV is imported through a reviewed draft: each row is matched to an existing record (which only gains the fields it is missing), mapped to a member account, created as a new draft record, or skipped, and no login account is ever created. Merging two records of one person keeps one, moves the other's service, family links and change history to it, and forwards the removed record's address. Photos, audio and video keep their original exactly as uploaded, downloadable by `history.manage` only; everyone else sees a photo as a re-encoded copy with its location and camera data stripped, and audio and video as a copy with their recording-device tags and data tracks removed. TIFF is not accepted. A tagged person's photo-use answer is shown to the archive's keepers as a warning, never a block.
+> The department archive, off by default and turned on under Settings → Modules. Any signed-in member reads what is published to members; the server decides what each caller receives, so a member's response never carries a past member's birth date, addresses, verification sources or research notes, and each memorial detail (date of death, circumstances, resting place) only where its own visibility allows. `history.view` reads drafts and research without editing, `history.manage` creates and edits, and `history.publish` publishes. Publishing to the public needs the department's clearance list — each step a position, any one holder of which clears it — to have cleared the record's latest substantial revision; with no list, a publisher publishes directly. The review page opens for the archive's keepers, the member who submitted the record and holders of a step's position. Public records are stored now and appear on the department's website once the public feed ships. A roster CSV is imported through a reviewed draft: each row is matched to an existing record (which only gains the fields it is missing), mapped to a member account, created as a new draft record, or skipped, and no login account is ever created. Merging two records of one person keeps one, moves the other's service, family links and change history to it, and forwards the removed record's address. Photos, audio and video keep their original exactly as uploaded, downloadable by `history.manage` only; everyone else sees a photo as a re-encoded copy with its location and camera data stripped, and audio and video as a copy with their recording-device tags and data tracks removed. TIFF is not accepted. Documents (PDFs and scans) live in the protected History folder in Documents with their catalogue in History; everyone but `history.manage` opens a copy rebuilt without its metadata, scripts or attachments, in the browser's own viewer in a new tab, and search covers each PDF's own text and transcription. A tagged person's photo-use answer is shown to the archive's keepers as a warning, never a block.
 
 ---
 
