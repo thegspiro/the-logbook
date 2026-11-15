@@ -1527,3 +1527,53 @@ class BulkTrainingRecordResult(BaseModel):
     duplicate_warnings: List[DuplicateWarning] = []
     errors: List[str] = []
     created_record_ids: List[str] = []
+
+
+# Course links: unlinked records' names, linked to library courses
+
+
+class CourseLinkCourse(BaseModel):
+    id: UUID
+    name: str
+    code: Optional[str] = None
+
+    model_config = _response_config
+
+
+class CourseLinkSpelling(BaseModel):
+    name: str
+    records: int
+
+
+class CourseLinkName(BaseModel):
+    """One name unlinked records carry, its spellings grouped together."""
+
+    key: str
+    label: str
+    spellings: List[CourseLinkSpelling]
+    records: int
+    members: int
+    first_date: Optional[date] = None
+    last_date: Optional[date] = None
+    suggested_course: Optional[CourseLinkCourse] = None
+
+
+class CourseLinksView(BaseModel):
+    items: List[CourseLinkName]
+    total: int
+    offset: int
+    limit: int
+    # Across every name, not just this page: what "Link all suggested" does.
+    suggested_names: int
+    suggested_records: int
+    courses: List[CourseLinkCourse]
+
+
+class CourseLinkRequest(BaseModel):
+    key: str = Field(..., min_length=1, max_length=255)
+    course_id: UUID
+
+
+class CourseLinkResult(BaseModel):
+    names: int
+    records: int

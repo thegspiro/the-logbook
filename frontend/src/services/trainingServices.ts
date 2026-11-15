@@ -39,6 +39,8 @@ import type {
   CourseClassCreate,
   CourseClassUpdate,
   CourseCohort,
+  CourseLinkResult,
+  CourseLinksView,
   CourseCohortClass,
   CourseCohortCreate,
   CourseCohortDetail,
@@ -234,6 +236,31 @@ export const trainingService = {
    */
   async updateCourse(courseId: string, updates: TrainingCourseUpdate): Promise<TrainingCourse> {
     const response = await api.patch<TrainingCourse>(`/training/courses/${courseId}`, updates);
+    return response.data;
+  },
+
+  /**
+   * The names training records with no library course carry, with a
+   * suggested course for each.
+   */
+  async getCourseLinks(params: {
+    search?: string | undefined;
+    offset: number;
+    limit: number;
+  }): Promise<CourseLinksView> {
+    const response = await api.get<CourseLinksView>('/training/course-links', { params });
+    return response.data;
+  },
+
+  /** Link every unlinked record carrying a name to a library course. */
+  async linkCourseName(key: string, courseId: string): Promise<CourseLinkResult> {
+    const response = await api.post<CourseLinkResult>('/training/course-links', { key, course_id: courseId });
+    return response.data;
+  },
+
+  /** Link every name that has a suggested course to it. */
+  async linkSuggestedCourseNames(): Promise<CourseLinkResult> {
+    const response = await api.post<CourseLinkResult>('/training/course-links/link-suggested');
     return response.data;
   },
 
