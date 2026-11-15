@@ -44,6 +44,23 @@ describe('AttendanceRequirementChecklist › whom a requirement applies to', () 
     );
   });
 
+  // A list of blank words matches no member's category, and the grader does
+  // not go on to ranks or positions once the list is non-empty: the
+  // Mandatory-for note says it applies to nobody, and so does this.
+  it('says no members when the member categories are all blank, whatever rank it names', () => {
+    renderWith(requirement({ required_membership_types: ['', '  '], required_roles: ['captain'] }));
+    expect(screen.getByRole('checkbox', { name: 'Drill attendance' })).toHaveAccessibleDescription(
+      'Applies to no members: no member categories, ranks or positions are set'
+    );
+  });
+
+  it('leaves a blank word out of the categories it names', () => {
+    renderWith(requirement({ required_membership_types: [' active ', ''] }));
+    expect(screen.getByRole('checkbox', { name: 'Drill attendance' })).toHaveAccessibleDescription(
+      'Member categories: Active'
+    );
+  });
+
   it('names the member categories, ahead of any rank or position', () => {
     renderWith(requirement({ required_membership_types: ['active', 'probationary'], required_roles: ['captain'] }));
     expect(screen.getByRole('checkbox', { name: 'Drill attendance' })).toHaveAccessibleDescription(

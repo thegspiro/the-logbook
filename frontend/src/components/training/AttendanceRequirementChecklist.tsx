@@ -32,17 +32,24 @@ interface AttendanceRequirementChecklistProps {
  * applies_to_all and the scope lists are independent fields; reading it as
  * "all members" told an officer the opposite of what the grader does.
  */
+const NO_MEMBERS = 'Applies to no members: no member categories, ranks or positions are set';
+
 const appliesTo = (requirement: TrainingRequirement): string => {
   if (requirement.applies_to_all) return 'Applies to all members';
-  const types = requirement.required_membership_types ?? [];
-  if (types.length) {
+  const listed = requirement.required_membership_types ?? [];
+  if (listed.length) {
+    // Blank words match no member's category, and the grader does not go on
+    // to ranks or positions once the list is non-empty, so a list of only
+    // blanks applies to no one (training_compliance.mandatory_tiers_for_requirements).
+    const types = listed.map((type) => type.trim()).filter(Boolean);
+    if (!types.length) return NO_MEMBERS;
     const label = (type: string) => MEMBERSHIP_TYPE_LABELS[type] ?? type.replace(/_/g, ' ');
     return `Member categories: ${types.map(label).join(', ')}`;
   }
   if (requirement.required_roles?.length || requirement.required_positions?.length) {
     return 'Applies to members by rank or position';
   }
-  return 'Applies to no members: no member categories, ranks or positions are set';
+  return NO_MEMBERS;
 };
 
 /**
