@@ -1,7 +1,7 @@
 """Store a department shift's evaluation requirements when it ends
 
 Revision ID: 611204dcf8d1
-Revises: b91f3c6d2e48
+Revises: d3a7f5e2c916
 Create Date: 2026-11-14 15:52:46.021357
 
 Owner decision, 2026-11-14: the evaluations a department shift calls for are
@@ -27,7 +27,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "611204dcf8d1"
-down_revision: Union[str, None] = "b91f3c6d2e48"
+down_revision: Union[str, None] = "d3a7f5e2c916"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

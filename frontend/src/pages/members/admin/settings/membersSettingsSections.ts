@@ -27,10 +27,10 @@
  * part of the move.
  */
 
-import { Eye, Hash, Layers, Shield, Truck } from 'lucide-react';
+import { CalendarOff, Eye, Hash, Layers, Shield, Truck } from 'lucide-react';
 import type { SettingsSection } from '../../../../components/settings/SettingsLayout';
 
-export type MembersSettingsTab = 'visibility' | 'ids' | 'ranks' | 'tiers' | 'evoc';
+export type MembersSettingsTab = 'visibility' | 'ids' | 'ranks' | 'tiers' | 'leave' | 'evoc';
 
 export interface MembersSettingsSection extends SettingsSection<MembersSettingsTab> {
   /** The route this section is reached at. */
@@ -81,6 +81,15 @@ export const MEMBERS_SETTINGS_SECTIONS: MembersSettingsSection[] = [
     // GET/PUT /users/membership-tiers/config — both require members.manage, so
     // unlike its neighbours this section's own grant and the hub's are the same
     // one.
+    permissions: ['members.manage'],
+  },
+  {
+    key: 'leave',
+    label: 'Leave of Absence',
+    icon: CalendarOff,
+    description: 'Ending reminders and leave requests',
+    path: '/members/admin/settings/leave',
+    // GET/PUT /users/leaves-of-absence/settings — both require members.manage.
     permissions: ['members.manage'],
   },
   {

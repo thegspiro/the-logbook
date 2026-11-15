@@ -14,6 +14,7 @@ import uuid
 from datetime import date
 
 import pytest
+from fastapi import BackgroundTasks
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -96,6 +97,7 @@ async def test_create_leave_emits_audit_event(
             start_date=date(2026, 1, 1),
             end_date=date(2026, 2, 1),
         ),
+        BackgroundTasks(),
         db_session,
         manager,
     )
@@ -118,6 +120,7 @@ async def test_update_leave_emits_audit_event(
             start_date=date(2026, 1, 1),
             end_date=date(2026, 2, 1),
         ),
+        BackgroundTasks(),
         db_session,
         manager,
     )
@@ -125,6 +128,7 @@ async def test_update_leave_emits_audit_event(
     await update_leave_of_absence(
         created.id,
         LeaveOfAbsenceUpdate(reason="Extended"),
+        BackgroundTasks(),
         db_session,
         manager,
     )
@@ -147,11 +151,12 @@ async def test_delete_leave_emits_audit_event(
             start_date=date(2026, 1, 1),
             end_date=date(2026, 2, 1),
         ),
+        BackgroundTasks(),
         db_session,
         manager,
     )
 
-    await delete_leave_of_absence(created.id, db_session, manager)
+    await delete_leave_of_absence(created.id, BackgroundTasks(), db_session, manager)
 
     event = await _latest_audit_event(db_session, "leave_of_absence_deleted")
     assert event is not None

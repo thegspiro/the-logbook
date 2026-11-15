@@ -86,7 +86,7 @@ const getDeadlineColor = (deadlineDate: string | null, timezone: string): string
   const days = daysUntil(deadlineDate, timezone);
   if (isNaN(days)) return 'text-theme-text-secondary';
   if (days < 14) return 'text-red-600';
-  if (days < 30) return 'text-yellow-700 dark:text-yellow-600';
+  if (days < 30) return 'text-amber-800 dark:text-yellow-600';
   return 'text-green-700 dark:text-green-600';
 };
 
@@ -95,7 +95,7 @@ const getDeadlineBadgeColor = (deadlineDate: string | null, timezone: string): s
   const days = daysUntil(deadlineDate, timezone);
   if (isNaN(days)) return 'bg-theme-surface-secondary text-theme-text-secondary';
   if (days < 14) return 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400';
-  if (days < 30) return 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
+  if (days < 30) return 'bg-amber-100 dark:bg-yellow-500/20 text-amber-800 dark:text-yellow-400';
   return 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400';
 };
 
@@ -563,7 +563,7 @@ const GrantsDashboardPage: React.FC = () => {
         <KpiTile
           label="Pending Applications"
           value={String(dashboard?.pendingApplications ?? 0)}
-          icon={<Clock className="h-5 w-5 text-yellow-700 dark:text-yellow-600" />}
+          icon={<Clock className="h-5 w-5 text-amber-800 dark:text-yellow-600" />}
           iconBgClass="bg-yellow-100 dark:bg-yellow-500/20"
           linkTo="/grants/applications?group=pending"
         />

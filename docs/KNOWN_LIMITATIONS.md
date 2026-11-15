@@ -6867,7 +6867,12 @@ error until a sender exists, rather than the current silent-accept.
 > decision:** the two reports still measure program progress and can disagree
 > with the dashboard; that is now stated on them. Tests:
 > `tests/test_training_summary_program_progress.py`,
-> `programProgressLabels.test.tsx`. The text below is the original finding.
+> `programProgressLabels.test.tsx`. **Reaffirmed 2026-11-14:** asked whether
+> to rebuild `compliance_status` on the dashboard's evaluation so a leave of
+> absence reduces its targets, the owner kept this decision and chose instead
+> to list each member's leave in the past year beside the progress (an
+> **On leave** mark and the dates); no figure changes
+> (`tests/test_reports_leave.py`). The text below is the original finding.
 
 `reports_service._generate_compliance_status` (the `compliance_status`
 report) and `_generate_training_summary`'s `requirement_breakdown` section
@@ -10385,10 +10390,15 @@ beyond the feature.
   again.
 - **A deactivated evaluation form is still offered and required** where a
   program or the department settings still name it.
-- **Two administrators creating forms with the same name at the same moment
-  get a 500** rather than the duplicate-name 400.
+- ~~**Two administrators creating forms with the same name at the same moment
+  get a 500** rather than the duplicate-name 400.~~ Resolved 2026-11-14: a
+  create or rename whose commit meets the per-department unique key now rolls
+  back and returns the same duplicate-name 400 the up-front check gives.
 - **A preceptor-link submission that collides with an officer creating the
   same evaluation** retries once; the retry keeps the link marked used but
   loses the submitting device's address and browser from the record.
-- **Restoring a pending outside shift approves it**, without approve's
-  pending-only check (it still needs `scheduling.manage`).
+- ~~**Restoring a pending outside shift approves it**, without approve's
+  pending-only check (it still needs `scheduling.manage`).~~ Resolved
+  2026-11-14: restore now applies only to a rejected entry and answers 400
+  otherwise, as approve does for one that is not pending; restore, approve and
+  reject all read the entry under a row lock.

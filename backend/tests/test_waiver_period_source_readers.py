@@ -48,6 +48,23 @@ REVIEWED = {
     ("services/training_waiver_service.py", "excused_month_reasons"): (
         "reads month_waivers' result, which drops the excusal"
     ),
+    ("services/training_waiver_service.py", "leave_months_in"): (
+        "keeps only SOURCE_LEAVE periods, so an excusal never reaches month_waivers"
+    ),
+    ("services/leave_workflow_notices.py", "resume_note"): (
+        "builds one SOURCE_LEAVE period from the leave itself; no excusal is "
+        "ever fetched"
+    ),
+    ("services/leave_workflow_notices.py", "send_leave_ending_reminders"): (
+        "reads leave rows for their end dates; builds no waiver period"
+    ),
+    ("services/leave_workflow_notices.py", "send_open_ended_leave_digest"): (
+        "reads leave rows for their start dates; builds no waiver period"
+    ),
+    ("services/reports_service.py", "_leave_periods_by_member"): (
+        "reads leave rows to list their dates on a report; builds no waiver "
+        "period, so no excusal can reach it"
+    ),
     ("services/training_compliance.py", "_month_rows"): (
         "reads month_waivers' result (MonthWaiver.sources), which drops the excusal"
     ),

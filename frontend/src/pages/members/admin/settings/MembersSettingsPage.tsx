@@ -28,6 +28,7 @@ import MembershipIdSection from './MembershipIdSection';
 import RanksSection from './RanksSection';
 import TiersSection from './TiersSection';
 import EvocSection from './EvocSection';
+import LeaveSection from './LeaveSection';
 
 interface MembersSettingsPageProps {
   /** Which section this route mounts. */
@@ -119,6 +120,8 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
         return <RanksSection />;
       case 'tiers':
         return <TiersSection />;
+      case 'leave':
+        return <LeaveSection save={saveVoid} saveDebounced={saveDebouncedVoid} />;
       case 'evoc':
         return <EvocSection />;
       case 'visibility':
@@ -134,7 +137,7 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
       navLabel="Members settings sections"
       eyebrow="Administration"
       title="Members Settings"
-      subtitle="Contact visibility, membership numbers, ranks, tiers and EVOC levels"
+      subtitle="Contact visibility, membership numbers, ranks, tiers, leave and EVOC levels"
       saveState={saveState}
       onRetrySave={retry}
       showBreadcrumbs
