@@ -40,6 +40,13 @@ describe('requirementTarget', () => {
     expect(requirementTarget(record({ requirement_type: 'refusals', required_refusals: 5 }, 2))).toBe('2 / 5 refusals');
   });
 
+  it('counts evaluated calls apart from the calls shift reports credit', () => {
+    expect(requirementTarget(record({ requirement_type: 'evaluated_calls', required_calls: 25 }, 7))).toBe(
+      '7 / 25 calls on evaluations'
+    );
+    expect(requirementAction(record({ requirement_type: 'evaluated_calls' }))).toMatch(/shift evaluations/);
+  });
+
   it('counts completed courses over the required list length', () => {
     expect(requirementTarget(record({ requirement_type: 'courses', required_courses: ['a', 'b', 'c', 'd'] }, 1))).toBe(
       '1 / 4 courses'

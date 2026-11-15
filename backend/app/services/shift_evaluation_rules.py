@@ -22,11 +22,14 @@ from app.models.training import RequirementType
 
 # Requirement types credited only by submitted shift evaluations, and the
 # column each one's target lives in. An evaluated-shift count reuses
-# required_shifts, as the form beside it does.
+# required_shifts, as the form beside it does, and an evaluated-call count
+# reuses required_calls: a number of calls either way, and the CALLS grading
+# that reads that column checks the type before it does.
 EVALUATION_REQUIREMENT_TARGETS = {
     RequirementType.EVALUATED_SHIFTS: "required_shifts",
     RequirementType.TRANSPORTS: "required_transports",
     RequirementType.REFUSALS: "required_refusals",
+    RequirementType.EVALUATED_CALLS: "required_calls",
 }
 
 # The requirement types an evaluation credits.
@@ -41,6 +44,8 @@ def credit_units(evaluation: ShiftEvaluation, requirement: Any) -> float:
         return float(statistics.get("transports") or 0)
     if rtype == RequirementType.REFUSALS:
         return float(statistics.get("refusals") or 0)
+    if rtype == RequirementType.EVALUATED_CALLS:
+        return float(statistics.get("calls") or 0)
     if rtype != RequirementType.EVALUATED_SHIFTS:
         return 0.0
     if requirement.evaluation_excludes_lowest_rating:

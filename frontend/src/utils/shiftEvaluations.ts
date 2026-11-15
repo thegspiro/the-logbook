@@ -111,6 +111,9 @@ export const EVALUATION_REQUIREMENT_TARGETS = {
   evaluated_shifts: 'required_shifts',
   transports: 'required_transports',
   refusals: 'required_refusals',
+  // The calls an evaluation records count against the calls target; the
+  // 'calls' type, fed by shift reports, uses the same field.
+  evaluated_calls: 'required_calls',
 } as const;
 export type EvaluationRequirementType = keyof typeof EVALUATION_REQUIREMENT_TARGETS;
 

@@ -249,6 +249,20 @@ async def get_training_session_by_event(
     if not training_session:
         return None
 
+    # A draft event's session is hidden from a non-organizer, as the event
+    # itself is (ADV-5): the same null an event with no session answers.
+    if not user_has_permission(current_user, "events.manage"):
+        is_draft = (
+            await db.execute(
+                select(Event.is_draft).where(
+                    Event.id == str(event_id),
+                    Event.organization_id == str(current_user.organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        if is_draft:
+            return None
+
     return await _session_payload(service, training_session)
 
 

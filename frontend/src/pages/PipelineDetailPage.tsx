@@ -305,6 +305,9 @@ const RequirementList: React.FC<{
                   )}
                   {pr.requirement?.required_transports && <span>{pr.requirement.required_transports} transports</span>}
                   {pr.requirement?.required_refusals && <span>{pr.requirement.required_refusals} refusals</span>}
+                  {pr.requirement?.requirement_type === 'evaluated_calls' && pr.requirement.required_calls && (
+                    <span>{pr.requirement.required_calls} evaluated calls</span>
+                  )}
                   {pr.requirement?.checklist_items && <span>{pr.requirement.checklist_items.length} items</span>}
                   {pr.requirement?.recency_days != null && <span>within last {pr.requirement.recency_days}d</span>}
                   {pr.requirement?.required_courses?.length ? (
@@ -664,7 +667,16 @@ const EnrollModal: React.FC<{
 // Requirement types whose progress is a numeric accrual (log a value); all
 // other types (courses, certification, checklist, knowledge test, skills) are
 // completed by setting status.
-const NUMERIC_TYPES = new Set(['hours', 'shifts', 'calls', 'courses', 'evaluated_shifts', 'transports', 'refusals']);
+const NUMERIC_TYPES = new Set([
+  'hours',
+  'shifts',
+  'calls',
+  'courses',
+  'evaluated_shifts',
+  'transports',
+  'refusals',
+  'evaluated_calls',
+]);
 
 // Requirement types an officer scores by entering a percentage; pass/fail is
 // derived from the requirement's passing_score. Groundwork for a fuller
@@ -682,6 +694,8 @@ function requirementTarget(req?: TrainingRequirementEnhanced): { value: number; 
     return { value: req.required_transports, label: 'transports' };
   if (req.requirement_type === 'refusals' && req.required_refusals)
     return { value: req.required_refusals, label: 'refusals' };
+  if (req.requirement_type === 'evaluated_calls' && req.required_calls)
+    return { value: req.required_calls, label: 'evaluated calls' };
   if (req.requirement_type === 'courses' && req.required_courses?.length)
     return { value: req.required_courses.length, label: 'courses' };
   return null;

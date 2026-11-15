@@ -105,7 +105,8 @@ shift the caller cannot see answers `null` too, the same answer it gave as a
 404, so nothing about another department is revealed. Covered by
 `backend/tests/test_scheduling_my_attendance.py`, which failed against the old
 endpoint, and `frontend/src/modules/scheduling/services/myAttendance.test.ts`.
-W31-4 (My Sizes) is the same pattern on a different endpoint and stays open.
+W31-4 (My Sizes), the same pattern on a different endpoint, was fixed the same
+way on 2026-11-14.
 
 ### W34-5 — NIT — A member not on the shift can check in to it — OPEN (setting)
 

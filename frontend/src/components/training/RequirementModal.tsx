@@ -250,6 +250,10 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
       toast.error('Required transports must be set for a transports requirement');
       return;
     }
+    if (formData.requirement_type === 'evaluated_calls' && !formData.required_calls) {
+      toast.error('Required evaluated calls must be set for an evaluated calls requirement');
+      return;
+    }
     if (formData.requirement_type === 'refusals' && !formData.required_refusals) {
       toast.error('Required refusals must be set for a refusals requirement');
       return;
@@ -312,7 +316,10 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
         formData.requirement_type === 'shifts' || formData.requirement_type === 'evaluated_shifts'
           ? (formData.required_shifts ?? null)
           : null,
-      required_calls: formData.requirement_type === 'calls' ? (formData.required_calls ?? null) : null,
+      required_calls:
+        formData.requirement_type === 'calls' || formData.requirement_type === 'evaluated_calls'
+          ? (formData.required_calls ?? null)
+          : null,
       required_transports: formData.requirement_type === 'transports' ? (formData.required_transports ?? null) : null,
       required_refusals: formData.requirement_type === 'refusals' ? (formData.required_refusals ?? null) : null,
       required_attendance_pct:
@@ -533,6 +540,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                   <option value="evaluated_shifts">Evaluated Shifts</option>
                   <option value="transports">Transports</option>
                   <option value="refusals">Refusals</option>
+                  <option value="evaluated_calls">Evaluated Calls</option>
                   <option value="session_attendance">Session Attendance</option>
                 </select>
               </div>
@@ -677,10 +685,12 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                 idPrefix="req"
                 type={formData.requirement_type}
                 shifts={formData.required_shifts?.toString() ?? ''}
+                calls={formData.required_calls?.toString() ?? ''}
                 transports={formData.required_transports?.toString() ?? ''}
                 refusals={formData.required_refusals?.toString() ?? ''}
                 excludesLowest={formData.evaluation_excludes_lowest_rating}
                 onShiftsChange={(v) => setFormData({ ...formData, required_shifts: v ? Number(v) : undefined })}
+                onCallsChange={(v) => setFormData({ ...formData, required_calls: v ? Number(v) : undefined })}
                 onTransportsChange={(v) => setFormData({ ...formData, required_transports: v ? Number(v) : undefined })}
                 onRefusalsChange={(v) => setFormData({ ...formData, required_refusals: v ? Number(v) : undefined })}
                 onExcludesLowestChange={(v) => setFormData({ ...formData, evaluation_excludes_lowest_rating: v })}

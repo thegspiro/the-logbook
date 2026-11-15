@@ -109,8 +109,13 @@ const applicant = {
   ],
 } as unknown as Applicant;
 
-function renderDrawer(overrides: Partial<Applicant> = {}) {
-  return renderWithRouter(
+// The dialog opens read-only and widens once getMyAccess answers, so a test
+// that acts before then finds the officer controls missing; on a loaded CI
+// runner that happened after "Stage History" had already rendered. The
+// Activity Log heading appears only with can_see_full, so waiting for it
+// waits for the access every test here runs with.
+async function renderDrawer(overrides: Partial<Applicant> = {}) {
+  const view = renderWithRouter(
     <ApplicantDetailDialog
       applicant={{ ...applicant, ...overrides }}
       isOpen
@@ -120,6 +125,8 @@ function renderDrawer(overrides: Partial<Applicant> = {}) {
       isFirstStage={false}
     />
   );
+  await screen.findByText('Activity Log');
+  return view;
 }
 
 beforeEach(() => {
@@ -134,7 +141,7 @@ describe('ApplicantDetailDialog stage progress', () => {
   // skipped drew as a muted unreached bubble — while the timeline right below
   // it showed the completion stamp the skip had written.
   it('shows a skipped stage as visited in the progress strip, not unreached', async () => {
-    renderDrawer();
+    await renderDrawer();
     // The child sections resolve their own fetches on mount; settle them here
     // so their state updates land inside act().
     await screen.findByText('Stage History');
@@ -147,7 +154,7 @@ describe('ApplicantDetailDialog stage progress', () => {
   });
 
   it('names the skipped state in the timeline rather than calling it completed', async () => {
-    renderDrawer();
+    await renderDrawer();
 
     const heading = await screen.findByText('Stage History');
     // Asserted on the labels, not on formatted dates: the timestamps render in
@@ -160,7 +167,7 @@ describe('ApplicantDetailDialog stage progress', () => {
 
   // A skip is not work done: it stays out of the completion count.
   it('counts only completed stages in the progress summary', async () => {
-    renderDrawer();
+    await renderDrawer();
     await screen.findByText('Stage History');
 
     expect(screen.getByText(/1 of 4 stages completed/)).toBeInTheDocument();
@@ -173,14 +180,14 @@ describe('ApplicantDetailDialog skip action', () => {
   // over with two clicks. The server refuses it now; the button says so before
   // the click rather than after it.
   it('offers Skip on a stage that is not required', async () => {
-    renderDrawer({ current_stage_required: false });
+    await renderDrawer({ current_stage_required: false });
     await screen.findByText('Stage History');
 
     expect(screen.getByRole('button', { name: /skip/i })).toBeEnabled();
   });
 
   it('disables Skip on a required stage and says why', async () => {
-    renderDrawer({ current_stage_required: true });
+    await renderDrawer({ current_stage_required: true });
     await screen.findByText('Stage History');
 
     const skip = screen.getByRole('button', { name: /skip/i });
@@ -214,7 +221,7 @@ describe('ApplicantDetailDialog approval status', () => {
   } as unknown as Partial<Applicant>;
 
   it("lists each required signer from the stage's configuration, with who has signed", async () => {
-    renderDrawer(signOff);
+    await renderDrawer(signOff);
     await screen.findByText('Stage History');
 
     expect(screen.queryByText('No approval data recorded yet.')).not.toBeInTheDocument();
@@ -223,7 +230,7 @@ describe('ApplicantDetailDialog approval status', () => {
   });
 
   it('names each signer by the office label the step response carries, not the stored key', async () => {
-    renderDrawer({
+    await renderDrawer({
       ...signOff,
       current_stage_config: {
         required_approvers: ['ems_supply_officer', ' hose_master '],
@@ -256,7 +263,7 @@ describe('ApplicantDetailDialog activity log', () => {
         created_at: '2026-08-20T14:00:00Z',
       },
     ]);
-    renderDrawer();
+    await renderDrawer();
     await screen.findByText('Stage History');
 
     await userEvent.click(screen.getByText('Activity Log'));
@@ -289,7 +296,7 @@ describe('ApplicantDetailDialog activity log', () => {
         created_at: '2026-08-21T14:00:00Z',
       },
     ]);
-    renderDrawer();
+    await renderDrawer();
     await screen.findByText('Stage History');
 
     await userEvent.click(screen.getByText('Activity Log'));
@@ -314,7 +321,7 @@ describe('ApplicantDetailDialog conversion notes', () => {
         created_at: '2026-09-28T14:00:00Z',
       },
     ]);
-    renderDrawer();
+    await renderDrawer();
     await screen.findByText('Stage History');
 
     await userEvent.click(screen.getByText('Activity Log'));
@@ -327,14 +334,14 @@ describe('ApplicantDetailDialog address', () => {
   // The dialog showed an address only when it had a city, so an applicant who
   // gave a street and ZIP but no city appeared to have no address at all.
   it('shows an address that has a street but no city', async () => {
-    renderDrawer({ address: { street: '1 Main St', zip_code: '62701' } });
+    await renderDrawer({ address: { street: '1 Main St', zip_code: '62701' } });
     await screen.findByText('Stage History');
 
     expect(screen.getByText('1 Main St, 62701')).toBeInTheDocument();
   });
 
   it('shows an address that has only a city', async () => {
-    renderDrawer({ address: { city: 'Springfield' } });
+    await renderDrawer({ address: { city: 'Springfield' } });
     await screen.findByText('Stage History');
 
     expect(screen.getByText('Springfield')).toBeInTheDocument();
@@ -354,7 +361,7 @@ describe('ApplicantDetailDialog contact edit', () => {
   // birth date and address behind a "Contact info updated" toast.
   it('sends null for every optional contact field the user empties', async () => {
     const user = userEvent.setup();
-    renderDrawer({
+    await renderDrawer({
       phone: '555-0100',
       date_of_birth: '1990-04-02',
       address: { street: '1 Main St', city: 'Springfield', state: 'IL', zip_code: '62701' },
@@ -394,7 +401,7 @@ describe('ApplicantDetailDialog checklist stage', () => {
   // Nothing rendered the items as tickable, so a stage with items configured
   // could never be completed: the server refused every advance.
   it('renders each configured item as a checkbox', async () => {
-    renderDrawer(checklistApplicant);
+    await renderDrawer(checklistApplicant);
     await screen.findByText('Stage History');
 
     expect(screen.getByRole('checkbox', { name: 'Gear issued' })).not.toBeChecked();
@@ -404,7 +411,7 @@ describe('ApplicantDetailDialog checklist stage', () => {
 
   it('counts ticks as the officer makes them', async () => {
     const user = userEvent.setup();
-    renderDrawer(checklistApplicant);
+    await renderDrawer(checklistApplicant);
     await screen.findByText('Stage History');
 
     await user.click(screen.getByRole('checkbox', { name: 'Gear issued' }));
@@ -416,7 +423,7 @@ describe('ApplicantDetailDialog checklist stage', () => {
 
 describe('ApplicantDetailDialog referral details', () => {
   it('shows where the applicant came from, who referred them and why', async () => {
-    renderDrawer({
+    await renderDrawer({
       referral_source: 'Attended: Spring Open House',
       referred_by_name: 'Jordan Avery',
       interest_reason: 'Grew up next to the station.',
@@ -430,7 +437,7 @@ describe('ApplicantDetailDialog referral details', () => {
   });
 
   it('shows only the parts on file', async () => {
-    renderDrawer({ referral_source: 'Website' });
+    await renderDrawer({ referral_source: 'Website' });
     await screen.findByText('Stage History');
 
     expect(screen.getByText('Website')).toBeInTheDocument();
@@ -439,7 +446,7 @@ describe('ApplicantDetailDialog referral details', () => {
   });
 
   it('omits the section entirely when nothing is on file', async () => {
-    renderDrawer();
+    await renderDrawer();
     await screen.findByText('Stage History');
 
     expect(screen.queryByRole('heading', { name: 'How They Found Us' })).not.toBeInTheDocument();
