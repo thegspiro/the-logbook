@@ -5,7 +5,7 @@ Unit tests for report generation logic.
 """
 
 from datetime import date
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -396,8 +396,14 @@ class TestComplianceStatusReport:
                 enrollments,
             ]
         )
+        # Leave is looked up for the members listed; none here.
+        service._leave_periods_by_member = AsyncMock(return_value={})
 
-        result = await service._generate_compliance_status(org_id)
+        async def _today(*_a, **_kw):
+            return date(2026, 10, 21)
+
+        with patch("app.services.reports_service.resolve_org_today", _today):
+            result = await service._generate_compliance_status(org_id)
 
         by_id = {e["member_id"]: e for e in result["entries"]}
         assert by_id["regular"]["compliance_percentage"] is None

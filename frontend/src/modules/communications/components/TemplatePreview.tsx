@@ -76,7 +76,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
     <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
+        <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
           <Eye className="h-5 w-5" />
           Live preview
           {/* Said out loud, because the pane now shows the draft: without
@@ -87,7 +87,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
               Unsaved
             </span>
           )}
-        </h3>
+        </h2>
         <div className="flex items-center space-x-2">
           {/* Viewport toggle */}
           <div className="bg-theme-surface-secondary flex rounded-lg p-0.5">

@@ -2177,6 +2177,56 @@ When you create a leave with **Training Requirements** ticked, The Logbook
 > creates the leave without a training waiver. The form says: _"Creates a
 > leave of absence but keeps training requirements active."_
 
+### Leave reminders, the open-ended digest and leave requests _(2026-11-14)_
+
+Set in **Members → Administration → Settings → Leave of Absence**, by
+officers who can manage member profiles. Every change is recorded in the audit
+log.
+
+**Before a leave ends.** The member is emailed the chosen number of days
+before their leave's end date (7 by default; 0 sends none), saying when their
+training requirements apply again under the department's **Months on leave**
+rule. With **Copy the officers who manage leave** on (the default), everyone
+who can record leave is emailed the same day. Each leave is reminded once;
+moving its end date earns a new reminder.
+
+**Open-ended leaves.** On the first run of each month, the officers who manage
+leave receive one email listing every leave with no end date that began six or
+more months ago, so none is forgotten. Nothing is sent when there are none.
+
+**Leave requests** (off until the department turns them on):
+
+1. A member opens **Leave Requests** (from **Ask for leave** on their own
+   profile, or `/members/leave-requests`), chooses the kind of leave and its
+   dates (or **I don&rsquo;t know the last day yet**), adds a reason if they
+   wish, and sends it.
+2. The approvers are emailed. Who they are is the department's choice of
+   positions under **Who decides**. When nobody else holds those positions,
+   the request goes to the Chief, then to everyone who can record leave. A
+   member never decides their own request.
+3. Each approver opens **Leave Requests**, reads the reason under **To
+   decide**, and approves or denies, with an optional note to the member.
+4. How many must agree is the department's **How they decide**:
+
+   | Choice                      | Approved when                         | Denied when                         |
+   | --------------------------- | ------------------------------------- | ----------------------------------- |
+   | **Any one approver**        | the first approver approves           | the first approver denies           |
+   | **A majority of approvers** | more than half of the approvers agree | a majority can no longer be reached |
+   | **Every approver**          | every approver approves               | any one approver denies             |
+
+   A request keeps the rule it was made under. Votes count against the
+   members who hold the positions today.
+
+5. An approval records the leave exactly as an officer would: the training
+   waiver, the dropped shift assignments, and the member's **Leave of absence
+   recorded** email. A denial emails the member with the approver's note. A
+   member can withdraw a request while it waits.
+
+The reason is shown to the member and their approvers only. No email, from
+any of these, carries a leave's reason or its type. The wording of each is a
+template under **Communications → Email Templates → Training &
+Certifications**.
+
 ---
 
 ## Waivers

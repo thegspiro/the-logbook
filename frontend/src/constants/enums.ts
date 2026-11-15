@@ -1109,9 +1109,9 @@ export const CONSENT_STATUS_LABELS: Record<ConsentStatus, string> = {
 };
 
 export const CONSENT_STATUS_COLORS: Record<ConsentStatus, string> = {
-  granted: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
-  declined: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
-  not_answered: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/20',
+  granted: 'bg-green-500/10 text-green-900 dark:text-green-300 border-green-500/20',
+  declined: 'bg-red-500/10 text-red-900 dark:text-red-300 border-red-500/20',
+  not_answered: 'bg-amber-500/10 text-amber-900 dark:text-amber-300 border-amber-500/20',
 };
 
 // ============================================

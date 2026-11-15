@@ -20,6 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import list_within_detail_limit
+from app.models.call_tracking import CallTrackingMode
 from app.models.evaluation import (
     Evaluation,
     EvaluationPeriod,
@@ -40,8 +41,10 @@ from app.schemas.evaluation import (
     definition_publish_errors,
     workflow_publish_errors,
 )
+from app.services.call_tracking_service import CallTrackingService
 from app.services.evaluation_data_sources import DATA_SOURCES
 from app.services.evaluation_starters import STARTERS, STARTERS_BY_KEY
+from app.services.organization_service import OrganizationService
 from app.utils.model_updates import apply_updates
 from app.utils.org_locks import EVALUATION_TEMPLATE_MATCHING, lock_organization_scope
 
@@ -350,8 +353,17 @@ class EvaluationTemplateService:
             ],
         }
 
-    @staticmethod
-    def data_sources() -> List[Dict[str, Any]]:
+    async def data_sources(self, organization_id: str) -> List[Dict[str, Any]]:
+        """The catalog, each source marked with why the department cannot
+        measure it, if it cannot.
+
+        A source is still offered when its module is off: a published
+        template may already use it, and the department may switch the module
+        back on. The builder shows the reason beside it instead, so nobody
+        builds a form whose figure will read "not available" on every member
+        without being told.
+        """
+        unavailable = await self._unavailable_sources(organization_id)
         return [
             {
                 "key": s.key,
@@ -360,9 +372,43 @@ class EvaluationTemplateService:
                 "module": s.module,
                 "description": s.description,
                 "scoreable": s.scoreable,
+                "unavailable_reason": unavailable.get(s.key),
             }
             for s in DATA_SOURCES
         ]
+
+    async def _unavailable_sources(self, organization_id: str) -> Dict[str, str]:
+        """``{source_key: reason}`` for the sources the department has turned
+        off.
+
+        Only switches that certainly stop a source are read, through the
+        readers the rest of the app uses (CLAUDE.md pitfall #29): the
+        Training and Scheduling modules, and call tracking. Members and
+        Events are essential modules and cannot be off; nothing switches
+        business meetings or administrative hours off as a module, so
+        those sources are never marked.
+        """
+        modules = set(
+            (
+                await OrganizationService(self.db).get_enabled_modules(organization_id)
+            ).enabled_modules
+        )
+        call_mode = (await CallTrackingService(self.db).get_settings(organization_id))[
+            "mode"
+        ]
+        reasons: Dict[str, str] = {}
+        for source in DATA_SOURCES:
+            if source.module == "training" and "training" not in modules:
+                reasons[source.key] = "The Training module is turned off."
+            elif source.module in ("scheduling", "calls") and (
+                "scheduling" not in modules
+            ):
+                # Call credit is recorded when a shift is closed out, so
+                # the call sources need scheduling as well.
+                reasons[source.key] = "The Scheduling module is turned off."
+            elif source.module == "calls" and call_mode == CallTrackingMode.OFF:
+                reasons[source.key] = "Call tracking is turned off."
+        return reasons
 
     # -------------------------------------------------------------- periods --
 
