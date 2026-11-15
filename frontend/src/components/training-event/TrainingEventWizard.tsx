@@ -288,26 +288,58 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   // fixes with nothing left marked.
   const fieldBanner = useRef(false);
 
-  // The phone's fixed Previous/Next bar. The form's `clear-of-action-bar`
-  // scroll margin keeps a control the browser scrolls into view by its box
-  // clear of it, but Chrome scrolls a focused textarea by its caret, so
-  // Description reached by Tab came to rest almost wholly behind the bar
-  // with the margin unused (WCAG 2.4.11). After the browser's own scroll,
-  // a focused control still reaching under the bar is scrolled clear,
-  // never so far that its top leaves the viewport.
+  // The phone's fixed Previous/Next bar and fixed header. The form's
+  // `clear-of-action-bar` scroll margin keeps a control the browser scrolls
+  // into view by its box clear of the bar, but Chrome scrolls a focused
+  // textarea by its caret, so Description reached by Tab came to rest almost
+  // wholly behind the bar with the margin unused (WCAG 2.4.11), and WebKit
+  // scrolls a focused field up to the viewport's top, under the header. After
+  // the browser's own scroll, a focused control still reaching under either
+  // is scrolled clear, never so far down that its top leaves the viewport.
+  //
+  // What it describes comes too. A refused Next, a refused Days group and a
+  // mapped 422 focus the field so its reason is read, and the reason sits
+  // under the control (under the second row of days, for the Days group): a
+  // control scrolled clear by its own box left the reason behind the bar, a
+  // focused field with no message for anyone not using a screen reader. The
+  // reason is brought clear only as far as keeps the control below the
+  // header.
+  //
+  // The step line is left where the browser puts it. It takes focus on every
+  // step change and keeps it while the officer scrolls the new step, so a
+  // correction landing a frame late (WebKit can draw none for a while) would
+  // pull the page back up under a finger already scrolling it.
   const stepBarRef = useRef<HTMLDivElement>(null);
   const keepFocusClearOfBar = (event: React.FocusEvent<HTMLFormElement>) => {
     const target = event.target;
     const bar = stepBarRef.current;
-    if (!bar || bar.contains(target)) return;
+    if (!bar || bar.contains(target) || target.id === STEP_HEADING_ID) return;
     requestAnimationFrame(() => {
       if (document.activeElement !== target || getComputedStyle(bar).position !== 'fixed') return;
       const gap = 8;
+      const banner = document.querySelector('header[role="banner"]');
+      const top =
+        (banner && getComputedStyle(banner).position === 'fixed' ? banner.getBoundingClientRect().bottom : 0) + gap;
+      const bottom = bar.getBoundingClientRect().top - gap;
       const rect = target.getBoundingClientRect();
-      const overlap = rect.bottom + gap - bar.getBoundingClientRect().top;
-      const by = Math.min(overlap, rect.top - gap);
+      const describedBottom = Math.max(
+        rect.bottom,
+        ...(target.getAttribute('aria-describedby') ?? '')
+          .split(/\s+/)
+          .map((id) => (id ? document.getElementById(id) : null))
+          .filter((el): el is HTMLElement => el !== null && el.getClientRects().length > 0)
+          .map((el) => el.getBoundingClientRect().bottom)
+      );
+      const by =
+        rect.top < top
+          ? rect.top - top
+          : Math.max(
+              0,
+              Math.min(rect.bottom - bottom, rect.top - gap),
+              Math.min(describedBottom - bottom, rect.top - top)
+            );
       // Absolute, so a smooth scroll still under way is replaced rather than added to.
-      if (by > 0) window.scrollTo({ top: window.scrollY + by, behavior: 'instant' });
+      if (by !== 0) window.scrollTo({ top: window.scrollY + by, behavior: 'instant' });
     });
   };
   const requestFocus = (id: string, outcome: Pick<FocusRequest, 'onFound' | 'onMissing'> = {}) => {
