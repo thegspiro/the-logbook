@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple, TypeGuard
 from uuid import UUID
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -38,13 +38,19 @@ from app.models.training import (
     TrainingRequirement,
     TrainingStatus,
 )
-from app.models.user import ACTIVE_ACCOUNT_STATUSES, User, UserStatus
+from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
+    MemberLeaveOfAbsence,
+    User,
+    UserStatus,
+)
 from app.services.call_tracking_service import CallTrackingService
 from app.services.training_compliance import (
     catch_up_deadline,
     member_join_date,
     requirement_applies_to_user,
 )
+from app.services.training_waiver_service import fetch_org_waivers, leave_months_in
 from app.utils.apparatus_ref import resolve_apparatus_labels
 from app.utils.hours import (
     hours_from_minutes,
@@ -114,6 +120,15 @@ def _include_empty_calendar_years(yearly: Dict[int, Dict[str, Any]]) -> None:
                 "conversion_days": [],
             },
         )
+
+
+def _covers(periods: List[Dict[str, Any]], day: date) -> bool:
+    """Whether any of the listed leave periods includes *day*."""
+    return any(
+        date.fromisoformat(p["start_date"]) <= day
+        and (p["end_date"] is None or day <= date.fromisoformat(p["end_date"]))
+        for p in periods
+    )
 
 
 class ReportsService:
@@ -713,11 +728,9 @@ class ReportsService:
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Generate an annual training report with hours, completions, shift reports, and member breakdown."""
+        today = await resolve_org_today(self.db, organization_id)
         # Default to current year if no dates provided
-        year = _safe_int(
-            (filters or {}).get("year"),
-            (await resolve_org_today(self.db, organization_id)).year,
-        )
+        year = _safe_int((filters or {}).get("year"), today.year)
         if not start_date:
             start_date = date(year, 1, 1)
         if not end_date:
@@ -773,7 +786,13 @@ class ReportsService:
                 "shifts_completed": 0,
                 "calls_responded": 0,
                 "avg_performance_rating": None,
+                "leave_months": 0.0,
+                "leave_periods": [],
             }
+
+        await self._add_leave(
+            member_data, str(organization_id), start_date, end_date, today
+        )
 
         # Process training records
         total_hours = 0.0
@@ -871,6 +890,77 @@ class ReportsService:
             },
             "entries": entries,
         }
+
+    async def _leave_periods_by_member(
+        self, org_id: str, start_date: date, end_date: date
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Each member's active leaves that touch ``[start_date, end_date]``.
+
+        Every such leave is listed, including one an officer marked exempt,
+        with ``excuses_training`` saying which. The leave's reason and type are
+        never put on a report: the reason is the member's own, often medical,
+        explanation, and a type of "medical" says much the same.
+        """
+        leaves = (
+            (
+                await self.db.execute(
+                    select(MemberLeaveOfAbsence)
+                    .where(
+                        MemberLeaveOfAbsence.organization_id == org_id,
+                        MemberLeaveOfAbsence.active.is_(True),
+                        MemberLeaveOfAbsence.start_date <= end_date,
+                        or_(
+                            MemberLeaveOfAbsence.end_date.is_(None),
+                            MemberLeaveOfAbsence.end_date >= start_date,
+                        ),
+                    )
+                    .order_by(MemberLeaveOfAbsence.start_date)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        by_member: Dict[str, List[Dict[str, Any]]] = {}
+        for leave in leaves:
+            by_member.setdefault(str(leave.user_id), []).append(
+                {
+                    "start_date": leave.start_date.isoformat(),
+                    "end_date": (
+                        leave.end_date.isoformat() if leave.end_date else None
+                    ),
+                    "excuses_training": not leave.exempt_from_training_waiver,
+                }
+            )
+        return by_member
+
+    async def _add_leave(
+        self,
+        member_data: Dict[str, Dict[str, Any]],
+        org_id: str,
+        start_date: date,
+        end_date: date,
+        today: date,
+    ) -> None:
+        """Put each member's leave beside their hours.
+
+        A member away for most of the year otherwise reads as short of hours.
+        ``leave_months`` is measured as a requirement measures it -- by the
+        department's leave month rule, through today -- so leave booked for
+        later in the year is listed but not yet counted.
+        """
+        by_member = await self._leave_periods_by_member(org_id, start_date, end_date)
+        if not by_member:
+            # No leave touches the period, so no month can be excused by one.
+            return
+        counted_end = min(end_date, today)
+        waivers_by_user = await fetch_org_waivers(self.db, org_id)
+        for uid, entry in member_data.items():
+            periods = by_member.get(uid)
+            if periods:
+                entry["leave_periods"] = periods
+                entry["leave_months"] = leave_months_in(
+                    waivers_by_user.get(uid, []), start_date, counted_end
+                )
 
     # ============================================
     # Certification Expiration Report
@@ -1245,6 +1335,23 @@ class ReportsService:
             else None
         )
 
+        # Leave beside program progress (owner decision 2026-11-14). The
+        # figures are program progress and leave changes none of them
+        # (RPT5-29-1), but an officer chasing an outstanding item should see
+        # the member was away. Program progress has no window, so this looks
+        # back a year from today unless the caller gave a period.
+        leave_by_member: Dict[str, List[Dict[str, Any]]] = {}
+        leave_today: Optional[date] = None
+        if users:
+            leave_today = today or await resolve_org_today(
+                self.db, str(organization_id)
+            )
+            leave_by_member = await self._leave_periods_by_member(
+                str(organization_id),
+                start_date or leave_today - timedelta(days=365),
+                end_date or leave_today,
+            )
+
         for user in users:
             uid = str(user.id)
             completed_ids = user_completed.get(uid, set())
@@ -1300,6 +1407,9 @@ class ReportsService:
                     "compliance_percentage": pct,
                     "overdue_items": overdue_items,
                     "upcoming_deadlines": upcoming_deadlines,
+                    "leave_periods": leave_by_member.get(uid, []),
+                    "on_leave": leave_today is not None
+                    and _covers(leave_by_member.get(uid, []), leave_today),
                 }
             )
 

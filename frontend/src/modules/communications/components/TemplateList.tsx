@@ -15,6 +15,7 @@ import {
   UserPlus,
   KeyRound,
   CalendarX,
+  CalendarOff,
   CalendarClock,
   GraduationCap,
   Vote,
@@ -243,6 +244,12 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   session_waiver_requested: { icon: ClipboardCheck, label: 'Training Waiver Requested', color: 'text-purple-500' },
   session_waiver_decided: { icon: BadgeCheck, label: 'Training Waiver Decided', color: 'text-purple-500' },
   session_waiver_withdrawn: { icon: Undo2, label: 'Training Waiver Withdrawn', color: 'text-purple-500' },
+  leave_of_absence_notice: { icon: CalendarOff, label: 'Leave of Absence Notice', color: 'text-purple-500' },
+  leave_ending_reminder: { icon: CalendarOff, label: 'Leave Ending Reminder', color: 'text-purple-500' },
+  leave_ending_officer_notice: { icon: CalendarOff, label: 'Leave Ending (Officers)', color: 'text-purple-500' },
+  open_ended_leave_digest: { icon: CalendarOff, label: 'Open-Ended Leave Digest', color: 'text-purple-500' },
+  leave_request_submitted: { icon: CalendarOff, label: 'Leave Request Submitted', color: 'text-purple-500' },
+  leave_request_denied: { icon: CalendarOff, label: 'Leave Request Denied', color: 'text-purple-500' },
   meeting_waiver_requested: {
     icon: ClipboardCheck,
     label: 'Meeting Waiver Requested',
@@ -356,6 +363,12 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
       'session_waiver_requested',
       'session_waiver_decided',
       'session_waiver_withdrawn',
+      'leave_of_absence_notice',
+      'leave_ending_reminder',
+      'leave_ending_officer_notice',
+      'open_ended_leave_digest',
+      'leave_request_submitted',
+      'leave_request_denied',
     ],
   },
   {
@@ -540,9 +553,9 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
 
   return (
     <div className="space-y-1">
-      <h3 className="text-theme-text-muted mb-2 px-3 text-xs font-semibold tracking-wider uppercase">
+      <h2 className="text-theme-text-muted mb-2 px-3 text-xs font-semibold tracking-wider uppercase">
         Email Templates
-      </h3>
+      </h2>
       {templates.length > 8 && (
         <div className="relative mb-2 px-3">
           <Search className="text-theme-text-muted absolute top-1/2 left-5 h-3.5 w-3.5 -translate-y-1/2" />
@@ -626,7 +639,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
                     <div className="min-w-0 flex-1">
                       <p
                         className={`truncate text-sm font-medium ${
-                          isSelected ? 'text-red-700 dark:text-red-400' : 'text-theme-text-primary'
+                          isSelected ? 'text-red-900 dark:text-red-300' : 'text-theme-text-primary'
                         }`}
                       >
                         {template.name}
