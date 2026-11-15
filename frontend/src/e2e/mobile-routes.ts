@@ -317,7 +317,7 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: ['training.manage'],
-    expectText: 'No test records found',
+    expectText: 'Candidate: E2E User · Examiner: Alex Johnson',
   },
   {
     path: '/training/admin?page=enhancements&tab=reports',

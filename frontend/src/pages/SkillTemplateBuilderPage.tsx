@@ -547,7 +547,7 @@ const SectionEditor: React.FC<{
 
           <button
             onClick={addCriterion}
-            className="border-theme-surface-border flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
+            className="border-theme-surface-border flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2 text-sm text-red-800 transition-colors hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20"
           >
             <Plus className="h-4 w-4" />
             Add Criterion
@@ -1329,7 +1329,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
 
           <button
             onClick={addSection}
-            className="border-theme-surface-border flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-3 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
+            className="border-theme-surface-border flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-3 text-sm font-medium text-red-800 transition-colors hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20"
           >
             <Plus className="h-5 w-5" />
             Add Section
