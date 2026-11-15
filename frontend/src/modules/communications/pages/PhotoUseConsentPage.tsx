@@ -644,10 +644,14 @@ const PhotoUseConsentPage: React.FC = () => {
                         <div className="min-w-0">
                           {/* `block` is load-bearing: `truncate` sets
                               overflow/white-space, which do nothing on the
-                              inline box a <Link> renders by default. */}
+                              inline box a <Link> renders by default. Wrapped
+                              rather than truncated below 768px: a table is
+                              never narrower than its widest unbreakable text,
+                              so a long truncated name pushed every stacked
+                              card past a 320px screen. */}
                           <Link
                             to={`/members/${member.user_id}`}
-                            className="text-theme-text-primary touch:leading-11 block truncate font-medium hover:underline"
+                            className="text-theme-text-primary touch:leading-11 block font-medium [overflow-wrap:anywhere] hover:underline md:truncate"
                           >
                             {memberName(member)}
                           </Link>

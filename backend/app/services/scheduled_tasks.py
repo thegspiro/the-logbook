@@ -241,6 +241,25 @@ SCHEDULE = {
         "recommended_time": "*/15",
         "cron": "*/15 * * * *",
     },
+    "leave_ending_reminders": {
+        "description": (
+            "Email a member, and the officers who manage leave if the "
+            "department copies them, the department's chosen number of days "
+            "before a leave of absence ends"
+        ),
+        "frequency": "daily",
+        "recommended_time": "07:20",
+        "cron": "20 7 * * *",
+    },
+    "open_ended_leave_digest": {
+        "description": (
+            "Once a month, email the officers who manage leave a list of "
+            "leaves with no end date that began six or more months ago"
+        ),
+        "frequency": "daily (sends monthly)",
+        "recommended_time": "07:25",
+        "cron": "25 7 * * *",
+    },
     "cert_expiration_alerts": {
         "description": "Send tiered certification expiration alerts (90/60/30/7-day + expired escalation)",
         "frequency": "daily",
@@ -1128,6 +1147,32 @@ async def resolve_check_templates(
         type_query.order_by(EquipmentCheckTemplate.sort_order)
     )
     return list(type_result.scalars().all())
+
+
+async def run_leave_ending_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Remind members whose leave of absence is about to end.
+
+    Each reminder is claimed per leave and end date before it is sent
+    (leave_workflow_notices), so a second run in a day sends nothing.
+    """
+    from app.services.leave_workflow_notices import send_leave_ending_reminders
+
+    return await _for_each_org(
+        db, "leave_ending_reminders", send_leave_ending_reminders
+    )
+
+
+async def run_open_ended_leave_digest(db: AsyncSession) -> Dict[str, Any]:
+    """Send the officers the month's list of long-running open-ended leaves.
+
+    Runs daily and sends once a month: the digest is claimed per month, so
+    the first run of each month sends it and the rest find the claim.
+    """
+    from app.services.leave_workflow_notices import send_open_ended_leave_digest
+
+    return await _for_each_org(
+        db, "open_ended_leave_digest", send_open_ended_leave_digest
+    )
 
 
 async def run_cert_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
@@ -8616,6 +8661,8 @@ async def run_election_lifecycle(db: AsyncSession) -> Dict[str, Any]:
 
 
 TASK_RUNNERS = {
+    "leave_ending_reminders": run_leave_ending_reminders,
+    "open_ended_leave_digest": run_open_ended_leave_digest,
     "cert_expiration_alerts": run_cert_expiration_alerts,
     "medical_screening_expiry_reminders": run_medical_screening_expiry_reminders,
     "election_lifecycle": run_election_lifecycle,
@@ -8745,6 +8792,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "recover_stranded_message_deliveries": 1800,
     "salesforce_auto_sync": 1800,
     # Daily (checked each loop tick; runs at most once per interval)
+    "leave_ending_reminders": 86400,
+    # Daily, sending once a month: the digest is claimed per month.
+    "open_ended_leave_digest": 86400,
     "cert_expiration_alerts": 86400,
     "medical_screening_expiry_reminders": 86400,
     "action_item_reminders": 86400,

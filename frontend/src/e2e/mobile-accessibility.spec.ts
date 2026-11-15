@@ -175,6 +175,16 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // short of 7:1 by a hair, like the shared alert-warning token above.
   '/inventory/admin/categories': 7,
   '/inventory/admin/checklists/supply': 3,
+  // Email Templates: three of the four are the live preview's status chip
+  // ("SHIFT", amber-700 on amber-50 in every theme). It is the email's own
+  // design, drawn inline from the template layout as recipients receive it, so
+  // it is not a colour this screen can raise without changing what members are
+  // sent. The fourth is the selected row's "Edited · sent N times" line,
+  // `text-theme-text-muted` on its red tint (6.57:1).
+  '/communications/email-templates': 4,
+  // The `alert-warning` heading ("A member who has not answered has not
+  // agreed"), the shared token /members/admin/settings/tiers carries below.
+  '/communications/photo-use-consent': 1,
   // Measured the first time the scheduling fixtures put templates on it: the
   // optional-seat chips ("EMT (opt)") and the inactive filter, all
   // `text-theme-text-muted` on `bg-theme-surface-hover` (6.91:1) — the same
