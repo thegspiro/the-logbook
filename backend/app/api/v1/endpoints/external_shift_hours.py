@@ -538,16 +538,17 @@ async def restore_external_shift(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.manage")),
 ):
-    """Undo a rejection so the entry counts again.
+    """Undo a rejection so the entry counts again. 400 unless it is rejected.
 
     **Permissions required:** scheduling.manage
     """
     service = ExternalShiftHoursService(db)
-    entry = ensure_found(
-        await service.restore(
+    try:
+        restored = await service.restore(
             str(current_user.organization_id), str(entry_id), str(current_user.id)
-        ),
-        _ENTRY,
-    )
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    entry = ensure_found(restored, _ENTRY)
     await _audit(db, "external_shift_hours_restored", current_user, entry)
     return await _response(service, str(current_user.organization_id), entry.id)
