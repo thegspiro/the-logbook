@@ -162,7 +162,7 @@ class TestTheProjection:
             UnmappedRequirement(
                 "req-retired",
                 "Retired",
-                "It is no longer active, so it grades no members",
+                "It is no longer active",
                 applies_to_no_one=True,
             )
         ]
@@ -187,7 +187,7 @@ class TestTheProjection:
             ),
             (
                 _req("Empty", active=False, types=["senior"]),
-                "It is no longer active, so it grades no members",
+                "It is no longer active",
             ),
         ],
         ids=["no-scope", "blank-categories", "inactive"],

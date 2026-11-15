@@ -166,9 +166,7 @@ class TestTheEndpoint:
             (retired, True),
             (unscoped, True),
         ]
-        assert response.unmapped[0].reason == (
-            "It is no longer active, so it grades no members"
-        )
+        assert response.unmapped[0].reason == ("It is no longer active")
 
     async def test_no_requirements_is_nobody(self, db_session):
         org = await _org(db_session)

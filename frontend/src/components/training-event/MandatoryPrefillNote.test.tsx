@@ -67,6 +67,32 @@ describe('MandatoryPrefillNote', () => {
       expect(screen.queryByText(/choose All members if they must attend/)).not.toBeInTheDocument();
     });
 
+    // The backend states only the fact, as it does "since …" for no scope, so
+    // the note's ending is the one place that says what follows from it.
+    it('says once what follows from a requirement no longer active', () => {
+      render(
+        <MandatoryPrefillNote
+          note={{
+            kind: 'not-filled',
+            unmapped: [
+              {
+                requirement_id: 'req-retired',
+                name: 'Old Drill Attendance',
+                reason: 'It is no longer active',
+                applies_to_no_one: true,
+              },
+            ],
+          }}
+          membershipTypes={MEMBERSHIP_TYPES}
+          mandatoryScope="some"
+        />
+      );
+
+      expect(
+        paragraph('Old Drill Attendance: It is no longer active, so it adds no one to Mandatory for.')
+      ).toBeInTheDocument();
+    });
+
     it('says only that Mandatory for is left as it was when nothing else is ticked', () => {
       render(
         <MandatoryPrefillNote

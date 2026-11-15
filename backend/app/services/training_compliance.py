@@ -2304,12 +2304,11 @@ def mandatory_tiers_for_requirements(
     for req in requirements:
         req_id, name = str(req.id), str(req.name)
         if getattr(req, "active", True) is False:
+            # Only the fact, as the no-scope reason gives only its "since":
+            # the form adds what follows from it ("so it adds no one").
             unmapped.append(
                 UnmappedRequirement(
-                    req_id,
-                    name,
-                    "It is no longer active, so it grades no members",
-                    applies_to_no_one=True,
+                    req_id, name, "It is no longer active", applies_to_no_one=True
                 )
             )
             continue
