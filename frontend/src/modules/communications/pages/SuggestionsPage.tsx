@@ -125,7 +125,7 @@ const SuggestionsPage: React.FC = () => {
         Suggestions
       </h1>
 
-      <div className="tab-scroll mb-4" role="tablist" {...tablist} aria-label="Suggestions">
+      <div className="tab-scroll mb-4" role="tablist" {...tablist} aria-label="Suggestions" data-mobile-scroll-region>
         {tabs.map((tab) => (
           <button
             key={tab}

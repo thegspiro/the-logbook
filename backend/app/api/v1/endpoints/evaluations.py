@@ -370,9 +370,14 @@ async def calculate_grades(
 
 @router.get("/data-sources", response_model=List[DataSourceResponse])
 async def list_data_sources(
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("evaluations.configure")),
 ):
-    return EvaluationTemplateService.data_sources()
+    """The catalog the builder offers, each source marked with why the
+    department cannot measure it, if it cannot."""
+    return await EvaluationTemplateService(db).data_sources(
+        current_user.organization_id
+    )
 
 
 @router.get("/builder-options", response_model=BuilderOptions)

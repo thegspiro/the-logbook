@@ -2,15 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { historyMediaService, historyService } from '../services/api';
+import { historyDocumentService, historyMediaService, historyService } from '../services/api';
 import { REVISION_KIND_LABELS, type Revision } from '../types';
 
 /** A record's change history, newest first. */
 export const RevisionList: React.FC<{
   personId: string;
   refreshKey: number;
-  /** Whose history: a person's (the default) or a photo/media item's. */
-  recordType?: 'member' | 'media';
+  /** Whose history: a person's (the default), a photo/media item's or a
+   * document's. */
+  recordType?: 'member' | 'media' | 'document';
 }> = ({ personId, refreshKey, recordType = 'member' }) => {
   const tz = useTimezone();
   const [revisions, setRevisions] = useState<Revision[]>([]);
@@ -18,7 +19,13 @@ export const RevisionList: React.FC<{
 
   useEffect(() => {
     let cancelled = false;
-    (recordType === 'media' ? historyMediaService : historyService)
+    const source =
+      recordType === 'media'
+        ? historyMediaService
+        : recordType === 'document'
+          ? historyDocumentService
+          : historyService;
+    source
       .listRevisions(personId)
       .then((list) => {
         if (!cancelled) setRevisions(list);

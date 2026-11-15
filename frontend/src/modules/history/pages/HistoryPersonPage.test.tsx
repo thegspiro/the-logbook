@@ -9,6 +9,7 @@ const mockListTitles = vi.fn();
 const mockListRevisions = vi.fn();
 
 const mockPersonMedia = vi.fn();
+const mockPersonDocuments = vi.fn();
 
 vi.mock('../services/api', () => ({
   historyService: {
@@ -19,7 +20,11 @@ vi.mock('../services/api', () => ({
   historyMediaService: {
     personMedia: (...args: unknown[]) => mockPersonMedia(...args) as unknown,
   },
+  historyDocumentService: {
+    personDocuments: (...args: unknown[]) => mockPersonDocuments(...args) as unknown,
+  },
   mediaFileUrl: (id: string, which: string) => `/api/v1/history/media/${id}/${which}`,
+  documentFileUrl: (id: string, which: string) => `/api/v1/history/documents/${id}/${which}`,
 }));
 
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
@@ -120,6 +125,8 @@ describe('HistoryPersonPage', () => {
     mockListRevisions.mockResolvedValue([]);
     mockPersonMedia.mockReset();
     mockPersonMedia.mockResolvedValue([]);
+    mockPersonDocuments.mockReset();
+    mockPersonDocuments.mockResolvedValue([]);
   });
 
   it('shows a member the published record and nothing of the Historian’s', async () => {
@@ -199,6 +206,31 @@ describe('HistoryPersonPage', () => {
     renderPage();
     expect(await screen.findByRole('link', { name: /Engine 3, 1962/ })).toHaveAttribute('href', '/history/media/m1');
     expect(mockPersonMedia).toHaveBeenCalledWith('p1');
+  });
+
+  it('shows the documents the person is tagged in', async () => {
+    mockGetPerson.mockResolvedValue(memberView());
+    mockPersonDocuments.mockResolvedValue([
+      {
+        id: 'd1',
+        kind: 'pdf',
+        title: 'Letter of thanks, 1962',
+        taken_date: '1962-01-01',
+        taken_date_precision: 'year',
+        taken_date_circa: false,
+        document_type_name: 'Letter',
+        page_count: 2,
+        has_thumbnail: false,
+        publication_level: 'members',
+      },
+    ]);
+    renderPage();
+    expect(await screen.findByRole('link', { name: /Letter of thanks, 1962/ })).toHaveAttribute(
+      'href',
+      '/history/documents/d1'
+    );
+    expect(screen.getByRole('heading', { name: 'Documents' })).toBeInTheDocument();
+    expect(mockPersonDocuments).toHaveBeenCalledWith('p1');
   });
 
   it('says plainly when a record cannot be read', async () => {

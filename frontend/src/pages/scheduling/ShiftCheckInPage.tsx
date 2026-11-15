@@ -212,7 +212,7 @@ const ShiftCheckInPage: React.FC = () => {
           <ActivePreShiftWorkCard session={preWork} onEnded={handlePreWorkEnded} />
           <button
             onClick={() => void navigate('/scheduling')}
-            className="text-theme-text-muted hover:text-theme-text-primary w-full py-2 text-center text-sm transition-colors"
+            className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 w-full py-2 text-center text-sm transition-colors"
           >
             Go to Scheduling
           </button>
@@ -309,7 +309,7 @@ const ShiftCheckInPage: React.FC = () => {
                 void handleCheckIn();
               }}
               disabled={processing || shift.is_finalized || shift.checkin_open === false}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-700 px-6 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-800 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-800 px-6 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-900 disabled:opacity-50"
             >
               {processing ? <Loader2 className="h-6 w-6 animate-spin" /> : <LogIn className="h-6 w-6" />}
               Check In
@@ -387,7 +387,7 @@ const ShiftCheckInPage: React.FC = () => {
 
         <button
           onClick={() => void navigate('/scheduling')}
-          className="text-theme-text-muted hover:text-theme-text-primary w-full py-2 text-center text-sm transition-colors"
+          className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 w-full py-2 text-center text-sm transition-colors"
         >
           Go to Scheduling
         </button>

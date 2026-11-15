@@ -160,6 +160,8 @@ export const ALL_ROUTES: RouteCheck[] = [
   // stretched icon button in it would never be seen.
   { path: '/events', maxSmallTargets: 0, maxTinyText: 0, permissions: ['events.manage'] },
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
+  // Every member reaches it; the fixture puts a request to decide on screen.
+  { path: '/members/leave-requests', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
   // The hub's other three tabs. Add and Import stand on `users.create` as well,
   // so without it the hub falls back to the roster and measures that instead.
@@ -238,6 +240,9 @@ export const ALL_ROUTES: RouteCheck[] = [
   // equivalent of — a reorder pair, a rights disclosure and a remove button, all
   // of which the fixture's two rungs put on screen.
   { path: '/members/admin/settings/tiers', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
+  // Leave of absence settings, with requests on so the approver picker and the
+  // rule choice render.
+  { path: '/members/admin/settings/leave', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
   // EVOC needs a grant from another module entirely: the levels are served by
   // the apparatus API, so without `apparatus.manage` the page filters the
   // section out and redirects, and the pass would measure Operational Ranks
@@ -562,6 +567,109 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/scheduling/admin/planning', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
   { path: '/scheduling/admin/closeout', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
   { path: '/scheduling/admin/reports', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
+  // Measured once helpers.ts served templates, patterns, history imports, the
+  // platoon overview and the position roster; before, three drew empty states
+  // and Platoons and Positions threw on the catch-all's `{}`.
+  {
+    path: '/scheduling/admin/planning/templates',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: '24-Hour Engine Company Platoon Rotation',
+  },
+  {
+    path: '/scheduling/admin/planning/patterns',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'A/B/C 24/48 Rotation',
+  },
+  {
+    path: '/scheduling/admin/history-import',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'Legacy CAD export Jan-Jun 2024 (Stations 1-3).csv',
+  },
+  // With platoons on: off, the page leads with a banner saying so, and the
+  // groups under it are not what a department using platoons sees.
+  {
+    path: '/scheduling/admin/platoons',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    fixture: { platoonsEnabled: true },
+    expectText: 'Christopher Montgomery-Vasquez-Whitfield',
+  },
+  {
+    path: '/scheduling/admin/positions',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'Christopher Montgomery-Vasquez-Whitfield',
+  },
+  // A shift is named in the URL, as the QR code on the apparatus names one; the
+  // bare path asks "Which shift?" and has nothing else to measure.
+  {
+    path: '/scheduling/checkin?shift=e2e-shift-checkin',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'Shift Check-In',
+  },
+  // Communications, measured once helpers.ts served templates, the member-email
+  // policy and opt-outs, the photo-use roster, suggestion boxes and department
+  // messages; before, Messages threw on the catch-all's `{}` and the rest drew
+  // empty states. One grant set for all seven, so they share a sign-in.
+  {
+    path: '/communications/email-templates',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
+    expectText: 'Start-of-Shift Briefing',
+  },
+  {
+    path: '/communications/member-emails',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
+    expectText: 'Required by your department',
+  },
+  {
+    path: '/communications/member-emails/opt-outs',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
+    expectText: 'Linh Nguyen',
+  },
+  {
+    path: '/communications/photo-use-consent',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
+    expectText: 'Christopher Montgomery-Vasquez-Whitfield',
+  },
+  {
+    path: '/communications/suggestion-boxes',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
+    expectText: 'Confidential Concerns',
+  },
+  {
+    path: '/suggestions',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
+    expectText: 'Suggestion box',
+  },
+  {
+    path: '/communications/messages',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
+    expectText: 'County burn ban in effect through Sunday',
+  },
   { path: '/admin-hours', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory', maxSmallTargets: 0, maxTinyText: 0 },
@@ -1252,6 +1360,7 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/medical-screening', maxSmallTargets: 0, maxTinyText: 0, permissions: ['medical_screening.view'] },
   { path: '/history', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/history/media', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/history/documents', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/medical-supplies', maxSmallTargets: 0, maxTinyText: 0, permissions: ['inventory.view_medical'] },
   { path: '/ip-security', maxSmallTargets: 0, maxTinyText: 0, permissions: ['security.manage'] },
   // Both are settings.manage-gated, so they cost no extra sign-in between them.

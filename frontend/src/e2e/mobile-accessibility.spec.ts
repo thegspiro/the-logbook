@@ -124,6 +124,14 @@ const ALLOWED_UNDECIDED = [
   /has no value/i,
 ];
 
+// Routes whose findings depend on today's date, measured at a fixed moment
+// instead (see the loop). /grants/opportunities is frozen 44 days before the
+// AFG fixture's 2026-12-15 deadline, where every row reads as a plain date.
+const FROZEN_CLOCK: Record<string, string> = {
+  '/scheduling': '2026-01-12T12:00:00',
+  '/grants/opportunities': '2026-11-01T12:00:00',
+};
+
 const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // Down from 9 on 2026-11-13 (SectionError's red-700 and the Log Training
   // hint moved to AAA). What remains is `text-theme-accent-red`, a shared
@@ -167,6 +175,22 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // short of 7:1 by a hair, like the shared alert-warning token above.
   '/inventory/admin/categories': 7,
   '/inventory/admin/checklists/supply': 3,
+  // Email Templates: three of the four are the live preview's status chip
+  // ("SHIFT", amber-700 on amber-50 in every theme). It is the email's own
+  // design, drawn inline from the template layout as recipients receive it, so
+  // it is not a colour this screen can raise without changing what members are
+  // sent. The fourth is the selected row's "Edited · sent N times" line,
+  // `text-theme-text-muted` on its red tint (6.57:1).
+  '/communications/email-templates': 4,
+  // The `alert-warning` heading ("A member who has not answered has not
+  // agreed"), the shared token /members/admin/settings/tiers carries below.
+  '/communications/photo-use-consent': 1,
+  // Measured the first time the scheduling fixtures put templates on it: the
+  // optional-seat chips ("EMT (opt)") and the inactive filter, all
+  // `text-theme-text-muted` on `bg-theme-surface-hover` (6.91:1) — the same
+  // shared token as the two inventory entries above. The required-seat and
+  // status badges beside them were raised to AAA in the same change.
+  '/scheduling/admin/planning/templates': 4,
   '/elections': 3,
   // One node: the `alert-warning` heading that tells an officer this ladder
   // decides who votes. `--alert-warning-title` is amber-800 on amber-50 and
@@ -351,8 +375,14 @@ test.describe('mobile accessibility', () => {
       // deliberately no /scheduling entry in AAA_CONTRAST_BUDGET. Freezing the
       // clock is what stops any *other* finding on this route from moving with
       // the date — a budget is a ratchet only while what it counts holds still.
-      if (route.path === '/scheduling') {
-        await page.clock.setFixedTime(new Date('2026-01-12T12:00:00'));
+      //
+      // /grants/opportunities is the same case: its deadline urgency counts
+      // days from the real clock to the fixture's fixed deadlines (helpers.ts),
+      // so the AFG row turned yellow on 2026-11-15, 30 days out, and the
+      // sweep failed on every branch that day.
+      const frozenAt = FROZEN_CLOCK[route.path];
+      if (frozenAt) {
+        await page.clock.setFixedTime(new Date(frozenAt));
       }
 
       await page.setViewportSize(PHONE);
@@ -536,10 +566,10 @@ test.describe('mobile accessibility', () => {
         ].join('  ')
       );
 
-      if (route.path === '/scheduling') {
+      if (frozenAt) {
         // No true "uninstall" in Playwright's Clock API (setFixedTime/
         // setSystemTime only) — reset to a fresh real timestamp so later
-        // routes in this same loop don't inherit the frozen Jan 2026 date.
+        // routes in this same loop don't inherit the frozen date.
         await page.clock.setFixedTime(new Date());
       }
     }

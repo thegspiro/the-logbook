@@ -13,9 +13,10 @@ import { SkeletonPage } from '../../../components/ux/Skeleton';
 import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { historyService } from '../services/api';
 import { ClearanceSteps } from '../components/ClearanceSteps';
+import { DocumentDetails } from '../components/DocumentDetails';
 import { MediaDetails } from '../components/MediaDetails';
 import { PersonDetails } from '../components/PersonDetails';
-import type { ClearanceDecisionKind, ClearanceReview } from '../types';
+import { isDocumentRecord, type ClearanceDecisionKind, type ClearanceReview } from '../types';
 
 export const HistoryClearanceReviewPage: React.FC = () => {
   const { requestId = '' } = useParams();
@@ -78,7 +79,13 @@ export const HistoryClearanceReviewPage: React.FC = () => {
         <div className="card p-4">
           <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">{review.request.record_label}</h2>
           <p className="text-theme-text-secondary mb-4 text-sm">As members would read it.</p>
-          {'kind' in review.record ? <MediaDetails item={review.record} /> : <PersonDetails person={review.record} />}
+          {isDocumentRecord(review.record) ? (
+            <DocumentDetails item={review.record} />
+          ) : 'kind' in review.record ? (
+            <MediaDetails item={review.record} />
+          ) : (
+            <PersonDetails person={review.record} />
+          )}
         </div>
         <aside className="card space-y-4 p-4">
           <ClearanceSteps request={review.request} />
