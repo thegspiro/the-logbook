@@ -12,6 +12,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { historyService } from '../services/api';
 import type { ClearanceStep, HistoryTitle } from '../types';
+import { DocumentTypeListEditor } from '../components/DocumentTypeListEditor';
 import { SourceListEditor } from '../components/SourceListEditor';
 
 interface DraftStep {
@@ -349,6 +350,7 @@ export const HistorySettingsPage: React.FC = () => {
       </section>
 
       <SourceListEditor />
+      <DocumentTypeListEditor />
     </div>
   );
 };

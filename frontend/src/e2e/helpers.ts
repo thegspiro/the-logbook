@@ -2448,6 +2448,865 @@ const checkinShift = () => {
   };
 };
 
+// Communications. Seven screens drew their empty states on the catch-all —
+// Email Templates "No templates found", Opt-outs "0 of 0", Photo Use Consent
+// "No members to show", both suggestion screens no boxes — and Department
+// Messages threw into the ErrorBoundary: `{}` has no `messages`, so
+// `setMessages(undefined)` and the list died on `messages.length`. Member
+// Emails rendered, but only its headings: the service normalizes `{}` to empty
+// `emails`/`texts` lists, so every per-kind card and its Require toggle were
+// missing. Casing follows the backend module by module: schemas/suggestion.py
+// carries `alias_generator=to_camel`; email_template.py, officer.py, the
+// messages endpoint's own serializer and the consent roster do not.
+const COMMS_STAMP = {
+  organization_id: 'org-1',
+  created_at: '2026-01-02T15:00:00Z',
+  updated_at: '2026-10-30T18:20:00Z',
+};
+
+const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+
+/** `get_variables_for_type` as the list endpoint resyncs it: the shared name, then the type's own. */
+const templateVariables = (...names: [string, string][]) =>
+  [['organization_name', 'Organization name'] as [string, string], ...names].map(([name, description]) => ({
+    name,
+    description,
+  }));
+
+const emailTemplate = (fields: {
+  id: string;
+  template_type: string;
+  name: string;
+  subject: string;
+  html_body: string;
+  available_variables: { name: string; description: string }[];
+  [field: string]: unknown;
+}) => ({
+  description: null,
+  text_body: null,
+  css_styles: null,
+  footer_key: null,
+  header_accent: null,
+  status_chip: null,
+  layout: null,
+  is_active: true,
+  allow_attachments: false,
+  default_cc: null,
+  default_bcc: null,
+  default_cc_position_ids: null,
+  attachments: [],
+  is_customized: false,
+  sent_count: 0,
+  always_sent: false,
+  created_by: null,
+  updated_by: null,
+  ...COMMS_STAMP,
+  ...fields,
+});
+
+// First in the list because the page auto-selects `templates[0]` at every
+// width, so this is the one the editor and preview open on: edited, with a
+// footer, accent and an attachment, so every editor section has content.
+const EMAIL_TEMPLATES = [
+  emailTemplate({
+    id: 'e2e-email-shift-reminder',
+    template_type: 'shift_reminder',
+    name: 'Start-of-Shift Briefing',
+    description: 'Sent the evening before each shift to everyone on the roster.',
+    subject: 'Shift Briefing — {{shift_date}} at {{shift_start}}',
+    html_body:
+      '<p>Hello {{recipient_name}},</p><p>You are on as <strong>{{position}}</strong>, {{time_range}}. Truck checks start at 07:30 — please mark your arrival when you reach the station.</p>{{apparatus_html}}{{roster_html}}<p><a href="{{arrival_url}}">Mark arrival</a></p>',
+    text_body:
+      'Hello {{recipient_name}},\n\nYou are on as {{position}}, {{time_range}}.\n{{apparatus_text}}\n{{roster_text}}\n\nMark arrival: {{arrival_url}}',
+    footer_key: 'internal',
+    header_accent: '#b45309',
+    status_chip: 'Shift',
+    layout: 'notice',
+    allow_attachments: true,
+    attachments: [
+      {
+        id: 'e2e-attachment-sop',
+        filename: 'SOP 2.04 Shift Change Procedure.pdf',
+        content_type: 'application/pdf',
+        file_size: '184320',
+        created_at: '2026-09-18T13:40:00Z',
+      },
+    ],
+    available_variables: templateVariables(
+      ['recipient_name', "Member's first name"],
+      ['position', 'Position the member is filling'],
+      ['shift_date', 'Date of the shift'],
+      ['shift_start', 'Shift start time, department timezone'],
+      ['time_range', 'Shift start and end times, department timezone'],
+      ['apparatus_html', 'Apparatus line, omitted entirely when the shift has none'],
+      ['roster_html', 'Table of the crew on this shift'],
+      ['arrival_url', 'Link to mark arrival at the station']
+    ),
+    is_customized: true,
+    sent_count: 1284,
+  }),
+  emailTemplate({
+    id: 'e2e-email-welcome',
+    template_type: 'welcome',
+    name: 'Welcome Email',
+    subject: 'Welcome to {{organization_name}} — Your Account is Ready',
+    html_body:
+      '<p>Welcome, {{first_name}}.</p><p>Your account is ready. Sign in as <strong>{{username}}</strong> with the temporary password <code>{{temp_password}}</code> and choose a new one.</p>',
+    available_variables: templateVariables(
+      ['first_name', "Recipient's first name (preferred name if set)"],
+      ['full_name', "Recipient's full name (preferred name if set)"],
+      ['username', 'Login username'],
+      ['temp_password', 'Temporary password']
+    ),
+    sent_count: 37,
+    always_sent: true,
+  }),
+  emailTemplate({
+    id: 'e2e-email-password-reset',
+    template_type: 'password_reset',
+    name: 'Password Reset',
+    subject: 'Password Reset — {{organization_name}}',
+    html_body:
+      '<p>Hello {{first_name}},</p><p><a href="{{reset_url}}">Reset your password</a>. The link expires in {{expiry_minutes}} minutes.</p>',
+    available_variables: templateVariables(
+      ['first_name', "Recipient's first name (preferred name if set)"],
+      ['reset_url', 'Password reset link'],
+      ['expiry_minutes', 'Minutes until link expires']
+    ),
+    sent_count: 112,
+    always_sent: true,
+  }),
+  emailTemplate({
+    id: 'e2e-email-event-cancellation',
+    template_type: 'event_cancellation',
+    name: 'Event Cancellation',
+    subject: 'Event Cancelled: {{event_title}} — {{organization_name}}',
+    html_body:
+      '<p>Hello {{recipient_name}},</p><p><strong>{{event_title}}</strong> on {{event_date}} has been cancelled.</p><p>{{reason}}</p>',
+    available_variables: templateVariables(
+      ['recipient_name', "Recipient's display name"],
+      ['event_title', 'Title of the cancelled event'],
+      ['event_date', 'Original event date'],
+      ['reason', 'Reason for cancellation']
+    ),
+    sent_count: 9,
+  }),
+  emailTemplate({
+    id: 'e2e-email-cert-expiration',
+    template_type: 'cert_expiration',
+    name: 'Certification Expiring',
+    subject: 'Your {{cert_name}} expires {{expires_when}}',
+    html_body:
+      '<p>{{recipient_name}},</p><p>Your <strong>{{cert_name}}</strong> expires on {{expiration_date}}. Bring your renewal card to the Training Officer before then, or you come off the riding roster.</p><p><a href="{{renewal_url}}">Open your training record</a></p>',
+    footer_key: 'official',
+    header_accent: '#b91c1c',
+    available_variables: templateVariables(
+      ['recipient_name', "Recipient's display name"],
+      ['cert_name', 'Name of the certification'],
+      ['expiration_date', 'Expiration date of the cert'],
+      ['expires_when', "When it expires: 'today', 'tomorrow' or 'in N days'"],
+      ['renewal_url', 'Link to training/certification page']
+    ),
+    is_customized: true,
+    sent_count: 214,
+  }),
+  emailTemplate({
+    id: 'e2e-email-ballot',
+    template_type: 'ballot_notification',
+    name: 'Ballot Notification',
+    subject: 'Ballot Available: {{election_title}}',
+    html_body:
+      '<p>Hello {{recipient_name}},</p><p>Voting for <strong>{{election_title}}</strong> is open from {{voting_opens}} to {{voting_closes}}.</p><p><a href="{{ballot_url}}">Cast your ballot</a></p>',
+    available_variables: templateVariables(
+      ['recipient_name', "Recipient's display name"],
+      ['election_title', 'Title of the election/ballot'],
+      ['ballot_url', 'Link to the voting page'],
+      ['voting_opens', 'Date and time voting opens'],
+      ['voting_closes', 'Date and time voting closes']
+    ),
+    always_sent: true,
+  }),
+  emailTemplate({
+    id: 'e2e-email-suggestion',
+    template_type: 'suggestion_submitted',
+    name: 'Suggestion Submitted',
+    subject: 'New submission in the {{box_name}} box',
+    html_body:
+      '<p>Hello {{recipient_name}},</p><p>A new submission is waiting in the {{box_name}} box.</p><p><a href="{{suggestion_url}}">Review it</a></p>',
+    available_variables: templateVariables(
+      ['recipient_name', "Reviewer's display name"],
+      ['box_name', 'Name of the suggestion box'],
+      ['suggestion_url', 'Link to the submission in the Review tab']
+    ),
+    sent_count: 23,
+  }),
+  // Turned off: what the "Off" filter and row subtitle exist for.
+  emailTemplate({
+    id: 'e2e-email-series-end',
+    template_type: 'series_end_reminder',
+    name: 'Series End Reminder',
+    subject: 'Recurring Series Ending Soon: {{event_title}} — Ends {{series_end_date}}',
+    html_body:
+      '<p>Hello {{recipient_name}},</p><p>The {{recurrence_pattern}} series <strong>{{event_title}}</strong> ends on {{series_end_date}} with {{remaining_occurrences}} left.</p>',
+    available_variables: templateVariables(
+      ['recipient_name', "Recipient's display name"],
+      ['event_title', 'Title of the recurring event series'],
+      ['recurrence_pattern', 'Recurrence pattern (e.g. Weekly, Monthly)'],
+      ['series_end_date', 'Date the recurring series ends'],
+      ['remaining_occurrences', 'Number of remaining occurrences']
+    ),
+    is_active: false,
+    sent_count: 4,
+  }),
+];
+
+/** What `SAMPLE_CONTEXT` fills a preview with when no member is chosen. */
+const PREVIEW_SAMPLE: Record<string, string> = {
+  organization_name: TEST_DEPARTMENT,
+  recipient_name: 'Jordan',
+  first_name: 'Jordan',
+  position: 'Driver',
+  shift_date: 'Saturday, November 15',
+  shift_start: '07:00',
+  time_range: '07:00 – 19:00',
+  cert_name: 'EMT-Basic',
+  expires_when: 'in 30 days',
+};
+
+/** The rendered preview of the template the URL names, with sample values in place. */
+const emailTemplatePreview = (request: Request) => {
+  const segments = new URL(request.url()).pathname.split('/');
+  const id = segments[segments.length - 2] ?? '';
+  const template = EMAIL_TEMPLATES.find((t) => t.id === id) ?? EMAIL_TEMPLATES[0];
+  const fill = (text: string) => text.replace(/\{\{(\w+)\}\}/g, (_, name: string) => PREVIEW_SAMPLE[name] ?? '');
+  return {
+    subject: fill(template?.subject ?? ''),
+    html_body: `<!doctype html><html><body style="font-family:sans-serif">${fill(template?.html_body ?? '')}<hr><p style="font-size:12px">This is an automated message from ${TEST_DEPARTMENT}.</p></body></html>`,
+    text_body: fill(typeof template?.text_body === 'string' ? template.text_body : ''),
+  };
+};
+
+// The seeded library (services/email_footers.DEFAULT_FOOTERS): an installation
+// is never without it, so it does not honour `empty`.
+const EMAIL_FOOTERS = {
+  default_key: 'internal',
+  footers: [
+    {
+      key: 'internal',
+      name: 'Internal — members',
+      description: 'Routine automated mail to members. The default.',
+      lines: ['This is an automated message from {{organization_name}}.'],
+      show_contact: true,
+      show_phone: true,
+      show_email: true,
+      show_website: true,
+      show_mailing_address: false,
+    },
+    {
+      key: 'public',
+      name: 'Public — outside the department',
+      description:
+        'Mail to people who are not members: event requesters, applicants. Invites a reply and carries the mailing address.',
+      lines: ['Sent by {{organization_name}}.', 'Replies to this message reach the department office.'],
+      show_contact: true,
+      show_phone: true,
+      show_email: true,
+      show_website: true,
+      show_mailing_address: true,
+    },
+    {
+      key: 'official',
+      name: 'Official notice — on the record',
+      description: 'Notices that form part of a member’s record: separations, property return, election results.',
+      lines: [
+        'This is an official department notice from {{organization_name}}.',
+        'Please retain this notice for your records.',
+      ],
+      show_contact: true,
+      show_phone: true,
+      show_email: true,
+      show_website: true,
+      show_mailing_address: true,
+    },
+  ],
+  variables: [
+    { name: 'organization_name', description: 'Organization name' },
+    { name: 'organization_mailing_address', description: 'Full mailing address (multi-line)' },
+    { name: 'organization_phone', description: 'Organization phone number' },
+  ],
+  usage: { internal: 6, public: 0, official: 1 },
+  contact_details: {
+    phone: '(555) 010-4400',
+    email: 'office@oakvillefire.example',
+    website: 'https://oakvillefire.example',
+    mailing_address: '12 Station Road\nOakville, ST 00000',
+  },
+};
+
+const office = (
+  office_key: string,
+  label: string,
+  category: string,
+  holder: { user_id: string; name: string; email: string; phone: string } | null
+) => ({
+  office_key,
+  label,
+  category,
+  default_title: label,
+  position_slugs: [office_key],
+  user_id: null,
+  name: holder?.name ?? '',
+  title: label,
+  email: holder?.email ?? '',
+  phone: holder?.phone ?? '',
+  source: holder ? 'auto' : 'unset',
+  override_name: null,
+  override_title: null,
+  override_email: null,
+  override_phone: null,
+  auto_candidates: holder ? [{ id: holder.user_id, name: holder.name }] : [],
+});
+
+// A slice of OFFICE_CATALOG; `variables` is built the way
+// `build_office_variables` builds it, four per office.
+const OFFICER_DIRECTORY = (empty: boolean) => {
+  const offices = [
+    office(
+      'chief',
+      'Chief',
+      'operational',
+      empty ? null : { user_id: 'e2e-mem-reyes', name: 'Pat Reyes', email: 'chief@oakvillefire.example', phone: '' }
+    ),
+    office(
+      'training_officer',
+      'Training Officer',
+      'operational',
+      empty ? null : { user_id: 'e2e-mem-ortiz', name: 'Dana Ortiz', email: '', phone: '(555) 010-4417' }
+    ),
+    office('secretary', 'Secretary', 'administrative', null),
+  ];
+  return {
+    offices,
+    variables: offices.flatMap((o) => [
+      { name: `${o.office_key}_name`, description: `Full name of the current ${o.label}` },
+      { name: `${o.office_key}_title`, description: `Signature title for the ${o.label}` },
+      { name: `${o.office_key}_email`, description: `Email address of the current ${o.label}` },
+      { name: `${o.office_key}_phone`, description: `Phone number of the current ${o.label}` },
+    ]),
+  };
+};
+
+const emailKind = (
+  key: string,
+  label: string,
+  required: boolean,
+  includes: string[],
+  rationale: string,
+  extra: { audience?: string; legacy_preference?: string | null; department_required?: boolean } = {}
+) => ({
+  key,
+  label,
+  required,
+  default_on: true,
+  audience: 'members',
+  includes,
+  rationale,
+  legacy_preference: null,
+  department_required: false,
+  ...extra,
+});
+
+// Twelve of services/email_policy.EMAIL_POLICIES' kinds, labels and wording
+// copied from it. Shift notices is department-required, so the "Required by
+// your department" badge, its toggle in the on position and the opt-out
+// screen's "(required — still sent)" all have something to show.
+const MEMBER_EMAIL_KINDS = [
+  emailKind(
+    'account_security',
+    'Account and security',
+    true,
+    ['Password reset', 'Welcome and sign-in details', 'Security alerts (two-factor changes, recovery codes)'],
+    'A member cannot sign in or secure their account without these.'
+  ),
+  emailKind(
+    'security_report',
+    'Weekly security report',
+    true,
+    ['A weekly count of security alerts, application errors and audit log health, sent to the IT Manager'],
+    'Regular review of system activity is a HIPAA Security Rule requirement (164.308(a)(1)(ii)(D)); a report that can be switched off by its recipient is not a review the department can show.',
+    { audience: 'officers' }
+  ),
+  emailKind(
+    'election_ballots',
+    'Election ballots',
+    true,
+    ['Ballots and voting links'],
+    'Every eligible voter must receive their ballot.'
+  ),
+  emailKind(
+    'department_messages',
+    'Department messages',
+    true,
+    ['Messages sent from Communications > Messages', "Announcements an event's organizer sends about an event"],
+    'Email is the channel of record for department announcements; urgent ones may also be texted to members who agreed to texts.'
+  ),
+  emailKind(
+    'departure_notices',
+    'Leaving the department',
+    true,
+    ['Separation notice', 'Property return reminders'],
+    'A formal notice about department property the member still holds.'
+  ),
+  emailKind(
+    'event_reminders',
+    'Event reminders',
+    false,
+    [
+      'Reminders before events',
+      'An event series you created is ending',
+      'The answer to an attendance request you made',
+      "Reminders, check-in confirmations and missed-event notices an event's organizer sends",
+    ],
+    'The events calendar and the bell carry the same dates.',
+    { legacy_preference: 'event_reminders' }
+  ),
+  emailKind(
+    'event_changes',
+    'Event changes and cancellations',
+    false,
+    [
+      'An event you said you are going to, or might go to, was cancelled',
+      'An event you said you are going to, or might go to, changed its title, time or location',
+      "A follow-up an event's organizer sends about the event",
+    ],
+    'The bell carries the same notice and the event page shows the change; with this off, a member who reads only email may turn up to an event that moved or was called off.'
+  ),
+  emailKind(
+    'training_reminders',
+    'Training and certification reminders',
+    false,
+    [
+      'Certifications expiring or expired',
+      'A medical screening due within 90 days',
+      'Training requirement due soon',
+      'Training requirements not met',
+      'Training pipeline milestones you reach',
+    ],
+    'Officers are still copied on escalations when the department has escalation turned on.',
+    { legacy_preference: 'training_reminders' }
+  ),
+  emailKind(
+    'shift_notices',
+    'Shift notices',
+    false,
+    [
+      'Shift reminders',
+      'Shift assignments',
+      'A shift you were on was cancelled',
+      'Shift swap expired',
+      'End-of-shift summary',
+      'Overdue trainee shift reports',
+    ],
+    'The schedule and the bell carry the same information.',
+    { department_required: true }
+  ),
+  emailKind(
+    'inventory_updates',
+    'Equipment and inventory updates',
+    false,
+    ['Equipment request approved, declined or issued', 'Changes to the gear assigned to you'],
+    'My Equipment and the bell carry the same news.'
+  ),
+  emailKind(
+    'suggestion_box',
+    'Suggestion box',
+    false,
+    ['New submissions, replies and forwards, for reviewers', 'Updates on a submission you made'],
+    'The suggestion box and the bell carry the same notices.'
+  ),
+  emailKind(
+    'scheduling_duties',
+    'Scheduling officer duties',
+    false,
+    [
+      'A member declined a shift',
+      'Shift drafts finalized',
+      'Attendance to validate after a shift',
+      'Seats automatic shift generation could not fill',
+      'An outside-department shift waiting for approval',
+    ],
+    'The task also waits in the bell and on the schedule.',
+    { audience: 'officers' }
+  ),
+];
+
+// A catalogue in code, not department data, so it ignores `empty`. `can_edit`
+// is what the endpoint computes: settings.manage or
+// organization.update_settings, not notifications.manage.
+const memberEmailPolicy = (permissions: string[]) => ({
+  emails: MEMBER_EMAIL_KINDS,
+  texts: [
+    {
+      key: 'urgent_department_message',
+      label: 'Urgent department messages',
+      description: 'A department message an officer marks urgent is also texted, after the email has gone out.',
+      email_kind: 'department_messages',
+    },
+  ],
+  text_conditions: [
+    'Text messaging (Twilio) is configured for the department.',
+    'The member has agreed to receive texts; a member never asked counts as having said no.',
+    'The member has not turned off Urgent Text Messages in their settings.',
+    'The member has a mobile or phone number on file.',
+  ],
+  can_edit: permissions.includes('settings.manage') || permissions.includes('organization.update_settings'),
+});
+
+const MEMBER_EMAIL_OPT_OUTS = [
+  {
+    user_id: 'e2e-mem-lee',
+    name: 'Jordan Lee',
+    membership_number: '212',
+    email_notifications_off: false,
+    turned_off: ['event_reminders', 'inventory_updates'],
+  },
+  {
+    user_id: 'e2e-mem-nguyen',
+    name: 'Linh Nguyen',
+    membership_number: '231',
+    email_notifications_off: true,
+    turned_off: [],
+  },
+  {
+    user_id: 'e2e-mem-whitaker',
+    name: 'Sam Whitaker',
+    membership_number: null,
+    email_notifications_off: false,
+    turned_off: ['shift_notices', 'suggestion_box'],
+  },
+];
+
+/** The opt-out page, filtered by `?kind=` the way the endpoint filters it. */
+const memberEmailOptOuts = (request: Request, empty: boolean) => {
+  const q = new URL(request.url()).searchParams;
+  const kind = q.get('kind');
+  const skip = Number(q.get('skip') ?? 0);
+  const limit = Number(q.get('limit') ?? 50);
+  const departmentRequired = MEMBER_EMAIL_KINDS.filter((k) => k.department_required).map((k) => k.key);
+  const optional = MEMBER_EMAIL_KINDS.filter((k) => !k.required).map((k) => k.key);
+  const rows = empty ? [] : MEMBER_EMAIL_OPT_OUTS;
+  const matching = kind ? rows.filter((m) => m.email_notifications_off || m.turned_off.includes(kind)) : rows;
+  return {
+    members: matching.slice(skip, skip + limit),
+    total: matching.length,
+    skip,
+    limit,
+    members_considered: empty ? 0 : 41,
+    not_emailed: Object.fromEntries(
+      optional.map((key) => [
+        key,
+        departmentRequired.includes(key)
+          ? 0
+          : rows.filter((m) => m.email_notifications_off || m.turned_off.includes(key)).length,
+      ])
+    ),
+    department_required: departmentRequired,
+  };
+};
+
+const consentMember = (fields: {
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  rank: string;
+  station: string | null;
+  membership_number: string;
+  granted: boolean | null;
+  [field: string]: unknown;
+}) => ({
+  preferred_name: null,
+  photo_url: null,
+  member_status: 'active',
+  status: fields.granted === null ? 'not_answered' : fields.granted ? 'granted' : 'declined',
+  decided_at: null,
+  ...fields,
+});
+
+// The department's roster from the scheduling fixtures, in every standing.
+// Ranks are codes: `/operational-ranks?**` serves no ladder, so they print as
+// `formatRank`'s fallback.
+const PHOTO_CONSENT_MEMBERS = [
+  consentMember({
+    user_id: 'e2e-mem-ortiz',
+    first_name: 'Dana',
+    last_name: 'Ortiz',
+    rank: 'lieutenant',
+    station: 'Station 1',
+    membership_number: '118',
+    granted: true,
+    decided_at: '2026-03-14T16:02:00Z',
+  }),
+  consentMember({
+    user_id: 'e2e-mem-lee',
+    first_name: 'Jordan',
+    last_name: 'Lee',
+    rank: 'firefighter',
+    station: 'Station 2',
+    membership_number: '212',
+    granted: false,
+    decided_at: '2026-06-02T21:45:00Z',
+  }),
+  consentMember({
+    user_id: 'e2e-mem-okafor',
+    first_name: 'Chidiebere',
+    preferred_name: 'Chidi',
+    last_name: 'Okafor',
+    rank: 'lieutenant',
+    station: 'Station 1',
+    membership_number: '104',
+    granted: true,
+    decided_at: '2026-09-21T12:10:00Z',
+  }),
+  consentMember({
+    user_id: 'e2e-mem-montgomery',
+    first_name: 'Christopher',
+    last_name: 'Montgomery-Vasquez-Whitfield',
+    rank: 'engineer',
+    station: 'Station 2',
+    membership_number: '305',
+    member_status: 'probationary',
+    granted: null,
+  }),
+  consentMember({
+    user_id: 'e2e-mem-nguyen',
+    first_name: 'Linh',
+    last_name: 'Nguyen',
+    rank: 'firefighter',
+    station: null,
+    membership_number: '231',
+    granted: null,
+  }),
+];
+
+// Only behind the "include inactive" toggle, as the roster query has it.
+const PHOTO_CONSENT_RETIRED = consentMember({
+  user_id: 'e2e-mem-farrell',
+  first_name: 'Ruth',
+  last_name: 'Farrell',
+  rank: 'captain',
+  station: 'Station 1',
+  membership_number: '061',
+  member_status: 'retired',
+  granted: true,
+  decided_at: '2025-05-30T14:00:00Z',
+});
+
+const photoUseConsentRoster = (request: Request, empty: boolean) => {
+  const includeInactive = new URL(request.url()).searchParams.get('include_inactive') === 'true';
+  const members = empty ? [] : [...PHOTO_CONSENT_MEMBERS, ...(includeInactive ? [PHOTO_CONSENT_RETIRED] : [])];
+  const count = (status: string) => members.filter((m) => m.status === status).length;
+  return {
+    consent_type: 'photo_use',
+    summary: {
+      granted: count('granted'),
+      declined: count('declined'),
+      not_answered: count('not_answered'),
+      total: members.length,
+    },
+    members,
+  };
+};
+
+const SUGGESTION_REVIEWER_OPTIONS = {
+  positions: [
+    { id: 'e2e-pos-chief', name: 'Chief' },
+    { id: 'e2e-pos-deputy', name: 'Deputy Chief' },
+    { id: 'e2e-pos-captain', name: 'Captain' },
+    { id: 'e2e-pos-quartermaster', name: 'Quartermaster' },
+    { id: 'e2e-pos-secretary', name: 'Secretary' },
+  ],
+  members: [
+    { id: 'e2e-user-id', name: 'Alex Tester' },
+    { id: 'e2e-mem-smith', name: 'Morgan Smith' },
+    { id: 'e2e-mem-ortiz', name: 'Dana Ortiz' },
+    { id: 'e2e-mem-reyes', name: 'Pat Reyes' },
+  ],
+};
+
+// camelCase: schemas/suggestion.py carries `alias_generator=to_camel`. The
+// signed-in member reviews the station box, which is what makes
+// `/review/summary` call them a reviewer.
+const SUGGESTION_BOXES = [
+  {
+    id: 'e2e-box-ideas',
+    name: 'Ideas & Improvements',
+    description:
+      'Training, scheduling, the station — anything you think we could do better. Accepted ideas go on the board.',
+    anonymityMode: 'allowed',
+    followUpEnabled: true,
+    publicBoardEnabled: true,
+    intakeQuestions: [],
+    isActive: true,
+    reviewerPositions: [
+      { id: 'e2e-pos-chief', name: 'Chief' },
+      { id: 'e2e-pos-deputy', name: 'Deputy Chief' },
+    ],
+    reviewerMembers: [],
+    watcherPositions: [{ id: 'e2e-pos-secretary', name: 'Secretary' }],
+    watcherMembers: [],
+    submissionCount: 14,
+    createdAt: '2026-02-01T15:00:00Z',
+    updatedAt: '2026-08-19T13:30:00Z',
+  },
+  {
+    id: 'e2e-box-station',
+    name: 'Station & Apparatus',
+    description: 'Broken equipment, building repairs and apparatus issues that are not urgent enough for a work order.',
+    anonymityMode: 'disabled',
+    followUpEnabled: true,
+    publicBoardEnabled: false,
+    intakeQuestions: [],
+    isActive: true,
+    reviewerPositions: [{ id: 'e2e-pos-quartermaster', name: 'Quartermaster' }],
+    reviewerMembers: [{ id: 'e2e-user-id', name: 'Alex Tester' }],
+    watcherPositions: [],
+    watcherMembers: [],
+    submissionCount: 6,
+    createdAt: '2026-02-01T15:05:00Z',
+    updatedAt: '2026-02-01T15:05:00Z',
+  },
+  {
+    id: 'e2e-box-confidential',
+    name: 'Confidential Concerns',
+    description: 'Always anonymous. Read only by the Chief. Use a follow-up key to see the reply.',
+    anonymityMode: 'required',
+    followUpEnabled: true,
+    publicBoardEnabled: false,
+    intakeQuestions: [],
+    isActive: true,
+    reviewerPositions: [{ id: 'e2e-pos-chief', name: 'Chief' }],
+    reviewerMembers: [],
+    watcherPositions: [],
+    watcherMembers: [],
+    submissionCount: 1,
+    createdAt: '2026-03-10T19:00:00Z',
+    updatedAt: '2026-03-10T19:00:00Z',
+  },
+];
+
+/** `SuggestionBoxPublic`: what a member sees of an active box. */
+const publicSuggestionBox = (box: (typeof SUGGESTION_BOXES)[number]) => ({
+  id: box.id,
+  name: box.name,
+  description: box.description,
+  anonymityMode: box.anonymityMode,
+  followUpEnabled: box.followUpEnabled,
+  publicBoardEnabled: box.publicBoardEnabled,
+  intakeQuestions: box.intakeQuestions,
+});
+
+const SUGGESTION_REVIEW_SUMMARY = {
+  isReviewer: true,
+  openCount: 2,
+  boxes: SUGGESTION_BOXES.filter((box) => box.reviewerMembers.some((m) => m.id === TEST_USER.id)).map(
+    publicSuggestionBox
+  ),
+};
+
+const departmentMessage = (fields: { id: string; title: string; body: string; [field: string]: unknown }) => ({
+  organization_id: 'org-1',
+  priority: 'normal',
+  target_type: 'all',
+  target_roles: null,
+  target_statuses: null,
+  target_member_ids: null,
+  is_pinned: false,
+  is_active: true,
+  is_persistent: false,
+  requires_acknowledgment: false,
+  posted_by: 'e2e-mem-reyes',
+  expires_at: null,
+  scheduled_at: null,
+  created_at: '2026-11-01T14:00:00Z',
+  updated_at: '2026-11-01T14:00:00Z',
+  ...fields,
+});
+
+const MESSAGE_ROLES = [
+  { id: 'e2e-role-officers', name: 'Officers', slug: 'officers' },
+  { id: 'e2e-role-firefighters', name: 'Firefighters', slug: 'firefighters' },
+  { id: 'e2e-role-drivers', name: 'Driver/Operators', slug: 'driver-operators' },
+];
+
+// Snake-cased by the endpoint's own `_serialize_message`, newest first as the
+// service orders them. The banquet notice's `scheduled_at` is measured from
+// now, since the badge only draws for a time still ahead.
+const departmentMessages = () => [
+  departmentMessage({
+    id: 'e2e-msg-banquet',
+    title: 'Annual awards banquet — RSVPs open',
+    body: 'The banquet is Saturday, December 13 at the Elks Lodge. RSVP on the event page by December 1.',
+    scheduled_at: inDays(3),
+    created_at: '2026-11-13T17:20:00Z',
+    updated_at: '2026-11-13T17:20:00Z',
+  }),
+  departmentMessage({
+    id: 'e2e-msg-burn-ban',
+    title: 'County burn ban in effect through Sunday',
+    body: 'The county has issued a total burn ban. Expect increased brush calls; Brush 1 stays in service at Station 2 through the weekend.',
+    priority: 'urgent',
+    is_pinned: true,
+    is_persistent: true,
+    requires_acknowledgment: true,
+    expires_at: '2026-11-17T05:00:00Z',
+    created_at: '2026-11-12T14:05:00Z',
+    updated_at: '2026-11-12T14:05:00Z',
+  }),
+  departmentMessage({
+    id: 'e2e-msg-rit-sop',
+    title: 'Updated SOP 4.12: Rapid Intervention Crew assignments',
+    body: 'RIC is now assigned from the second-due engine company. Read the revised SOP before your next shift and acknowledge it here.',
+    priority: 'important',
+    target_type: 'roles',
+    target_roles: ['e2e-role-officers', 'e2e-role-firefighters'],
+    requires_acknowledgment: true,
+    created_at: '2026-11-06T13:15:00Z',
+    updated_at: '2026-11-06T13:15:00Z',
+  }),
+  departmentMessage({
+    id: 'e2e-msg-fit-test',
+    title: 'Probationary members: SCBA fit testing Thursday',
+    body: 'Fit testing runs 18:00–21:00 at Station 1. Bring your issued facepiece.',
+    target_type: 'statuses',
+    target_statuses: ['probationary'],
+    created_at: '2026-11-03T20:30:00Z',
+    updated_at: '2026-11-03T20:30:00Z',
+  }),
+  departmentMessage({
+    id: 'e2e-msg-bay-door',
+    title: 'Station 2 bay door out of service',
+    body: 'Bay 2 door is down for repair. Back Engine 2 in through Bay 1 until further notice.',
+    target_type: 'members',
+    target_member_ids: ['e2e-mem-lee', 'e2e-mem-nguyen', 'e2e-mem-montgomery'],
+    is_active: false,
+    created_at: '2026-10-21T11:40:00Z',
+    updated_at: '2026-10-24T16:05:00Z',
+  }),
+];
+
+/** The admin list, paged and filtered by `?priority=` as the endpoint does. */
+const departmentMessageList = (request: Request, empty: boolean) => {
+  const q = new URL(request.url()).searchParams;
+  const priority = q.get('priority');
+  const skip = Number(q.get('skip') ?? 0);
+  const limit = Number(q.get('limit') ?? 25);
+  const all = empty ? [] : departmentMessages();
+  const matching = all.filter(
+    (m) => (q.get('include_inactive') === 'true' || m.is_active) && (!priority || m.priority === priority)
+  );
+  return { messages: matching.slice(skip, skip + limit), total: matching.length };
+};
+
 /**
  * Route glob → response body. Ordered least to most specific; `mockApi`
  * registers them in order and Playwright matches the last registration first,
@@ -2535,6 +3394,42 @@ const routes = ({
           taken_date_precision: 'month',
           taken_date_circa: true,
           duration_seconds: null,
+          has_thumbnail: false,
+          publication_level: 'public',
+        },
+      ],
+      total: 2,
+    }),
+  ],
+
+  // History documents: a letter and a scan with no preview, so the list is
+  // measured with its tiles and not with broken image requests.
+  ['**/api/v1/history/document-types**', () => []],
+  [
+    '**/api/v1/history/documents**',
+    () => ({
+      items: [
+        {
+          id: 'e2e-document-1',
+          kind: 'pdf',
+          title: 'Letter of thanks from the mayor, 1962',
+          taken_date: '1962-07-01',
+          taken_date_precision: 'month',
+          taken_date_circa: false,
+          document_type_name: 'Letter',
+          page_count: 2,
+          has_thumbnail: false,
+          publication_level: 'members',
+        },
+        {
+          id: 'e2e-document-2',
+          kind: 'image',
+          title: 'Minutes of the first company meeting',
+          taken_date: '1923-01-01',
+          taken_date_precision: 'year',
+          taken_date_circa: true,
+          document_type_name: 'Minutes',
+          page_count: 1,
           has_thumbnail: false,
           publication_level: 'public',
         },
@@ -3251,6 +4146,27 @@ const routes = ({
       member_counts: { active: 2 },
     }),
   ],
+  // Leave settings with requests on and a vacant approver position, so the
+  // section's picker, rule choice and vacancy warning are all on screen.
+  [
+    '**/api/v1/users/leaves-of-absence/settings',
+    () => ({
+      end_reminder_days: 7,
+      end_reminder_copy_officers: true,
+      requests_enabled: true,
+      request_approver_position_ids: ['pos-board'],
+      request_decision_rule: 'majority',
+      available_positions: [
+        { id: 'pos-board', name: 'Board of Directors', holder_count: 0 },
+        { id: 'pos-chief', name: 'Fire Chief', holder_count: 1 },
+      ],
+    }),
+  ],
+  // A request waiting on the caller, so the vote controls render; the list
+  // glob is registered first so the more specific `/me` and `/config` win.
+  ['**/api/v1/users/leave-requests?**', () => [leaveRequestFixture({ member_name: 'Alex Johnson', can_vote: true })]],
+  ['**/api/v1/users/leave-requests/me', () => [leaveRequestFixture({})]],
+  ['**/api/v1/users/leave-requests/config', () => ({ requests_enabled: true })],
 
   ['**/api/v1/admin-hours/summary**', () => ({ totalHours: 8 })],
 
@@ -3396,6 +4312,30 @@ const routes = ({
       total: 1,
     }),
   ],
+  // Communications (see "Communications. Seven screens" above). Every glob is
+  // exact or carries a literal `?`, so each answers only the request its
+  // screen makes: `/email-templates` is not `/event-requests/email-templates`,
+  // `/messages?…` is not the shell's `/messages/inbox…`, and the template's own
+  // `/backups` stays on the catch-all, which `asArray` reads as none.
+  ['**/api/v1/email-templates', () => (empty ? [] : EMAIL_TEMPLATES)],
+  ['**/api/v1/email-templates/footers', () => EMAIL_FOOTERS],
+  ['**/api/v1/email-templates/*/preview', emailTemplatePreview],
+  ['**/api/v1/email-templates/member-email-policy', () => memberEmailPolicy(permissions)],
+  ['**/api/v1/email-templates/member-email-opt-outs?**', (request) => memberEmailOptOuts(request, empty)],
+  ['**/api/v1/officers', () => OFFICER_DIRECTORY(empty)],
+  ['**/api/v1/users/consents/photo-use?**', (request) => photoUseConsentRoster(request, empty)],
+  [
+    '**/api/v1/suggestions/boxes',
+    () => (empty ? [] : SUGGESTION_BOXES.filter((box) => box.isActive).map(publicSuggestionBox)),
+  ],
+  [
+    '**/api/v1/suggestions/review/summary',
+    () => (empty ? { isReviewer: false, openCount: 0, boxes: [] } : SUGGESTION_REVIEW_SUMMARY),
+  ],
+  ['**/api/v1/suggestions/admin/boxes', () => (empty ? [] : SUGGESTION_BOXES)],
+  ['**/api/v1/suggestions/admin/reviewer-options', () => SUGGESTION_REVIEWER_OPTIONS],
+  ['**/api/v1/messages?**', (request) => departmentMessageList(request, empty)],
+  ['**/api/v1/messages/roles', () => MESSAGE_ROLES],
   ...(memberRecord ? memberRecordRoutes() : []),
 ];
 
@@ -3663,6 +4603,33 @@ const emptyReport = (type: string): unknown => {
       return {};
   }
 };
+
+/** One leave request, waiting under a majority rule. */
+function leaveRequestFixture(overrides: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id: 'leave-request-1',
+    user_id: 'user-1',
+    member_name: 'Test User',
+    leave_type: 'medical',
+    start_date: '2026-12-01',
+    end_date: '2027-02-28',
+    reason: 'Surgery and recovery',
+    status: 'pending',
+    decision_rule: 'majority',
+    created_at: '2026-11-14T12:00:00Z',
+    decided_at: null,
+    decided_by_name: null,
+    leave_id: null,
+    votes: [],
+    approvals: 0,
+    denials: 0,
+    approver_count: 3,
+    approvals_needed: 2,
+    can_vote: false,
+    my_vote: null,
+    ...overrides,
+  };
+}
 
 /**
  * Fulfil every `/api/v1/**` request with fixture data.
