@@ -439,6 +439,30 @@ export const strippedForFinalized = (payload: EventTrainingDetailsUpdate): Event
     : { attendance_requirement_ids: payload.attendance_requirement_ids };
 
 /**
+ * The session settings Training Admin's old create path also wrote to the
+ * event's custom_fields, and the old Events form wrote there only. Nothing
+ * reads them for credit: the session's own columns decide. The event page
+ * lists a copy that says otherwise as never applied
+ * (TrainingSessionLinkageCard), so a save that sets the session's settings
+ * drops the copies with it: kept, a copy of the value just replaced would be
+ * offered back as one the officer never got.
+ */
+export const SESSION_SETTING_COPIES = [
+  'instructor',
+  'issues_certification',
+  'issuing_agency',
+  'expiration_months',
+  'auto_create_records',
+] as const;
+
+/** The event's custom_fields without those copies; everything else is kept. */
+export const withoutSessionSettingCopies = <T>(customFields: Record<string, T>): Record<string, T> => {
+  const kept = { ...customFields };
+  for (const key of SESSION_SETTING_COPIES) delete kept[key];
+  return kept;
+};
+
+/**
  * The training fields a refusal can land on, with the control it focuses and
  * the label a 422 is reworded in. `api` is the path the backend's validation
  * handler reports (`training_details.<field>`); the bare `training_details`

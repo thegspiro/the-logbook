@@ -882,6 +882,45 @@ describe('EventEditPage', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/events/evt-1');
     });
 
+    // Training Admin's old create path wrote the session's instructor,
+    // certification, agency, expiry and auto-create settings to the event's
+    // custom_fields as well. The event page lists a copy that differs from the
+    // session as never applied, so a copy kept by an edit that changed the
+    // session would be offered back as one the officer never got.
+    it("drops the old form's copies of the session's settings once Training Info is saved", async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...trainingEvent,
+        custom_fields: {
+          instructor: 'Owen Kittredge',
+          issues_certification: false,
+          issuing_agency: '',
+          expiration_months: null,
+          auto_create_records: true,
+          crew_note: 'Bring gloves',
+        },
+      });
+      vi.mocked(userService.getUsers).mockResolvedValue([
+        { id: 'u-dana', username: 'dokafor', first_name: 'Dana', last_name: 'Okafor' },
+      ] as never);
+      window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await screen.findByText('Step 2 of 4 · Training Info');
+      await screen.findByRole('option', { name: 'Dana Okafor' });
+      await user.selectOptions(screen.getByLabelText(/Lead Instructor/), 'u-dana');
+      await toReview(user);
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+      await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+      expect(sent()).toEqual(
+        expect.objectContaining({
+          custom_fields: { crew_note: 'Bring gloves' },
+          training_details: { ...unchangedDetails, instructor: 'Dana Okafor', instructor_id: 'u-dana' },
+        })
+      );
+    });
+
     // A link to a requirement since deactivated is kept by every save, so the
     // form shows it: ticked, named and marked, where it can be unticked, and
     // the section is shown even when no active requirement is left to offer.
@@ -1459,6 +1498,27 @@ describe('EventEditPage', () => {
         for (const field of ATTENDANCE_LOCKED_EVENT_FIELDS) {
           expect(payload).not.toHaveProperty(field);
         }
+      });
+
+      // The session's settings are not saved here, so the old form's copies
+      // that differ from them are still news on the event page.
+      it("keeps the old form's copies of the session's settings", async () => {
+        const custom_fields = { instructor: 'Capt. Owen Kittredge', issues_certification: true };
+        vi.mocked(eventService.getEvent).mockResolvedValue({
+          ...trainingEvent,
+          attendance_finalized_at: '2026-03-15T21:00:00Z',
+          custom_fields,
+        });
+        window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await user.click(await screen.findByLabelText(/Company Drill Attendance/));
+        await toReview(user);
+        await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+        await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+        expect(sent()?.custom_fields).toEqual(custom_fields);
       });
 
       it('saves a class stored mandatory for every member as All members', async () => {

@@ -38,6 +38,12 @@ interface TrainingSessionLinkageCardProps {
    * finalizing credits from the session alone — so the card reports the
    * session and lists any copy that says otherwise as not applied, never in
    * its place (pitfall #29: the training form shows the session too).
+   *
+   * Training Admin's old create wrote the same values to both, so its copies
+   * match the session and are not listed. The training form drops the copies
+   * whenever it saves the session's settings (withoutSessionSettingCopies), so
+   * a copy never outlives an edit to be listed as a value the officer did not
+   * get.
    */
   customFields?: Record<string, unknown> | null | undefined;
 }

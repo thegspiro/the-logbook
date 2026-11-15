@@ -74,6 +74,7 @@ import {
   toUpdatePayload,
   validateTrainingDetails,
   withCourseChoice,
+  withoutSessionSettingCopies,
   type InstructorOption,
   type TrainingDetailsForm,
   type TrainingField,
@@ -655,6 +656,12 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     if (!onSubmitUpdate) return;
     // The model's update payload: a blank sent as null, as the event form's.
     const { training_details: _none, ...eventFields } = model.buildSinglePayload();
+    // Only where every session setting is sent: a finalized edit sends the
+    // attendance links alone, and a reader nothing, so there the copies are
+    // still news.
+    if (trainingAccess === 'edit' && eventFields.custom_fields) {
+      eventFields.custom_fields = withoutSessionSettingCopies(eventFields.custom_fields);
+    }
     const details = trainingUpdate();
     const payload: EventUpdate = details ? { ...eventFields, training_details: details } : eventFields;
     setIsSubmitting(true);
