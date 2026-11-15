@@ -61,6 +61,7 @@ class RequirementType(str, Enum):
     TRANSPORTS = "transports"
     REFUSALS = "refusals"
     SESSION_ATTENDANCE = "session_attendance"
+    EVALUATED_CALLS = "evaluated_calls"
 
 
 # Training Category Schemas
@@ -517,6 +518,10 @@ _REQUIREMENT_QUANTITY_FIELDS = {
     ),
     RequirementType.TRANSPORTS: ("required_transports", "no transport count is set"),
     RequirementType.REFUSALS: ("required_refusals", "no refusal count is set"),
+    RequirementType.EVALUATED_CALLS: (
+        "required_calls",
+        "no number of evaluated calls is set",
+    ),
     RequirementType.SESSION_ATTENDANCE: (
         "required_attendance_pct",
         "no attendance percentage is set",

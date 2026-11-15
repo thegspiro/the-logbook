@@ -3428,6 +3428,7 @@ _TARGET_BY_TYPE = {
     RequirementType.EVALUATED_SHIFTS.value: ("required_shifts", "evaluated shifts"),
     RequirementType.TRANSPORTS.value: ("required_transports", "transports"),
     RequirementType.REFUSALS.value: ("required_refusals", "refusals"),
+    RequirementType.EVALUATED_CALLS.value: ("required_calls", "evaluated calls"),
     # A share, not a count: the screen renders it "60% of sessions".
     RequirementType.SESSION_ATTENDANCE.value: (
         "required_attendance_pct",
