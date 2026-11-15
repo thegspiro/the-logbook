@@ -59,7 +59,6 @@ import { MAX_BULK_ELIGIBILITY_SHIFTS } from '../constants/config';
 import { memberSignupClosedReason } from '../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../modules/scheduling/hooks/useSignupWindow';
 import { adminHoursEntryService } from '../modules/admin-hours/services/api';
-import { signOffService } from '../modules/prospective-members/services/api';
 import type { PendingSignOff } from '../modules/prospective-members/types';
 import { endOfReportingDayUTC, startOfReportingDayUTC } from '../modules/admin-hours/utils/reportingRange';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -972,6 +971,11 @@ const Dashboard: React.FC = () => {
       return;
     }
     try {
+      // Imported here, not at the top: the dashboard is in every first
+      // visit's download, and this one call would bring the whole
+      // prospective-members service with it. A failed chunk load lands in
+      // the catch below, like a failed request.
+      const { signOffService } = await import('../modules/prospective-members/services/api');
       setMySignOffs(await signOffService.listMine());
     } catch {
       setMySignOffs([]);
