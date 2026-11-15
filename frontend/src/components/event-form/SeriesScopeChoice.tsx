@@ -116,8 +116,8 @@ export const SeriesScopeReview: React.FC<SeriesScopeChoiceProps> = ({
           </div>
           <p id="series-scope-note">
             Either choice covers the event fields <strong>and</strong> the training details, including Counts toward
-            attendance. A session-attendance requirement linked under Requirement is kept as it is; with This and all
-            future events, each later occurrence keeps it too. It can be removed, but not chosen again.
+            attendance. Requirement changes only if you change it: left as it is, each later occurrence keeps its own. A
+            session-attendance requirement linked there is kept, and can be removed but not chosen again.
             {rolling && ' With This and all future events, occurrences added later copy these changes too.'}
           </p>
         </fieldset>

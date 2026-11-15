@@ -777,6 +777,8 @@ describe('EventEditPage', () => {
      * null — each event's own length, the backend's reading of null — and the
      * approval deadline is left out while sign-off is off.
      */
+    // Requirement is absent: an unchanged one is left out, so a series edit
+    // leaves each later occurrence's own (toUpdatePayload).
     const unchangedDetails = {
       course_id: null,
       course_name: null,
@@ -784,7 +786,6 @@ describe('EventEditPage', () => {
       category_id: null,
       program_id: null,
       phase_id: null,
-      requirement_id: null,
       training_type: 'skills_practice',
       credit_hours: null,
       instructor: 'Owen Kittredge',
@@ -1155,6 +1156,50 @@ describe('EventEditPage', () => {
         );
         await toReview(user);
         expect(screen.getByText('Company Drill Attendance (currently linked, no longer offered)')).toBeInTheDocument();
+      });
+
+      // A later occurrence may store another Requirement, or none, and the
+      // legacy link may not be given to it: re-sent untouched, it refused
+      // "This and all future events" for an edit of the description.
+      describe('on "This and all future events"', () => {
+        beforeEach(() => {
+          vi.mocked(eventService.getEvent).mockResolvedValue({
+            ...trainingEvent,
+            recurrence_parent_id: 'series-1',
+            recurrence_pattern: 'weekly',
+          });
+        });
+
+        async function saveFuture(user: User) {
+          await toReview(user);
+          await user.click(screen.getByLabelText(/this and all future events/i));
+          await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+          await waitFor(() => expect(eventService.updateFutureEvents).toHaveBeenCalledTimes(1));
+          return vi.mocked(eventService.updateFutureEvents).mock.calls[0]?.[1];
+        }
+
+        it('leaves the untouched Requirement out, and says each occurrence keeps its own', async () => {
+          const user = userEvent.setup();
+          renderWithRouter(<EventEditPage />);
+          const description = await screen.findByLabelText(/Description/);
+          await user.type(description, ' Bring gloves.');
+          await toReview(user);
+          expect(screen.getByText(/each later occurrence keeps its own/)).toBeInTheDocument();
+
+          const payload = await saveFuture(user);
+          expect(payload?.training_details).toBeDefined();
+          expect(payload?.training_details).not.toHaveProperty('requirement_id');
+        });
+
+        it('still sends a cleared Requirement, as null', async () => {
+          window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
+          const user = userEvent.setup();
+          renderWithRouter(<EventEditPage />);
+          await user.selectOptions(await screen.findByLabelText('Requirement'), '');
+
+          const payload = await saveFuture(user);
+          expect(payload?.training_details).toMatchObject({ requirement_id: null });
+        });
       });
 
       it("does not tell a reader they can change the course's type", async () => {

@@ -180,6 +180,24 @@ describe('toUpdatePayload', () => {
     ).toMatchObject({ credit_hours: 2 });
   });
 
+  // A Requirement nobody touched is left out, so "This and all future events"
+  // leaves each later occurrence's own: a legacy session-attendance link
+  // re-sent was refused against every occurrence that stored another, or
+  // none, for an edit that never went near Requirement.
+  it('leaves out a Requirement the officer did not change', () => {
+    const stored = form({ requirement_id: 'req-att' });
+    expect(toUpdatePayload(stored, 2, stored)).not.toHaveProperty('requirement_id');
+    expect(toUpdatePayload(form(), 2, form())).not.toHaveProperty('requirement_id');
+  });
+
+  it('sends a changed Requirement, and a cleared one as null', () => {
+    const stored = form({ requirement_id: 'req-att' });
+    expect(toUpdatePayload(form({ requirement_id: 'req-hours' }), 2, stored)).toMatchObject({
+      requirement_id: 'req-hours',
+    });
+    expect(toUpdatePayload(form({ requirement_id: '' }), 2, stored)).toMatchObject({ requirement_id: null });
+  });
+
   it('clears the fields of the course modes not chosen', () => {
     const payload = toUpdatePayload(
       form({ course_mode: 'library', course_id: 'course-pump', course_name: 'Old one-off' }),

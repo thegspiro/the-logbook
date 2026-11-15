@@ -792,6 +792,90 @@ class TestASeries:
             assert (await _session(db_session, event_id))["instructor"] is None
 
 
+class TestASeriesWithALegacyRequirement:
+    """An occurrence carrying a session-attendance requirement under
+    Requirement, from before Counts toward attendance, edited with "This and
+    all future events". The form leaves an unchanged Requirement out, so each
+    later occurrence keeps its own; re-sent, it is refused, because the link
+    may be kept but not given to an occurrence that stores another, or none.
+    """
+
+    async def _series_with_requirements(self, db, dept) -> tuple:
+        ids = await TestASeries()._series(db, dept, {})
+        hours = await _requirement(db, dept["org"], RequirementType.HOURS)
+        for event_id, requirement in (
+            (ids[2], dept["drills"]),
+            (ids[3], hours),
+            (ids[4], None),
+        ):
+            await db.execute(
+                text(
+                    "UPDATE training_sessions SET requirement_id = :r "
+                    "WHERE event_id = :e"
+                ),
+                {"r": requirement, "e": event_id},
+            )
+        return ids, hours
+
+    async def _requirements(self, db, ids) -> list:
+        result = []
+        for event_id in ids:
+            row = await db.execute(
+                text(
+                    "SELECT requirement_id FROM training_sessions WHERE event_id = :e"
+                ),
+                {"e": event_id},
+            )
+            result.append(row.scalar_one())
+        return result
+
+    async def test_an_edit_leaving_requirement_out_saves_and_keeps_each(
+        self, db_session, dept
+    ):
+        ids, hours = await self._series_with_requirements(db_session, dept)
+
+        await TestASeries()._edit_future(
+            db_session,
+            dept,
+            ids[2],
+            TrainingSessionDetailsUpdate(instructor="Lt. Okafor"),
+        )
+
+        assert await self._requirements(db_session, ids[2:5]) == [
+            dept["drills"],
+            hours,
+            None,
+        ]
+        assert (await _session(db_session, ids[4]))["instructor"] == "Lt. Okafor"
+
+    async def test_re_sending_it_is_refused(self, db_session, dept):
+        ids, _hours = await self._series_with_requirements(db_session, dept)
+
+        with pytest.raises(ValueError, match="graded by session attendance"):
+            await TestASeries()._edit_future(
+                db_session,
+                dept,
+                ids[2],
+                TrainingSessionDetailsUpdate(
+                    requirement_id=dept["drills"], instructor="Lt. Okafor"
+                ),
+            )
+
+    async def test_a_deliberate_clear_reaches_every_later_occurrence(
+        self, db_session, dept
+    ):
+        ids, _hours = await self._series_with_requirements(db_session, dept)
+
+        await TestASeries()._edit_future(
+            db_session,
+            dept,
+            ids[2],
+            TrainingSessionDetailsUpdate(requirement_id=None),
+        )
+
+        assert await self._requirements(db_session, ids[2:5]) == [None, None, None]
+
+
 class TestTheSchema:
     def test_an_unknown_key_is_refused(self):
         with pytest.raises(ValidationError):

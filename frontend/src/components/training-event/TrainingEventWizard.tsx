@@ -487,12 +487,13 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   };
 
   /**
-   * An edit's `training_details`: every field (pitfall #1), only the
-   * attendance links on a finalized event, nothing for a reader.
+   * An edit's `training_details`: every field (pitfall #1) but an unchanged
+   * Requirement, only the attendance links on a finalized event, nothing for
+   * a reader.
    */
   const trainingUpdate = () => {
     if (trainingAccess === 'readonly') return undefined;
-    const full = toUpdatePayload(training, durationHours);
+    const full = toUpdatePayload(training, durationHours, originalTraining);
     return trainingAccess === 'finalized' ? strippedForFinalized(full) : full;
   };
 

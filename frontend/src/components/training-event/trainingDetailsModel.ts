@@ -340,10 +340,19 @@ export const toAttachPayload = (value: TrainingDetailsForm, durationHours: numbe
  * place behind a success message (pitfall #1). Fields of the course modes not
  * chosen are cleared, as are the certification fields when no certification
  * is issued. `training_type` and the completion settings cannot be null.
+ *
+ * The one field left out when unchanged is Requirement, given the details as
+ * stored (`original`): on "This and all future events" every field sent is
+ * written to each later occurrence, and a session-attendance requirement
+ * linked there before Counts toward attendance existed may be kept but not
+ * given to an occurrence that stores another, or none, so re-sending it
+ * refused an edit that never touched Requirement. Omitted, each occurrence
+ * keeps its own; a change, or a clear (null), is still sent.
  */
 export const toUpdatePayload = (
   value: TrainingDetailsForm,
-  durationHours: number | null
+  durationHours: number | null,
+  original?: TrainingDetailsForm
 ): EventTrainingDetailsUpdate => ({
   course_id: value.course_mode === 'library' ? value.course_id || null : null,
   course_name: value.course_mode === 'oneoff' ? blankToNull(value.course_name) : null,
@@ -351,7 +360,9 @@ export const toUpdatePayload = (
   category_id: value.category_id || null,
   program_id: value.program_id || null,
   phase_id: value.phase_id || null,
-  requirement_id: value.requirement_id || null,
+  ...(original && (value.requirement_id || null) === (original.requirement_id || null)
+    ? {}
+    : { requirement_id: value.requirement_id || null }),
   training_type: value.training_type,
   // Following the length is null, which the backend reads as each event's
   // own scheduled length; a figure would be written to every later occurrence
