@@ -10,12 +10,12 @@ twice.
 
 Downgrade deletes any rows of the new type, then narrows the enum.
 
-Also joins the two heads ``main`` carries: ``4d8e2b6f1c93`` (history
-documents) and ``c4e81b7a2d95`` (election and minutes templates), so this
-widening builds on the latter's type list rather than beside it.
+Built on ``b91f3c6d2e48``, which joins ``main``'s two heads (``4d8e2b6f1c93``
+and ``c4e81b7a2d95``), so this widening extends ``c4e81b7a2d95``'s type list
+rather than sitting beside it.
 
 Revision ID: b4e7c2a91f06
-Revises: 4d8e2b6f1c93, c4e81b7a2d95
+Revises: b91f3c6d2e48
 Create Date: 2026-11-14 16:00:00
 """
 
@@ -26,7 +26,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "b4e7c2a91f06"
-down_revision: Union[str, Sequence[str], None] = ("4d8e2b6f1c93", "c4e81b7a2d95")
+down_revision: Union[str, None] = "b91f3c6d2e48"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
