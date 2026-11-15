@@ -17,6 +17,7 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+import { savedReportsService } from '../services/api';
 import { useReportsStore, getPresetDates } from './reportsStore';
 
 describe('getPresetDates', () => {
@@ -236,5 +237,49 @@ describe('useReportsStore', () => {
       expect(useReportsStore.getState().comparisonData).toBeNull();
       expect(useReportsStore.getState().comparisonPeriod).toBeNull();
     });
+  });
+});
+
+describe('what a download re-runs', () => {
+  const report = { report_type: 'event_attendance', events: [] };
+
+  beforeEach(() => {
+    mockGenerateReport.mockReset();
+    mockGenerateReport.mockResolvedValue(report);
+    vi.mocked(savedReportsService.runNow).mockReset();
+    vi.mocked(savedReportsService.runNow).mockResolvedValue(report);
+    useReportsStore.setState({ activeReportExport: null });
+  });
+
+  it('is the request that generated the report on screen', async () => {
+    await useReportsStore.getState().generateReport({
+      report_type: 'event_attendance',
+      start_date: '2026-01-01',
+      end_date: '2026-06-30',
+    });
+
+    expect(useReportsStore.getState().activeReportExport).toEqual({
+      report_type: 'event_attendance',
+      start_date: '2026-01-01',
+      end_date: '2026-06-30',
+      filters: undefined,
+    });
+  });
+
+  it("is the saved report's id when a saved report was run", async () => {
+    await useReportsStore.getState().runSavedReport({
+      id: 'saved-1',
+      name: 'Q1 Drills',
+      report_type: 'event_attendance',
+    } as never);
+
+    expect(useReportsStore.getState().activeReportExport).toEqual({ saved_report_id: 'saved-1' });
+  });
+
+  it('is forgotten when the report is closed', async () => {
+    await useReportsStore.getState().generateReport({ report_type: 'event_attendance' });
+    useReportsStore.getState().clearActiveReport();
+
+    expect(useReportsStore.getState().activeReportExport).toBeNull();
   });
 });

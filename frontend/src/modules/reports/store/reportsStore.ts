@@ -10,6 +10,7 @@ import type {
   AvailableReport,
   DatePreset,
   ReportData,
+  ReportExportSource,
   ReportRequest,
   SavedReportConfig,
   SavedReportCreate,
@@ -86,6 +87,11 @@ interface ReportsState {
   activeReportType: string | null;
   /** Set when the active report is a saved report's run: its name. */
   activeReportLabel: string | null;
+  /**
+   * What produced the active report, so a download re-runs that rather than
+   * the date range the page shows now, which may have moved since.
+   */
+  activeReportExport: ReportExportSource | null;
 
   // Date range
   datePreset: DatePreset;
@@ -140,6 +146,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   activeReportData: null,
   activeReportType: null,
   activeReportLabel: null,
+  activeReportExport: null,
   datePreset: 'this-year',
   startDate: initialDates.start,
   endDate: initialDates.end,
@@ -173,6 +180,12 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
         activeReportData: data,
         activeReportType: request.report_type,
         activeReportLabel: null,
+        activeReportExport: {
+          report_type: request.report_type,
+          start_date: request.start_date,
+          end_date: request.end_date,
+          filters: request.filters,
+        },
         generatingReportType: null,
       });
       return data;
@@ -184,7 +197,13 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
   },
 
   clearActiveReport: () => {
-    set({ activeReportData: null, activeReportType: null, activeReportLabel: null, error: null });
+    set({
+      activeReportData: null,
+      activeReportType: null,
+      activeReportLabel: null,
+      activeReportExport: null,
+      error: null,
+    });
   },
 
   setDatePreset: (preset: DatePreset, tz?: string) => {
@@ -263,6 +282,8 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
         activeReportData: data,
         activeReportType: report.report_type,
         activeReportLabel: report.name,
+        // The server resolves a saved report's dates as Run did.
+        activeReportExport: { saved_report_id: report.id },
         generatingReportType: null,
       });
       return data;

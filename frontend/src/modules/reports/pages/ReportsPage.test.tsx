@@ -3,9 +3,17 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
+const mockExportReport = vi.fn();
+const mockSaveFile = vi.fn();
 vi.mock('../services/api', () => ({
-  reportsApiService: { generateReport: vi.fn() },
+  reportsApiService: {
+    generateReport: vi.fn(),
+    exportReport: (...args: unknown[]) => mockExportReport(...args) as unknown,
+  },
   savedReportsService: {},
+}));
+vi.mock('@/utils/fileDownload', () => ({
+  saveFile: (...args: unknown[]) => mockSaveFile(...args) as unknown,
 }));
 
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
@@ -100,8 +108,67 @@ describe('ReportsPage with a report body it cannot read', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Reports' })).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent("This report's data could not be read.");
     const enabledExports = screen
-      .queryAllByRole('button', { name: /CSV|Print \/ PDF/ })
+      .queryAllByRole('button', { name: /^(CSV|PDF)$/ })
       .filter((button) => !(button as HTMLButtonElement).disabled);
     expect(enabledExports).toEqual([]);
+  });
+});
+
+describe('ReportsPage downloads', () => {
+  const roster = {
+    report_type: 'member_roster',
+    total_members: 1,
+    active_members: 1,
+    inactive_members: 0,
+    members: [{ first_name: 'Pat', last_name: 'Lee', roles: [] }],
+  };
+
+  beforeEach(() => {
+    mockExportReport.mockReset();
+    mockExportReport.mockResolvedValue({ blob: new Blob(['%PDF']), filename: 'member_roster_2026-11-15.pdf' });
+    mockSaveFile.mockReset();
+  });
+
+  it('downloads the report on screen, not the date range the page shows now', async () => {
+    const user = userEvent.setup();
+    useReportsStore.setState({
+      generatingReportType: null,
+      activeReportType: 'member_roster',
+      activeReportLabel: null,
+      activeReportData: roster as never,
+      activeReportExport: { report_type: 'member_roster', start_date: '2026-01-01', end_date: '2026-06-30' },
+      startDate: '2025-01-01',
+      endDate: '2025-12-31',
+      generateReport: vi.fn(),
+    });
+    renderWithRouter(<ReportsPage />);
+
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+
+    expect(mockExportReport).toHaveBeenCalledWith(
+      { report_type: 'member_roster', start_date: '2026-01-01', end_date: '2026-06-30' },
+      'pdf',
+      'member_roster.pdf'
+    );
+    const saved = mockSaveFile.mock.calls[0]?.[0] as { blob: unknown; filename: string } | undefined;
+    expect(saved?.blob).toBeInstanceOf(Blob);
+    expect(saved?.filename).toBe('member_roster_2026-11-15.pdf');
+  });
+
+  it("downloads a saved report by its id, under the saved report's name", async () => {
+    const user = userEvent.setup();
+    useReportsStore.setState({
+      generatingReportType: null,
+      activeReportType: 'member_roster',
+      activeReportLabel: 'Q1 Roster',
+      activeReportData: roster as never,
+      activeReportExport: { saved_report_id: 'saved-1' },
+      generateReport: vi.fn(),
+    });
+    renderWithRouter(<ReportsPage />);
+
+    await user.click(screen.getByRole('button', { name: 'CSV' }));
+
+    expect(mockExportReport).toHaveBeenCalledWith({ saved_report_id: 'saved-1' }, 'csv', 'q1_roster.csv');
   });
 });

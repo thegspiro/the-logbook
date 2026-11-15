@@ -231,10 +231,10 @@ now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
   - **CI does not run veraPDF.** Conformance was confirmed with veraPDF 1.28
     on 2026-11-10; `tests/test_pdfa.py` guards the structure it checked, not
     every rule.
-- **The Reports page prints from the browser.** "Print / PDF" has no page
-  numbers, no repeated header, the browser's own time zone and no audit row.
-  **Decided, to build (owner, 2026-11-09):** a server-side PDF on the kit,
-  audited on the server.
+- ~~**The Reports page prints from the browser.**~~ **Resolved 2026-11-15:**
+  the page's PDF and CSV are built and audited on the server, from the report
+  re-run under the caller's own permissions (see "Reports page downloads" in
+  `docs/PDF_REPORTS.md`).
 - **Print hints reach Acrobat, not browsers.** Label sheets and ID cards ask
   to print at actual size (`/PrintScaling /None`), but most browser PDF
   viewers ignore that and default to "Fit". The label pages tell the user to
