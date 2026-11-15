@@ -117,6 +117,15 @@ class EmailTemplateType(str, enum.Enum):
     MINUTES_ACTION_ITEM_REMINDER = "minutes_action_item_reminder"
     MINUTES_OPEN_ITEMS_DIGEST = "minutes_open_items_digest"
     MEETING_ACTION_ITEM_REMINDER = "meeting_action_item_reminder"
+    # To the member when an officer records, changes or removes their leave.
+    LEAVE_OF_ABSENCE_NOTICE = "leave_of_absence_notice"
+    # Leave reminders, the open-ended digest and member leave requests; see
+    # email_templates_leave_workflow.py.
+    LEAVE_ENDING_REMINDER = "leave_ending_reminder"
+    LEAVE_ENDING_OFFICER_NOTICE = "leave_ending_officer_notice"
+    OPEN_ENDED_LEAVE_DIGEST = "open_ended_leave_digest"
+    LEAVE_REQUEST_SUBMITTED = "leave_request_submitted"
+    LEAVE_REQUEST_DENIED = "leave_request_denied"
     CUSTOM = "custom"
 
 

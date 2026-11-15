@@ -43,6 +43,7 @@ from app.api.v1.endpoints import (
     grants,
     historical_import,
     history,
+    history_documents,
     history_import,
     history_media,
     integrations,
@@ -53,6 +54,7 @@ from app.api.v1.endpoints import (
     ip_security,
     knowledge_tests,
     labels,
+    leave_requests,
     legal_documents,
     locations,
     mcp_keys,
@@ -397,6 +399,12 @@ api_router.include_router(
     tags=["history"],
     dependencies=module_gate("history", "History"),
 )
+api_router.include_router(
+    history_documents.router,
+    prefix="/history",
+    tags=["history"],
+    dependencies=module_gate("history", "History"),
+)
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 # Ahead of the meetings router: its /{meeting_id} also matches
 # /meetings/waiver-requests, and would answer the GET with a 422 for a
@@ -598,6 +606,9 @@ api_router.include_router(
     dependencies=module_gate("training", "Training"),
 )
 api_router.include_router(member_leaves.router, prefix="/users", tags=["member-leaves"])
+api_router.include_router(
+    leave_requests.router, prefix="/users", tags=["leave-requests"]
+)
 api_router.include_router(
     operational_ranks.router, prefix="/operational-ranks", tags=["operational-ranks"]
 )

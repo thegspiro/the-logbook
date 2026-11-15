@@ -795,8 +795,73 @@ Phase 3, photos and media (2026-11-13), ships with these:
 - **A batch upload is not one transaction.** Each file is its own request; if
   the browser is closed part way, the files already sent stay as drafts and
   the rest were never uploaded. The shared `batch_id` identifies the set.
-- **Documents (letters, minutes, scanned PDFs) are phase 4.** The media
-  upload refuses PDF and office files.
+- **Documents (letters, minutes, scanned PDFs) are phase 4.** ✅ Shipped
+  2026-11-14; the media upload still refuses PDF and office files, which go
+  through the documents upload instead.
+
+Phase 4, documents (2026-11-14), ships with these:
+
+- **A PDF opens in a new tab, not inside the page.** The app is served with
+  `frame-ancestors 'none'` everywhere, and loosening it for one viewer would
+  loosen it for the whole app. The document page shows the first-page preview
+  and an Open link.
+- **What "stripped" covers for a PDF.** The copy members open is rebuilt from
+  its pages: no document information or XMP metadata, no JavaScript, automatic
+  actions, form scripts, embedded files or file-attachment annotations, and the
+  JPEG images inside lose their EXIF (and GPS). Not covered: text or a stamp
+  drawn on the page, a picture's own content, and image formats other than
+  JPEG inside the PDF, which are drawn as they are. The Historian still reads
+  a document before publishing it.
+- **No OCR.** Typed and already-OCR'd PDFs are searchable by their own text; a
+  scan is found by its catalogue and transcription (owner decision,
+  2026-11-14).
+- **Long PDFs are read in part.** Search reads at most 2,000 pages and 2 MB of
+  text; the document page says when a document ran past that.
+- **Word and other office files are refused.** Converted to PDF first, so
+  members can view them and their hidden author and edit history never reach
+  anyone (owner decision 3).
+- **A password-protected PDF is refused.** It can be neither stripped, read
+  nor previewed; remove the password and upload it again. A PDF restricted only
+  by its owner (it opens without a password) is accepted, and the copy members
+  open carries no restriction.
+- **The transcription and a PDF's text are stored unencrypted**, so they can be
+  searched; research notes stay encrypted and are not searched.
+- **A catalogued document is managed in History.** The Documents module
+  downloads it but will not rename, move or delete it, and nothing is uploaded
+  or moved into the History folder from there.
+- **New dependency: pypdfium2** (PDFium bindings, 5.15.2) draws the first
+  page; pypdf was already installed.
+
+## Department Store — Decisions for the Owner (2026-11-13)
+
+From the department store follow-up
+([W67b](workflow-review/W67b-department-store-follow-up.md)). Both were seen in
+the browser. Neither is fixed, because each changes what departments already
+see or rely on.
+
+- **Tracked stock is sold again in every order window (W67b-1, HIGH).**
+  Remaining stock is `stock_quantity` minus the units ordered in the current
+  window. Nothing decrements `stock_quantity`, so a unit sold in one window is
+  offered again in the next, or in a second window open at the same time. One
+  M hoodie with stock 1 was sold twice. **Decision needed:** what "stock"
+  means.
+  - (a) Units on hand: decrement on order and restore on cancel.
+  - (b) Count every non-cancelled order across all windows.
+
+  Either changes the availability existing departments see.
+
+- **Money on an order the member cancels drops out of the books (W67b-2,
+  HIGH).**
+  - A part payment leaves an order at "Awaiting payment", which a member may
+    cancel.
+  - Once cancelled, the order leaves every collected and outstanding total.
+  - My Orders files it as settled, and no admin is notified.
+  - A cancel while a reported payment is pending leaves money that can be
+    neither recorded nor refunded.
+
+  **Decision needed:** whether a member may cancel once money is recorded or
+  reported. The likely shape is to refuse it, notify staff on any member
+  cancel, and list "cancelled with money held" on the admin hub.
 
 ## Medical Screening — Gaps for the Owner (2026-11-02, updated 2026-11-03)
 
@@ -6802,7 +6867,12 @@ error until a sender exists, rather than the current silent-accept.
 > decision:** the two reports still measure program progress and can disagree
 > with the dashboard; that is now stated on them. Tests:
 > `tests/test_training_summary_program_progress.py`,
-> `programProgressLabels.test.tsx`. The text below is the original finding.
+> `programProgressLabels.test.tsx`. **Reaffirmed 2026-11-14:** asked whether
+> to rebuild `compliance_status` on the dashboard's evaluation so a leave of
+> absence reduces its targets, the owner kept this decision and chose instead
+> to list each member's leave in the past year beside the progress (an
+> **On leave** mark and the dates); no figure changes
+> (`tests/test_reports_leave.py`). The text below is the original finding.
 
 `reports_service._generate_compliance_status` (the `compliance_status`
 report) and `_generate_training_summary`'s `requirement_breakdown` section
@@ -10269,9 +10339,10 @@ beyond the feature.
   already submitted are kept but no longer required, new ones are required,
   and close-out waits for them. Freezing the set at close-out would need a
   stored snapshot.
-- **No-show and pending crew are asked for an evaluation.** The rule mirrors
-  the trainee-report gate (only declined and cancelled seats are left out),
-  so the two agree; excusing no-shows would mean changing both.
+- ~~**No-show and pending crew are asked for an evaluation.**~~ Resolved
+  2026-11-14 (owner decision): only Assigned and Confirmed crew need a trainee
+  report or a shift evaluation, and close-out drafts reports for them alone
+  (`WORKING_ASSIGNMENT_STATUSES`).
 - **No requirement type counts the calls an evaluation records.** Evaluated
   shifts, transports and refusals are credited; the existing Calls type is
   still fed by shift reports.
@@ -10310,10 +10381,15 @@ beyond the feature.
   again.
 - **A deactivated evaluation form is still offered and required** where a
   program or the department settings still name it.
-- **Two administrators creating forms with the same name at the same moment
-  get a 500** rather than the duplicate-name 400.
+- ~~**Two administrators creating forms with the same name at the same moment
+  get a 500** rather than the duplicate-name 400.~~ Resolved 2026-11-14: a
+  create or rename whose commit meets the per-department unique key now rolls
+  back and returns the same duplicate-name 400 the up-front check gives.
 - **A preceptor-link submission that collides with an officer creating the
   same evaluation** retries once; the retry keeps the link marked used but
   loses the submitting device's address and browser from the record.
-- **Restoring a pending outside shift approves it**, without approve's
-  pending-only check (it still needs `scheduling.manage`).
+- ~~**Restoring a pending outside shift approves it**, without approve's
+  pending-only check (it still needs `scheduling.manage`).~~ Resolved
+  2026-11-14: restore now applies only to a rejected entry and answers 400
+  otherwise, as approve does for one that is not pending; restore, approve and
+  reject all read the entry under a row lock.

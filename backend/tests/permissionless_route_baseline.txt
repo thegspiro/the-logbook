@@ -673,6 +673,24 @@ app/api/v1/endpoints/history_media.py::list_sources
 app/api/v1/endpoints/history_media.py::media_thumbnail
 app/api/v1/endpoints/history_media.py::media_view_file
 app/api/v1/endpoints/history_media.py::person_media
+# History documents (2026-11-14), the same rule as photos: published documents
+# are read by any signed-in member. Every query filters the caller's
+# organization and HistoryDocumentService.can_read hides drafts from anyone
+# without history.view/manage/publish, through the list, a document, its
+# preview and its stripped copy (list_documents, get_document,
+# document_thumbnail, document_view_file) and a person's documents
+# (person_documents, which also requires the person to be readable).
+# list_document_types is the department's own type names (and creates the
+# starting list on first read). list_document_revisions refuses unless the
+# caller holds history.view/manage or a clearance-step position. The original
+# file is not here: it requires history.manage.
+app/api/v1/endpoints/history_documents.py::document_thumbnail
+app/api/v1/endpoints/history_documents.py::document_view_file
+app/api/v1/endpoints/history_documents.py::get_document
+app/api/v1/endpoints/history_documents.py::list_document_revisions
+app/api/v1/endpoints/history_documents.py::list_document_types
+app/api/v1/endpoints/history_documents.py::list_documents
+app/api/v1/endpoints/history_documents.py::person_documents
 
 # Added 2026-11-04 (owner decisions of 2026-11-01). Each is meant for every
 # member and scoped inside the handler:
@@ -688,3 +706,18 @@ app/api/v1/endpoints/member_status.py::get_membership_tier_names
 # scheduling.manage OR the requester's current supervisor, re-checked in
 # SchedulingService under a row lock on the request; anyone else gets 403.
 app/api/v1/endpoints/scheduling.py::review_time_off_request
+# Leave requests (2026-11-14): who decides is the department's approver
+# positions (falling back to the Chief, then members.manage), not a permission,
+# so LeaveRequestService decides inside the handler. config returns one flag
+# for the caller's own department; create and withdraw act on the caller's own
+# request; list-me returns the caller's own; list and get return only requests
+# the caller may decide (every one for members.manage), 404 for any other; a
+# vote by anyone outside the request's approvers is 404 (409 for the member or
+# a members.manage holder who is not one of them).
+app/api/v1/endpoints/leave_requests.py::create_leave_request
+app/api/v1/endpoints/leave_requests.py::get_leave_request
+app/api/v1/endpoints/leave_requests.py::get_leave_request_config
+app/api/v1/endpoints/leave_requests.py::list_leave_requests_to_decide
+app/api/v1/endpoints/leave_requests.py::list_my_leave_requests
+app/api/v1/endpoints/leave_requests.py::vote_on_leave_request
+app/api/v1/endpoints/leave_requests.py::withdraw_leave_request

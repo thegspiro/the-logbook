@@ -14,6 +14,7 @@ from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.shift_evaluation import (
@@ -31,6 +32,7 @@ from app.schemas.shift_evaluation import (
 from app.services.training_module_config_service import TrainingModuleConfigService
 
 DUPLICATE_NAME_MESSAGE = "Another evaluation template already has this name"
+UNIQUE_NAME_CONSTRAINT = "uq_shift_evaluation_template_org_name"
 
 
 class ShiftEvaluationTemplateService:
@@ -91,7 +93,7 @@ class ShiftEvaluationTemplateService:
             **body.column_values(),
         )
         self.db.add(template)
-        await self.db.commit()
+        await self._commit_refusing_duplicate_name()
         await self.db.refresh(template)
         return template
 
@@ -118,7 +120,7 @@ class ShiftEvaluationTemplateService:
             setattr(template, column, value)
         template.version = (template.version or 1) + 1
         template.updated_by = str(user_id)
-        await self.db.commit()
+        await self._commit_refusing_duplicate_name()
         await self.db.refresh(template)
         return template
 
@@ -224,6 +226,19 @@ class ShiftEvaluationTemplateService:
         return _settings_response(config)
 
     # -- Helpers -------------------------------------------------------------
+
+    async def _commit_refusing_duplicate_name(self) -> None:
+        # _refuse_duplicate_name is a check-then-write: two administrators
+        # saving the same name at once both pass it, and the second commit
+        # meets the unique key. That is still a duplicate name, so it gets the
+        # same 400 sentence rather than surfacing as a 500.
+        try:
+            await self.db.commit()
+        except IntegrityError as exc:
+            await self.db.rollback()
+            if UNIQUE_NAME_CONSTRAINT in str(exc.orig):
+                raise ValueError(DUPLICATE_NAME_MESSAGE) from exc
+            raise
 
     async def _refuse_duplicate_name(
         self,

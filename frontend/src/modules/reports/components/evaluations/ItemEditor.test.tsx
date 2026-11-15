@@ -101,4 +101,92 @@ describe('ItemEditor', () => {
       ['Shifts', ['Shifts worked']],
     ]);
   });
+
+  it('says which values a scoring rule leaves without a suggestion', () => {
+    const sources: EvaluationDataSource[] = [
+      {
+        key: 'training.hours',
+        label: 'Training hours',
+        unit: 'hours',
+        module: 'training',
+        description: '',
+        scoreable: true,
+      },
+    ];
+    const item: TemplateItem = {
+      ...newItem('Training', []),
+      data_block: {
+        source: 'training.hours',
+        scoring_rule: {
+          bands: [
+            { min: 0, max: 10, score: 2 },
+            { min: 20, max: null, score: 4 },
+          ],
+        },
+      },
+    };
+    render(<Harness initial={item} sources={sources} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('No rating is suggested for values from 10 up to 20.');
+  });
+
+  it('says nothing when the bands cover every value', () => {
+    const sources: EvaluationDataSource[] = [
+      {
+        key: 'training.hours',
+        label: 'Training hours',
+        unit: 'hours',
+        module: 'training',
+        description: '',
+        scoreable: true,
+      },
+    ];
+    const item: TemplateItem = {
+      ...newItem('Training', []),
+      data_block: {
+        source: 'training.hours',
+        scoring_rule: {
+          bands: [
+            { min: 0, max: 10, score: 2 },
+            { min: 10, max: null, score: 4 },
+          ],
+        },
+      },
+    };
+    render(<Harness initial={item} sources={sources} />);
+
+    expect(screen.queryByText(/no rating is suggested/i)).not.toBeInTheDocument();
+  });
+
+  it('marks a source the department has turned off, and says why once chosen', () => {
+    const sources: EvaluationDataSource[] = [
+      {
+        key: 'calls.response_pct',
+        label: 'Call response rate',
+        unit: 'percent',
+        module: 'calls',
+        description: 'Calls responded to out of all department calls.',
+        scoreable: true,
+        unavailable_reason: 'Call tracking is turned off.',
+      },
+      {
+        key: 'training.hours',
+        label: 'Training hours',
+        unit: 'hours',
+        module: 'training',
+        description: '',
+        scoreable: true,
+        unavailable_reason: null,
+      },
+    ];
+    const item: TemplateItem = {
+      ...newItem('Calls', []),
+      data_block: { source: 'calls.response_pct', scoring_rule: null },
+    };
+    render(<Harness initial={item} sources={sources} />);
+
+    expect(screen.getByRole('option', { name: 'Call response rate (turned off)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Training hours' })).toBeInTheDocument();
+    expect(screen.getByText(/call tracking is turned off\. until it is turned on/i)).toBeInTheDocument();
+  });
 });

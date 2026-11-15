@@ -822,8 +822,8 @@ export type HistoricalRecordType = (typeof HistoricalRecordType)[keyof typeof Hi
 
 /** Shift history import: a draft under review, or committed to the schedule. */
 export const HISTORY_IMPORT_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
-  committed: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
+  draft: 'bg-yellow-500/10 text-yellow-900 dark:text-yellow-300 border-yellow-500/20',
+  committed: 'bg-green-500/10 text-green-900 dark:text-green-300 border-green-500/20',
 };
 
 /**
@@ -1109,9 +1109,9 @@ export const CONSENT_STATUS_LABELS: Record<ConsentStatus, string> = {
 };
 
 export const CONSENT_STATUS_COLORS: Record<ConsentStatus, string> = {
-  granted: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
-  declined: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
-  not_answered: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/20',
+  granted: 'bg-green-500/10 text-green-900 dark:text-green-300 border-green-500/20',
+  declined: 'bg-red-500/10 text-red-900 dark:text-red-300 border-red-500/20',
+  not_answered: 'bg-amber-500/10 text-amber-900 dark:text-amber-300 border-amber-500/20',
 };
 
 // ============================================

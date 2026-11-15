@@ -370,6 +370,20 @@ export const WaiverManagementPage: React.FC = () => {
           description="Excuse members from training, meeting and shift requirements"
           className="mb-6"
         />
+        <p className="text-theme-text-secondary mb-4 text-sm">
+          Members&rsquo; requests for leave are decided under{' '}
+          <Link to="/members/leave-requests" className="font-medium text-blue-700 hover:underline dark:text-blue-300">
+            Leave Requests
+          </Link>
+          ; the reminder before a leave ends and who decides requests are set in{' '}
+          <Link
+            to="/members/admin/settings/leave"
+            className="font-medium text-blue-700 hover:underline dark:text-blue-300"
+          >
+            Members Settings
+          </Link>
+          .
+        </p>
 
         {error && (
           <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-400">

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**380 tables · 6099 columns · 1271 foreign keys**
+**388 tables · 6186 columns · 1294 foreign keys**
 
 ---
 
@@ -363,11 +363,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`historical_member_relations`](#historical_member_relations) | `HistoricalMemberRelation` | 8 | A family link between two people, stored once and read from both ends. |
 | [`historical_member_service_periods`](#historical_member_service_periods) | `HistoricalMemberServicePeriod` | 12 | One stretch of service. A person who left and rejoined has several. |
 | [`historical_members`](#historical_members) | `HistoricalMember` | 39 | A person who served the department, as the archive records them. |
+| [`history_album_documents`](#history_album_documents) | `HistoryAlbumDocument` | 4 | One document's place in one album. ``position`` shares one sequence |
 | [`history_album_items`](#history_album_items) | `HistoryAlbumItem` | 4 | One media item's place in one album. |
 | [`history_albums`](#history_albums) | `HistoryAlbum` | 10 | A named group of media items, in an order the Historian sets. |
 | [`history_clearance_decisions`](#history_clearance_decisions) | `HistoryClearanceDecision` | 9 | One step's decision on one request. |
 | [`history_clearance_requests`](#history_clearance_requests) | `HistoryClearanceRequest` | 12 | One submission of one revision through the clearance list. |
 | [`history_clearance_steps`](#history_clearance_steps) | `HistoryClearanceStep` | 7 | One step in a department's clearance list, in order. |
+| [`history_document_files`](#history_document_files) | `HistoryDocumentFile` | 8 | A derived file of a document: the stripped copy readers open, or its |
+| [`history_document_tags`](#history_document_tags) | `HistoryDocumentTag` | 4 | A person a document is about, by, to or names. |
+| [`history_document_types`](#history_document_types) | `HistoryDocumentType` | 9 | One entry in a department's managed list of document types (letter, |
+| [`history_documents`](#history_documents) | `HistoryDocument` | 36 | The archive's catalogue of one document, one-to-one with its row in the |
 | [`history_import_rows`](#history_import_rows) | `HistoryImportRow` | 12 | One line of an uploaded file, with the Historian's decision about it. |
 | [`history_import_title_mappings`](#history_import_title_mappings) | `HistoryImportTitleMapping` | 9 | A department's remembered answer for one title text an import met. |
 | [`history_imports`](#history_imports) | `HistoryImport` | 14 | One uploaded roster file, from draft through commit. |
@@ -461,6 +466,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`label_printers`](#label_printers) | `LabelPrinter` | 17 | A ZPL-capable network label printer belonging to an organization. |
+
+### Leave_Request
+
+<sub>`app/models/leave_request.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`leave_notice_sends`](#leave_notice_sends) | `LeaveNoticeSend` | 5 | A scheduled leave email claimed before it is sent. |
+| [`leave_request_votes`](#leave_request_votes) | `LeaveRequestVote` | 7 | One approver's vote on one request. One per approver, by constraint. |
+| [`leave_requests`](#leave_requests) | `LeaveRequest` | 14 | One member's request for a leave of absence. |
 
 ### Legal
 
@@ -2835,7 +2850,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -2899,7 +2914,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `session_waiver_requested`, `session_waiver_decided`, `session_waiver_withdrawn`, `meeting_waiver_requested`, `meeting_waiver_decided`, `meeting_waiver_withdrawn`, `shift_evaluation_preceptor_link`, `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package`, `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`, `leave_of_absence_notice`, `leave_ending_reminder`, `leave_ending_officer_notice`, `open_ended_leave_digest`, `leave_request_submitted`, `leave_request_denied`, `custom`) | no |  |  |  |
 | `to_emails` | TEXT | no |  |  |  |
 | `cc_emails` | TEXT | yes |  |  |  |
 | `bcc_emails` | TEXT | yes |  |  |  |
@@ -5864,6 +5879,23 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_historical_members_org_level` (`organization_id`, `publication_level`)
 - `ix_historical_members_org_lodd` (`organization_id`, `is_line_of_duty_death`)
 
+### `history_album_documents`
+
+**HistoryAlbumDocument** · `app/models/history.py`
+
+> One document's place in one album. ``position`` shares one sequence with ``history_album_items`` so an album interleaves photos and documents.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `album_id` | VARCHAR(36) | no | PK, FK |  | → `history_albums.id` ON DELETE CASCADE |
+| `document_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `history_documents.document_id` ON DELETE CASCADE |
+| `position` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_album_documents_document` (`document_id`)
+
 ### `history_album_items`
 
 **HistoryAlbumItem** · `app/models/history.py`
@@ -5971,6 +6003,118 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_history_clearance_steps_org` (`organization_id`, `step_order`)
+
+### `history_document_files`
+
+**HistoryDocumentFile** · `app/models/history.py`
+
+> A derived file of a document: the stripped copy readers open, or its preview. The original is the ``documents`` row's own file. One row per file, so the storage tools can rewrite each path. No ``organization_id``: reached only through its document, which has one.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `document_id` | VARCHAR(36) | no | FK |  | → `history_documents.document_id` ON DELETE CASCADE |
+| `role` | ENUM(`original`, `display`, `thumbnail`) | no |  |  |  |
+| `file_path` | VARCHAR(500) | no |  |  |  |
+| `mime_type` | VARCHAR(100) | no |  |  |  |
+| `size_bytes` | INTEGER | no |  |  |  |
+| `sha256` | VARCHAR(64) | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_history_document_file_role` (`document_id`, `role`)
+
+### `history_document_tags`
+
+**HistoryDocumentTag** · `app/models/history.py`
+
+> A person a document is about, by, to or names.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `document_id` | VARCHAR(36) | no | PK, FK |  | → `history_documents.document_id` ON DELETE CASCADE |
+| `member_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `historical_members.id` ON DELETE CASCADE |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_document_tags_member` (`member_id`)
+
+### `history_document_types`
+
+**HistoryDocumentType** · `app/models/history.py`
+
+> One entry in a department's managed list of document types (letter, minutes, newspaper clipping, ...). Managed like sources: retired or merged, never deleted.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(150) | no |  |  |  |
+| `name_key` | VARCHAR(150) | no |  |  |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `is_retired` | BOOL | no |  | `0` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_history_document_type_key` (`organization_id`, `name_key`)
+
+### `history_documents`
+
+**HistoryDocument** · `app/models/history.py`
+
+> The archive's catalogue of one document, one-to-one with its row in the Documents module (phase 1 decision: the file lives in the protected History folder, the catalogue beside it). The ``documents`` row holds the original, which only ``history.manage`` downloads; everyone else reads the stripped copy in ``history_document_files``. Published like a photo, under ``record_type = "document"``, with ``document_id`` as the record id.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `document_id` | VARCHAR(36) | no | PK, FK |  | → `documents.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `kind` | ENUM(`pdf`, `image`) | no |  |  |  |
+| `title` | VARCHAR(200) | no |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `taken_date` | DATE | yes |  |  |  |
+| `taken_date_precision` | ENUM(`day`, `month`, `year`) | no |  | `'year'` |  |
+| `taken_date_circa` | BOOL | no |  | `0` |  |
+| `place` | VARCHAR(255) | yes |  |  |  |
+| `document_type_id` | VARCHAR(36) | yes | FK |  | → `history_document_types.id` ON DELETE SET NULL |
+| `author` | VARCHAR(255) | yes |  |  |  |
+| `recipient` | VARCHAR(255) | yes |  |  |  |
+| `source_id` | VARCHAR(36) | yes | FK, IDX |  | → `history_sources.id` ON DELETE SET NULL |
+| `rights_note` | TEXT | yes |  |  |  |
+| `accession_number` | VARCHAR(100) | yes |  |  |  |
+| `original_location` | VARCHAR(255) | yes |  |  |  |
+| `research_notes` | TEXT | yes |  |  |  |
+| `transcription` | MEDIUMTEXT | yes |  |  |  |
+| `extracted_text` | MEDIUMTEXT | yes |  |  |  |
+| `text_truncated` | BOOL | no |  | `0` |  |
+| `page_count` | INTEGER | yes |  |  |  |
+| `width` | INTEGER | yes |  |  |  |
+| `height` | INTEGER | yes |  |  |  |
+| `original_filename` | VARCHAR(255) | no |  |  |  |
+| `batch_id` | VARCHAR(36) | yes |  |  |  |
+| `publication_level` | ENUM(`draft`, `members`, `public`) | no |  | `'draft'` |  |
+| `published_at` | DATETIME | yes |  |  |  |
+| `published_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `public_snapshot` | JSON | yes |  |  |  |
+| `public_revision_number` | INTEGER | yes |  |  |  |
+| `substantial_revision_number` | INTEGER | no |  | `1` |  |
+| `revision_number` | INTEGER | no |  | `1` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_documents_org_date` (`organization_id`, `taken_date`)
+- `ix_history_documents_org_level` (`organization_id`, `publication_level`)
+- `ix_history_documents_org_type` (`organization_id`, `document_type_id`)
+- `ix_history_documents_source` (`source_id`)
 
 ### `history_import_rows`
 
@@ -7748,6 +7892,79 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - UNIQUE `uq_label_printer_org_name` (`organization_id`, `name`)
+
+## Leave_Request
+
+### `leave_notice_sends`
+
+**LeaveNoticeSend** · `app/models/leave_request.py`
+
+> A scheduled leave email claimed before it is sent. ``kind`` names the email and ``key`` what it was about: a leave's id and end date for the ending reminder (so moving the end date earns a new reminder), the month for the open-ended digest. The claim is taken and committed before the email goes out and released if the send fails, so a process that dies after claiming sends nothing (at most once): a missed reminder costs the member a nudge, a repeated one their trust in the mail.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `kind` | VARCHAR(40) | no |  |  |  |
+| `key` | VARCHAR(120) | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_leave_notice_send` (`organization_id`, `kind`, `key`)
+
+### `leave_request_votes`
+
+**LeaveRequestVote** · `app/models/leave_request.py`
+
+> One approver's vote on one request. One per approver, by constraint.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `request_id` | VARCHAR(36) | no | FK, IDX |  | → `leave_requests.id` ON DELETE CASCADE |
+| `voter_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `vote` | ENUM(`approve`, `deny`) | no |  |  |  |
+| `note` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_leave_request_votes_org_request` (`organization_id`, `request_id`)
+- `ix_leave_request_votes_request_id` (`request_id`)
+
+**Constraints**
+
+- UNIQUE `uq_leave_request_vote` (`request_id`, `voter_id`)
+
+### `leave_requests`
+
+**LeaveRequest** · `app/models/leave_request.py`
+
+> One member's request for a leave of absence. ``decision_rule`` is the department's rule when the request was made, kept on the row so a later change to the setting does not move the bar for a request already being voted on. ``reason`` is encrypted at rest: members explain a leave in their own words, often medical or family detail. ``leave_id`` is the leave an approval created; SET NULL so the request stays on record if that leave is later deleted.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `leave_type` | ENUM(`leave_of_absence`, `medical`, `military`, `personal`, `administrative`, `new_member`, `other`) | no |  | `leave_of_absence` |  |
+| `start_date` | DATE | no |  |  |  |
+| `end_date` | DATE | yes |  |  |  |
+| `reason` | TEXT | yes |  |  |  |
+| `status` | ENUM(`pending`, `approved`, `denied`, `withdrawn`) | no |  | `pending` |  |
+| `decision_rule` | ENUM(`any`, `majority`, `all`) | no |  | `any` |  |
+| `decided_at` | DATETIME | yes |  |  |  |
+| `decided_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `leave_id` | VARCHAR(36) | yes | FK |  | → `member_leaves_of_absence.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_leave_requests_org_status` (`organization_id`, `status`)
+- `ix_leave_requests_org_user` (`organization_id`, `user_id`)
 
 ## Legal
 
@@ -13068,7 +13285,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (465 references)
+### → `users` (473 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13268,6 +13485,11 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `history_albums` | `created_by` | SET NULL | yes |
 | `history_clearance_decisions` | `decided_by` | SET NULL | yes |
 | `history_clearance_requests` | `submitted_by` | SET NULL | yes |
+| `history_document_tags` | `created_by` | SET NULL | yes |
+| `history_document_types` | `created_by` | SET NULL | yes |
+| `history_documents` | `created_by` | SET NULL | yes |
+| `history_documents` | `published_by` | SET NULL | yes |
+| `history_documents` | `updated_by` | SET NULL | yes |
 | `history_import_rows` | `target_user_id` | SET NULL | yes |
 | `history_import_title_mappings` | `updated_by` | SET NULL | yes |
 | `history_imports` | `committed_by` | SET NULL | yes |
@@ -13320,6 +13542,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `knowledge_test_attempts` | `user_id` | CASCADE | no |
 | `knowledge_tests` | `created_by` | SET NULL | yes |
 | `label_printers` | `created_by_id` | SET NULL | yes |
+| `leave_request_votes` | `voter_id` | CASCADE | no |
+| `leave_requests` | `decided_by` | SET NULL | yes |
+| `leave_requests` | `user_id` | CASCADE | no |
 | `legal_document_revisions` | `created_by` | SET NULL | yes |
 | `legal_document_revisions` | `edited_by` | SET NULL | yes |
 | `legal_document_revisions` | `published_by` | SET NULL | yes |
@@ -13538,7 +13763,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (311 references)
+### → `organizations` (316 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13676,6 +13901,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `history_albums` | `organization_id` | CASCADE | no |
 | `history_clearance_requests` | `organization_id` | CASCADE | no |
 | `history_clearance_steps` | `organization_id` | CASCADE | no |
+| `history_document_types` | `organization_id` | CASCADE | no |
+| `history_documents` | `organization_id` | CASCADE | no |
 | `history_import_title_mappings` | `organization_id` | CASCADE | no |
 | `history_imports` | `organization_id` | CASCADE | no |
 | `history_media` | `organization_id` | CASCADE | no |
@@ -13711,6 +13938,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `knowledge_test_questions` | `organization_id` | CASCADE | no |
 | `knowledge_tests` | `organization_id` | CASCADE | no |
 | `label_printers` | `organization_id` | CASCADE | no |
+| `leave_notice_sends` | `organization_id` | CASCADE | no |
+| `leave_request_votes` | `organization_id` | CASCADE | no |
+| `leave_requests` | `organization_id` | CASCADE | no |
 | `legal_document_revisions` | `organization_id` | CASCADE | no |
 | `locations` | `organization_id` | CASCADE | no |
 | `maintenance_records` | `organization_id` | CASCADE | no |
@@ -14183,6 +14413,17 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_nfc_tags` | `check_compartment_id` | CASCADE | yes |
 | `shift_equipment_check_seals` | `template_compartment_id` | SET NULL | yes |
 
+### → `documents` (6 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `apparatus_documents` | `document_id` | CASCADE | yes |
+| `apparatus_photos` | `document_id` | CASCADE | yes |
+| `check_requests` | `receipt_document_id` | SET NULL | yes |
+| `expense_line_items` | `receipt_document_id` | SET NULL | yes |
+| `history_documents` | `document_id` | CASCADE | no |
+| `purchase_requests` | `receipt_document_id` | SET NULL | yes |
+
 ### → `finance_export_logs` (6 references)
 
 | From table | Column | On delete | Nullable |
@@ -14204,6 +14445,17 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `dues_schedules` | `fiscal_year_id` | SET NULL | yes |
 | `expense_reports` | `fiscal_year_id` | CASCADE | no |
 | `purchase_requests` | `fiscal_year_id` | CASCADE | no |
+
+### → `historical_members` (6 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `historical_member_relations` | `member_id` | CASCADE | no |
+| `historical_member_relations` | `related_member_id` | CASCADE | no |
+| `historical_member_service_periods` | `member_id` | CASCADE | no |
+| `history_document_tags` | `member_id` | CASCADE | no |
+| `history_import_rows` | `target_member_id` | SET NULL | yes |
+| `history_media_tags` | `member_id` | CASCADE | no |
 
 ### → `membership_pipeline_steps` (6 references)
 
@@ -14258,16 +14510,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `expense_line_items` | `budget_id` | SET NULL | yes |
 | `purchase_requests` | `budget_id` | SET NULL | yes |
 
-### → `documents` (5 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `apparatus_documents` | `document_id` | CASCADE | yes |
-| `apparatus_photos` | `document_id` | CASCADE | yes |
-| `check_requests` | `receipt_document_id` | SET NULL | yes |
-| `expense_line_items` | `receipt_document_id` | SET NULL | yes |
-| `purchase_requests` | `receipt_document_id` | SET NULL | yes |
-
 ### → `email_templates` (5 references)
 
 | From table | Column | On delete | Nullable |
@@ -14287,16 +14529,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `evaluation_parts` | `evaluation_id` | CASCADE | no |
 | `evaluation_signatures` | `evaluation_id` | CASCADE | no |
 | `evaluation_steps` | `evaluation_id` | CASCADE | no |
-
-### → `historical_members` (5 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `historical_member_relations` | `member_id` | CASCADE | no |
-| `historical_member_relations` | `related_member_id` | CASCADE | no |
-| `historical_member_service_periods` | `member_id` | CASCADE | no |
-| `history_import_rows` | `target_member_id` | SET NULL | yes |
-| `history_media_tags` | `member_id` | CASCADE | no |
 
 ### → `suggestions` (5 references)
 
@@ -14447,6 +14679,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `event_requests` | `form_submission_id` | SET NULL | yes |
 | `prospect_form_requests` | `submission_id` | SET NULL | yes |
 | `prospective_members` | `form_submission_id` | SET NULL | yes |
+
+### → `history_documents` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `history_album_documents` | `document_id` | CASCADE | no |
+| `history_document_files` | `document_id` | CASCADE | no |
+| `history_document_tags` | `document_id` | CASCADE | no |
 
 ### → `inventory_vendors` (3 references)
 
@@ -14616,12 +14856,26 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `zeffy_campaign_links` | `fundraising_event_id` | SET NULL | yes |
 | `zeffy_payments` | `fundraising_event_id` | SET NULL | yes |
 
+### → `history_albums` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `history_album_documents` | `album_id` | CASCADE | no |
+| `history_album_items` | `album_id` | CASCADE | no |
+
 ### → `history_imports` (2 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `historical_members` | `import_id` | SET NULL | yes |
 | `history_import_rows` | `import_id` | CASCADE | no |
+
+### → `history_sources` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `history_documents` | `source_id` | SET NULL | yes |
+| `history_media` | `source_id` | SET NULL | yes |
 
 ### → `history_titles` (2 references)
 
@@ -14879,29 +15133,23 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `historical_staffing_rows` | `file_id` | CASCADE | no |
 
-### → `history_albums` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `history_album_items` | `album_id` | CASCADE | no |
-
 ### → `history_clearance_requests` (1 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `history_clearance_decisions` | `request_id` | CASCADE | no |
 
+### → `history_document_types` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `history_documents` | `document_type_id` | SET NULL | yes |
+
 ### → `history_import_rows` (1 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `history_import_rows` | `target_row_id` | SET NULL | yes |
-
-### → `history_sources` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `history_media` | `source_id` | SET NULL | yes |
 
 ### → `inventory_nfc_audits` (1 references)
 
@@ -14939,6 +15187,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `inventory_items` | `variant_group_id` | SET NULL | yes |
 
+### → `leave_requests` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `leave_request_votes` | `request_id` | CASCADE | no |
+
 ### → `maintenance_records` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -14962,6 +15216,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `minutes_closed_sessions` | `motion_id` | SET NULL | yes |
+
+### → `member_leaves_of_absence` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `leave_requests` | `leave_id` | SET NULL | yes |
 
 ### → `minutes_action_items` (1 references)
 
@@ -15124,8 +15384,11 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `historical_member_period_titles` | `historical_member_service_periods`, `history_titles` |
 | `historical_member_service_periods` | `historical_members` |
 | `historical_staffing_rows` | `historical_staffing_files` |
+| `history_album_documents` | `history_albums`, `history_documents` |
 | `history_album_items` | `history_albums`, `history_media` |
 | `history_clearance_decisions` | `history_clearance_requests`, `users` |
+| `history_document_files` | `history_documents` |
+| `history_document_tags` | `historical_members`, `history_documents`, `users` |
 | `history_import_rows` | `historical_members`, `history_import_rows`, `history_imports`, `users` |
 | `history_media_files` | `history_media` |
 | `history_media_tags` | `historical_members`, `history_media`, `users` |
