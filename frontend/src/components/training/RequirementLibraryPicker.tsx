@@ -35,7 +35,8 @@ const describe = (req: TrainingRequirementEnhanced): string => {
   if (req.required_hours) parts.push(`${req.required_hours} hrs`);
   if (req.required_shifts)
     parts.push(`${req.required_shifts} ${req.requirement_type === 'evaluated_shifts' ? 'evaluated shifts' : 'shifts'}`);
-  if (req.required_calls) parts.push(`${req.required_calls} calls`);
+  if (req.required_calls)
+    parts.push(`${req.required_calls} ${req.requirement_type === 'evaluated_calls' ? 'evaluated calls' : 'calls'}`);
   if (req.required_transports) parts.push(`${req.required_transports} transports`);
   if (req.required_refusals) parts.push(`${req.required_refusals} refusals`);
   if (req.checklist_items?.length) parts.push(`${req.checklist_items.length} items`);

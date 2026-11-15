@@ -4886,7 +4886,10 @@ class EventService:
         )
         event = event_result.scalar_one_or_none()
 
-        if not event:
+        # A draft is not announced yet, so its QR payload (title, description,
+        # location, times) is not served, and a scan of it is not recorded.
+        # Self-check-in refuses a draft too, so there is nothing to scan into.
+        if not event or event.is_draft:
             return None, "Event not found"
 
         if event.is_cancelled:
@@ -5418,6 +5421,11 @@ class EventService:
 
         if not event:
             return None, "Event not found", None
+
+        # EV-6 refuses an RSVP to a draft; a check-in creates one, so it is
+        # refused for the same reason (QR scan, NFC tap and kiosk alike).
+        if event.is_draft:
+            return None, "Cannot check in to an unpublished event", None
 
         if event.is_cancelled:
             return None, "Event has been cancelled", None

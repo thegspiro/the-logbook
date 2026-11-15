@@ -102,6 +102,12 @@ class RequirementOverrideService:
             raise ValueError("This requirement does not accept a Chief's override")
         if end_date < start_date:
             raise ValueError("The end date must be on or after the start date")
+        # Separation of duties: an override counts the member as meeting the
+        # requirement however few sessions they attended, so the Chief may not
+        # grant one to themselves. The Chief's own absence goes through the
+        # attendance-waiver workflow, which routes it to someone else.
+        if str(user_id) == str(granted_by):
+            raise ValueError("You cannot grant an override on your own requirement")
         if not await is_in_org(self.db, User, user_id, organization_id):
             raise ValueError("Member not found")
         # The overlap check below is a read-then-insert, so two grants sent

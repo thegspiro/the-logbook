@@ -102,7 +102,7 @@ async def list_my_shift_evaluations(
     evaluations = await service.list_for_member(
         current_user.id, current_user.organization_id, member_view=True
     )
-    return [await service.detail(e, current_user.organization_id) for e in evaluations]
+    return await service.details(evaluations, current_user.organization_id)
 
 
 @router.get("/members/{member_id}", response_model=list[ShiftEvaluationDetail])
@@ -131,7 +131,7 @@ async def list_member_shift_evaluations(
         # no drafts, nothing still waiting on review.
         member_view=str(member_id) == str(current_user.id),
     )
-    return [await service.detail(e, current_user.organization_id) for e in evaluations]
+    return await service.details(evaluations, current_user.organization_id)
 
 
 @router.get("/shifts/{shift_id}", response_model=ShiftEvaluationRoster)
