@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**388 tables · 6186 columns · 1294 foreign keys**
+**388 tables · 6187 columns · 1294 foreign keys**
 
 ---
 
@@ -828,7 +828,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shift_template_equipment_checks`](#shift_template_equipment_checks) | `ShiftTemplateEquipmentCheck` | 7 | One equipment checklist a shift template puts on the shifts it creates. |
 | [`shift_templates`](#shift_templates) | `ShiftTemplate` | 19 | Reusable shift template for quick shift creation. |
 | [`shift_time_off`](#shift_time_off) | `ShiftTimeOff` | 12 | Member request for time off / unavailability. |
-| [`shifts`](#shifts) | `Shift` | 33 | Shift model (Framework) |
+| [`shifts`](#shifts) | `Shift` | 34 | Shift model (Framework) |
 | [`skill_checkoffs`](#skill_checkoffs) | `SkillCheckoff` | 14 | Skill Checkoff model |
 | [`skill_evaluations`](#skill_evaluations) | `SkillEvaluation` | 13 | Skill Evaluation model |
 | [`standing_shift_claims`](#standing_shift_claims) | `StandingShiftClaim` | 14 | A member's recurring claim on a shift — "every Tuesday night". |
@@ -12174,6 +12174,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `notes` | TEXT | yes |  |  |  |
 | `activities` | JSON | yes |  |  |  |
 | `pass_down_notes` | TEXT | yes |  |  |  |
+| `evaluation_requirements` | JSON | yes |  |  |  |
 | `open_to_all_members` | BOOL | no |  | `0` |  |
 | `is_outreach` | BOOL | no |  | `0` |  |
 | `duty_type` | VARCHAR(20) | no |  | `in_station` |  |
