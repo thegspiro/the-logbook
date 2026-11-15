@@ -16,6 +16,58 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4328](https://github.com/thegspiro/the-logbook/pull/4328)** (branch
+`claude/security-review-cross-cutting-p17`): Feature 00 (Cross-cutting
+baseline), pass 17, opening a fresh rotation lap. PR #4259 (Feature 34,
+Frontend shared, pass 15) had already merged, docs-only — the rotation table
+was all `✅`, so per Step 1 it is reset to `⬜` here and the lap wraps to
+Feature 00, reviewed in this same iteration rather than left for a later PR
+to pick up (this file's own 2026-11-04 precedent).
+
+**1 fixed (SEC17-1, LOW), 0 other new findings.** Baseline `3087fdaf5` (pass
+16's own head, PR #4020). 1203 commits / 716 non-merge since then — a full
+rotation lap, 323 backend `.py` files and 1161 frontend files touched. All 13
+established cross-cutting sweep classes re-swept; clean except raw-exception
+leakage (SEC17-1) and the pre-existing 3-head Alembic fork (flagged below,
+not this pass's to fix). Seven new endpoint files with no rotation row yet
+(attendance waivers, meeting waivers, leave requests, QuickBooks Online,
+three `history.py` siblings) read directly and found sound. See
+`docs/security-review/SEC-00-cross-cutting-baseline.md`'s **Pass 17** section
+for the full trace.
+
+**SEC17-1 (LOW, FIXED):** `ComplianceReportService.generate_report`'s failure
+handler wrote the raw `str(e)` into `ComplianceReport.error_message` with no
+sanitization at all, served back verbatim by `GET /compliance/reports` /
+`GET /compliance/reports/{id}` — the same raw-exception-into-error-column
+class SEC13-1/SEC14-1/SEC16-1 already fixed elsewhere, and the identical file
+already had the correct `safe_error_detail()` pattern four lines away.
+Fixed; an existing test that had encoded the bug as expected behavior was
+corrected with the reason stated, a sibling test added, and a new guard test
+added, seen to fail against the unfixed code first.
+
+**Pre-existing, out-of-scope, flagged not fixed:** `main` has 3 forked
+Alembic heads (`c8d2f61a7e34`, `e2b7d94c1a63`, `169a11ebf589`) — three PRs
+each joined the same two parents and all three merged. PR #4323 is open with
+the one join revision these three need; not merged as of this pass. This PR
+does not add a competing (fourth-head) merge revision.
+`validate_migrations.py --strict` and `test_alembic_migrations.py`'s two
+chain-shape tests fail for this reason only.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+**fails, pre-existing 3-head fork, tracked by PR #4323**;
+`check_route_permissions.py --strict` — 327 routes, 0 errors/warnings;
+cross-cutting guard suite — 220 passed; targeted backend suites — 1095 + 211
+passed, 1 pre-existing skip; `npm run typecheck` — 0 errors; `npm run lint` —
+0 errors/warnings.
+
+**Every row below is reset to `⬜` for this new rotation lap except Feature
+00, now `✅`.** Next is Feature 01 (Auth & session lifecycle) — re-check for
+an open security-review PR fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 15, PR #4259, merged), preserved for history</summary>
+
 **PR [#4259](https://github.com/thegspiro/the-logbook/pull/4259)**
 (branch `claude/security-review-frontend-shared-p15`): Feature 34 (Frontend
 shared), pass 15, closing out this rotation lap. PR #4256 (Feature 33, Core
@@ -55,6 +107,8 @@ suite (16 files) — 374 passed.
 Step 1 rule, the next iteration should see every row `✅`, say the rotation
 is complete, and reset all 35 rows (00–34) to `⬜` for a fresh pass — that
 reset is not performed here.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 14, PR #4256, merged), preserved for history</summary>
