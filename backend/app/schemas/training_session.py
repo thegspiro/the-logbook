@@ -372,6 +372,9 @@ class UnmappedRequirementResponse(BaseModel):
     requirement_id: str
     name: str
     reason: str
+    # It grades no member at all (no scope, or no longer active), so it adds
+    # no one; the others grade members no tier stands for.
+    applies_to_no_one: bool = False
 
 
 class MandatoryTiersResponse(BaseModel):

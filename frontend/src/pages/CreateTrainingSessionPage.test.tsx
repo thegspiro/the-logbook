@@ -1176,6 +1176,7 @@ describe('CreateTrainingSessionPage mandatory pre-fill', () => {
     requirement_id: 'req-admin',
     name: 'Administrative Drill Attendance',
     reason: "Administrative members can't be chosen by member type",
+    applies_to_no_one: false,
   };
 
   beforeEach(() => {

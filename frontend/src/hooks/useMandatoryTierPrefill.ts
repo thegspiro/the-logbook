@@ -57,9 +57,9 @@ type AttendanceModel = Pick<
  *   type, still counts.
  * - A requirement that applies to everyone suggests All members.
  * - Requirements no tier stands for are named in the note, as is one that
- *   applies to no member at all, and neither is listed as a source; when
- *   none of the ticked ones maps, Mandatory for is left as it was rather than
- *   falling back to everyone.
+ *   applies to no member at all or is no longer active, and neither is listed
+ *   as a source; when none of the ticked ones maps, Mandatory for is left as
+ *   it was rather than falling back to everyone.
  * - Unticking every requirement leaves Mandatory and Mandatory for alone.
  */
 export function useMandatoryTierPrefill(

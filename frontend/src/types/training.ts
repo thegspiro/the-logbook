@@ -104,6 +104,12 @@ export interface MandatoryTiersUnmapped {
   requirement_id: string;
   name: string;
   reason: string;
+  /**
+   * It grades no member at all (it names no one, or is no longer active), so
+   * it adds no one to Mandatory for. The others grade members no member type
+   * stands for, and the note offers All members for them.
+   */
+  applies_to_no_one: boolean;
 }
 
 export interface MandatoryTiersResponse {

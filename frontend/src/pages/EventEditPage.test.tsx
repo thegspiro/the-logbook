@@ -950,6 +950,28 @@ describe('EventEditPage', () => {
         expect(screen.queryByText('Selected requirement')).not.toBeInTheDocument();
       });
 
+      // Named as Review and the event page name it, never by its id, should
+      // the pre-fill take it as a source.
+      it('names it in the Mandatory-for note by name, not id', async () => {
+        linkageRequirements.value = [attendanceRequirement];
+        vi.mocked(trainingSessionService.getMandatoryTiers).mockResolvedValue({
+          everyone: false,
+          tier_ids: ['active'],
+          unmapped: [],
+        });
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await user.click(await screen.findByLabelText(/Company Drill Attendance/));
+        await waitFor(() => expect(trainingSessionService.getMandatoryTiers).toHaveBeenCalledTimes(1));
+        await next(user);
+        await user.click(screen.getByRole('checkbox', { name: 'Mandatory attendance' }));
+
+        expect(
+          await screen.findByText('Old Drill Attendance (no longer active), Company Drill Attendance → Active.')
+        ).toBeInTheDocument();
+      });
+
       it('lets the officer untick it, and the save drops it', async () => {
         const user = userEvent.setup();
         renderWithRouter(<EventEditPage />);

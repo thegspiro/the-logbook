@@ -14,17 +14,22 @@ interface MandatoryPrefillNoteProps {
 
 const joinNames = (names: string[]) => names.join(', ');
 
+/** Where a requirement grades no member at all, as the backend says (applies_to_no_one). */
+const ADDS_NO_ONE = ', so it adds no one to Mandatory for.';
+
 /**
  * Each requirement no member type stands for, with the backend's reason
  * (worded for the officer there, so it is shown as is) and what follows from
- * it, which differs by note.
+ * it. For one that grades members no type stands for, that differs by note
+ * (`then`); one that grades no member at all adds no one, whatever the note,
+ * and is never a reason to choose All members.
  */
 const UnmappedList: React.FC<{ unmapped: Note['unmapped']; then: string }> = ({ unmapped, then }) => (
   <>
     {unmapped.map((u, index) => (
       <p key={`${u.requirement_id}-${index}`} className="text-sm">
         <span className="font-semibold">{u.name}</span>: {u.reason}
-        {then}
+        {u.applies_to_no_one ? ADDS_NO_ONE : then}
       </p>
     ))}
   </>
@@ -38,6 +43,9 @@ export const MandatoryPrefillNote: React.FC<MandatoryPrefillNoteProps> = ({
   id,
 }) => {
   if (note.kind === 'not-filled') {
+    // Choosing All members is offered only for a requirement that grades
+    // someone: for one that grades no one there is nobody to choose it for.
+    const gradesSomeone = note.unmapped.some((u) => !u.applies_to_no_one);
     return (
       <div id={id} className="alert-info flex items-start gap-3" role="note">
         <Info className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
@@ -50,7 +58,9 @@ export const MandatoryPrefillNote: React.FC<MandatoryPrefillNoteProps> = ({
           <p className="text-sm">
             {mandatoryScope === 'all'
               ? 'Choose member types instead if only some must attend.'
-              : 'Mandatory for is left as it was. Choose All members if they must attend.'}
+              : gradesSomeone
+                ? 'Mandatory for is left as it was. Choose All members if they must attend.'
+                : 'Mandatory for is left as it was.'}
           </p>
         </div>
       </div>

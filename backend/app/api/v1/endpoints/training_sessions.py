@@ -350,7 +350,10 @@ async def get_mandatory_tiers(
         tier_ids=tiers.tier_ids,
         unmapped=[
             UnmappedRequirementResponse(
-                requirement_id=u.requirement_id, name=u.name, reason=u.reason
+                requirement_id=u.requirement_id,
+                name=u.name,
+                reason=u.reason,
+                applies_to_no_one=u.applies_to_no_one,
             )
             for u in tiers.unmapped
         ],

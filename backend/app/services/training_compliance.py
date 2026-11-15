@@ -2235,6 +2235,10 @@ class UnmappedRequirement:
     # Shown to the officer as written, after the requirement's name, so it is
     # plain language: no "tier" or "member class".
     reason: str
+    # It grades no member at all, so it adds no one to "Mandatory for". The
+    # others grade members no tier stands for, and the form offers All
+    # members for them; it tells the two apart by this, not by the wording.
+    applies_to_no_one: bool = False
 
 
 @dataclass(frozen=True)
@@ -2252,6 +2256,7 @@ def _applies_to_no_one(req_id: str, name: str) -> UnmappedRequirement:
         name,
         "It applies to no members, since no member categories, ranks or "
         "positions are set",
+        applies_to_no_one=True,
     )
 
 
@@ -2277,6 +2282,9 @@ def mandatory_tiers_for_requirements(
       and is reported unmapped, saying so, rather than read as a source of
       the tiers the others suggest. The Counts toward attendance checklist
       says the same of it.
+    - So does one no longer active, whatever its scope: an edited session
+      keeps its link to a requirement since deactivated, and nothing grades
+      through that requirement any more.
 
     Grandfathering and compliance profiles are ignored: they decide which
     members a requirement grades, not which tiers an event is mandatory for.
@@ -2293,6 +2301,16 @@ def mandatory_tiers_for_requirements(
 
     for req in requirements:
         req_id, name = str(req.id), str(req.name)
+        if getattr(req, "active", True) is False:
+            unmapped.append(
+                UnmappedRequirement(
+                    req_id,
+                    name,
+                    "It is no longer active, so it grades no members",
+                    applies_to_no_one=True,
+                )
+            )
+            continue
         if req.applies_to_all:
             return MandatoryTiers(everyone=True, tier_ids=[], unmapped=[])
         if req.required_membership_types:

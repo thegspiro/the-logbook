@@ -28,6 +28,7 @@ def _req(
     types=None,
     roles=None,
     positions=None,
+    active=True,
 ):
     return SimpleNamespace(
         id=f"req-{name.lower()}",
@@ -36,6 +37,7 @@ def _req(
         required_membership_types=types,
         required_roles=roles,
         required_positions=positions,
+        active=active,
     )
 
 
@@ -138,8 +140,42 @@ class TestTheProjection:
                 "Unscoped",
                 "It applies to no members, since no member categories, ranks "
                 "or positions are set",
+                applies_to_no_one=True,
             )
         ]
+
+    # A link the session keeps to a requirement since deactivated: nothing
+    # grades through it any more, so it decides no one, even one that applied
+    # to everyone, and the form says it adds no one rather than offering to
+    # choose All members for it.
+    @pytest.mark.parametrize(
+        "scope", [{"applies_to_all": True}, {"types": ["senior"]}, {"types": []}]
+    )
+    def test_a_requirement_no_longer_active_suggests_no_one(self, scope):
+        tiers = mandatory_tiers_for_requirements(
+            [_req("Retired", active=False, **scope), _req("Drills", types=["active"])],
+            DEFAULT_LADDER,
+        )
+
+        assert (tiers.everyone, tiers.tier_ids) == (False, ["active"])
+        assert tiers.unmapped == [
+            UnmappedRequirement(
+                "req-retired",
+                "Retired",
+                "It is no longer active, so it grades no members",
+                applies_to_no_one=True,
+            )
+        ]
+
+    # Only a requirement that grades no one says so: one whose members no
+    # tier stands for still grades them, and the form offers All members.
+    def test_a_requirement_no_tier_stands_for_still_grades_someone(self):
+        tiers = mandatory_tiers_for_requirements(
+            [_req("Admin", types=["administrative"]), _req("Ranks", roles=["captain"])],
+            DEFAULT_LADDER,
+        )
+
+        assert [u.applies_to_no_one for u in tiers.unmapped] == [False, False]
 
     def test_several_requirements_union_in_ladder_order(self):
         tiers = mandatory_tiers_for_requirements(

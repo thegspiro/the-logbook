@@ -145,6 +145,31 @@ class TestTheEndpoint:
 
         assert (response.everyone, response.tier_ids) == (True, [])
 
+    async def test_a_requirement_that_grades_no_one_says_so(self, db_session):
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        retired = await _requirement(
+            db_session,
+            org,
+            RequirementType.SESSION_ATTENDANCE,
+            applies_to_all=True,
+            active=False,
+        )
+        unscoped = await _requirement(
+            db_session, org, RequirementType.SESSION_ATTENDANCE
+        )
+
+        response = await _ask(db_session, user, [retired, unscoped])
+
+        assert (response.everyone, response.tier_ids) == (False, [])
+        assert [(u.requirement_id, u.applies_to_no_one) for u in response.unmapped] == [
+            (retired, True),
+            (unscoped, True),
+        ]
+        assert response.unmapped[0].reason == (
+            "It is no longer active, so it grades no members"
+        )
+
     async def test_no_requirements_is_nobody(self, db_session):
         org = await _org(db_session)
         user = await _user(db_session, org)

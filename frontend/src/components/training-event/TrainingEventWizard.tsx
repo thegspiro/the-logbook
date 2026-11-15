@@ -45,7 +45,7 @@ import { trainingService, userService } from '../../services/api';
 import { useRanks } from '../../hooks/useRanks';
 import { useTrainingLinkageData } from '../../hooks/useTrainingLinkageData';
 import { useMandatoryTierPrefill } from '../../hooks/useMandatoryTierPrefill';
-import { useRetiredAttendanceRequirements } from '../../hooks/useRetiredAttendanceRequirements';
+import { linkedAttendanceLabel, useRetiredAttendanceRequirements } from '../../hooks/useRetiredAttendanceRequirements';
 import { getErrorDetail } from '../../utils/errorHandling';
 import { mapServerFieldErrors } from '../../utils/serverFieldErrors';
 import { displayNameOf } from '../../utils/memberName';
@@ -405,7 +405,11 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
 
   const prefill = useMandatoryTierPrefill(
     model,
-    (id) => linkageData.requirements.find((r) => r.id === id)?.name ?? id,
+    // A link kept to a requirement since deactivated is named as Review and
+    // the event page name it, never by its id.
+    (id) =>
+      linkageData.requirements.find((r) => r.id === id)?.name ??
+      linkedAttendanceLabel(id, linkageData.requirements, retiredAttendanceNames),
     originalTraining?.attendance_requirement_ids
   );
 
