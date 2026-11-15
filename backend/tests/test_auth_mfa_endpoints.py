@@ -33,6 +33,7 @@ from app.api.v1.endpoints.auth import (
     router,
 )
 from app.core.database import database_manager
+from app.core.error_codes import ErrorCode
 from app.core.security import create_mfa_pending_token
 from app.schemas.auth import MFALogin, MFAVerify, UserLogin
 from app.services import mfa_service
@@ -131,6 +132,14 @@ def _mfa_user(**overrides):
     )
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
+
+
+def _no_passkey():
+    """The member has no passkey, so first-factor enrollment needs no step-up."""
+    return patch(
+        "app.services.passkey_service.has_second_factor",
+        AsyncMock(return_value=False),
+    )
 
 
 def _locking_db_for(user):
@@ -764,7 +773,8 @@ class TestMfaLastTimestepClearedOnSecretChange:
         db = MagicMock()
         db.commit = AsyncMock()
 
-        result = await mfa_setup(current_user=user, db=db)
+        with _no_passkey():
+            result = await mfa_setup(request=MagicMock(), current_user=user, db=db)
 
         assert "secret" in result
         assert user.mfa_last_timestep is None
@@ -794,7 +804,8 @@ class TestMfaLastTimestepClearedOnSecretChange:
         # Re-enroll with a brand-new secret.
         setup_db = MagicMock()
         setup_db.commit = AsyncMock()
-        await mfa_setup(current_user=user, db=setup_db)
+        with _no_passkey():
+            await mfa_setup(request=MagicMock(), current_user=user, db=setup_db)
         new_secret = user.mfa_secret
         assert new_secret != old_secret
 
@@ -805,12 +816,96 @@ class TestMfaLastTimestepClearedOnSecretChange:
         with (
             patch("app.api.v1.endpoints.auth.log_audit_event", new=AsyncMock()),
             patch("app.api.v1.endpoints.auth.notify_security_event", new=AsyncMock()),
+            _no_passkey(),
         ):
             result = await mfa_verify_setup(
                 data=MFAVerify(code=new_code),
                 background_tasks=AsyncMock(),
+                request=MagicMock(),
                 current_user=user,
                 db=db2,
             )
 
         assert "recovery_codes" in result
+
+
+def _passkey_holder():
+    """A member whose only second factor is a passkey."""
+    return _mfa_user(mfa_enabled=False, mfa_secret=None, mfa_backup_codes=["old"])
+
+
+def _with_passkey(stepup_fresh: bool):
+    return (
+        patch(
+            "app.services.passkey_service.has_second_factor",
+            AsyncMock(return_value=True),
+        ),
+        patch(
+            "app.api.dependencies._stepup_is_fresh",
+            AsyncMock(return_value=stepup_fresh),
+        ),
+    )
+
+
+@pytest.mark.asyncio
+class TestAuthenticatorEnrollmentNeedsStepUpOverAPasskey:
+    """A stolen session of a passkey-only member must not be able to enroll
+    its own authenticator app: the app would then pass step-up in place of
+    the passkey, and verify-setup replaces the member's recovery codes."""
+
+    async def test_setup_without_a_fresh_step_up_is_refused(self):
+        user = _passkey_holder()
+        db = MagicMock()
+        db.commit = AsyncMock()
+        has_factor, fresh = _with_passkey(stepup_fresh=False)
+
+        with has_factor, fresh, pytest.raises(CodedHTTPException) as exc:
+            await mfa_setup(request=MagicMock(), current_user=user, db=db)
+
+        assert exc.value.status_code == 403
+        assert exc.value.error_code == ErrorCode.AUTH_STEPUP_REQUIRED
+        assert user.mfa_secret is None
+        db.commit.assert_not_awaited()
+
+    async def test_verify_setup_without_a_fresh_step_up_is_refused(self):
+        user = _passkey_holder()
+        user.mfa_secret = mfa_service.generate_secret()
+        code = pyotp.TOTP(user.mfa_secret).now()
+        has_factor, fresh = _with_passkey(stepup_fresh=False)
+
+        with has_factor, fresh, pytest.raises(CodedHTTPException) as exc:
+            await mfa_verify_setup(
+                data=MFAVerify(code=code),
+                background_tasks=AsyncMock(),
+                request=MagicMock(),
+                current_user=user,
+                db=_locking_db_for(user),
+            )
+
+        assert exc.value.error_code == ErrorCode.AUTH_STEPUP_REQUIRED
+        assert user.mfa_enabled is False
+        assert user.mfa_backup_codes == ["old"]
+
+    async def test_after_a_fresh_step_up_the_member_may_add_the_app(self):
+        user = _passkey_holder()
+        setup_db = MagicMock()
+        setup_db.commit = AsyncMock()
+        has_factor, fresh = _with_passkey(stepup_fresh=True)
+
+        with (
+            has_factor,
+            fresh,
+            patch("app.api.v1.endpoints.auth.log_audit_event", new=AsyncMock()),
+            patch("app.api.v1.endpoints.auth.notify_security_event", new=AsyncMock()),
+        ):
+            await mfa_setup(request=MagicMock(), current_user=user, db=setup_db)
+            result = await mfa_verify_setup(
+                data=MFAVerify(code=pyotp.TOTP(user.mfa_secret).now()),
+                background_tasks=AsyncMock(),
+                request=MagicMock(),
+                current_user=user,
+                db=_locking_db_for(user),
+            )
+
+        assert user.mfa_enabled is True
+        assert len(result["recovery_codes"]) > 0

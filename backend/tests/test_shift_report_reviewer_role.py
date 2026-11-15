@@ -69,14 +69,14 @@ async def dept(db_session: AsyncSession):
     await db_session.flush()
     service = ShiftCompletionService(db_session)
 
-    async def report(trainee):
+    async def report(trainee, officer=None, status="pending_review"):
         created = await service.create_report(
             organization_id=uuid.UUID(org_id),
-            officer_id=uuid.UUID(officer_id),
+            officer_id=uuid.UUID(officer or officer_id),
             trainee_id=trainee,
             shift_date=date.today(),
             hours_on_shift=12.0,
-            review_status="pending_review",
+            review_status=status,
         )
         await db_session.flush()
         return created
@@ -170,6 +170,53 @@ class TestReviewerRole:
             current_user=captain,
         )
         assert result == {"reviewed": 0, "failed": 1}
+
+    async def test_a_role_reviewer_does_not_approve_a_report_they_filed(self, dept):
+        db = dept["db"]
+        filed = await dept["report"](dept["trainee_id"], officer=dept["captain_id"])
+        captain = _member(dept["captain_id"], dept["org_id"], slugs=["captain"])
+
+        queue = await endpoint.get_pending_review_reports(db=db, current_user=captain)
+        assert filed.id not in [r.id for r in queue]
+        with pytest.raises(HTTPException) as refused:
+            await endpoint.review_report(
+                filed.id,
+                ReportReview(review_status="approved"),
+                db=db,
+                current_user=captain,
+            )
+        assert refused.value.status_code == 403
+        result = await endpoint.batch_review_reports(
+            BatchReviewRequest(report_ids=[filed.id], review_status="approved"),
+            db=db,
+            current_user=captain,
+        )
+        assert result == {"reviewed": 0, "failed": 1}
+        stored = await ShiftCompletionService(db).get_report(filed.id, dept["org_id"])
+        assert stored.review_status == "pending_review"
+
+    @pytest.mark.parametrize("status", ["draft", "approved"])
+    async def test_a_role_reviewer_reviews_only_what_awaits_review(self, dept, status):
+        db = dept["db"]
+        report = await dept["report"](dept["trainee_id"], status=status)
+        captain = _member(dept["captain_id"], dept["org_id"], slugs=["captain"])
+
+        with pytest.raises(HTTPException) as refused:
+            await endpoint.review_report(
+                report.id,
+                ReportReview(review_status="flagged"),
+                db=db,
+                current_user=captain,
+            )
+        assert refused.value.status_code == 409
+        result = await endpoint.batch_review_reports(
+            BatchReviewRequest(report_ids=[report.id], review_status="flagged"),
+            db=db,
+            current_user=captain,
+        )
+        assert result == {"reviewed": 0, "failed": 1}
+        stored = await ShiftCompletionService(db).get_report(report.id, dept["org_id"])
+        assert stored.review_status == status
 
     async def test_training_managers_keep_their_access(self, dept):
         manager = _member(

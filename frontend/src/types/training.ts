@@ -1015,7 +1015,10 @@ export type RequirementType =
   | 'transports'
   | 'refusals'
   // Attend a share of the sessions linked to the requirement.
-  | 'session_attendance';
+  | 'session_attendance'
+  // Calls recorded on submitted shift evaluations, against required_calls.
+  // 'calls' stays credited by shift reports, so neither counts the other's.
+  | 'evaluated_calls';
 
 export type RequirementSource = 'department' | 'state' | 'national';
 

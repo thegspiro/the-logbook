@@ -734,7 +734,7 @@ export const RequirementFormModal: React.FC<{
         requirement_type: type as never,
         required_hours: type === 'hours' && hours ? Number(hours) : null,
         required_shifts: (type === 'shifts' || type === 'evaluated_shifts') && shifts ? Number(shifts) : null,
-        required_calls: type === 'calls' && calls ? Number(calls) : null,
+        required_calls: (type === 'calls' || type === 'evaluated_calls') && calls ? Number(calls) : null,
         required_transports: type === 'transports' && transports ? Number(transports) : null,
         required_refusals: type === 'refusals' && refusals ? Number(refusals) : null,
         // A boolean on every save: the column refuses null.
@@ -928,10 +928,12 @@ export const RequirementFormModal: React.FC<{
             idPrefix="rq"
             type={type}
             shifts={shifts}
+            calls={calls}
             transports={transports}
             refusals={refusals}
             excludesLowest={excludesLowest}
             onShiftsChange={setShifts}
+            onCallsChange={setCalls}
             onTransportsChange={setTransports}
             onRefusalsChange={setRefusals}
             onExcludesLowestChange={setExcludesLowest}
