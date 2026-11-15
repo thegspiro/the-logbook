@@ -244,7 +244,15 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
               </p>
             )}
             <div className="flex flex-wrap items-end gap-2">
-              <FormField id={IMPORT_FIELDS.file.id} label="CSV file to import" error={importErrors.errors.file}>
+              {/* min-w-0 and w-full let the field shrink: a file control's
+                  intrinsic width is about 250px plus its label, which made the
+                  field 377px wide in a 320px viewport. */}
+              <FormField
+                id={IMPORT_FIELDS.file.id}
+                label="CSV file to import"
+                error={importErrors.errors.file}
+                className="w-full min-w-0 sm:w-auto sm:flex-1"
+              >
                 {(field) => (
                   <input
                     {...field}
@@ -252,7 +260,7 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
                     type="file"
                     accept=".csv,text/csv"
                     onChange={handleFileChange}
-                    className="text-theme-text-primary text-sm"
+                    className="text-theme-text-primary w-full min-w-0 text-sm"
                   />
                 )}
               </FormField>
