@@ -54,6 +54,7 @@ from app.api.v1.endpoints import (
     ip_security,
     knowledge_tests,
     labels,
+    leave_requests,
     legal_documents,
     locations,
     mcp_keys,
@@ -605,6 +606,9 @@ api_router.include_router(
     dependencies=module_gate("training", "Training"),
 )
 api_router.include_router(member_leaves.router, prefix="/users", tags=["member-leaves"])
+api_router.include_router(
+    leave_requests.router, prefix="/users", tags=["leave-requests"]
+)
 api_router.include_router(
     operational_ranks.router, prefix="/operational-ranks", tags=["operational-ranks"]
 )

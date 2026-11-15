@@ -3287,6 +3287,27 @@ const routes = ({
       member_counts: { active: 2 },
     }),
   ],
+  // Leave settings with requests on and a vacant approver position, so the
+  // section's picker, rule choice and vacancy warning are all on screen.
+  [
+    '**/api/v1/users/leaves-of-absence/settings',
+    () => ({
+      end_reminder_days: 7,
+      end_reminder_copy_officers: true,
+      requests_enabled: true,
+      request_approver_position_ids: ['pos-board'],
+      request_decision_rule: 'majority',
+      available_positions: [
+        { id: 'pos-board', name: 'Board of Directors', holder_count: 0 },
+        { id: 'pos-chief', name: 'Fire Chief', holder_count: 1 },
+      ],
+    }),
+  ],
+  // A request waiting on the caller, so the vote controls render; the list
+  // glob is registered first so the more specific `/me` and `/config` win.
+  ['**/api/v1/users/leave-requests?**', () => [leaveRequestFixture({ member_name: 'Alex Johnson', can_vote: true })]],
+  ['**/api/v1/users/leave-requests/me', () => [leaveRequestFixture({})]],
+  ['**/api/v1/users/leave-requests/config', () => ({ requests_enabled: true })],
 
   ['**/api/v1/admin-hours/summary**', () => ({ totalHours: 8 })],
 
@@ -3699,6 +3720,33 @@ const emptyReport = (type: string): unknown => {
       return {};
   }
 };
+
+/** One leave request, waiting under a majority rule. */
+function leaveRequestFixture(overrides: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id: 'leave-request-1',
+    user_id: 'user-1',
+    member_name: 'Test User',
+    leave_type: 'medical',
+    start_date: '2026-12-01',
+    end_date: '2027-02-28',
+    reason: 'Surgery and recovery',
+    status: 'pending',
+    decision_rule: 'majority',
+    created_at: '2026-11-14T12:00:00Z',
+    decided_at: null,
+    decided_by_name: null,
+    leave_id: null,
+    votes: [],
+    approvals: 0,
+    denials: 0,
+    approver_count: 3,
+    approvals_needed: 2,
+    can_vote: false,
+    my_vote: null,
+    ...overrides,
+  };
+}
 
 /**
  * Fulfil every `/api/v1/**` request with fixture data.
