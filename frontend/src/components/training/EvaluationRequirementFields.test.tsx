@@ -6,6 +6,7 @@ import { EvaluationRequirementFields } from './EvaluationRequirementFields';
 
 const handlers = {
   onShiftsChange: vi.fn(),
+  onCallsChange: vi.fn(),
   onTransportsChange: vi.fn(),
   onRefusalsChange: vi.fn(),
   onExcludesLowestChange: vi.fn(),
@@ -17,6 +18,7 @@ const renderFields = (type: string, excludesLowest = false) =>
       idPrefix="t"
       type={type}
       shifts=""
+      calls=""
       transports=""
       refusals=""
       excludesLowest={excludesLowest}
@@ -55,6 +57,17 @@ describe('EvaluationRequirementFields', () => {
 
     expect(handlers.onTransportsChange).toHaveBeenCalledWith('2');
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('asks for a count of evaluated calls without the lowest-rating rule', async () => {
+    const user = userEvent.setup();
+    renderFields('evaluated_calls');
+
+    await user.type(screen.getByLabelText(/Required evaluated calls/), '9');
+
+    expect(handlers.onCallsChange).toHaveBeenCalledWith('9');
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByText(/Counted from submitted shift evaluations/)).toBeInTheDocument();
   });
 
   it('asks for a refusal count', async () => {

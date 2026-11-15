@@ -4087,8 +4087,9 @@ class TrainingProgramService:
                         user_waivers,
                         str(requirement.id),
                         period_months=get_rolling_period_months(requirement),
-                        # Evaluated shifts, transports and refusals are counts,
-                        # prorated like shifts and calls: never part of one.
+                        # Evaluated shifts and calls, transports and refusals
+                        # are counts, prorated like shifts and calls: never
+                        # part of one.
                         whole_units=True,
                     )
                     if user_waivers
