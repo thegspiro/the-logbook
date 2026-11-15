@@ -153,7 +153,21 @@ def report_dates(
     period = filters.get("period")
     if period in REPORT_PERIODS:
         return resolve_period(period, today)
-    return filters.get("start_date"), filters.get("end_date")
+    return _saved_date(filters.get("start_date")), _saved_date(filters.get("end_date"))
+
+
+def _saved_date(value: Any) -> Optional[date]:
+    """A fixed date from a saved report's filters, which are JSON, so stored as
+    ISO text. Handed to a generator as text it raised a TypeError on every run;
+    an unreadable value is treated as no bound rather than failing the run."""
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
 
 
 # ============================================

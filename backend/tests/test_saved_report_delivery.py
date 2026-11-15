@@ -63,6 +63,17 @@ class TestScheduleRules:
     def test_periods(self, period, expected):
         assert resolve_period(period, TODAY) == expected
 
+    def test_fixed_saved_dates_come_back_as_dates(self):
+        # Filters are JSON, so fixed dates are stored as text; handed on as
+        # text they crashed every run of the report with a TypeError.
+        assert schedule.report_dates(
+            {"start_date": "2026-01-01", "end_date": "2026-03-31"}, TODAY
+        ) == (date(2026, 1, 1), date(2026, 3, 31))
+
+    @pytest.mark.parametrize("value", ["", "not-a-date", "2026-13-01", 7])
+    def test_an_unreadable_fixed_date_is_no_bound(self, value):
+        assert schedule.report_dates({"start_date": value}, TODAY) == (None, None)
+
     @pytest.mark.parametrize(
         ("args", "message"),
         [
