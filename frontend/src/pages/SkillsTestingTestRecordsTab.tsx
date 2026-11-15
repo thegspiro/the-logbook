@@ -49,12 +49,12 @@ const isOpenForScoring = (test: SkillTestListItem): boolean => test.status === '
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const styles: Record<string, string> = {
-    in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-    voided: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-    pass: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    fail: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    in_progress: 'bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-300',
+    completed: 'bg-green-100 text-green-900 dark:bg-green-900/30 dark:text-green-300',
+    cancelled: 'bg-red-100 text-red-900 dark:bg-red-900/30 dark:text-red-300',
+    voided: 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300',
+    pass: 'bg-green-100 text-green-900 dark:bg-green-900/30 dark:text-green-300',
+    fail: 'bg-red-100 text-red-900 dark:bg-red-900/30 dark:text-red-300',
     incomplete: 'bg-theme-surface-secondary text-theme-text-primary',
   };
   // The badge printed the stored code ("in progress", "pass"); these are the
@@ -168,7 +168,7 @@ const TestCard: React.FC<{
                  is closed — the one row on this screen that is explicitly
                  read-only. */
               isOpenForScoring(test) && (
-                <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                <p className="text-xs font-medium text-blue-900 dark:text-blue-300">
                   {test.started_at ? 'Resume' : 'Start'}
                 </p>
               )
