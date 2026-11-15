@@ -10091,9 +10091,12 @@ Found by `docs/security-review/TR-17-training-core.md` pass 14.
 the links as `training_details.attendance_requirement_ids` on `POST /events`,
 `/events/recurring`, `PATCH /events/{id}` and `/events/{id}/update-future`,
 still behind `events.manage`, and each change is audited the same way
-(`training_session_created` on a create, `training_session_updated` with
-`action: attendance_requirements_set`, the ids, the scope and the count on an
-edit). A caller admitted to an event edit only as a training manager is
+(`training_session_created` on a create; on an edit, `training_session_updated`
+naming the fields that changed and the scope, with
+`action: attendance_requirements_set` and the ids when the links changed). The
+form restates every field on every save, so the edit audit is judged from what
+the save changed, not from what it sent: a save that leaves the links as they
+were records no link change (2026-11-15). A caller admitted to an event edit only as a training manager is
 refused `training_details` (403), so the event edit does not widen who decides.
 `PUT /training/sessions/{id}/attendance-requirements` remains for API callers;
 the app no longer calls it.
