@@ -832,6 +832,37 @@ Phase 4, documents (2026-11-14), ships with these:
 - **New dependency: pypdfium2** (PDFium bindings, 5.15.2) draws the first
   page; pypdf was already installed.
 
+## Department Store — Decisions for the Owner (2026-11-13)
+
+From the department store follow-up
+([W67b](workflow-review/W67b-department-store-follow-up.md)). Both were seen in
+the browser. Neither is fixed, because each changes what departments already
+see or rely on.
+
+- **Tracked stock is sold again in every order window (W67b-1, HIGH).**
+  Remaining stock is `stock_quantity` minus the units ordered in the current
+  window. Nothing decrements `stock_quantity`, so a unit sold in one window is
+  offered again in the next, or in a second window open at the same time. One
+  M hoodie with stock 1 was sold twice. **Decision needed:** what "stock"
+  means.
+  - (a) Units on hand: decrement on order and restore on cancel.
+  - (b) Count every non-cancelled order across all windows.
+
+  Either changes the availability existing departments see.
+
+- **Money on an order the member cancels drops out of the books (W67b-2,
+  HIGH).**
+  - A part payment leaves an order at "Awaiting payment", which a member may
+    cancel.
+  - Once cancelled, the order leaves every collected and outstanding total.
+  - My Orders files it as settled, and no admin is notified.
+  - A cancel while a reported payment is pending leaves money that can be
+    neither recorded nor refunded.
+
+  **Decision needed:** whether a member may cancel once money is recorded or
+  reported. The likely shape is to refuse it, notify staff on any member
+  cancel, and list "cancelled with money held" on the admin hub.
+
 ## Medical Screening — Gaps for the Owner (2026-11-02, updated 2026-11-03)
 
 From the medical-screening deep dive
@@ -6859,7 +6890,12 @@ error until a sender exists, rather than the current silent-accept.
 > decision:** the two reports still measure program progress and can disagree
 > with the dashboard; that is now stated on them. Tests:
 > `tests/test_training_summary_program_progress.py`,
-> `programProgressLabels.test.tsx`. The text below is the original finding.
+> `programProgressLabels.test.tsx`. **Reaffirmed 2026-11-14:** asked whether
+> to rebuild `compliance_status` on the dashboard's evaluation so a leave of
+> absence reduces its targets, the owner kept this decision and chose instead
+> to list each member's leave in the past year beside the progress (an
+> **On leave** mark and the dates); no figure changes
+> (`tests/test_reports_leave.py`). The text below is the original finding.
 
 `reports_service._generate_compliance_status` (the `compliance_status`
 report) and `_generate_training_summary`'s `requirement_breakdown` section
@@ -10368,10 +10404,15 @@ beyond the feature.
   again.
 - **A deactivated evaluation form is still offered and required** where a
   program or the department settings still name it.
-- **Two administrators creating forms with the same name at the same moment
-  get a 500** rather than the duplicate-name 400.
+- ~~**Two administrators creating forms with the same name at the same moment
+  get a 500** rather than the duplicate-name 400.~~ Resolved 2026-11-14: a
+  create or rename whose commit meets the per-department unique key now rolls
+  back and returns the same duplicate-name 400 the up-front check gives.
 - **A preceptor-link submission that collides with an officer creating the
   same evaluation** retries once; the retry keeps the link marked used but
   loses the submitting device's address and browser from the record.
-- **Restoring a pending outside shift approves it**, without approve's
-  pending-only check (it still needs `scheduling.manage`).
+- ~~**Restoring a pending outside shift approves it**, without approve's
+  pending-only check (it still needs `scheduling.manage`).~~ Resolved
+  2026-11-14: restore now applies only to a rejected entry and answers 400
+  otherwise, as approve does for one that is not pending; restore, approve and
+  reject all read the entry under a row lock.

@@ -94,6 +94,14 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
       const prefs = userId
         ? await inventoryService.getMemberSizePreferences(userId)
         : await inventoryService.getMySizePreferences();
+      if (!prefs) {
+        // Both endpoints answer null when no sizes are saved: "nothing stored
+        // yet", so a blank, save-ready form. Falling through would read fields
+        // off null and land in the load-failure branch, which blocks Save.
+        setForm(EMPTY);
+        setDetailsPrefilled(false);
+        return;
+      }
       const loaded: FormState = {
         shirt_size: prefs.shirt_size ?? '',
         garment_fit: prefs.garment_fit ?? '',
@@ -110,7 +118,8 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
     } catch (err: unknown) {
       if (toAppError(err).status === 404) {
         // No preferences yet — genuinely expected, safe to show a blank
-        // form ready to create.
+        // form ready to create. The service already maps an older backend's
+        // 404 to null; this keeps a direct 404 meaning the same thing.
         setForm(EMPTY);
         setDetailsPrefilled(false);
       } else {

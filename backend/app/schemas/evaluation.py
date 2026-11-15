@@ -657,6 +657,9 @@ class DataSourceResponse(BaseModel):
     module: str
     description: str
     scoreable: bool
+    # Why the department cannot measure this source, when it cannot; set only
+    # by the builder's catalog (``GET /evaluations/data-sources``).
+    unavailable_reason: Optional[str] = None
 
 
 # ------------------------------------------------------------------ periods ---

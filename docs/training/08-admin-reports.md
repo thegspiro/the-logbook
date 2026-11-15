@@ -870,7 +870,7 @@ now.
 | **Training & Program Progress Summary** | Training   | ✓          | Training hours and course completion by member and course, and training-program progress by requirement — not requirement compliance                        |
 | **Event Attendance**                    | Events     | ✓          | RSVPs and attendance for each event in the reporting period                                                                                                 |
 | **Training Progress**                   | Training   |            | Each member's progress through their training programs and requirements                                                                                     |
-| **Annual Training Report**              | Training   | ✓          | Training hours, shift experience, calls, and performance ratings for each active member                                                                     |
+| **Annual Training Report**              | Training   | ✓          | Training hours, shift experience, calls, performance ratings and leave of absence for each active member                                                    |
 | **Admin Hours Report**                  | Admin      | ✓          | Administrative hours logged by members, broken down by category                                                                                             |
 | **Department Overview**                 | Compliance | ✓          | Department totals for members, training, events, and open action items                                                                                      |
 | **Certification Expiration**            | Compliance |            | Every member's certifications and expiration dates, flagging expired and expiring ones                                                                      |
@@ -894,6 +894,13 @@ now.
 On **Program Requirement Progress** the groups read **All Requirements Met**,
 **Some Met** and **None Met**; the percentage column is **Program Progress**;
 and the overdue column is **Outstanding**.
+
+Its **Leave** column _(2026-11-14)_ lists each member's leaves of absence in
+the past year and reads **On leave** for a member on leave today, so an
+officer chasing an outstanding item can see the member was away. Leave changes
+none of this report's figures: it measures program progress, and a program
+step is either marked complete or not. The CSV has **On Leave Now** and
+**Leave in Past Year** columns.
 
 The summary's **Program Progress by Requirement** tab leaves out members a
 requirement does not apply to — including someone who joined before the
@@ -2805,14 +2812,26 @@ At the top are four totals: **Total Hours**, **Avg Hours/Member**,
 **Completions** and **Calls Responded**. Below them is one row per active
 member:
 
-| Member        | Rank         | Training Hours | Courses Completed | Shift Hours | Shifts Completed | Calls Responded | Avg Rating |
-| ------------- | ------------ | -------------- | ----------------- | ----------- | ---------------- | --------------- | ---------- |
-| Adams, John   | Captain      | 78.5           | 9                 | 412         | 34               | 88              | 4.6        |
-| Brooks, Sarah | Lieutenant   | 64.0           | 7                 | 380         | 31               | 75              | 4.4        |
-| Evans, Tom    | Probationary | 88.0           | 11                | 210         | 18               | 40              | 3.9        |
-| Foster, Amy   | Firefighter  | 28.0           | 3                 | 150         | 12               | 22              | 4.1        |
-| Harris, Ken   | Firefighter  | 31.0           | 4                 | 175         | 15               | 30              | 4.0        |
-| ...           | ...          | ...            | ...               | ...         | ...              | ...             | ...        |
+| Member        | Rank         | Training Hours | Courses Completed | Shift Hours | Shifts Completed | Calls Responded | Leave                               | Avg Rating |
+| ------------- | ------------ | -------------- | ----------------- | ----------- | ---------------- | --------------- | ----------------------------------- | ---------- |
+| Adams, John   | Captain      | 78.5           | 9                 | 412         | 34               | 88              | -                                   | 4.6        |
+| Brooks, Sarah | Lieutenant   | 64.0           | 7                 | 380         | 31               | 75              | -                                   | 4.4        |
+| Evans, Tom    | Probationary | 88.0           | 11                | 210         | 18               | 40              | -                                   | 3.9        |
+| Foster, Amy   | Firefighter  | 28.0           | 3                 | 150         | 12               | 22              | -                                   | 4.1        |
+| Grant, Lee    | Firefighter  | 9.0            | 2                 | 24          | 2                | 5               | 9 months, Jul 1, 2024 – Sep 1, 2025 | 4.2        |
+| Harris, Ken   | Firefighter  | 31.0           | 4                 | 175         | 15               | 30              | -                                   | 4.0        |
+| ...           | ...          | ...            | ...               | ...         | ...              | ...             | ...                                 | ...        |
+
+**The Leave column** _(2026-11-14)_ explains a short year. It lists each leave
+of absence that touches the period and how many of the period's months leave
+excused, counted by the department's **Months on leave** rule (see
+[Training > Months on leave](./02-training.md#months-on-leave--the-department-rule-2026-11-02))
+and only up to today, so leave booked for later in the year is listed but not
+yet counted. A leave an officer marked as keeping training requirements in
+force reads "(requirements stayed in force)" and adds no months. The CSV has
+**Months on Leave** and **Leave Periods** columns. The leave's reason and type
+are never on the report. Grant's 9 hours are hours he trained during his leave;
+they still count.
 
 This report counts hours and activity. It does not say who met each
 requirement. For that, she checks two more places:

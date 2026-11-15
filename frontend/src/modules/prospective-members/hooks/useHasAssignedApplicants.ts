@@ -14,7 +14,6 @@
 
 import { useEffect } from 'react';
 import { create } from 'zustand';
-import { applicantService } from '../services/api';
 
 interface AssignedApplicantsState {
   /** The member the answer is for; a different member asks again. */
@@ -33,6 +32,10 @@ export const useAssignedApplicantsStore = create<AssignedApplicantsState>((set, 
     if (get().loading || get().userId === userId) return;
     set({ loading: true });
     try {
+      // Imported here, not at the top: the navigation is in every first
+      // visit's download, and this one call would bring the whole
+      // prospective-members service with it.
+      const { applicantService } = await import('../services/api');
       const applicants = await applicantService.getMyApplicants();
       set({ userId, hasAny: applicants.length > 0, loading: false });
     } catch {
