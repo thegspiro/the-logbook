@@ -84,7 +84,7 @@ function getDeadlineUrgency(
   if (daysLeft <= 30) {
     return {
       label: `${daysLeft}d left`,
-      color: 'text-yellow-700 dark:text-yellow-400',
+      color: 'text-amber-800 dark:text-yellow-400',
       isUrgent: false,
     };
   }
