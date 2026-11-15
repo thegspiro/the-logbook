@@ -48,6 +48,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import SettingsPanelHead from '../components/settings/SettingsPanelHead';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
+import { ElectionsAreaNav } from '../modules/elections/components/ElectionsAreaNav';
 import { SettingsToggle as Toggle } from '../components/settings/SettingsToggle';
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
 import { ElectionDefaultsSection } from '../modules/elections/components/ElectionDefaultsSection';
@@ -676,14 +677,17 @@ export const ElectionsSettingsPage: React.FC = () => {
       saveState={saveState}
       onRetrySave={retry}
       pageHeader={(controls) => (
-        <GovernancePageHeader
-          icon={SettingsIcon}
-          title="Election Settings"
-          breadcrumbLabel="Settings"
-          adminHeader
-          subtitle="Voter eligibility, proxy voting, election features, and ballot integrity"
-          actions={controls}
-        />
+        <>
+          <GovernancePageHeader
+            icon={SettingsIcon}
+            title="Election Settings"
+            breadcrumbLabel="Settings"
+            adminHeader
+            subtitle="Voter eligibility, proxy voting, election features, and ballot integrity"
+            actions={controls}
+          />
+          <ElectionsAreaNav />
+        </>
       )}
     >
       {renderContent()}

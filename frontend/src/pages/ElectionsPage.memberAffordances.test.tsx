@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
@@ -129,23 +129,28 @@ describe('ElectionsPage member affordances', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('names the settings link in the header for a secretary', async () => {
+  it('gives a secretary the Elections pages as named links, the list marked open', async () => {
     mockCanManage = true;
 
     renderWithRouter(<ElectionsPage />);
 
-    const settings = await screen.findByRole('link', { name: 'Election Settings' });
-    expect(settings).toHaveAttribute('href', '/elections/settings');
-    expect(settings).toHaveTextContent('Election Settings');
+    const pages = await screen.findByRole('navigation', { name: 'Elections pages' });
+    expect(within(pages).getByRole('link', { name: 'All Elections' })).toHaveAttribute('aria-current', 'page');
+    expect(within(pages).getByRole('link', { name: 'Meeting Attendance' })).toHaveAttribute(
+      'href',
+      '/elections/attendance'
+    );
+    expect(within(pages).getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/elections/settings');
   });
 
-  it('does not offer the settings link to a member', async () => {
+  it('does not offer the officer pages to a member', async () => {
     renderWithRouter(<ElectionsPage />);
 
     await waitFor(() => {
       expect(mockGetElections).toHaveBeenCalled();
     });
-    expect(screen.queryByRole('link', { name: 'Election Settings' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Elections pages' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
   });
 
   it('requests create-dialog support data for a secretary', async () => {

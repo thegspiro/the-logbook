@@ -10386,8 +10386,10 @@ beyond the feature.
   evaluation re-saved after one of its programs drops out of the combined
   scope (its form cleared while the enrollment stays active) keeps the credit
   it gave that program until the evaluation is saved again with it.
-- **A deactivated evaluation form is still offered and required** where a
-  program or the department settings still name it.
+- ~~**A deactivated evaluation form is still offered and required**~~
+  Resolved 2026-11-14 (owner decision): a form a program or the general-form
+  setting uses cannot be deactivated, and an inactive form cannot be newly
+  chosen for either.
 - ~~**Two administrators creating forms with the same name at the same moment
   get a 500** rather than the duplicate-name 400.~~ Resolved 2026-11-14: a
   create or rename whose commit meets the per-department unique key now rolls

@@ -142,12 +142,12 @@ class TestSizePreferences:
         with patch(
             "app.api.v1.endpoints.inventory.InventoryService", return_value=service
         ):
-            # No row on file is a 404 — past the gate, which is the point.
-            with pytest.raises(HTTPException) as exc_info:
-                await get_member_size_preferences(
-                    user_id=target,
-                    db=MagicMock(),
-                    current_user=_user(SELF, *permissions),
-                )
-        assert exc_info.value.status_code == 404
+            # No row on file answers None (it was a 404 until 2026-11-14) —
+            # past the gate, which is the point.
+            result = await get_member_size_preferences(
+                user_id=target,
+                db=MagicMock(),
+                current_user=_user(SELF, *permissions),
+            )
+        assert result is None
         service.get_member_size_preferences.assert_awaited_once()
