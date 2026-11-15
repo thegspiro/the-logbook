@@ -22,7 +22,7 @@ from app.core.utils import (
     handle_service_errors,
     safe_error_detail,
 )
-from app.models.document import Document, DocumentStatus
+from app.models.document import HISTORY_DOCUMENT_SOURCE_TYPE, Document, DocumentStatus
 from app.models.minute import MeetingMinutes, MinutesAttachment
 from app.models.user import Position, User
 from app.schemas.documents import (
@@ -106,6 +106,27 @@ DOCUMENT_FILE_RULES = FileRules(
     max_bytes=50 * 1024 * 1024,
     description="PDF, Word, Excel, PowerPoint, text, CSV, images, ZIP",
 )
+
+# History documents (phase 4, owner-approved spec 2026-11-14) live in the
+# History folder with their catalogue beside them. They are changed through
+# History, which keeps the catalogue, the stripped copy members read and the
+# change history in step; the Documents screens may download one but not
+# rename, move or delete it, and nothing is filed into the History folder from
+# here, where it would sit uncatalogued and unstripped.
+_HISTORY_MANAGED = (
+    "This document is catalogued in History. Edit, move or delete it there."
+)
+_HISTORY_FOLDER = (
+    "The History folder is filled through History, which catalogues each "
+    "document and makes the copy members read. Upload it there instead."
+)
+
+
+def _refuse_history_document(document) -> None:
+    if document.source_type == HISTORY_DOCUMENT_SOURCE_TYPE:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=_HISTORY_MANAGED
+        )
 
 
 # ============================================
@@ -527,6 +548,10 @@ async def upload_document(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to upload to this folder",
         )
+    if await service.is_in_history_tree(folder, current_user.organization_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=_HISTORY_FOLDER
+        )
 
     # Size cap, content-type detection, malware scan and an org-scoped write,
     # in that order. The stored extension comes from the detected type, never
@@ -855,6 +880,7 @@ async def update_document(
         existing, current_user.organization_id, current_user, require_write=True
     ):
         raise HTTPException(status_code=404, detail="Document not found")
+    _refuse_history_document(existing)
     update_data = doc.model_dump(exclude_unset=True)
     # An explicit folder_id: null used to move a document to "unfiled", where
     # anyone with documents.view could read it -- a way out of every gated
@@ -886,6 +912,10 @@ async def update_document(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to move a document into this folder",
+            )
+        if await service.is_in_history_tree(destination, current_user.organization_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=_HISTORY_FOLDER
             )
     # Wrapped so a service-layer ValueError (an out-of-org folder_id, DOC-6)
     # returns 400 rather than 500.
@@ -929,6 +959,7 @@ async def delete_document(
         existing, current_user.organization_id, current_user, require_write=True
     ):
         raise HTTPException(status_code=404, detail="Document not found")
+    _refuse_history_document(existing)
     # A service-layer PermissionError here means the document is referenced
     # by a facility and the caller lacks facilities.delete/.manage -- the
     # facility API's own action-specific delete gate (FAC-26).

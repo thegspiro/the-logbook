@@ -44,9 +44,11 @@ from app.models.user import User
 from app.schemas.history import (
     AlbumCreate,
     AlbumDetail,
+    AlbumEntry,
     AlbumItemsReplace,
     AlbumSummary,
     AlbumUpdate,
+    DocumentSummary,
     HistorySourceCreate,
     HistorySourceMerge,
     HistorySourceResponse,
@@ -72,6 +74,7 @@ from app.services.history_collection_service import (
     HistoryAlbumService,
     HistorySourceService,
 )
+from app.services.history_document_service import HistoryDocumentService
 from app.services.history_media_service import RECORD_MEDIA, HistoryMediaService
 from app.services.history_service import HistoryService, Viewer
 from app.utils.upload_limits import read_upload_limited
@@ -708,12 +711,27 @@ async def _album_detail(
     db: AsyncSession, viewer: Viewer, album: HistoryAlbum
 ) -> AlbumDetail:
     service = HistoryAlbumService(db)
-    items = await service.album_items(viewer, album)
-    summary = await _album_summary(db, viewer, album, len(items))
+    entries = await service.album_entries(viewer, album)
+    summary = await _album_summary(db, viewer, album, len(entries))
     media = HistoryMediaService(db)
+    papers = HistoryDocumentService(db)
     return AlbumDetail(
         **summary.model_dump(),
-        items=[MediaSummary(**media.summary(i)) for i in items],
+        items=[
+            MediaSummary(**media.summary(item))
+            for kind, item in entries
+            if kind == "media" and isinstance(item, HistoryMedia)
+        ],
+        entries=[
+            (
+                AlbumEntry(kind="media", media=MediaSummary(**media.summary(item)))
+                if isinstance(item, HistoryMedia)
+                else AlbumEntry(
+                    kind="document", document=DocumentSummary(**papers.summary(item))
+                )
+            )
+            for _, item in entries
+        ],
         can_edit=viewer.can_manage,
     )
 
@@ -812,19 +830,34 @@ async def replace_album_items(
     current_user: User = Depends(require_permission("history.manage")),
 ):
     """
-    Set the album's items, in order.
+    Set the album's contents, in order: either ``entries`` (photos and
+    documents together, replacing everything), or the earlier ``media_ids``
+    (photos only; the album's documents stay after them).
 
     **Requires permission: history.manage**
     """
     album = await _managed_album(db, current_user, album_id)
+    service = HistoryAlbumService(db)
     async with handle_service_errors("Could not save this album"):
-        await HistoryAlbumService(db).set_items(album, payload.media_ids)
+        if payload.entries is not None:
+            await service.set_entries(
+                album, [(entry.kind, entry.id) for entry in payload.entries]
+            )
+        else:
+            await service.set_items(album, payload.media_ids or [])
     await db.commit()
     await _audit(
         db,
         current_user,
         "history_album_items_set",
-        {"album_id": album_id, "count": len(payload.media_ids)},
+        {
+            "album_id": album_id,
+            "count": len(
+                payload.entries
+                if payload.entries is not None
+                else payload.media_ids or []
+            ),
+        },
     )
     album = await _managed_album(db, current_user, album_id)
     return await _album_detail(db, Viewer.of(current_user), album)

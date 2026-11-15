@@ -520,7 +520,8 @@ class TestProspectDocuments:
 class TestDocumentDeleteConfinement:
     async def _delete(self, monkeypatch, stored):
         svc = DocumentsService(_db_returning())
-        document = SimpleNamespace(file_path=str(stored))
+        # A real Document always carries source_type; delete_document reads it.
+        document = SimpleNamespace(file_path=str(stored), source_type=None)
         monkeypatch.setattr(svc, "get_document_by_id", AsyncMock(return_value=document))
         monkeypatch.setattr(
             svc, "_delete_facility_document_references", AsyncMock(return_value=None)

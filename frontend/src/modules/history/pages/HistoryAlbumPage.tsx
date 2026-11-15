@@ -1,7 +1,7 @@
 /**
- * One album. Members see the items in it they may read; keepers also rename
- * it, show it to members, choose its cover, and add, remove and reorder its
- * items.
+ * One album. Members see the photos and documents in it they may read; keepers
+ * also show it to members, choose its cover (a photo), and add, remove and
+ * reorder its photos and documents in one order.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
@@ -12,9 +12,15 @@ import { EmptyState } from '../../../components/ux/EmptyState';
 import { SkeletonPage } from '../../../components/ux/Skeleton';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
+import { DocumentTile } from '../components/DocumentDetails';
 import { MediaTile } from '../components/MediaDetails';
-import { historyMediaService } from '../services/api';
-import type { AlbumDetail, MediaSummary } from '../types';
+import { historyDocumentService, historyMediaService } from '../services/api';
+import type { AlbumDetail, AlbumEntryRef } from '../types';
+
+interface Found {
+  ref: AlbumEntryRef;
+  title: string;
+}
 
 export const HistoryAlbumPage: React.FC = () => {
   const { albumId = '' } = useParams();
@@ -24,7 +30,7 @@ export const HistoryAlbumPage: React.FC = () => {
   const [missing, setMissing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<MediaSummary[]>([]);
+  const [results, setResults] = useState<Found[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -46,10 +52,17 @@ export const HistoryAlbumPage: React.FC = () => {
     }
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      historyMediaService
-        .listMedia({ search: query.trim(), limit: 12 })
-        .then((list) => {
-          if (!cancelled) setResults(list.items);
+      const search = query.trim();
+      Promise.all([
+        historyMediaService.listMedia({ search, limit: 8 }),
+        historyDocumentService.listDocuments({ search, limit: 8 }),
+      ])
+        .then(([media, documents]) => {
+          if (cancelled) return;
+          setResults([
+            ...media.items.map((m) => ({ ref: { kind: 'media' as const, id: m.id }, title: m.title })),
+            ...documents.items.map((d) => ({ ref: { kind: 'document' as const, id: d.id }, title: d.title })),
+          ]);
         })
         .catch(() => {
           if (!cancelled) setResults([]);
@@ -86,21 +99,25 @@ export const HistoryAlbumPage: React.FC = () => {
     }
   };
 
-  const ids = album.items.map((i) => i.id);
-  const setItems = (next: string[]) =>
-    save(() => historyMediaService.setAlbumItems(album.id, next), 'Could not save this album');
+  const refs: AlbumEntryRef[] = album.entries.flatMap((entry): AlbumEntryRef[] => {
+    const id = entry.kind === 'media' ? entry.media?.id : entry.document?.id;
+    return id ? [{ kind: entry.kind, id }] : [];
+  });
+  const has = (ref: AlbumEntryRef) => refs.some((r) => r.kind === ref.kind && r.id === ref.id);
+  const setEntries = (next: AlbumEntryRef[]) =>
+    save(() => historyMediaService.setAlbumEntries(album.id, next), 'Could not save this album');
   const move = (index: number, by: number) => {
-    const next = [...ids];
+    const next = [...refs];
     const [moved] = next.splice(index, 1);
     if (moved === undefined) return;
     next.splice(index + by, 0, moved);
-    void setItems(next);
+    void setEntries(next);
   };
 
   const remove = async () => {
     const ok = await confirm({
       title: 'Delete album',
-      message: `Delete "${album.name}"? Its photos and media stay in the archive.`,
+      message: `Delete "${album.name}"? Its photos and documents stay in the archive.`,
       confirmLabel: 'Delete album',
       cancelLabel: 'Keep it',
       variant: 'danger',
@@ -156,10 +173,10 @@ export const HistoryAlbumPage: React.FC = () => {
       {album.can_edit && (
         <section className="card mb-4 p-4" aria-labelledby="album-add-heading">
           <h2 id="album-add-heading" className="text-theme-text-primary mb-2 text-lg font-semibold">
-            Add items
+            Add photos and documents
           </h2>
           <label className="relative block">
-            <span className="sr-only">Find items</span>
+            <span className="sr-only">Find photos and documents</span>
             <Search
               className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
               aria-hidden="true"
@@ -168,23 +185,23 @@ export const HistoryAlbumPage: React.FC = () => {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search photos and media by title or place"
+              placeholder="Search photos and documents"
               className="form-input pl-9"
             />
           </label>
           {results.length > 0 && (
             <ul className="mt-2 space-y-1">
               {results
-                .filter((r) => !ids.includes(r.id))
+                .filter((r) => !has(r.ref))
                 .map((r) => (
-                  <li key={r.id}>
+                  <li key={`${r.ref.kind}-${r.ref.id}`}>
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => void setItems([...ids, r.id])}
+                      onClick={() => void setEntries([...refs, r.ref])}
                       className="touch-target-phone text-theme-text-primary text-left text-sm underline"
                     >
-                      Add “{r.title}”
+                      Add {r.ref.kind === 'document' ? 'document' : 'photo'} “{r.title}”
                     </button>
                   </li>
                 ))}
@@ -193,63 +210,68 @@ export const HistoryAlbumPage: React.FC = () => {
         </section>
       )}
 
-      {album.items.length === 0 ? (
+      {album.entries.length === 0 ? (
         <EmptyState icon={FolderOpen} title="Nothing in this album yet" description="" />
       ) : (
         <ul className="thumb-grid" aria-busy={busy}>
-          {album.items.map((item, index) => (
-            <li key={item.id} className="space-y-1">
-              <MediaTile item={item} />
-              {album.can_edit && (
-                <div className="flex justify-center gap-1">
-                  <button
-                    type="button"
-                    className="btn-icon touch-target-phone"
-                    disabled={busy || index === 0}
-                    onClick={() => move(index, -1)}
-                    aria-label={`Move ${item.title} earlier`}
-                  >
-                    <ArrowUp className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-icon touch-target-phone"
-                    disabled={busy || index === album.items.length - 1}
-                    onClick={() => move(index, 1)}
-                    aria-label={`Move ${item.title} later`}
-                  >
-                    <ArrowDown className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                  {item.has_thumbnail && (
+          {album.entries.map((entry, index) => {
+            const title = entry.media?.title ?? entry.document?.title ?? '';
+            const ref = refs[index];
+            return (
+              <li key={`${entry.kind}-${ref?.id ?? index}`} className="space-y-1">
+                {entry.media && <MediaTile item={entry.media} />}
+                {entry.document && <DocumentTile item={entry.document} />}
+                {album.can_edit && ref && (
+                  <div className="flex justify-center gap-1">
                     <button
                       type="button"
                       className="btn-icon touch-target-phone"
-                      disabled={busy || album.cover_media_id === item.id}
-                      aria-pressed={album.cover_media_id === item.id}
-                      onClick={() =>
-                        void save(
-                          () => historyMediaService.updateAlbum(album.id, { cover_media_id: item.id }),
-                          'Could not set the cover'
-                        )
-                      }
-                      aria-label={`Use ${item.title} as the cover`}
+                      disabled={busy || index === 0}
+                      onClick={() => move(index, -1)}
+                      aria-label={`Move ${title} earlier`}
                     >
-                      <Star className="h-4 w-4" aria-hidden="true" />
+                      <ArrowUp className="h-4 w-4" aria-hidden="true" />
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="btn-icon touch-target-phone"
-                    disabled={busy}
-                    onClick={() => void setItems(ids.filter((id) => id !== item.id))}
-                    aria-label={`Remove ${item.title} from the album`}
-                  >
-                    <X className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </div>
-              )}
-            </li>
-          ))}
+                    <button
+                      type="button"
+                      className="btn-icon touch-target-phone"
+                      disabled={busy || index === album.entries.length - 1}
+                      onClick={() => move(index, 1)}
+                      aria-label={`Move ${title} later`}
+                    >
+                      <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    {entry.media?.has_thumbnail && (
+                      <button
+                        type="button"
+                        className="btn-icon touch-target-phone"
+                        disabled={busy || album.cover_media_id === entry.media.id}
+                        aria-pressed={album.cover_media_id === entry.media.id}
+                        onClick={() =>
+                          void save(
+                            () => historyMediaService.updateAlbum(album.id, { cover_media_id: ref.id }),
+                            'Could not set the cover'
+                          )
+                        }
+                        aria-label={`Use ${title} as the cover`}
+                      >
+                        <Star className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn-icon touch-target-phone"
+                      disabled={busy}
+                      onClick={() => void setEntries(refs.filter((r) => !(r.kind === ref.kind && r.id === ref.id)))}
+                      aria-label={`Remove ${title} from the album`}
+                    >
+                      <X className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

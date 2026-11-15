@@ -20,6 +20,7 @@ from app.models.document import (
     APPARATUS_FOLDER_PERMISSIONS,
     EVENTS_FOLDER_PERMISSIONS,
     FINANCE_FOLDER_PERMISSIONS,
+    HISTORY_FOLDER_PERMISSIONS,
     SEPARATIONS_FOLDER_PERMISSIONS,
     SYSTEM_FOLDERS,
     TRAINING_FOLDER_PERMISSIONS,
@@ -92,6 +93,7 @@ class TestTheRightsMap:
             roots["apparatus"]["required_permissions"] == APPARATUS_FOLDER_PERMISSIONS
         )
         assert roots["finance"]["required_permissions"] == FINANCE_FOLDER_PERMISSIONS
+        assert roots["history"]["required_permissions"] == HISTORY_FOLDER_PERMISSIONS
         assert (
             roots["member-separations"]["required_permissions"]
             == SEPARATIONS_FOLDER_PERMISSIONS
@@ -147,6 +149,9 @@ class TestWhoOpensWhichModuleFolder:
             ("events", "training_officer", True, True),
             ("member-separations", "membership_coordinator", True, True),
             ("member-separations", "treasurer", False, False),
+            ("history", "historian", True, True),
+            ("history", "member", False, False),
+            ("history", "secretary", False, False),
         ],
     )
     def test_module_rights_decide(self, slug, position, reads, writes):
@@ -162,8 +167,15 @@ class TestWhoOpensWhichModuleFolder:
             "finance",
             "events",
             "member-separations",
+            "history",
         ):
             assert _reads(_root(slug), user) is False, slug
+
+    def test_history_view_does_not_open_the_history_folder(self):
+        """The folder holds originals, which only history.manage downloads;
+        a history.view holder reads the stripped copies through History."""
+        user = _grants("documents.view", "history.view", "history.publish")
+        assert _reads(_root("history"), user) is False
 
     def test_a_full_administrator_opens_every_folder(self):
         admin = _grants("*")
