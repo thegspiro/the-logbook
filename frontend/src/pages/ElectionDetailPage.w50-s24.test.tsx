@@ -1,18 +1,17 @@
 /**
- * A `?tab=` deep link survives the election loading, and the tab fallback does
- * not push history.
+ * A section link survives the election loading, and the fallback for a
+ * section that is not there does not push history.
  *
- * `fetchElection` used to call `setActiveTab('results')` whenever the election
- * was closed or `results_visible_immediately` — on every load and every
- * refresh — which overwrote the section the link named and pushed a history
- * entry (react-router's `setSearchParams` navigates with push unless told
- * otherwise). A secretary opening "the eligibility roster for this election"
- * from a colleague's link landed on Results instead, and Back returned to the
- * deep link only to be redirected again. The auto-select now runs only when
- * the URL names no tab, and both it and the tabs fallback use `replace`.
+ * `fetchElection` used to jump to Results whenever the election was closed or
+ * `results_visible_immediately` — on every load and every refresh — which
+ * overwrote the section the link named and pushed a history entry. A secretary
+ * opening "the eligibility roster for this election" from a colleague's link
+ * landed on Results instead, and Back returned to the link only to be
+ * redirected again. Sections are paths now and nothing jumps; a section this
+ * election does not have falls back to the Overview with `replace`.
  *
  * Rendered, not source-asserted: the defect is timing (URL after load), and
- * the loaded branch needs its panels stubbed to reach the tab strip.
+ * the loaded branch needs its panels stubbed to reach the section links.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -39,7 +38,12 @@ vi.mock('../modules/prospective-members/services/api', () => ({
 }));
 vi.mock('react-router', async () => {
   const actual = await vi.importActual<typeof import('react-router')>('react-router');
-  return { ...actual, useParams: () => ({ electionId: 'e-1' }) };
+  // Read off the address the way the `/elections/:electionId/*` route would,
+  // so the page sees its own redirect land.
+  return {
+    ...actual,
+    useParams: () => ({ electionId: 'e-1', '*': window.location.pathname.split('/').slice(3).join('/') }),
+  };
 });
 vi.mock('../stores/authStore', () => {
   const state = { checkPermission: () => true, user: { id: 'u-1' } };
@@ -96,25 +100,38 @@ const closedElection = {
   victory_condition: 'plurality',
 };
 
-describe('ElectionDetailPage tab deep link on a closed election (S24)', () => {
+describe('ElectionDetailPage section link on a closed election (S24)', () => {
   beforeEach(() => {
     getElection.mockReset();
     getElection.mockResolvedValue(closedElection);
   });
 
   it('keeps the section the link named instead of jumping to Results', async () => {
-    window.history.replaceState({}, '', '/elections/e-1?tab=eligibility');
+    window.history.replaceState({}, '', '/elections/e-1/eligibility');
     const before = window.history.length;
     renderWithRouter(<ElectionDetailPage />);
 
-    // The strip renders only once the election has loaded, which is also when
-    // fetchElection's auto-select runs; let its navigation settle first.
-    await screen.findByRole('tab', { name: /Results/ });
+    // The links render only once the election has loaded; let anything that
+    // load would trigger settle first.
+    await screen.findByRole('link', { name: /Results/ });
     await act(async () => undefined);
 
-    expect(window.location.search).toBe('?tab=eligibility');
-    expect(screen.getByRole('tab', { name: /Eligibility/ })).toHaveAttribute('aria-selected', 'true');
-    // No history entry was pushed: Back still leaves the page.
+    expect(window.location.pathname).toBe('/elections/e-1/eligibility');
+    expect(screen.getByRole('link', { name: /Eligibility/ })).toHaveAttribute('aria-current', 'page');
+    expect(window.history.length).toBe(before);
+  });
+
+  it('sends a section this election does not have to the Overview, without pushing history', async () => {
+    // Voting is over: there is no Cast Vote section on a closed election.
+    window.history.replaceState({}, '', '/elections/e-1/voting');
+    const before = window.history.length;
+    renderWithRouter(<ElectionDetailPage />);
+
+    await screen.findByRole('link', { name: /Results/ });
+    await act(async () => undefined);
+
+    expect(window.location.pathname).toBe('/elections/e-1');
+    expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
     expect(window.history.length).toBe(before);
   });
 });

@@ -12,7 +12,7 @@ a session or approval that exists is returned exactly as before.
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Optional, get_args
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -28,7 +28,14 @@ pytestmark = pytest.mark.unit
 
 
 def _caller():
-    return SimpleNamespace(organization_id=uuid4())
+    return SimpleNamespace(organization_id=uuid4(), positions=[], roles=[], rank=None)
+
+
+def _published_event_db():
+    """A db whose one query (the event's draft flag) answers "published"."""
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = False
+    return SimpleNamespace(execute=AsyncMock(return_value=result))
 
 
 def _route():
@@ -77,7 +84,7 @@ class TestGetTrainingSessionByEvent:
             patch.object(endpoint, "_session_response", return_value=shaped) as shape,
         ):
             result = await endpoint.get_training_session_by_event(
-                event_id=uuid4(), db=AsyncMock(), current_user=_caller()
+                event_id=uuid4(), db=_published_event_db(), current_user=_caller()
             )
 
         assert result is shaped

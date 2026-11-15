@@ -527,6 +527,8 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
         return 'Transports';
       case 'refusals':
         return 'Refusals';
+      case 'evaluated_calls':
+        return 'Evaluated Calls';
       default:
         return type;
     }
@@ -781,7 +783,12 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                   <DetailRow label="Required Shifts" value={String(requirement.required_shifts)} />
                 )}
                 {requirement.required_calls != null && (
-                  <DetailRow label="Required Calls" value={String(requirement.required_calls)} />
+                  <DetailRow
+                    label={
+                      requirement.requirement_type === 'evaluated_calls' ? 'Required Evaluated Calls' : 'Required Calls'
+                    }
+                    value={String(requirement.required_calls)}
+                  />
                 )}
                 {requirement.required_transports != null && (
                   <DetailRow label="Required Transports" value={String(requirement.required_transports)} />

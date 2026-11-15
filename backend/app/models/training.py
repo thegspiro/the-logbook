@@ -105,6 +105,11 @@ class RequirementType(str, enum.Enum):
     # Attend a share of the sessions linked to the requirement
     # (training_session_requirements), graded by training_compliance.
     SESSION_ATTENDANCE = "session_attendance"
+    # Calls recorded on submitted shift evaluations, against required_calls.
+    # Last so the model's ENUM order matches the migration that appended it.
+    # The CALLS type stays credited by shift reports, so a call is not counted
+    # by both.
+    EVALUATED_CALLS = "evaluated_calls"
 
 
 class RequirementSource(str, enum.Enum):
@@ -689,7 +694,9 @@ class TrainingRequirement(Base):
         JSON
     )  # For COURSES type - list of course IDs
     required_shifts: Mapped[Optional[int]] = mapped_column(Integer)  # For SHIFTS type
-    required_calls: Mapped[Optional[int]] = mapped_column(Integer)  # For CALLS type
+    # For CALLS and EVALUATED_CALLS: a number of calls in both, and every
+    # reader that grades CALLS against it checks the type first.
+    required_calls: Mapped[Optional[int]] = mapped_column(Integer)
     # EVALUATED_SHIFTS counts against required_shifts. TRANSPORTS and REFUSALS
     # have targets of their own rather than borrowing required_calls, which
     # the call-matching and grading code reads as a number of calls.
@@ -4081,6 +4088,20 @@ class Shift(Base):
     # the next crew on the same apparatus (staffing changes, apparatus issues,
     # ongoing incidents, etc.).
     pass_down_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # The evaluations each crew member was due when the shift ended (owner
+    # decision, 2026-11-14), so a setting changed or a program joined later
+    # does not re-scope a shift that is over. NULL means not stored yet: it is
+    # written on the first read after ``end_time``. One canonical shape
+    # (Pitfall #20), written by ShiftEvaluationService only, always as a fresh
+    # dict (Pitfall #12):
+    #   {"<member_id>": [{"scope_key": str, "required": bool,
+    #                     "seat": str | None, "enrollment_ids": [str],
+    #                     "program_names": [str], "template_ids": [str]}]}
+    # A member due nothing is stored with an empty list.
+    evaluation_requirements: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # When True, all members (including non-operational types) can self-signup.
     # Copied from ShiftTemplate when a shift is created from a template.

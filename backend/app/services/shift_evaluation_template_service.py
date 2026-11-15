@@ -17,6 +17,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.utils import list_within_detail_limit
 from app.models.shift_evaluation import (
     DEFAULT_GENERAL_EVALUATION_MODE,
     DEFAULT_PRECEPTOR_LINK_DAYS,
@@ -32,6 +33,9 @@ from app.schemas.shift_evaluation import (
 from app.services.training_module_config_service import TrainingModuleConfigService
 
 DUPLICATE_NAME_MESSAGE = "Another evaluation template already has this name"
+INACTIVE_FORM_MESSAGE = (
+    "That evaluation form is no longer in use. Reactivate it, or choose another."
+)
 UNIQUE_NAME_CONSTRAINT = "uq_shift_evaluation_template_org_name"
 
 
@@ -114,6 +118,8 @@ class ShiftEvaluationTemplateService:
         await self._refuse_duplicate_name(
             organization_id, body.name, exclude_id=template.id
         )
+        if template.is_active and not body.is_active:
+            await self._refuse_deactivating_in_use(template, organization_id)
         # Fresh values for every JSON column, so SQLAlchemy sees a change
         # rather than a mutated shared reference (Pitfall #12).
         for column, value in body.column_values().items():
@@ -191,6 +197,11 @@ class ShiftEvaluationTemplateService:
                 )
                 if template is None:
                     raise ValueError("Invalid shift evaluation template")
+                if (
+                    not template.is_active
+                    and template.id != config.general_shift_evaluation_template_id
+                ):
+                    raise ValueError(INACTIVE_FORM_MESSAGE)
                 template_id = template.id
 
         mode = config.general_shift_evaluation_mode or DEFAULT_GENERAL_EVALUATION_MODE
@@ -257,6 +268,31 @@ class ShiftEvaluationTemplateService:
             query = query.where(ShiftEvaluationTemplate.id != exclude_id)
         if (await self.db.execute(query)).scalar_one():
             raise ValueError(DUPLICATE_NAME_MESSAGE)
+
+    async def _refuse_deactivating_in_use(
+        self, template: ShiftEvaluationTemplate, organization_id: UUID | str
+    ) -> None:
+        """Owner decision (2026-11-14): a form a program or the general-form
+        setting names cannot be deactivated. It would still be required and
+        offered, so deactivating it would change nothing anyone could see."""
+        users = list(
+            (await self._program_names_by_template(organization_id)).get(
+                template.id, []
+            )
+        )
+        config = await TrainingModuleConfigService(self.db).get_config(organization_id)
+        if str(config.general_shift_evaluation_template_id or "") == template.id:
+            users.append("the department's general evaluation setting")
+        if users:
+            # Programs grow with the department; list what fits so the
+            # refusal is never long enough to be replaced by a generic error.
+            raise ValueError(
+                list_within_detail_limit(
+                    f"'{template.name}' is still in use by ",
+                    users,
+                    ". Choose another form there before deactivating this one.",
+                )
+            )
 
     async def _program_names_by_template(
         self, organization_id: UUID | str
