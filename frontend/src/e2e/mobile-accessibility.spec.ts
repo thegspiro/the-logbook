@@ -125,11 +125,14 @@ const ALLOWED_UNDECIDED = [
 ];
 
 // Routes whose findings depend on today's date, measured at a fixed moment
-// instead (see the loop). /grants/opportunities is frozen 44 days before the
-// AFG fixture's 2026-12-15 deadline, where every row reads as a plain date.
+// instead (see the loop). /grants/opportunities is frozen 10 days before the
+// AFG fixture's 2026-12-15 deadline, so the AFG row renders its most urgent
+// state, the red "10d left" label and chip, and every run holds that state to
+// the route's AAA budget of 0. Frozen at a plain-date moment instead, the sweep
+// would never see the colours a member sees in a deadline's last two weeks.
 const FROZEN_CLOCK: Record<string, string> = {
   '/scheduling': '2026-01-12T12:00:00',
-  '/grants/opportunities': '2026-11-01T12:00:00',
+  '/grants/opportunities': '2026-12-05T12:00:00',
 };
 
 const AAA_CONTRAST_BUDGET: Record<string, number> = {

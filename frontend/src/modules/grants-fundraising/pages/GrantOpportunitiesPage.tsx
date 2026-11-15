@@ -77,7 +77,7 @@ function getDeadlineUrgency(
   if (daysLeft <= 14) {
     return {
       label: `${daysLeft}d left`,
-      color: 'text-red-600 dark:text-red-400',
+      color: 'text-red-800 dark:text-red-400',
       isUrgent: true,
     };
   }
@@ -319,7 +319,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
                           : 'Rolling deadline'}
                     </span>
                     {urgency.isUrgent && (
-                      <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-400">
+                      <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-900 dark:bg-red-500/20 dark:text-red-300">
                         <AlertTriangle className="h-3 w-3" />
                         {urgency.label}
                       </span>
