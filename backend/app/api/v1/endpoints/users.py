@@ -1989,6 +1989,10 @@ async def update_contact_info(
                 "your own."
             ),
         )
+    # The same holds for a member's own address: with only a stolen session,
+    # changing it and then using forgot-password sets a password the owner
+    # does not know. Step-up asks for what the session alone does not prove.
+    if email_changing:
         await ensure_stepup(db, access_token_from(authorization, access_token))
 
     # Update fields if provided
@@ -2382,6 +2386,27 @@ async def update_user_profile(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=safe_error_detail(e),
                 ) from e
+
+    # A directory account's first password is mailed to `personal_email`, and
+    # a retry resends a fresh one there while `credentials_sent` is false. The
+    # directory mailbox is the member's login address, so repointing a
+    # colleague's personal email is a credential reset and takes its ceiling:
+    # otherwise members.manage could collect a mailbox above its own rights.
+    if (
+        not is_self
+        and "personal_email" in update_data
+        and update_data["personal_email"] != user.personal_email
+    ):
+        await _enforce_account_reset_ceiling(
+            current_user,
+            user,
+            db,
+            action="personal-email-change",
+            detail=(
+                "You cannot change the personal email of a user with privileges "
+                "beyond your own."
+            ),
+        )
 
     # New writes only (W04-7): a number sent back unchanged passes even if it
     # predates the rule, so a member can still save the rest of their profile.

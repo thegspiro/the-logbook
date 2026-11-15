@@ -1,10 +1,339 @@
 # Security Review 00 — Cross-Cutting Baseline
 
-**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-07 (out-of-band, ahead of pass 4), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-04 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, opens rotation lap "pass 8"), 2026-10-18 (pass 10, watchdog pickup, opens rotation lap "pass 9"), 2026-10-22 (pass 11, watchdog pickup, opens rotation lap "pass 10"), 2026-10-25 (pass 12, opens rotation lap "pass 11"), 2026-10-28 (pass 13, watchdog pickup, opens rotation lap "pass 12"), 2026-10-30 (pass 14, watchdog pickup, opens rotation lap "pass 13"), 2026-11-04 (pass 15, watchdog pickup, opens rotation lap "pass 14"), 2026-11-04 (pass 16, watchdog pickup — a second, concurrent sweep that raced pass 15 and merged just after it; see Pass 16's own note) · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1), [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (pass 3, rounds 1–2, merged), [#2132](https://github.com/thegspiro/the-logbook/pull/2132) (pass 3, round 3 — separate PR per Pitfall #24, #2128 having already merged), [#2381](https://github.com/thegspiro/the-logbook/pull/2381) (out-of-band data-leakage sweep, prior art for pass 4), #2387 (pass 4), [#2534](https://github.com/thegspiro/the-logbook/pull/2534) (pass 5), [#2592](https://github.com/thegspiro/the-logbook/pull/2592) (pass 6), pass 7 PR recorded in `PROGRESS.md`, pass 8 PR recorded in `PROGRESS.md`, pass 9 PR recorded in `PROGRESS.md`, pass 10 PR recorded in `PROGRESS.md`, pass 11 PR recorded in `PROGRESS.md`, pass 12 PR recorded in `PROGRESS.md`, pass 13 PR recorded in `PROGRESS.md`, [#3869](https://github.com/thegspiro/the-logbook/pull/3869) (pass 14), [#4019](https://github.com/thegspiro/the-logbook/pull/4019) (pass 15), pass 16 PR recorded in `PROGRESS.md`
+**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-07 (out-of-band, ahead of pass 4), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-04 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, opens rotation lap "pass 8"), 2026-10-18 (pass 10, watchdog pickup, opens rotation lap "pass 9"), 2026-10-22 (pass 11, watchdog pickup, opens rotation lap "pass 10"), 2026-10-25 (pass 12, opens rotation lap "pass 11"), 2026-10-28 (pass 13, watchdog pickup, opens rotation lap "pass 12"), 2026-10-30 (pass 14, watchdog pickup, opens rotation lap "pass 13"), 2026-11-04 (pass 15, watchdog pickup, opens rotation lap "pass 14"), 2026-11-04 (pass 16, watchdog pickup — a second, concurrent sweep that raced pass 15 and merged just after it; see Pass 16's own note), 2026-11-15 (pass 17, watchdog pickup, opens rotation lap "pass 16") · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1), [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (pass 3, rounds 1–2, merged), [#2132](https://github.com/thegspiro/the-logbook/pull/2132) (pass 3, round 3 — separate PR per Pitfall #24, #2128 having already merged), [#2381](https://github.com/thegspiro/the-logbook/pull/2381) (out-of-band data-leakage sweep, prior art for pass 4), #2387 (pass 4), [#2534](https://github.com/thegspiro/the-logbook/pull/2534) (pass 5), [#2592](https://github.com/thegspiro/the-logbook/pull/2592) (pass 6), pass 7 PR recorded in `PROGRESS.md`, pass 8 PR recorded in `PROGRESS.md`, pass 9 PR recorded in `PROGRESS.md`, pass 10 PR recorded in `PROGRESS.md`, pass 11 PR recorded in `PROGRESS.md`, pass 12 PR recorded in `PROGRESS.md`, pass 13 PR recorded in `PROGRESS.md`, [#3869](https://github.com/thegspiro/the-logbook/pull/3869) (pass 14), [#4019](https://github.com/thegspiro/the-logbook/pull/4019) (pass 15), [#4020](https://github.com/thegspiro/the-logbook/pull/4020) (pass 16), pass 17 PR recorded in `PROGRESS.md`
 
 Passes are recorded in this one file rather than a new `SEC<n>-00-*.md` per
 lap — the sweeps are cumulative and a reader needs the earlier method beside
 the later result to tell a re-verification from a first run. Newest pass first.
+
+---
+
+## Pass 17 (2026-11-15, watchdog pickup) — rotation lap "pass 16" closes (every Feature 00–34 own-pass PR, PRs #4020–#4319); 1 new finding (SEC17-1, LOW, fixed), 0 tooling findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) has been unreachable across many
+consecutive cycles. Step 0 (`list_pull_requests`, state: open, 18 results)
+found 0 open PRs with a head branch starting `claude/security-review-`; the
+last one, #4259 (Feature 34, Frontend shared, pass 15), merged into `main` on
+2026-11-12 and was docs-only (touched only `PROGRESS.md` and a findings file),
+so there is nothing from it to record. Every row of the rotation table was at
+`✅` — a full lap closed — so per Step 1 the table is reset to `⬜` for the
+next pass and the rotation wraps to Feature 00, continuing in this same
+iteration.
+
+**Baseline:** `3087fdaf5` (pass 16's own head, PR #4020's merge). **Head:**
+`79ab1c88e` (PR #4319's merge, `origin/main` at the start of this iteration).
+This worktree's clone was shallow; `git merge-base` between those two
+commits came back empty until `git fetch --unshallow` ran, which is worth
+naming because an empty merge-base on a clone that is actually linear reads
+exactly like a rewritten/diverged history and would have sent this pass
+chasing the wrong cause. 1203 commits between baseline and head, 716
+non-merge, 323 backend `.py` files touched and 1161 frontend files touched —
+a full rotation lap (every Feature 00–34's own pass-16 PR, `#4020`–`#4319`),
+across 11 days. Routes checked against `APPLICATION_PAGES.md`: **327** (up
+from 298 at pass 16, 17 redirects skipped), 0 errors, 0 warnings.
+
+### A pre-existing, out-of-scope Alembic fork — flagged, not fixed
+
+`main` currently has **3 Alembic heads** (`c8d2f61a7e34`, `e2b7d94c1a63`,
+`169a11ebf589`), so `validate_migrations.py --strict` and
+`alembic upgrade head` both fail — see the Completion gate below. This is the
+same class of defect SEC12-1's companion note and PR #4256's own findings
+describe for an earlier two-head fork, not a new one this pass introduces:
+three separate pull requests each added their own join of the same two
+parents (`4d8e2b6f1c93`, `c4e81b7a2d95`) and all three merged, because each
+was opened and reviewed against a base that did not yet have the others.
+[PR #4323](https://github.com/thegspiro/the-logbook/pull/4323)
+(`claude/join-three-alembic-heads`) is open and adds the one join revision
+all three heads need; it was not merged yet when this pass ran. Per the
+rule this class of defect has followed since the two-head case, this pass
+does **not** write a competing merge revision (that would just add a fourth
+head) — it is flagged here, `test_alembic_migrations.py`'s two chain-shape
+tests are confirmed to fail for exactly this reason (below), and the fix
+rides on #4323 (or a successor) rather than this PR.
+
+### Re-verified standing sweeps (all 13 classes from passes 1–16)
+
+| #   | Class swept                                           | Result                                                                                                                                                                                                                                                          |
+| --- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Formula injection in exports (Pitfall #15)            | **clean** — `grep -E "csv\.(writer\|DictWriter)\("` over `app/` and `scripts/` outside `csv_export.py`: 0 hits; `tests/test_csv_writer_sweep.py` passes                                                                                                         |
+| 2   | `SET NULL` on `NOT NULL` columns (Pitfall #2)         | **clean** — `test_database_schema.py::TestForeignKeyIntegrity::test_set_null_fks_are_nullable` passes                                                                                                                                                           |
+| 3   | Proxy-IP attribution                                  | **clean** — same 3 `request.client.host` hits as every prior pass, same shape (two documenting comments, one deliberate direct-IP fallback)                                                                                                                     |
+| 4   | Alembic chain integrity                               | **FORKED, pre-existing, out of scope** — 3 heads; see above. `validate_migrations.py --strict` fails for this reason only                                                                                                                                       |
+| 5   | LIKE-wildcard handling (Pitfall #25)                  | **clean** — `tests/test_like_escaping.py` passes                                                                                                                                                                                                                |
+| 6   | `BaseHTTPMiddleware` usage (Pitfall #4)               | **clean** — 0 imports, 0 subclasses; every `grep` hit is a documenting comment in `security_middleware.py` / `app/mcp/transport.py`                                                                                                                             |
+| 7   | Unbounded in-memory trackers (Pitfall #9)             | **clean, 0 new unbounded trackers** — see below (an AST pass over all 323 changed backend files found 18 candidates, all local variables scoped to one request/call or already-bounded, not new module-level state)                                             |
+| 8   | `window.confirm`/`alert`/`prompt` (Pitfall #16)       | **clean** — `grep -rn "window\.\(confirm\|alert\|prompt\)("` over `frontend/src/`: 0 hits                                                                                                                                                                       |
+| 9   | JSON shallow-copy-then-nested-mutate (Pitfall #12)    | **clean** — `tests/test_json_column_ast_sweep.py` passes                                                                                                                                                                                                        |
+| 10  | Org-scoping / IDOR ratchet (Pitfall #14)              | **clean** — `tests/test_org_scoping_ratchet.py` passes                                                                                                                                                                                                          |
+| 11  | Capacity-check locking (Pitfall #27)                  | **clean** — `tests/test_capacity_locking.py` passes; no new check-then-write lock introduced this delta                                                                                                                                                         |
+| 12  | Route auth coverage                                   | **clean** — `check_route_permissions.py --strict`: 327 routes, 0 errors, 0 warnings; `tests/test_endpoint_auth_coverage.py` passes                                                                                                                              |
+| 13  | Raw exception text reaching the client (checklist §5) | **1 new finding** — see SEC17-1 below. Same AST shape as pass 16 (module-level/`self.x` assignment of `str(<handler-name>)`/an f-string carrying it, to an attribute matching `error`/`message`/`detail`/`reason`), plus a manual read of every hit it surfaced |
+
+Also re-ran: `tests/test_baseline_member_grants.py`,
+`tests/test_account_status_gates.py` (Pitfall #32), `tests/test_log_call_shape.py`
+and `tests/test_logging.py` (Pitfall #33), `tests/test_org_scoping.py`,
+`tests/test_audit_log_org_scoping.py`, `tests/test_audit_org_scoping.py`,
+`tests/test_migration_cleanup.py`, `tests/test_api_cache_pii_exclusions.py` —
+all pass (220 passed across this group plus the 13-class suite above).
+
+Outbound-transport checks: raw SQL by string interpolation is still the same
+2 sites (`scheduling_service.py`'s `int(cushion)`-guarded `INTERVAL` literal,
+`enum_normalization.py`'s fixed internal table/column names), same disposition
+as every prior pass. `httpx.AsyncClient(`/`Client(` construction gained one
+new direct-construction site this delta
+(`app/api/v1/endpoints/quickbooks_online.py`'s `get_quickbooks_http`
+dependency) beside the same pre-existing files as pass 16; read and
+dispositioned the same way the pre-existing ones already are —
+`qbo_online_client` only ever talks to Intuit's own fixed API host, never a
+department-configurable URL, which is the same reason `oauth_service.py` and
+`gmail_api_sender.py` construct a plain client rather than going through
+`SSRFSafeAsyncTransport`: that transport exists for admin-entered webhook/
+integration URLs, not a hardcoded provider endpoint. `SSRFSafeAsyncTransport(`
+direct construction is unchanged (the same 2 real call sites).
+`assert_outbound_url_safe(` call sites are unchanged.
+
+### New surfaces this delta: a full rotation lap landed, including seven endpoint files with no rotation row yet
+
+This window is an entire rotation lap (every Feature 00–34's own pass-16 PR),
+so almost everything in it was already reviewed by that feature's own pass.
+Seven new endpoint files landed with **no existing rotation row and no prior
+mention in this file or `PROGRESS.md`'s Log** — `grep`-confirmed absent
+before this pass. All were read directly rather than trusted clean by the
+tooling passing:
+
+- **Attendance waivers** (`app/api/v1/endpoints/attendance_waiver_requests.py`,
+  mounted at `/training/waivers/requests`, `app/services/attendance_waiver_service.py`)
+  and its sibling **meeting waivers**
+  (`app/api/v1/endpoints/meeting_waiver_requests.py`, mounted at
+  `/meetings/waiver-requests`) — a member asks to skip a session's attendance
+  requirement; an officer decides. All 17/16 routes carry
+  `Depends(get_current_user)` or `Depends(require_permission(...))`, none
+  bare. `AttendanceWaiverService._require_decider` explicitly refuses a
+  self-decision (`if str(request.user_id) == str(actor.id): raise
+PermissionError("You cannot decide your own request.")` — checklist §2's
+  separation-of-duties item) and answers `AttendanceWaiverNotFound` (→ 404)
+  rather than a 403 to a caller who may not view the request, so a
+  non-participant cannot distinguish "not yours" from "doesn't exist" (existence
+  non-disclosure). `approve()`'s cap check reuses the already-locked member row
+  from `_locked_request` and takes its own count as a locking read
+  (`_approved_dates(..., lock=True)`), matching Pitfall #27 exactly. Both
+  modules are already covered for frontend response caching by the existing
+  `/training/waivers` prefix and `/meetings` prefix entries in
+  `UNCACHEABLE_PREFIXES` — confirmed by the mount prefixes
+  (`/training/waivers/requests`, `/meetings/waiver-requests`) both starting
+  with an already-excluded prefix, and by `test_api_cache_pii_exclusions.py`
+  staying green with no new entry needed.
+- **Leave of absence requests** (`app/api/v1/endpoints/leave_requests.py`,
+  mounted under the existing `/users` prefix, `app/services/leave_request_service.py`).
+  9 routes, all gated (`require_permission("members.manage")` for settings,
+  `get_current_user` plus self/decider checks for the rest). Mounted under
+  `/users`, already in `UNCACHEABLE_PREFIXES`'s top-level entry — confirmed
+  no gap.
+- **QuickBooks Online** (`app/api/v1/endpoints/quickbooks_online.py`, mounted
+  at `/finance/quickbooks`, `app/services/quickbooks_sync_service.py`,
+  `app/services/quickbooks_online_client.py`) — the highest-risk new surface
+  this pass (an OAuth connection to a department's accounting system that then
+  posts payments). Read in full rather than spot-checked:
+  - The connect flow (`begin_connect`/`complete_connect`) binds the attempt
+    three ways exactly as the existing calendar-OAuth connects do: a
+    JWT-signed `state` (org + user + nonce + expiry), a nonce
+    double-submitted through an httpOnly, `Secure`, `SameSite=Lax` cookie
+    scoped to `/api/v1/finance/quickbooks/` (trailing slash — Pitfall #6),
+    and the same nonce stored as the connection's single pending attempt.
+    `complete_connect` clears the pending attempt **before** doing anything
+    else, so a replayed `state` finds nothing (fail-closed on an
+    already-consumed token, checklist §1). Both nonce comparisons use
+    `secrets.compare_digest`. `realm_id` is constrained to
+    `isalnum()` and ≤32 chars before use. The Treasurer who started the
+    attempt must still hold `finance.manage` when it completes
+    (`_may_still_manage`) — a departed or demoted officer's dangling consent
+    cannot connect the department's books.
+  - `GET /oauth/callback` is correctly unauthenticated (Intuit's own redirect
+    target, where the browser's session may have lapsed during consent) with
+    the three-way binding above as its compensating control, matching
+    checklist §1's requirement for an intentionally public route.
+  - `access_token`/`refresh_token` are `EncryptedText` columns (encryption at
+    rest); `QuickBooksConnectionResponse` never echoes them.
+  - Error text stored and later served back (`last_error`, `error_message`
+    equivalents): every site is a caught `QuickBooksError` subclass (or the
+    OAuth helper's own `MicrosoftOAuthError`-shaped curated messages for the
+    sibling directory-provisioning module, below) whose text is either a
+    developer-written string or Intuit's own structured `Fault.Message` —
+    never a raw Python exception's `str()`. This is the same accepted pattern
+    the Google Workspace / Microsoft 365 directory clients already use
+    (next item) — not the SEC13/14/16/17 raw-exception-leak shape, because
+    nothing here lets an uncaught driver/SQL/path exception reach the column.
+  - A quick AST sweep (the same shape as class 13) had flagged
+    `app/services/directory_account_service.py` (8 hits, `last_error`/
+    `suspension_error`) as worth checking for the same reason — all 8 are
+    `str(exc)` on a caught `DirectoryError` (or a subclass), and
+    `directory_common.py`'s own docstring states the invariant directly:
+    "Every error a client raises is a `DirectoryError` whose message is
+    written by the provider module and safe to show an officer; a provider's
+    raw response … never reaches one." Spot-checked against
+    `google_workspace_service.py` and `microsoft_365_service.py`'s raise
+    sites: every one constructs a curated string; the one site that wraps an
+    underlying exception (`Microsoft365Error(str(exc))` from a caught
+    `MicrosoftOAuthError`) wraps `app/utils/microsoft_oauth.py`'s own
+    `MicrosoftOAuthError`, whose message is built by
+    `_transport_failure_message`/`_describe_failure`, which name only
+    `type(exc).__name__` for an unrecognized transport failure, never the
+    exception's own text. **Verified good** — mechanism named, not merely
+    not-yet-flagged.
+- **Department history: documents, media and import** (`app/api/v1/endpoints/history_documents.py`,
+  `history_media.py`, `history_import.py`, 46 routes across the three,
+  `app/services/history_document_service.py`, `history_media_service.py`,
+  `history_merge_service.py`, `history_import_engine.py`/`history_import_service.py`)
+  — these extend the department-history/honor-roll module pass 16 already
+  reviewed from the `history.py` angle; `Viewer`/org-scoping is the same
+  shared mechanism (`app/services/history_service.py`). Every by-id read goes
+  through `get_document(organization_id, document_id)` /
+  `get_readable_document(viewer, document_id)`, which filters
+  `organization_id` together with the id (XC-3) and then gates on publication
+  level for a caller who does not hold `history.view`/`history.manage`/
+  `history.publish` (`Viewer.can_read`) — "members receive the published
+  view; the archive's keepers receive every field," confirmed by reading
+  `get_document`'s own docstring and `can_read`'s implementation, not merely
+  assumed from the name. The three file-serving routes
+  (`/documents/{id}/thumbnail`, `/view`, `/original`) resolve the backing
+  file through `file_storage.resolve(stored.file_path, item.organization_id,
+DERIVED_AREA)` — the org id comes from the already-org-scoped `item`, not
+  from the request, so a guessed document id from another org 404s before any
+  file lookup happens — and `/original` (unlike the two derived, sanitized
+  copies) requires `history.manage`, matching checklist §2's
+  `.view`-vs-`.manage` fit. All three mount under the existing `/history`
+  prefix, already a deliberately-broad `UNCACHEABLE_SUBSTRINGS` entry per pass
+  16's note; confirmed no gap. `history_import.py`'s bulk-import routes are
+  all `history.manage`-gated with no public surface.
+
+No genuinely new unbounded, attacker-reachable cache (class 7, detail below).
+
+### Class 7 (unbounded in-memory trackers): delta check against the changed files
+
+323 backend `.py` files changed in this delta. The same AST shape as prior
+passes (module-level and `self.x`-in-`__init__` assignments of an empty
+dict/set/list literal or bare `dict()`/`list()`/`set()`/`OrderedDict()`/
+`defaultdict()`, name matching `cache`/`track`/`seen`/`attempt`/`count`/`_map`/
+`registry`) found 18 candidates. All traced:
+
+- 17 are local variables assigned inside a request-handling function or a
+  per-call method (building an id→count or id→row map for the duration of one
+  call) — bounded by the request's own lifetime, not module or instance
+  state that survives across requests.
+- `equipment_check_service.py`'s `self._counted_inventory_ids` is a `self.x`
+  attribute, but `EquipmentCheckService` is instantiated per request
+  (`EquipmentCheckService(self.db)`, matching this project's standard service
+  pattern), so nothing shares or accumulates it across callers.
+
+No genuinely new unbounded, attacker-reachable cache.
+
+## Findings
+
+### SEC17-1 — LOW — `ComplianceReport.error_message` persisted a raw generation-failure's exception text with no sanitization at all — FIXED
+
+**What:** `generate_report`'s outer `except Exception as e:` handler wrote
+`report.error_message = str(e)` — the completely unfiltered exception
+message, not even truncated.
+
+**Where:** `backend/app/services/compliance_config_service.py:365` (same file,
+same column, same shape `_record_failed_report` already got right four lines
+away at line 522 with `error_message=safe_error_detail(error)` — a
+re-sweep catch of an inconsistency within one file, not a change introduced
+by this delta's commits: `git log -p` shows line 365 unchanged since before
+baseline `3087fdaf5`).
+
+**Failure scenario:** `ComplianceReportSummary`/`ComplianceReportDetail`
+(backing `GET /compliance/reports` and `GET /compliance/reports/{report_id}`,
+gated behind `training.manage`/`reports.view`) serialize `error_message`
+verbatim. Any exception bubbling out of report generation — a duplicate-key
+`IntegrityError`, a transient driver error, an attribute error deep in
+`AnnualComplianceReportService` — persists its full driver/SQL/path text onto
+the row and hands it back to the next officer who opens the compliance
+reports screen, exactly what `safe_error_detail()` exists to prevent. Same
+disclosure class as SEC13-1/SEC14-1/SEC16-1 against other error columns of
+this identical shape.
+
+**Impact:** internal-schema information disclosure to an already-authenticated,
+already-permitted officer. Not a tenant-isolation or auth-bypass issue; not
+PII/PHI.
+
+**Fix:** `report.error_message = safe_error_detail(e)` (the function was
+already imported in this file for the other call site). Also changed the
+adjacent `logger.error(f"Report generation failed: {e}")` to the
+argument-passed form (`logger.error("Report generation failed: {}", e)`) to
+match this file's own other logger call (line 659) and Pitfall #33's
+preferred shape, though the f-string form was not itself unsafe here (no
+extra positional args were combined with it).
+
+**Existing test corrected, in the same commit, with the reason stated (Pitfall
+#37's "don't change a test and the code together without saying why"):**
+`tests/test_compliance_config_service.py::TestGenerateReport::test_failure_marks_failed_and_reraises`
+asserted `report.error_message == "boom"` for a bare `RuntimeError("boom")` —
+i.e. it encoded the exact bug this finding fixes as the expected behavior, and
+went red against the fix (`AssertionError: 'An unexpected error occurred...'
+== 'boom'`) before being corrected to assert the generic fallback message. A
+new sibling test in the same class
+(`test_failure_with_a_validation_message_passes_it_through`) asserts the other
+half of `safe_error_detail`'s contract — a `ValueError`'s own message is
+trusted and passed through unchanged — so the two tests together pin both
+branches rather than only the one this finding touched.
+
+**Guard test:** new
+`tests/test_compliance_report_error_sanitization.py::TestComplianceReportGenerationFailureDoesNotPersistRawExceptionText::test_a_generation_failure_s_error_message_is_sanitized`
+patches `AnnualComplianceReportService.generate_monthly_report` to raise a
+`RuntimeError` carrying driver/SQL/path text, drives `generate_report` against
+a real `db_session`, and asserts none of that text reaches the stored
+`ComplianceReport.error_message`. Seen to fail first against the unfixed code
+(stashed the one-line service fix, ran the new test, observed the red failure
+with the raw driver text asserted present in the message, restored the fix),
+per Pitfall #37.
+
+**Severity:** LOW.
+
+**Disposition:** FIXED.
+
+**0 other application-security findings this pass.** All 13 classes
+re-verified clean against head (class 4's fork is pre-existing and out of
+scope, not a new finding) and diffed against the pass-16 baseline tree.
+
+### Re-verified open items from prior passes
+
+- **SEC12-1 (LOW/MED, S3/MinIO DNS-rebinding TOCTOU) — still OPEN/FLAGGED,
+  unchanged.** `backend/app/services/s3_storage.py`: confirmed
+  `git diff 3087fdaf5..79ab1c88e -- backend/app/services/s3_storage.py` is
+  empty. No new information to add.
+- **The standing egress-proxy TOCTOU item** (`docs/KNOWN_LIMITATIONS.md`,
+  "Outbound Integration Requests") — remains open, unchanged.
+  `create_integration_client()` and `SSRFSafeAsyncTransport`
+  (`app/services/integration_services/base.py`, `app/utils/ssrf_transport.py`)
+  did not change in this delta.
+- **The pre-existing Alembic fork** (above) — open, tracked by PR #4323, not
+  this pass's to fix.
+
+**0 security-tooling findings this pass.**
+
+## Guard tests added
+
+`test_compliance_report_error_sanitization.py` (new file, SEC17-1, above) and
+a corrected assertion plus one new sibling test in
+`test_compliance_config_service.py::TestGenerateReport` (SEC17-1, above).
+
+## Completion gate
+
+| Check                                                                                                                                                                                    | Result                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.5.0, CI's pin)                                                                                                                                          | ✅ 0 violations                                                                             |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                                                                 | ✅ clean (after one auto-format of the new test file)                                       |
+| `isort --check-only app/ tests/ alembic/` (9.2.0, CI's pin)                                                                                                                              | ✅ clean                                                                                    |
+| `validate_migrations.py --strict`                                                                                                                                                        | ❌ **3 heads — pre-existing, out of scope; fix tracked by PR #4323 (open, not yet merged)** |
+| `check_route_permissions.py --strict`                                                                                                                                                    | ✅ 327 routes, 0 errors, 0 warnings                                                         |
+| Cross-cutting guard suite (16 files: json/like/org-scoping/capacity/auth-coverage/csv/schema/api-cache/baseline-grants/account-status/log-shape/logging/org-scoping×4/migration-cleanup) | ✅ 220 passed                                                                               |
+| `test_alembic_migrations.py` + `test_migration_create_all_tables.py`                                                                                                                     | ❌/✅ **2 failed (the same pre-existing fork, both chain-shape tests)**, 78 passed          |
+| Targeted backend suite (`-k "attendance_waiver or leave_request or meeting_waiver or quickbooks or history_document or history_media or history_import"`)                                | ✅ 1095 passed, 1 pre-existing skip (`py_vapid` not installed)                              |
+| Targeted suite (`-k "compliance_report or compliance_config or sanitiz"`)                                                                                                                | ✅ 211 passed (after the SEC17-1 fix + corrected test)                                      |
+| `cd frontend && npm run typecheck`                                                                                                                                                       | ✅ 0 errors                                                                                 |
+| `cd frontend && npm run lint`                                                                                                                                                            | ✅ 0 errors (`--max-warnings 10`)                                                           |
 
 ---
 

@@ -224,6 +224,20 @@ class TestRecordingOverrides:
 
         assert refused.value.status_code == 403
 
+    async def test_the_chief_cannot_override_their_own_requirement(self, db_session):
+        org = await _org(db_session)
+        chief = await _member(db_session, org)
+        req = await _accepting_requirement(db_session, org)
+
+        with pytest.raises(HTTPException) as refused:
+            await endpoint.grant_requirement_override(
+                req.id, _body(chief), db=db_session, current_user=_actor(chief)
+            )
+
+        assert refused.value.status_code == 400
+        assert "your own" in refused.value.detail
+        assert await fetch_user_waivers(db_session, org.id, chief.id) == []
+
     async def test_a_requirement_that_does_not_allow_it_refuses(self, db_session):
         org = await _org(db_session)
         chief, member = await _member(db_session, org), await _member(db_session, org)

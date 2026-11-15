@@ -63,6 +63,7 @@ def _event(finalized=True, **overrides):
         "actual_start_time": None,
         "actual_end_time": now - timedelta(hours=2),
         "is_cancelled": False,
+        "is_draft": False,
         "max_attendees": None,
         "event_type": None,
         "custom_category": None,

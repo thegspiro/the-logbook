@@ -1330,6 +1330,29 @@ the owner, because closing them changes how members get into their accounts:
   is; the email change itself is now ceiling-bound, step-up gated, audited and
   reported to the previous address.
 
+## Separation of Duties — Five Decisions Left Open (ADV-02, 2026-11-14)
+
+The adversarial pass over the month to 2026-11-14 found these items. Its
+findings are in `docs/security-review/ADV-02-adversarial-last-month.md`. Each
+fix changes a workflow some departments rely on, so the owner decides:
+
+- **One officer can conduct, calibrate and approve a personnel evaluation
+  (ADV2-4).** Only the subject is barred from the approval step and from
+  calibration. Refusing the evaluator stalls every evaluation where they are
+  the only holder of the step's position, because no action reassigns or skips
+  a step.
+- **A shift officer can write their own close-out hours (ADV2-8).** Pre-shift
+  work and event attendance refuse the self case. On a one-person shift nobody
+  else could record it.
+- **An officer can grant themselves a leave, and with it a training waiver
+  (ADV2-9).** This needs `members.manage` and `scheduling.assign`.
+- **An applicant's edited email or name and birth date can make a coordinator's
+  self-access guard hide their file (ADV2-10).** Refusing a member's email
+  covers half of it. The rest turns on whether self-detection should trust
+  fields the applicant can edit.
+- **A Zeffy dues payment credits whichever member's email the payer typed
+  (ADV2-11).** Overpayment is recorded as that member's donation.
+
 ## Authentication & Security
 
 | Item                                                                                                                                                                                                                                                                                                  | Status                                                                                                                                   | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
