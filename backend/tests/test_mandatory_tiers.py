@@ -121,10 +121,25 @@ class TestTheProjection:
 
         assert (tiers.tier_ids, tiers.unmapped) == (["life"], [])
 
-    def test_a_requirement_naming_nobody_contributes_nothing(self):
-        tiers = mandatory_tiers_for_requirements([_req()], DEFAULT_LADDER)
+    # The grader applies it to no member, as the Counts toward attendance
+    # checklist says. Left silent, it read as a source of the tiers the
+    # other requirements suggested, or left Mandatory for with no word.
+    @pytest.mark.parametrize("types", [None, [], ["", "  "]])
+    def test_a_requirement_naming_nobody_is_named_and_suggests_no_one(self, types):
+        tiers = mandatory_tiers_for_requirements(
+            [_req("Unscoped", types=types), _req("Drills", types=["active"])],
+            DEFAULT_LADDER,
+        )
 
-        assert (tiers.everyone, tiers.tier_ids, tiers.unmapped) == (False, [], [])
+        assert (tiers.everyone, tiers.tier_ids) == (False, ["active"])
+        assert tiers.unmapped == [
+            UnmappedRequirement(
+                "req-unscoped",
+                "Unscoped",
+                "It applies to no members, since no member categories, ranks "
+                "or positions are set",
+            )
+        ]
 
     def test_several_requirements_union_in_ladder_order(self):
         tiers = mandatory_tiers_for_requirements(

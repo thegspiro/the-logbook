@@ -2246,6 +2246,15 @@ class MandatoryTiers:
     unmapped: List[UnmappedRequirement]
 
 
+def _applies_to_no_one(req_id: str, name: str) -> UnmappedRequirement:
+    return UnmappedRequirement(
+        req_id,
+        name,
+        "It applies to no members, since no member categories, ranks or "
+        "positions are set",
+    )
+
+
 def mandatory_tiers_for_requirements(
     requirements: Sequence[Any], ladder: Sequence[str]
 ) -> MandatoryTiers:
@@ -2264,7 +2273,10 @@ def mandatory_tiers_for_requirements(
     - A class word (administrative, honorary), a word with no tier on this
       ladder, or a requirement scoped only by rank or position is reported
       unmapped rather than guessed at.
-    - A requirement naming nobody contributes nothing.
+    - A requirement naming nobody grades no member, so it suggests no tier
+      and is reported unmapped, saying so, rather than read as a source of
+      the tiers the others suggest. The Counts toward attendance checklist
+      says the same of it.
 
     Grandfathering and compliance profiles are ignored: they decide which
     members a requirement grades, not which tiers an event is mandatory for.
@@ -2284,10 +2296,18 @@ def mandatory_tiers_for_requirements(
         if req.applies_to_all:
             return MandatoryTiers(everyone=True, tier_ids=[], unmapped=[])
         if req.required_membership_types:
-            for word in req.required_membership_types:
-                key = (word or "").strip().lower()
-                if not key:
-                    continue
+            words = [
+                key
+                for key in (
+                    (w or "").strip().lower() for w in req.required_membership_types
+                )
+                if key
+            ]
+            if not words:
+                # Blank words match no member's type, and the grader does not
+                # go on to ranks or positions once the list is non-empty.
+                unmapped.append(_applies_to_no_one(req_id, name))
+            for key in words:
                 if key in _CLASS_MEMBERSHIP_WORDS:
                     unmapped.append(
                         UnmappedRequirement(
@@ -2319,6 +2339,8 @@ def mandatory_tiers_for_requirements(
                     "as a member type",
                 )
             )
+        else:
+            unmapped.append(_applies_to_no_one(req_id, name))
 
     picked = set(tiers)
     return MandatoryTiers(
