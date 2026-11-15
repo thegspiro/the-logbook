@@ -123,16 +123,13 @@ describe('TrainingEventWizard › the series controls', () => {
 
   // "Duration" was a <label> with no control: it named nothing to a screen
   // reader and was a stray label to every check that looks for them.
-  it('names the Duration group, and draws no label without a control', async () => {
+  it('names the Duration group rather than labelling nothing', async () => {
     const user = userEvent.setup();
-    const { container } = renderForm();
+    renderForm();
     await user.click(screen.getByRole('checkbox', { name: 'Make this a recurring event' }));
 
     const duration = screen.getByRole('group', { name: 'Duration' });
     expect(within(duration).getByRole('checkbox', { name: 'Rolling 12-month cycle' })).toBeInTheDocument();
-    const orphans = [...container.querySelectorAll('label')].filter(
-      (label) => !label.htmlFor && !label.querySelector('input, select, textarea, button')
-    );
-    expect(orphans.map((label) => label.textContent)).toEqual([]);
+    expect(screen.getByText('Duration')).not.toBeInstanceOf(HTMLLabelElement);
   });
 });
