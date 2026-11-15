@@ -38,7 +38,7 @@ vi.mock('../services/api', () => ({
   // The training form's: a Training event's session, the Course Library and
   // the lead instructor list. Installed per test in the top-level beforeEach.
   trainingSessionService: { getSessionByEvent: vi.fn(), getMandatoryTiers: vi.fn() },
-  trainingService: { getCourses: vi.fn() },
+  trainingService: { getCourses: vi.fn(), getRequirements: vi.fn() },
   userService: { getUsers: vi.fn() },
 }));
 
@@ -132,6 +132,8 @@ describe('EventEditPage', () => {
     });
     vi.mocked(trainingService.getCourses).mockReset();
     vi.mocked(trainingService.getCourses).mockResolvedValue([]);
+    vi.mocked(trainingService.getRequirements).mockReset();
+    vi.mocked(trainingService.getRequirements).mockResolvedValue([]);
     vi.mocked(userService.getUsers).mockReset();
     vi.mocked(userService.getUsers).mockResolvedValue([]);
     vi.mocked(eventService.getEvents).mockReset();
@@ -775,10 +777,9 @@ describe('EventEditPage', () => {
      * Every training field the form owns, as an edit sends it: blanks as null
      * (pitfall #1). The hours equal the length, so they follow it and travel as
      * null — each event's own length, the backend's reading of null — and the
-     * approval deadline is left out while sign-off is off.
+     * approval deadline is left out while sign-off is off, as is an unchanged
+     * Requirement, so a series edit leaves each later occurrence's own.
      */
-    // Requirement is absent: an unchanged one is left out, so a series edit
-    // leaves each later occurrence's own (toUpdatePayload).
     const unchangedDetails = {
       course_id: null,
       course_name: null,
@@ -879,6 +880,48 @@ describe('EventEditPage', () => {
       );
       expect(eventService.updateFutureEvents).not.toHaveBeenCalled();
       expect(mockNavigate).toHaveBeenCalledWith('/events/evt-1');
+    });
+
+    // A link to a requirement since deactivated is kept by every save, so the
+    // form shows it: ticked, named and marked, where it can be unticked, and
+    // the section is shown even when no active requirement is left to offer.
+    describe('linked to an attendance requirement no longer active', () => {
+      beforeEach(() => {
+        linkageRequirements.value = [];
+        vi.mocked(trainingSessionService.getSessionByEvent).mockResolvedValue({
+          ...session,
+          attendance_requirement_ids: ['req-retired'],
+        });
+        vi.mocked(trainingService.getRequirements).mockResolvedValue([
+          { ...attendanceRequirement, id: 'req-retired', name: 'Old Drill Attendance', active: false },
+        ] as never);
+        window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
+      });
+
+      it('shows it ticked and marked, and names it on Review', async () => {
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        const linked = await screen.findByRole('checkbox', { name: /Old Drill Attendance/ });
+        expect(linked).toBeChecked();
+        expect(linked).toHaveAccessibleDescription(expect.stringContaining('No longer active'));
+        expect(screen.getByRole('group', { name: 'Counts toward attendance' })).toBeInTheDocument();
+        await toReview(user);
+        expect(screen.getByText('Old Drill Attendance (no longer active)')).toBeInTheDocument();
+        expect(screen.queryByText('Selected requirement')).not.toBeInTheDocument();
+      });
+
+      it('lets the officer untick it, and the save drops it', async () => {
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await user.click(await screen.findByRole('checkbox', { name: /Old Drill Attendance/ }));
+        await toReview(user);
+        await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+        await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+        expect(sent()?.training_details).toMatchObject({ attendance_requirement_ids: [] });
+      });
     });
 
     it('clears an emptied training field rather than leaving it in place', async () => {

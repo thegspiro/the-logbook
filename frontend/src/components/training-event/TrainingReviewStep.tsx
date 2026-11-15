@@ -29,6 +29,7 @@ import { getEventTypeBadgeColor, getEventTypeLabel } from '../../utils/eventHelp
 import { formatCalendarDate, formatDateCustom, localToUTC } from '../../utils/dateFormatting';
 import type { EventFormModel } from '../event-form/useEventFormModel';
 import { MONTHS, ORDINALS, RECURRENCE_PATTERNS, WEEKDAYS } from '../event-form/eventFormConstants';
+import { UNNAMED_RETIRED_REQUIREMENT } from '../../hooks/useRetiredAttendanceRequirements';
 import type { TrainingDetailsForm } from './trainingDetailsModel';
 import { creditHoursFromCourse, effectiveCreditHours } from './trainingDetailsModel';
 
@@ -93,6 +94,8 @@ interface TrainingReviewStepProps {
   /** Ticked requirements the Mandatory-for pre-fill could not map, with why. */
   unmapped?: readonly MandatoryTiersUnmapped[] | undefined;
   seriesOccurrence?: SeriesOccurrence | undefined;
+  /** Linked attendance requirements no longer offered, id to name. */
+  retiredAttendanceNames?: Readonly<Record<string, string>> | undefined;
 }
 
 const hoursLabel = (hours: number | string) => `${hours} ${Number(hours) === 1 ? 'hour' : 'hours'}`;
@@ -174,6 +177,7 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
   storedCourseName,
   unmapped = [],
   seriesOccurrence,
+  retiredAttendanceNames = {},
 }) => {
   const { tz, formData } = model;
   const nameOf = (id: string) => model.organizerOptions.options.find((o) => o.id === id)?.name ?? 'Selected member';
@@ -273,7 +277,12 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
 
   const attendanceNames = training.attendance_requirement_ids.map((id) => {
     const req = requirements.find((r) => r.id === id);
-    if (!req) return 'Selected requirement';
+    if (!req) {
+      const retired = retiredAttendanceNames[id];
+      return retired && retired !== UNNAMED_RETIRED_REQUIREMENT
+        ? `${retired} (no longer active)`
+        : UNNAMED_RETIRED_REQUIREMENT;
+    }
     return req.required_attendance_pct ? `${req.name} (${req.required_attendance_pct}%)` : req.name;
   });
 

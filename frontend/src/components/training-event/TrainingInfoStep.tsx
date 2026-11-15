@@ -70,6 +70,8 @@ interface TrainingInfoStepProps {
   storedCourseName?: string | undefined;
   /** Whether `courses` has loaded, so a course missing from it is really gone. */
   coursesLoaded?: boolean | undefined;
+  /** Linked attendance requirements no longer offered, id to name. */
+  retiredAttendanceNames?: Readonly<Record<string, string>> | undefined;
 }
 
 interface CourseOptionProps {
@@ -113,6 +115,8 @@ const CourseOption: React.FC<CourseOptionProps> = ({ mode, current, onSelect, ti
   );
 };
 
+const NO_RETIRED: Readonly<Record<string, string>> = {};
+
 export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
   value,
   onChange,
@@ -128,6 +132,7 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
   readOnlyNotice,
   storedCourseName,
   coursesLoaded = false,
+  retiredAttendanceNames = NO_RETIRED,
 }) => {
   const locked = access !== 'edit';
   const checklistLocked = access === 'readonly';
@@ -461,7 +466,10 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
           />
         </fieldset>
 
-        {attendanceRequirements(linkageData.requirements).length > 0 && (
+        {/* Shown while anything is linked, even with nothing left to offer:
+            a link to a deactivated requirement is kept by every save. */}
+        {(attendanceRequirements(linkageData.requirements).length > 0 ||
+          value.attendance_requirement_ids.length > 0) && (
           <fieldset aria-describedby="training-attendance-note">
             <legend className="text-theme-text-primary text-sm font-semibold">Counts toward attendance</legend>
             <p id="training-attendance-note" className="text-theme-text-muted mt-1 mb-3 text-sm">
@@ -476,6 +484,7 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
               value={value.attendance_requirement_ids}
               onChange={(next) => onChange({ attendance_requirement_ids: next })}
               disabled={checklistLocked}
+              retired={Object.entries(retiredAttendanceNames).map(([id, name]) => ({ id, name }))}
             />
             {access === 'finalized' && (
               <p className="text-theme-text-muted mt-3 text-sm">

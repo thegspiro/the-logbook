@@ -9,6 +9,12 @@ interface AttendanceRequirementChecklistProps {
   value: string[];
   onChange: (next: string[]) => void;
   disabled?: boolean | undefined;
+  /**
+   * Linked requirements no longer offered (deactivated since), by name. Each
+   * is drawn ticked and marked so the officer can see the link and untick
+   * it; once unticked it is gone, as it can no longer be chosen.
+   */
+  retired?: readonly { id: string; name: string }[] | undefined;
 }
 
 /**
@@ -51,6 +57,7 @@ const AttendanceRequirementChecklist: React.FC<AttendanceRequirementChecklistPro
   value,
   onChange,
   disabled = false,
+  retired = [],
 }) => {
   const idPrefix = useId();
   const toggle = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
@@ -88,6 +95,37 @@ const AttendanceRequirementChecklist: React.FC<AttendanceRequirementChecklistPro
           </label>
         );
       })}
+      {retired
+        .filter((r) => value.includes(r.id))
+        .map((r) => {
+          const descriptionId = `${idPrefix}-${r.id}`;
+          return (
+            <label
+              key={r.id}
+              className={`touch:min-h-11 bg-theme-surface-secondary flex cursor-pointer items-start gap-3 rounded-lg border border-red-700 p-3 text-sm dark:border-red-500 ${
+                disabled ? 'cursor-not-allowed' : ''
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5 shrink-0"
+                checked
+                onChange={() => toggle(r.id)}
+                disabled={disabled}
+                aria-describedby={descriptionId}
+              />
+              <span className="min-w-0">
+                <span className="text-theme-text-primary block font-medium">{r.name}</span>
+                <span id={descriptionId} aria-hidden="true" className="text-theme-text-secondary block">
+                  <span className="badge mr-1 bg-amber-500/15 text-xs text-amber-800 dark:text-amber-300">
+                    No longer active
+                  </span>{' '}
+                  Still linked. Untick to remove it; it can&apos;t be chosen again.
+                </span>
+              </span>
+            </label>
+          );
+        })}
     </div>
   );
 };

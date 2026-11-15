@@ -45,6 +45,7 @@ import { trainingService, userService } from '../../services/api';
 import { useRanks } from '../../hooks/useRanks';
 import { useTrainingLinkageData } from '../../hooks/useTrainingLinkageData';
 import { useMandatoryTierPrefill } from '../../hooks/useMandatoryTierPrefill';
+import { useRetiredAttendanceRequirements } from '../../hooks/useRetiredAttendanceRequirements';
 import { getErrorDetail } from '../../utils/errorHandling';
 import { mapServerFieldErrors } from '../../utils/serverFieldErrors';
 import { displayNameOf } from '../../utils/memberName';
@@ -299,6 +300,12 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   );
 
   const linkageData = useTrainingLinkageData(training.program_id || undefined);
+  // The stored links too, so one unticked in this edit keeps its name.
+  const linkedAttendanceIds = useMemo(
+    () => [...training.attendance_requirement_ids, ...(originalTraining?.attendance_requirement_ids ?? [])],
+    [training.attendance_requirement_ids, originalTraining?.attendance_requirement_ids]
+  );
+  const retiredAttendanceNames = useRetiredAttendanceRequirements(linkedAttendanceIds, linkageData);
   const selectedCourse =
     training.course_mode === 'library' ? courses.find((c) => c.id === training.course_id) : undefined;
   const { formData, tz } = model;
@@ -768,6 +775,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
               readOnlyNotice={readOnlyNotice}
               storedCourseName={storedCourseName}
               coursesLoaded={coursesLoaded}
+              retiredAttendanceNames={retiredAttendanceNames}
             />
           )}
 
@@ -846,6 +854,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
                 storedCourseName={storedCourseName}
                 unmapped={formData.is_mandatory && prefill.note ? prefill.note.unmapped : []}
                 seriesOccurrence={seriesOccurrence}
+                retiredAttendanceNames={retiredAttendanceNames}
               />
               <AttachmentsSection existingAttachments={model.existingAttachments} />
               {model.existingAttachments.length > 0 && (
