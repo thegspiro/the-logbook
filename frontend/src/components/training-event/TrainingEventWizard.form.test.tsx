@@ -4,7 +4,7 @@
  * moves to the next step, checked as Next checks it, and on Review it creates.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 
@@ -115,5 +115,24 @@ describe('TrainingEventWizard › a real form', () => {
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'CPR recert night', event_type: 'training' })
     );
+  });
+});
+
+describe('TrainingEventWizard › the series controls', () => {
+  beforeEach(resetMocks);
+
+  // "Duration" was a <label> with no control: it named nothing to a screen
+  // reader and was a stray label to every check that looks for them.
+  it('names the Duration group, and draws no label without a control', async () => {
+    const user = userEvent.setup();
+    const { container } = renderForm();
+    await user.click(screen.getByRole('checkbox', { name: 'Make this a recurring event' }));
+
+    const duration = screen.getByRole('group', { name: 'Duration' });
+    expect(within(duration).getByRole('checkbox', { name: 'Rolling 12-month cycle' })).toBeInTheDocument();
+    const orphans = [...container.querySelectorAll('label')].filter(
+      (label) => !label.htmlFor && !label.querySelector('input, select, textarea, button')
+    );
+    expect(orphans.map((label) => label.textContent)).toEqual([]);
   });
 });

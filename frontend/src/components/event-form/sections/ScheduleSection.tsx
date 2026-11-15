@@ -260,8 +260,12 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className={labelClass}>Duration</label>
+                {/* A heading for what it groups, as Days of the Week is: no
+                    control of its own to label. */}
+                <div role="group" aria-labelledby="recurrence-duration-label">
+                  <span id="recurrence-duration-label" className={labelClass}>
+                    Duration
+                  </span>
                   <div className="space-y-3">
                     <label className="mobile-touch-target flex cursor-pointer items-center justify-start gap-2 text-sm">
                       <input
