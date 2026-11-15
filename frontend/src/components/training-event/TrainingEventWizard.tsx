@@ -287,6 +287,29 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   // once every one of them has been corrected rather than still asking for
   // fixes with nothing left marked.
   const fieldBanner = useRef(false);
+
+  // The phone's fixed Previous/Next bar. The form's `clear-of-action-bar`
+  // scroll margin keeps a control the browser scrolls into view by its box
+  // clear of it, but Chrome scrolls a focused textarea by its caret, so
+  // Description reached by Tab came to rest almost wholly behind the bar
+  // with the margin unused (WCAG 2.4.11). After the browser's own scroll,
+  // a focused control still reaching under the bar is scrolled clear,
+  // never so far that its top leaves the viewport.
+  const stepBarRef = useRef<HTMLDivElement>(null);
+  const keepFocusClearOfBar = (event: React.FocusEvent<HTMLFormElement>) => {
+    const target = event.target;
+    const bar = stepBarRef.current;
+    if (!bar || bar.contains(target)) return;
+    requestAnimationFrame(() => {
+      if (document.activeElement !== target || getComputedStyle(bar).position !== 'fixed') return;
+      const gap = 8;
+      const rect = target.getBoundingClientRect();
+      const overlap = rect.bottom + gap - bar.getBoundingClientRect().top;
+      const by = Math.min(overlap, rect.top - gap);
+      // Absolute, so a smooth scroll still under way is replaced rather than added to.
+      if (by > 0) window.scrollTo({ top: window.scrollY + by, behavior: 'instant' });
+    });
+  };
   const requestFocus = (id: string, outcome: Pick<FocusRequest, 'onFound' | 'onMissing'> = {}) => {
     focusSeq.current += 1;
     setFocusRequest({ id, seq: focusSeq.current, ...outcome });
@@ -738,6 +761,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
           if (step < REVIEW) handleNext();
           else void handleSubmit();
         }}
+        onFocus={keepFocusClearOfBar}
         className="md:card max-md:clear-of-action-bar space-y-8 max-md:pb-24 md:p-8"
       >
         <div className="max-md:card space-y-8 p-4 sm:p-8 md:p-0">
@@ -936,6 +960,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
             home indicator, pitfall #21), Previous one share and Next two.
             Outside the phone card, so `fixed` resolves to the viewport. */}
         <div
+          ref={stepBarRef}
           role="group"
           aria-label="Step navigation"
           className="border-theme-surface-border max-md:bg-theme-nav-bg max-md:action-bar-safe flex items-center gap-3 border-t pt-6 max-md:fixed max-md:right-0 max-md:bottom-0 max-md:left-[var(--side-nav-width,0px)] max-md:z-30 max-md:gap-2 max-md:px-4 max-md:shadow-[0_-4px_12px_rgb(0_0_0/0.08)]"

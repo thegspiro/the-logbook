@@ -113,4 +113,27 @@ test.describe('training-event form on a phone', () => {
     expect(checked).toBeGreaterThan(3);
     expect(obscured).toEqual([]);
   });
+
+  // Chrome scrolls a focused textarea by its caret, not its box, so the
+  // scroll margin above left Description, reached by Tab from its toolbar,
+  // almost wholly behind the bar.
+  test('keeps Description, reached by Tab from its toolbar, clear of the bar', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await openWizard(page);
+    const barTop = (await page.getByRole('group', { name: 'Step navigation' }).boundingBox())?.y ?? 0;
+    expect(barTop).toBeGreaterThan(0);
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    await page.locator('#training-wizard-step').focus();
+
+    let reached = false;
+    for (let press = 0; press < 15 && !reached; press += 1) {
+      await page.keyboard.press('Tab');
+      reached = await page.evaluate(() => document.activeElement?.id === 'event-description');
+    }
+    expect(reached).toBe(true);
+    // Past the next frame, where a correction to the browser's own scroll lands.
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const bottom = await page.locator('#event-description').evaluate((el) => el.getBoundingClientRect().bottom);
+    expect(bottom).toBeLessThanOrEqual(barTop);
+  });
 });
