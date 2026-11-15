@@ -12,9 +12,9 @@
  *
  * Each step is checked before Next; a refused save, or a 422, puts every
  * message under its field and goes to the earliest step holding one (forms
- * review F-3/F-4). The one toast is a save the form itself refuses on an
- * earlier step: it names the step the form went back to, not the refusal,
- * which the focused field already reads out (forms batch 17).
+ * review F-3/F-4). The one toast is a save, refused by the form or by the
+ * server, that sends the form back to an earlier step: it names the step, not
+ * the refusal, which the focused field already reads out (forms batch 17).
  *
  * The same steps edit an existing Training event. An edit sends every training
  * field the form owns, blanks as null (pitfall #1), except where the session's
@@ -135,6 +135,15 @@ interface StepMessage {
   message: string;
 }
 
+interface FocusRequest {
+  id: string;
+  seq: number;
+  /** Run once the control was found and focused. */
+  onFound?: (() => void) | undefined;
+  /** Run when the step does not draw the control; the step line has focus. */
+  onMissing?: (() => void) | undefined;
+}
+
 interface TrainingEventWizardProps {
   /**
    * The event form's model, owned by the host (`EventComposer`) so that every
@@ -234,19 +243,31 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   const [users, setUsers] = useState<User[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Focus is moved after the step it targets has rendered: to the first
-  // refused field, or to the step's heading when the step changes.
-  const [focusRequest, setFocusRequest] = useState<{ id: string; seq: number } | null>(null);
+  // refused field, or to the step's heading when the step changes. Only then
+  // is it known whether the field's control is drawn at all (a member-type
+  // box under an unticked Mandatory is not), so what follows from finding it
+  // or not is decided there too.
+  const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
   const focusSeq = useRef(0);
   // Whether the banner lists field refusals and nothing else, so that it goes
   // once every one of them has been corrected rather than still asking for
   // fixes with nothing left marked.
   const fieldBanner = useRef(false);
-  const requestFocus = (id: string) => {
+  const requestFocus = (id: string, outcome: Pick<FocusRequest, 'onFound' | 'onMissing'> = {}) => {
     focusSeq.current += 1;
-    setFocusRequest({ id, seq: focusSeq.current });
+    setFocusRequest({ id, seq: focusSeq.current, ...outcome });
   };
   useEffect(() => {
-    if (focusRequest) document.getElementById(focusRequest.id)?.focus();
+    if (!focusRequest) return;
+    const target = document.getElementById(focusRequest.id);
+    if (target) {
+      target.focus();
+      focusRequest.onFound?.();
+      return;
+    }
+    // Never left on <body>: the step line says where the form now is.
+    document.getElementById(STEP_HEADING_ID)?.focus();
+    focusRequest.onMissing?.();
   }, [focusRequest]);
 
   useEffect(() => {
@@ -348,15 +369,20 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   /**
    * Show refusals: each under its field, a summary in the step's banner, and
    * the wizard on the earliest step holding one, focused on its first field.
-   * Returns that step and whether a field there was flagged, or null when
-   * there is nothing to show.
+   * Returns whether there was anything to show.
+   *
+   * When that takes the form to another step (a save pressed on Review), a
+   * toast names the step, so that something on screen says the save did not
+   * go through; the refusal itself is read out by the focused field. A field
+   * whose control the step does not draw cannot hold or read out its
+   * refusal, so it is announced in the banner instead.
    */
   const showErrors = (
     eventErrors: EventErrors,
     trainingErrorsToShow: TrainingErrors,
     messages: StepMessage[],
     extra: string[] = []
-  ): { target: WizardStep; fieldFocused: boolean } | null => {
+  ): boolean => {
     // The type picker draws no message under itself, and Training Admin has
     // no picker at all, so a refusal of the type goes in the banner.
     const { event_type: typeMessage, ...rest } = eventErrors;
@@ -367,7 +393,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
       ...(Object.keys(trainingErrorsToShow).length ? [TRAINING] : []),
       ...allMessages.map((m) => m.step),
     ];
-    if (steps.length === 0 && extra.length === 0) return null;
+    if (steps.length === 0 && extra.length === 0) return false;
     const target = steps.length ? (Math.min(...steps) as WizardStep) : REVIEW;
 
     model.setFieldErrors(fieldErrors);
@@ -395,20 +421,32 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     model.showFormError([firstField ? '' : summary, others.join(' ')].filter(Boolean).join('\n') || null);
     // A banner of field refusals only is cleared once the last is fixed.
     fieldBanner.current = others.length === 0 && fieldMessages.length > 0;
+    const moved = target !== step;
     setStep(target);
 
-    if (firstField && target === TRAINING) {
-      requestFocus(TRAINING_FIELDS[firstField as TrainingField].id);
-    } else if (firstField) {
-      const field = firstField as EventField;
-      // The "Other" location box and the fallback box share the field.
-      requestFocus(
-        field === 'location' && model.locations.length === 0 ? 'location-text-fallback' : EVENT_FIELD_IDS[field]
-      );
+    if (firstField) {
+      const field = firstField;
+      const controlId =
+        target === TRAINING
+          ? TRAINING_FIELDS[field as TrainingField].id
+          : // The "Other" location box and the fallback box share the field.
+            field === 'location' && model.locations.length === 0
+            ? 'location-text-fallback'
+            : EVENT_FIELD_IDS[field as EventField];
+      requestFocus(controlId, {
+        onFound: () => {
+          if (moved) toast.error(`Back to ${STEP_TITLES[target]}: fix the flagged field`);
+        },
+        onMissing: () => {
+          model.showFormErrorSummary(null);
+          model.showFormError([summary, ...others].filter(Boolean).join('\n') || null);
+          if (moved) toast.error(`Back to ${STEP_TITLES[target]}: nothing was saved`);
+        },
+      });
     } else {
       requestFocus(STEP_HEADING_ID);
     }
-    return { target, fieldFocused: Boolean(firstField) };
+    return true;
   };
 
   const clearAllErrors = () => {
@@ -514,14 +552,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
 
   const handleSubmit = async () => {
     const { event, training: trainingInvalid, messages } = collect();
-    const shown = showErrors(event, trainingInvalid, messages);
-    if (shown) {
-      // Only when the form moved: on the open step the refusal is in view.
-      if (shown.target !== step && shown.fieldFocused) {
-        toast.error(`Back to ${STEP_TITLES[shown.target]}: fix the flagged field`);
-      }
-      return;
-    }
+    if (showErrors(event, trainingInvalid, messages)) return;
     clearAllErrors();
     if (editing) {
       await handleUpdate();

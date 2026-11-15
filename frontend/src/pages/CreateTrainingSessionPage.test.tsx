@@ -1031,7 +1031,8 @@ describe('CreateTrainingSessionPage saving', () => {
     expect(navigate).toHaveBeenCalledWith('/events/event-1');
   });
 
-  // A 422 lands under the field it names, on that field's step, not in a toast.
+  // A 422 lands under the field it names, on that field's step, not in a
+  // toast; the toast says only which step the form went back to.
   it('puts a refused training field under its field, back on Training Info', async () => {
     createEvent.mockRejectedValue({
       response: {
@@ -1054,7 +1055,8 @@ describe('CreateTrainingSessionPage saving', () => {
     expect(screen.getByLabelText(/Course Name/)).toHaveAccessibleDescription(
       /Course name is too long — keep it to 255 characters\./
     );
-    expect(toastError).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(toastError).toHaveBeenCalledWith('Back to Training Info: fix the flagged field');
   });
 
   it('shows a failure that names no field on the Review step', async () => {

@@ -137,6 +137,46 @@ describe('TrainingEventWizard › refusals on their fields', () => {
     await waitFor(() => expect(courseName).toHaveFocus());
   });
 
+  // The save was pressed on Review and the form is now on another step: the
+  // toast is what says the save did not go through, as a refusal of the
+  // form's own does (forms batch 17).
+  it.each([
+    ['title', 'String should have at most 200 characters', 'Event Details'],
+    ['training_details.course_name', 'String should have at most 255 characters', 'Training Info'],
+  ])('names the step a 422 on %s went back to', async (field, message, step) => {
+    onSubmit.mockRejectedValueOnce({ response: { status: 422, data: { detail: [{ field, message }] } } });
+    const user = userEvent.setup();
+    renderForm();
+    await fillAndReachReview(user);
+    await submit(user);
+
+    expect(await screen.findByText(`Step ${step === 'Event Details' ? 1 : 2} of 4 · ${step}`)).toBeInTheDocument();
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(`Back to ${step}: fix the flagged field`));
+    expect(toastError).toHaveBeenCalledTimes(1);
+  });
+
+  // Mandatory unticked, so no member-type box is drawn to hold the refusal or
+  // take focus: it is announced in the step's banner, and focus goes to the
+  // step line rather than dropping to the page.
+  it('announces a 422 on a field the step does not draw, and focuses the step', async () => {
+    onSubmit.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'mandatory_membership_types', message: 'Unknown member type' }] },
+      },
+    });
+    const user = userEvent.setup();
+    renderForm();
+    await fillAndReachReview(user);
+    await submit(user);
+
+    const stepLine = await screen.findByText('Step 3 of 4 · Settings');
+    await waitFor(() => expect(stepLine).toHaveFocus());
+    expect(screen.getByRole('alert')).toHaveTextContent('Unknown member type');
+    expect(toastError).toHaveBeenCalledWith('Back to Settings: nothing was saved');
+    expect(toastError).toHaveBeenCalledTimes(1);
+  });
+
   it('creates nothing without a course name and flags it on its step', async () => {
     const user = userEvent.setup();
     renderForm();
