@@ -22,7 +22,7 @@ narrowed. Which requirements had the new type is lost on the way down; their
 ``required_calls`` and the progress their credits added stay.
 
 Revision ID: 9d044fc1d81b
-Revises: b91f3c6d2e48
+Revises: d3a7f5e2c916
 Create Date: 2026-11-14 15:47:29
 
 """
@@ -34,7 +34,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "9d044fc1d81b"
-down_revision: Union[str, None] = "b91f3c6d2e48"
+down_revision: Union[str, None] = "d3a7f5e2c916"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
