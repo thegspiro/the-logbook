@@ -8338,7 +8338,10 @@ the Form" below.
   (member classes, not rungs), a membership word with no tier on the ladder
   (Retired, on the default ladder), and a requirement scoped only by rank or
   position. If nothing maps, "Mandatory for" is left as it was rather than
-  falling back to everyone.
+  falling back to everyone. A requirement that grades no member at all,
+  because it names no one or is no longer active (a link an edited session
+  keeps), is named too, as adding no one, and never as a reason to choose All
+  members.
 
 **Known gaps, not fixed here:**
 
@@ -8423,10 +8426,12 @@ single-page form. What it changes, and what it leaves:
   while a course is chosen. The form says so under the field and on Review
   rather than showing "None". Making them clearable would change the API's
   meaning of `null`.
-- **Training Admin's header still offers Create Session to a training
+- ~~**Training Admin's header still offers Create Session to a training
   manager without `events.manage`.** The approved design marks hiding it as
   a proposal; the tab itself shows the notice. Left until the owner
-  confirms.
+  confirms.~~ **Resolved 2026-11-11:** the header leaves Create Session out
+  for a viewer without `events.manage`, as the approved mockup draws it, and
+  the Sessions tab still shows its notice naming the permission.
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 
