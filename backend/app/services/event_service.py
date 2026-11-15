@@ -669,6 +669,7 @@ class EventService:
         include_cancelled: bool = False,
         include_drafts: bool = False,
         mandatory_only: bool = False,
+        recurrence_series_id: UUID | str | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
@@ -807,6 +808,15 @@ class EventService:
 
         if mandatory_only:
             query = query.where(Event.is_mandatory.is_(True))
+
+        if recurrence_series_id:
+            # A series is its first event and the occurrences that name it.
+            query = query.where(
+                or_(
+                    Event.id == str(recurrence_series_id),
+                    Event.recurrence_parent_id == str(recurrence_series_id),
+                )
+            )
 
         if start_after:
             query = query.where(Event.start_datetime >= start_after)

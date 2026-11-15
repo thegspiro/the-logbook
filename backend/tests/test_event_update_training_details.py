@@ -984,3 +984,26 @@ class TestTheEndpoints:
                 "attendance_requirement_ids": [dept["drills"], dept["meetings"]],
             }
         ]
+
+
+class TestListingOneSeries:
+    """The edit form names the nearest earlier finalized occurrence of the
+    series being edited; it asks for that series alone, so a busy calendar
+    cannot push the occurrence it wants past the list's 500-row cap."""
+
+    async def test_only_the_series_is_listed(self, db_session, dept):
+        weekly = await TestASeries()._series(db_session, dept, {})
+        other = await TestASeries()._series(db_session, dept, {})
+        lone = await _event(db_session, dept, {}, window=_window(days_ahead=-7))
+        officer = await TestTheEndpoints._user(db_session, dept["officer"])
+
+        listed = await events_endpoint.list_events(
+            recurrence_series_id=weekly[0],
+            skip=0,
+            limit=100,
+            db=db_session,
+            current_user=officer,
+        )
+
+        assert sorted(str(item.id) for item in listed) == sorted(weekly)
+        assert not {str(item.id) for item in listed} & set(other + [lone])

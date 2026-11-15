@@ -767,6 +767,7 @@ async def list_events(
     include_cancelled: bool = False,
     include_drafts: bool = False,
     mandatory_only: bool = False,
+    recurrence_series_id: UUID | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -784,6 +785,9 @@ async def list_events(
 
     Use `mandatory_only` to narrow to mandatory events — the events list uses
     it to find recent mandatory events the member never checked in to.
+
+    Use `recurrence_series_id` (a series' first event) to list that series
+    alone: the first event and every occurrence created from it.
 
     **Authentication required**
     """
@@ -810,6 +814,7 @@ async def list_events(
         include_drafts=include_drafts
         and user_has_permission(current_user, "events.manage"),
         mandatory_only=mandatory_only,
+        recurrence_series_id=recurrence_series_id,
         skip=skip,
         limit=limit,
     )

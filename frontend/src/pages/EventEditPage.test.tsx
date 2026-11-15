@@ -998,9 +998,40 @@ describe('EventEditPage', () => {
             'Sun, Mar 15, 2026, in a series running since Sun, Jan 4, 2026. Sun, Feb 1, 2026, before it, has finalized attendance.'
           )
         ).toBeInTheDocument();
+        // The series alone, asked of the server: an org-wide page capped at
+        // 500 could cut off the very occurrence named here.
         expect(eventService.getEvents).toHaveBeenCalledWith(
-          expect.objectContaining({ start_after: '2026-01-04T18:00:00Z', start_before: '2026-03-15T18:00:00Z' })
+          expect.objectContaining({
+            recurrence_series_id: 'series-1',
+            start_after: '2026-01-04T18:00:00Z',
+            start_before: '2026-03-15T18:00:00Z',
+          })
         );
+      });
+
+      // A full page may stop short of the nearest finalized occurrence, so
+      // the date it would name could be the wrong one: say nothing instead.
+      it('names no finalized occurrence when the list came back full', async () => {
+        vi.mocked(eventService.getEvent).mockImplementation((id: string) =>
+          Promise.resolve(id === 'series-1' ? parent : child)
+        );
+        const page = Array.from({ length: 500 }, (_, index) => ({
+          ...trainingEvent,
+          id: `occ-${index}`,
+          start_datetime: '2026-02-01T18:00:00Z',
+          recurrence_parent_id: 'series-1',
+          attendance_finalized_at: '2026-02-01T21:00:00Z',
+        }));
+        vi.mocked(eventService.getEvents).mockImplementation((params) =>
+          Promise.resolve(params?.start_before ? (page as never) : [])
+        );
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await screen.findByText('Step 1 of 4 · Event Details');
+        await toReview(user);
+        expect(screen.getByText('Sun, Mar 15, 2026, in a series running since Sun, Jan 4, 2026.')).toBeInTheDocument();
+        expect(screen.queryByText(/has finalized attendance/)).not.toBeInTheDocument();
       });
 
       it('says that occurrences a rolling series adds later copy the changes', async () => {

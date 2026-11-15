@@ -30,6 +30,9 @@ import { formatDateCustom } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { useAuthStore } from '../stores/authStore';
 
+/** The most rows the events list returns at once (its server-side cap). */
+const FINALIZED_LOOKUP_LIMIT = 500;
+
 const DATE_ONLY: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
 
 /** What a training manager without events.manage is told on Training Info: the API refuses them training details (403). */
@@ -115,12 +118,17 @@ export const EventEditPage: React.FC = () => {
         }
         if (data.event_type === EventTypeEnum.TRAINING) {
           try {
+            // The series alone, so the rest of the calendar cannot crowd the
+            // occurrence wanted out of a capped page. Ascending, so a full
+            // page may still stop short of the nearest: then no date is named
+            // rather than an older one.
             const earlier = await eventService.getEvents({
+              recurrence_series_id: parentId,
               ...(parent ? { start_after: parent.start_datetime } : {}),
               start_before: data.start_datetime,
-              limit: 500,
+              limit: FINALIZED_LOOKUP_LIMIT,
             });
-            const finalized = earlier
+            const finalized = (earlier.length < FINALIZED_LOOKUP_LIMIT ? earlier : [])
               .filter(
                 (e) =>
                   e.id !== data.id &&
