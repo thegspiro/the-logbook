@@ -114,9 +114,36 @@ async def require_report_reviewer(
 
 def _not_about_reviewer(report, user: User) -> bool:
     """A role reviewer does not review, or see in the queue, a report about
-    themselves: the second review exists to put another pair of eyes on it.
-    ``training.manage`` holders are not limited, as before."""
-    return _manages_training(user) or str(report.trainee_id) != str(user.id)
+    themselves or one they filed: the second review exists to put another
+    pair of eyes on it. ``training.manage`` holders are not limited, as
+    before."""
+    if _manages_training(user):
+        return True
+    return str(report.trainee_id) != str(user.id) and str(report.officer_id) != str(
+        user.id
+    )
+
+
+# What the review queue shows a role reviewer, and so all they may review. A
+# draft still belongs to its officer, and an approved report has already been
+# released to the trainee and credited.
+_ROLE_REVIEWABLE = ("pending_review", "flagged")
+
+
+def _role_review_refusal(report, user: User) -> HTTPException | None:
+    """Why a role reviewer may not review ``report``, or None if they may."""
+    if report is None or _manages_training(user):
+        return None
+    if not _not_about_reviewer(report, user):
+        return HTTPException(
+            status_code=403,
+            detail="A report about you, or one you filed, is reviewed by someone else",
+        )
+    if report.review_status not in _ROLE_REVIEWABLE:
+        return HTTPException(
+            status_code=409, detail="This report is not awaiting review"
+        )
+    return None
 
 
 async def _is_officer_of_shift(db: AsyncSession, user: User, shift_id) -> bool:
@@ -851,11 +878,9 @@ async def review_report(
     service = ShiftCompletionService(db)
     if not _manages_training(current_user):
         existing = await service.get_report(report_id, current_user.organization_id)
-        if existing is not None and not _not_about_reviewer(existing, current_user):
-            raise HTTPException(
-                status_code=403,
-                detail="A report about you is reviewed by someone else",
-            )
+        refusal = _role_review_refusal(existing, current_user)
+        if refusal is not None:
+            raise refusal
     report = await service.review_report(
         report_id=report_id,
         organization_id=current_user.organization_id,
@@ -901,9 +926,7 @@ async def batch_review_reports(
                 existing = await service.get_report(
                     report_id, current_user.organization_id
                 )
-                if existing is not None and not _not_about_reviewer(
-                    existing, current_user
-                ):
+                if _role_review_refusal(existing, current_user) is not None:
                     failed += 1
                     continue
             report = await service.review_report(

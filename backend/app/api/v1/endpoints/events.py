@@ -3917,7 +3917,11 @@ async def get_event_folder(
     """
     service = EventService(db)
     event, _ = await service.get_event(event_id, current_user.organization_id)
-    if not event:
+    # A draft's folder is named after its unannounced title; a non-organizer
+    # gets the same 404 the event itself answers (ADV-5).
+    if not event or (
+        event.is_draft and not user_has_permission(current_user, "events.manage")
+    ):
         raise HTTPException(status_code=404, detail="Event not found")
 
     docs_service = DocumentsService(db)
