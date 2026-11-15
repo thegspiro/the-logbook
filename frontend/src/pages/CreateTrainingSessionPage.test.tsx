@@ -394,19 +394,21 @@ describe('CreateTrainingSessionPage leaving and refusals', () => {
     expect(navigate).toHaveBeenCalledWith('/training/admin');
   });
 
+  // Listed but not announced: focus is on Title, which reads its own
+  // refusal out (forms batch 17).
   it('lists the refusals in the banner, in field order, and clears it once they are fixed', async () => {
     const user = userEvent.setup();
     renderWithRouter(<CreateTrainingSessionPage />);
 
     await next(user);
-    const banner = screen.getByRole('alert');
-    expect(banner).toHaveTextContent('Fix the 3 fields marked below.');
+    const banner = screen.getByText(/^Fix the 3 fields marked below\./);
     expect(banner).toHaveTextContent(
       'Enter a title for the event. · Choose when the event starts. · Choose when the event ends.'
     );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
     await fillEventDetails(user);
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Fix the 3 fields marked below\./)).not.toBeInTheDocument();
   });
 
   // It was a banner only, with focus on the step line.

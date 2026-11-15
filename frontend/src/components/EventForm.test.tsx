@@ -460,7 +460,7 @@ describe('EventForm', () => {
 
       await user.click(screen.getByRole('button', { name: /create event/i }));
 
-      expect(screen.getByRole('alert')).toHaveTextContent('Set an RSVP deadline');
+      expect(screen.getByLabelText(/rsvp deadline\s*\*/i)).toHaveAccessibleDescription(/Set an RSVP deadline/);
       expect(mockOnSubmit).not.toHaveBeenCalled();
     });
 
@@ -847,7 +847,9 @@ describe('EventForm', () => {
       fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-01' } });
       await user.click(screen.getByRole('button', { name: /create event/i }));
 
-      expect(screen.getByRole('alert')).toHaveTextContent('Select at least one member type');
+      expect(screen.getByLabelText('Cadet')).toHaveAccessibleDescription(
+        'Select at least one member type, or choose All members.'
+      );
       expect(mockOnSubmit).not.toHaveBeenCalled();
     });
   });
@@ -1027,12 +1029,14 @@ describe('EventForm', () => {
       const submitButton = screen.getByRole('button', { name: /create event/i });
       await user.click(submitButton);
 
-      // On the field it is about, tied to it, as well as in the summary (forms review F-4).
+      // On the field it is about, tied to it, as well as in the summary (forms review F-4),
+      // which is not announced: the focused field reads it out (forms batch 17).
       await waitFor(() => {
         expect(endInput).toHaveAccessibleDescription('End must be after the start.');
       });
       expect(endInput).toHaveAttribute('aria-invalid', 'true');
-      expect(screen.getByRole('alert')).toHaveTextContent('End must be after the start.');
+      expect(screen.getAllByText('End must be after the start.')).toHaveLength(2);
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
       expect(mockOnSubmit).not.toHaveBeenCalled();
     });
@@ -1267,7 +1271,9 @@ describe('EventForm', () => {
       expect(screen.getByLabelText(/end date & time/i)).toBeInTheDocument();
     });
 
-    it('should have error role for validation messages', async () => {
+    // Tied to the field it is about, which focus reaches; a live banner
+    // repeating it made a screen reader say it twice (forms batch 17).
+    it('ties a validation message to its field rather than announcing it again', async () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const user = userEvent.setup();
@@ -1282,9 +1288,10 @@ describe('EventForm', () => {
 
       await user.click(screen.getByRole('button', { name: /create event/i }));
 
-      await waitFor(() => {
-        expect(screen.getByRole('alert')).toBeInTheDocument();
-      });
+      await waitFor(() => expect(endInput).toHaveFocus());
+      expect(endInput).toHaveAttribute('aria-invalid', 'true');
+      expect(endInput).toHaveAccessibleDescription('End must be after the start.');
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
   });
 
@@ -1507,6 +1514,81 @@ describe('EventForm', () => {
       await waitFor(() => expect(lookup).toHaveBeenCalled());
       expect(await screen.findByRole('heading', { name: 'Event Details', level: 2 })).toBeInTheDocument();
       expect(screen.getAllByText('Business Meeting').length).toBeGreaterThan(0);
+    });
+  });
+
+  // Forms batch 17: the focused field reads its refusal out through its
+  // description, so a live summary repeating it made a screen reader say it
+  // twice. Only a refusal no field owns is announced.
+  describe('a refusal is announced once', () => {
+    /** Everything a screen reader is told without moving to it. */
+    const announcedText = () =>
+      (['alert', 'status', 'log'] as const)
+        .flatMap((role) => screen.queryAllByRole(role))
+        .map((region) => region.textContent ?? '')
+        .join('\n');
+
+    async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
+      await user.type(screen.getByLabelText(/title/i), 'Test Event');
+      fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2026-04-01' } });
+      fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-01' } });
+    }
+
+    it('leaves a refused save to the focused field', async () => {
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+      const user = userEvent.setup();
+      fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2026-04-01' } });
+      fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-01' } });
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      const title = screen.getByLabelText(/title/i);
+      await waitFor(() => expect(title).toHaveFocus());
+      expect(title).toHaveAccessibleDescription(/Enter a title for the event\./);
+      expect(announcedText()).not.toContain('Enter a title for the event.');
+      // Still on screen in the summary, for whoever reads the form from the top.
+      expect(screen.getAllByText('Enter a title for the event.')).toHaveLength(2);
+      expect(mockOnSubmit).not.toHaveBeenCalled();
+    });
+
+    it('leaves a mapped 422 to the focused field', async () => {
+      mockOnSubmit.mockRejectedValueOnce({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'title', message: 'String should have at most 200 characters' }] },
+        },
+      });
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+      const user = userEvent.setup();
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      const title = screen.getByLabelText(/title/i);
+      await waitFor(() => expect(title).toHaveFocus());
+      expect(title).toHaveAccessibleDescription(/Title is too long/);
+      expect(announcedText()).not.toContain('Title is too long');
+    });
+
+    it('announces the part of a 422 no field owns, and only that part', async () => {
+      mockOnSubmit.mockRejectedValueOnce({
+        response: {
+          status: 422,
+          data: {
+            detail: [
+              { field: 'title', message: 'String should have at most 200 characters' },
+              { field: 'nothing_here', message: 'The event could not be filed.' },
+            ],
+          },
+        },
+      });
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+      const user = userEvent.setup();
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      const title = screen.getByLabelText(/title/i);
+      await waitFor(() => expect(title).toHaveFocus());
+      expect(screen.getByRole('alert')).toHaveTextContent('The event could not be filed.');
+      expect(announcedText()).not.toContain('Title is too long');
     });
   });
 });

@@ -80,7 +80,13 @@ export const useEventFormModel = ({
     ...DEFAULT_FORM_DATA,
     ...normalizedInitial,
   });
+  // Announced (role="alert"): a refusal no field owns, read out on arrival
+  // because nothing else would say it.
   const [error, setError] = useState<string | null>(null);
+  // Shown beside it but not announced: the field refusals, each already read
+  // out by its own field once focus reaches it (forms batch 17). Announcing
+  // them as well made a screen reader say every one twice.
+  const [errorSummary, setErrorSummary] = useState<string | null>(null);
   // Each refusal shown under the field it is about, with aria-invalid and the
   // message tied to the control (forms review F-3/F-4), rather than one banner
   // at the top of a long form.
@@ -90,12 +96,19 @@ export const useEventFormModel = ({
     unmatched: string[] = []
   ): EventField | undefined => {
     setFieldErrors(errors);
-    // An error summary at the top, announced as an alert, for whoever does not
-    // reach the field by focus; the message itself stays under its field.
+    // A summary at the top for whoever reads the form from there; the message
+    // itself stays under its field. Announced only when no field takes focus
+    // to read it out.
     const messages = Object.values(errors);
-    const summary = messages.length === 1 ? (messages[0] ?? '') : `Fix the ${messages.length} fields marked below.`;
-    setError([summary, ...unmatched].filter(Boolean).join(' ') || null);
+    const summary =
+      messages.length === 0
+        ? ''
+        : messages.length === 1
+          ? (messages[0] ?? '')
+          : `Fix the ${messages.length} fields marked below.`;
     const first = (Object.keys(EVENT_FIELD_IDS) as EventField[]).find((field) => errors[field]);
+    setErrorSummary(first ? summary || null : null);
+    setError([first ? '' : summary, ...unmatched].filter(Boolean).join(' ') || null);
     if (first) {
       // The "Other" location box and the fallback box share the field.
       const id = first === 'location' && locations.length === 0 ? 'location-text-fallback' : EVENT_FIELD_IDS[first];
@@ -672,6 +685,7 @@ export const useEventFormModel = ({
     if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
       return showFieldErrors(mapped.fieldErrors, mapped.unmatched);
     }
+    setErrorSummary(null);
     setError(mapped?.unmatched.join(' ') || getErrorMessage(err, 'An error occurred'));
     return undefined;
   };
@@ -679,13 +693,13 @@ export const useEventFormModel = ({
   /** Clear the banner and every field error, as a fresh submit does. */
   const clearErrors = () => {
     setError(null);
+    setErrorSummary(null);
     setFieldErrors({});
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setFieldErrors({});
+    clearErrors();
 
     const invalid = validate();
     if (Object.keys(invalid).length > 0) {
@@ -736,6 +750,7 @@ export const useEventFormModel = ({
     setIsDraft,
     update,
     error,
+    errorSummary,
     fieldErrors,
     organizerId,
     setOrganizerId,
@@ -813,6 +828,7 @@ export const useEventFormModel = ({
     // For a form that places and focuses errors itself, across steps.
     setFieldErrors,
     showFormError: setError,
+    showFormErrorSummary: setErrorSummary,
     clearErrors,
     buildSinglePayload,
     buildRecurringPayload,

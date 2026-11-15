@@ -407,6 +407,7 @@ describe('EventComposer opening on Training', () => {
     const first = screen.getByLabelText('Active Member');
     expect(first).toHaveAccessibleDescription('Select at least one member type, or choose All members.');
     await waitFor(() => expect(first).toHaveFocus());
-    expect(screen.getByRole('alert')).toHaveTextContent('Select at least one member type, or choose All members.');
+    // Read out by the focused box, so not announced a second time.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

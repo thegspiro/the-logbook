@@ -384,15 +384,19 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
           ? (fieldMessages[0] ?? '')
           : `Fix the ${fieldMessages.length} fields marked below.\n${fieldMessages.join(' · ')}`;
     const others = [...allMessages.map((m) => m.message), ...extra];
-    model.showFormError([summary, others.join(' ')].filter(Boolean).join('\n') || null);
-    // A banner of field refusals only is cleared once the last is fixed.
-    fieldBanner.current = others.length === 0 && fieldMessages.length > 0;
-    setStep(target);
-
     const firstField =
       target === TRAINING
         ? (Object.keys(TRAINING_FIELDS) as TrainingField[]).find((f) => trainingErrorsToShow[f])
         : (Object.keys(EVENT_FIELD_IDS) as EventField[]).find((f) => fieldErrors[f] && EVENT_FIELD_STEP[f] === target);
+    // The focused field reads its own refusal out, so the field summary is
+    // shown but not announced (forms batch 17); only what no focused field
+    // says goes in the announced banner.
+    model.showFormErrorSummary(firstField ? summary || null : null);
+    model.showFormError([firstField ? '' : summary, others.join(' ')].filter(Boolean).join('\n') || null);
+    // A banner of field refusals only is cleared once the last is fixed.
+    fieldBanner.current = others.length === 0 && fieldMessages.length > 0;
+    setStep(target);
+
     if (firstField && target === TRAINING) {
       requestFocus(TRAINING_FIELDS[firstField as TrainingField].id);
     } else if (firstField) {
@@ -413,14 +417,17 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     setTrainingErrors({});
   };
 
-  const { fieldErrors: eventFieldErrors, showFormError } = model;
+  const { fieldErrors: eventFieldErrors, showFormError, showFormErrorSummary } = model;
   useEffect(() => {
-    if (!fieldBanner.current) return;
-    if (Object.keys(eventFieldErrors).length === 0 && Object.keys(trainingErrors).length === 0) {
+    if (Object.keys(eventFieldErrors).length > 0 || Object.keys(trainingErrors).length > 0) return;
+    // The field summary goes with the last field refusal; the banner goes too
+    // when it held nothing else.
+    showFormErrorSummary(null);
+    if (fieldBanner.current) {
       fieldBanner.current = false;
       showFormError(null);
     }
-  }, [eventFieldErrors, trainingErrors, showFormError]);
+  }, [eventFieldErrors, trainingErrors, showFormError, showFormErrorSummary]);
 
   /** Cancel, asking first when something would be lost. */
   const requestCancel = async () => {
@@ -469,6 +476,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
       return;
     }
     fieldBanner.current = false;
+    model.showFormErrorSummary(null);
     model.showFormError(
       mapped?.unmatched.join(' ') ||
         getErrorDetail(err) ||

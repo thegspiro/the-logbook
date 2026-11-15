@@ -232,3 +232,117 @@ describe('TrainingEventWizard › a refusal on an earlier step', () => {
     expect(toastError).not.toHaveBeenCalled();
   });
 });
+
+/** Everything a screen reader is told without moving to it. */
+const announcedText = () =>
+  (['alert', 'status', 'log'] as const)
+    .flatMap((role) => screen.queryAllByRole(role))
+    .map((region) => region.textContent ?? '')
+    .join('\n');
+
+// Forms batch 17: the focused field reads its refusal out through its
+// description, so a live banner repeating it made a screen reader say it
+// twice. Only a refusal no field owns is announced.
+describe('TrainingEventWizard › a refusal is announced once', () => {
+  beforeEach(() => {
+    for (const mock of [
+      getUsers,
+      getCourses,
+      getLocations,
+      getVisibleEventTypesWithCategories,
+      getMandatoryTiers,
+      onSubmit,
+      toastError,
+    ]) {
+      mock.mockReset();
+    }
+    getUsers.mockResolvedValue([]);
+    getCourses.mockResolvedValue([]);
+    getLocations.mockResolvedValue([]);
+    getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [] });
+    getVisibleEventTypesWithCategories.mockResolvedValue({
+      visible_event_types: ['training'],
+      custom_event_categories: [],
+      visible_custom_categories: [],
+      membership_types: [{ value: 'active', label: 'Active Member' }],
+    });
+    onSubmit.mockResolvedValue(undefined);
+  });
+
+  it('leaves a refused Next to the focused field', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await next(user);
+
+    const title = screen.getByLabelText(/^Title/);
+    expect(title).toHaveAccessibleDescription(/Enter a title for the event\./);
+    await waitFor(() => expect(title).toHaveFocus());
+    expect(announcedText()).not.toContain('Enter a title for the event.');
+  });
+
+  it('leaves a refused training field on Next to the focused field', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /One-off course name/ }));
+    await next(user);
+
+    const courseName = screen.getByLabelText(/Course Name/);
+    await waitFor(() => expect(courseName).toHaveFocus());
+    expect(courseName).toHaveAccessibleDescription(/Enter a course name\./);
+    expect(announcedText()).not.toContain('Enter a course name.');
+  });
+
+  it('leaves a mapped 422 to the focused field', async () => {
+    onSubmit.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'title', message: 'String should have at most 200 characters' }] },
+      },
+    });
+    const user = userEvent.setup();
+    renderForm();
+    await fillAndReachReview(user);
+    await submit(user);
+
+    const title = await screen.findByLabelText(/^Title/);
+    await waitFor(() => expect(title).toHaveFocus());
+    expect(title).toHaveAccessibleDescription(/Title is too long — keep it to 200 characters\./);
+    expect(announcedText()).not.toContain('Title is too long');
+  });
+
+  it('announces the part of a 422 no field owns, and only that part', async () => {
+    onSubmit.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: {
+          detail: [
+            { field: 'training_details.course_name', message: 'String should have at most 255 characters' },
+            { field: 'nothing_here', message: 'The session could not be filed.' },
+          ],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderForm();
+    await fillAndReachReview(user);
+    await submit(user);
+
+    const courseName = await screen.findByLabelText(/Course Name/);
+    await waitFor(() => expect(courseName).toHaveFocus());
+    expect(courseName).toHaveAccessibleDescription(/Course name is too long/);
+    expect(screen.getByRole('alert')).toHaveTextContent('The session could not be filed.');
+    expect(announcedText()).not.toContain('Course name is too long');
+  });
+
+  it('announces a refusal with no field to hold it', async () => {
+    onSubmit.mockRejectedValueOnce({ response: { status: 500, data: { detail: 'The server is down.' } } });
+    const user = userEvent.setup();
+    renderForm();
+    await fillAndReachReview(user);
+    await submit(user);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The server is down.');
+  });
+});

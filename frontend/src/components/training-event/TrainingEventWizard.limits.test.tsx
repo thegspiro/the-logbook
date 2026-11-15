@@ -139,11 +139,12 @@ describe('TrainingEventWizard › Days of the Week', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Rolling 12-month cycle' }));
     await user.selectOptions(screen.getByLabelText(/^Repeats/), 'custom');
     await next(user);
-    expect(screen.getByRole('alert')).toHaveTextContent('Select at least one day for custom recurrence.');
+    // Under the group and in the (unannounced) summary above the step.
+    expect(screen.getAllByText('Select at least one day for custom recurrence.')).toHaveLength(2);
 
     await user.selectOptions(screen.getByLabelText(/^Repeats/), 'weekly');
 
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText('Select at least one day for custom recurrence.')).not.toBeInTheDocument();
     await next(user);
     expect(screen.getByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
   });

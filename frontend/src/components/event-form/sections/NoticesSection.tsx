@@ -4,7 +4,7 @@ import { FIELD_ERROR_CLASS } from '../../ux/FormField';
 import type { EventFormModel } from '../useEventFormModel';
 
 interface NoticesSectionProps {
-  model: Pick<EventFormModel, 'error' | 'attendanceLocked' | 'lockNoticeId' | 'initialRecurrence'>;
+  model: Pick<EventFormModel, 'error' | 'errorSummary' | 'attendanceLocked' | 'lockNoticeId' | 'initialRecurrence'>;
   /**
    * Which notices to draw. A form that places the lock notice above its step
    * indicator, so every step opens under it, draws the two apart.
@@ -20,13 +20,21 @@ interface NoticesSectionProps {
 
 /** The form's error summary and, on a finalized event, why some fields are locked. */
 export const NoticesSection: React.FC<NoticesSectionProps> = ({ model, show = 'all', lockBody }) => {
-  const { error, attendanceLocked, lockNoticeId, initialRecurrence } = model;
+  const { error, errorSummary, attendanceLocked, lockNoticeId, initialRecurrence } = model;
   return (
     <>
-      {show !== 'lock' && error && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
-          {/* A summary may run to a second line, listing each refusal. */}
-          <p className={`text-sm whitespace-pre-line ${FIELD_ERROR_CLASS}`}>{error}</p>
+      {show !== 'lock' && (error || errorSummary) && (
+        <div className="space-y-1 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+          {/* Not live: focus goes to the first refused field, whose description
+              reads the refusal out, so announcing the summary too says it
+              twice (forms batch 17). A summary may run to a second line,
+              listing each refusal. */}
+          {errorSummary && <p className={`text-sm whitespace-pre-line ${FIELD_ERROR_CLASS}`}>{errorSummary}</p>}
+          {error && (
+            <div role="alert" aria-live="assertive">
+              <p className={`text-sm whitespace-pre-line ${FIELD_ERROR_CLASS}`}>{error}</p>
+            </div>
+          )}
         </div>
       )}
 
