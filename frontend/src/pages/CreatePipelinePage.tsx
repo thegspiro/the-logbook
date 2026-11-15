@@ -400,6 +400,8 @@ const REQUIREMENT_TYPE_HELP: Record<string, string> = {
     'A number of shifts with a submitted shift evaluation. Accrue automatically once the member can see each evaluation.',
   transports: 'A number of patient transports, totalled from submitted shift evaluations.',
   refusals: 'A number of patient refusals, totalled from submitted shift evaluations.',
+  evaluated_calls:
+    'A number of calls, totalled from submitted shift evaluations. Counted apart from Call Responses, which come from shift reports.',
 };
 
 // Only the program's name is required to create it. The build request nests
@@ -939,6 +941,7 @@ const StepRequirements: React.FC<{
                             <option value="evaluated_shifts">Evaluated Shifts</option>
                             <option value="transports">Transports</option>
                             <option value="refusals">Refusals</option>
+                            <option value="evaluated_calls">Evaluated Calls</option>
                           </select>
                           {REQUIREMENT_TYPE_HELP[req.requirement_type] && (
                             <HelpText>{REQUIREMENT_TYPE_HELP[req.requirement_type]}</HelpText>
@@ -1089,10 +1092,12 @@ const StepRequirements: React.FC<{
                       idPrefix={`pipeline-${req.id}`}
                       type={req.requirement_type}
                       shifts={req.required_shifts}
+                      calls={req.required_calls}
                       transports={req.required_transports}
                       refusals={req.required_refusals}
                       excludesLowest={req.evaluation_excludes_lowest_rating}
                       onShiftsChange={(v) => onUpdateRequirement(phase.key, req.id, 'required_shifts', v)}
+                      onCallsChange={(v) => onUpdateRequirement(phase.key, req.id, 'required_calls', v)}
                       onTransportsChange={(v) => onUpdateRequirement(phase.key, req.id, 'required_transports', v)}
                       onRefusalsChange={(v) => onUpdateRequirement(phase.key, req.id, 'required_refusals', v)}
                       onExcludesLowestChange={(v) =>
@@ -1870,6 +1875,7 @@ const CreatePipelinePage: React.FC = () => {
           (req.requirement_type === 'hours' && !req.required_hours.trim()) ||
           (req.requirement_type === 'shifts' && !req.required_shifts.trim()) ||
           (req.requirement_type === 'calls' && !req.required_calls.trim()) ||
+          (req.requirement_type === 'evaluated_calls' && !req.required_calls.trim()) ||
           (req.requirement_type === 'evaluated_shifts' && !req.required_shifts.trim()) ||
           (req.requirement_type === 'transports' && !req.required_transports.trim()) ||
           (req.requirement_type === 'refusals' && !req.required_refusals.trim());

@@ -1125,6 +1125,9 @@ jobs:
   # once consumed a whole job's budget — because a cache miss (a new Ubuntu
   # image, a Playwright bump that changes the dependency list) still goes to
   # the network: a stall fails this job in minutes rather than hanging it.
+  # When the stall is the Azure mirror's, `install-webkit-deps.sh` first
+  # retries on archive.ubuntu.com, so a cache miss during an outage of that
+  # one mirror no longer fails the job.
   #
   # Until 2026-11-11 that cache had never once been saved, so every run went to
   # the mirror. See the step that hands the archive directory back after the
@@ -1224,9 +1227,16 @@ jobs:
           restore-keys: |
             apt-webkit-deps-${{ runner.os }}-
 
+      # Not a bare `npx playwright install-deps webkit`. On 2026-11-11 the
+      # Azure Ubuntu mirror stopped serving packages for three and a half
+      # hours and every shard timed out here before a test ran. The script
+      # spots that stall in apt's output, moves apt to archive.ubuntu.com and
+      # retries, all under an 18-minute deadline inside this step's 20. See
+      # its header for the detail.
       - name: Install WebKit system libraries
         timeout-minutes: 20
-        run: npx playwright install-deps webkit
+        run: |
+          "$GITHUB_WORKSPACE/.github/scripts/install-webkit-deps.sh"
 
       # apt hands archives/partial back to its own `_apt` user, mode 0700,
       # while it installs, and leaves root's `lock` file at 0640. The cache's

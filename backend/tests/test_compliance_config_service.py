@@ -149,7 +149,24 @@ class TestGenerateReport:
         # The report object was added; inspect the captured instance.
         report = db.add.call_args.args[0]
         assert report.status == ReportStatus.FAILED.value
-        assert report.error_message == "boom"
+        # error_message goes through safe_error_detail() (SEC17-1): a bare
+        # RuntimeError is not a trusted ValueError/PermissionError, so its raw
+        # text ("boom") must never reach the stored row — only the generic
+        # fallback may. The real exception is still logged at ERROR level.
+        assert report.error_message == "An unexpected error occurred. Please try again."
+
+    async def test_failure_with_a_validation_message_passes_it_through(
+        self, stub_annual
+    ):
+        """A ValueError's own message is safe and specific; it should survive
+        safe_error_detail() unlike an arbitrary exception's text."""
+        stub_annual.exc = ValueError("report_type must be 'monthly' or 'annual'")
+        db = _db([])
+        with pytest.raises(ValueError, match="report_type must be"):
+            await ComplianceReportService(db).generate_report("org-1", "annual", 2026)
+        report = db.add.call_args.args[0]
+        assert report.status == ReportStatus.FAILED.value
+        assert report.error_message == "report_type must be 'monthly' or 'annual'"
 
 
 # ---------------------------------------------------------------------------

@@ -707,7 +707,12 @@ const TrainingProgramsPage: React.FC<{ embedded?: boolean }> = ({ embedded = fal
                                     {req.requirement_type === 'evaluated_shifts' ? 'evaluated shifts' : 'shifts'}
                                   </span>
                                 )}
-                                {req.required_calls && <span>{req.required_calls} calls</span>}
+                                {req.required_calls && (
+                                  <span>
+                                    {req.required_calls}{' '}
+                                    {req.requirement_type === 'evaluated_calls' ? 'evaluated calls' : 'calls'}
+                                  </span>
+                                )}
                                 {req.required_transports && <span>{req.required_transports} transports</span>}
                                 {req.required_refusals && <span>{req.required_refusals} refusals</span>}
                                 <span>{req.frequency}</span>

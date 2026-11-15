@@ -1055,6 +1055,7 @@ export const REQUIREMENT_TYPE_LABELS: Record<string, string> = {
   evaluated_shifts: 'Evaluated shifts',
   transports: 'Transports',
   refusals: 'Refusals',
+  evaluated_calls: 'Evaluated calls',
   session_attendance: 'Session attendance',
 };
 
@@ -1071,6 +1072,7 @@ export const REQUIREMENT_TYPE_OPTIONS: { value: string; label: string }[] = [
   'evaluated_shifts',
   'transports',
   'refusals',
+  'evaluated_calls',
 ].map((value) => ({ value, label: REQUIREMENT_TYPE_LABELS[value] ?? value }));
 
 /** Weekday numbers used by meeting patterns (0 = Monday, matching Python). */
