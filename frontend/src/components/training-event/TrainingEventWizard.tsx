@@ -136,6 +136,39 @@ interface StepMessage {
   message: string;
 }
 
+/**
+ * The banner's list of field refusals, read from `onStep`. One 422 can refuse
+ * fields on two steps while the form shows one, so the head says how many are
+ * on this step and which steps hold the rest, rather than "marked below" over
+ * a step that marks only some of them. In the order the fields are drawn, so
+ * the list reads as the form does.
+ */
+const describeRefusals = (eventErrors: EventErrors, trainingErrors: TrainingErrors, onStep: WizardStep): string => {
+  const refusals = [
+    ...(Object.keys(EVENT_FIELD_IDS) as EventField[]).map((f) => ({
+      step: EVENT_FIELD_STEP[f],
+      message: eventErrors[f],
+    })),
+    ...(Object.keys(TRAINING_FIELDS) as TrainingField[]).map((f) => ({
+      step: TRAINING,
+      message: trainingErrors[f],
+    })),
+  ].filter((r): r is { step: WizardStep; message: string } => Boolean(r.message));
+  const only = refusals.length === 1 ? refusals[0] : undefined;
+  if (refusals.length === 0) return '';
+  if (only?.step === onStep) return only.message;
+  const list = refusals.map((r) => r.message).join(' · ');
+  const here = refusals.filter((r) => r.step === onStep).length;
+  if (here === refusals.length) return `Fix the ${refusals.length} fields marked below.\n${list}`;
+  const elsewhere = [...new Set(refusals.map((r) => r.step))]
+    .filter((s) => s !== onStep)
+    .sort()
+    .map((s) => `${refusals.filter((r) => r.step === s).length} on ${STEP_TITLES[s]}`);
+  const where = [...(here ? [`${here} marked below`] : []), ...elsewhere].join(', ');
+  const noun = refusals.length === 1 ? 'field' : 'fields';
+  return `Fix the ${refusals.length} refused ${noun}: ${where}.\n${list}`;
+};
+
 interface FocusRequest {
   id: string;
   seq: number;
@@ -406,17 +439,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
 
     model.setFieldErrors(fieldErrors);
     setTrainingErrors(trainingErrorsToShow);
-    // In the order the fields are drawn, so the list reads as the form does.
-    const fieldMessages = [
-      ...(Object.keys(EVENT_FIELD_IDS) as EventField[]).map((f) => fieldErrors[f]),
-      ...(Object.keys(TRAINING_FIELDS) as TrainingField[]).map((f) => trainingErrorsToShow[f]),
-    ].filter((message): message is string => Boolean(message));
-    const summary =
-      fieldMessages.length === 0
-        ? ''
-        : fieldMessages.length === 1
-          ? (fieldMessages[0] ?? '')
-          : `Fix the ${fieldMessages.length} fields marked below.\n${fieldMessages.join(' · ')}`;
+    const summary = describeRefusals(fieldErrors, trainingErrorsToShow, target);
     const others = [...allMessages.map((m) => m.message), ...extra];
     const firstField =
       target === TRAINING
@@ -428,7 +451,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     model.showFormErrorSummary(firstField ? summary || null : null);
     model.showFormError([firstField ? '' : summary, others.join(' ')].filter(Boolean).join('\n') || null);
     // A banner of field refusals only is cleared once the last is fixed.
-    fieldBanner.current = others.length === 0 && fieldMessages.length > 0;
+    fieldBanner.current = others.length === 0 && summary !== '';
     const moved = target !== step;
     setStep(target);
 
@@ -491,21 +514,51 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     if (discard) onCancel();
   };
 
-  const goTo = (next: WizardStep) => {
+  /**
+   * Leave `leaving` for `next`. Its own refusals go, as they always have; a
+   * refusal on another step stays under its field until that field is
+   * edited, or a fresh check or save replaces it, so a 422 that named fields
+   * on two steps still marks the second once the first is fixed. Arriving on
+   * a step that holds one focuses it, which reads the refusal out.
+   */
+  const goTo = (leaving: WizardStep, next: WizardStep) => {
     setStep(next);
-    requestFocus(STEP_HEADING_ID);
+    const eventLeft = Object.fromEntries(
+      Object.entries(model.fieldErrors).filter(([field]) => EVENT_FIELD_STEP[field as EventField] !== leaving)
+    ) as EventErrors;
+    const trainingLeft: TrainingErrors = leaving === TRAINING ? {} : trainingErrors;
+    const summary = describeRefusals(eventLeft, trainingLeft, next);
+    if (!summary) {
+      clearAllErrors();
+      requestFocus(STEP_HEADING_ID);
+      return;
+    }
+    model.setFieldErrors(eventLeft);
+    setTrainingErrors(trainingLeft);
+    model.showFormErrorSummary(summary);
+    // A banner of field refusals only is now said by the summary.
+    if (fieldBanner.current) model.showFormError(null);
+    const firstHere =
+      next === TRAINING
+        ? (Object.keys(TRAINING_FIELDS) as TrainingField[]).find((f) => trainingLeft[f])
+        : (Object.keys(EVENT_FIELD_IDS) as EventField[]).find((f) => eventLeft[f] && EVENT_FIELD_STEP[f] === next);
+    requestFocus(
+      firstHere === undefined
+        ? STEP_HEADING_ID
+        : next === TRAINING
+          ? TRAINING_FIELDS[firstHere as TrainingField].id
+          : EVENT_FIELD_IDS[firstHere as EventField]
+    );
   };
 
   const handleNext = () => {
     const { event, training: trainingInvalid, messages } = collect(step);
     if (showErrors(event, trainingInvalid, messages)) return;
-    clearAllErrors();
-    goTo(Math.min(REVIEW, step + 1) as WizardStep);
+    goTo(step, Math.min(REVIEW, step + 1) as WizardStep);
   };
 
   const handlePrevious = () => {
-    clearAllErrors();
-    goTo(Math.max(DETAILS, step - 1) as WizardStep);
+    goTo(step, Math.max(DETAILS, step - 1) as WizardStep);
   };
 
   /** A refused save: a 422 under the fields it names, anything else in the banner. */
@@ -845,10 +898,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
                 durationHours={durationHours}
                 courses={courses}
                 linkageData={linkageData}
-                onEdit={(target) => {
-                  clearAllErrors();
-                  goTo(REVIEW_TARGET_STEP[target]);
-                }}
+                onEdit={(target) => goTo(REVIEW, REVIEW_TARGET_STEP[target])}
                 editing={editing}
                 original={originalTraining}
                 scopeChoice={scopeChoice}

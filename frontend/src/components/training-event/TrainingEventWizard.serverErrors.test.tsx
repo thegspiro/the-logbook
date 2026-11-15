@@ -155,6 +155,40 @@ describe('TrainingEventWizard › refusals on their fields', () => {
     expect(toastError).toHaveBeenCalledTimes(1);
   });
 
+  // One 422 can refuse fields on two steps. The form goes to the earlier one,
+  // the banner says where the other is rather than "marked below", and Next
+  // keeps the later step's refusal under its own field.
+  it('keeps a 422 on a later step marked on that step after Next', async () => {
+    onSubmit.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: {
+          detail: [
+            { field: 'title', message: 'String should have at most 200 characters' },
+            { field: 'training_details.course_code', message: 'String should have at most 50 characters' },
+          ],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderForm();
+    await fillAndReachReview(user);
+    await submit(user);
+
+    expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+    expect(screen.getByText(/^Fix the 2 refused fields: 1 marked below, 1 on Training Info\./)).toBeInTheDocument();
+    expect(screen.queryByText(/fields marked below/)).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText(/^Title/)).toHaveFocus());
+
+    await next(user);
+
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    const courseCode = screen.getByLabelText(/Course Code/);
+    expect(courseCode).toHaveAttribute('aria-invalid', 'true');
+    expect(courseCode).toHaveAccessibleDescription(/Course code is too long — keep it to 50 characters\./);
+    await waitFor(() => expect(courseCode).toHaveFocus());
+  });
+
   // Mandatory unticked, so no member-type box is drawn to hold the refusal or
   // take focus: it is announced in the step's banner, and focus goes to the
   // step line rather than dropping to the page.
