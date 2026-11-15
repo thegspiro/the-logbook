@@ -93,14 +93,20 @@ describe('EmailTemplatesPage tab deep links', () => {
  * happened to produce the right pane.
  */
 describe('EmailTemplatesPage editor layout', () => {
-  it('lays the three columns out at lg', () => {
-    expect(source).toContain('lg:grid-cols-[296px_minmax(0,1fr)_468px]');
+  // Three columns need ~812px before the editor gets any: from `lg` with the
+  // sidebar open that crushed the editor to nothing. Two columns from `xl`
+  // (list beside a shared editor/preview), three only from `2xl`.
+  it('lays the list beside the editor at xl and all three columns at 2xl', () => {
+    expect(source).toContain('xl:grid-cols-[296px_minmax(0,1fr)]');
+    expect(source).toContain('2xl:grid-cols-[296px_minmax(0,1fr)_468px]');
+    expect(source).not.toContain(' lg:grid-cols-');
   });
 
-  it('keeps the edit/preview strip only below lg', () => {
-    // Above `lg` both panes are on screen and a switch decides nothing; the
-    // strip is what makes the stacked phone layout usable.
-    expect(source).toContain('tab-scroll lg:hidden');
+  it('keeps the edit/preview strip only below 2xl', () => {
+    // From `2xl` both panes are on screen and a switch decides nothing; below
+    // it the two share a column, and the strip is what swaps them.
+    expect(source).toContain('2xl:hidden');
+    expect(source).toMatch(/className="tab-scroll [^"]*2xl:hidden"/);
   });
 
   it('previews the unsaved draft rather than the stored template', () => {

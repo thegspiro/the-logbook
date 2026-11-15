@@ -20,6 +20,8 @@ from app.api.v1.endpoints import storefront as storefront_endpoints
 from app.models.notification import NotificationChannel, NotificationLog
 from app.models.storefront import (
     StoreFulfillmentMethod,
+    StoreOrderEvent,
+    StoreOrderEventType,
     StoreOrderStatus,
     StoreOrderWindow,
     StorePaymentMethod,
@@ -2373,3 +2375,170 @@ class TestAdminDashboardEndpoint:
 
         assert dashboard.active_window is None
         assert dashboard.open_order_count == 0
+
+
+class TestOrderStatusTransitions:
+    """W67b-4: the status route moved an order anywhere, backwards included.
+
+    Owner decision (2026-11-14): forward moves stay free; backward moves are
+    corrections among Ordered / Ready for pickup / Fulfilled only; the payment
+    states follow the ledger; Cancelled goes through cancel_order.
+    """
+
+    async def _ordered_order(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org, payment_policy=StorePaymentPolicy.NONE)
+        member = await _make_member(db_session, org)
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+        order = await service.update_order_status(
+            order.id, org.id, StoreOrderStatus.ORDERED, None, notify_member=False
+        )
+        return service, org, order
+
+    async def _event_count(self, db_session, order_id):
+        rows = await db_session.execute(
+            select(StoreOrderEvent).where(StoreOrderEvent.order_id == order_id)
+        )
+        return len(rows.scalars().all())
+
+    async def test_setting_the_current_status_again_changes_nothing(self, db_session):
+        service, org, order = await self._ordered_order(db_session)
+        before = await self._event_count(db_session, order.id)
+        service.notifications.send_order_update = AsyncMock()
+
+        again = await service.update_order_status(
+            order.id, org.id, StoreOrderStatus.ORDERED, None
+        )
+
+        assert again.status == StoreOrderStatus.ORDERED
+        assert await self._event_count(db_session, order.id) == before
+        service.notifications.send_order_update.assert_not_awaited()
+
+    async def test_cancelled_through_the_status_route_is_a_real_cancellation(
+        self, db_session
+    ):
+        service, org, order = await self._ordered_order(db_session)
+
+        cancelled = await service.update_order_status(
+            order.id,
+            org.id,
+            StoreOrderStatus.CANCELLED,
+            None,
+            message="The vendor discontinued it",
+            notify_member=False,
+        )
+
+        assert cancelled.status == StoreOrderStatus.CANCELLED
+        assert cancelled.cancelled_at is not None
+        assert cancelled.cancellation_reason == "The vendor discontinued it"
+        # Read from the table: the returned order's events were loaded before
+        # the cancel, and the identity map hands back that collection.
+        rows = await db_session.execute(
+            select(StoreOrderEvent.event_type).where(
+                StoreOrderEvent.order_id == order.id
+            )
+        )
+        assert StoreOrderEventType.CANCELLED in rows.scalars().all()
+
+    async def test_an_order_cannot_move_back_into_a_payment_state(self, db_session):
+        service, org, order = await self._ordered_order(db_session)
+        await service.update_order_status(
+            order.id, org.id, StoreOrderStatus.FULFILLED, None, notify_member=False
+        )
+
+        for target in (
+            StoreOrderStatus.AWAITING_PAYMENT,
+            StoreOrderStatus.SUBMITTED,
+            StoreOrderStatus.PAID,
+        ):
+            with pytest.raises(ValueError, match="cannot move back"):
+                await service.update_order_status(
+                    order.id, org.id, target, None, notify_member=False
+                )
+
+        current = await service.get_order(order.id, org.id)
+        assert current.status == StoreOrderStatus.FULFILLED
+
+    async def test_a_settled_order_cannot_be_marked_awaiting_payment(self, db_session):
+        service, org, order = await self._ordered_order(db_session)
+        # A settled order still at Submitted is unusual but reachable through
+        # a waiver; the point is the ledger, not the stage.
+        order.status = StoreOrderStatus.SUBMITTED
+        order.payment_status = StorePaymentStatus.WAIVED
+        await db_session.flush()
+
+        with pytest.raises(ValueError, match="already settled"):
+            await service.update_order_status(
+                order.id,
+                org.id,
+                StoreOrderStatus.AWAITING_PAYMENT,
+                None,
+                notify_member=False,
+            )
+
+    async def test_a_fulfilment_mistake_can_be_corrected(self, db_session):
+        service, org, order = await self._ordered_order(db_session)
+        await service.update_order_status(
+            order.id, org.id, StoreOrderStatus.FULFILLED, None, notify_member=False
+        )
+
+        corrected = await service.update_order_status(
+            order.id,
+            org.id,
+            StoreOrderStatus.READY_FOR_PICKUP,
+            None,
+            notify_member=False,
+        )
+
+        assert corrected.status == StoreOrderStatus.READY_FOR_PICKUP
+        # It is no longer fulfilled, so nothing may still say it was.
+        assert corrected.fulfilled_at is None
+        assert corrected.fulfilled_by is None
+        assert all(item.fulfilled_quantity == 0 for item in corrected.items)
+
+    async def test_bulk_skips_a_refused_move_and_reports_it(self, db_session):
+        service, org, order = await self._ordered_order(db_session)
+        # A refusal rolls back to release the order's lock, which expires
+        # every loaded object, so keep the ids as plain strings.
+        org_id, order_id = str(org.id), str(order.id)
+
+        result = await service.bulk_update_status(
+            org_id,
+            [order_id],
+            StoreOrderStatus.AWAITING_PAYMENT,
+            None,
+            notify_members=False,
+        )
+
+        assert result["updated"] == 0
+        assert result["skipped"] == 1
+        assert "cannot move back" in result["errors"][0]["error"]
+        current = await service.get_order(order_id, org_id)
+        assert current.status == StoreOrderStatus.ORDERED
+
+    async def test_bulk_to_paid_goes_on_past_a_refused_order(self, db_session):
+        # A move to PAID locks each order first; a refused one is rolled back
+        # so its lock is released, and the next order is still processed.
+        service, org, ordered = await self._ordered_order(db_session)
+        member = await _make_member(db_session, org, first="Second")
+        product = await _make_product(db_session, org, name="Cap")
+        waiting = await service.create_order(org.id, member, _cart(product.id))
+        org_id, ordered_id, waiting_id = str(org.id), str(ordered.id), str(waiting.id)
+
+        result = await service.bulk_update_status(
+            org_id,
+            [ordered_id, waiting_id],
+            StoreOrderStatus.PAID,
+            None,
+            notify_members=False,
+        )
+
+        assert result["updated"] == 1
+        assert result["skipped"] == 1
+        assert result["errors"][0]["order_id"] == ordered_id
+        paid = await service.get_order(waiting_id, org_id)
+        assert paid.status == StoreOrderStatus.PAID
+        assert paid.payment_status == StorePaymentStatus.PAID

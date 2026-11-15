@@ -68,9 +68,9 @@ Not driven: MFA sign-in (W04 enrols MFA first), Google and Microsoft sign-in (no
 **Where:** `ACCOUNT_LOCKOUT_REVEAL=False` (the default, SEC-14) is deliberate. The seconds-long countdown (`authStore.ts`, `LOGIN_BACKOFF_BASE_MS`) and the missing admin visibility are what turn it into a support call nobody can diagnose.
 **Why not fixed:** copy that hints at a possible lock, an admin lock indicator with an Unlock action, or recommending `ACCOUNT_LOCKOUT_REVEAL=True` are product and security calls. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
 
-### W02-5 — LOW — The sign-in screen's links are too small to tap on a phone — OPEN
+### W02-5 — LOW — The sign-in screen's links are too small to tap on a phone — ✅ FIXED (W79-1)
 
-At 390px, "Forgot your password?" is 16px tall, and Privacy and Terms are 14px. The inputs are 42px, just under the 44px minimum. Left for the W79 phone pass.
+At 390px, "Forgot your password?" is 16px tall, and Privacy and Terms are 14px. The inputs are 42px, just under the 44px minimum. Fixed in the W79 phone pass (W79-1). Measured again on 2026-11-14 at 390px: the fields, Forgot your password?, Privacy and Terms are all 44px.
 
 ### W02-6 — NIT — The lockout recovery script documented a 30-minute lock — ✅ FIXED
 
@@ -89,7 +89,7 @@ The server ends a session after 15 idle minutes, so every session the seed saved
 | 3. Wrong input, failure | ✅ after W02-2; W02-4 flagged                                        |
 | 4. Browser signals      | ✅ only the expected 401s and the deliberate 429                     |
 | 5. Coming back to it    | ✅ Back after sign-out stays out; deep links return with their query |
-| 6. On a phone           | ✅ no overflow; W02-5 open                                           |
+| 6. On a phone           | ✅ no overflow; W02-5 fixed (W79-1)                                  |
 | 7. Everyone can use it  | ✅ labels, autocomplete, Tab order, errors in `role=alert`           |
 | 8. What happens around  | W02-3 flagged (no audit trail for password sign-in)                  |
 

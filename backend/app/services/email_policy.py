@@ -232,6 +232,8 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "An officer voided one of your training records, and why",
             "An officer edited one of your training records",
             "A decision on your request to be excused from a training session",
+            "A leave of absence recorded, changed or removed, and what it does "
+            "to your training requirements",
         ),
         rationale=(
             "Changes to the member's official training record, which they "

@@ -33,6 +33,7 @@ from app.models.document import (
     FACILITY_ACCESS_PERMISSIONS,
     FACILITY_FOLDER_PERMISSIONS,
     FACILITY_SUB_FOLDERS,
+    HISTORY_DOCUMENT_SOURCE_TYPE,
     Document,
     DocumentFolder,
     DocumentStatus,
@@ -2025,6 +2026,10 @@ class DocumentsService:
         )
         if not document:
             return False
+        if document.source_type == HISTORY_DOCUMENT_SOURCE_TYPE:
+            # Every deletion path ends here (the Documents screen, apparatus,
+            # facilities), so History's documents are protected in one place.
+            raise ValueError("This document is catalogued in History. Delete it there.")
 
         file_path = document.file_path
         # A facility record can reference this document without a foreign
@@ -3094,6 +3099,86 @@ class DocumentsService:
             .with_for_update(read=True)
         )
         return folder
+
+    HISTORY_ROOT_SLUG = "history"
+
+    async def _history_root(
+        self, organization_id: UUID | str, *, lock: bool
+    ) -> Optional[DocumentFolder]:
+        query = (
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == str(organization_id))
+            .where(DocumentFolder.slug == self.HISTORY_ROOT_SLUG)
+            .where(DocumentFolder.is_system.is_(True))
+            .where(DocumentFolder.parent_id.is_(None))
+            .order_by(DocumentFolder.id)
+            .limit(1)
+        )
+        if lock:
+            query = query.with_for_update()
+        return (await self.db.execute(query)).scalar_one_or_none()
+
+    async def ensure_history_folder(
+        self, organization_id: UUID | str
+    ) -> DocumentFolder:
+        """The History root, created if missing, share-locked for a filing.
+
+        History/   (system, history.manage only — the originals of the
+                    archive's documents; HISTORY_FOLDER_PERMISSIONS)
+
+        Same read-then-write shape as ``ensure_finance_receipts_folder``: no
+        uniqueness constraint backs the slug, so creation happens under the
+        organization row lock and re-checks there (Pitfall #27). The share
+        lock afterwards is level 1 of the canonical lock order, taken before
+        the document row the caller is about to insert.
+        """
+        folder = await self._history_root(organization_id, lock=False)
+        if folder is None:
+            org = await self.db.scalar(
+                select(Organization)
+                .where(Organization.id == str(organization_id))
+                .with_for_update()
+            )
+            if org is None:
+                raise ValueError("Organization not found")
+            folder = await self._history_root(organization_id, lock=True)
+            if folder is None:
+                folder = DocumentFolder(
+                    organization_id=organization_id,
+                    **system_folder_fields(self.HISTORY_ROOT_SLUG),
+                )
+                self.db.add(folder)
+                await self.db.flush()
+        await self.db.execute(
+            select(DocumentFolder.id)
+            .where(DocumentFolder.id == folder.id)
+            .with_for_update(read=True)
+        )
+        return folder
+
+    async def is_in_history_tree(
+        self, folder: DocumentFolder, organization_id: UUID | str
+    ) -> bool:
+        """Whether *folder* is the History root or anywhere beneath it.
+
+        Files there are filed through History, which strips and catalogues
+        them; the Documents upload refuses them so nothing sits in the
+        archive's folder uncatalogued.
+        """
+        current: Optional[DocumentFolder] = folder
+        seen: Set[str] = set()
+        while current is not None and str(current.id) not in seen:
+            seen.add(str(current.id))
+            if (
+                current.parent_id is None
+                and current.is_system
+                and current.slug == self.HISTORY_ROOT_SLUG
+            ):
+                return True
+            if current.parent_id is None:
+                return False
+            current = await self.get_folder_by_id(current.parent_id, organization_id)
+        return False
 
     async def _lock_events_root(
         self, organization_id: UUID | str

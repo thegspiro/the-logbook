@@ -128,6 +128,8 @@ _PLAIN_COLUMNS = [
     ("member_leaves_of_absence", "id", ["reason"]),
     ("training_waivers", "id", ["reason"]),
     ("attendance_waiver_requests", "id", ["reason"]),
+    ("leave_requests", "id", ["reason"]),
+    ("leave_request_votes", "id", ["note"]),
     ("attendance_waiver_request_actions", "id", ["note"]),
     ("training_requirement_overrides", "id", ["reason"]),
     (
@@ -193,6 +195,7 @@ _PLAIN_COLUMNS = [
     ("history_revisions", "id", ["snapshot"]),
     ("history_import_rows", "id", ["cells", "edits"]),
     ("history_media", "id", ["research_notes"]),
+    ("history_documents", "document_id", ["research_notes"]),
     ("integrations", "id", ["encrypted_config"]),
     (
         "quickbooks_connections",
