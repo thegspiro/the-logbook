@@ -1,24 +1,21 @@
 /**
- * The card has two contracts worth pinning.
+ * The card is a read-only summary of the session (owner decision,
+ * 2026-11-10): the training form edits it, and the card links an event
+ * manager there. Its contracts worth pinning:
  *
- * The update contract: every field the editor owns goes on every save, and a
- * link the officer cleared travels as an explicit `null`. Omitting the key
- * means "leave this alone" on the backend, so a dropped null would leave the
- * old link in place behind a success toast (CLAUDE.md pitfall #1).
+ * What it reports comes from the session, as the backend holds it, including
+ * the approval (pitfall #29), and a session with no course says what its
+ * credit is filed under rather than naming the title as a course.
  *
  * The lock: the event's attendance lock, not the session's own flag, decides
- * whether details may change, and the card reports the approval the backend
- * holds rather than guessing at it (pitfall #29).
+ * what the card says may still change.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 
 const mockGetSessionByEvent = vi.fn();
-const mockUpdateSessionLinkage = vi.fn();
-const mockAttachSession = vi.fn();
 const mockGetApprovalSummary = vi.fn();
 const mockReopenSession = vi.fn();
 const mockGetCourses = vi.fn();
@@ -30,8 +27,6 @@ const mockGetProgramPhases = vi.fn();
 vi.mock('../../services/api', () => ({
   trainingSessionService: {
     getSessionByEvent: (...args: unknown[]) => mockGetSessionByEvent(...args) as unknown,
-    updateSessionLinkage: (...args: unknown[]) => mockUpdateSessionLinkage(...args) as unknown,
-    attachSession: (...args: unknown[]) => mockAttachSession(...args) as unknown,
     getApprovalSummary: (...args: unknown[]) => mockGetApprovalSummary(...args) as unknown,
     reopenSession: (...args: unknown[]) => mockReopenSession(...args) as unknown,
   },
@@ -46,11 +41,10 @@ vi.mock('../../services/api', () => ({
   },
 }));
 
-const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 vi.mock('react-hot-toast', () => ({
   default: {
-    success: (...args: unknown[]) => mockToastSuccess(...args) as unknown,
+    success: vi.fn(),
     error: (...args: unknown[]) => mockToastError(...args) as unknown,
   },
 }));
@@ -93,6 +87,7 @@ interface CardProps {
   attendanceFinalized?: boolean;
   refreshKey?: number;
   onSessionChange?: (session: TrainingSessionResponse | null) => void;
+  customFields?: Record<string, string | number | boolean | null> | undefined;
 }
 
 const renderCard = (initial: CardProps = {}) => {
@@ -102,6 +97,7 @@ const renderCard = (initial: CardProps = {}) => {
     attendanceFinalized = false,
     refreshKey = 0,
     onSessionChange,
+    customFields,
   }: CardProps) => (
     <MemoryRouter>
       <TrainingSessionLinkageCard
@@ -112,6 +108,7 @@ const renderCard = (initial: CardProps = {}) => {
         attendanceFinalized={attendanceFinalized}
         refreshKey={refreshKey}
         onSessionChange={onSessionChange}
+        customFields={customFields}
       />
     </MemoryRouter>
   );
@@ -125,15 +122,10 @@ const renderCard = (initial: CardProps = {}) => {
 
 describe('TrainingSessionLinkageCard', () => {
   beforeEach(() => {
-    mockToastSuccess.mockReset();
     mockToastError.mockReset();
     mockReopenSession.mockReset();
     mockGetSessionByEvent.mockReset();
     mockGetSessionByEvent.mockResolvedValue(SESSION);
-    mockUpdateSessionLinkage.mockReset();
-    mockUpdateSessionLinkage.mockResolvedValue({ ...SESSION, category_id: undefined });
-    mockAttachSession.mockReset();
-    mockAttachSession.mockResolvedValue({ ...SESSION, id: 'sess-new', training_type: 'skills_practice' });
     mockGetApprovalSummary.mockReset();
     mockGetApprovalSummary.mockResolvedValue(null);
     mockGetCourses.mockReset();
@@ -172,6 +164,151 @@ describe('TrainingSessionLinkageCard', () => {
     mockGetProgramPhases.mockResolvedValue([]);
   });
 
+  // A session the old Events form attached carried none of these: they were
+  // written to the event's custom_fields only.
+  describe('a session attached before the training form', () => {
+    const LEGACY: TrainingSessionResponse = {
+      ...SESSION,
+      instructor: null,
+      issues_certification: false,
+      issuing_agency: null,
+      expiration_months: null,
+      auto_create_records: true,
+    };
+    const CUSTOM_FIELDS = {
+      instructor: 'Capt. Owen Kittredge',
+      issues_certification: true,
+      issuing_agency: 'AHA',
+      expiration_months: 24,
+      auto_create_records: false,
+    };
+
+    beforeEach(() => {
+      mockGetSessionByEvent.mockResolvedValue(LEGACY);
+    });
+
+    // Nothing reads these copies: finalize credits from the session, and the
+    // training form shows the session. The card substituted them for it.
+    it('reports the session as in effect, and the old copies as not applied', async () => {
+      renderCard({ canManage: true, customFields: CUSTOM_FIELDS });
+
+      expect(await screen.findByText('Training records')).toBeInTheDocument();
+      expect(screen.getByText('None')).toBeInTheDocument();
+      expect(screen.queryByText(/^Issued/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Lead Instructor')).not.toBeInTheDocument();
+      expect(screen.getByText('Started at check-in, completed when attendance is finalized')).toBeInTheDocument();
+      expect(
+        within(screen.getByRole('list', { name: 'Entered on the old form, not applied' }))
+          .getAllByRole('listitem')
+          .map((item) => item.textContent)
+      ).toEqual([
+        'Lead instructor: Capt. Owen Kittredge',
+        'Issues a certification',
+        'Issuing agency: AHA',
+        'Expires after 24 months',
+        'Training records created only when attendance is finalized',
+      ]);
+      expect(screen.getByText('Attendance is credited with the details above.', { exact: false })).toHaveTextContent(
+        'To use any of these, enter them with Edit training details.'
+      );
+    });
+
+    it('prefers what the session holds', async () => {
+      mockGetSessionByEvent.mockResolvedValue({
+        ...LEGACY,
+        instructor: 'Lt. Dana Okafor',
+        instructor_id: 'u-1',
+        issues_certification: true,
+        issuing_agency: 'State Fire Training',
+        expiration_months: 12,
+      });
+      renderCard({ customFields: CUSTOM_FIELDS });
+
+      expect(await screen.findByText('Lt. Dana Okafor')).toBeInTheDocument();
+      expect(screen.getByText('Issued by State Fire Training · expires after 12 months')).toBeInTheDocument();
+      expect(screen.getByText('Lead instructor: Capt. Owen Kittredge')).toBeInTheDocument();
+    });
+
+    it('lists nothing as not applied when the copies match the session', async () => {
+      mockGetSessionByEvent.mockResolvedValue({
+        ...LEGACY,
+        instructor: 'Capt. Owen Kittredge',
+        issues_certification: true,
+        issuing_agency: 'AHA',
+        expiration_months: 24,
+        auto_create_records: false,
+      });
+      renderCard({ customFields: CUSTOM_FIELDS });
+
+      expect(await screen.findByText('Issued by AHA · expires after 24 months')).toBeInTheDocument();
+      expect(screen.queryByText('Entered on the old form, not applied')).not.toBeInTheDocument();
+    });
+  });
+
+  // Until the requirements load, every linked id matched nothing and read as retired.
+  it('names no linked requirement as retired before the requirements have loaded', async () => {
+    let release: (value: unknown) => void = () => {};
+    mockGetRequirements.mockReturnValue(new Promise((resolve) => (release = resolve)));
+    mockGetSessionByEvent.mockResolvedValue({ ...SESSION, attendance_requirement_ids: ['req-att'] });
+    renderCard({ canManage: true });
+
+    expect(await screen.findByText('Course')).toBeInTheDocument();
+    expect(screen.queryByText('A requirement no longer active')).not.toBeInTheDocument();
+
+    await act(async () => {
+      release([
+        {
+          id: 'req-att',
+          organization_id: 'org-1',
+          name: 'Company Drill Attendance',
+          requirement_type: 'session_attendance',
+          required_attendance_pct: 60,
+          source: 'department',
+          frequency: 'annual',
+          applies_to_all: true,
+          due_date_type: 'calendar_period',
+          active: true,
+          created_at: '',
+          updated_at: '',
+        },
+      ]);
+      await Promise.resolve();
+    });
+    expect(screen.getByText('Company Drill Attendance (60%)')).toBeInTheDocument();
+  });
+
+  // The training form names the same link "<name> (no longer active)"; the
+  // card read only the active list and fell back to a generic label.
+  it('names a linked requirement that is no longer active, as the training form does', async () => {
+    const attendance = {
+      organization_id: 'org-1',
+      requirement_type: 'session_attendance',
+      source: 'department',
+      frequency: 'annual',
+      applies_to_all: true,
+      due_date_type: 'calendar_period',
+      created_at: '',
+      updated_at: '',
+    };
+    const active = {
+      ...attendance,
+      id: 'r-cda',
+      name: 'Company Drill Attendance',
+      required_attendance_pct: 50,
+      active: true,
+    };
+    const retired = { ...attendance, id: 'r-old', name: 'Legacy Night Drill Attendance', active: false };
+    mockGetRequirements.mockImplementation((params?: { active_only?: boolean }) =>
+      Promise.resolve(params?.active_only === false ? [active, retired] : [active])
+    );
+    mockGetSessionByEvent.mockResolvedValue({ ...SESSION, attendance_requirement_ids: ['r-cda', 'r-old'] });
+    renderCard();
+
+    expect(await screen.findByText('Legacy Night Drill Attendance (no longer active)')).toBeInTheDocument();
+    expect(screen.getByText('Company Drill Attendance (50%)')).toBeInTheDocument();
+    expect(screen.queryByText('A requirement no longer active')).not.toBeInTheDocument();
+  });
+
   describe('an event with no training details', () => {
     beforeEach(() => {
       mockGetSessionByEvent.mockResolvedValue(null);
@@ -193,14 +330,18 @@ describe('TrainingSessionLinkageCard', () => {
           /No training details: attendance will be credited as .Hose drill., Continuing Education\./
         )
       ).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Add training details' })).toBeInTheDocument();
+      // The training form adds them, opened on its Training Info step.
+      expect(screen.getByRole('link', { name: 'Add training details' })).toHaveAttribute(
+        'href',
+        '/events/evt-1/edit?step=training'
+      );
     });
 
-    it('shows a training officer the same, without the add button', async () => {
+    it('shows a training officer the same, without the add link', async () => {
       renderCard({ canApprove: true });
 
       expect(await screen.findByText(/No training details: attendance will be credited as/)).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Add training details' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Add training details' })).not.toBeInTheDocument();
     });
 
     it('points to a reopen once attendance is finalized', async () => {
@@ -209,29 +350,7 @@ describe('TrainingSessionLinkageCard', () => {
       expect(
         await screen.findByText('Details can be added after someone who can reopen attendance reopens it.')
       ).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Add training details' })).not.toBeInTheDocument();
-    });
-
-    it('attaches only what was picked and reports the new session', async () => {
-      const onSessionChange = vi.fn();
-      const user = userEvent.setup();
-      renderCard({ canManage: true, onSessionChange });
-
-      await user.click(await screen.findByRole('button', { name: 'Add training details' }));
-      const addButton = screen.getByRole('button', { name: 'Add details' });
-      // Nothing picked yet: attaching would change nothing about the credit.
-      expect(addButton).toBeDisabled();
-
-      await user.selectOptions(screen.getByLabelText('Training Type'), 'skills_practice');
-      await user.click(addButton);
-
-      await waitFor(() =>
-        expect(mockAttachSession).toHaveBeenCalledWith('evt-1', { training_type: 'skills_practice' })
-      );
-      await waitFor(() =>
-        expect(onSessionChange).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'sess-new' }))
-      );
-      expect(await screen.findByText('Skills Practice')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Add training details' })).not.toBeInTheDocument();
     });
 
     it('claims nothing when the session could not be loaded', async () => {
@@ -245,109 +364,159 @@ describe('TrainingSessionLinkageCard', () => {
       await waitFor(() => expect(onSessionChange).toHaveBeenCalledWith(null));
       expect(container).toBeEmptyDOMElement();
     });
-
-    it("shows the backend's reason when the attach is refused", async () => {
-      mockAttachSession.mockRejectedValue(
-        Object.assign(new Error('Request failed with status code 409'), {
-          response: { status: 409, data: { detail: 'This event already has training details' } },
-        })
-      );
-      const user = userEvent.setup();
-      renderCard({ canManage: true });
-
-      await user.click(await screen.findByRole('button', { name: 'Add training details' }));
-      await user.selectOptions(screen.getByLabelText('Training Type'), 'refresher');
-      await user.click(screen.getByRole('button', { name: 'Add details' }));
-
-      expect(await screen.findByRole('alert')).toHaveTextContent('This event already has training details');
-    });
   });
 
   describe('an event with training details', () => {
     it('shows the details read-only', async () => {
       renderCard();
 
-      expect(await screen.findByText('Requirements & Programs')).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Training details' })).toBeInTheDocument();
+      // A one-off name, filed under itself.
       expect(screen.getByText('CPR / BLS')).toBeInTheDocument();
-      expect(screen.getByText('Certification')).toBeInTheDocument();
+      expect(screen.getByText('Training Type')).toBeInTheDocument();
+      // The type's label, beside the Certification row's own label.
+      expect(screen.getAllByText('Certification')).toHaveLength(2);
       expect(screen.getByText('4 hours')).toBeInTheDocument();
+      expect(screen.getByText('Issued')).toBeInTheDocument();
+      expect(screen.getByText('Started at check-in, completed when attendance is finalized')).toBeInTheDocument();
+      expect(screen.getByText('Counts toward certification')).toBeInTheDocument();
+      expect(screen.getByText('Yes')).toBeInTheDocument();
       expect(await screen.findByText('CPR Renewal')).toBeInTheDocument();
       expect(screen.getByText('EMS')).toBeInTheDocument();
-      expect(screen.queryByText('Requires training officer approval')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Requires sign-off/)).not.toBeInTheDocument();
+      // Nothing on the card edits: the training form does.
+      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     });
 
-    it('badges a session whose credit waits for a training officer', async () => {
+    it('names a session with no course as filed under the event title, not as a course', async () => {
+      mockGetSessionByEvent.mockResolvedValue({ ...SESSION, course_name: 'Hose drill' });
+      renderCard();
+
+      expect(await screen.findByText('No course yet (filed under the event title)')).toBeInTheDocument();
+      expect(screen.queryByText('Hose drill')).not.toBeInTheDocument();
+    });
+
+    it('names a one-off course called as the event is by its code, not as filed under the title', async () => {
+      mockGetSessionByEvent.mockResolvedValue({ ...SESSION, course_name: 'Hose drill', course_code: 'HD1' });
+      renderCard();
+
+      expect(await screen.findByText('HD1 - Hose drill')).toBeInTheDocument();
+      expect(screen.queryByText('No course yet (filed under the event title)')).not.toBeInTheDocument();
+    });
+
+    it('names a library course with its code', async () => {
+      mockGetSessionByEvent.mockResolvedValue({ ...SESSION, course_id: 'course-1', course_code: 'CPR' });
+      renderCard();
+
+      expect(await screen.findByText('CPR - CPR / BLS')).toBeInTheDocument();
+    });
+
+    it("shows the session's instructor, saying when the name is no member's", async () => {
+      mockGetSessionByEvent.mockResolvedValue({ ...SESSION, instructor: 'Capt. Owen Kittredge', instructor_id: 'u-1' });
+      const { unmount } = renderCard();
+      expect(await screen.findByText('Capt. Owen Kittredge')).toBeInTheDocument();
+      unmount();
+
+      mockGetSessionByEvent.mockResolvedValue({
+        ...SESSION,
+        course_id: 'course-1',
+        instructor: 'AHA Regional Faculty',
+      });
+      renderCard();
+      expect(await screen.findByText('AHA Regional Faculty (from the course, not a member)')).toBeInTheDocument();
+    });
+
+    it('describes the certification and how records are completed', async () => {
+      mockGetSessionByEvent.mockResolvedValue({
+        ...SESSION,
+        issuing_agency: 'State Fire Training',
+        certification_number_prefix: 'PUMP-',
+        expiration_months: 24,
+        auto_create_records: false,
+        counts_toward_certification: false,
+      });
+      renderCard();
+
+      expect(
+        await screen.findByText('Issued by State Fire Training · prefix PUMP- · expires after 24 months')
+      ).toBeInTheDocument();
+      expect(screen.getByText('Completed when attendance is finalized')).toBeInTheDocument();
+      expect(screen.getByText('No')).toBeInTheDocument();
+    });
+
+    it('marks a session-attendance requirement linked the old way', async () => {
+      mockGetRequirements.mockResolvedValue([
+        {
+          id: 'req-cpr',
+          organization_id: 'org-1',
+          name: 'Company Drill Attendance',
+          requirement_type: 'session_attendance',
+          source: 'department',
+          frequency: 'annual',
+          applies_to_all: true,
+          due_date_type: 'calendar_period',
+          active: true,
+          created_at: '',
+          updated_at: '',
+        },
+      ]);
+      renderCard();
+
+      expect(
+        await screen.findByText('Company Drill Attendance (currently linked, no longer offered)')
+      ).toBeInTheDocument();
+    });
+
+    it('badges a session whose credit waits for sign-off', async () => {
       mockGetSessionByEvent.mockResolvedValue({ ...SESSION, require_completion_confirmation: true });
       renderCard();
 
-      expect(await screen.findByText('Requires training officer approval')).toBeInTheDocument();
+      expect(await screen.findByText('Requires sign-off by the instructor or a training officer')).toBeInTheDocument();
+    });
+
+    it("links an event manager to the training form's Training Info step", async () => {
+      renderCard({ canManage: true });
+
+      expect(await screen.findByRole('link', { name: 'Edit training details' })).toHaveAttribute(
+        'href',
+        '/events/evt-1/edit?step=training'
+      );
     });
 
     it('offers no edit affordance without events.manage', async () => {
       renderCard({ canApprove: true });
 
       await screen.findByText('CPR / BLS');
-      expect(screen.queryByRole('button', { name: /Edit details/ })).not.toBeInTheDocument();
-    });
-
-    it('sends every field on save, with cleared links as explicit null', async () => {
-      const user = userEvent.setup();
-      renderCard({ canManage: true });
-
-      await user.click(await screen.findByRole('button', { name: /Edit details/ }));
-      expect(screen.getByText('Changes apply when attendance is next finalized.')).toBeInTheDocument();
-      await screen.findByRole('option', { name: 'EMS' });
-      // Clear the category; the requirement link stays as it was
-      await user.selectOptions(screen.getByLabelText('Training Category'), '');
-      await user.click(screen.getByRole('button', { name: 'Save details' }));
-
-      await waitFor(() =>
-        expect(mockUpdateSessionLinkage).toHaveBeenCalledWith('sess-1', {
-          course_id: null,
-          category_id: null,
-          program_id: null,
-          phase_id: null,
-          requirement_id: 'req-cpr',
-          training_type: 'certification',
-        })
-      );
-    });
-
-    it('never offers a blank type when editing, since a type cannot be cleared', async () => {
-      const user = userEvent.setup();
-      renderCard({ canManage: true });
-
-      await user.click(await screen.findByRole('button', { name: /Edit details/ }));
-      expect(screen.getByLabelText('Training Type')).toHaveValue('certification');
-      expect(screen.queryByRole('option', { name: 'Default (Continuing Education)' })).not.toBeInTheDocument();
-    });
-
-    it('leaves edit mode without saving when cancelled', async () => {
-      const user = userEvent.setup();
-      renderCard({ canManage: true });
-
-      await user.click(await screen.findByRole('button', { name: /Edit details/ }));
-      await user.click(screen.getByRole('button', { name: 'Cancel' }));
-
-      expect(mockUpdateSessionLinkage).not.toHaveBeenCalled();
-      expect(screen.queryByRole('button', { name: 'Save details' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Edit training details' })).not.toBeInTheDocument();
     });
 
     it("follows the event's attendance lock, not the session's own flag", async () => {
-      // The session reads unfinalized; the event's lock still wins.
+      // The session reads unfinalized; the event's lock still wins. Counts
+      // toward attendance stays editable in the form, so the link stays.
       renderCard({ canManage: true, attendanceFinalized: true });
+
+      expect(
+        await screen.findByText(
+          'Attendance is finalized. Counts toward attendance can still be changed with Edit training details; anything else needs Reopen Attendance first.'
+        )
+      ).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Edit training details' })).toBeInTheDocument();
+    });
+
+    it('tells someone who cannot edit it only that attendance is finalized', async () => {
+      renderCard({ canApprove: true, attendanceFinalized: true });
 
       expect(
         await screen.findByText('Attendance is finalized. Use Reopen Attendance on this event to make corrections.')
       ).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Edit details/ })).not.toBeInTheDocument();
     });
 
-    it('allows editing an open event even when the session was finalized before a reopen', async () => {
+    it('offers the edit link on an open event even when the session was finalized before a reopen', async () => {
       mockGetSessionByEvent.mockResolvedValue({ ...SESSION, is_finalized: true });
       renderCard({ canManage: true });
 
-      expect(await screen.findByRole('button', { name: /Edit details/ })).toBeInTheDocument();
+      expect(await screen.findByRole('link', { name: 'Edit training details' })).toBeInTheDocument();
     });
 
     it('no longer offers a separate session reopen', async () => {
@@ -397,7 +566,9 @@ describe('TrainingSessionLinkageCard', () => {
       mockGetApprovalSummary.mockResolvedValue(PENDING);
       renderCard({ canApprove: true, attendanceFinalized: true });
 
-      expect(await screen.findByText('Waiting for training officer approval (3 members)')).toBeInTheDocument();
+      expect(
+        await screen.findByText('Waiting for sign-off by the instructor or a training officer (3 members)')
+      ).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Review and approve' })).toHaveAttribute(
         'href',
         '/training/approve/tok-123'
@@ -409,7 +580,9 @@ describe('TrainingSessionLinkageCard', () => {
       mockGetApprovalSummary.mockResolvedValue({ ...PENDING, token: null });
       renderCard({ canManage: true, attendanceFinalized: true });
 
-      expect(await screen.findByText('Waiting for training officer approval (3 members)')).toBeInTheDocument();
+      expect(
+        await screen.findByText('Waiting for sign-off by the instructor or a training officer (3 members)')
+      ).toBeInTheDocument();
       expect(screen.queryByRole('link', { name: 'Review and approve' })).not.toBeInTheDocument();
     });
 
@@ -417,7 +590,7 @@ describe('TrainingSessionLinkageCard', () => {
       mockGetApprovalSummary.mockResolvedValue(PENDING);
       renderCard({ canManage: true, attendanceFinalized: true });
 
-      await screen.findByText(/Waiting for training officer approval/);
+      await screen.findByText(/Waiting for sign-off/);
       expect(screen.queryByRole('link', { name: 'Review and approve' })).not.toBeInTheDocument();
     });
 
@@ -463,7 +636,7 @@ describe('TrainingSessionLinkageCard', () => {
       renderCard({ canManage: true, canApprove: true, attendanceFinalized: true });
 
       await waitFor(() => expect(mockGetApprovalSummary).toHaveBeenCalledWith('evt-1'));
-      expect(screen.queryByText(/Waiting for training officer approval/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Waiting for sign-off/)).not.toBeInTheDocument();
       expect(screen.queryByText(/Approval/)).not.toBeInTheDocument();
       expect(mockToastError).not.toHaveBeenCalled();
     });

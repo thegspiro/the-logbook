@@ -28,6 +28,7 @@ def _req(
     types=None,
     roles=None,
     positions=None,
+    active=True,
 ):
     return SimpleNamespace(
         id=f"req-{name.lower()}",
@@ -36,6 +37,7 @@ def _req(
         required_membership_types=types,
         required_roles=roles,
         required_positions=positions,
+        active=active,
     )
 
 
@@ -83,7 +85,7 @@ class TestTheProjection:
             UnmappedRequirement(
                 "req-admin",
                 "Admin",
-                f"{word.capitalize()} is a member class, not a membership tier",
+                f"{word.capitalize()} members can't be chosen by member type",
             )
         ]
 
@@ -95,7 +97,9 @@ class TestTheProjection:
         assert tiers.tier_ids == []
         assert tiers.unmapped == [
             UnmappedRequirement(
-                "req-retirees", "Retirees", "No membership tier stands for retired"
+                "req-retirees",
+                "Retirees",
+                "No member type here stands for retired members",
             )
         ]
 
@@ -109,7 +113,7 @@ class TestTheProjection:
 
         assert tiers.tier_ids == []
         assert [u.reason for u in tiers.unmapped] == [
-            "It applies by rank or position, not membership"
+            "It applies by rank or position, which can't be chosen as a member type"
         ]
 
     def test_membership_types_win_over_ranks_as_the_grader_reads_them(self):
@@ -119,10 +123,99 @@ class TestTheProjection:
 
         assert (tiers.tier_ids, tiers.unmapped) == (["life"], [])
 
-    def test_a_requirement_naming_nobody_contributes_nothing(self):
-        tiers = mandatory_tiers_for_requirements([_req()], DEFAULT_LADDER)
+    # The grader applies it to no member, as the Counts toward attendance
+    # checklist says. Left silent, it read as a source of the tiers the
+    # other requirements suggested, or left Mandatory for with no word.
+    @pytest.mark.parametrize("types", [None, [], ["", "  "]])
+    def test_a_requirement_naming_nobody_is_named_and_suggests_no_one(self, types):
+        tiers = mandatory_tiers_for_requirements(
+            [_req("Unscoped", types=types), _req("Drills", types=["active"])],
+            DEFAULT_LADDER,
+        )
 
-        assert (tiers.everyone, tiers.tier_ids, tiers.unmapped) == (False, [], [])
+        assert (tiers.everyone, tiers.tier_ids) == (False, ["active"])
+        assert tiers.unmapped == [
+            UnmappedRequirement(
+                "req-unscoped",
+                "Unscoped",
+                "It applies to no members, since no member categories, ranks "
+                "or positions are set",
+                applies_to_no_one=True,
+            )
+        ]
+
+    # A link the session keeps to a requirement since deactivated: nothing
+    # grades through it any more, so it decides no one, even one that applied
+    # to everyone, and the form says it adds no one rather than offering to
+    # choose All members for it.
+    @pytest.mark.parametrize(
+        "scope", [{"applies_to_all": True}, {"types": ["senior"]}, {"types": []}]
+    )
+    def test_a_requirement_no_longer_active_suggests_no_one(self, scope):
+        tiers = mandatory_tiers_for_requirements(
+            [_req("Retired", active=False, **scope), _req("Drills", types=["active"])],
+            DEFAULT_LADDER,
+        )
+
+        assert (tiers.everyone, tiers.tier_ids) == (False, ["active"])
+        assert tiers.unmapped == [
+            UnmappedRequirement(
+                "req-retired",
+                "Retired",
+                "It is no longer active",
+                applies_to_no_one=True,
+            )
+        ]
+
+    # All members covers every requirement that grades someone, but not one
+    # that grades no one: the form's checklist says it "Applies to no
+    # members", so it is still named, never read as a source of All members.
+    # Either order, since the projection used to stop at the first
+    # applies_to_all and drop what it had collected.
+    @pytest.mark.parametrize(
+        ("no_one", "reason"),
+        [
+            (
+                _req("Empty"),
+                "It applies to no members, since no member categories, ranks "
+                "or positions are set",
+            ),
+            (
+                _req("Empty", types=["", "  "]),
+                "It applies to no members, since no member categories, ranks "
+                "or positions are set",
+            ),
+            (
+                _req("Empty", active=False, types=["senior"]),
+                "It is no longer active",
+            ),
+        ],
+        ids=["no-scope", "blank-categories", "inactive"],
+    )
+    @pytest.mark.parametrize("all_first", [True, False], ids=["all-first", "all-last"])
+    def test_all_members_still_names_a_requirement_that_grades_no_one(
+        self, no_one, reason, all_first
+    ):
+        everyone = _req("All", applies_to_all=True)
+        admin = _req("Admin", types=["administrative"])
+        ordered = [everyone, no_one, admin] if all_first else [admin, no_one, everyone]
+
+        tiers = mandatory_tiers_for_requirements(ordered, DEFAULT_LADDER)
+
+        assert (tiers.everyone, tiers.tier_ids) == (True, [])
+        assert tiers.unmapped == [
+            UnmappedRequirement("req-empty", "Empty", reason, applies_to_no_one=True)
+        ]
+
+    # Only a requirement that grades no one says so: one whose members no
+    # tier stands for still grades them, and the form offers All members.
+    def test_a_requirement_no_tier_stands_for_still_grades_someone(self):
+        tiers = mandatory_tiers_for_requirements(
+            [_req("Admin", types=["administrative"]), _req("Ranks", roles=["captain"])],
+            DEFAULT_LADDER,
+        )
+
+        assert [u.applies_to_no_one for u in tiers.unmapped] == [False, False]
 
     def test_several_requirements_union_in_ladder_order(self):
         tiers = mandatory_tiers_for_requirements(
@@ -138,3 +231,54 @@ class TestTheProjection:
         tiers = mandatory_tiers_for_requirements([_req(types=["life"])], DEFAULT_LADDER)
 
         assert tiers.tier_ids == ["life"]
+
+
+class TestTheSources:
+    """Which requirements the note credits with the suggestion.
+
+    A requirement can map partly: some of its member types stand on a tier
+    and another does not. It is still a source of the tiers it contributed,
+    so the form must not read "named in unmapped" as "contributed nothing".
+    """
+
+    def test_a_partly_mapped_requirement_is_a_source_of_its_tiers(self):
+        tiers = mandatory_tiers_for_requirements(
+            [
+                _req("A", types=["probationary", "honorary"]),
+                _req("B", types=["active"]),
+            ],
+            ["active", "probationary", "life"],
+        )
+
+        assert tiers.tier_ids == ["active", "probationary"]
+        assert [u.requirement_id for u in tiers.unmapped] == ["req-a"]
+        assert tiers.source_ids == ["req-a", "req-b"]
+
+    def test_a_requirement_that_maps_to_no_tier_is_no_source(self):
+        tiers = mandatory_tiers_for_requirements(
+            [
+                _req("Admin", types=["administrative"]),
+                _req("Ranks", roles=["captain"]),
+                _req("Empty"),
+                _req("B", types=["active"]),
+            ],
+            DEFAULT_LADDER,
+        )
+
+        assert tiers.source_ids == ["req-b"]
+
+    # All members stands for every requirement that grades someone, whether a
+    # tier stands for its members or not; one that grades no one is not.
+    def test_all_members_is_sourced_by_every_requirement_that_grades_someone(self):
+        tiers = mandatory_tiers_for_requirements(
+            [
+                _req("Admin", types=["administrative"]),
+                _req("Empty"),
+                _req("All", applies_to_all=True),
+                _req("Retired", active=False, applies_to_all=True),
+            ],
+            DEFAULT_LADDER,
+        )
+
+        assert tiers.everyone is True
+        assert tiers.source_ids == ["req-admin", "req-all"]

@@ -310,6 +310,8 @@ Member Management lists every member except the archived and dropped (voluntary 
 | `/events/:id/monitoring` | Check-In Monitoring | `events.manage`                                             |
 | `/events/:id/analytics`  | Event Analytics     | `analytics.view`                                            |
 
+> _(2026-11-11)_ **Edit Event opens a Training event in the training-event form**: the step-by-step Event Details, Training Info, Settings, Review form that Training Admin's **Create Session** uses, with the session's own fields on Training Info. Every other type keeps the single-page form, and changing the type swaps the form in place. `?step=training` opens it on Training Info; the event page's **Edit training details** links there. It is a query parameter on this route, not a route of its own. Saving training details needs `events.manage`: a training manager admitted by `training.manage` alone edits the event's own fields and sees Training Info read-only ("Training details are changed by an event manager."), because the API refuses `training_details` from them (403).
+
 > _(2026-08-23)_ **Check-In Monitoring** also lists members whose check-in landed before the event's scheduled start, with how early each one was. Their attendance is already credited from the scheduled start rather than from the tap, so the list is not a correction queue — it exists so an organizer can spot the member who really was working beforehand and set their check-in time by hand, which is credited verbatim. Members already given an explicit check-in time drop off the list.
 
 ### Events Module Pages (2026-03-13)
@@ -360,6 +362,8 @@ Requires `events.manage` permission. Drawn with the same two-level navigation as
 | Settings           | `settings`      | Settings             |
 
 A missing or unknown `?tab=` opens Create Event.
+
+> _(2026-11-11)_ **Create Event hands a Training event to the training-event form.** Picking **Training** as the type, or a Training template, swaps the single-page form for the step-by-step one in place, carrying every value typed so far; picking another type swaps it back. `?tab=create&template=<id>` (the Events list's **Use template** link) opens with that template applied.
 
 **Legacy redirects:**
 
@@ -505,7 +509,7 @@ Requires `training.manage` permission. Tab-based admin interface.
 | `waivers`           | Training Waivers              |
 | `submissions`       | Review Submissions            |
 | `requirements`      | Requirements                  |
-| `sessions`          | Create Session                |
+| `sessions`          | Sessions (Create Session)     |
 | `cohorts`           | Course Cohorts                |
 | `templates`         | Templates (Skills Testing)    |
 | `tests`             | Test Records (Skills Testing) |
@@ -520,6 +524,8 @@ Requires `training.manage` permission. Tab-based admin interface.
 | `enhancements`      | Enhancements                  |
 
 > The two **Skills Testing** tabs were missing from this list. `templates` is the skill-sheet library (create, edit, publish, archive, and the per-template result-disclosure override); `tests` is the records tab, which is where an officer **validates**, **voids**, **releases** and **cancels** results, and where the "awaiting validation" filter lives. Both are officer-only, unlike `/training/skills-testing`, which is the member's entry point.
+
+> The **Create Session** tab (`sessions`, under **Records**) is the training-event form _(2026-11-11)_: the same step-by-step form Events → Create Event opens for a Training event, with the type fixed to Training. It saves through `POST /events` and `/events/recurring`, which need `events.manage`, so a training manager without that permission sees a notice naming it instead of a form whose save would be refused.
 
 > The **Programs** tab (`pipelines`) lists the department's existing programs. Its New Pipeline button opens the create wizard in the same tab at `&view=new`; selecting Programs in the hub nav returns to the list. Its views are Programs and Templates. The standalone `/training/programs` page also has a Requirements view, but the hub leaves it out because the hub's own **Requirements** tab covers it, including **Import from Registry** (NFPA, Pro Board, NREMT).
 
@@ -549,13 +555,15 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 **Legacy redirects:**
 
-- `/training/officer` → `/training/admin?tab=dashboard`
-- `/training/submissions` → `/training/admin?tab=submissions`
-- `/training/requirements` → `/training/admin?tab=requirements`
-- `/training/sessions/new` → `/training/admin?tab=sessions`
+- `/training/officer` → `/training/admin?page=dashboard&tab=overview`
+- `/training/submissions` → `/training/admin?page=records&tab=submissions`
+- `/training/requirements` → `/training/admin?page=setup&tab=requirements`
+- `/training/sessions/new` → `/training/admin?page=records&tab=sessions`
 - `/training/programs/new` → `/training/admin?page=curriculum&tab=pipelines&view=new`
-- `/training/shift-reports` → `/training/admin?tab=shift-reports`
-- `/training/integrations` → `/training/admin?tab=integrations`
+- `/training/shift-reports` → `/training/admin?page=records&tab=shift-reports`
+- `/training/integrations` → `/training/admin?page=setup&tab=integrations`
+
+> _(corrected 2026-11-11)_ Six of these targets were listed without the `page=` area the redirects in `modules/training/routes.tsx` send, and `/training/officer` with a `dashboard` tab the hub no longer has.
 
 ---
 

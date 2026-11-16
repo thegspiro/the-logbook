@@ -19,6 +19,7 @@ than rotting quietly.
 
 - [How the schema actually comes into being](#how-the-schema-actually-comes-into-being)
 - [The hygiene rules CI already enforces](#the-hygiene-rules-ci-already-enforces)
+- [Parallel branches and a single head](#parallel-branches-and-a-single-head)
 - [A Migration Must Tolerate a Table Only `create_all` Builds](#a-migration-must-tolerate-a-table-only-create_all-builds)
 - [A Seeded Rank Grant Reaches the Database Through a Position](#a-seeded-rank-grant-reaches-the-database-through-a-position)
 - [What stayed in CLAUDE.md](#what-stayed-in-claudemd)
@@ -83,6 +84,67 @@ not hand-write one.
 only, where the revision id _is_ the filename prefix. Files on the current
 hash-revision template fall outside that check — a gap in coverage, not
 permission to diverge from the template.
+
+---
+
+## Parallel branches and a single head
+
+_2026-11-15._
+
+**Each pull request is checked alone, so two valid branches can fork main
+between them.** `validate_migrations.py --strict` and `test_exactly_one_head`
+run against a branch merged with `main` _as it was when that CI run started_.
+Two branches that each add a migration on the same parent both see one head
+and both go green; whichever merges second leaves `main` with two, and
+`alembic upgrade head` fails with "Multiple head revisions" until somebody
+adds a merge revision. With several sessions open against this repository at
+once, this happened often enough to leave 38 merge revisions in the chain.
+
+**`.husky/pre-push` checks the merge before the push.** It runs
+`scripts/check-migration-heads.sh` for each pushed commit, which fetches
+`origin/main`, computes the merge with `git merge-tree` (the working tree is
+not touched) and runs the validator against the merged
+`backend/alembic/versions/`. A branch that adds no migration is not checked,
+since it cannot fork the chain. Run it by hand at any time:
+
+```sh
+sh scripts/check-migration-heads.sh
+```
+
+It skips, with a message, rather than blocking when it cannot run: no
+`python3`, git older than 2.38, or `origin/main` unreachable. CI still runs the
+validator, so a machine that cannot check is not a reason to stop a push.
+
+**When it reports a fork, re-point the migration that has not merged.**
+
+1. `git merge origin/main`.
+2. Set your migration's `down_revision` to the head the report prints.
+3. Fix its `Revises:` docstring line to match, and push.
+
+That keeps the chain linear. Re-pointing is only safe while your revision
+exists on your branch alone: no database has stamped it, so nothing records
+the old parent. **Once both forks are on `main`, re-pointing is no longer an
+option** — an installation may have applied either one — and the fix is a
+merge revision (`alembic merge -m "merge heads" <head1> <head2>`) on a new
+branch.
+
+**The hook narrows the window; it does not close it.** Two branches can each
+pass the check and still race, if one merges between the other's push and its
+merge. Closing that needs GitHub to re-test a pull request against the `main`
+it will actually land on: a merge queue on `main`, or "Require branches to be
+up to date before merging", with the **Migration Chain** job as a required check.
+That is a repository setting, and it is the owner's to turn on.
+
+**As of 2026-11-16 neither is on, by the owner's decision.** `main` requires
+Migration Chain and CI Success to pass, but not that a branch be up to date
+first, and a merge queue is not available to a repository owned by a personal
+account. So the race above stays open: when `main` forks, the fix is a merge
+revision on a new branch. The reasoning, and what would reopen it, are in
+[KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#migration-chain--branches-need-not-be-up-to-date-to-merge-owner-decision-2026-11-16).
+
+`scripts/test_check_migration_heads.py` covers the script and the hook,
+including the case above: a branch whose chain is valid alone and forked once
+merged.
 
 ---
 

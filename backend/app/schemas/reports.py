@@ -5,9 +5,9 @@ Request and response schemas for report generation endpoints.
 """
 
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 
@@ -25,6 +25,29 @@ class ReportRequest(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     filters: Optional[Dict[str, Any]] = None
+
+
+class ReportExportRequest(BaseModel):
+    """A download of a report, re-run on the server.
+
+    Names either a report the page generated (``report_type`` and its dates
+    and filters) or a saved report (``saved_report_id``), never both: a saved
+    report's dates and filters are resolved on the server, as its Run button
+    resolves them.
+    """
+
+    format: Literal["pdf", "csv"]
+    report_type: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    filters: Optional[Dict[str, Any]] = None
+    saved_report_id: Optional[str] = Field(default=None, min_length=1, max_length=36)
+
+    @model_validator(mode="after")
+    def _one_source(self) -> "ReportExportRequest":
+        if (self.report_type is None) == (self.saved_report_id is None):
+            raise ValueError("Give either report_type or saved_report_id")
+        return self
 
 
 # ============================================

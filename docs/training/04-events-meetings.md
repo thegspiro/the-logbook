@@ -879,6 +879,17 @@ of **Manage Events**.
    unticked to publish now.
 9. Select **Create Event**.
 
+> **Training events use the training-event form** _(2026-11-11)_. Choosing
+> **Training** as the event type, or a template marked **(Training)**, swaps
+> this form for a step-by-step one — **Event Details**, **Training Info**,
+> **Settings**, **Review** — in place, carrying over everything you have typed.
+> It is the same form as Training Admin's **Create Session**, with the course,
+> instructor, credit hours, certification and sign-off on **Training Info**. A
+> note at the top says **Switched to the training form**, with a **Change back
+> to …** button; picking another type also brings the single-page form back,
+> again with your entries. See
+> [Training Credit from Events](#training-credit-from-events).
+
 > **What if Require RSVP is on but there is no deadline?** On a single event,
 > **RSVP Deadline** is then required and marked with an asterisk. The form
 > says _"Set an RSVP deadline, or turn off Require RSVP"_. A recurring series
@@ -894,9 +905,16 @@ of **Manage Events**.
 > beside a file removes it, after asking.
 
 **Mandatory attendance.** Ticking **Mandatory attendance** opens **Mandatory
-for**, a checklist of your department's membership types. The form will not
-save until at least one is ticked. The event is mandatory only for members
-whose membership type is ticked. _(2026-11-04)_ A member's type here is their
+for**, with two choices _(2026-11-11)_: **All members**, or **Only these member
+types** with a checklist of your department's membership types. Under **Only
+these member types**, the form will not save until at least one is ticked; the
+message sits under the checklist. The event is mandatory only for members whose
+membership type is ticked. On the single-page form a newly ticked **Mandatory
+attendance** starts on **Only these member types**; on the training-event form
+it starts on **All members**, unless the session's **Counts toward
+attendance** ticks have suggested member types (see
+[Mandatory for, suggested from the ticks](./02-training.md#mandatory-for-suggested-from-the-ticks-2026-11-11)).
+_(2026-11-04)_ A member's type here is their
 **Membership status** — their tier on the department's ladder — whatever their
 class, so an administrative member on the Life tier is expected at an event
 mandatory for Life members. A member with no standing recorded at all counts
@@ -1200,21 +1218,29 @@ Any event with type **Training** credits its attendees' training records when
 its attendance is finalized — however the event was created.
 
 1. Create the event with type **Training** — on **Create Event**, or under
-   Training → **Create Training Session** for sign-off, certification or an
-   assigned instructor.
-2. Optionally fill in **Training details (optional)** on the form: course,
-   category, training type, program and requirement. Then the credit counts
-   toward the right requirements. You can add or change them later on the
-   event's **Requirements & Programs** card while attendance is open. Without
-   details, the record is filed under the event's title as Continuing
-   Education. That counts toward total hours, but not toward a requirement
-   based on a category.
+   Training Admin → **Records → Sessions** (**Create Session**). Both open the
+   same step-by-step training-event form _(2026-11-11)_.
+2. On its **Training Info** step, choose the course — **No course yet (filed
+   under the event title)**, **From the Course Library**, or a **One-off course
+   name** — and the training type, lead instructor, credit hours, category,
+   program and requirement, so the credit counts toward the right
+   requirements. Certification, **Counts toward attendance** and sign-off are
+   on the same step. With no course, the record is filed under the event's
+   title, as the training type chosen (Continuing Education unless you change
+   it). That counts toward total hours, but not toward a requirement based on a
+   category. Every Training event the form creates has a training session,
+   course or not. To change the details later, use **Edit training details**
+   on the event's **Training details** card, which opens the same form on
+   **Training Info**. Saving training details needs **Manage all events**; a
+   training manager without it sees them read-only.
 3. Check members in (or use **Check In** and **Edit Times**), then
    **Finalize Attendance** after the event ends. A Training event can only be
    finalized once it has ended.
 4. To correct a finalized event, someone who can reopen attendance (or any
    training manager) reopens it.
-   Change the details or times, then finalize again.
+   Change the details or times, then finalize again. While attendance is
+   finalized, only **Counts toward attendance** can change among the training
+   details.
 
 ![Create Event with the type set to Training: the Training details (optional) group with a course picked, its training type and category filled in, and the Create Training Session link](./images/04-61-training-details-create.png)
 
@@ -1233,8 +1259,8 @@ never duplicated.
 If the event's training session needs a training officer's confirmation,
 finalizing sends the attendance to training officers instead. Members see the
 class as **In Progress** until an officer approves it. The approval page is
-linked from their email and from the event's **Requirements & Programs**
-card.
+linked from their email and from **Review and approve** on the event's
+**Training details** card.
 
 ![The Finalize attendance? confirmation on an ended Training event: how each member's time is decided, that members with no credited time get no record, that earlier admin-hours entries are removed, and Finalize and close beside Keep it open](./images/04-62-finalize-training-confirm.png)
 
@@ -1375,7 +1401,9 @@ the events list. On any occurrence's page:
   occurrence is no longer counted, so its line reads **Series of 6**.
 - **Edit** asks which events to change: **This event only** or **This and all
   future events**. "Future" means this occurrence and every later one — not
-  "everything after today".
+  "everything after today". On a Training event the choice is on the training
+  form's **Review** step, with the save, and covers the training details as
+  well as the event's own fields _(2026-11-11)_.
 - **More → Cancel Entire Series** cancels the series. It offers **Only cancel
   future events (keep past events)**.
 - **More → Delete Event** offers **Delete only this event** or **Delete all
@@ -1408,7 +1436,7 @@ the events list. On any occurrence's page:
 | Series spanning a daylight-saving change    | Each occurrence keeps its local time — a 7:00 PM drill stays at 7:00 PM                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Editing a series with finalized occurrences | Refused when the save would change a finalized occurrence's times, type, category or check-in rules — for example "(2 of 3 finalized occurrences would change)". Saved from a finalized occurrence, those fields are left out, so a description-only edit goes through. Saved from an open occurrence, its type, category and check-in rules are copied onto every later one, so even a description-only edit is refused when a finalized later one differs. Edit those occurrences one at a time |
 | Cancelling or deleting a series             | Refused whenever any occurrence is finalized                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Duplicating an occurrence                   | Makes a stand-alone event. The recurrence is not copied                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Duplicating an occurrence                   | Makes a stand-alone event. The recurrence is not copied. A Training event's training details and **Counts toward attendance** links are copied, but not its finalized attendance (2026-11-11)                                                                                                                                                                                                                                                                                                     |
 
 ---
 

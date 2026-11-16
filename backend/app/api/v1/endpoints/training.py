@@ -63,6 +63,12 @@ from app.schemas.training import (
     CertAlertSettings,
     CertAlertSettingsUpdate,
     ComplianceSummary,
+    CourseLinkCourse,
+    CourseLinkName,
+    CourseLinkRequest,
+    CourseLinkResult,
+    CourseLinkSpelling,
+    CourseLinksView,
     DuplicateWarning,
     HistoricalImportConfirmRequest,
     RequirementChangeScope,
@@ -116,6 +122,10 @@ from app.services.training_compliance import (
     requirement_applies_to_user,
     tally_standing,
 )
+from app.services.training_course_links import (
+    TrainingCourseLinkService,
+    UnlinkedName,
+)
 from app.services.training_course_names import (
     library_course_names,
     member_course_name,
@@ -127,7 +137,7 @@ from app.services.training_record_notices import (
     send_training_record_notice,
     snapshot,
 )
-from app.services.training_record_source import record_sources
+from app.services.training_record_source import ledger_csv_imports, record_sources
 from app.services.training_requirement_removal import (
     purge_requirement,
     remove_requirement,
@@ -548,6 +558,125 @@ def _member_requirement_response(requirement) -> TrainingRequirementResponse:
 
 
 # Training Courses
+
+
+def _course_link_view(name: UnlinkedName) -> CourseLinkName:
+    return CourseLinkName(
+        key=name.key,
+        label=name.label,
+        spellings=[
+            CourseLinkSpelling(name=s.name, records=s.records) for s in name.spellings
+        ],
+        records=name.records,
+        members=len(name.members),
+        first_date=name.first_date,
+        last_date=name.last_date,
+        suggested_course=(
+            CourseLinkCourse.model_validate(name.suggested_course)
+            if name.suggested_course
+            else None
+        ),
+    )
+
+
+@router.get("/course-links", response_model=CourseLinksView)
+async def list_course_links(
+    search: str | None = Query(None, max_length=100),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    The names training records with no library course carry, each with a
+    suggested course.
+
+    Spellings that differ only in case, punctuation, a trailing provider id or
+    a "CAPCE" prefix are grouped as one name. Most records first.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingCourseLinkService(db)
+    names = await service.unlinked_names(str(current_user.organization_id))
+    suggested = [n for n in names if n.suggested_course]
+    if search and search.strip():
+        needle = search.strip().casefold()
+        names = [
+            n
+            for n in names
+            if any(needle in s.name.casefold() for s in n.spellings)
+            or (n.suggested_course and needle in n.suggested_course.name.casefold())
+        ]
+    courses = await service.library(str(current_user.organization_id))
+    return CourseLinksView(
+        items=[_course_link_view(n) for n in names[offset : offset + limit]],
+        total=len(names),
+        offset=offset,
+        limit=limit,
+        suggested_names=len(suggested),
+        suggested_records=sum(n.records for n in suggested),
+        courses=[CourseLinkCourse.model_validate(c) for c in courses],
+    )
+
+
+@router.post("/course-links", response_model=CourseLinkResult)
+async def link_course_name(
+    payload: CourseLinkRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Link every training record carrying a name, and no course, to a library
+    course. The records take the course's category and training type; each
+    keeps its own name, date and hours. Records that already have a course are
+    left alone, so linking a name twice changes nothing.
+
+    **Requires permission: training.manage**
+    """
+    try:
+        result = await TrainingCourseLinkService(db).link(
+            str(current_user.organization_id), payload.key, str(payload.course_id)
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    await db.commit()
+    await log_audit_event(
+        db=db,
+        event_type="training_course_name_linked",
+        event_category="training",
+        severity="info",
+        event_data={"course_id": str(payload.course_id), "records": result.records},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return CourseLinkResult(names=result.names, records=result.records)
+
+
+@router.post("/course-links/link-suggested", response_model=CourseLinkResult)
+async def link_suggested_course_names(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Link every name that has a suggested course to that course, as linking
+    each one would.
+
+    **Requires permission: training.manage**
+    """
+    result = await TrainingCourseLinkService(db).link_suggested(
+        str(current_user.organization_id)
+    )
+    await db.commit()
+    await log_audit_event(
+        db=db,
+        event_type="training_course_names_linked",
+        event_category="training",
+        severity="info",
+        event_data={"names": result.names, "records": result.records},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return CourseLinkResult(names=result.names, records=result.records)
 
 
 @router.get("/courses", response_model=list[TrainingCourseResponse])
@@ -3289,12 +3418,15 @@ async def confirm_historical_import(
                     created_by=current_user.id,
                 )
                 db.add(record)
-                imported_records.append(record)
+            # Only once the savepoint has released: a row whose insert failed
+            # was rolled back, and must not be ledgered or synced.
+            imported_records.append(record)
             imported += 1
         except Exception as e:
             failed += 1
             errors.append(f"Row {row.row_number}: {safe_error_detail(e)}")
 
+    await ledger_csv_imports(db, str(current_user.organization_id), imported_records)
     await db.commit()
 
     # A backfilled certification confers the same qualification a freshly
@@ -4281,6 +4413,9 @@ async def import_training_csv(
             failures.append({"row": row_num, "error": safe_error_detail(e)})
 
     if successes > 0:
+        await ledger_csv_imports(
+            db, str(current_user.organization_id), imported_records
+        )
         await db.commit()
         await _sync_qualifications(db, imported_records)
 

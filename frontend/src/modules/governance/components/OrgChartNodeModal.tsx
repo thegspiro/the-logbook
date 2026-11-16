@@ -519,6 +519,10 @@ export const OrgChartNodeModal: React.FC<OrgChartNodeModalProps> = ({
             </label>
             <input
               id="org-node-phone"
+              // A phone keyboard, and no offer of the officer's own number:
+              // this is the position's line, not theirs (forms review F-9).
+              type="tel"
+              autoComplete="off"
               className="form-input"
               value={draft.contactPhone}
               onChange={(e) => setDraft({ ...draft, contactPhone: e.target.value })}

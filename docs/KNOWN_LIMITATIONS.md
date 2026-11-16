@@ -1,5 +1,46 @@
 # Known Limitations & Open Decisions
 
+## Migration Chain — Branches Need Not Be Up to Date to Merge (Owner Decision, 2026-11-16)
+
+Two pull requests that each add an Alembic migration on the same parent both
+pass CI on their own, and whichever merges second leaves `main` with two heads.
+`alembic upgrade head` then refuses to run, and every database job on every
+branch fails until a merge revision lands. It happened on 2026-11-15, when #4312
+and #4314 merged within a minute of each other; `main` stayed forked for about
+eight hours, until #4333 carried the merge revision from #4331.
+
+### Decided
+
+- **`main` requires the Migration Chain and CI Success checks to pass.** A pull
+  request whose own chain is forked cannot merge.
+- **It does not require a branch to be up to date with `main` before
+  merging.** That setting was turned on on 2026-11-15 and off on 2026-11-16.
+  It closes the race above, but with CI taking about two hours under the
+  current queue and something merging into `main` every hour or two, a pull
+  request fell behind again before its run finished: #4336 was brought up to date five
+  times overnight without merging. Every pull request paid that cost to guard
+  against one that only pull requests adding a migration can cause.
+- **The pre-push check (`scripts/check-migration-heads.sh`) stays.** It catches
+  a branch that forks the chain against the `main` it was pushed against, which
+  is most cases, though not two branches pushed before either merges.
+
+### Accepted
+
+- **`main` can still fork when two migration branches merge close together.**
+  Migration Chain fails on the push to `main` and the session-start hook
+  reports it, so it is noticed at once. The fix is one merge revision, per
+  [Parallel branches and a single head](rules/migrations.md#parallel-branches-and-a-single-head).
+
+### What would reopen this
+
+- **A merge queue** tests each pull request on top of the ones queued ahead of
+  it, which closes the race without anyone updating branches. GitHub offers it
+  only to repositories owned by an organization, so it needs the repository
+  moved into one (a free organization is enough for a public repository), and
+  `ci.yml` would need a `merge_group` trigger.
+- **CI fast enough** that a pull request usually finishes before `main` moves
+  would make the up-to-date setting workable again.
+
 ## Attendance Waiver Emails and Template Copies — Choices Made Without a Ruling (2026-11-11)
 
 The waiver emails and the template-CC fix (defect D1) follow the owner
@@ -231,10 +272,10 @@ now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
   - **CI does not run veraPDF.** Conformance was confirmed with veraPDF 1.28
     on 2026-11-10; `tests/test_pdfa.py` guards the structure it checked, not
     every rule.
-- **The Reports page prints from the browser.** "Print / PDF" has no page
-  numbers, no repeated header, the browser's own time zone and no audit row.
-  **Decided, to build (owner, 2026-11-09):** a server-side PDF on the kit,
-  audited on the server.
+- ~~**The Reports page prints from the browser.**~~ **Resolved 2026-11-15:**
+  the page's PDF and CSV are built and audited on the server, from the report
+  re-run under the caller's own permissions (see "Reports page downloads" in
+  `docs/PDF_REPORTS.md`).
 - **Print hints reach Acrobat, not browsers.** Label sheets and ID cards ask
   to print at actual size (`/PrintScaling /None`), but most browser PDF
   viewers ignore that and default to "Fit". The label pages tell the user to
@@ -587,7 +628,8 @@ reason appears on the field instead of a native popup.
 
 **Rolled out further on 2026-11-09** (batch 17): Create Election, the member
 admin edit page (its uppercase labels kept through `FormField`'s
-`labelClassName`), the Create Training Session wizard, Inventory's Receive
+`labelClassName`), the Create Training Session wizard (carried into the
+training-event form that replaced it, 2026-11-11), Inventory's Receive
 Stock, Request Equipment, vendors and contacts, Add several items, Unassign and
 Assign terms, Apparatus › Archive and NFPA items, the facility emergency
 contacts, medical supply deliveries, sixteen Finance dialogs (expense line,
@@ -625,9 +667,9 @@ The other `PromptDialog` callers are unchanged until they opt in.
 
 Still to come, module by module: the locations setup wizard, the other training
 builders and pipeline pages, the rest of Inventory (settings, stock lots, the
-checklist builder and the smaller dialogs), the full apparatus form, the
-facility overview, files and settings, medical supply lots and imports, store
-checkout, the finance cards and settings, the minutes editor,
+checklist builder and catalog quick add), the full apparatus form, the
+facility overview, files, settings and list, store settings, the finance cards
+and settings, the minutes editor,
 the remaining report dialogs, communications templates and intake, scheduling
 templates and settings, applicant conversion and stage settings, the org chart
 node and IP security admin, and onboarding, history, membership and the public
@@ -655,6 +697,16 @@ screen, and are now one component each, so a change lands on both. A save that
 failed with a reason no field answers for ("due date cannot be before the
 scheduled date", a room nesting rule, a duplicate name) is said in the form,
 where it stays until the next save, rather than in a toast.
+
+**Rolled out further on 2026-11-11** (batch 20): store checkout; the store's
+order dialog (payment, waive, status, send an update, internal notes, cancel); a medical
+supply's lots (add a lot, and a lot's edit row); medical supply import; and the
+size preferences dialog. The same rules apply. Checkout changes only how its two
+boxes show what is wrong: the order it sends, the payment methods and the totals
+are as they were. In the order dialog each section is its own request with its
+own errors, and a refusal no longer reloads the order, which used to reseed the
+amount and reference just refused. Send update and Import are no longer greyed
+out until answered; pressing them says what is missing.
 
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
@@ -8226,7 +8278,8 @@ ones skipped.
 - **No backfill.** Events finalized before this change keep whatever they
   wrote — for Events-created Training events, nothing. The fix is per event:
   somebody with `events.reopen_attendance` reopens it (optionally adding
-  training details on the Requirements & Programs card) and it is finalized
+  training details with **Add training details** on the event page's
+  Training details card, which opens the training-event form) and it is finalized
   again. Training officers do not hold that permission by default, so a chief
   has to do the reopen.
 - **Training events no longer credit admin hours**, even where a department
@@ -8308,7 +8361,8 @@ take every training field, including "Counts toward attendance"; an event
 edit carries `training_details`, for one event or "this and all future"; a
 rolling series and a duplicate keep their session and links; and
 `POST /training/sessions/mandatory-tiers` pre-fills "Mandatory for". The form
-itself follows in later pull requests.
+itself followed on 2026-11-11: see "Training — One Form for Training Events,
+the Form" below.
 
 **Defaults assumed on the owner's "Yes" (2026-11-11), and what they cost:**
 
@@ -8325,7 +8379,10 @@ itself follows in later pull requests.
   (member classes, not rungs), a membership word with no tier on the ladder
   (Retired, on the default ladder), and a requirement scoped only by rank or
   position. If nothing maps, "Mandatory for" is left as it was rather than
-  falling back to everyone.
+  falling back to everyone. A requirement that grades no member at all,
+  because it names no one or is no longer active (a link an edited session
+  keeps), is named too, as adding no one, and never as a reason to choose All
+  members.
 
 **Known gaps, not fixed here:**
 
@@ -8342,12 +8399,80 @@ itself follows in later pull requests.
   links** from the event edit. Attaching a session to a finalized event is
   refused, as it always was; reopen attendance first. An event with a
   session takes new links at any time.
-- **The Events form still hides training details on a rolling series** until
-  the single form replaces that block.
+- ~~**The Events form still hides training details on a rolling series**
+  until the single form replaces that block.~~ **✅ Resolved 2026-11-11.**
+  Events → Create Event now hands a Training event to the training-event
+  form, which offers the rolling 12-month cycle with every training field;
+  the single-page form no longer has a training block to hide.
 - **`TrainingSessionAttach` and `TrainingSessionDetailsUpdate` refuse unknown
   keys** (422). Before, an unknown key was dropped and the request still
   answered 201. Nothing in this repository sends one; an outside API client
   that does will now see the refusal.
+
+## Training — One Form for Training Events, the Form (2026-11-11)
+
+The owner's one training-event form (2026-11-10) is built: a step-by-step
+form (Event Details, Training Info, Settings, Review) opened by Training
+Admin's **Create Session**, by Events → **Create Event** when the type is
+Training, and by **Edit** on a Training event. Every other type keeps the
+single-page form. What it changes, and what it leaves:
+
+- **Training Admin's defaults changed to the Events form's** (owner decision,
+  Q5): RSVP off, check-in from 60 minutes before, manual check-out off. The
+  old Create Session form started with RSVP on, 15 minutes and check-out on.
+  All three are on the Settings step and can be changed; an officer used to
+  the old form who saves without looking gets the new values.
+- **A training manager without `events.manage` cannot create a Training
+  event, or change an existing one's training details** (owner decision,
+  Q1). Create Session shows a notice naming the permission instead of a form
+  the API would refuse; in an edit, Training Info is read-only with "Training
+  details are changed by an event manager." The event's own fields stay
+  theirs to edit, as before. TR14-2 below is unchanged.
+- **Every Training event the form creates has a session**, with or without a
+  course. With no course, members' records are filed under the event title as
+  the chosen training type. Credit Hours follow the event's length until
+  typed; a value typed once stays, so lengthening the event later does not
+  raise it.
+- **"Mandatory for" is suggested from "Counts toward attendance", not
+  decided by it.** Ticking requirements never ticks Mandatory attendance: a
+  requirement's percentage and a mandatory event are different things. The
+  suggestion stops once the officer changes "Mandatory for" by hand, and is
+  never re-run when an event is opened for editing, only when its ticks
+  change. The backend's approximation gaps are listed under the backend
+  section above.
+- **A mandatory event's reminders go to every active member**, not only the
+  member types it is mandatory for: ticking Mandatory attendance switches the
+  reminder audience to all active members unless the officer has chosen one.
+  This is the Events form's existing rule, now also applied to sessions
+  created from Training Admin. The audience is on the Settings step.
+- **A single session created from Training Admin is announced to chat
+  integrations.** It is created through `POST /events`, which tells connected
+  chat integrations (Slack, Discord, Teams) about a new event; the old
+  `POST /training/sessions` path did not. A series, through
+  `/events/recurring`, is not announced, from either screen.
+- **On a finalized event, only "Counts toward attendance" can change among
+  the training details.** The rest of Training Info is drawn locked; reopen
+  attendance to change it. The event's own fields keep the finalized-event
+  rules under "Events — Edit Form Gaps" below.
+- **A Training template fills the event's own fields, not its training
+  details.** Training Admin's Create Session now offers the department's
+  Training templates, as the Events page does, but `EventTemplate` has no
+  training fields (course, type, hours, instructor, certification, links),
+  so Training Info opens on its defaults. Carrying them needs template
+  fields that do not exist yet: an owner decision, since it changes what a
+  saved template is.
+- **Under a library course, a blank Lead Instructor or Expiration is saved
+  as the course's.** The backend reads `null` for those two as "use the
+  course's value", on create and on edit, so an officer cannot clear either
+  while a course is chosen. The form says so under the field and on Review
+  rather than showing "None". Making them clearable would change the API's
+  meaning of `null`.
+- ~~**Training Admin's header still offers Create Session to a training
+  manager without `events.manage`.** The approved design marks hiding it as
+  a proposal; the tab itself shows the notice. Left until the owner
+  confirms.~~ **Resolved 2026-11-11:** the header leaves Create Session out
+  for a viewer without `events.manage`, as the approved mockup draws it, and
+  the Sessions tab still shows its notice naming the permission.
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 
@@ -10008,7 +10133,21 @@ was flagged rather than changed. The options are to keep it, to require
 the drill, and a training officer would link it), or to require both grants.
 Found by `docs/security-review/TR-17-training-core.md` pass 14.
 
-## Training — Records From the Older CSV Importers Read "The Logbook" (2026-11-10)
+**Where the decision is made since 2026-11-11.** The training-event form sends
+the links as `training_details.attendance_requirement_ids` on `POST /events`,
+`/events/recurring`, `PATCH /events/{id}` and `/events/{id}/update-future`,
+still behind `events.manage`, and each change is audited the same way
+(`training_session_created` on a create; on an edit, `training_session_updated`
+naming the fields that changed and the scope, with
+`action: attendance_requirements_set` and the ids when the links changed). The
+form restates every field on every save, so the edit audit is judged from what
+the save changed, not from what it sent: a save that leaves the links as they
+were records no link change (2026-11-15). A caller admitted to an event edit only as a training manager is
+refused `training_details` (403), so the event edit does not widen who decides.
+`PUT /training/sessions/{id}/attendance-requirements` remains for API callers;
+the app no longer calls it.
+
+## Training — Records the Older CSV Importers Wrote Before 2026-11-15 Read "The Logbook" (2026-11-10)
 
 **Accepted (owner decision 2026-11-10).** Training lists, the print page and
 the individual CSV and PDF exports show where each record came from:
@@ -10024,9 +10163,15 @@ writes in `imported_source_records`.
 
 The two older importers on the Training screens, the CSV import wizard
 (`POST /training/import/confirm`) and `POST /training/records/import-csv`,
-leave no such mark. Their records therefore read "The Logbook". The owner chose
-this over adding a stored source column, which could only have labelled records
+left no such mark. The owner chose to leave their records as "The Logbook"
+over adding a stored source column, which could only have labelled records
 imported after the change.
+
+**Narrowed 2026-11-15.** Both importers now ledger what they write
+(`ledger_csv_imports`, source system `logbook.training-csv-import`), so a record
+they import from now on reads "Imported". What remains is the records they
+imported before then: nothing distinguishes them, and they still read "The
+Logbook".
 
 ## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06, resolved 2026-10-29)
 
@@ -10412,12 +10557,19 @@ beyond the feature.
   lose one.**~~ Resolved 2026-11-14: crediting and reversing lock the
   progress row and the ledger lookup, and re-read the row rather than using
   the session's copy (`tests/test_requirement_credit_locking.py`).
-- **Credit is not re-stated when a requirement's crediting rule changes**
-  (its type, or "leave out the lowest rating"), **when an evaluation's
-  combined scope shrinks**, or **when its shift is deleted, an outside entry
-  moves to an agency that does not evaluate, or the member is removed from the
-  shift.** Each leaves earlier credit standing until the evaluation is saved
-  again.
+- **Credit is not re-stated when an outside entry moves to an agency that
+  does not evaluate shifts.** Resolved 2026-11-14 for the rest: a change to a
+  requirement's crediting rule (its type, or leaving out the lowest rating)
+  restates every evaluation's credit, or removes it where evaluations no
+  longer count; a member taken off a shift, or marked No-show, loses that
+  shift's evaluation credit. A shift that has started cannot be deleted, so an
+  evaluated one never is. The agency case is left: tying credit to the
+  agency's switch would also take back every past credit when an agency is
+  switched off, which needs an owner ruling.
+- **Credit is not re-stated when an evaluation's combined scope shrinks.** An
+  evaluation re-saved after one of its programs drops out of the combined
+  scope (its form cleared while the enrollment stays active) keeps the credit
+  it gave that program until the evaluation is saved again with it.
 - ~~**A deactivated evaluation form is still offered and required**~~
   Resolved 2026-11-14 (owner decision): a form a program or the general-form
   setting uses cannot be deactivated, and an inactive form cannot be newly

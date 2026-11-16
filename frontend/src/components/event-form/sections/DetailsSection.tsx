@@ -1,10 +1,10 @@
 import React from 'react';
-import { FileText, Bold, Italic, List, Link } from 'lucide-react';
+import { FileText, Bold, Italic, List, Link, Lock } from 'lucide-react';
 import type { EventType } from '../../../types/event';
 import { EventType as EventTypeEnum } from '../../../constants/enums';
 import { getEventTypeLabel } from '../../../utils/eventHelpers';
 import { EventOrganizerPickers } from '../../EventOrganizerPickers';
-import { FormField } from '../../ux/FormField';
+import { FIELD_ERROR_CLASS, FormField } from '../../ux/FormField';
 import { EVENT_FIELDS, EVENT_TYPES, inputClass, labelClass, selectClass } from '../eventFormConstants';
 import type { EventFormModel } from '../useEventFormModel';
 
@@ -43,16 +43,52 @@ interface DetailsSectionProps {
   hideTypePicker?: boolean | undefined;
   /** Rendered under the type picker, before the recruitment prompt; hidden with the picker. */
   typeHint?: React.ReactNode;
+  /** The id `typeHint` carries, so the picker is described by it. */
+  typeHintId?: string | undefined;
+  /**
+   * Put the Event Type block first, above Title: a form that changes shape with
+   * the type leads with it.
+   */
+  typeFirst?: boolean | undefined;
   /** Rendered between the Event Type block and the category picker. */
   afterType?: React.ReactNode;
+  /** Rendered under the heading, above Title: a form with a fixed type says so here. */
+  beforeTitle?: React.ReactNode;
+  /** Shown under Title, tied to it as its description. */
+  titleHint?: React.ReactNode;
+  titlePlaceholder?: string | undefined;
+  /** The category picker's label; the single-page form's is "Category". */
+  categoryLabel?: string | undefined;
+  /** Said under the category picker. */
+  categoryHint?: string | undefined;
+  /** Mark Description "(optional)", as the training form marks every optional field. */
+  markOptional?: boolean | undefined;
 }
+
+const CATEGORY_HINT_ID = 'custom-category-hint';
+
+/** Under a control the finalized attendance locks. */
+const LockLine: React.FC<{ id?: string | undefined }> = ({ id }) => (
+  <p id={id} className="text-theme-text-muted mt-2 flex items-center gap-1.5 text-sm">
+    <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
+    Locked while attendance is finalized.
+  </p>
+);
 
 /** Title, description, type, category and (on create) who organizes the event. */
 export const DetailsSection: React.FC<DetailsSectionProps> = ({
   model,
   hideTypePicker = false,
+  typeFirst = false,
   typeHint,
+  typeHintId,
   afterType,
+  beforeTitle,
+  titleHint,
+  titlePlaceholder = 'e.g., Monthly Business Meeting',
+  categoryLabel = 'Category',
+  categoryHint,
+  markOptional = false,
 }) => {
   const {
     formData,
@@ -78,6 +114,86 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
     setAlternateId,
     currentUserId,
   } = model;
+  // Event Type, with its hint and the recruitment prompt.
+  const typePicker = !hideTypePicker && (
+    <div>
+      <label htmlFor="event-type" className={labelClass}>
+        Event Type{' '}
+        <span className={FIELD_ERROR_CLASS} aria-hidden="true">
+          *
+        </span>
+      </label>
+      <select
+        id="event-type"
+        required
+        value={formData.event_type}
+        onChange={(e) => handleEventTypeChange(e.target.value as EventType)}
+        disabled={attendanceLocked || eventTypeLocked}
+        aria-describedby={
+          attendanceLocked ? lockNoticeId : eventTypeLocked ? typeLockHintId : typeHint ? typeHintId : undefined
+        }
+        className={`${selectClass} disabled:cursor-not-allowed disabled:opacity-60`}
+      >
+        {EVENT_TYPES.filter((t) => visibleTypes.includes(t)).map((type) => (
+          <option key={type} value={type}>
+            {getEventTypeLabel(type)}
+          </option>
+        ))}
+        {EVENT_TYPES.some((t) => !visibleTypes.includes(t)) && (
+          <optgroup label="Other">
+            {EVENT_TYPES.filter((t) => !visibleTypes.includes(t)).map((type) => (
+              <option key={type} value={type}>
+                {getEventTypeLabel(type)}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+      {attendanceLocked && <LockLine />}
+      {eventTypeLocked && !attendanceLocked && (
+        <p id={typeLockHintId} className="text-theme-text-muted mt-2 text-sm">
+          Only an event manager can change a training event&apos;s type.
+        </p>
+      )}
+      {typeHint}
+      {/* A recruitment event only reaches the prospective-members pipeline
+          through guest sign-in, and those two switches live in Check-In,
+          several sections below the type picker. Without this prompt the
+          usual outcome is an outreach night whose applicants' attendance
+          is recorded as external attendees and never reaches their
+          applications. */}
+      {formData.event_type === EventTypeEnum.RECRUITMENT && (
+        <div className="mt-2 rounded-lg border border-teal-500/30 bg-teal-500/10 p-3">
+          {formData.allow_guest_check_in && formData.guest_check_in_creates_prospect ? (
+            <p className="text-sm text-teal-700 dark:text-teal-300">
+              Applicants who sign in at this event will have it recorded on their application. Visitors not yet in the
+              pipeline are asked to see a member of staff.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-teal-700 dark:text-teal-300">
+                Applicants record their attendance at this event by signing in as guests. Turn on guest sign-in to link
+                this event to the prospective members pipeline.
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  updateGuestSwitches({
+                    allow_guest_check_in: true,
+                    guest_check_in_creates_prospect: true,
+                  })
+                }
+                className="mt-2 rounded-md border border-teal-500/40 px-3 py-1.5 text-sm font-medium text-teal-700 hover:bg-teal-500/10 dark:text-teal-300"
+              >
+                Enable guest sign-in and pipeline follow-up
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <section className="space-y-6">
       <h2 className="text-theme-text-primary flex items-center space-x-2 text-xl font-bold">
@@ -85,12 +201,17 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
         <span>Event Details</span>
       </h2>
 
+      {beforeTitle}
+
+      {typeFirst && typePicker}
+
       {/* Title */}
       <FormField
         id="event-title"
         label="Title"
         required
         error={fieldErrors.title}
+        hint={titleHint}
         maxLength={EVENT_FIELDS.title.maxLength}
         count={formData.title.length}
       >
@@ -102,7 +223,7 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
             value={formData.title}
             onChange={(e) => update({ title: e.target.value })}
             className={inputClass}
-            placeholder="e.g., Monthly Business Meeting"
+            placeholder={titlePlaceholder}
           />
         )}
       </FormField>
@@ -111,6 +232,7 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
       <div>
         <label htmlFor="event-description" className={labelClass}>
           Description
+          {markOptional && <span className="text-theme-text-muted font-normal"> (optional)</span>}
         </label>
         {/* Formatting toolbar */}
         <div className="mb-1 flex items-center gap-1">
@@ -164,85 +286,13 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
           placeholder="What is this event about? Use **bold**, *italic*, - lists, or [links](url)"
         />
         {fieldErrors.description && (
-          <p id="event-description-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+          <p id="event-description-error" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
             {fieldErrors.description}
           </p>
         )}
       </div>
 
-      {/* Event Type */}
-      {!hideTypePicker && (
-        <div>
-          <label htmlFor="event-type" className={labelClass}>
-            Event Type <span className="text-red-700 dark:text-red-500">*</span>
-          </label>
-          <select
-            id="event-type"
-            required
-            value={formData.event_type}
-            onChange={(e) => handleEventTypeChange(e.target.value as EventType)}
-            disabled={attendanceLocked || eventTypeLocked}
-            aria-describedby={attendanceLocked ? lockNoticeId : eventTypeLocked ? typeLockHintId : undefined}
-            className={`${selectClass} disabled:cursor-not-allowed disabled:opacity-60`}
-          >
-            {EVENT_TYPES.filter((t) => visibleTypes.includes(t)).map((type) => (
-              <option key={type} value={type}>
-                {getEventTypeLabel(type)}
-              </option>
-            ))}
-            {EVENT_TYPES.some((t) => !visibleTypes.includes(t)) && (
-              <optgroup label="Other">
-                {EVENT_TYPES.filter((t) => !visibleTypes.includes(t)).map((type) => (
-                  <option key={type} value={type}>
-                    {getEventTypeLabel(type)}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-          </select>
-          {eventTypeLocked && !attendanceLocked && (
-            <p id={typeLockHintId} className="text-theme-text-muted mt-2 text-sm">
-              Only an event manager can change a training event&apos;s type.
-            </p>
-          )}
-          {typeHint}
-          {/* A recruitment event only reaches the prospective-members pipeline
-              through guest sign-in, and those two switches live in Check-In,
-              several sections below the type picker. Without this prompt the
-              usual outcome is an outreach night whose applicants' attendance
-              is recorded as external attendees and never reaches their
-              applications. */}
-          {formData.event_type === EventTypeEnum.RECRUITMENT && (
-            <div className="mt-2 rounded-lg border border-teal-500/30 bg-teal-500/10 p-3">
-              {formData.allow_guest_check_in && formData.guest_check_in_creates_prospect ? (
-                <p className="text-sm text-teal-700 dark:text-teal-300">
-                  Applicants who sign in at this event will have it recorded on their application. Visitors not yet in
-                  the pipeline are asked to see a member of staff.
-                </p>
-              ) : (
-                <>
-                  <p className="text-sm text-teal-700 dark:text-teal-300">
-                    Applicants record their attendance at this event by signing in as guests. Turn on guest sign-in to
-                    link this event to the prospective members pipeline.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateGuestSwitches({
-                        allow_guest_check_in: true,
-                        guest_check_in_creates_prospect: true,
-                      })
-                    }
-                    className="mt-2 rounded-md border border-teal-500/40 px-3 py-1.5 text-sm font-medium text-teal-700 hover:bg-teal-500/10 dark:text-teal-300"
-                  >
-                    Enable guest sign-in and pipeline follow-up
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+      {!typeFirst && typePicker}
 
       {afterType}
 
@@ -250,7 +300,7 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
       {(customCategories.length > 0 || unlistedCategories.length > 0) && (
         <div>
           <label htmlFor="custom-category" className={labelClass}>
-            Category
+            {categoryLabel}
           </label>
           <select
             id="custom-category"
@@ -259,13 +309,15 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
               update(e.target.value ? { custom_category: e.target.value } : { custom_category: undefined })
             }
             disabled={attendanceLocked}
-            aria-describedby={attendanceLocked ? lockNoticeId : undefined}
+            aria-describedby={attendanceLocked ? lockNoticeId : categoryHint ? CATEGORY_HINT_ID : undefined}
             className={`${selectClass} disabled:cursor-not-allowed disabled:opacity-60`}
           >
             <option value="">None</option>
             {unlistedCategories.map((saved) => (
               <option key={saved} value={saved}>
-                {saved}
+                {/* Only once the department's list has loaded: with none
+                    loaded, nothing says the category is gone. */}
+                {customCategories.length > 0 ? `${saved} (no longer an event category)` : saved}
               </option>
             ))}
             {customCategories
@@ -287,12 +339,25 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
               </optgroup>
             )}
           </select>
+          {customCategories.length > 0 &&
+            formData.custom_category &&
+            unlistedCategories.includes(formData.custom_category) && (
+              <p className="text-theme-text-secondary mt-2 text-sm">
+                No longer an event category. It stays on this event until someone picks another.
+              </p>
+            )}
+          {categoryHint && !attendanceLocked && (
+            <p id={CATEGORY_HINT_ID} className="text-theme-text-muted mt-2 text-sm">
+              {categoryHint}
+            </p>
+          )}
+          {attendanceLocked && <LockLine />}
         </div>
       )}
       {showOrganizerPickers && (
         <div>
           {organizerOptions.error ? (
-            <p className="text-sm text-red-700 dark:text-red-400" role="alert">
+            <p className={`text-sm ${FIELD_ERROR_CLASS}`} role="alert">
               {organizerOptions.error} You will be the organizer; you can transfer the event once it is created.
             </p>
           ) : (

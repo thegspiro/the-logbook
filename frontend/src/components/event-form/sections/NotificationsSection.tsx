@@ -5,10 +5,13 @@ import type { EventFormModel } from '../useEventFormModel';
 
 interface NotificationsSectionProps {
   model: Pick<EventFormModel, 'formData' | 'update' | 'handleReminderTargetChange'>;
+  /** `steps`: the training form, which labels the add-a-reminder picker on screen. */
+  variant?: 'single-page' | 'steps' | undefined;
 }
 
 /** Who is reminded, and when. */
-export const NotificationsSection: React.FC<NotificationsSectionProps> = ({ model }) => {
+export const NotificationsSection: React.FC<NotificationsSectionProps> = ({ model, variant = 'single-page' }) => {
+  const steps = variant === 'steps';
   const { formData, update, handleReminderTargetChange } = model;
   return (
     <section className="space-y-4">
@@ -72,9 +75,14 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({ mode
             </div>
           )}
 
+          {steps && (
+            <label htmlFor="add-reminder" className={labelClass}>
+              Add a reminder
+            </label>
+          )}
           <select
             id="add-reminder"
-            aria-label="Add a reminder"
+            aria-label={steps ? undefined : 'Add a reminder'}
             value=""
             onChange={(e) => {
               const val = parseInt(e.target.value);

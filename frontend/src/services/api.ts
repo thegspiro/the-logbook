@@ -232,7 +232,6 @@ export {
 } from './adminServices';
 export type {
   TrainingSessionResponse,
-  TrainingSessionCreate,
   TrainingSessionLinkageUpdate,
   TrainingSessionAttach,
   TrainingApprovalSummary,

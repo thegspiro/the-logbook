@@ -1,167 +1,96 @@
-import React, { useState } from 'react';
-import { ClipboardCheck, Pencil } from 'lucide-react';
-import toast from 'react-hot-toast';
+import React from 'react';
+import { ClipboardCheck } from 'lucide-react';
 import type { TrainingSessionResponse } from '../../services/api';
-import { trainingSessionService } from '../../services/api';
 import type { TrainingRequirement } from '../../types/training';
-import AttendanceRequirementChecklist from '../training/AttendanceRequirementChecklist';
 import { attendanceRequirements } from '../../utils/attendanceRequirements';
-import { getErrorMessage } from '../../utils/errorHandling';
+import { linkedAttendanceLabel } from '../../hooks/useRetiredAttendanceRequirements';
 
 interface SessionAttendanceRequirementsProps {
   session: TrainingSessionResponse;
-  /** Every active requirement; only session-attendance ones are offered. */
+  /** Every active requirement; only session-attendance ones are named. */
   requirements: TrainingRequirement[];
-  /** Holder of events.manage: may change which requirements the session counts toward. */
-  canManage: boolean;
-  onChange: (session: TrainingSessionResponse) => void;
+  /** Whether `requirements` has loaded: until then a linked id is not known to be retired. */
+  loaded?: boolean | undefined;
+  /** Linked requirements no longer active, id to name (useRetiredAttendanceRequirements). */
+  retiredNames?: Readonly<Record<string, string>> | undefined;
+  /** Holder of events.manage, who is pointed at Edit training details to fix a retired link. */
+  canManage?: boolean | undefined;
 }
 
-const staleNotice = (count: number, alsoCurrent: boolean): string => {
-  const what = count === 1 ? 'a requirement' : `${count} requirements`;
-  return alsoCurrent
-    ? `This session is also linked to ${what} no longer active, which ${count === 1 ? 'counts' : 'count'} it against no one.`
-    : `This session is linked only to ${count === 1 ? 'a requirement' : 'requirements'} no longer active, so it counts against no one and members cannot ask to be excused from it.`;
+/**
+ * What links to retired requirements mean. The waiver and compliance checks
+ * read active requirements only, so such a link grades no one: a session
+ * linked only that way counts against no one, and its page offers no request
+ * to be excused, with nothing else on it saying why.
+ */
+const retiredNotice = (count: number, alsoActive: boolean): string => {
+  if (alsoActive) {
+    return count === 1
+      ? 'The requirement no longer active counts this session against no one.'
+      : 'The requirements no longer active count this session against no one.';
+  }
+  return `${count === 1 ? 'That requirement is' : 'Those requirements are'} no longer active, so this session counts against no one and members cannot ask to be excused from it.`;
 };
 
 /**
- * Which session-attendance requirements a training session counts toward.
+ * Which session-attendance requirements a training session counts toward, on
+ * the event page. Attendance at it counts toward their percentages.
  *
- * A linked session is one the members those requirements grade are expected
- * to attend; an unlinked one is optional and counts against nobody. Unlike
- * the training details above it, this may change after attendance is
- * finalized: it alters how the session is graded, not any record it wrote.
+ * Read-only: the links are changed in the training form's Training Info step,
+ * which the card's "Edit training details" opens, even after attendance is
+ * finalized, since they change how the session is graded and no record it
+ * wrote.
  */
 const SessionAttendanceRequirements: React.FC<SessionAttendanceRequirementsProps> = ({
   session,
   requirements,
-  canManage,
-  onChange,
+  loaded = true,
+  retiredNames = {},
+  canManage = false,
 }) => {
   const linked = session.attendance_requirement_ids ?? [];
   const options = attendanceRequirements(requirements);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<string[]>(linked);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  if (!loaded) return null;
 
   if (options.length === 0 && linked.length === 0) return null;
 
-  // `requirements` holds active ones only, so a linked id missing from the
-  // options names a requirement that was deactivated. The waiver and
-  // compliance checks read active requirements only, so such a link grades
-  // nobody: the session counts toward it for no one.
-  const current = options.filter((r) => linked.includes(r.id));
-  const staleCount = linked.filter((id) => !options.some((r) => r.id === id)).length;
-
-  const save = async () => {
-    setSaving(true);
-    setError(null);
-    try {
-      const updated = await trainingSessionService.setAttendanceRequirements(session.id, draft);
-      onChange(updated);
-      setEditing(false);
-      toast.success('Attendance requirements updated');
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to update attendance requirements'));
-    } finally {
-      setSaving(false);
-    }
-  };
+  const names = linked.map((id) => linkedAttendanceLabel(id, options, retiredNames));
+  const retiredCount = linked.filter((id) => !options.some((r) => r.id === id)).length;
 
   return (
     <div className="border-theme-surface-border mt-6 border-t pt-4">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-medium">
-          <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
-          Counts toward attendance
-        </h3>
-        {canManage && !editing && (options.length > 0 || staleCount > 0) && (
-          <button
-            type="button"
-            onClick={() => {
-              // Only ids the checklist can show: a stale one would be resent
-              // on every save with no box to untick it.
-              setDraft(current.map((r) => r.id));
-              setError(null);
-              setEditing(true);
-            }}
-            className="touch-target-phone text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1.5 text-sm font-medium"
-          >
-            <Pencil className="h-4 w-4" aria-hidden="true" />
-            Change
-          </button>
-        )}
-      </div>
-
-      {editing ? (
-        <fieldset disabled={saving}>
-          <legend className="text-theme-text-muted mb-3 text-sm">
-            Members these requirements grade are expected to attend this session. Leave all unticked to make it
-            optional.
-          </legend>
-          {error && (
-            <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3" role="alert">
-              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-            </div>
-          )}
-          {staleCount > 0 && (
-            <p className="text-theme-text-secondary mb-3 text-sm">
-              Saving removes the {staleCount === 1 ? 'link' : `${staleCount} links`} to{' '}
-              {staleCount === 1 ? 'a requirement' : 'requirements'} no longer active.
-            </p>
-          )}
-          {options.length > 0 ? (
-            <AttendanceRequirementChecklist requirements={requirements} value={draft} onChange={setDraft} />
-          ) : (
-            <p className="text-theme-text-secondary text-sm">
-              No attendance requirement is active. Save to make this session optional, or activate one under Training
-              requirements first.
-            </p>
-          )}
-          <div className="mt-4 flex flex-wrap justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setEditing(false)}
-              className="bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary touch-target-phone rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void save()}
-              className="btn-primary px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Save'}
-            </button>
-          </div>
-        </fieldset>
-      ) : linked.length > 0 ? (
+      <h3 className="text-theme-text-primary mb-2 flex items-center gap-2 text-sm font-medium">
+        <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
+        Counts toward attendance
+      </h3>
+      {linked.length > 0 ? (
         <>
-          {current.length > 0 && (
-            <ul className="text-theme-text-primary list-inside list-disc text-sm">
-              {current.map((r) => (
-                <li key={r.id}>{r.name}</li>
-              ))}
-            </ul>
-          )}
-          {staleCount > 0 && (
+          <ul className="flex flex-wrap gap-2">
+            {names.map((name, i) => (
+              <li
+                key={linked[i] ?? name}
+                className="badge border border-blue-500/30 bg-blue-500/10 text-sm text-blue-800 dark:text-blue-300"
+              >
+                {name}
+              </li>
+            ))}
+          </ul>
+          {retiredCount > 0 && (
             <p
-              className={`text-sm ${canManage ? 'alert-warning rounded-lg p-3' : 'text-theme-text-secondary'} ${
-                current.length > 0 ? 'mt-2' : ''
-              }`}
+              className={`mt-2 text-sm ${canManage ? 'alert-warning rounded-lg p-3' : 'text-theme-text-secondary'}`}
               role="status"
             >
-              {staleNotice(staleCount, current.length > 0)}
+              {retiredNotice(retiredCount, retiredCount < linked.length)}
               {canManage &&
-                (options.length > 0
-                  ? ' Choose Change to link an active requirement or remove the old links.'
-                  : ' Activate an attendance requirement under Training requirements, or choose Change to remove the old links.')}
+                ' Use Edit training details to link an active requirement or untick the one no longer active.'}
             </p>
           )}
         </>
       ) : (
-        <p className="text-theme-text-secondary text-sm">Optional: not counted against anyone.</p>
+        <p className="text-theme-text-secondary text-sm">
+          None: this session is not graded against an attendance requirement.
+        </p>
       )}
     </div>
   );

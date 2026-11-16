@@ -92,7 +92,7 @@ describe('CampaignsPage form', () => {
 
     await waitFor(() =>
       expect(screen.getByLabelText(/^Goal Amount/)).toHaveAccessibleDescription(
-        'Input should be less than or equal to 9999999999.99'
+        'Goal amount must be 9999999999.99 or less.'
       )
     );
   });

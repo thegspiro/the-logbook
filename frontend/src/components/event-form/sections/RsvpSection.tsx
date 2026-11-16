@@ -9,16 +9,122 @@ import type { EventFormModel } from '../useEventFormModel';
 
 interface RsvpSectionProps {
   model: Pick<EventFormModel, 'formData' | 'update' | 'fieldErrors' | 'rsvpDeadlineRequired' | 'toggleRsvpStatus'>;
+  /**
+   * `steps`: the training form's wording, which names its sections by topic
+   * ("RSVP") under a Settings step and marks each optional field; the
+   * single-page form keeps "RSVP Settings".
+   */
+  variant?: 'single-page' | 'steps' | undefined;
+  /** Max Attendees holds the library course's max participants. */
+  maxAttendeesFromCourse?: boolean | undefined;
 }
 
 /** Whether a response is required, capacity, guests and roster visibility. */
-export const RsvpSection: React.FC<RsvpSectionProps> = ({ model }) => {
+export const RsvpSection: React.FC<RsvpSectionProps> = ({
+  model,
+  variant = 'single-page',
+  maxAttendeesFromCourse = false,
+}) => {
   const { formData, update, fieldErrors, rsvpDeadlineRequired, toggleRsvpStatus } = model;
+  const steps = variant === 'steps';
+  const maxAttendees = (
+    <FormField
+      id="max-attendees"
+      label="Max Attendees"
+      optional={steps}
+      error={fieldErrors.max_attendees}
+      hint={
+        steps
+          ? maxAttendeesFromCourse
+            ? 'From the course. Leave blank for unlimited.'
+            : 'Leave blank for unlimited.'
+          : undefined
+      }
+    >
+      {(field) => (
+        <input
+          {...field}
+          type="number"
+          inputMode="numeric"
+          min="1"
+          value={formData.max_attendees || ''}
+          onChange={(e) => update({ max_attendees: e.target.value ? parseInt(e.target.value) : undefined })}
+          className={inputClass}
+          placeholder="Unlimited"
+        />
+      )}
+    </FormField>
+  );
+  const guests = (
+    <label className="mobile-touch-target flex items-center justify-start space-x-3">
+      <input
+        type="checkbox"
+        id="allow-guests"
+        checked={formData.allow_guests}
+        onChange={(e) => update({ allow_guests: e.target.checked })}
+        className={checkboxClass}
+      />
+      <span className="text-theme-text-secondary text-sm">
+        Allow guests{steps && ' (members can bring a guest on their RSVP)'}
+      </span>
+    </label>
+  );
+  const statuses = (
+    <fieldset>
+      <legend className={labelClass}>RSVP Status Options</legend>
+      <div className="flex flex-wrap gap-3">
+        {([RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING, RSVPStatusEnum.MAYBE] as RSVPStatus[]).map((status) => (
+          <label
+            key={status}
+            className="mobile-touch-target flex cursor-pointer items-center justify-start gap-2 text-sm"
+          >
+            <input
+              type="checkbox"
+              checked={formData.allowed_rsvp_statuses?.includes(status) || false}
+              onChange={(e) => toggleRsvpStatus(status, e.target.checked)}
+              className={checkboxClass}
+            />
+            <span className="text-theme-text-secondary">
+              {status === RSVPStatusEnum.GOING ? 'Going' : status === RSVPStatusEnum.NOT_GOING ? 'Not Going' : 'Maybe'}
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+  const visibility = (
+    <div>
+      <label htmlFor="attendee-visibility" className={labelClass}>
+        Who can see who&apos;s going
+      </label>
+      <select
+        id="attendee-visibility"
+        /* '' is the inherit state. It must go back out as an explicit
+               null, never an omitted key: the API dumps updates with
+               exclude_unset, so omitting it would leave a previous
+               override in place behind a success toast. */
+        value={formData.attendee_visibility ?? ''}
+        onChange={(e) =>
+          update({
+            attendee_visibility: (e.target.value || null) as 'members' | 'managers' | null,
+          })
+        }
+        className={selectClass}
+      >
+        <option value="">Use organization default</option>
+        <option value="members">Everyone in the department</option>
+        <option value="managers">Only event managers</option>
+      </select>
+      <p className="text-theme-text-muted mt-1 text-xs">
+        Members only ever see names of people going — never contact details, notes or accessibility information.
+      </p>
+    </div>
+  );
   return (
     <section className="space-y-4">
       <h2 className="text-theme-text-primary flex items-center space-x-2 text-lg font-bold">
-        <Mail className="h-5 w-5 text-red-700" />
-        <span>RSVP Settings</span>
+        <Mail className="h-5 w-5 text-red-700" aria-hidden="true" />
+        <span>{steps ? 'RSVP' : 'RSVP Settings'}</span>
       </h2>
 
       <label className="mobile-touch-target flex items-center justify-start space-x-3">
@@ -43,6 +149,11 @@ export const RsvpSection: React.FC<RsvpSectionProps> = ({ model }) => {
             label="RSVP Deadline"
             required={rsvpDeadlineRequired}
             error={fieldErrors.rsvp_deadline}
+            hint={
+              steps
+                ? 'Must be before the event starts. Required for a single event when Require RSVP is on; optional for a series.'
+                : undefined
+            }
           >
             {(field) => (
               <DateTimeQuarterHour
@@ -57,84 +168,25 @@ export const RsvpSection: React.FC<RsvpSectionProps> = ({ model }) => {
       )}
 
       <div className="space-y-4 border-l-2 border-red-500/30 pl-4">
-        <FormField id="max-attendees" label="Max Attendees" error={fieldErrors.max_attendees}>
-          {(field) => (
-            <input
-              {...field}
-              type="number"
-              inputMode="numeric"
-              min="1"
-              value={formData.max_attendees || ''}
-              onChange={(e) => update({ max_attendees: e.target.value ? parseInt(e.target.value) : undefined })}
-              className={inputClass}
-              placeholder="Unlimited"
-            />
-          )}
-        </FormField>
-
-        <label className="mobile-touch-target flex items-center justify-start space-x-3">
-          <input
-            type="checkbox"
-            id="allow-guests"
-            checked={formData.allow_guests}
-            onChange={(e) => update({ allow_guests: e.target.checked })}
-            className={checkboxClass}
-          />
-          <span className="text-theme-text-secondary text-sm">Allow guests</span>
-        </label>
-
-        <fieldset>
-          <legend className={labelClass}>RSVP Status Options</legend>
-          <div className="flex flex-wrap gap-3">
-            {([RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING, RSVPStatusEnum.MAYBE] as RSVPStatus[]).map((status) => (
-              <label
-                key={status}
-                className="mobile-touch-target flex cursor-pointer items-center justify-start gap-2 text-sm"
-              >
-                <input
-                  type="checkbox"
-                  checked={formData.allowed_rsvp_statuses?.includes(status) || false}
-                  onChange={(e) => toggleRsvpStatus(status, e.target.checked)}
-                  className={checkboxClass}
-                />
-                <span className="text-theme-text-secondary">
-                  {status === RSVPStatusEnum.GOING
-                    ? 'Going'
-                    : status === RSVPStatusEnum.NOT_GOING
-                      ? 'Not Going'
-                      : 'Maybe'}
-                </span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
-        <div>
-          <label htmlFor="attendee-visibility" className={labelClass}>
-            Who can see who&apos;s going
-          </label>
-          <select
-            id="attendee-visibility"
-            /* '' is the inherit state. It must go back out as an explicit
-               null, never an omitted key: the API dumps updates with
-               exclude_unset, so omitting it would leave a previous
-               override in place behind a success toast. */
-            value={formData.attendee_visibility ?? ''}
-            onChange={(e) =>
-              update({
-                attendee_visibility: (e.target.value || null) as 'members' | 'managers' | null,
-              })
-            }
-            className={selectClass}
-          >
-            <option value="">Use organization default</option>
-            <option value="members">Everyone in the department</option>
-            <option value="managers">Only event managers</option>
-          </select>
-          <p className="text-theme-text-muted mt-1 text-xs">
-            Members only ever see names of people going — never contact details, notes or accessibility information.
-          </p>
-        </div>
+        {steps ? (
+          // The training form pairs capacity with who sees the roster, as
+          // the approved Settings step draws them, before guests and statuses.
+          <>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {maxAttendees}
+              {visibility}
+            </div>
+            {guests}
+            {statuses}
+          </>
+        ) : (
+          <>
+            {maxAttendees}
+            {guests}
+            {statuses}
+            {visibility}
+          </>
+        )}
       </div>
     </section>
   );

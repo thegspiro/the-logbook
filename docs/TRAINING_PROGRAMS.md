@@ -2596,15 +2596,24 @@ than deleting it. The cohort class row — not the event — is the stable ident
 so an event deleted through the events UI leaves a repairable gap rather than
 erasing the cohort's record of the class.
 
-Training sessions can be linked to events via the `training_session.event_id` foreign key. When a training session is created from an event:
+A training session belongs to one Training event, through
+`training_sessions.event_id` (unique). The event carries everything a session
+shares with any event — schedule, location, RSVP, QR check-in, reminders — and
+the session carries what is training-specific: the course (or none), training
+type, credit hours, instructor, certification, the requirement and program
+links, the completion flags and the **Counts toward attendance** links.
 
-- Event RSVP data pre-populates the session attendee list
-- Event QR code check-ins can be used for attendance verification
-- Event location is inherited by the training session
-
-<!-- Screenshot placeholder:
-_[Screenshot of the Create Training Session form showing the "Link to Event" dropdown with a list of upcoming events, and the auto-populated attendee list from the event's RSVPs]_
--->
+_(2026-11-11)_ **One form creates and edits both.** Training Admin's **Create
+Session**, Events → **Create Event** with the type set to Training, and **Edit**
+on a Training event all open the same step-by-step training-event form, which
+saves through the events endpoints with the session as `training_details`
+(`POST /events`, `/events/recurring`, `PATCH /events/{id}`,
+`/events/{id}/update-future`). Every Training event it creates has a session;
+with no course, records are filed under the event's title. A rolling series
+and a duplicated event carry the session and its links on to the new events.
+`POST /training/sessions` remains for cohort generation and API callers. The
+guide is [Finalizing a Training Session](./training/02-training.md#finalizing-a-training-session);
+the API is in `wiki/Module-Training-Developer.md` under Training Sessions.
 
 #### Training Session Approval → Pipeline Progress
 

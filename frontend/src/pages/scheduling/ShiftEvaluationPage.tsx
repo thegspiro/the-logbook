@@ -457,7 +457,16 @@ const ShiftEvaluationPage: React.FC = () => {
       )}
 
       <fieldset disabled={isSelf} className="min-w-0">
-        <ShiftEvaluationFields form={form.template} draft={draft} onChange={change} showErrors={showErrors} />
+        {/* Keyed on the evaluation and its form: switching forms keeps this
+            page mounted, and the fields' own state (the optional comment
+            boxes opened) belongs to the form it was opened on. */}
+        <ShiftEvaluationFields
+          key={`${routeKey}|${templateId ?? ''}`}
+          form={form.template}
+          draft={draft}
+          onChange={change}
+          showErrors={showErrors}
+        />
       </fieldset>
 
       {problems.length > 0 && (
