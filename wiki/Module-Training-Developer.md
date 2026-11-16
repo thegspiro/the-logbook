@@ -309,17 +309,40 @@ category per section and links them; the result reports
 
 ```
 GET    /api/v1/training/sessions/calendar                  # Session calendar
-POST   /api/v1/training/sessions                           # Create session (events.manage)
-POST   /api/v1/training/sessions/recurring                 # Create a recurring series (events.manage)
+POST   /api/v1/training/sessions                           # Create session (events.manage; cohorts and API callers)
+POST   /api/v1/training/sessions/recurring                 # Create a recurring series (events.manage; API callers)
 GET    /api/v1/training/sessions/by-event/{event_id}       # The session behind a Training event (200 with null when it has none)
 POST   /api/v1/training/sessions/by-event/{event_id}       # Attach training details to a Training event (events.manage)
 GET    /api/v1/training/sessions/by-event/{event_id}/approval  # Where the event's approval stands (events.manage or training.manage; 200 with null when it has none)
+POST   /api/v1/training/sessions/mandatory-tiers           # {requirement_ids} -> {everyone, tier_ids, unmapped, source_ids} (events.manage or training.manage)
 PATCH  /api/v1/training/sessions/{id}                      # Relink course/program/requirement (events.manage; locked while attendance is finalized)
+PUT    /api/v1/training/sessions/{id}/attendance-requirements  # Replace the Counts toward attendance set (events.manage; allowed after finalize)
 POST   /api/v1/training/sessions/{id}/finalize             # Runs the event's Finalize Attendance (events.manage)
 POST   /api/v1/training/sessions/{id}/reopen               # Runs the event's Reopen Attendance (events.reopen_attendance)
 GET    /api/v1/training/sessions/approve/{token}           # Approval roster (training.manage)
 POST   /api/v1/training/sessions/approve/{token}           # Submit approval (training.manage)
 ```
+
+**The app creates and edits sessions through the events endpoints**
+_(2026-11-11)_. The training-event form (`components/training-event/`) sends the
+session as `training_details` on `POST /events` and `/events/recurring`
+(`TrainingSessionAttach`: `course_id` or a one-off `course_name`/`course_code`,
+linkage ids, `training_type`, `credit_hours`, instructor, certification fields,
+the completion flags and `attendance_requirement_ids`; unknown keys are refused)
+and on `PATCH /events/{id}` and `/events/{id}/update-future`
+(`TrainingSessionDetailsUpdate`). An update is three-state: a key left out is
+untouched and `null` clears it, except that a null `credit_hours`, instructor or
+`expiration_months` falls back to the library course's value (hours to the
+scheduled length with no course); `training_type` and the completion flags
+cannot be null, and `attendance_requirement_ids` replaces the whole set. On a
+finalized event only `attendance_requirement_ids` may change (anything else is
+a 409), and a caller admitted only as a training manager is refused
+`training_details` (403). Both schema modules are snake_case. The frontend
+model is `trainingDetailsModel.ts` (`toAttachPayload` omits blanks,
+`toUpdatePayload` sends them as `null`, `strippedForFinalized`), and
+`hooks/useMandatoryTierPrefill.ts` calls `mandatory-tiers` when the **Counts
+toward attendance** ticks change. `trainingSessionService` no longer has
+`createSession` / `createRecurringSessions`.
 
 ### Course Cohorts
 
@@ -950,27 +973,27 @@ The training module's service objects live in
 `shiftCompletionService` and the waiver calls in
 `frontend/src/services/adminServices.ts`:
 
-| Service                       | API Prefix                       | Key Operations                                                                        |
-| ----------------------------- | -------------------------------- | ------------------------------------------------------------------------------------- |
-| `trainingService`             | `/training`                      | CRUD for records, courses, categories, requirements; compliance summary/matrix; stats |
-| `externalTrainingService`     | `/training/external`             | Provider CRUD, connection testing, sync, mappings, imports                            |
-| `trainingProgramService`      | `/training/programs`             | Programs, phases, milestones, enrollments, progress, registry import, export/import   |
-| `trainingSessionService`      | `/training/sessions`             | Session calendar, creation, finalization, token-based approval                        |
-| `trainingSubmissionService`   | `/training/submissions`          | Self-reported submissions, attachments, config, review workflow                       |
-| `trainingModuleConfigService` | `/training/module-config`        | Module visibility and configuration                                                   |
-| `skillsTestingService`        | `/training/skills-testing`       | Templates, tests, completion, validation, viewers, practice mode                      |
-| `recertificationService`      | `/training/recertification`      | Pathways, renewal tasks                                                               |
-| `competencyService`           | `/training/competency`           | Competency matrices, member competencies                                              |
-| `instructorService`           | `/training/instructors`          | Qualifications, validation, qualified instructor lookup                               |
-| `effectivenessService`        | `/training/effectiveness`        | Evaluations, course summaries                                                         |
-| `multiAgencyService`          | `/training/multi-agency`         | Joint session CRUD                                                                    |
-| `reportExportService`         | `/training/reports`              | Report export, compliance forecast                                                    |
-| `documentService`             | `/training/records/{id}`         | Record attachments                                                                    |
-| `complianceOfficerService`    | `/compliance`                    | ISO readiness, attestations, annual report, record completeness                       |
-| `complianceConfigService`     | `/compliance/config`             | Compliance thresholds and profiles                                                    |
-| `courseSyllabusService`       | `/training/courses/{id}/classes` | Syllabus classes, reorder, autofill                                                   |
-| `courseCohortService`         | `/training/cohorts`              | Cohort preview, generation, schedule changes, roster, missed classes                  |
-| `shiftCompletionService`      | `/training/shift-reports`        | Shift report filing, review, drafts, preview (in `adminServices.ts`)                  |
+| Service                       | API Prefix                       | Key Operations                                                                         |
+| ----------------------------- | -------------------------------- | -------------------------------------------------------------------------------------- |
+| `trainingService`             | `/training`                      | CRUD for records, courses, categories, requirements; compliance summary/matrix; stats  |
+| `externalTrainingService`     | `/training/external`             | Provider CRUD, connection testing, sync, mappings, imports                             |
+| `trainingProgramService`      | `/training/programs`             | Programs, phases, milestones, enrollments, progress, registry import, export/import    |
+| `trainingSessionService`      | `/training/sessions`             | Session calendar, by-event lookup, mandatory tiers, finalization, token-based approval |
+| `trainingSubmissionService`   | `/training/submissions`          | Self-reported submissions, attachments, config, review workflow                        |
+| `trainingModuleConfigService` | `/training/module-config`        | Module visibility and configuration                                                    |
+| `skillsTestingService`        | `/training/skills-testing`       | Templates, tests, completion, validation, viewers, practice mode                       |
+| `recertificationService`      | `/training/recertification`      | Pathways, renewal tasks                                                                |
+| `competencyService`           | `/training/competency`           | Competency matrices, member competencies                                               |
+| `instructorService`           | `/training/instructors`          | Qualifications, validation, qualified instructor lookup                                |
+| `effectivenessService`        | `/training/effectiveness`        | Evaluations, course summaries                                                          |
+| `multiAgencyService`          | `/training/multi-agency`         | Joint session CRUD                                                                     |
+| `reportExportService`         | `/training/reports`              | Report export, compliance forecast                                                     |
+| `documentService`             | `/training/records/{id}`         | Record attachments                                                                     |
+| `complianceOfficerService`    | `/compliance`                    | ISO readiness, attestations, annual report, record completeness                        |
+| `complianceConfigService`     | `/compliance/config`             | Compliance thresholds and profiles                                                     |
+| `courseSyllabusService`       | `/training/courses/{id}/classes` | Syllabus classes, reorder, autofill                                                    |
+| `courseCohortService`         | `/training/cohorts`              | Cohort preview, generation, schedule changes, roster, missed classes                   |
+| `shiftCompletionService`      | `/training/shift-reports`        | Shift report filing, review, drafts, preview (in `adminServices.ts`)                   |
 
 ---
 

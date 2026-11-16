@@ -46,6 +46,31 @@ function applyThemeToDocument(resolved: ResolvedTheme): void {
     }
   }
   root.setAttribute('data-theme', resolved);
+  syncBrowserThemeColor(root);
+}
+
+/**
+ * Paint the browser and OS chrome (Android's status bar, Chrome's toolbar) in
+ * the navigation bar's colour, so the header and bottom bar do not look as if
+ * they float on a band of a different colour.
+ *
+ * index.html's two `theme-color` tags choose by `prefers-color-scheme`, which
+ * is the phone's setting, not the theme picked in the app: a member who chose
+ * Light on a dark phone got a navy status bar above a white header. Every tag
+ * is rewritten rather than one, because whichever media query matches is the
+ * one the browser reads. The colour is read from `--nav-bg` so the stylesheet
+ * stays the only place the per-theme navigation colour is defined; an empty
+ * value (no stylesheet loaded) leaves the tags as they were.
+ *
+ * The manifest's `theme_color` is separate and fixed at install time — see
+ * vite.config.ts.
+ */
+function syncBrowserThemeColor(root: HTMLElement): void {
+  const navBg = getComputedStyle(root).getPropertyValue('--nav-bg').trim();
+  if (!navBg) return;
+  document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((meta) => {
+    meta.content = navBg;
+  });
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

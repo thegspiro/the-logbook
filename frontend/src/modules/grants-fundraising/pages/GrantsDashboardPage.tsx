@@ -85,7 +85,7 @@ const getDeadlineColor = (deadlineDate: string | null, timezone: string): string
   if (!deadlineDate) return 'text-theme-text-secondary';
   const days = daysUntil(deadlineDate, timezone);
   if (isNaN(days)) return 'text-theme-text-secondary';
-  if (days < 14) return 'text-red-600';
+  if (days < 14) return 'text-red-800 dark:text-red-400';
   if (days < 30) return 'text-amber-800 dark:text-yellow-600';
   return 'text-green-700 dark:text-green-600';
 };
@@ -330,7 +330,7 @@ const ComplianceTasksDue: React.FC<ComplianceTasksProps> = ({ tasks, timezone })
           const statusColor =
             COMPLIANCE_STATUS_COLORS[task.status] ?? 'bg-theme-surface-secondary text-theme-text-secondary';
           const days = daysUntil(task.dueDate, timezone);
-          const urgentClass = !isNaN(days) && days < 7 ? 'text-red-600' : 'text-theme-text-secondary';
+          const urgentClass = !isNaN(days) && days < 7 ? 'text-red-800 dark:text-red-400' : 'text-theme-text-secondary';
 
           return (
             <li key={task.id} className="hover:bg-theme-surface-hover p-4 transition-colors">
@@ -352,7 +352,7 @@ const ComplianceTasksDue: React.FC<ComplianceTasksProps> = ({ tasks, timezone })
                 <div className="shrink-0 text-right">
                   <p className={`text-xs font-medium ${urgentClass}`}>{formatDate(task.dueDate, timezone)}</p>
                   {!isNaN(days) && days < 7 && (
-                    <span className="mt-1 inline-flex items-center gap-1 text-xs text-red-600">
+                    <span className="mt-1 inline-flex items-center gap-1 text-xs text-red-800 dark:text-red-400">
                       <AlertTriangle className="h-3 w-3" />
                       {days < 0 ? 'Overdue' : days === 0 ? 'Due today' : `${String(days)}d left`}
                     </span>

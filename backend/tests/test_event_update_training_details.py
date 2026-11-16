@@ -792,6 +792,90 @@ class TestASeries:
             assert (await _session(db_session, event_id))["instructor"] is None
 
 
+class TestASeriesWithALegacyRequirement:
+    """An occurrence carrying a session-attendance requirement under
+    Requirement, from before Counts toward attendance, edited with "This and
+    all future events". The form leaves an unchanged Requirement out, so each
+    later occurrence keeps its own; re-sent, it is refused, because the link
+    may be kept but not given to an occurrence that stores another, or none.
+    """
+
+    async def _series_with_requirements(self, db, dept) -> tuple:
+        ids = await TestASeries()._series(db, dept, {})
+        hours = await _requirement(db, dept["org"], RequirementType.HOURS)
+        for event_id, requirement in (
+            (ids[2], dept["drills"]),
+            (ids[3], hours),
+            (ids[4], None),
+        ):
+            await db.execute(
+                text(
+                    "UPDATE training_sessions SET requirement_id = :r "
+                    "WHERE event_id = :e"
+                ),
+                {"r": requirement, "e": event_id},
+            )
+        return ids, hours
+
+    async def _requirements(self, db, ids) -> list:
+        result = []
+        for event_id in ids:
+            row = await db.execute(
+                text(
+                    "SELECT requirement_id FROM training_sessions WHERE event_id = :e"
+                ),
+                {"e": event_id},
+            )
+            result.append(row.scalar_one())
+        return result
+
+    async def test_an_edit_leaving_requirement_out_saves_and_keeps_each(
+        self, db_session, dept
+    ):
+        ids, hours = await self._series_with_requirements(db_session, dept)
+
+        await TestASeries()._edit_future(
+            db_session,
+            dept,
+            ids[2],
+            TrainingSessionDetailsUpdate(instructor="Lt. Okafor"),
+        )
+
+        assert await self._requirements(db_session, ids[2:5]) == [
+            dept["drills"],
+            hours,
+            None,
+        ]
+        assert (await _session(db_session, ids[4]))["instructor"] == "Lt. Okafor"
+
+    async def test_re_sending_it_is_refused(self, db_session, dept):
+        ids, _hours = await self._series_with_requirements(db_session, dept)
+
+        with pytest.raises(ValueError, match="graded by session attendance"):
+            await TestASeries()._edit_future(
+                db_session,
+                dept,
+                ids[2],
+                TrainingSessionDetailsUpdate(
+                    requirement_id=dept["drills"], instructor="Lt. Okafor"
+                ),
+            )
+
+    async def test_a_deliberate_clear_reaches_every_later_occurrence(
+        self, db_session, dept
+    ):
+        ids, _hours = await self._series_with_requirements(db_session, dept)
+
+        await TestASeries()._edit_future(
+            db_session,
+            dept,
+            ids[2],
+            TrainingSessionDetailsUpdate(requirement_id=None),
+        )
+
+        assert await self._requirements(db_session, ids[2:5]) == [None, None, None]
+
+
 class TestTheSchema:
     def test_an_unknown_key_is_refused(self):
         with pytest.raises(ValidationError):
@@ -884,3 +968,126 @@ class TestTheEndpoints:
             "action": "attendance_requirements_set",
             "attendance_requirement_ids": [dept["drills"]],
         }
+
+    @staticmethod
+    def _training_entries(audit) -> list:
+        return [
+            call.kwargs["event_data"]
+            for call in audit.await_args_list
+            if call.kwargs["event_type"] == "training_session_updated"
+        ]
+
+    async def test_re_sending_the_stored_form_audits_nothing(
+        self, db_session, dept, audit
+    ):
+        # The edit form sends every field it owns on every save (pitfall #1),
+        # so a description fix restates the links. Recording that as a "set"
+        # buried the saves that changed which sessions count (TR14-2).
+        event_id = await _event(
+            db_session,
+            dept,
+            {
+                "instructor": "Lt. Okafor",
+                "attendance_requirement_ids": [dept["drills"]],
+            },
+        )
+        officer = await self._user(db_session, dept["officer"])
+
+        await events_endpoint.update_event(
+            event_id=uuid.UUID(event_id),
+            event_data=EventUpdate(
+                description="Bring gloves",
+                training_details=TrainingSessionDetailsUpdate(
+                    instructor="Lt. Okafor",
+                    attendance_requirement_ids=[dept["drills"]],
+                ),
+            ),
+            db=db_session,
+            current_user=officer,
+        )
+
+        assert self._training_entries(audit) == []
+
+    async def test_only_what_changed_is_audited(self, db_session, dept, audit):
+        event_id = await _event(
+            db_session,
+            dept,
+            {
+                "instructor": "Lt. Okafor",
+                "attendance_requirement_ids": [dept["drills"]],
+            },
+        )
+        officer = await self._user(db_session, dept["officer"])
+
+        await events_endpoint.update_event(
+            event_id=uuid.UUID(event_id),
+            event_data=EventUpdate(
+                training_details=TrainingSessionDetailsUpdate(
+                    instructor="Capt. Reyes",
+                    attendance_requirement_ids=[dept["drills"]],
+                ),
+            ),
+            db=db_session,
+            current_user=officer,
+        )
+
+        assert self._training_entries(audit) == [
+            {"event_id": event_id, "scope": "this_event", "fields": ["instructor"]}
+        ]
+
+    async def test_a_series_edit_audits_the_links_once_they_change(
+        self, db_session, dept, audit
+    ):
+        ids = await TestASeries()._series(
+            db_session, dept, {"attendance_requirement_ids": [dept["drills"]]}
+        )
+        officer = await self._user(db_session, dept["officer"])
+
+        async def edit_future(links):
+            await events_endpoint.update_future_events(
+                event_id=uuid.UUID(ids[2]),
+                event_data=EventUpdate(
+                    training_details=TrainingSessionDetailsUpdate(
+                        attendance_requirement_ids=links
+                    )
+                ),
+                db=db_session,
+                current_user=officer,
+            )
+
+        await edit_future([dept["drills"]])
+        assert self._training_entries(audit) == []
+
+        await edit_future([dept["drills"], dept["meetings"]])
+        assert self._training_entries(audit) == [
+            {
+                "event_id": ids[2],
+                "scope": "this_and_future",
+                "fields": ["attendance_requirement_ids"],
+                "action": "attendance_requirements_set",
+                "attendance_requirement_ids": [dept["drills"], dept["meetings"]],
+            }
+        ]
+
+
+class TestListingOneSeries:
+    """The edit form names the nearest earlier finalized occurrence of the
+    series being edited; it asks for that series alone, so a busy calendar
+    cannot push the occurrence it wants past the list's 500-row cap."""
+
+    async def test_only_the_series_is_listed(self, db_session, dept):
+        weekly = await TestASeries()._series(db_session, dept, {})
+        other = await TestASeries()._series(db_session, dept, {})
+        lone = await _event(db_session, dept, {}, window=_window(days_ahead=-7))
+        officer = await TestTheEndpoints._user(db_session, dept["officer"])
+
+        listed = await events_endpoint.list_events(
+            recurrence_series_id=weekly[0],
+            skip=0,
+            limit=100,
+            db=db_session,
+            current_user=officer,
+        )
+
+        assert sorted(str(item.id) for item in listed) == sorted(weekly)
+        assert not {str(item.id) for item in listed} & set(other + [lone])

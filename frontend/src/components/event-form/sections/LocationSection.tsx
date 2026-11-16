@@ -1,6 +1,6 @@
 import React from 'react';
 import { MapPin } from 'lucide-react';
-import { FormField } from '../../ux/FormField';
+import { FIELD_ERROR_CLASS, FormField } from '../../ux/FormField';
 import { EVENT_FIELDS, inputClass, labelClass, selectClass } from '../eventFormConstants';
 import type { EventFormModel } from '../useEventFormModel';
 
@@ -17,10 +17,17 @@ interface LocationSectionProps {
     | 'formatLocationAddress'
     | 'selectedLocation'
   >;
+  /**
+   * The training form's wording: both fields marked optional, the picker
+   * listing names only (the card under it shows the address), and directions
+   * in a box that grows as they are typed. The Events form keeps its own.
+   */
+  variant?: 'events' | 'training' | undefined;
 }
 
 /** A listed location or a typed one, and directions. */
-export const LocationSection: React.FC<LocationSectionProps> = ({ model }) => {
+export const LocationSection: React.FC<LocationSectionProps> = ({ model, variant = 'events' }) => {
+  const training = variant === 'training';
   const {
     formData,
     update,
@@ -40,8 +47,10 @@ export const LocationSection: React.FC<LocationSectionProps> = ({ model }) => {
       </h2>
 
       <div>
-        <label htmlFor="location-select" className={labelClass}>
-          Location
+        {/* Names whichever control is drawn: with no saved locations the
+            select gives way to a text box, which went unnamed. */}
+        <label htmlFor={locations.length > 0 ? 'location-select' : 'location-text-fallback'} className={labelClass}>
+          {training ? 'Location (optional)' : 'Location'}
         </label>
         {locations.length > 0 ? (
           <select
@@ -53,7 +62,7 @@ export const LocationSection: React.FC<LocationSectionProps> = ({ model }) => {
             <option value="">-- Select a location --</option>
             {locations.map((loc) => (
               <option key={loc.id} value={loc.id}>
-                {formatLocationLabel(loc)}
+                {formatLocationLabel(loc, training ? 'none' : 'dash')}
               </option>
             ))}
             <option value="__other__">Other (off-site / enter manually)</option>
@@ -72,7 +81,7 @@ export const LocationSection: React.FC<LocationSectionProps> = ({ model }) => {
               placeholder="e.g., Station 1 Conference Room"
             />
             {fieldErrors.location && (
-              <p id="location-text-fallback-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+              <p id="location-text-fallback-error" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
                 {fieldErrors.location}
               </p>
             )}
@@ -119,7 +128,7 @@ export const LocationSection: React.FC<LocationSectionProps> = ({ model }) => {
       {locationMode === 'other' && locations.length > 0 && (
         <FormField
           id="location-text"
-          label="Location Name / Address"
+          label={training ? 'Location Name / Address (optional)' : 'Location Name / Address'}
           error={fieldErrors.location}
           maxLength={EVENT_FIELDS.location.maxLength}
           count={(formData.location || '').length}
@@ -131,23 +140,40 @@ export const LocationSection: React.FC<LocationSectionProps> = ({ model }) => {
               value={formData.location || ''}
               onChange={(e) => update({ location: e.target.value })}
               className={inputClass}
-              placeholder="e.g., City Hall — 123 Main St, Anytown"
+              placeholder={training ? 'e.g., City Hall, 123 Main St' : 'e.g., City Hall — 123 Main St, Anytown'}
             />
           )}
         </FormField>
       )}
 
-      <FormField id="location-details" label="Additional Directions" error={fieldErrors.location_details}>
-        {(field) => (
-          <input
-            {...field}
-            type="text"
-            value={formData.location_details || ''}
-            onChange={(e) => update({ location_details: e.target.value })}
-            className={inputClass}
-            placeholder="e.g., Enter through side door, Room 204"
-          />
-        )}
+      <FormField
+        id="location-details"
+        label={training ? 'Additional Directions (optional)' : 'Additional Directions'}
+        error={fieldErrors.location_details}
+      >
+        {(field) =>
+          training ? (
+            // field-sizing grows the box with its text where supported; two
+            // rows and the resize handle stand in elsewhere.
+            <textarea
+              {...field}
+              rows={2}
+              value={formData.location_details || ''}
+              onChange={(e) => update({ location_details: e.target.value })}
+              className="form-input field-sizing-content min-h-20 resize-y"
+              placeholder="e.g., Enter through the side door, Room 204"
+            />
+          ) : (
+            <input
+              {...field}
+              type="text"
+              value={formData.location_details || ''}
+              onChange={(e) => update({ location_details: e.target.value })}
+              className={inputClass}
+              placeholder="e.g., Enter through side door, Room 204"
+            />
+          )
+        }
       </FormField>
     </section>
   );

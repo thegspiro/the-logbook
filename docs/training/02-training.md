@@ -1299,19 +1299,28 @@ count. A session linked to none is optional and counts against nobody. One
 session can count toward several attendance requirements at once — the same
 drills graded at 60% for active members and 30% for senior members, say.
 
-- **When you create the session.** On the create form's **Training Info** step,
-  under **Counts toward attendance**, tick each attendance requirement the
-  session counts toward. The box appears only once the department has a
-  Session Attendance requirement. For a recurring session, the ticks apply to
-  every session in the series. Leave them all unticked to make the session
-  optional.
-- **Afterwards, from the event page.** The event's **Requirements & Programs**
-  card has a **Counts toward attendance** section listing the linked
-  requirements, or "Optional: not counted against anyone." Officers who can
-  manage events select **Change**, tick or untick, and **Save**. Unlike the
-  card's other links, this can be changed after attendance is finalized; it
-  changes how the session is graded, not any record. That is how you link
-  drills held before the requirement existed.
+- **When you create the session.** On the training-event form's **Training
+  Info** step, under **Counts toward attendance**, tick each attendance
+  requirement the session counts toward. The box appears only once the
+  department has a Session Attendance requirement. For a recurring session, the
+  ticks apply to every session in the series. Leave them all unticked and the
+  session counts toward no attendance requirement.
+- **Counting is not the same as mandatory** _(2026-11-11)_. A tick makes
+  attendance count toward that requirement's percentage; it does not make
+  attending the session mandatory. That is **Mandatory attendance** on the
+  **Settings** step. Your ticks suggest who it is mandatory for there — see
+  [Mandatory for, suggested from the ticks](#mandatory-for-suggested-from-the-ticks-2026-11-11).
+  An approved attendance waiver still leaves the session out of that member's
+  percentage.
+- **Afterwards, from the event page** _(2026-11-11)_. The event's **Training
+  details** card lists the linked requirements with their percentages, or
+  "None: this session is not graded against an attendance requirement."
+  Officers who can manage events select **Edit training details**, which opens
+  the training-event form on **Training Info**; tick or untick, then **Save
+  Changes** on **Review**. Unlike the other training details, this can be
+  changed after attendance is finalized; it changes how the session is graded,
+  not any record. That is how you link drills held before the requirement
+  existed.
 
 **Who sees which sessions count.** A session linked to an attendance
 requirement carries a **Counts toward attendance** badge on its event card in
@@ -1325,8 +1334,8 @@ period:
   cancelled. An open session does not yet count for or against anyone.
 - Sessions held before the member joined are not charged to them.
 - A member attended a session when finalizing it gave them a **completed**
-  training record. Under **Require instructor confirmation** that is after an
-  officer approves the attendance.
+  training record. Under **Require sign-off** that is after an officer approves
+  the attendance.
 - A session on a day covered by a training waiver or leave of absence (one
   covering this requirement, or every requirement) is not charged — unless the
   member attended anyway, in which case it counts.
@@ -1913,7 +1922,7 @@ Withdrawing a submission archives its notifications.
 
 > **Hint:** Submissions reviewed here are separate from finalizing a training
 > session. Whether a session needs a second officer to confirm depends on its
-> **Require instructor confirmation** setting (see
+> **Require sign-off** setting (see
 > [Finalizing a Training Session](#finalizing-a-training-session)).
 
 ### Fixing a Mistaken Approval or Record
@@ -1984,11 +1993,13 @@ member is credited the time they attended:
 A member with no time to credit gets no record, and is named in the finalize
 message.
 
-What happens next depends on the **Require instructor confirmation** box set
-when the session was created. It is on the third step of the create form,
-headed **Settings**, under _Attendance & Completion Settings_. The form is
-under **Training Admin → Records → Sessions**, or the **Create Session** button
-at the top of Training Administration.
+What happens next depends on the session's **Require sign-off** box
+_(2026-11-11; it was called Require instructor confirmation, on the third
+step)_. It is on the second step of the training-event form, **Training
+Info**, under _Training completion_. The form is under **Training Admin →
+Records → Sessions**, or the **Create Session** button at the top of Training
+Administration, and **Events → Create Event** opens the same form when the
+type is **Training**. **Edit** on the event page changes it later.
 
 - **Unticked (the default)** — finalizing **immediately completes** every
   attendee's training record. There is no separate approval step and no
@@ -1996,8 +2007,8 @@ at the top of Training Administration.
 - **Ticked** — the attendance goes to the department's training officers for
   approval. Members see the class as **In Progress** until an officer approves
   it on the **approval page**. Officers reach that page from the emailed link,
-  or from **Review and approve** on the event's **Requirements & Programs**
-  card. The page lists each member's credited time. The officer can change the
+  or from **Review and approve** on the event's **Training details** card. The
+  page lists each member's credited time. The officer can change the
   approved minutes (0 gives that member no credit) before selecting **Approve
   and record**.
 
@@ -2005,7 +2016,7 @@ at the top of Training Administration.
 
 ![Step 3 of the Create Session form — the settings, with Require instructor confirmation among them](./images/02-91-session-confirmation-toggle.png)
 
-> **Hint:** Leave **Require instructor confirmation** off for routine drills
+> **Hint:** Leave **Require sign-off** off for routine drills
 > you want completed as soon as you finalize them. Turn it on only when a
 > second officer must sign off before records count.
 
@@ -2016,19 +2027,34 @@ links, then finalize again. Each member's record is updated in place. A member t
 with the hours it had noted. Reopening cancels an approval link that was still
 waiting; finalizing again sends a new one.
 
-**A session built on a library course** _(2026-10-21)_. Choose **Use a course
-from the Course Library** on the first step. The **Credit Hours** field shows
-in both modes and can be edited. Left alone, it takes the course's credit
-hours, or the course's duration when the course has no credit hours, so a
-course saved with only a duration no longer gives a session worth 0 hours. A
-library session with no course chosen is refused. The review step shows times
-in your department's time zone and names the course.
+### Choosing the Course _(2026-11-11)_
+
+The course is optional. On **Training Info**, under **Course**, choose one of
+three:
+
+- **No course yet (filed under the event title)**, the default. Members'
+  records are filed under the event's title, with the training type you pick.
+- **From the Course Library**. Pick a course and the form fills in the
+  training type, credit hours, instructor, expiry, category, program and
+  maximum attendees, and shows a card of what it took. You can change any of
+  them. Credit hours come from the course's credit hours, or from its duration
+  when it has none, so a course saved with only a duration does not give a
+  session worth 0 hours. Choosing this option without picking a course is
+  refused under the **Course** field.
+- **One-off course name (not added to the Course Library)**. A name, and an
+  optional code, used for this session only. It never adds a course to the
+  library.
+
+**Training Type**, **Lead Instructor** and **Credit Hours** are offered
+whichever you choose. **Credit Hours** follow the event's length until you type
+a value. The **Review** step shows times in your department's time zone and
+names the course.
 
 ### Linking a Session to What It Counts Toward
 
-What finalizing credits depends on the session's links. Set them on the create
-form's second step, **Training Info**, under **Connect to Requirements &
-Programs**. All are optional:
+What finalizing credits depends on the session's links. Set them on the
+training-event form's second step, **Training Info**, under **Connect to
+Requirements & Programs**. All are optional:
 
 - the **course** it teaches;
 - the **Training Category** its hours count under;
@@ -2059,15 +2085,61 @@ Programs**. All are optional:
 - **Counts toward attendance** _(2026-11-04)_. When the department has
   [session attendance requirements](#the-chiefs-override-of-a-session-attendance-requirement), a tick box
   for each appears here, so the session is linked the moment it is created.
+- **The Requirement list leaves out Session Attendance requirements**
+  _(2026-11-11)_. Those are linked under **Counts toward attendance** instead.
+  A session linked to one the old way keeps it, shown as "(currently linked, no
+  longer offered)", until you pick another.
 
-The same pickers appear on the event page as **Requirements & Programs**. That
-is where you fix a session created before a requirement existed, or linked to
-the wrong pipeline. The card also lets you **add training details** to a
-Training event made from **Events → Create Event**. Changes apply the next
-time the event's attendance is finalized, which rewrites the members' records
-under the new links. While attendance is finalized, the links are locked;
-reopen attendance to change them. The one exception is **Counts toward
-attendance** _(2026-11-04)_, which can be changed at any time.
+**Changing the links later** _(2026-11-11)_. The event page's **Training
+details** card is a read-only summary of the session: course (or "No course
+yet (filed under the event title)"), training type, credit hours, lead
+instructor, certification, how records are completed, the links and **Counts
+toward attendance**. Officers who can manage events select **Edit training
+details** — or **Add training details** on a Training event with no session
+yet — which opens the training-event form on **Training Info**. That is where
+you fix a session created before a requirement existed, or linked to the
+wrong pipeline. Changes apply the next time the event's attendance is
+finalized, which rewrites the members' records under the new links. While
+attendance is finalized, everything on **Training Info** except **Counts
+toward attendance** is locked; reopen attendance to change it. A Training
+event with no session cannot be given one while finalized.
+
+**Who can change training details.** Saving them needs the **Manage all
+events** permission. A training manager without it can still edit a Training
+event's schedule, location and settings, and sees **Training Info**
+read-only: "Training details are changed by an event manager." In Training
+Administration, **Create Session** shows them a notice saying who can create
+one, instead of the form.
+
+**A series.** Editing a Training event that is part of a series asks, on the
+**Review** step, whether to apply the changes to **This event only** or **This
+and all future events**. The choice covers the training details as well as the
+event's own fields. If a later occurrence is finalized and its locked training
+details would change, the save is refused and says how many. On a rolling
+series, the occurrences added afterwards copy the latest one, training details
+and attendance links included.
+
+### Mandatory for, suggested from the ticks _(2026-11-11)_
+
+Ticking requirements under **Counts toward attendance** suggests who the
+session is mandatory for, on the **Settings** step:
+
+- **Mandatory for** is filled with the member types the ticked requirements
+  apply to, or **All members** when one applies to every member. A note under
+  it says it was pre-filled from **Counts toward attendance**.
+- A requirement no member type stands for — one for administrative or honorary
+  members, a membership type with no tier on your ladder, or one scoped only by
+  rank or position — is named in the note with the reason, and adds nothing.
+  If nothing ticked maps, **Mandatory for** is left as it was.
+- Ticking requirements never ticks **Mandatory attendance** itself. The
+  suggestion is written in when it is ticked, or the moment you tick it.
+- Once you change **Mandatory for** yourself, the ticks stop changing it.
+  Opening an existing event never re-runs the suggestion; only changing its
+  ticks does.
+
+It is a suggestion: a requirement and an event decide who is expected in
+slightly different ways, so check it, and change it if your requirement is
+narrower or wider than the member types shown.
 
 ---
 
@@ -4181,49 +4253,59 @@ monthly CPR refreshers or quarterly hazmat reviews.
 ### Creating a Recurring Training Session
 
 Select **Create Session** at the top of **Training Administration**, or open
-**Training Admin → Records → Sessions**. The form is a **four-step wizard** —
-**Event Details**, **Training Info**, **Settings**, **Review** — with its steps
-shown across the top. **Next** moves forward and **Previous** goes back. Steps
-1 to 5 below are on **Event Details**; the course is on **Training Info**.
+**Training Admin → Records → Sessions**; **Events → Create Event** with the
+type set to **Training** opens the same form. It is the **training-event
+form**, in four steps — **Event Details**, **Training Info**, **Settings**,
+**Review** — with its steps shown across the top. **Next** checks the step
+and moves forward; **Previous** goes back. Steps 1 to 5 below are on **Event
+Details**; the course is on **Training Info**.
 
-1. Give the session a **Training Title** and, if you like, a description.
+1. Give the session a **Title** and, if you like, a description. With no
+   course chosen, the title is also what members' records are filed under.
 2. Set the **Start Date & Time**. The time is three lists — hour, minute and
    AM/PM. Minutes can only be `:00`, `:15`, `:30` and `:45`.
 
 ![The start date/time control — a date field beside hour, minute and AM/PM dropdowns](./images/02-81-session-quarter-hour.png)
 
 3. Use one of the **Quick Duration** buttons (1 hour, 2 hours, 4 hours, 8
-   hours) to fill in the end time, or set the End Date & Time yourself. The
-   row appears only once a start time is set.
+   hours) to fill in the end time, or set the End Date & Time yourself. With
+   no start time set, a button says "Set a start date first" instead.
 
 ![The Quick Duration row — 1 hour, 2 hours, 4 hours and 8 hours](./images/02-82-session-quick-duration.png)
 
-4. Tick **Make this a recurring training session** and choose from the
-   **Repeats** list:
+4. Tick **Make this a recurring event** and choose from the **Repeats** list:
    - **Daily**
    - **Weekly**
    - **Every 2 Weeks**
    - **Monthly (same date)**
    - **Monthly (by weekday)** — adds **Which Occurrence** and **Day of Week**,
      so "2nd" + "Tue" gives the second Tuesday of each month
-   - **Annually**
+   - **Annually (same date)**
    - **Annually (by weekday)** — as above, plus a **Month** list
    - **Custom Days** — adds a row of weekday buttons to switch on and off
 
-   **Repeat Until** is required whenever the session repeats.
+   Under **Duration**, set the date the series ends, or tick **Rolling
+   12-month cycle** _(2026-11-11)_ to keep the series running a year ahead;
+   each occurrence added later copies the training details and attendance
+   links from the latest one. Add any **Exception Dates (dates to skip)**.
 
 ![The recurrence block with Monthly (by weekday) chosen and its ordinal and weekday pickers](./images/02-83-session-recurrence.png)
 
-5. Set the location, RSVP and participant limits, then select **Next**.
-6. On **Training Info**, choose **Use a course from the Course Library** and pick a
-   **course**. The form fills in the training type, credit hours, instructor,
-   expiry months and maximum participants from the course, and shows a preview
-   card of what it took. The other choice, **Create new course for this
-   training**, is selected at first and asks for those details directly.
+5. Set the location, then select **Next**.
+6. On **Training Info**, choose the course (see
+   [Choosing the Course](#choosing-the-course-2026-11-11)): **No course
+   yet** is selected at first; **From the Course Library** fills in the
+   training type, credit hours, instructor, expiry and maximum attendees from
+   the course and shows a card of what it took.
 
 ![The course picker with an existing course chosen and its details preview card underneath](./images/02-80-session-course-autopopulate.png)
 
-7. Work through **Settings**, then **Review**, and submit from the last step.
+7. On **Settings**, set attendance, RSVP, check-in and reminders. A new
+   Training event starts with RSVP off, check-in opening 60 minutes before and
+   manual check-out off _(2026-11-11; the old Create Session form started with
+   RSVP on, 15 minutes and check-out on)_. Then check **Review** and submit
+   from the last step. Every section on **Review** has an **Edit** link back to
+   its step. A save refused for a field goes back to the step holding it.
 
 The Logbook creates one event for each occurrence, each with its own linked
 training session. Each session takes its training type, credit hours and other
@@ -4236,9 +4318,10 @@ details from the form.
 | You delete the parent event                        | The linked training session is not deleted with it.               |
 | A time from imported data is not on a quarter hour | It is rounded to the nearest quarter hour.                        |
 | The form fills in details from a course            | Nothing is locked. You can change any filled-in value.            |
-| No start date is chosen                            | The Quick Duration buttons are not available yet.                 |
+| No start date is chosen                            | A Quick Duration button says "Set a start date first".            |
 | An occurrence falls after **Repeat Until**         | It is not created.                                                |
 | The course is changed later                        | Sessions already created keep the details they were created with. |
+| No course is chosen                                | Records are filed under the event's title.                        |
 
 ---
 
@@ -4742,11 +4825,12 @@ Lt. Santos opens **Events > Create Event** and fills in the drill:
 | RSVP Fields          | Dietary restrictions, accessibility needs (for lunch) |
 | Maximum Participants | 30                                                    |
 
-He saves the event. On its event page he opens **Requirements & Programs**,
-selects **add training details**, and links the "Structural Firefighting
-Operations" course with 4 credit hours, so finalizing attendance gives
-everyone training credit (see
-[Linking a Session to What It Counts Toward](#linking-a-session-to-what-it-counts-toward)).
+Choosing **Training** opens the step-by-step training-event form, with what he
+has typed carried over. On **Training Info** he picks the "Structural
+Firefighting Operations" course **From the Course Library**, with 4 credit
+hours, so finalizing attendance gives everyone training credit (see
+[Linking a Session to What It Counts Toward](#linking-a-session-to-what-it-counts-toward)),
+and saves the event.
 
 The drill falls on Shift B's duty day. Lt. Santos tells Shift B's officer, so
 the members on duty know they are expected at both.
@@ -5078,6 +5162,18 @@ have moved, been renamed or work differently.
 - **The two-year frequency** reads **Every 2 Years** in the requirement form's Frequency list (it was "Biannual", and still shows as "biannual" on requirement cards and in the Compliance Matrix). It
   means once every two years, not twice a year.
 - **The member export period** "Lifetime" reads **All Time**.
+- **Create Session is the training-event form** _(2026-11-11)_. The same
+  step-by-step form opens from **Events → Create Event** when the type is
+  **Training**, and from **Edit** on a Training event. The course is optional
+  ("No course yet" is the default); "Create new course for this training" is
+  now **One-off course name (not added to the Course Library)**, which is what
+  it always did. **Require instructor confirmation** is **Require sign-off**,
+  on **Training Info** under _Training completion_, not on **Settings**. A new
+  session starts with RSVP off, check-in from 60 minutes before and manual
+  check-out off.
+- **The event page's Requirements & Programs card is now Training details**
+  _(2026-11-11)_, a read-only summary. Its **Change** and **Edit** buttons are
+  replaced by **Edit training details**, which opens the training-event form.
 - **The Compliance Matrix** is a list grouped by standing that you step
   through, not a grid of icons. **Notify** and **Assign** buttons are gone.
 - **My Training's summary tiles** count the calendar year so far. Lifetime

@@ -37,7 +37,7 @@ import { formatCalendarDate, toLocalISODate } from '../../../utils/dateFormattin
 import { useRanks } from '../../../hooks/useRanks';
 import { useAuthStore } from '../../../stores/authStore';
 import { useReportsStore } from '../store/reportsStore';
-import type { ReportCardDefinition, ReportData, DatePreset } from '../types';
+import type { ReportCardDefinition, ReportData, ReportExportSource, DatePreset } from '../types';
 import { ExportControls } from '../components/ExportControls';
 import { ReportContentBoundary } from '../components/ReportContentBoundary';
 import {
@@ -300,17 +300,20 @@ function getExportData(data: ReportData, reportType: string) {
 }
 
 /**
- * The export buttons for one report, computed where a malformed body can be
- * contained: each helper reads its report's own shape, and one that throws
- * must not take the page down with it (ReportContentBoundary around it).
+ * The export buttons for one report. The file is built on the server from
+ * *source*; the page's own export rows only decide whether there is anything
+ * to download. Computed where a malformed body can be contained: each helper
+ * reads its report's own shape, and one that throws must not take the page
+ * down with it (ReportContentBoundary around it).
  */
-const ReportExport: React.FC<{ title: string; data: ReportData; reportType: string }> = ({
-  title,
-  data,
-  reportType,
-}) => {
+const ReportExport: React.FC<{
+  title: string;
+  data: ReportData;
+  reportType: string;
+  source: ReportExportSource | null;
+}> = ({ title, data, reportType, source }) => {
   const exportData = getExportData(data, reportType);
-  return <ExportControls reportTitle={title} rows={exportData.rows} columns={exportData.columns} />;
+  return <ExportControls reportTitle={title} source={source} disabled={exportData.rows.length === 0} />;
 };
 
 export const ReportsPage: React.FC = () => {
@@ -325,6 +328,7 @@ export const ReportsPage: React.FC = () => {
     activeReportData,
     activeReportType,
     activeReportLabel,
+    activeReportExport,
     datePreset,
     startDate,
     endDate,
@@ -708,7 +712,12 @@ export const ReportsPage: React.FC = () => {
                     <div className="split-row-aside flex flex-wrap items-center gap-2">
                       {/* Export Controls */}
                       <ReportContentBoundary resetKey={activeReportData} fallback={null}>
-                        <ReportExport title={activeCard.title} data={activeReportData} reportType={activeReportType} />
+                        <ReportExport
+                          title={activeReportLabel ?? activeCard.title}
+                          data={activeReportData}
+                          reportType={activeReportType}
+                          source={activeReportExport}
+                        />
                       </ReportContentBoundary>
                       {/* Compare button */}
                       {activeCard.usesDateRange && !comparisonData && (

@@ -316,6 +316,36 @@ class PayPalConfig(BaseModel):
     # setup form always sends it; the default covers a config saved without
     # it, and the webhook reads the same constant (SF-auto-apply).
     auto_apply_payments: bool = PAYPAL_AUTO_APPLY_DEFAULT
+    # Where members send money when the store's PayPal button is set to use
+    # the connected account. PayPal's API cannot report an account's
+    # PayPal.Me link, so an administrator enters it. Public, not secrets:
+    # both are shown to every member on the Pay button.
+    paypal_me_url: str = Field("", max_length=300)
+    account_email: str = Field("", max_length=255)
+
+    @field_validator("paypal_me_url")
+    @classmethod
+    def _paypal_me_link(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            return ""
+        # Imported here: the storefront module imports models that import
+        # this schema module's neighbours, and the check is only needed on
+        # a write.
+        from app.utils.storefront_payments import normalize_paypal_me
+
+        normalized = normalize_paypal_me(cleaned)
+        if normalized is None:
+            raise ValueError("Enter a paypal.me link or a PayPal.Me name")
+        return normalized
+
+    @field_validator("account_email")
+    @classmethod
+    def _account_email(cls, value: str) -> str:
+        cleaned = value.strip()
+        if cleaned and ("@" not in cleaned or any(c.isspace() for c in cleaned)):
+            raise ValueError("Enter the PayPal account's email address")
+        return cleaned
 
 
 class ZeffyConfig(BaseModel):

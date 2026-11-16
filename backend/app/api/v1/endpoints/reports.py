@@ -5,25 +5,35 @@ Endpoints for report generation, saved report management,
 and report export.
 """
 
+import asyncio
 from datetime import datetime, timezone
-from typing import List
+from typing import Any, List, Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission, user_has_permission
 from app.api.prospect_privacy import get_hidden_prospect_ids
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, safe_error_detail
 from app.models.analytics import SavedReport
-from app.models.user import User
+from app.models.user import Organization, User
 from app.schemas.reports import (
+    ReportExportRequest,
     ReportRequest,
     SavedReportCreate,
     SavedReportResponse,
     SavedReportUpdate,
 )
+from app.services.report_export import (
+    export_filename,
+    render_report_csv,
+    render_report_pdf,
+)
+from app.services.report_tables import build_export_table, export_spec, report_title
 from app.services.reports_service import ReportsService
 from app.services.saved_report_schedule import (
     PII_REPORT_PERMISSIONS as _PII_REPORT_PERMISSIONS,
@@ -36,7 +46,7 @@ from app.services.saved_report_schedule import (
     validate_schedule,
 )
 from app.utils.model_updates import apply_updates
-from app.utils.org_timezone import resolve_org_today
+from app.utils.org_timezone import format_in_org_timezone, resolve_org_today
 
 router = APIRouter()
 
@@ -76,6 +86,42 @@ def _enforce_report_pii_permission(current_user: User, report_type: str) -> None
                 f"'{required}' permission"
             ),
         )
+
+
+def _iso_date(value: Any) -> Optional[str]:
+    # A saved report's fixed dates come back from its JSON filters as text,
+    # a relative period's as dates.
+    if value is None or value == "":
+        return None
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
+async def _active_saved_report(
+    db: AsyncSession, report_id: str, current_user: User
+) -> SavedReport:
+    """The caller's organization's active saved report, or 404."""
+    result = await db.execute(
+        select(SavedReport).where(
+            SavedReport.id == report_id,
+            SavedReport.organization_id == str(current_user.organization_id),
+            SavedReport.is_active.is_(True),
+        )
+    )
+    return ensure_found(result.scalar_one_or_none(), "Saved report")
+
+
+async def _saved_report_dates(
+    db: AsyncSession, filters: dict, current_user: User
+) -> tuple[Optional[Any], Optional[Any]]:
+    """A saved report's dates as of today in the department's calendar.
+
+    A relative period (filters.period) runs for the period as of today, the
+    same way the scheduled send resolves it — and the same way for Run and
+    for a download, so the file matches what Run showed.
+    """
+    return report_dates(
+        filters, await resolve_org_today(db, str(current_user.organization_id))
+    )
 
 
 # ============================================
@@ -133,6 +179,121 @@ async def generate_report(
         raise HTTPException(status_code=400, detail=report["error"])
 
     return report
+
+
+@router.post("/export")
+async def export_report(
+    request: ReportExportRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("reports.view")),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
+):
+    """Download a report as PDF or CSV.
+
+    The report is run again here, under the same gates as Generate and Run,
+    rather than printed from rows the browser holds: the file is what the
+    server would show this caller, and the audit row records a fact. A report
+    listing members' personal data also needs the permission that guards that
+    data at its source (RPT-3).
+
+    **Requires permission: reports.view**
+    """
+    title: Optional[str] = None
+    saved_report_id: Optional[str] = None
+    if request.saved_report_id is not None:
+        saved = await _active_saved_report(db, request.saved_report_id, current_user)
+        report_type = saved.report_type
+        filters = saved.filters or {}
+        start_date, end_date = await _saved_report_dates(db, filters, current_user)
+        title = saved.name
+        saved_report_id = str(saved.id)
+    else:
+        report_type = str(request.report_type)
+        filters = request.filters or {}
+        start_date, end_date = request.start_date, request.end_date
+
+    _enforce_report_pii_permission(current_user, report_type)
+    if report_type not in export_spec():
+        raise HTTPException(
+            status_code=400, detail=f"Unknown report type '{report_type}'"
+        )
+
+    report = await ReportsService(db).generate_report(
+        current_user.organization_id,
+        report_type,
+        start_date=start_date,
+        end_date=end_date,
+        filters=filters,
+        hidden_prospect_ids=hidden_prospect_ids,
+        current_user=current_user,
+    )
+    if "error" in report:
+        raise HTTPException(status_code=400, detail=report["error"])
+    table = build_export_table(report_type, report, title=title)
+
+    org_id = str(current_user.organization_id)
+    today = await resolve_org_today(db, org_id)
+    if request.format == "pdf":
+        organization = (
+            await db.execute(select(Organization).where(Organization.id == org_id))
+        ).scalar_one_or_none()
+        parameters = []
+        if title is not None:
+            parameters.append(("Report", report_title(report_type)))
+        if start_date or end_date:
+            parameters.append(
+                ("Period", f"{start_date or 'start'} to {end_date or 'today'}")
+            )
+        content = await asyncio.to_thread(
+            render_report_pdf,
+            table,
+            org_name=organization.name if organization else None,
+            logo=organization.logo if organization else None,
+            generated_at=format_in_org_timezone(
+                datetime.now(timezone.utc), organization, "%Y-%m-%d %H:%M %Z"
+            ),
+            generated_by=current_user.full_name,
+            parameters=parameters,
+        )
+        media_type = "application/pdf"
+    else:
+        content = render_report_csv(table)
+        media_type = "text/csv; charset=utf-8"
+
+    # Ids and parameters only, never the report's content; written after the
+    # file exists, so a refused or failed export leaves no row.
+    await log_audit_event(
+        db=db,
+        event_type="report_exported",
+        event_category="reports",
+        severity="info",
+        event_data={
+            "report_type": report_type,
+            "format": request.format,
+            "saved_report_id": saved_report_id,
+            "start_date": _iso_date(start_date),
+            "end_date": _iso_date(end_date),
+            "filter_keys": sorted(str(key) for key in filters),
+            "row_count": len(table.rows),
+        },
+        user_id=str(current_user.id),
+        organization_id=org_id,
+    )
+
+    filename = export_filename(table.title, today, request.format)
+    # A saved report's own name can hold any script; a header carries only
+    # latin-1 unless the name is RFC 5987 encoded (the file storage rule).
+    quoted = quote(filename)
+    disposition = (
+        f"attachment; filename*=utf-8''{quoted}"
+        if quoted != filename
+        else f'attachment; filename="{filename}"'
+    )
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": disposition},
+    )
 
 
 # ============================================
@@ -338,24 +499,13 @@ async def run_saved_report(
     hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """Run a saved report immediately and return the results"""
-    result = await db.execute(
-        select(SavedReport).where(
-            SavedReport.id == report_id,
-            SavedReport.organization_id == str(current_user.organization_id),
-            SavedReport.is_active.is_(True),
-        )
-    )
-    report = ensure_found(result.scalar_one_or_none(), "Saved report")
+    report = await _active_saved_report(db, report_id, current_user)
 
     _enforce_report_pii_permission(current_user, report.report_type)
 
     service = ReportsService(db)
     filters = report.filters or {}
-    # A relative period (filters.period) runs for the period as of today, the
-    # same way the scheduled send resolves it.
-    start_date, end_date = report_dates(
-        filters, await resolve_org_today(db, str(current_user.organization_id))
-    )
+    start_date, end_date = await _saved_report_dates(db, filters, current_user)
     report_data = await service.generate_report(
         current_user.organization_id,
         report.report_type,

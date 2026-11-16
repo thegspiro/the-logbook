@@ -14,7 +14,7 @@ from dataclasses import field as dataclass_field
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Union
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -86,6 +86,10 @@ from app.utils.org_timezone import (
     resolve_scheduling_timezone,
     to_local,
 )
+
+if TYPE_CHECKING:
+    # Typing only: training_session_service imports this module.
+    from app.services.training_session_service import SessionDetailsPlan
 
 DEFAULT_ALLOWED_RSVP_STATUSES = ["going", "not_going"]
 
@@ -468,6 +472,10 @@ class EventService:
         # caller that reached it through end_event or record_actual_times,
         # whose return shapes predate the training report.
         self.last_finalize_outcome: Optional[FinalizeOutcome] = None
+        # What the most recent edit's training details changed, session by
+        # session, for the audit entry: the form restates every field on each
+        # save, so what was sent says nothing about what changed.
+        self.last_training_plans: List["SessionDetailsPlan"] = []
         # Pipeline reversals owed by writes made with ``defer_commit=True``;
         # the caller commits its whole batch once and then runs
         # ``complete_deferred_writes``.
@@ -661,6 +669,7 @@ class EventService:
         include_cancelled: bool = False,
         include_drafts: bool = False,
         mandatory_only: bool = False,
+        recurrence_series_id: UUID | str | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
@@ -799,6 +808,15 @@ class EventService:
 
         if mandatory_only:
             query = query.where(Event.is_mandatory.is_(True))
+
+        if recurrence_series_id:
+            # A series is its first event and the occurrences that name it.
+            query = query.where(
+                or_(
+                    Event.id == str(recurrence_series_id),
+                    Event.recurrence_parent_id == str(recurrence_series_id),
+                )
+            )
 
         if start_after:
             query = query.where(Event.start_datetime >= start_after)
@@ -1205,6 +1223,7 @@ class EventService:
         its list then rolls back the events before it too. That caller commits
         and then calls :meth:`complete_deferred_writes`.
         """
+        self.last_training_plans = []
         # The room booking lock comes before this event's row lock, on every
         # update: the overlap check below takes it whenever the event has a
         # room, and taking it there, after the event lock, would invert the
@@ -1398,6 +1417,7 @@ class EventService:
                 )
             raise ValueError(attendance_locked_error(what))
         await training.apply_session_details(plans, organization_id, updated_by)
+        self.last_training_plans = plans
 
     async def _refuse_orphaning_check_ins(
         self, event: Event, update_data: Dict[str, Any]
@@ -1524,6 +1544,7 @@ class EventService:
 
         Returns the count of updated events.
         """
+        self.last_training_plans = []
         # Fetch the anchor event
         result = await self.db.execute(
             select(Event)

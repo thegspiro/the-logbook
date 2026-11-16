@@ -95,6 +95,12 @@ export const TRAINING_RECORDS_PAGE_SIZE = 500;
 export const EVENT_RELATIVE_LABEL_WINDOW_MS = 48 * 60 * 60 * 1000; // 48 hours
 /** An unanswered RSVP whose deadline falls inside this window is urgent. */
 export const EVENT_RSVP_DEADLINE_SOON_MS = 48 * 60 * 60 * 1000; // 48 hours
+/**
+ * How far ahead an unanswered mandatory event asks the member for a response.
+ * A recurring mandatory series otherwise flags every future occurrence at once;
+ * with a rolling window each one surfaces about two months before it starts.
+ */
+export const EVENT_MANDATORY_RSVP_WINDOW_DAYS = 60;
 /** How far back the list looks for mandatory events with no check-in. */
 export const EVENT_MISSED_LOOKBACK_DAYS = 30;
 /** Rows the "Needs You" band shows before collapsing the rest into a link. */
