@@ -4044,7 +4044,21 @@ class EventService:
             return None, "Already checked in"
 
         rsvp.checked_in = True
-        rsvp.checked_in_at = datetime.now(dt_timezone.utc)
+        # An officer checking a member in is vouching for their attendance, so
+        # credit runs from the scheduled start even when the officer works
+        # through the list after the event began (owner decision, 2026-11-16).
+        # Stored as the check-in itself rather than as an override: an override
+        # marks the row "(times edited)" and reads as a correction on the
+        # approval page, which this is not. An early check-in is kept as the
+        # tap, since crediting already clamps it to the start. A member who
+        # really did arrive late is corrected with Edit Times. Self check-ins
+        # are untouched and still count a late tap from when it landed. The
+        # moment the officer acted is kept in the audit log.
+        scheduled_start = self._as_utc(event.start_datetime)
+        if scheduled_start is not None and now > scheduled_start:
+            rsvp.checked_in_at = scheduled_start
+        else:
+            rsvp.checked_in_at = now
 
         # The same placeholder a self check-in starts, under the same lock: an
         # officer checking a member in left them with no in-progress record
