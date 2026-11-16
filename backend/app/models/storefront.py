@@ -207,6 +207,13 @@ class StoreSettings(Base):
     venmo_handle: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     paypal_me_url: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     paypal_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # True: the PayPal button uses the PayPal.Me link and email entered on
+    # the connected PayPal integration, falling back to the two fields above
+    # when that integration is disconnected or has neither. False keeps the
+    # fields above, the behaviour before 2026-11-14.
+    paypal_use_connected: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     # See StorePaymentPolicy. Gates the vendor order and/or pickup.
     payment_policy: Mapped[StorePaymentPolicy] = mapped_column(
         SQLEnum(StorePaymentPolicy, values_callable=_enum_values),
