@@ -28,13 +28,6 @@ class ExternalApparatusInUseError(Exception):
 _PROTECTED = {"id", "organization_id", "agency_id", "created_at", "updated_at"}
 
 
-def _name_key(name: str) -> str:
-    """How two unit names compare when merging: case- and space-blind, as the
-    unique index on ``(agency_id, name)`` compares them under the database's
-    case-insensitive collation."""
-    return name.strip().casefold()
-
-
 class ExternalApparatusService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -215,8 +208,8 @@ class ExternalApparatusService:
         Department"), typically from a history import.
 
         * Each of the source's units moves to the target. A unit the target
-          already has under the same name (ignoring case and surrounding
-          space, as the unique index does) is combined instead: its shifts
+          already has under the same name, as the database's collation
+          judges it (see :meth:`_same_named_unit`), is combined instead: its shifts
           are repointed to the target's unit and the duplicate is removed.
         * **Past shifts are relabelled** with the target's name — owner
           decision 2026-11-16, overriding the usual rule that a shift keeps
@@ -268,11 +261,12 @@ class ExternalApparatusService:
                 )
             ).scalars()
         )
-        target_units = {_name_key(u.name): u for u in units if u.agency_id == target.id}
+        target_units = {u.id: u for u in units if u.agency_id == target.id}
 
         moved = combined = relabelled = 0
         for unit in (u for u in units if u.agency_id == source.id):
-            match = target_units.get(_name_key(unit.name))
+            match_id = await self._same_named_unit(org, target.id, unit.name)
+            match = target_units.get(match_id) if match_id else None
             values: Dict[str, Any] = {"agency_name": target.name}
             if match is not None:
                 values.update(external_apparatus_id=match.id, apparatus_name=match.name)
@@ -319,6 +313,28 @@ class ExternalApparatusService:
             "combined_apparatus": combined,
             "relabelled_shifts": relabelled,
         }
+
+    async def _same_named_unit(
+        self, organization_id: str, agency_id: str, name: str
+    ) -> Optional[str]:
+        """The agency's unit the database counts as having this name, if any.
+
+        Asked of the database rather than compared in Python because the
+        unique index on ``(agency_id, name)`` decides by the column's
+        collation (``utf8mb4_unicode_ci``): case- and accent-blind, trailing
+        spaces ignored, leading ones not. A Python approximation disagrees
+        with it somewhere, and where it says "different" and the index says
+        "same", moving the unit violates the index and the merge rolls back.
+        """
+        return (
+            await self.db.execute(
+                select(ExternalApparatus.id).where(
+                    ExternalApparatus.organization_id == str(organization_id),
+                    ExternalApparatus.agency_id == str(agency_id),
+                    ExternalApparatus.name == name,
+                )
+            )
+        ).scalar_one_or_none()
 
     # ------------------------------------------------------------------
     # Apparatus

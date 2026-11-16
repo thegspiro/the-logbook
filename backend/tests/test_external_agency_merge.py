@@ -154,9 +154,9 @@ class TestMerge:
         member = await _add_user(db_session, org_id, "Casey")
         source = await _agency(db_session, org_id, COUNTY)
         target = await _agency(db_session, org_id, COUNTY_FD)
-        dup = await _unit(db_session, org_id, source, " a106")
+        dup = await _unit(db_session, org_id, source, "a106")
         kept = await _unit(db_session, org_id, target, "A106")
-        on_dup = await _shift(db_session, org_id, member, dup, COUNTY, " a106")
+        on_dup = await _shift(db_session, org_id, member, dup, COUNTY, "a106")
 
         result, _ = await _merge(db_session, officer, source, target)
 
@@ -168,6 +168,29 @@ class TestMerge:
         assert entry.apparatus_name == "A106"
         assert entry.agency_name == COUNTY_FD
         assert await db_session.get(ExternalApparatus, dup) is None
+
+    async def test_units_the_collation_calls_equal_are_combined_not_moved(
+        self, db_session, org_and_officer
+    ):
+        """The unique index compares under utf8mb4_unicode_ci, which is
+        accent-blind: "Cafe" and "Café" are one name to it. Moving the source's
+        unit beside the target's would violate the index and roll the whole
+        merge back, so they must be combined."""
+        org_id, officer = org_and_officer
+        member = await _add_user(db_session, org_id, "Casey")
+        source = await _agency(db_session, org_id, COUNTY)
+        target = await _agency(db_session, org_id, COUNTY_FD)
+        plain = await _unit(db_session, org_id, source, "Cafe")
+        kept = await _unit(db_session, org_id, target, "Café")
+        on_plain = await _shift(db_session, org_id, member, plain, COUNTY, "Cafe")
+
+        result, _ = await _merge(db_session, officer, source, target)
+
+        assert result["combined_apparatus"] == 1
+        assert [u["id"] for u in result["agency"]["apparatus"]] == [kept]
+        entry = await _entry(db_session, on_plain)
+        assert entry.external_apparatus_id == kept
+        assert entry.apparatus_name == "Café"
 
     async def test_a_shift_whose_unit_was_deleted_is_relabelled_by_name(
         self, db_session, org_and_officer

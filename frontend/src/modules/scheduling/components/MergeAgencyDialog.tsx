@@ -21,7 +21,13 @@ interface MergeAgencyDialogProps {
   onMerge: (source: ExternalAgency, target: ExternalAgency) => void;
 }
 
-const nameKey = (name: string): string => name.trim().toLocaleLowerCase();
+/**
+ * How the preview guesses which units the server will combine. The server
+ * asks the database, whose collation (utf8mb4_unicode_ci) is case- and
+ * accent-blind and ignores trailing but not leading spaces; this mirrors that
+ * closely enough for "A106" / "a106" and "Cafe" / "Café" to read the same.
+ */
+const nameKey = (name: string): string => name.normalize('NFD').replace(/\p{M}/gu, '').trimEnd().toLocaleLowerCase();
 
 export const MergeAgencyDialog: React.FC<MergeAgencyDialogProps> = ({ source, agencies, busy, onClose, onMerge }) => {
   const selectId = useId();

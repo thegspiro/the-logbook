@@ -226,6 +226,29 @@ describe('OutsideApparatusSettings: merging two spellings of one department', ()
     expect(mergeButton).toBeEnabled();
   });
 
+  it('previews a unit spelled with an accent on one side as combined, as the server will', async () => {
+    mockList.mockResolvedValue({
+      agencies: [
+        {
+          ...county,
+          apparatus: [{ id: 'u-cafe', agency_id: 'a-county', name: 'Cafe', apparatus_type: null, is_active: true }],
+        },
+        {
+          ...countyFd,
+          apparatus: [
+            { id: 'u-cafe-fd', agency_id: 'a-county-fd', name: 'Café', apparatus_type: null, is_active: true },
+          ],
+        },
+      ],
+    });
+    const { user, dialog } = await openMerge();
+
+    await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+
+    expect(dialog).toHaveTextContent('Cafe is already listed there, so it is combined into one.');
+    expect(dialog).not.toHaveTextContent('apparatus moves');
+  });
+
   it('merges into the chosen department and reports what moved', async () => {
     const { user, dialog } = await openMerge();
 
