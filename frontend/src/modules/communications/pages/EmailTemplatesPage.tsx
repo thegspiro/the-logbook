@@ -66,6 +66,7 @@ import { useTemplateDraft } from '../hooks/useTemplateDraft';
 import type { EmailAttachment, EmailTemplate } from '../types';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { isActiveAccount } from '../../../constants/enums';
 
 interface PreviewMember {
   id: string;
@@ -73,6 +74,7 @@ interface PreviewMember {
   first_name?: string | undefined;
   last_name?: string | undefined;
   email?: string | undefined;
+  status?: string | undefined;
 }
 
 /**
@@ -183,6 +185,9 @@ const EmailTemplatesPage: React.FC = () => {
   const [editorView, setEditorView] = useState<'edit' | 'preview'>('edit');
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [members, setMembers] = useState<PreviewMember[]>([]);
+  // The preview's sample member is chosen from current members only. The
+  // officers panel gets the full list, to name an office holder who has left.
+  const currentMembers = members.filter((m) => isActiveAccount(m.status));
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [previewMemberId, setPreviewMemberId] = useState<string | undefined>(undefined);
   const [attachmentToDelete, setAttachmentToDelete] = useState<EmailAttachment | null>(null);
@@ -210,6 +215,7 @@ const EmailTemplatesPage: React.FC = () => {
             first_name: u.first_name,
             last_name: u.last_name,
             email: u.email,
+            status: u.status,
           }))
         );
       })
@@ -771,7 +777,7 @@ const EmailTemplatesPage: React.FC = () => {
                     preview={preview}
                     isPreviewing={isPreviewing}
                     onRefresh={handlePreview}
-                    members={members}
+                    members={currentMembers}
                     isLoadingMembers={isLoadingMembers}
                     isDirty={draft.isDirty}
                   />

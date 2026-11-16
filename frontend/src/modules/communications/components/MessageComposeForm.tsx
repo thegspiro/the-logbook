@@ -14,7 +14,7 @@ import { Loader2, X } from 'lucide-react';
 import { messagesService, userService } from '../../../services/api';
 import type { RoleOption, DepartmentMessageRecord } from '../../../services/adminServices';
 import type { User } from '../../../types/user';
-import { UserStatus } from '../../../constants/enums';
+import { UserStatus, isActiveAccount } from '../../../constants/enums';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
 import { displayNameOf } from '../../../utils/memberName';
@@ -272,7 +272,11 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
     onSaved();
   };
 
+  // Only current members are offered. A former member already in a saved
+  // message's audience stays listed, ticked, so the author can see and untick
+  // them rather than have them dropped unseen.
   const filteredMembers = members.filter((m) => {
+    if (!isActiveAccount(m.status) && !message?.target_member_ids?.includes(m.id)) return false;
     if (!memberSearch.trim()) return true;
     const q = memberSearch.toLowerCase();
     const name = displayNameOf(m).toLowerCase();
@@ -466,6 +470,7 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
                 />
                 {displayNameOf(m)}
                 {m.membership_number ? ` (#${m.membership_number})` : ''}
+                {isActiveAccount(m.status) ? '' : ' (former member)'}
               </label>
             ))}
           </div>

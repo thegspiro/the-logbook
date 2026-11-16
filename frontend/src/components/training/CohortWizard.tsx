@@ -35,7 +35,7 @@ import {
   getTodayLocalDate,
   localToUTC,
 } from '../../utils/dateFormatting';
-import { DateRollPolicy, MEETING_WEEKDAYS } from '../../constants/enums';
+import { DateRollPolicy, MEETING_WEEKDAYS, isActiveAccount } from '../../constants/enums';
 import { getErrorMessage } from '../../utils/errorHandling';
 import type {
   CohortClassOverride,
@@ -150,7 +150,8 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
           locationsService.getLocations({ is_active: true }).catch(() => [] as Location[]),
         ]);
         setCourses(courseList);
-        setMembers(memberList);
+        // Only current members can be enrolled; imported former members are not.
+        setMembers(memberList.filter((m) => isActiveAccount(m.status)));
         setLocations(locationList);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to load courses'));

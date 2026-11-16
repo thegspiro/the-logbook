@@ -91,7 +91,9 @@ beforeEach(() => {
   [mockPreviewSchedule, mockCreateCohort, mockGetCourses, mockGetUsers, mockGetLocations].forEach((m) => m.mockReset());
   mockGetLocations.mockResolvedValue(rooms);
   mockGetCourses.mockResolvedValue([course]);
-  mockGetUsers.mockResolvedValue([{ id: 'u1', first_name: 'Dana', last_name: 'Reyes', email: 'dana@fd.org' }]);
+  mockGetUsers.mockResolvedValue([
+    { id: 'u1', first_name: 'Dana', last_name: 'Reyes', email: 'dana@fd.org', status: 'active' },
+  ]);
   mockPreviewSchedule.mockResolvedValue(preview);
 });
 
@@ -239,6 +241,29 @@ describe('CohortWizard', () => {
     ]);
     expect(payload.member_user_ids).toEqual(['u1']);
     expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers only current members on the roster step', async () => {
+    mockGetUsers.mockResolvedValue([
+      { id: 'u1', first_name: 'Dana', last_name: 'Reyes', email: 'dana@fd.org', status: 'active' },
+      { id: 'u2', first_name: 'Pat', last_name: 'Ng', email: 'pat@fd.org', status: 'probationary' },
+      { id: 'u3', first_name: 'Lee', last_name: 'Park', email: 'lee@fd.org', status: 'retired' },
+    ]);
+    const user = userEvent.setup();
+    render(<CohortWizard onComplete={vi.fn()} onCancel={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Course')).toBeInTheDocument();
+    });
+    await advanceTo(user, 'preview');
+    await waitFor(() => {
+      expect(screen.getByText('Orientation')).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole('button', { name: /Next/i }));
+
+    expect(await screen.findByRole('checkbox', { name: /Dana/i })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /Pat/i })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /Lee/i })).not.toBeInTheDocument();
   });
 
   it('cancels out of the wizard from the first step', async () => {
