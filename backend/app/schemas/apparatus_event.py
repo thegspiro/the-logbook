@@ -430,3 +430,22 @@ class CalendarOutreachItem(UTCResponseBase):
     filled: int
     total: int
     is_mine: bool
+
+
+class EditorApparatusOption(BaseModel):
+    id: str
+    unit_number: str
+    name: Optional[str] = None
+    required_evoc_level_name: Optional[str] = None
+    status_name: Optional[str] = None
+    is_available: bool
+
+
+class EditorCategoryOption(BaseModel):
+    id: str
+    name: str
+
+
+class EditorOptionsResponse(BaseModel):
+    apparatus: List[EditorApparatusOption]
+    categories: List[EditorCategoryOption]

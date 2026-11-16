@@ -49,6 +49,7 @@ export type { IntegrationConfig } from './trainingServices';
 
 // Events
 export { eventService, eventRequestService } from './eventServices';
+export { apparatusEventService } from './apparatusEventServices';
 // NOTE: Inventory types are temporarily co-located with eventServices due to
 // extraction boundary overlap. They will be moved in a follow-up cleanup.
 export type {

@@ -84,6 +84,7 @@ import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplate
 import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
 import EventGuestsCard from '../components/event-detail/EventGuestsCard';
+import EventApparatusCrewCard from '../components/event-detail/EventApparatusCrewCard';
 import { GuestCheckInQRCard } from '../components/events/GuestCheckInQRCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
@@ -1812,6 +1813,13 @@ export const EventDetailPage: React.FC = () => {
             {/* Pipeline meeting stages can also link prospects to ordinary
                 business events, so this is intentionally not type-gated. */}
             <EventProspectsCard eventId={event.id} createsProspects={event.guest_check_in_creates_prospect ?? false} />
+
+            {/* The seats on an apparatus night (Santamobile, a parade). Renders
+                nothing on an ordinary event; asked only of someone who could
+                take or assign a seat. */}
+            {(checkPermission('apparatus_events.signup') || checkPermission('apparatus_events.manage')) && (
+              <EventApparatusCrewCard eventId={event.id} timezone={tz} />
+            )}
 
             {/* Guests are listed apart from member attendance and never
                 counted in it (W23-2). */}

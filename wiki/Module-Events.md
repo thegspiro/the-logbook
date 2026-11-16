@@ -1109,6 +1109,8 @@ Settings are stored in `organization.settings.events`; nested JSON writes use
 | `events.view`                              | Attendee list (subject to attendee visibility), attachments, event folder                                                        |
 | `events.manage`                            | Create, edit, delete, cancel, templates, rosters, check-in, finalize, settings, outreach pipeline, decide any attendance request |
 | `events.reopen_attendance`                 | Reopen finalized attendance (deliberately not part of `events.manage`)                                                           |
+| `apparatus_events.signup`                  | Take or leave a crew seat on an apparatus night (seeded wherever `events.view` is)                                               |
+| `apparatus_events.manage`                  | Apparatus event templates, scheduling nights, assigning seats (seeded wherever `events.manage` is)                               |
 | `analytics.view`                           | Event analytics pages                                                                                                            |
 | `locations.manage_nfc_tags`                | Write room NFC tags; switch kiosk badge check-in                                                                                 |
 | `apparatus.manage_nfc_tags`                | Write apparatus NFC tags                                                                                                         |

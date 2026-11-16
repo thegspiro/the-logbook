@@ -800,6 +800,34 @@ class TestOrganizationScoping:
 # ---------------------------------------------------------------------------
 
 
+class TestEditorOptions:
+    async def test_only_this_departments_live_apparatus_and_categories(
+        self, db_session: AsyncSession
+    ):
+        w = await _world(db_session)
+        other = await _world(db_session)
+        retired = Apparatus(
+            id=str(uuid.uuid4()),
+            organization_id=w.org.id,
+            unit_number=f"OLD-{uuid.uuid4().hex[:6]}",
+            apparatus_type_id=w.engine.apparatus_type_id,
+            status_id=w.status.id,
+            is_archived=True,
+        )
+        db_session.add(retired)
+        await db_session.flush()
+
+        options = await w.service.editor_options(w.org.id)
+
+        assert [a["id"] for a in options["apparatus"]] == [w.engine.id]
+        assert options["apparatus"][0]["required_evoc_level_name"] == "EVOC 3"
+        assert {c["id"] for c in options["categories"]} == {
+            w.outreach.id,
+            w.public_ed.id,
+        }
+        assert other.engine.id not in {a["id"] for a in options["apparatus"]}
+
+
 class TestCalendar:
     async def test_a_night_shows_unless_its_plan_opts_out(
         self, db_session: AsyncSession

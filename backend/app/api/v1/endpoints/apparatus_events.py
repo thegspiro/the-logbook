@@ -31,6 +31,7 @@ from app.schemas.apparatus_event import (
     CrewSeatResponse,
     CrewUnitResponse,
     DriverCandidatesResponse,
+    EditorOptionsResponse,
     NightPlanUpdate,
     NightSummary,
     ScheduleNightsRequest,
@@ -45,6 +46,7 @@ from app.services.apparatus_event_service import (
     ConflictsNotAcknowledged,
     SeatOutcome,
 )
+from app.services.event_service import attendance_is_finalized
 
 router = APIRouter()
 
@@ -218,7 +220,7 @@ async def _board(
         end_datetime=event.end_datetime,
         location=event.location,
         is_cancelled=bool(event.is_cancelled),
-        attendance_finalized=event.attendance_finalized_at is not None,
+        attendance_finalized=attendance_is_finalized(event),
         template_id=plan.template_id,
         template_name=template_names.get(str(plan.template_id)),
         evoc_mode=plan.evoc_mode,
@@ -298,6 +300,21 @@ async def create_template(
         username=current_user.username,
     )
     return (await _template_responses(service, [template], organization_id))[0]
+
+
+@router.get("/options", response_model=EditorOptionsResponse)
+async def editor_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus_events.manage")),
+):
+    """
+    The apparatus and Admin Hours categories the template editor offers.
+
+    **Requires permission: apparatus_events.manage**
+    """
+    return await ApparatusEventService(db).editor_options(
+        str(current_user.organization_id)
+    )
 
 
 @router.get("/templates/{template_id}", response_model=ApparatusEventTemplateResponse)

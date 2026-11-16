@@ -995,6 +995,67 @@ class ApparatusEventService:
         return SeatOutcome(warnings=warnings)
 
     # ------------------------------------------------------------------
+    # The template editor's pick-lists
+    # ------------------------------------------------------------------
+
+    async def editor_options(self, organization_id: str) -> Dict[str, Any]:
+        """Apparatus and Admin Hours categories a coordinator can pick.
+
+        Served here rather than from ``/apparatus`` and ``/admin-hours``:
+        those need ``apparatus.view`` and an Admin Hours grant, and a
+        coordinator who runs outreach need hold neither.
+        """
+        apparatus = (
+            await self.db.execute(
+                select(Apparatus)
+                .options(
+                    selectinload(Apparatus.required_evoc_level),
+                    selectinload(Apparatus.status_record),
+                )
+                .where(
+                    Apparatus.organization_id == str(organization_id),
+                    Apparatus.is_archived.is_(False),
+                )
+                .order_by(Apparatus.unit_number)
+            )
+        ).scalars()
+        categories = (
+            await self.db.execute(
+                select(AdminHoursCategory.id, AdminHoursCategory.name)
+                .where(
+                    AdminHoursCategory.organization_id == str(organization_id),
+                    AdminHoursCategory.is_active.is_(True),
+                )
+                .order_by(AdminHoursCategory.name)
+            )
+        ).all()
+        return {
+            "apparatus": [
+                {
+                    "id": str(unit.id),
+                    "unit_number": unit.unit_number,
+                    "name": unit.name,
+                    "required_evoc_level_name": (
+                        unit.required_evoc_level.name
+                        if unit.required_evoc_level
+                        else None
+                    ),
+                    "status_name": (
+                        unit.status_record.name if unit.status_record else None
+                    ),
+                    "is_available": (
+                        unit.status_record.is_available if unit.status_record else True
+                    ),
+                }
+                for unit in apparatus
+            ],
+            "categories": [
+                {"id": str(category_id), "name": name}
+                for category_id, name in categories
+            ],
+        }
+
+    # ------------------------------------------------------------------
     # Assignment pickers
     # ------------------------------------------------------------------
 
