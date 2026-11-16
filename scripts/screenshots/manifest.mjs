@@ -18155,6 +18155,27 @@ export const SHOTS = [
   {
     // Settings appears only on a connected card; see showIntegrationConnected.
     // The base URL is an example self-hosted server, not a real one.
+    id: "16-28-documenso-settings",
+    doc: "16-integrations.md",
+    line: 337,
+    anchor:
+      "Documenso settings on a connected Documenso card, as an administrator",
+    alt: "Documenso settings on a connected card: the API Token box reading Leave blank to keep the current token, the API Base URL box showing the department's own Documenso server with the note that changing it needs that server's token in the same save, the Webhook Secret box with its note that a blank box keeps the saved secret, the webhook address, and the notice that a new token or base URL is used from the next request to Documenso",
+    route: "/integrations",
+    beforeNavigate: showIntegrationConnected("documenso", {
+      api_base_url: "https://sign.oakvillefd.org/api/v1",
+    }),
+    prepare: openIntegrationSettings("Documenso", "documenso"),
+    expect: "The webhook address does not change",
+    // "No personal information" is a chip on the Claude card behind the
+    // dialog, not an empty page.
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 1200 },
+    fullPage: false,
+  },
+  {
+    // Settings appears only on a connected card; see showIntegrationConnected.
+    // The base URL is an example self-hosted server, not a real one.
     id: "16-27-calcom-settings",
     doc: "16-integrations.md",
     line: 383,

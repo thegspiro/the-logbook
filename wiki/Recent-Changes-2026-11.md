@@ -5,6 +5,17 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 16, 2026 (Documenso)
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-documenso-settings-november-16-2026).
+
+- **Documenso**: a connected Documenso card has a **Settings** button. Change
+  the API token, base URL or webhook secret without disconnecting; blank token
+  and secret boxes keep the saved ones. Moving to a different Documenso server
+  needs that server's API token in the same save. See
+  [Documenso Integration](Integration-Documenso).
+
 ## Recent changes: November 16, 2026 (Cal.com)
 
 The engineering audit is

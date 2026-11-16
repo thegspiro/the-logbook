@@ -5,6 +5,18 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: Documenso Settings, November 16, 2026
+
+A targeted pass for the **Settings** button on a connected Documenso card, the
+Documenso counterpart of Cal.com's. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                | Guide | Disposition                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------ |
+| **Settings** on a connected Documenso card: edit the API token, base URL and webhook secret without disconnecting; the base URL in use is shown, and blank token and secret boxes keep the saved ones | 16    | Paragraph written; `16-28-documenso-settings` captured |
+| Moving Documenso to a different base URL needs that server's API token in the same save. The API already refused this with 422; the dialog now says so and asks before sending                        | 16    | Note written; `wiki/Integration-Documenso.md` updated  |
+
+**Screenshots:** none queued.
+
 ## Change audit: Cal.com Settings, November 16, 2026
 
 A targeted pass for the **Settings** button on a connected Cal.com card, the

@@ -325,6 +325,17 @@ acknowledgments. It works with Documenso Cloud or your own Documenso server.
 
 After saving, select **Test** on the card to check the token.
 
+To change any of these later, use **Settings** on the connected card. Documenso
+stays connected and the webhook address does not change. Leave the **API
+Token** or **Webhook Secret** box blank to keep the saved one. The **API Base
+URL** box shows the address in use. **Moving to a different Documenso server
+needs that server's API token in the same save**: a token works only on the
+server it was created on, so The Logbook will not send the saved token to a new
+address. To return to Documenso Cloud, enter `https://app.documenso.com/api/v1`
+with a Cloud token.
+
+![Documenso settings on a connected card: the API Token box reading Leave blank to keep the current token, the API Base URL box showing the department's own Documenso server with the note that changing it needs that server's token in the same save, the Webhook Secret box with its note that a blank box keeps the saved secret, the webhook address, and the notice that a new token or base URL is used from the next request to Documenso](./images/16-28-documenso-settings.png)
+
 ### Auto-Advancing a Signing Stage (Webhooks)
 
 When you set a **Webhook Secret**, the connect window shows a **callback URL**
