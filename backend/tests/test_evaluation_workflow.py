@@ -3126,3 +3126,112 @@ class TestCrewSupervisor:
             assert (await client.get(url)).status_code == 404
             assert (await client.get(f"{url}/document")).status_code == 404
             assert (await client.get("/evaluations/crew")).json() == []
+
+
+async def _next_period(dept: _Dept, year: int = 2026) -> EvaluationPeriod:
+    period = EvaluationPeriod(
+        organization_id=dept.org,
+        name=f"{year} Annual {_uid()[:4]}",
+        start_date=date(year, 1, 1),
+        end_date=date(year, 12, 31),
+    )
+    dept.db.add(period)
+    await dept.db.flush()
+    return period
+
+
+class TestPreviousReview:
+    """A review shows the member's last finalized review on the same form,
+    to whoever could open that one, and to nobody else."""
+
+    async def test_the_evaluator_sees_last_years_grade(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        last_url = await _finalized(dept, make_client)
+        evaluator = await make_client(dept.evaluator)
+        last = (await evaluator.get(last_url)).json()
+        this = await _draft(
+            await make_client(dept.manager),
+            dept,
+            period_id=(await _next_period(dept)).id,
+        )
+
+        seen = (await evaluator.get(f"/evaluations/{this['id']}")).json()
+
+        previous = seen["previous_review"]
+        assert previous["evaluation_id"] == last["id"]
+        assert previous["period_name"] == dept.period.name
+        assert previous["overall"] == f"{last['weighted_overall']:g}% (weighted)"
+        # The earlier review has nothing before it.
+        assert last["previous_review"] is None
+
+    async def test_the_member_sees_their_own_last_review(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        last_url = await _finalized(dept, make_client)
+        this = await _draft(
+            await make_client(dept.manager),
+            dept,
+            period_id=(await _next_period(dept)).id,
+        )
+        member = await make_client(dept.member)
+
+        seen = (await member.get(f"/evaluations/{this['id']}")).json()
+
+        assert seen["previous_review"]["evaluation_id"] == last_url.rsplit("/", 1)[-1]
+
+    async def test_an_evaluator_who_could_not_open_last_years_sees_nothing(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        await _finalized(dept, make_client)
+        newcomer = await _user(dept.db, dept.org, ["evaluations.conduct"])
+        this = await _draft(
+            await make_client(dept.manager),
+            dept,
+            period_id=(await _next_period(dept)).id,
+            evaluator_id=newcomer.id,
+        )
+
+        seen = (
+            await (await make_client(newcomer)).get(f"/evaluations/{this['id']}")
+        ).json()
+
+        assert seen["previous_review"] is None
+
+    async def test_an_unfinished_or_other_form_review_is_not_last_years(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        manager = await make_client(dept.manager)
+        # 2025's review on this form was drafted but never finished.
+        await _draft(manager, dept)
+        # 2024's was finished, but on another form.
+        other = await _template(dept.db, dept.org, name="Other Annual")
+        older = await _draft(
+            manager,
+            dept,
+            period_id=(await _next_period(dept, 2024)).id,
+            template_id=other.id,
+        )
+        other_url = f"/evaluations/{older['id']}"
+        await _lock_evaluator(dept, make_client, other_url)
+        signed = await (await make_client(dept.member)).post(
+            f"{other_url}/sign",
+            json={
+                "signed_name": dept.member.full_name,
+                "disposition": "acknowledged",
+                "intent_confirmed": True,
+            },
+        )
+        assert signed.json()["outcome"] == "finalized"
+        this = await _draft(
+            manager,
+            dept,
+            period_id=(await _next_period(dept)).id,
+            template_id=dept.template.id,
+        )
+
+        seen = (
+            await (await make_client(dept.evaluator)).get(f"/evaluations/{this['id']}")
+        ).json()
+
+        assert seen["previous_review"] is None

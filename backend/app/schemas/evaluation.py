@@ -990,6 +990,31 @@ class GradeRequest(BaseModel):
     content: PartContent
 
 
+class PreviousSectionGrade(BaseModel):
+    key: str
+    title: str
+    label: str
+
+
+class PreviousGoal(BaseModel):
+    key: str
+    label: str
+    text: str
+
+
+class PreviousReview(BaseModel):
+    """The member's last finalized review on the same form, as the caller may
+    see it: the grade that stood, each section's grade, the goals it set."""
+
+    evaluation_id: str
+    period_name: Optional[str] = None
+    period_start: date
+    period_end: date
+    overall: Optional[str] = None
+    sections: List[PreviousSectionGrade] = Field(default_factory=list)
+    goals: List[PreviousGoal] = Field(default_factory=list)
+
+
 class EvaluationDetail(EvaluationSummary):
     coverage_start: Optional[date] = None
     coverage_end: Optional[date] = None
@@ -1025,6 +1050,8 @@ class EvaluationDetail(EvaluationSummary):
     response_document_available: bool = False
     # Keys of the evaluator's items the calibrator flagged to revisit.
     calibration_flags: List[str] = Field(default_factory=list)
+    # The member's last review on the same form, when the caller may read it.
+    previous_review: Optional[PreviousReview] = None
     viewer: EvaluationViewer
 
 

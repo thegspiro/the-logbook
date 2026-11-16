@@ -23,6 +23,7 @@ import { CalibrationDialog } from '../components/evaluations/CalibrationDialog';
 import { DeleteEvaluationDialog } from '../components/evaluations/DeleteEvaluationDialog';
 import { EvaluationForm } from '../components/evaluations/EvaluationForm';
 import { FiguresPanel } from '../components/evaluations/FiguresPanel';
+import { PreviousReviewPanel } from '../components/evaluations/PreviousReviewPanel';
 import { ResponsePanel } from '../components/evaluations/ResponsePanel';
 import { SignDialog } from '../components/evaluations/SignDialog';
 import { StepList } from '../components/evaluations/StepList';
@@ -488,6 +489,7 @@ const EvaluationDetailPage: React.FC = () => {
               onSubmit={() => void submitResponse()}
             />
             <StepList steps={detail.steps} />
+            {detail.previous_review && <PreviousReviewPanel review={detail.previous_review} />}
             {(detail.amendments ?? []).length > 0 && (
               <section aria-labelledby="amendments-heading" className="card p-4 sm:p-6">
                 <h2 id="amendments-heading" className="text-theme-text-primary text-lg font-semibold">

@@ -21,6 +21,7 @@ from app.services.evaluation_service import (
     completeness_errors,
     form_definition,
     form_items,
+    previous_review_summary,
     shape_errors,
     weighted_overall,
 )
@@ -432,3 +433,100 @@ class TestWeightedOverall:
 
     def test_nothing_rated_is_no_overall(self):
         assert weighted_overall(_content(), self.items) is None
+
+
+class TestPreviousReviewSummary:
+    DEFINITION = TemplateDefinition.model_validate(
+        {
+            "overall_mode": "sectioned",
+            "sections": [
+                {
+                    "key": "duty",
+                    "title": "Duty",
+                    "weight": 100,
+                    "items": [
+                        {
+                            "key": "skills",
+                            "label": "Skills",
+                            "tool": "labeled_scale",
+                            "levels": LEVELS,
+                            "weight": 100,
+                        },
+                        {
+                            "key": "next_year",
+                            "label": "Goals for next year",
+                            "tool": "goals",
+                        },
+                        {"key": "notes", "label": "Notes", "tool": "narrative"},
+                    ],
+                }
+            ],
+        }
+    )
+
+    def _view(self, *, grades=None, answers=None):
+        parts = []
+        if answers is not None:
+            parts.append(
+                {
+                    "kind": "evaluator",
+                    "content": PartContent.model_validate({"answers": answers}),
+                }
+            )
+        return {
+            "id": "prev",
+            "period_name": "2025 Annual",
+            "period_start": date(2025, 1, 1),
+            "period_end": date(2025, 12, 31),
+            "definition": self.DEFINITION,
+            "grades": grades,
+            "weighted_overall": None,
+            "parts": parts,
+        }
+
+    def test_the_grade_that_stood_and_the_goals_set(self):
+        grades = {
+            "overall": {"label": "Exceeds expectations"},
+            "sections": [
+                # The evaluator raised the calculated grade: theirs stood.
+                {"key": "duty", "title": "Duty", "label": "Exceeds expectations"}
+            ],
+        }
+        answers = {
+            "skills": {"rating": 3},
+            "next_year": {"text": "  Finish driver training.  "},
+            "notes": {"text": "Not a goal."},
+        }
+
+        summary = previous_review_summary(self._view(grades=grades, answers=answers))
+
+        assert summary == {
+            "evaluation_id": "prev",
+            "period_name": "2025 Annual",
+            "period_start": date(2025, 1, 1),
+            "period_end": date(2025, 12, 31),
+            "overall": "Exceeds expectations",
+            "sections": [
+                {"key": "duty", "title": "Duty", "label": "Exceeds expectations"}
+            ],
+            "goals": [
+                {
+                    "key": "next_year",
+                    "label": "Goals for next year",
+                    "text": "Finish driver training.",
+                }
+            ],
+        }
+
+    def test_a_viewer_who_may_read_neither_grades_nor_part_gets_none(self):
+        assert previous_review_summary(self._view()) is None
+
+    def test_a_blank_goal_is_not_listed(self):
+        summary = previous_review_summary(
+            self._view(
+                grades={"overall": {"label": "Meets expectations"}, "sections": []},
+                answers={"next_year": {"text": "   "}},
+            )
+        )
+        assert summary is not None
+        assert summary["goals"] == []

@@ -274,6 +274,23 @@ that up.
   the member. Records are listed at `GET /removed` (officers) and
   `GET /mine/removed` (the member).
 
+## The last review
+
+Every evaluation read (`GET /{id}` and each write that returns the evaluation)
+carries `previous_review`: the member's most recent finalized evaluation on the
+same template, whatever its version, whose period ended before this one began.
+It holds that review's period, the overall grade and each section's grade that
+stood (the evaluator's where they changed the calculated one; a weighted form
+gives its percentage, an evaluator-rated form its overall rating), and the text
+of its Goals items, so this year's review can say whether they were met.
+
+It is read through `EvaluationService.detail` as the caller, so it shows exactly
+what the caller could see by opening that review, and is `null` when they could
+see none of it. An evaluator who could not open last year's review (a different
+evaluator without `evaluations.view_all`) gets nothing. It is shown on the
+screen beside the form and is not printed on the PDF: the PDF is the record of
+this review alone.
+
 ## Emails
 
 All seven are editable templates under Communications → Email Templates →

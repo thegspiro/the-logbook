@@ -341,6 +341,67 @@ def _name(user: Optional[User]) -> Optional[Dict[str, str]]:
     return {"id": user.id, "name": user.full_name}
 
 
+def previous_review_summary(view: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """What a later evaluation shows of an earlier one, from the earlier one's
+    detail as the viewer may see it: the overall grade, each section's grade,
+    and the goals the evaluator set. None when the viewer may see none of
+    those, so a summary never says less than nothing.
+
+    Each grade is the one that stands, the evaluator's override where they
+    changed the calculated one, as the evaluation's own screens show it.
+    """
+    definition: TemplateDefinition = view["definition"]
+    grades = view.get("grades")
+    evaluator = next(
+        (
+            p["content"]
+            for p in view.get("parts") or []
+            if p["kind"] == EvaluationPartKind.EVALUATOR.value
+        ),
+        None,
+    )
+
+    overall: Optional[str] = None
+    sections: List[Dict[str, str]] = []
+    if grades:
+        overall = grades["overall"].get("label")
+        sections = [
+            {"key": g["key"], "title": g["title"], "label": g["label"]}
+            for g in grades["sections"]
+            if g.get("label")
+        ]
+    elif view.get("weighted_overall") is not None:
+        overall = f"{view['weighted_overall']:g}% (weighted)"
+    elif evaluator is not None and evaluator.overall_rating:
+        overall = next(
+            (lv.label for lv in OVERALL_LEVELS if lv.value == evaluator.overall_rating),
+            None,
+        )
+
+    goals: List[Dict[str, str]] = []
+    if evaluator is not None:
+        for section in definition.sections:
+            for item in section.items:
+                if item.tool != EvaluationTool.GOALS:
+                    continue
+                answer = evaluator.answers.get(item.key)
+                text = (answer.text or "").strip() if answer else ""
+                if text:
+                    goals.append({"key": item.key, "label": item.label, "text": text})
+
+    if overall is None and not sections and not goals:
+        return None
+    return {
+        "evaluation_id": view["id"],
+        "period_name": view.get("period_name"),
+        "period_start": view["period_start"],
+        "period_end": view["period_end"],
+        "overall": overall,
+        "sections": sections,
+        "goals": goals,
+    }
+
+
 class EvaluationService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -489,11 +550,21 @@ class EvaluationService:
     # --------------------------------------------------------------- reads
 
     async def detail(
-        self, organization_id: str, evaluation_id: str, viewer: User
+        self,
+        organization_id: str,
+        evaluation_id: str,
+        viewer: User,
+        *,
+        include_previous: bool = True,
     ) -> Optional[Dict[str, Any]]:
         """The evaluation as ``viewer`` may see it, or None when they may not
         see it at all (answered as not found, so its existence is not
-        disclosed)."""
+        disclosed).
+
+        ``include_previous`` adds the member's last review on the same form
+        (:meth:`_previous_review`); that read passes False so it does not
+        walk back through every year.
+        """
         evaluation = await self._evaluation(organization_id, evaluation_id)
         if evaluation is None:
             return None
@@ -534,7 +605,7 @@ class EvaluationService:
                 EvaluationDocument.revision == evaluation.revision,
             )
         )
-        return self._detail_view(
+        view = self._detail_view(
             evaluation,
             steps,
             parts,
@@ -551,6 +622,52 @@ class EvaluationService:
             and user_has_permission(viewer, "evaluations.delete"),
             amendments=await self._amendments(evaluation),
         )
+        view["previous_review"] = (
+            await self._previous_review(organization_id, evaluation, viewer)
+            if include_previous
+            else None
+        )
+        return view
+
+    async def _previous_review(
+        self, organization_id: str, evaluation: Evaluation, viewer: User
+    ) -> Optional[Dict[str, Any]]:
+        """The member's most recent finalized evaluation on the same form,
+        summarised for this one: its grades and the goals it set.
+
+        Read through :meth:`detail` as ``viewer``, so it shows exactly what
+        ``viewer`` could see by opening that evaluation and nothing more: an
+        evaluator who could not open last year's review sees no summary of
+        it. "Same form" is the template, whatever its version, and "previous"
+        a period that ended before this one began, so a re-done review of the
+        same period is never compared with itself.
+        """
+        previous_id = await self.db.scalar(
+            select(Evaluation.id)
+            .join(
+                EvaluationTemplateVersion,
+                EvaluationTemplateVersion.id == Evaluation.template_version_id,
+            )
+            .where(
+                Evaluation.organization_id == organization_id,
+                Evaluation.member_id == evaluation.member_id,
+                Evaluation.status == EvaluationStatus.FINALIZED.value,
+                Evaluation.id != evaluation.id,
+                EvaluationTemplateVersion.template_id
+                == evaluation.template_version.template_id,
+                Evaluation.period_end < evaluation.period_start,
+            )
+            .order_by(Evaluation.period_end.desc(), Evaluation.id.desc())
+            .limit(1)
+        )
+        if previous_id is None:
+            return None
+        previous = await self.detail(
+            organization_id, previous_id, viewer, include_previous=False
+        )
+        if previous is None:
+            return None
+        return previous_review_summary(previous)
 
     def _released_to_member(
         self, evaluation: Evaluation, steps: Sequence[EvaluationStep]
