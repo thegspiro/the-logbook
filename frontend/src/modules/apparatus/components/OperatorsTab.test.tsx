@@ -85,8 +85,8 @@ beforeEach(() => {
   // read-only view narrow this themselves.
   grantedPermissions = new Set(['apparatus.manage']);
   mockGetUsers.mockResolvedValue([
-    { id: 'u-1', first_name: 'Marcus', last_name: 'Bell' },
-    { id: 'u-2', first_name: 'Nadia', last_name: 'Belhaj' },
+    { id: 'u-1', first_name: 'Marcus', last_name: 'Bell', status: 'active' },
+    { id: 'u-2', first_name: 'Nadia', last_name: 'Belhaj', status: 'active' },
   ]);
 });
 
