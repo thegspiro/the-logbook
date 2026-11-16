@@ -56,6 +56,33 @@ const tapReaches = async (control: Locator) => {
 };
 
 /**
+ * Resolves once the page has drawn `frames` frames in a row without
+ * scrolling. A focus scroll is not done when the key press returns: WebKit
+ * scrolls a newly focused control into view only at its next rendering
+ * update, which Playwright's WebKit can hold back for a second or more, and
+ * the form's own correction to that scroll lands a frame after it. Counting
+ * frames, not time, waits out such a stall however long it lasts.
+ */
+const scrollSettled = (page: Page, frames = 10) =>
+  page.evaluate(
+    (needed) =>
+      new Promise<void>((resolve) => {
+        let last = window.scrollY;
+        let still = 0;
+        let drawn = 0;
+        const tick = () => {
+          drawn += 1;
+          still = window.scrollY === last ? still + 1 : 0;
+          last = window.scrollY;
+          if (still >= needed || drawn > 300) resolve();
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+    frames
+  );
+
+/**
  * Whether the focused control and its first description (its refusal, when
  * it has one) came to rest between the phone's fixed header and the bar, each
  * what a tap at its middle reaches. Read once the page has stopped scrolling,
@@ -63,22 +90,7 @@ const tapReaches = async (control: Locator) => {
  * correction to it lands a frame later.
  */
 const focusedDescription = async (page: Page) => {
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve) => {
-        let last = window.scrollY;
-        let still = 0;
-        let frames = 0;
-        const tick = () => {
-          frames += 1;
-          still = window.scrollY === last ? still + 1 : 0;
-          last = window.scrollY;
-          if (still >= 10 || frames > 300) resolve();
-          else requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
-      })
-  );
+  await scrollSettled(page);
   return page.evaluate(() => {
     const control = document.activeElement;
     const id = control?.getAttribute('aria-describedby')?.split(/\s+/)[0] ?? '';
@@ -143,6 +155,8 @@ test.describe('training-event form on a phone', () => {
     let checked = 0;
     for (let press = 0; press < 40; press += 1) {
       await page.keyboard.press('Tab');
+      // Where the browser's focus scroll and the form's correction leave it.
+      await scrollSettled(page, 5);
       const focused = await page.evaluate(() => {
         const el = document.activeElement;
         if (!(el instanceof HTMLElement) || !el.closest('form')) return null;
@@ -176,8 +190,8 @@ test.describe('training-event form on a phone', () => {
       reached = await page.evaluate(() => document.activeElement?.id === 'event-description');
     }
     expect(reached).toBe(true);
-    // Past the next frame, where a correction to the browser's own scroll lands.
-    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    // Past the browser's focus scroll and the correction to it.
+    await scrollSettled(page, 5);
     const bottom = await page.locator('#event-description').evaluate((el) => el.getBoundingClientRect().bottom);
     expect(bottom).toBeLessThanOrEqual(barTop);
   });
