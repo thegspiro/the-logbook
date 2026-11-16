@@ -10,7 +10,7 @@ shifts would quietly change the apparatus summary leadership reads.
 
 from typing import Any, Dict, List, Mapping, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.external_shift_hours import (
@@ -26,6 +26,13 @@ class ExternalApparatusInUseError(Exception):
 
 
 _PROTECTED = {"id", "organization_id", "agency_id", "created_at", "updated_at"}
+
+
+def _name_key(name: str) -> str:
+    """How two unit names compare when merging: case- and space-blind, as the
+    unique index on ``(agency_id, name)`` compares them under the database's
+    case-insensitive collation."""
+    return name.strip().casefold()
 
 
 class ExternalApparatusService:
@@ -197,6 +204,121 @@ class ExternalApparatusService:
         await self.db.delete(agency)
         await self.db.commit()
         return agency
+
+    async def merge_agency(
+        self, organization_id: str, source_id: str, target_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Fold ``source`` into ``target``: one department under one name.
+
+        For when the same department reached the list twice under two
+        spellings ("Arlington County" and "Arlington County Fire
+        Department"), typically from a history import.
+
+        * Each of the source's units moves to the target. A unit the target
+          already has under the same name (ignoring case and surrounding
+          space, as the unique index does) is combined instead: its shifts
+          are repointed to the target's unit and the duplicate is removed.
+        * **Past shifts are relabelled** with the target's name — owner
+          decision 2026-11-16, overriding the usual rule that a shift keeps
+          the names it was logged under, because the point of a merge is that
+          one department reads as one everywhere. That covers shifts on the
+          source's units and shifts whose unit was deleted but which still
+          carry the source's name. It cannot be undone from the record; the
+          endpoint's audit event keeps both names.
+        * The target keeps its own settings (active, evaluated shifts), so a
+          moved unit's shifts follow the target's evaluation setting.
+        * A shift's review status is untouched: an officer combining two
+          spellings has not changed what the member claimed.
+
+        Both agency rows are locked for the transaction, so two officers
+        merging at once cannot each move half the units. Returns None when
+        either agency is not in the organization.
+        """
+        org = str(organization_id)
+        if str(source_id) == str(target_id):
+            raise ValueError("Choose a different department to merge into")
+
+        agencies = {
+            a.id: a
+            for a in (
+                await self.db.execute(
+                    select(ExternalAgency)
+                    .where(
+                        ExternalAgency.organization_id == org,
+                        ExternalAgency.id.in_([str(source_id), str(target_id)]),
+                    )
+                    .with_for_update()
+                )
+            ).scalars()
+        }
+        source = agencies.get(str(source_id))
+        target = agencies.get(str(target_id))
+        if source is None or target is None:
+            return None
+
+        units = list(
+            (
+                await self.db.execute(
+                    select(ExternalApparatus)
+                    .where(
+                        ExternalApparatus.organization_id == org,
+                        ExternalApparatus.agency_id.in_([source.id, target.id]),
+                    )
+                    .with_for_update()
+                )
+            ).scalars()
+        )
+        target_units = {_name_key(u.name): u for u in units if u.agency_id == target.id}
+
+        moved = combined = relabelled = 0
+        for unit in (u for u in units if u.agency_id == source.id):
+            match = target_units.get(_name_key(unit.name))
+            values: Dict[str, Any] = {"agency_name": target.name}
+            if match is not None:
+                values.update(external_apparatus_id=match.id, apparatus_name=match.name)
+            result = await self.db.execute(
+                update(ExternalShiftHours)
+                .where(
+                    ExternalShiftHours.organization_id == org,
+                    ExternalShiftHours.external_apparatus_id == unit.id,
+                )
+                .values(**values)
+                .execution_options(synchronize_session=False)
+            )
+            relabelled += result.rowcount or 0
+            if match is not None:
+                await self.db.delete(unit)
+                combined += 1
+            else:
+                unit.agency_id = target.id
+                moved += 1
+
+        detached = await self.db.execute(
+            update(ExternalShiftHours)
+            .where(
+                ExternalShiftHours.organization_id == org,
+                ExternalShiftHours.external_apparatus_id.is_(None),
+                ExternalShiftHours.agency_name == source.name,
+            )
+            .values(agency_name=target.name)
+            .execution_options(synchronize_session=False)
+        )
+        relabelled += detached.rowcount or 0
+
+        # The moves must reach the database before the source goes: its
+        # delete cascades to whatever units still name it.
+        await self.db.flush()
+        source_name = source.name
+        await self.db.delete(source)
+        await self.db.commit()
+        return {
+            "agency_id": target.id,
+            "source_name": source_name,
+            "target_name": target.name,
+            "moved_apparatus": moved,
+            "combined_apparatus": combined,
+            "relabelled_shifts": relabelled,
+        }
 
     # ------------------------------------------------------------------
     # Apparatus

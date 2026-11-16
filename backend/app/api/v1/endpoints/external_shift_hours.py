@@ -35,6 +35,8 @@ from app.models.user import User
 from app.schemas.external_shift_hours import (
     ExternalAgencyCreate,
     ExternalAgencyListResponse,
+    ExternalAgencyMerge,
+    ExternalAgencyMergeResponse,
     ExternalAgencyResponse,
     ExternalAgencyUpdate,
     ExternalApparatusCreate,
@@ -208,6 +210,55 @@ async def update_agency(
     )
     listed = await service.list_agencies(str(current_user.organization_id))
     return next(a for a in listed if a["id"] == agency.id)
+
+
+@router.post("/agencies/{agency_id}/merge", response_model=ExternalAgencyMergeResponse)
+async def merge_agency(
+    agency_id: UUID,
+    payload: ExternalAgencyMerge,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Merge this agency into another: its units move across (a same-named
+    unit is combined), every shift logged on them is relabelled with the kept
+    agency's name, and this agency is removed. 404 when either agency is not
+    in the caller's organization.
+
+    **Permissions required:** scheduling.manage
+    """
+    service = ExternalApparatusService(db)
+    try:
+        result = await service.merge_agency(
+            str(current_user.organization_id),
+            str(agency_id),
+            str(payload.into_agency_id),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    result = ensure_found(result, _AGENCY)
+    # Both names are kept here because the relabel overwrote the shifts'
+    # record of the old one.
+    await _audit_list_change(
+        db,
+        "external_agency_merged",
+        current_user,
+        {
+            "agency_id": result["agency_id"],
+            "merged_agency_id": str(agency_id),
+            "merged_name": result["source_name"],
+            "kept_name": result["target_name"],
+            "moved_apparatus": result["moved_apparatus"],
+            "combined_apparatus": result["combined_apparatus"],
+            "relabelled_shifts": result["relabelled_shifts"],
+        },
+    )
+    listed = await service.list_agencies(str(current_user.organization_id))
+    return {
+        "agency": next(a for a in listed if a["id"] == result["agency_id"]),
+        "moved_apparatus": result["moved_apparatus"],
+        "combined_apparatus": result["combined_apparatus"],
+        "relabelled_shifts": result["relabelled_shifts"],
+    }
 
 
 @router.delete("/agencies/{agency_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -614,6 +614,15 @@ You need to be able to manage schedules for both of these.
   have been logged on it, so it stays on record. Turn it off to hide it from
   members instead."_ Each logged shift keeps the names it was logged under, so
   renaming an entry never changes past records.
+- **One department listed twice** _(2026-11-16)_. If the same department is on
+  the list under two names (say _Arlington County_ and _Arlington County Fire
+  Department_), select the merge button beside the one to remove, choose the
+  department to keep under **Merge into**, and read **What happens** before
+  selecting **Merge departments**. Its units move to the kept department, and a
+  unit both list becomes one. Every shift logged with the removed department
+  then shows the kept name, on members' hours and in reports. The old name is
+  not kept on those shifts, so a merge cannot be undone from the screen; the
+  audit log records both names.
 - **Evaluations on an agency's units** _(2026-11-02)_. Under each department in
   the list, tick **Evaluate shifts on _agency_'s units** if its preceptors
   evaluate your trainees. It is off to start with. With it on, a member in a

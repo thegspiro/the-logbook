@@ -685,6 +685,17 @@ export interface ExternalAgency {
   apparatus: ExternalApparatus[];
 }
 
+export interface ExternalAgencyMergeResult {
+  /** The kept agency, with every unit it now holds. */
+  agency: ExternalAgency;
+  /** Units that moved across unchanged. */
+  moved_apparatus: number;
+  /** Units folded into a same-named unit the kept agency already had. */
+  combined_apparatus: number;
+  /** Logged shifts now carrying the kept agency's name. */
+  relabelled_shifts: number;
+}
+
 export interface ExternalAgencyList {
   agencies: ExternalAgency[];
 }
@@ -991,6 +1002,13 @@ export const schedulingService = {
   },
   async deleteExternalAgency(id: string): Promise<void> {
     await api.delete(`/scheduling/external-hours/agencies/${id}`);
+  },
+  /** Merge one agency into another; the second is kept. */
+  async mergeExternalAgency(id: string, intoAgencyId: string): Promise<ExternalAgencyMergeResult> {
+    const response = await api.post<ExternalAgencyMergeResult>(`/scheduling/external-hours/agencies/${id}/merge`, {
+      into_agency_id: intoAgencyId,
+    });
+    return response.data;
   },
   async createExternalApparatus(agencyId: string, data: ExternalApparatusCreate): Promise<ExternalApparatus> {
     const response = await api.post<ExternalApparatus>(
