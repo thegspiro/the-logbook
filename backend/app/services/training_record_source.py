@@ -6,13 +6,15 @@ Three origins can be told apart without storing anything new:
   ``external_provider_id`` and ``external_record_id``, which only the provider
   sync sets. Labelled with the provider's product name, so a Target Solutions
   sync reads "Target Solutions" whatever the department named the connection.
-* **imported** — written by the Historical Data Import, which enters every
-  training record it writes in the ``imported_source_records`` ledger.
+* **imported** — written by an import that enters every training record it
+  writes in the ``imported_source_records`` ledger: the Historical Data Import,
+  and since 2026-11-15 the two CSV importers on the Training screens (see
+  ``ledger_csv_imports``).
 * **logbook** — everything else: entered, submitted, finalized from an event or
   session in The Logbook itself.
 
-The older CSV importers on the Training screens leave no mark, so their records
-read "The Logbook" (owner decision 2026-11-10; see KNOWN_LIMITATIONS.md).
+Records the Training CSV importers wrote before 2026-11-15 left no mark, so they
+still read "The Logbook" (owner decision 2026-11-10; see KNOWN_LIMITATIONS.md).
 
 Every screen and export that shows the label calls ``record_sources`` rather
 than deciding for itself, so they cannot disagree (CLAUDE.md pitfall 29).
@@ -51,6 +53,12 @@ PROVIDER_LABELS: Dict[ExternalProviderType, str] = {
     ExternalProviderType.LEXIPOL: "Lexipol",
     ExternalProviderType.I_AM_RESPONDING: "I Am Responding",
 }
+
+# The ledger's source system for the Training screens' CSV importers. A
+# historical import's source system is a name an officer types, so this one is
+# spelled the way no one names a database. Each record is its own source row:
+# these importers have no stable row id, and a record is written once.
+CSV_IMPORT_SOURCE_SYSTEM = "logbook.training-csv-import"
 
 # Keeps each IN list a reasonable size for a lifetime export.
 _CHUNK = 500
@@ -128,3 +136,28 @@ async def record_sources(
         else:
             sources[rid] = LOGBOOK
     return sources
+
+
+async def ledger_csv_imports(
+    db: AsyncSession, organization_id: str, records: Iterable[TrainingRecord]
+) -> None:
+    """Enter records a Training CSV importer wrote in the import ledger.
+
+    Call it in the transaction that writes the records, so a record and its
+    entry commit or roll back together. It flushes first, because a record's id
+    is assigned on insert.
+    """
+    records = list(records)
+    if not records:
+        return
+    await db.flush()
+    db.add_all(
+        ImportedSourceRecord(
+            organization_id=str(organization_id),
+            source_system=CSV_IMPORT_SOURCE_SYSTEM,
+            source_id=str(r.id),
+            record_kind=ImportedRecordKind.TRAINING_RECORD.value,
+            record_id=str(r.id),
+        )
+        for r in records
+    )

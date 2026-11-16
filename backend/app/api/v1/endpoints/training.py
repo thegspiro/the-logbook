@@ -127,7 +127,7 @@ from app.services.training_record_notices import (
     send_training_record_notice,
     snapshot,
 )
-from app.services.training_record_source import record_sources
+from app.services.training_record_source import ledger_csv_imports, record_sources
 from app.services.training_requirement_removal import (
     purge_requirement,
     remove_requirement,
@@ -3289,12 +3289,15 @@ async def confirm_historical_import(
                     created_by=current_user.id,
                 )
                 db.add(record)
-                imported_records.append(record)
+            # Only once the savepoint has released: a row whose insert failed
+            # was rolled back, and must not be ledgered or synced.
+            imported_records.append(record)
             imported += 1
         except Exception as e:
             failed += 1
             errors.append(f"Row {row.row_number}: {safe_error_detail(e)}")
 
+    await ledger_csv_imports(db, str(current_user.organization_id), imported_records)
     await db.commit()
 
     # A backfilled certification confers the same qualification a freshly
@@ -4281,6 +4284,9 @@ async def import_training_csv(
             failures.append({"row": row_num, "error": safe_error_detail(e)})
 
     if successes > 0:
+        await ledger_csv_imports(
+            db, str(current_user.organization_id), imported_records
+        )
         await db.commit()
         await _sync_qualifications(db, imported_records)
 
