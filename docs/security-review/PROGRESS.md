@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#SF04-PENDING](#)** (branch `claude/security-review-storefront-payments`):
+**PR [#4359](https://github.com/thegspiro/the-logbook/pull/4359)** (branch
+`claude/security-review-storefront-payments`):
 Feature 04 (Storefront & payments), pass 16 — watchdog-delegated iteration.
 PR #4349 (Feature 03, Public surface & webhooks, pass 16) had merged
 before this iteration started. A fresh `list_pull_requests` (state `open`)
