@@ -35,6 +35,7 @@ from http.cookiejar import CookieJar
 from pathlib import Path
 from time import monotonic, sleep
 from typing import Any
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from bootstrap_demo import (
@@ -14353,6 +14354,7 @@ class Seeder:
     OUTREACH_HISTORY = [
         {
             "title": "Fire prevention assembly",
+            "crew": 4,
             "at": 0.82,
             "request": {
                 "contact_name": "Janet Ortiz",
@@ -14365,6 +14367,7 @@ class Seeder:
         },
         {
             "title": "CPR class",
+            "crew": 2,
             "at": 0.74,
             "request": {
                 "contact_name": "Dale Holt",
@@ -14378,6 +14381,7 @@ class Seeder:
         },
         {
             "title": "Senior center safety talk",
+            "crew": 2,
             "at": 0.61,
             "request": {
                 "contact_name": "Marion Feld",
@@ -14391,6 +14395,7 @@ class Seeder:
         },
         {
             "title": "Pre-K station tour",
+            "crew": 3,
             "at": 0.47,
             "request": {
                 "contact_name": "Lena Brooks",
@@ -14404,6 +14409,7 @@ class Seeder:
         },
         {
             "title": "Open house",
+            "crew": 8,
             "at": 0.66,
             "event_type": "public_education",
             "signed_in": 12,
@@ -14411,6 +14417,7 @@ class Seeder:
         },
         {
             "title": "Pancake breakfast",
+            "crew": 6,
             "at": 0.33,
             "event_type": "fundraiser",
             "signed_in": 64,
@@ -14442,9 +14449,17 @@ class Seeder:
         held = {
             e.get("title"): e
             for e in items(
+                # Encoded: the offset's "+" would otherwise arrive as a space
+                # and the dates be refused.
                 self.api.get(
-                    f"/events?limit=500&start_after={iso(year_start)}"
-                    f"&start_before={iso(now)}"
+                    "/events?"
+                    + urlencode(
+                        {
+                            "limit": 500,
+                            "start_after": iso(year_start),
+                            "start_before": iso(now),
+                        }
+                    )
                 ),
                 "events",
             )
@@ -14453,6 +14468,12 @@ class Seeder:
             pick(r, "contact_name"): r
             for r in items(self.api.get("/event-requests"), "requests")
         }
+        # Members other than the administrator, in a stable order, so a
+        # re-run picks the same crew.
+        admin = pick(self.api.get("/auth/me"), "id")
+        crew_ids = sorted(
+            uid for uid in self._user_ids_by_username().values() if uid != admin
+        )
 
         for spec in self.OUTREACH_HISTORY:
             # 15:00 UTC is mid-morning in the demo department's zone; an hour
@@ -14516,6 +14537,28 @@ class Seeder:
                         f"{pick(guest, 'id')}/check-in",
                         {},
                     )
+
+            # The crew recorded the way an officer records attendance after
+            # the fact (the event page's late-attendee form): added, then
+            # given the event's own start and end as their times.
+            present = {
+                str(pick(r, "user_id"))
+                for r in items(self.api.get(f"/events/{event_id}/rsvps"), "rsvps")
+            }
+            for user_id in crew_ids[: spec.get("crew", 0)]:
+                if user_id in present:
+                    continue
+                self.api.post(
+                    f"/events/{event_id}/add-attendee",
+                    {"user_id": user_id, "status": "going", "checked_in": False},
+                )
+                self.api.patch(
+                    f"/events/{event_id}/rsvps/{user_id}/override",
+                    {
+                        "override_check_in_at": iso(start),
+                        "override_check_out_at": iso(start + timedelta(hours=1)),
+                    },
+                )
 
             if "headcount" in spec:
                 self.api.put(

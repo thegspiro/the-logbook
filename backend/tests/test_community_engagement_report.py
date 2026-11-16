@@ -293,6 +293,28 @@ class TestMemberHours:
         assert report.current.members_involved == 2
 
 
+class TestCrewRecordedByOverride:
+    async def test_a_member_an_officer_recorded_counts_as_crew(self, db_session, dept):
+        org, members = dept
+        event = await _event(db_session, org, "Fair", _ago(days=2))
+        # Never tapped in; an officer recorded their time afterwards.
+        await _crew(
+            db_session,
+            org,
+            event,
+            members[0],
+            checked_in=False,
+            override_check_in_at=event.start_datetime,
+            override_duration_minutes=120,
+        )
+
+        report = await _report(db_session, members[0])
+
+        assert report.recent_events[0].crew == 1
+        assert report.current.member_hours == 2.0
+        assert report.current.members_involved == 1
+
+
 class TestPeriods:
     async def test_the_period_bounds_what_is_counted_and_compared(
         self, db_session, dept

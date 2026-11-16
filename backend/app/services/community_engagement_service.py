@@ -24,7 +24,7 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -231,7 +231,15 @@ class CommunityEngagementService:
             select(EventRSVP).where(
                 EventRSVP.organization_id == organization_id,
                 EventRSVP.event_id.in_(ids),
-                EventRSVP.checked_in.is_(True),
+                # Present by scan or by an officer's override: the events
+                # list's rule (user_attended) and the attendance-waiver
+                # check's. An override writes override_check_in_at without
+                # setting checked_in, and a member an officer recorded after
+                # the fact gave the same hours as one who tapped in.
+                or_(
+                    EventRSVP.checked_in.is_(True),
+                    EventRSVP.override_check_in_at.is_not(None),
+                ),
             )
         )
         for rsvp in rsvp_rows.scalars().all():
