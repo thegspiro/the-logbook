@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SizePreferencesModal } from './SizePreferencesModal';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
+
+// The dialog asks before discarding typed sizes, which needs the
+// ConfirmProvider the app shell mounts.
+const render = (ui: React.ReactElement) => rtlRender(<ConfirmProvider>{ui}</ConfirmProvider>);
 
 const mockGetMy = vi.fn();
 const mockGetMember = vi.fn();
@@ -227,7 +232,7 @@ describe('SizePreferencesModal', () => {
     expect(mockUpsertMy).not.toHaveBeenCalled();
   });
 
-  it('shows an error toast and stays open when saving fails', async () => {
+  it('says a failed save in the dialog and stays open', async () => {
     mockUpsertMy.mockRejectedValue(new Error('boom'));
     const user = userEvent.setup();
     render(<SizePreferencesModal isOpen onClose={onClose} />);
@@ -235,8 +240,43 @@ describe('SizePreferencesModal', () => {
 
     await user.click(screen.getByRole('button', { name: 'Save Sizes' }));
 
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('alert')).toHaveTextContent('boom');
+    expect(mockToastError).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('saves the rest and keeps a refused size flagged on its field', async () => {
+    mockUpsertMy
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ loc: ['body', 'pant_waist'], msg: 'Too long' }] } },
+      })
+      .mockResolvedValue({});
+    const user = userEvent.setup();
+    render(<SizePreferencesModal isOpen onClose={onClose} />);
+    await user.type(await pantWaist(), '34');
+    await user.type(screen.getByLabelText(/Pant Inseam/), '32');
+
+    await user.click(screen.getByRole('button', { name: 'Save Sizes' }));
+
+    await waitFor(() => expect(mockUpsertMy).toHaveBeenCalledTimes(2));
+    const second = mockUpsertMy.mock.calls[1]?.[0] as Record<string, unknown>;
+    expect('pant_waist' in second).toBe(false);
+    expect(second.pant_inseam).toBe('32');
+    expect(screen.getByLabelText(/Pant Waist/)).toHaveAccessibleDescription(/Too long\./);
+    expect(screen.getByRole('alert')).toHaveTextContent('Sizes saved, except pant waist.');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('asks before Cancel throws away typed sizes', async () => {
+    const user = userEvent.setup();
+    render(<SizePreferencesModal isOpen onClose={onClose} />);
+    await user.type(await pantWaist(), '34');
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole('button', { name: /Discard/ }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the detail sizes behind a disclosure, collapsed when the member has none', async () => {
