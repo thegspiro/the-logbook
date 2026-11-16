@@ -89,3 +89,12 @@ export function resolveRoute(
   }
   return null;
 }
+
+/**
+ * The DOM id of an intake question's control: the input itself, or for a list
+ * of choices its first choice. The answering form focuses it to show the
+ * member the first question that needs an answer.
+ */
+export function intakeInputId(questionId: string): string {
+  return `intake-${questionId}`;
+}
