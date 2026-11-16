@@ -3739,7 +3739,13 @@ async def anonymize_member(
         severity="warning",
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
-        event_data={"anonymized_user_id": str(user_id)},
+        event_data={
+            "anonymized_user_id": str(user_id),
+            # Counts only: a path or filename here would outlive the erasure.
+            "self_report_files_deleted": summary["self_report_files_deleted"],
+            "self_report_files_not_deleted": summary["self_report_files_not_deleted"],
+            "self_report_files_shared_kept": summary["self_report_files_shared_kept"],
+        },
         **_request_origin(request),
     )
     await db.commit()
