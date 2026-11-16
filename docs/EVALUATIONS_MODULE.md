@@ -160,6 +160,15 @@ period ends. The workflow also sets `reminder_days_before` (default 3),
 member's acknowledgement; an interim check-in has only the self-evaluation and
 evaluator steps and no signatures.
 
+**Starters:** a new template may start from a ready-made form
+(`GET /templates/starters`, `starter` on `POST /templates`): the annual member
+evaluation, the annual evaluation with officer sections, and the probationary
+check-in. Each publishes as it stands. The officer one adds an officer-only
+Leadership and supervision section and needs `officer_ranks` on the create
+request: required for it, refused for any other, and checked against the
+department's ranks. A member without one of those ranks is graded on the other
+sections alone, which keep nearly the plain annual form's shares.
+
 **Matching:** when drafting without naming a template, the most specific
 active, published template of the kind is used (class and status beats either,
 which beats neither); two equally specific fits are refused rather than
