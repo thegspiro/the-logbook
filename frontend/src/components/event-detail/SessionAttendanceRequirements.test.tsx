@@ -131,6 +131,89 @@ describe('SessionAttendanceRequirements', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('explains a link to an inactive requirement instead of listing a placeholder', () => {
+    render(
+      <SessionAttendanceRequirements
+        session={session(['active', 'retired'])}
+        requirements={REQUIREMENTS}
+        canManage={false}
+        onChange={onChange}
+      />
+    );
+
+    expect(screen.getByText('Company drills — active')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'This session is also linked to a requirement no longer active, which counts it against no one.'
+    );
+    expect(screen.getByRole('status')).not.toHaveTextContent(/Choose Change/);
+    expect(screen.queryByText('A requirement no longer active')).not.toBeInTheDocument();
+  });
+
+  it('tells a manager a session linked only to inactive requirements counts against no one, and how to fix it', () => {
+    render(
+      <SessionAttendanceRequirements
+        session={session(['retired-1', 'retired-2'])}
+        requirements={REQUIREMENTS}
+        canManage
+        onChange={onChange}
+      />
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'This session is linked only to requirements no longer active, so it counts against no one and members ' +
+        'cannot ask to be excused from it. Choose Change to link an active requirement or remove the old links.'
+    );
+  });
+
+  it('drops inactive links from the editor so a save can remove them', async () => {
+    const updated = session(['senior']);
+    mockSet.mockResolvedValue(updated);
+    const user = userEvent.setup();
+    render(
+      <SessionAttendanceRequirements
+        session={session(['retired', 'active'])}
+        requirements={REQUIREMENTS}
+        canManage
+        onChange={onChange}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Change' }));
+    expect(screen.getByText('Saving removes the link to a requirement no longer active.')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /active/ })).toBeChecked();
+    await user.click(screen.getByRole('checkbox', { name: /active/ }));
+    await user.click(screen.getByRole('checkbox', { name: /senior/ }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(mockSet).toHaveBeenCalledWith('ses-1', ['senior']);
+  });
+
+  it('lets a manager clear inactive links when no attendance requirement is active', async () => {
+    const updated = session([]);
+    mockSet.mockResolvedValue(updated);
+    const user = userEvent.setup();
+    const hoursOnly = [REQUIREMENTS[2] ?? requirement({})];
+    render(
+      <SessionAttendanceRequirements
+        session={session(['retired'])}
+        requirements={hoursOnly}
+        canManage
+        onChange={onChange}
+      />
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Activate an attendance requirement under Training requirements, or choose Change to remove the old links.'
+    );
+    await user.click(screen.getByRole('button', { name: 'Change' }));
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByText(/No attendance requirement is active/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(mockSet).toHaveBeenCalledWith('ses-1', []);
+    expect(onChange).toHaveBeenCalledWith(updated);
+  });
+
   it('renders nothing where the department has no attendance requirement', () => {
     const { container } = render(
       <SessionAttendanceRequirements

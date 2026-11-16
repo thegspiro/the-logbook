@@ -17,6 +17,13 @@ interface SessionAttendanceRequirementsProps {
   onChange: (session: TrainingSessionResponse) => void;
 }
 
+const staleNotice = (count: number, alsoCurrent: boolean): string => {
+  const what = count === 1 ? 'a requirement' : `${count} requirements`;
+  return alsoCurrent
+    ? `This session is also linked to ${what} no longer active, which ${count === 1 ? 'counts' : 'count'} it against no one.`
+    : `This session is linked only to ${count === 1 ? 'a requirement' : 'requirements'} no longer active, so it counts against no one and members cannot ask to be excused from it.`;
+};
+
 /**
  * Which session-attendance requirements a training session counts toward.
  *
@@ -40,7 +47,12 @@ const SessionAttendanceRequirements: React.FC<SessionAttendanceRequirementsProps
 
   if (options.length === 0 && linked.length === 0) return null;
 
-  const names = linked.map((id) => options.find((r) => r.id === id)?.name ?? 'A requirement no longer active');
+  // `requirements` holds active ones only, so a linked id missing from the
+  // options names a requirement that was deactivated. The waiver and
+  // compliance checks read active requirements only, so such a link grades
+  // nobody: the session counts toward it for no one.
+  const current = options.filter((r) => linked.includes(r.id));
+  const staleCount = linked.filter((id) => !options.some((r) => r.id === id)).length;
 
   const save = async () => {
     setSaving(true);
@@ -64,11 +76,13 @@ const SessionAttendanceRequirements: React.FC<SessionAttendanceRequirementsProps
           <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
           Counts toward attendance
         </h3>
-        {canManage && !editing && options.length > 0 && (
+        {canManage && !editing && (options.length > 0 || staleCount > 0) && (
           <button
             type="button"
             onClick={() => {
-              setDraft(linked);
+              // Only ids the checklist can show: a stale one would be resent
+              // on every save with no box to untick it.
+              setDraft(current.map((r) => r.id));
               setError(null);
               setEditing(true);
             }}
@@ -91,7 +105,20 @@ const SessionAttendanceRequirements: React.FC<SessionAttendanceRequirementsProps
               <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
             </div>
           )}
-          <AttendanceRequirementChecklist requirements={requirements} value={draft} onChange={setDraft} />
+          {staleCount > 0 && (
+            <p className="text-theme-text-secondary mb-3 text-sm">
+              Saving removes the {staleCount === 1 ? 'link' : `${staleCount} links`} to{' '}
+              {staleCount === 1 ? 'a requirement' : 'requirements'} no longer active.
+            </p>
+          )}
+          {options.length > 0 ? (
+            <AttendanceRequirementChecklist requirements={requirements} value={draft} onChange={setDraft} />
+          ) : (
+            <p className="text-theme-text-secondary text-sm">
+              No attendance requirement is active. Save to make this session optional, or activate one under Training
+              requirements first.
+            </p>
+          )}
           <div className="mt-4 flex flex-wrap justify-end gap-3">
             <button
               type="button"
@@ -110,11 +137,29 @@ const SessionAttendanceRequirements: React.FC<SessionAttendanceRequirementsProps
           </div>
         </fieldset>
       ) : linked.length > 0 ? (
-        <ul className="text-theme-text-primary list-inside list-disc text-sm">
-          {names.map((name, i) => (
-            <li key={linked[i] ?? name}>{name}</li>
-          ))}
-        </ul>
+        <>
+          {current.length > 0 && (
+            <ul className="text-theme-text-primary list-inside list-disc text-sm">
+              {current.map((r) => (
+                <li key={r.id}>{r.name}</li>
+              ))}
+            </ul>
+          )}
+          {staleCount > 0 && (
+            <p
+              className={`text-sm ${canManage ? 'alert-warning rounded-lg p-3' : 'text-theme-text-secondary'} ${
+                current.length > 0 ? 'mt-2' : ''
+              }`}
+              role="status"
+            >
+              {staleNotice(staleCount, current.length > 0)}
+              {canManage &&
+                (options.length > 0
+                  ? ' Choose Change to link an active requirement or remove the old links.'
+                  : ' Activate an attendance requirement under Training requirements, or choose Change to remove the old links.')}
+            </p>
+          )}
+        </>
       ) : (
         <p className="text-theme-text-secondary text-sm">Optional: not counted against anyone.</p>
       )}
