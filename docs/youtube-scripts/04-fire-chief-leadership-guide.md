@@ -749,12 +749,16 @@ waiting period; everyone else follows their status.]**
 > candidate meets the victory condition and runoffs are enabled, a runoff
 > election is created automatically."
 
-**[SCREEN: Show the closed election with the Publish Results panel]**
+**[SCREEN: Show the closed election with the Results & Publishing panel:
+"Results are visible to members" and **Send Me a Copy**]** **[PRODUCTION NOTE
+— 2026-11-16. There is no Publish Results button any more: closing the
+election, early or on schedule, releases the results. Re-shoot this cue.]**
 
-> "Review the results, then use the Publish Results panel to make them visible
-> to the membership and email the results report. One tip: if you closed voting
-> early, press **Publish Results** so members don't have to wait for the
-> originally scheduled end time."
+> "Review the results. Closing the election is what shows them to the
+> membership — whether you close it early at the meeting or it ends on
+> schedule — and the results report is emailed to the election's creator and
+> leadership. **Send Me a Copy** on the Results & Publishing panel sends you
+> another."
 
 > "Results are recorded permanently, every vote carries a cryptographic
 > signature, and a full forensic audit trail is available if an election is

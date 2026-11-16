@@ -338,7 +338,7 @@ already taken, whether they sign up or an officer assigns them.
 positions, only a minimum staffing number, members can't sign up past that
 number. An officer can still add an extra person on purpose.
 
-**Custom seats** _(2026-11-04)_. An officer with **Manage scheduling** may seat
+**Custom seats** _(2026-11-04)_. An officer with **Manage schedules** may seat
 anyone in a department-defined seat that nothing grants. A reason is required and
 the action is audited; caps, leave, overlap and EVOC rules still apply. A
 certification can confer a custom seat, and notifications, reminders and printed

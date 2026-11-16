@@ -864,6 +864,26 @@ existing row changes, and nothing is backfilled.
   **Checklist** requirement (which it was is lost), and drops the stored
   evaluation lists, so ended shifts follow the current settings again.
 
+### Elections and minutes: ten notices become editable templates (2026-11-14)
+
+Migration `c4e81b7a2d95` only widens the template type list. Ten notices that
+were built in code — nominations open, you've been nominated, nomination
+accepted for you, proxy authorized, the pre-meeting package, minutes ready for
+review, action items assigned, the two action item reminders and the open
+action items digest — now appear under **Communications → Email Templates**,
+where a department can reword, preview, test-send or switch them off.
+
+- **Minutes and meeting notices now go out through the department's own mail
+  settings, logo and footer**, as every other templated email does.
+- **A template's default CC and BCC now apply to these ten** (see the
+  2026-11-11 entry below), except the pre-meeting package, which a secretary
+  sends by hand.
+- **A switched-off Pre-meeting package refuses to send** and says why, before
+  the PDF is built.
+- The election managers' delivery alarms (ballots, announcement, automatic
+  reminder not sent) stay in code and cannot be switched off.
+- The downgrade deletes these templates' rows, a department's edits included.
+
 ### Shift evaluations: linked department requirements count evaluations, and no-show crew are excused (2026-11-14)
 
 No migration. Two changes to how shift evaluations are counted:
@@ -946,6 +966,31 @@ list by one value; no existing row changes.
   checked.
 - **Downgrading** deletes the new template's rows (a department's edits to it
   included) and narrows the type list again.
+
+### Elections: voter rules are set per member type, and can take a vote away from some members (2026-11-13)
+
+No migration: stored rules are converted when read and never rewritten.
+**Election Settings → Voter Eligibility** now sets who may vote as one row per
+member type — may vote, a waiting period, and up to four meeting-attendance
+rules — for each of four kinds of vote (regular business meeting, annual
+meeting, bylaws amendment, special meeting; each uses the regular set until
+given its own). A new election picks its rules with **Kind of vote**. The
+membership tier screen no longer offers **Can vote** or an attendance
+threshold; its stored values seed the rows until the secretary first saves
+Voter Eligibility. Elections created before the upgrade keep their old rules
+until they close.
+
+Two changes can only take a vote away, never give one:
+
+- **A tier's attendance threshold now also decides who is sent a ballot.** It
+  used to be checked only when the member tried to vote, so a member short of
+  it got a ballot link and was then refused. Now they are not sent one.
+- **Administrative and social members are held to their status row's waiting
+  period** as well as their class row's. Before, they waited only on their
+  class.
+
+Check the roster on a new election before sending ballots. A secretary's voter
+override still lets a member vote who fails the rules.
 
 ### Training: a leave that keeps training requirements excuses no training, and a leave counts once (2026-11-13)
 

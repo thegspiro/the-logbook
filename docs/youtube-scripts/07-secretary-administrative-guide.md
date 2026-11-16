@@ -572,14 +572,15 @@ tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
 > first — test votes are marked as tests and never count toward the real
 > results."
 
-**[SCREEN: Show the Eligibility Roster and the Publish Results panel]**
+**[SCREEN: Show the Eligibility Roster and the Results & Publishing panel]**
+**[PRODUCTION NOTE — 2026-11-16. There is no Publish Results button any more:
+closing the election releases the results. Re-shoot this cue.]**
 
-> "After closing the election, use the Publish Results panel to make results
-> visible to members and email the results report — then formally record the
-> outcome in the meeting minutes. One thing to know: if you close voting early,
-> say at the end of the meeting, press **Publish Results** so members can see
-> the outcome right away — otherwise results stay hidden until the originally
-> scheduled end time."
+> "Closing the election is what shows the results to members — even if you
+> close voting early, say at the end of the meeting. The results report is
+> emailed to the election's creator and leadership, and **Send Me a Copy** on
+> the Results & Publishing panel sends you another. Then formally record the
+> outcome in the meeting minutes."
 
 > "And before the meeting: generate the **Pre-Meeting Package** — a printable
 > PDF with the agenda, the full ballot preview, and the eligible-voter list,
