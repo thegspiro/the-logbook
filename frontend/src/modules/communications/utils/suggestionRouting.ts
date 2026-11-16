@@ -98,3 +98,39 @@ export function resolveRoute(
 export function intakeInputId(questionId: string): string {
   return `intake-${questionId}`;
 }
+
+/** What is wrong with one question as an administrator wrote it. */
+export interface QuestionProblems {
+  label?: string;
+  options?: string;
+}
+
+const CHOICE_TYPES: readonly string[] = [...ROUTING_TYPES, SuggestionIntakeQuestionType.CHECKBOX];
+
+/**
+ * The questions the server would refuse, by id, checked before a save so each
+ * is named on the question (forms review F-3). Mirrors IntakeQuestion and
+ * IntakeOption in backend/app/schemas/suggestion.py: a label is required, a
+ * choice question needs at least one option, and every option needs a label.
+ */
+export function questionProblems(questions: readonly EditableQuestion[]): Record<string, QuestionProblems> {
+  const out: Record<string, QuestionProblems> = {};
+  for (const question of questions) {
+    const problems: QuestionProblems = {};
+    if (!question.label.trim()) problems.label = 'Write the question members will be asked.';
+    if (CHOICE_TYPES.includes(question.type)) {
+      if (question.options.length === 0) problems.options = 'Add at least one option to choose from.';
+      else if (question.options.some((o) => !o.label.trim())) problems.options = 'Give every option a label.';
+    }
+    if (problems.label || problems.options) out[question.id] = problems;
+  }
+  return out;
+}
+
+/** The control to focus for a question's first problem, in the editor's ids. */
+export function questionProblemTarget(question: EditableQuestion, problems: QuestionProblems): string {
+  const prefix = `intake-q-${question.id}`;
+  if (problems.label) return `${prefix}-label`;
+  const blank = question.options.findIndex((o) => !o.label.trim());
+  return blank >= 0 ? `${prefix}-option-${blank}` : `${prefix}-add-option`;
+}
