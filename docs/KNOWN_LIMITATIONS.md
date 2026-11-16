@@ -625,9 +625,9 @@ The other `PromptDialog` callers are unchanged until they opt in.
 
 Still to come, module by module: the locations setup wizard, the other training
 builders and pipeline pages, the rest of Inventory (settings, stock lots, the
-checklist builder and the smaller dialogs), the full apparatus form, the
-facility overview, files and settings, medical supply lots and imports, store
-checkout, the finance cards and settings, the minutes editor,
+checklist builder and catalog quick add), the full apparatus form, the
+facility overview, files, settings and list, store settings, the finance cards
+and settings, the minutes editor,
 the remaining report dialogs, communications templates and intake, scheduling
 templates and settings, applicant conversion and stage settings, the org chart
 node and IP security admin, and onboarding, history, membership and the public
@@ -655,6 +655,16 @@ screen, and are now one component each, so a change lands on both. A save that
 failed with a reason no field answers for ("due date cannot be before the
 scheduled date", a room nesting rule, a duplicate name) is said in the form,
 where it stays until the next save, rather than in a toast.
+
+**Rolled out further on 2026-11-11** (batch 20): store checkout; the store's
+order dialog (payment, waive, status, send an update, internal notes, cancel); a medical
+supply's lots (add a lot, and a lot's edit row); medical supply import; and the
+size preferences dialog. The same rules apply. Checkout changes only how its two
+boxes show what is wrong: the order it sends, the payment methods and the totals
+are as they were. In the order dialog each section is its own request with its
+own errors, and a refusal no longer reloads the order, which used to reseed the
+amount and reference just refused. Send update and Import are no longer greyed
+out until answered; pressing them says what is missing.
 
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
