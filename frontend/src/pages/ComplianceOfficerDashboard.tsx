@@ -430,8 +430,8 @@ const AnnualReportSection: React.FC = () => {
           <div className="border-theme-surface-border border-b px-4 py-3">
             <h3 className="text-theme-text-secondary text-sm font-medium">Requirement Compliance Analysis</h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+          <div className="rwd-table-container overflow-x-auto">
+            <table className="rwd-table rwd-table-narrow min-w-full text-sm">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th
@@ -466,12 +466,16 @@ const AnnualReportSection: React.FC = () => {
                     key={req.requirement_id}
                     className="border-theme-surface-border hover:bg-theme-surface-hover border-b"
                   >
-                    <td className="text-theme-text-primary px-4 py-2">{req.name}</td>
-                    <td className="text-theme-text-secondary px-4 py-2 capitalize">{req.type.replace('_', ' ')}</td>
-                    <td className="text-theme-text-primary px-4 py-2 text-center">
+                    <td className="rwd-table-lead text-theme-text-primary px-4 py-2" data-label="Requirement">
+                      {req.name}
+                    </td>
+                    <td className="text-theme-text-secondary px-4 py-2 capitalize" data-label="Type">
+                      {req.type.replace('_', ' ')}
+                    </td>
+                    <td className="text-theme-text-primary px-4 py-2 text-center" data-label="Compliant">
                       {req.members_compliant}/{req.members_total}
                     </td>
-                    <td className="px-4 py-2 text-center">
+                    <td className="px-4 py-2 text-center" data-label="Compliance %">
                       {/* No member is held to it (a program-only requirement, say):
                           0 of 0 is not a 0% failure. */}
                       {req.members_total === 0 ? (
