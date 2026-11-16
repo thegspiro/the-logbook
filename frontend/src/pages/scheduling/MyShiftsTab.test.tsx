@@ -29,6 +29,8 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     // loadData awaits this alongside getMyAssignments; without it the call
     // throws and the whole load falls into its catch, leaving an empty list.
     getMyAttendanceHistory: (...args: unknown[]) => mockGetMyAttendanceHistory(...args) as unknown,
+    // The tab reads every page through this; the tests stand one page in.
+    getAllMyAttendanceHistory: (...args: unknown[]) => mockGetMyAttendanceHistory(...args) as unknown,
     getShifts: (...args: unknown[]) => mockGetShifts(...args) as unknown,
     createSwapRequest: (...args: unknown[]) => mockCreateSwapRequest(...args) as unknown,
     getExchangeCandidates: (...args: unknown[]) => mockGetExchangeCandidates(...args) as unknown,
@@ -59,6 +61,27 @@ vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
+// A member with no hours on record, as /my-hours-history reports one.
+const hoursHistoryDefault = () => ({
+  year: 2026,
+  earliest_year: 2026,
+  timezone: 'America/New_York',
+  months: Array.from({ length: 12 }, (_, i) => ({
+    year: 2026,
+    month: i + 1,
+    shifts: 0,
+    hours: 0,
+    calls: 0,
+    pending_shifts: 0,
+    pending_hours: 0,
+  })),
+  totals: { shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
+  all_time: { shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
+  current_month: { year: 2026, month: 2, shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
+  previous_month: { year: 2026, month: 1, shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
+  history: [],
+});
+
 describe('MyShiftsTab', () => {
   const mockOnViewShift = vi.fn();
 
@@ -71,24 +94,7 @@ describe('MyShiftsTab', () => {
     mockGetMyAttendanceHistory.mockReset();
     mockGetMyAttendanceHistory.mockResolvedValue([]);
     mockGetMyHoursHistory.mockReset();
-    mockGetMyHoursHistory.mockResolvedValue({
-      year: 2026,
-      earliest_year: 2026,
-      timezone: 'America/New_York',
-      months: Array.from({ length: 12 }, (_, i) => ({
-        year: 2026,
-        month: i + 1,
-        shifts: 0,
-        hours: 0,
-        calls: 0,
-        pending_shifts: 0,
-        pending_hours: 0,
-      })),
-      totals: { shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
-      all_time: { shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
-      current_month: { year: 2026, month: 2, shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
-      previous_month: { year: 2026, month: 1, shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
-    });
+    mockGetMyHoursHistory.mockResolvedValue(hoursHistoryDefault());
   });
 
   describe('declining your own assignment', () => {
@@ -465,7 +471,7 @@ describe('MyShiftsTab', () => {
         apparatus_unit_number: 'A106E',
       },
     });
-    const worked = (id: string, date: string, minutes: number) => ({
+    const worked = (id: string, date: string, minutes: number, finalized = true) => ({
       id: `att-${id}`,
       shift_id: `shift-${id}`,
       user_id: 'user-1',
@@ -474,7 +480,23 @@ describe('MyShiftsTab', () => {
       checked_out_at: `${date}T23:00:00Z`,
       duration_minutes: minutes,
       shift_date: date,
+      shift_is_finalized: finalized,
     });
+    const month = (year: number, m: number, shifts: number, hours: number, pendingShifts = 0, pendingHours = 0) => ({
+      year,
+      month: m,
+      shifts,
+      hours,
+      calls: 0,
+      pending_shifts: pendingShifts,
+      pending_hours: pendingHours,
+    });
+    // What /my-hours-history reports. October 2025 credits 13.25: the 11.75
+    // worked on the finalized shift plus 1.5 of approved prep that belongs to
+    // no row — so a header that summed its rows would read 11.75, and one
+    // that summed raw time worked would read 23.75. Only the backend's figure
+    // matches the Hours tab.
+    const creditHistory = [month(2024, 10, 1, 8), month(2025, 10, 1, 13.25, 1, 12)];
 
     beforeEach(() => {
       mockGetMyAssignments.mockReset();
@@ -489,9 +511,13 @@ describe('MyShiftsTab', () => {
       mockGetMyAttendanceHistory.mockReset();
       mockGetMyAttendanceHistory.mockResolvedValue([
         worked('oct-a', '2025-10-24', 705),
-        worked('oct-b', '2025-10-11', 720),
+        worked('oct-b', '2025-10-11', 720, false),
         worked('old', '2024-10-11', 480),
       ]);
+      mockGetMyHoursHistory.mockReset();
+      mockGetMyHoursHistory.mockImplementation(() =>
+        Promise.resolve({ ...hoursHistoryDefault(), history: creditHistory })
+      );
     });
 
     const openPast = async () => {
@@ -499,6 +525,14 @@ describe('MyShiftsTab', () => {
       renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
       await user.click(await screen.findByRole('button', { name: /^Past/ }));
       return user;
+    };
+
+    const rowFor = (region: HTMLElement, details: RegExp) => {
+      const rows = within(region)
+        .getAllByRole('listitem')
+        .filter((li) => within(li).queryByRole('button', { name: details }) !== null);
+      expect(rows).toHaveLength(1);
+      return rows;
     };
 
     it('leaves declined and cancelled seats out of the history and its count', async () => {
@@ -511,42 +545,59 @@ describe('MyShiftsTab', () => {
     it('still lists a declined seat the member worked anyway, from attendance', async () => {
       mockGetMyAttendanceHistory.mockResolvedValue([worked('declined', '2025-08-21', 525)]);
       await openPast();
-      const august = screen.getByRole('region', { name: 'August 2025' });
-      const rows = within(august)
-        .getAllByRole('listitem')
-        .filter((li) => within(li).queryByRole('button', { name: /Details for shift on Thu, Aug 21, 2025/ }) !== null);
-      expect(rows).toHaveLength(1);
-      rows.forEach((row) => {
-        expect(within(row).getByText(/8\.75h worked/)).toBeInTheDocument();
-        expect(within(row).getAllByText('completed').length).toBeGreaterThan(0);
+      rowFor(screen.getByRole('region', { name: 'August 2025' }), /Details for shift on Thu, Aug 21, 2025/).forEach(
+        (row) => {
+          expect(within(row).getByText(/8\.75h credited/)).toBeInTheDocument();
+          expect(within(row).getAllByText('completed').length).toBeGreaterThan(0);
+        }
+      );
+    });
+
+    it("shows the Hours tab's credited figures for the year, with pending time apart", async () => {
+      await openPast();
+      expect(screen.getByLabelText('Year')).toHaveValue('2025');
+
+      const hours = screen.getByRole('group', { name: 'Hours credited, 2025' });
+      expect(within(hours).getByText('13.25')).toBeInTheDocument();
+      expect(within(hours).getByText('+12 hrs awaiting close-out')).toBeInTheDocument();
+      const shifts = screen.getByRole('group', { name: 'Credited shifts, 2025' });
+      expect(within(shifts).getByText('1')).toBeInTheDocument();
+      expect(within(shifts).getByText('+1 awaiting close-out')).toBeInTheDocument();
+
+      const october = screen.getByRole('region', { name: 'October 2025' });
+      expect(
+        within(october).getByText('2 shifts · 13.25 hrs credited · 12 hrs awaiting close-out')
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'October 2024' })).not.toBeInTheDocument();
+
+      expect(screen.getByRole('button', { name: 'October: 13.25 hrs credited, 2 shifts' })).toBeInTheDocument();
+      // A month with no shifts has nothing to jump to.
+      expect(screen.getByRole('button', { name: 'March: 0 hrs credited, 0 shifts' })).toBeDisabled();
+    });
+
+    it('says which rows are credited and which await close-out', async () => {
+      await openPast();
+      const october = screen.getByRole('region', { name: 'October 2025' });
+      rowFor(october, /Details for shift on Fri, Oct 24, 2025/).forEach((row) => {
+        expect(within(row).getByText(/11\.75h credited/)).toBeInTheDocument();
+      });
+      rowFor(october, /Details for shift on Sat, Oct 11, 2025/).forEach((row) => {
+        expect(within(row).getByText(/12h · awaiting close-out/)).toBeInTheDocument();
       });
     });
 
-    it('opens on the newest year, with that year in the tiles and its months listed', async () => {
-      await openPast();
-      expect(screen.getByLabelText('Year')).toHaveValue('2025');
-      expect(within(screen.getByRole('group', { name: 'Hours worked, 2025' })).getByText('23.75')).toBeInTheDocument();
-      expect(within(screen.getByRole('group', { name: 'Shifts, 2025' })).getByText('3')).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'October 2025' })).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'August 2025' })).toBeInTheDocument();
-      expect(screen.queryByRole('heading', { name: 'October 2024' })).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'October: 23.75 hrs, 2 shifts' })).toBeInTheDocument();
-      // A month with no shifts has nothing to jump to.
-      expect(screen.getByRole('button', { name: 'March: 0 hrs, 0 shifts' })).toBeDisabled();
-    });
-
-    it('offers All time, which lists every year and charts hours by year', async () => {
+    it('offers All time, which lists every year and charts credited hours by year', async () => {
       const user = await openPast();
       await user.selectOptions(screen.getByLabelText('Year'), 'All time (4 shifts)');
 
       expect(
-        within(screen.getByRole('group', { name: 'Hours worked, All time' })).getByText('31.75')
+        within(screen.getByRole('group', { name: 'Hours credited, All time' })).getByText('21.25')
       ).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: 'October 2025' })).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: 'October 2024' })).toBeInTheDocument();
 
       // A tap on a year's bar opens that year.
-      await user.click(screen.getByRole('button', { name: '2024: 8 hrs, 1 shift' }));
+      await user.click(screen.getByRole('button', { name: '2024: 8 hrs credited, 1 shift' }));
       expect(screen.getByLabelText('Year')).toHaveValue('2024');
       expect(screen.queryByRole('heading', { name: 'October 2025' })).not.toBeInTheDocument();
     });
@@ -555,9 +606,20 @@ describe('MyShiftsTab', () => {
       const user = await openPast();
       const scroll = vi.mocked(Element.prototype.scrollIntoView);
       scroll.mockClear();
-      await user.click(screen.getByRole('button', { name: 'August: 0 hrs, 1 shift' }));
+      await user.click(screen.getByRole('button', { name: 'August: 0 hrs credited, 1 shift' }));
       expect(scroll).toHaveBeenCalledWith({ behavior: 'smooth' });
       expect(scroll.mock.contexts[0]).toBe(screen.getByRole('region', { name: 'August 2025' }));
+    });
+
+    it('lists the shifts but shows no hours when the credited hours cannot be loaded', async () => {
+      mockGetMyHoursHistory.mockReset();
+      mockGetMyHoursHistory.mockRejectedValue(new Error('offline'));
+      await openPast();
+
+      expect(screen.getByRole('status')).toHaveTextContent('Your credited hours could not be loaded');
+      expect(within(screen.getByRole('group', { name: 'Hours credited, 2025' })).getByText('—')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'October 2025' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^October:/ })).not.toBeInTheDocument();
     });
   });
 
