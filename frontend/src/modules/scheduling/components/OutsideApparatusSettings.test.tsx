@@ -249,6 +249,40 @@ describe('OutsideApparatusSettings: merging two spellings of one department', ()
     expect(dialog).not.toHaveTextContent('apparatus moves');
   });
 
+  it('says when merging into a hidden department hides the moved apparatus from members', async () => {
+    mockList.mockResolvedValue({ agencies: [county, { ...countyFd, is_active: false }] });
+    const { user, dialog } = await openMerge();
+
+    const select = within(dialog).getByLabelText('Merge into');
+    expect(
+      within(select).getByRole('option', { name: 'Arlington County Fire Department (hidden from members)' })
+    ).toBeInTheDocument();
+    await user.selectOptions(select, 'a-county-fd');
+
+    expect(dialog).toHaveTextContent(
+      "Arlington County Fire Department is hidden from members, so Arlington County's apparatus will be hidden from them too."
+    );
+  });
+
+  it('says when merging a hidden department into an offered one makes its apparatus available', async () => {
+    mockList.mockResolvedValue({ agencies: [{ ...county, is_active: false }, countyFd] });
+    const { user, dialog } = await openMerge();
+
+    await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+
+    expect(dialog).toHaveTextContent(
+      "Arlington County Fire Department is offered to members, so Arlington County's apparatus that are switched on become available to them."
+    );
+  });
+
+  it('says nothing about visibility when both departments match', async () => {
+    const { user, dialog } = await openMerge();
+
+    await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+
+    expect(dialog).not.toHaveTextContent('from members');
+  });
+
   it('merges into the chosen department and reports what moved', async () => {
     const { user, dialog } = await openMerge();
 

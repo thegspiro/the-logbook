@@ -106,23 +106,50 @@ class ExternalApparatusService:
     async def get_pickable_apparatus(
         self, organization_id: str, apparatus_id: str
     ) -> Optional[tuple[ExternalApparatus, ExternalAgency]]:
-        """The unit and its agency, if a member may log a shift on it now."""
-        row = (
+        """The unit and its agency, if a member may log a shift on it now.
+
+        The unit row is read with a shared lock, held until the caller
+        commits the shift it is logging. :meth:`merge_agency` takes an
+        exclusive lock on the same row before it moves or removes the unit, so
+        the two serialize: a shift logged during a merge waits for it and
+        then reads the unit's new agency, and a merge started while a shift
+        is being logged waits for that shift and relabels it. Without it, a
+        shift could land on a moved unit still carrying the merged-away name.
+
+        Only the unit is locked, and its agency read without one. The merge
+        locks agencies before units; locking both here, in a join whose row
+        order the database chooses, could take them the other way round and
+        deadlock. The unit's lock is the one that matters: it is what a merge
+        rewrites.
+        """
+        unit = (
             await self.db.execute(
-                select(ExternalApparatus, ExternalAgency)
-                .join(ExternalAgency, ExternalAgency.id == ExternalApparatus.agency_id)
+                select(ExternalApparatus)
                 .where(
                     ExternalApparatus.id == str(apparatus_id),
                     ExternalApparatus.organization_id == str(organization_id),
-                    ExternalAgency.organization_id == str(organization_id),
                     ExternalApparatus.is_active.is_(True),
+                )
+                .with_for_update(read=True)
+                # A copy already in the session would otherwise be handed
+                # back as it was, not as the locked read found it.
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if unit is None:
+            return None
+        agency = (
+            await self.db.execute(
+                select(ExternalAgency).where(
+                    ExternalAgency.id == unit.agency_id,
+                    ExternalAgency.organization_id == str(organization_id),
                     ExternalAgency.is_active.is_(True),
                 )
             )
-        ).first()
-        if row is None:
+        ).scalar_one_or_none()
+        if agency is None:
             return None
-        return row[0], row[1]
+        return unit, agency
 
     # ------------------------------------------------------------------
     # Agencies

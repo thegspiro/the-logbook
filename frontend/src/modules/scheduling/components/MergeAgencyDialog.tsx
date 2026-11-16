@@ -48,6 +48,10 @@ export const MergeAgencyDialog: React.FC<MergeAgencyDialogProps> = ({ source, ag
     : [];
   const moving = source.apparatus.length - shared.length;
   const evaluationDiffers = target !== null && target.evaluate_shifts !== source.evaluate_shifts;
+  // The kept department's on/off switch governs its units in the member's
+  // picker, so a merge can hide units members could pick, or offer ones they
+  // could not.
+  const visibilityDiffers = target !== null && target.is_active !== source.is_active;
 
   return (
     <Modal
@@ -89,6 +93,7 @@ export const MergeAgencyDialog: React.FC<MergeAgencyDialogProps> = ({ source, ag
               {others.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
+                  {a.is_active ? '' : ' (hidden from members)'}
                 </option>
               ))}
             </select>
@@ -114,6 +119,13 @@ export const MergeAgencyDialog: React.FC<MergeAgencyDialogProps> = ({ source, ag
                   Every shift logged with {source.name} will show {target.name} instead, on members&apos; hours and in
                   reports.
                 </li>
+                {visibilityDiffers && target && (
+                  <li>
+                    {target.is_active
+                      ? `${target.name} is offered to members, so ${source.name}'s apparatus that are switched on become available to them.`
+                      : `${target.name} is hidden from members, so ${source.name}'s apparatus will be hidden from them too.`}
+                  </li>
+                )}
                 {evaluationDiffers && (
                   <li>
                     {target.name} {target.evaluate_shifts ? 'evaluates' : 'does not evaluate'} shifts, so the moved
