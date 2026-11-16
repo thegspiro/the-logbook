@@ -559,6 +559,43 @@ the full apparatus form and documents; the facility overview, files and
 settings sections and list; store settings. The other rows of the batch 18
 list are unchanged.
 
+## Rollout status, 2026-11-16 (batch 21)
+
+The same steps, on these:
+
+| Area                 | Converted                                                                                                                                                                                |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inventory and assets | Facilities › overview (edit), files (caption / description), Facility Settings' lookup dialog; Inventory › catalog quick add, stock lots (Add Lot), checklist settings; Store › settings |
+
+The facility overview is an edit, so a blank type or status, a mistyped email
+or an out-of-range number is left out of the save and stays flagged while the
+rest saves; its field ids are unchanged and the email is still checked as it is
+typed. Facility Settings' lookup dialog had main's field errors already; it
+gains the discard question, a counter and the single-save rule (Active saves
+with the name refused).
+
+Store settings carries the payment configuration and is replaced together, so a
+refused setting holds the whole save back, as batch 18's Zeffy link does. The
+fourteen settings with a limit or a rule go through `FormField` with their
+existing ids, with an `ErrorSummary` at the top of the long page and a
+leave-page question; the payload is built exactly as before.
+
+Two screens on the list had no form to convert. The facility list is a search
+box over cards, and its Add Facility dialog was already converted on main.
+Checklist settings saves each control as it changes; it now says on the
+control what happened to the change (a refused save, an unusable entry, a
+number folded back into range) instead of a toast or nothing. Catalog quick add
+is a search box rather than a form: Add is no longer greyed out on an empty
+box, and a refused create hands the typed name back with the reason under the
+bar instead of clearing it.
+
+**Still not converted**, from the inventory-and-assets row: the checklist
+builder (`EquipmentCheckTemplateBuilder`, some 7,000 lines, its own batch);
+the full apparatus form and its documents; and a facility's extended sections
+(utilities, access keys, shutoffs, capital projects, insurance, occupants),
+which share one `ResourceSection` and were not on earlier lists. The other rows
+of the batch 18 list are unchanged.
+
 ## Suggested order
 
 1. **F-1** — small, backend-led, stops a data-integrity hole.
