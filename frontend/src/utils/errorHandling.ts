@@ -241,6 +241,11 @@ export function getLoadFailureMessage(error: unknown, what: string): string {
   if (appError.status !== undefined && appError.status >= 500) {
     return `Could not load ${what}: the server hit a problem on its end. Refresh the page in a moment. If it keeps happening, tell IT${code}.`;
   }
+  if (appError.status === undefined) {
+    // No answer and no transport failure: the page itself failed (a response
+    // it could not read, a thrown TypeError). Its message is for developers.
+    return `Could not load ${what}. Refresh the page, and if it keeps happening, tell IT.`;
+  }
   return getErrorMessage(error, `Could not load ${what}`);
 }
 

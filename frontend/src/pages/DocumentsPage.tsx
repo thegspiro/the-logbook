@@ -47,7 +47,7 @@ import {
   isAdminOnlyRefusal,
 } from '../components/documents/folderAccess';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { getErrorDetail } from '../utils/errorHandling';
+import { getErrorDetail, getLoadFailureMessage } from '../utils/errorHandling';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import { fileTypeLabel } from '../utils/fileTypeLabel';
 import { StatGrid } from '@/components/ux/StatGrid';
@@ -181,9 +181,9 @@ const DocumentsPage: React.FC = () => {
       // whole level and hide every folder past the first page.
       setFolderTotal(response.total);
       return true;
-    } catch {
+    } catch (err: unknown) {
       if (generation === levelGeneration.current) {
-        setFoldersError('Unable to load folders. Check your connection and try again.');
+        setFoldersError(getLoadFailureMessage(err, 'folders'));
       }
       return false;
     } finally {
@@ -220,10 +220,10 @@ const DocumentsPage: React.FC = () => {
       const nextDocuments = asArray(response.documents);
       setDocuments((current) => (append ? [...current, ...nextDocuments] : nextDocuments));
       setDocumentsTotal(response.total);
-    } catch {
+    } catch (err: unknown) {
       if (generation === requestGeneration.current) {
         if (!append) setDocuments([]);
-        setDocumentsError('Unable to load documents. Check your connection and try again.');
+        setDocumentsError(getLoadFailureMessage(err, 'documents'));
       }
     } finally {
       if (generation === requestGeneration.current) {

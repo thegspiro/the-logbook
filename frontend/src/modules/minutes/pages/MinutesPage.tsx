@@ -35,7 +35,7 @@ import { AgendaEditorDialog } from '../components/AgendaEditorDialog';
 import { ArchiveSearchResults } from '../components/ArchiveSearchResults';
 import { MyActionItemsPanel } from '../components/MyActionItemsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
-import { getErrorDetail, getErrorMessage } from '../../../utils/errorHandling';
+import { getErrorDetail, getErrorMessage, getLoadFailureMessage } from '../../../utils/errorHandling';
 import { toDisplayString } from '../../../utils/displayValue';
 import type { MeetingType, MinutesListItem, MinutesStats } from '../types/minutes';
 import { formatCalendarDate, formatTimeOfDay } from '../../../utils/dateFormatting';
@@ -222,8 +222,8 @@ const MinutesPage: React.FC = () => {
           : []
       );
       setMinutesStats(stats);
-    } catch {
-      setError('Unable to load meetings. Check your connection and try again.');
+    } catch (err: unknown) {
+      setError(getLoadFailureMessage(err, 'meetings'));
     } finally {
       setLoading(false);
     }

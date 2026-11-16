@@ -535,7 +535,7 @@ describe('DocumentsPage', () => {
     renderWithRouter(<DocumentsPage />);
     await user.click(await screen.findByRole('button', { name: /sops/i }));
 
-    expect(await screen.findByText(/unable to load documents/i)).toBeInTheDocument();
+    expect(await screen.findByText(/could not load documents/i)).toBeInTheDocument();
     expect(screen.getByText('SOPs', { selector: '[aria-current="page"]' })).toBeInTheDocument();
   });
 

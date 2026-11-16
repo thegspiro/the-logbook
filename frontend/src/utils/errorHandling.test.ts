@@ -583,6 +583,15 @@ describe('errorHandling', () => {
       );
     });
 
+    it('keeps a developer message off screen when the page itself failed', () => {
+      const message = getLoadFailureMessage(
+        new TypeError('The training dashboard response was not a summary'),
+        'the dashboard'
+      );
+
+      expect(message).toBe('Could not load the dashboard. Refresh the page, and if it keeps happening, tell IT.');
+    });
+
     it('passes any other answer through as the server wrote it', () => {
       expect(getLoadFailureMessage(http(404, { detail: 'Organization not found' }), 'members and positions')).toBe(
         'Organization not found'
