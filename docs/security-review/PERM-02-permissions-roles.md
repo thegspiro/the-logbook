@@ -1,9 +1,145 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), #3212 (pass 9), #3398 (pass 10), #3557 (pass 11, the header's own "this PR" placeholder was never filled in after merge; corrected here), #3685 (pass 12), #3803 (pass 13, same stale-placeholder correction applied here), #3871 (pass 14), pass 15 (this PR)
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup), 2026-11-16 (pass 16, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), #3212 (pass 9), #3398 (pass 10), #3557 (pass 11, the header's own "this PR" placeholder was never filled in after merge; corrected here), #3685 (pass 12), #3803 (pass 13, same stale-placeholder correction applied here), #3871 (pass 14), #4022 (pass 15), pass 16 (this PR)
 
 Passes are recorded in this one file rather than a new `PERM<n>-02-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 16 (2026-11-16, watchdog pickup) — 0 fixed, 0 new findings
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable — confirmed via
+`ListAgents`, no reachable agents at all. Step 0 re-checked fresh against
+GitHub (`list_pull_requests`, state `open`): 0 results for a
+`claude/security-review-*` head. PR #4332 (Feature 01, Auth & session
+lifecycle, pass 16) had just merged (`7ba683ce2`). Row 01 is `✅`; row 02
+(Permissions & roles) is the next `⬜` row.
+
+**Baseline:** `cbab9350f` — pass 15's content landed on `main` as PR #4022's
+merge, but that exact merge-commit SHA is not reachable from current
+`main`'s ancestry (this repo's heavy cross-branch "merge main into mine"
+pattern produces that routinely for a fast-moving trunk); `cbab9350f` is
+the commit `git log -S` locates pass 15's own write-up at, and
+`git merge-base --is-ancestor cbab9350f HEAD` confirms it is an ancestor of
+the current head, so it is a valid diff base. **Head:** current `main`
+(`7ba683ce2`, PR #4332's merge).
+
+### Route inventory — re-enumerated by AST/grep, not diffed
+
+**28 routes, unchanged from pass 15** — re-walked `grep -c '^@router\.'`
+over all four endpoint files: `roles.py` (13), `operational_ranks.py` (7),
+`officers.py` (3), `org_chart.py` (5). All four endpoint files are
+byte-identical to pass 15 (`git diff --stat` empty), confirmed
+independently of the route-count match. No missing auth/permission
+dependency — nothing changed here to introduce one.
+
+### What changed since pass 15
+
+`git diff --stat` against every file/pair this feature tracks
+(`dependencies.py`, `core/permissions.py`, `roles.py` + `role_service.py`,
+`operational_ranks.py` + `operational_rank_service.py`, `officers.py` +
+`officer_service.py`, `org_chart.py` + `org_chart_service.py`,
+`admin_continuity_service.py`, and the rank/role-assignment surface in
+`users.py`) is non-empty in three:
+
+1. **`dependencies.py`** (+6/-5, cosmetic) — an MFA-grace-banner copy fix:
+   `action_url="/account"` → `"/account?tab=security"`, plus the matching
+   label text, so the banner links to where the tab setup actually lives.
+   Not a security change.
+2. **`role_service.py`** (+12/-1) — wires the new `member_position_term`
+   module (owner decision 2026-11-06) into `delete_role`,
+   `assign_role_to_user`, `remove_role_from_user`, `set_user_roles`: each
+   now calls `note_position_actor`/`sync_position_terms` so a role
+   grant/revocation also opens or closes a dated history row. No new
+   permission check, no new OR-gate, no change to what any of these
+   methods authorizes.
+3. **`users.py`** (+195/-18, mostly Feature 07's territory — email/
+   personal-email credential-reset ceilings, IP/UA audit logging,
+   `service_since`/`past_positions` visibility redaction) — the only lines
+   inside this feature's scope are three `note_position_actor(db,
+current_user.id)` calls added immediately before `user.roles = roles` /
+   `.append(role)` / `.remove(role_to_remove)` in `assign_user_roles`,
+   `add_role_to_user`, `remove_role_from_user` (`users.py:1524,1635,1752`).
+   The actor id passed is always `current_user.id` — server-resolved,
+   never client input, confirmed by reading all three call sites.
+   `_enforce_role_grant_ceiling`/`_enforce_rank_grant_ceiling` themselves
+   are untouched (0 hits for either name in this file's diff).
+
+`core/permissions.py`, `operational_ranks.py`'s service, `officers.py` +
+service, `org_chart.py` + service, `admin_continuity_service.py` are all
+byte-identical to pass 15.
+
+### New machinery reviewed: `member_position_term.py` / `member_position_term_service.py`
+
+Not this feature's own PR, but `role_service.py` now calls into it, so it
+got full scrutiny rather than a trust-the-docstring pass:
+
+- **Org scoping is sound.** `_reconcile()` resolves `organization_id` by
+  joining `User`/`Position` off the `(user_id, position_id)` pair itself
+  (`member_position_term.py:161-176`) — never client-supplied, so no
+  cross-tenant write is possible through this path.
+- **`Role = Position` and `user_roles = user_positions`** are literal
+  aliases (`backend/app/models/user.py:1059-1060`) — the "role_id"
+  `role_service.py` passes into `sync_position_terms` _is_ a position id in
+  the same table/id-space. Traced this as a possible type-confusion bug
+  (passing a Role id into a function that joins against the `positions`
+  table) and confirmed it is not one — same underlying row.
+- **Actor provenance.** Every live call site (`roles.py:417`'s
+  `deleted_by=str(current_user.id)`; the three `users.py` call sites
+  above) passes the authenticated user's own id, never a request body
+  field. `assign_role_to_user`/`remove_role_from_user`/`set_user_roles` in
+  `role_service.py` itself have **no caller anywhere in `app/`**
+  (confirmed by grep — the only hit outside their own definitions is a
+  docstring cross-reference), and their own docstrings explicitly warn the
+  next caller to wire the grant-ceiling check, so this is a documented gap
+  in dead code, not a silent one.
+- **No new finding.** This is audit-trail infrastructure; it doesn't gate
+  or grant anything.
+
+### Frontend
+
+`frontend/src/modules/communications/components/OfficersPanel.tsx` changed
+(+307/-~130 net) — in scope (officers UI). Full diff read: a forms-UX pass
+only (per-field server-error mapping via `mapServerFieldErrors`,
+`useDiscardGuard` on cancel, `FormField` adoption), matching the "Forms
+review" batches referenced elsewhere in the repo. Checked for
+permission/role-related identifiers in the diff (`permission`, `canEdit`,
+`role.`, `hasPermission`) — zero hits, so no client-side-only permission
+gating was added or removed; the save still round-trips through the
+server (`setOfficer`), which is the actual authority. `OrgChartPage.tsx`/
+`OrgChartDiagram.tsx` are unchanged. `RevisionEditorModal.tsx`/
+`LegalDocumentsPage.tsx` also changed in the `governance` module but are
+Feature 10's (Documents & legal) territory, not reviewed here.
+
+### Findings
+
+**0 new findings.** PERM-1 through PERM-12 remain closed: every file that
+carried one of them is byte-identical to pass 15, so nothing could have
+regressed. No PERM-13+ opened this pass.
+
+### Pitfall #23 (seeded-grant machinery)
+
+**No.** `operational_ranks.py` and `officers.py` are byte-identical to pass
+15 — no new permission string, no change to `DEFAULT_POSITIONS`/
+`OPERATIONAL_RANKS` seeding, nothing that would need a migration rewriting
+stored `positions` rows. The only rank/role-adjacent change this pass is
+the audit-trail wiring above, which touches no seeded-grant data.
+
+### Completion gate
+
+`flake8`/`black --check`/`isort --check-only` on `app/ tests/ alembic/` all
+clean; `validate_migrations.py --strict` — single head `053d3e96b4fa`,
+passes; `check_route_permissions.py --strict` — 327 routes, 0 errors/
+warnings; scoped backend suite (`-k "permission or role or rank or officer
+or org_chart or passkey or stepup or position_term"`) — 1929 passed, 1
+pre-existing environment-only skip (`py_vapid`), 0 failed; `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors/warnings.
+
+Row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public surface &
+webhooks) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ---
 
