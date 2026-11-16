@@ -96,6 +96,20 @@ content on `manage` alone; reading needs `view_all`, being the evaluator, or
 being an approver at an open approval step. Approval steps are signed by
 holders of the step's position.
 
+**Separation of duties** _(owner decision 2026-11-16, ADV2-4)_. The evaluator
+never approves or calibrates their own evaluation, and nobody signs two
+approval steps on one revision. Where that leaves a step with nobody
+eligible -- a department whose only Captain wrote the evaluation, say -- a
+`manage` holder names who takes it (`PUT /{id}/steps/{key}/assignee`, with
+step-up). The person named replaces the step's position holders (or the
+`view_all` holders, for calibration) on that one evaluation, reads it as an
+approver does, and is emailed if the step is already open. Any current
+member may be named except the member and the evaluator, and, on an
+approval, anyone who signed another approval on the revision. Clearing the
+name hands the step back. An amendment's new revision starts with no names.
+A position holder replaced by a name no longer sees the evaluation unless
+they have another part in it.
+
 The member's supervisor today, by the dated Reports To assignments, also
 reads their evaluations, by relationship rather than by grant (owner decision
 2026-11-01, built 2026-11-04). `GET /crew` lists every evaluation of the
@@ -311,7 +325,9 @@ All under `/api/v1/evaluations`.
 | `GET /crew`                                                                                                                   | sign-in; lists only the evaluations of members the caller supervises today                    |
 | `GET /{id}` and its actions                                                                                                   | anyone with a part in it; the service decides who may do what, and answers 404 to anyone else |
 | `POST /{id}/sign`                                                                                                             | the signer the open step waits on, with step-up                                               |
-| `POST /{id}/calibration/complete`                                                                                             | `view_all`                                                                                    |
+| `POST /{id}/calibration/complete`                                                                                             | the person named on the step, else `view_all`; never the evaluator                            |
+| `GET /{id}/steps/{key}/assignee-candidates`                                                                                   | `manage`                                                                                      |
+| `PUT /{id}/steps/{key}/assignee`                                                                                              | `manage`, with step-up                                                                        |
 | `POST /{id}/amend`                                                                                                            | `manage`                                                                                      |
 | `POST /{id}/delete`                                                                                                           | `delete`, with step-up                                                                        |
 | `PUT /{id}/response`, `POST /{id}/response/submit`                                                                            | the member                                                                                    |
@@ -322,7 +338,7 @@ In order: `3fbd0fe30e5b` (tables), `b65eaef983b9` and `1476abf56dd3`
 (Chief grants), `0ebd6603289b` (documents), `38e0f552242d` (notices, step
 stamps), `857291750c67` (delete grant, deleted email), `6b2f0c9d4e71`
 (amended email), `9d3a71c5e2b8` (response PDF, response email),
-`4c8e2f61a9d7` (calibration flags). Each is safe to run twice and tolerates a
+`4c8e2f61a9d7` (calibration flags), `a6c3e8d17f42` (step assignee). Each is safe to run twice and tolerates a
 table `create_all` has not built (pitfall #26).
 
 ## Tests
