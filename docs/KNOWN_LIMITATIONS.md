@@ -10018,7 +10018,7 @@ was flagged rather than changed. The options are to keep it, to require
 the drill, and a training officer would link it), or to require both grants.
 Found by `docs/security-review/TR-17-training-core.md` pass 14.
 
-## Training — Records From the Older CSV Importers Read "The Logbook" (2026-11-10)
+## Training — Records the Older CSV Importers Wrote Before 2026-11-15 Read "The Logbook" (2026-11-10)
 
 **Accepted (owner decision 2026-11-10).** Training lists, the print page and
 the individual CSV and PDF exports show where each record came from:
@@ -10034,9 +10034,15 @@ writes in `imported_source_records`.
 
 The two older importers on the Training screens, the CSV import wizard
 (`POST /training/import/confirm`) and `POST /training/records/import-csv`,
-leave no such mark. Their records therefore read "The Logbook". The owner chose
-this over adding a stored source column, which could only have labelled records
+left no such mark. The owner chose to leave their records as "The Logbook"
+over adding a stored source column, which could only have labelled records
 imported after the change.
+
+**Narrowed 2026-11-15.** Both importers now ledger what they write
+(`ledger_csv_imports`, source system `logbook.training-csv-import`), so a record
+they import from now on reads "Imported". What remains is the records they
+imported before then: nothing distinguishes them, and they still read "The
+Logbook".
 
 ## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06, resolved 2026-10-29)
 
