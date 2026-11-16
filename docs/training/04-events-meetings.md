@@ -314,10 +314,11 @@ Nobody decides their own request.
 
 **Every request in one place.** When requests are waiting on your events, the
 Events page shows _"N attendance requests are waiting for you"_. It opens
-**Attendance Requests**, which lists every waiting request on events you
-organize or are alternate for, oldest first, with the same **Approve** and
-**Decline**. Officers who can manage events can switch between **My events**
-and **All events**.
+**Attendance Requests**, which lists every waiting request sent to you, oldest
+first, with the same **Approve** and **Decline**: those on events you organize
+or are alternate for, and any passed on to you because the event's organizers
+could not take it. Officers who can manage events can switch between **Sent to
+me** and **All events**.
 
 **Who is told.**
 
