@@ -197,10 +197,19 @@ Fixed 2026-11-14:
   back into a payment stage. The same status is a no-op, and Cancelled goes
   through the real cancel.
 
+Fixed 2026-11-16:
+
+- W67b-6 (MED): an option could take a line below zero. Products, options
+  and window prices are now refused at save, and any line below zero at
+  checkout.
+- W67b-7 (MED): an overpayment was accepted silently. Owner decision: a typed
+  payment above the balance is refused; an applied PayPal capture records
+  what arrived, and the excess shows as owed back to the member with a
+  one-step refund. A partial refund that leaves the order paid in full keeps
+  it Paid.
+
 Open:
 
-- W67b-6 (MED): sizes can be priced below zero;
-- W67b-7 (MED): overpayment is accepted;
 - W67b-8 (LOW): refund is one tap and always refunds everything;
 - W67b-9 (LOW): a pickup order keeps a home address it does not need;
 - W67b-10 (LOW): loading checkout directly bounces to the store;
@@ -214,6 +223,10 @@ order, payment reports and notification gaps). Details in
 Gate for the W67b-3, -4 and -5 fixes: typecheck, lint, flake8, black, isort
 and the mypy ratchet clean; 313 frontend storefront and integrity tests and 571
 backend storefront, payment, locking and SoD tests pass.
+
+Gate for the W67b-6 and -7 fixes: typecheck, lint, flake8, black, isort and the
+mypy ratchet clean; 334 frontend storefront and integrity tests and 691 backend
+storefront, payment, PayPal, Zeffy, locking and SoD tests pass.
 
 ### W09 second pass — Import members from a spreadsheet — 2026-11-10
 

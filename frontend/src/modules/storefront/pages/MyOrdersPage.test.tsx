@@ -114,6 +114,26 @@ describe('MyOrdersPage', () => {
     expect(mockGetMyOrders).toHaveBeenCalledWith();
   });
 
+  it('tells the member when the department owes them money back', async () => {
+    mockGetMyOrders.mockResolvedValue([
+      {
+        ...unpaidOrder,
+        status: 'paid',
+        paymentStatus: 'paid',
+        amountPaid: '50.00',
+        balanceDue: '0.00',
+        overpaidAmount: '5.00',
+      },
+    ]);
+    renderPage();
+    await screen.findByRole('heading', { name: 'ORD-2026-0001' });
+
+    const terms = screen.getAllByRole('term');
+    const owedIndex = terms.findIndex((term) => term.textContent === 'Owed to you');
+    expect(owedIndex).toBeGreaterThanOrEqual(0);
+    expect(screen.getAllByRole('definition')[owedIndex]).toHaveTextContent('$5.00');
+  });
+
   it('shows the member how a shipped order reaches them, and what it cost to ship', async () => {
     mockGetMyOrders.mockResolvedValue([
       {

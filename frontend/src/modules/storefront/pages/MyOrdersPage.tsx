@@ -209,6 +209,12 @@ const MyOrdersPage: React.FC = () => {
               <dt className="text-theme-text-secondary">Paid</dt>
               <dd className="text-theme-text-primary font-mono">{formatCurrency(Number(order.amountPaid))}</dd>
             </div>
+            {Number(order.overpaidAmount ?? 0) > 0 && (
+              <div className="flex justify-between">
+                <dt className="text-theme-text-secondary">Owed to you</dt>
+                <dd className="text-theme-text-primary font-mono">{formatCurrency(Number(order.overpaidAmount))}</dd>
+              </div>
+            )}
           </dl>
 
           <div className="border-theme-surface-border border-t pt-3">

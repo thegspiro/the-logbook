@@ -383,6 +383,35 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
       }
     });
 
+  /** A PayPal capture applied for more than the balance leaves money that is
+   *  the member's; the server reports how much (W67b-7). */
+  const refundExcess = async () => {
+    if (!order) return;
+    const excess = Number(order.overpaidAmount ?? 0);
+    if (excess <= 0) return;
+    const ok = await confirm({
+      title: `Refund ${formatCurrency(excess)} to ${order.customerName}?`,
+      message: `Records ${formatCurrency(excess)} going back to the member, leaving the order paid in full. Send the money itself the way it came in.`,
+      confirmLabel: `Refund ${formatCurrency(excess)}`,
+      cancelLabel: 'Not now',
+    });
+    if (!ok) return;
+    await withBusy(async () => {
+      paymentErrors.clear();
+      try {
+        await storefrontService.refundOrder(order.id, {
+          amount: excess,
+          reason: 'Refund of an overpayment',
+          notifyMember: true,
+        });
+        toast.success('Refund recorded');
+        return true;
+      } catch (err: unknown) {
+        return refuse(paymentErrors, err, 'Could not record the refund');
+      }
+    });
+  };
+
   const cancelled = order?.status === StoreOrderStatus.CANCELLED;
 
   const submitWith =
@@ -515,6 +544,25 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                 {order.cancellationReason ? ` — ${order.cancellationReason}` : ''}.
                 {Number(order.amountPaid) > 0 &&
                   ` ${formatCurrency(Number(order.amountPaid))} is still recorded as paid; use Refund to record it going back.`}
+              </div>
+            )}
+
+            {Number(order.overpaidAmount ?? 0) > 0 && (
+              <div className="alert-warning flex flex-wrap items-center justify-between gap-3 text-sm">
+                <span>
+                  {formatCurrency(Number(order.overpaidAmount))} more than the order total has been recorded. It is owed
+                  back to the member.
+                </span>
+                <button
+                  type="button"
+                  className="btn-secondary btn-md"
+                  disabled={busy}
+                  onClick={() => {
+                    void refundExcess();
+                  }}
+                >
+                  Refund the {formatCurrency(Number(order.overpaidAmount))} excess
+                </button>
               </div>
             )}
 
