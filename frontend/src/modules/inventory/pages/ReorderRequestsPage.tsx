@@ -365,10 +365,15 @@ const ReorderFormModal: React.FC<{
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <span className={lbl}>Inventory item</span>
+            <label htmlFor="reorder-link-item" className={lbl}>
+              Inventory item
+            </label>
             {/* Receiving posts stock onto this item, and the server refuses a
-                receipt for an order with none (W41-5). */}
+                receipt for an order with none (W41-5). The label names the
+                picker's own input; a placeholder alone vanishes as it is typed
+                into (forms review F-8). */}
             <InventoryItemPicker
+              controlProps={{ id: 'reorder-link-item' }}
               value={f.item_id || undefined}
               placeholder="Search inventory to link…"
               onChange={(id, name) =>
@@ -800,35 +805,29 @@ const WorkflowActionModal: React.FC<{
         )}
         {action === 'receive' && request && !request.item_id && (
           // Receipts post stock onto a linked item, and the server refuses one
-          // without (W41-5); link it here first. The group is the focus target
-          // for its error: the picker has no single input to name.
-          <div
-            id={ACTION_FIELDS.item.id}
-            role="group"
-            aria-labelledby={`${ACTION_FIELDS.item.id}-label`}
-            aria-describedby={fieldErrors.errors.item ? `${ACTION_FIELDS.item.id}-error` : undefined}
-            tabIndex={-1}
-            className="focus:outline-none"
-          >
-            <span id={`${ACTION_FIELDS.item.id}-label`} className={lbl}>
-              Inventory item{' '}
-              <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
-                *
-              </span>
-            </span>
-            <InventoryItemPicker
-              value={linkItemId || undefined}
-              placeholder="Search inventory to link…"
-              onChange={(id) => {
-                setLinkItemId(id ?? '');
-                fieldErrors.setError('item', null);
-              }}
-            />
-            {fieldErrors.errors.item && (
-              <p id={`${ACTION_FIELDS.item.id}-error`} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
-                {fieldErrors.errors.item}
-              </p>
-            )}
+          // without (W41-5); link it here first. The picker hands FormField's
+          // wiring to its own search input, so the label, the required state,
+          // the error and focus all sit on the control a member types into.
+          <div>
+            <FormField
+              id={ACTION_FIELDS.item.id}
+              label="Inventory item"
+              required
+              labelClassName={lbl}
+              error={fieldErrors.errors.item}
+            >
+              {(field) => (
+                <InventoryItemPicker
+                  controlProps={field}
+                  value={linkItemId || undefined}
+                  placeholder="Search inventory to link…"
+                  onChange={(id) => {
+                    setLinkItemId(id ?? '');
+                    fieldErrors.setError('item', null);
+                  }}
+                />
+              )}
+            </FormField>
             <p className="text-theme-text-muted mt-1 text-xs">
               This order isn&apos;t linked to an inventory item yet. Choose the item the stock goes onto; the order
               stays linked to it.

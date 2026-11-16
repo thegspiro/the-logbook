@@ -242,7 +242,10 @@ export const SkillsTestingPage: React.FC = () => {
             aria-hidden="true"
           />
           <input
-            type="text"
+            type="search"
+            // The placeholder vanishes as a member types, so the box is named on
+            // its own (forms review F-8).
+            aria-label={activeTab === 'available' ? 'Search available tests' : 'Search your results'}
             placeholder={activeTab === 'available' ? 'Search available tests...' : 'Search your results...'}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
