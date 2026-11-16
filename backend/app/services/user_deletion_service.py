@@ -191,6 +191,43 @@ async def release_user_references(db: AsyncSession, user_id: str) -> int:
     return released
 
 
+@lru_cache(maxsize=1)
+def _all_user_references() -> _ReferenceSet:
+    """Every column that refers to ``users.id``, whatever its delete action."""
+    _register_all_models()
+    found: list[tuple[str, str]] = []
+    for table in Base.metadata.sorted_tables:
+        for column in table.columns:
+            if any(_targets_user_id(fk) for fk in column.foreign_keys):
+                found.append((table.name, column.name))
+    return tuple(sorted(found))
+
+
+async def count_user_references(db: AsyncSession, user_id: str) -> int:
+    """How many rows anywhere refer to *user_id*, in one statement.
+
+    For a caller that deletes a member only when nothing records them: a
+    former member an import created and whose imported rows were all undone.
+    The member's own row is not counted, even where ``users`` refers to
+    itself (a status changed by, an archived by).
+    """
+    branches = []
+    for table_name, column_names in _group_by_table(_all_user_references()).items():
+        table = Base.metadata.tables[table_name]
+        condition = or_(*(table.c[name] == user_id for name in column_names))
+        if table_name == _USER_TABLE:
+            condition = condition & (table.c.id != user_id)
+        branches.append(
+            select(func.count().label("row_count")).select_from(table).where(condition)
+        )
+    if not branches:
+        return 0
+    total = 0
+    for (row_count,) in (await db.execute(union_all(*branches))).all():
+        total += int(row_count or 0)
+    return total
+
+
 # Words a plain underscore-to-space rendering would get wrong in a label.
 _LABEL_WORDS = {
     "ip": "IP",

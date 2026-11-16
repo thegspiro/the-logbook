@@ -579,3 +579,37 @@ class StaffingUnfilledUpdate(BaseModel):
         if any(v is not None and len(str(v)) > 36 for v in value.values()):
             raise ValueError("A member id is too long.")
         return value
+
+
+# Undo
+
+
+class UndoKeptRecord(BaseModel):
+    kind: str
+    record_id: str
+    label: str
+
+
+class UndoStepPreview(BaseModel):
+    committed: bool
+    # The later steps that must be undone first, by name.
+    blocked_by: List[str]
+    removable: int
+    kept_total: int
+    # The first few kept records; kept_total is the whole count.
+    kept: List[UndoKeptRecord]
+    already_gone: int
+
+
+class UndoPreview(BaseModel):
+    steps: Dict[str, UndoStepPreview]
+    members_created: int
+
+
+class UndoResult(BaseModel):
+    step: str
+    removed: int
+    kept: int
+    members_removed: int
+    members_kept: int
+    preview: UndoPreview
