@@ -1,5 +1,23 @@
 # Script currency
 
+## Edited 2026-11-16 (not re-recorded)
+
+The November 15 – 16 changes made screens named in four scripts disappear, so
+the narration and SCREEN cues were rewritten and each carries a 2026-11-16
+production note. Nothing was re-recorded or re-timed. See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-15--16-2026).
+
+| Script   | What changed                                                                                                                                                              |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 04 Chief | Create Event → Training now switches to the training-event form; "Training details (optional)" and "Continuing Education" default gone; Counts toward attendance cue      |
+| 05       | **Require sign-off** (was Require instructor confirmation) on Training Info, step 2 (was step 3); Counts toward attendance and Edit training details; the screenshot note |
+| 16       | Training events beat rewritten for the one form and the **Training details** card                                                                                         |
+| 12       | Forensics tab → **Integrity & Audit** section; production note on the election header, section addresses and the Elections pages row                                      |
+
+**Flagged, not edited:** 05, 09 and 16 could add a beat on **Course Links** and
+the **Evaluated Calls** requirement type; 04 and 06 on Needs You's two-month
+window for mandatory events. No script quotes a label these change.
+
 ## Flagged 2026-11-11 (not edited)
 
 Worth a beat or a re-record note when next touched: 03 IT and 04 Chief
@@ -2754,7 +2772,8 @@ gap is fixed; the claim as scripted is now accurate in full. Take it as
 written.
 
 **Optional aside, `THE ELIGIBILITY ROSTER` (14:00 – 15:30):** the roster is
-now linkable — `/elections/<id>?tab=eligibility` — worth ten seconds when
+now linkable — `/elections/<id>/eligibility` since 2026-11-15 (it was
+`?tab=eligibility`, which still forwards) — worth ten seconds when
 the narration says "send this to your co-officer."
 
 ### 06 — The Member Experience

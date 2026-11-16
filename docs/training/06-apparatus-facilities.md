@@ -365,7 +365,11 @@ with their EVOC level and certification dates.
 
 ![The Operators tab: certified operators by name, with EVOC level and certification dates](./images/06-22-apparatus-operators-tab.png)
 
-To add one, select **Add Operator** and pick the **Member** from the list. Add
+To add one, select **Add Operator** and pick the **Member** from the list. The
+list offers only current members — active or probationary _(2026-11-16)_;
+former, separated and imported historical members are left out, and saving one
+is refused with "Only current members can be added as operators". An operator
+already recorded keeps their entry, still editable, if they later leave. Add
 their **EVOC Certification Level**, certification and expiry dates, license
 details, any restrictions and notes. Adding, editing or removing operators
 needs full apparatus management.

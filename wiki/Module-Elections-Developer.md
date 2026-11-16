@@ -18,28 +18,51 @@ Attention** (drafts and overdue elections), **Completed** and **Total Votes
 Cast** — above the election cards. A card for an election closed early shows
 the real close time (`closed_at`), not the scheduled end.
 
-### Election Detail Tabs
+### Election Detail Sections _(2026-11-15, #4297)_
 
-`/elections/:electionId?tab=<id>` addresses each workflow tab. The active tab
-is derived from the URL (tab changes use `replace`, so Back leaves the page
-rather than stepping through tabs); an unknown or currently hidden value falls
-back to the first tab the viewer may see.
+`/elections/:electionId` is the **Overview**; `/elections/:electionId/<section>`
+opens one section. A single splat route (`/elections/:electionId/*`, rendered
+through `ElectionDetailRoute`) serves every section, so switching sections does
+not remount the page or lose a vote receipt. Section changes push history, so
+Back steps through them. A section the viewer may not open, or an unknown one,
+falls back to the Overview with `replace`, so Back does not loop.
 
-| `?tab=`       | Label        | Visible to                                         |
-| ------------- | ------------ | -------------------------------------------------- |
-| `ballot`      | Ballot       | Managers, unless cancelled                         |
-| `nominations` | Nominations  | Everyone during nominations; managers in draft     |
-| `candidates`  | Candidates   | Managers                                           |
-| `eligibility` | Eligibility  | Managers, unless cancelled                         |
-| `attendance`  | Attendance   | Managers, in draft, nominations or open            |
-| `overrides`   | Overrides    | Managers, unless cancelled                         |
-| `proxies`     | Proxy Voting | Managers, unless cancelled                         |
-| `voting`      | Cast Vote    | Everyone, while open                               |
-| `results`     | Results      | Closed elections, or `results_visible_immediately` |
+**Old links:** `ElectionDetailRoute` permanently forwards `?tab=<id>` to
+`/elections/:id/<id>`, keeping other query parameters and the hash. Emailed
+nomination links (`?tab=nominations`) depend on this, and the backend still
+sends them. An unknown tab, including the old `?tab=overview`, opens the
+Overview.
 
-The tabs follow the WAI-ARIA Tabs pattern: arrow keys, Home and End move
-between tabs, and each `tabpanel` is labelled by its tab. The lifecycle
-stepper is a named list with `aria-current="step"` on the current stage.
+The single visibility rule is `visibleElectionSections` in
+`modules/elections/electionSections.ts`:
+
+| Path segment  | Label             | Visible to                                         |
+| ------------- | ----------------- | -------------------------------------------------- |
+| _(none)_      | Overview          | Everyone                                           |
+| `ballot`      | Ballot            | Managers, unless cancelled                         |
+| `nominations` | Nominations       | Everyone during nominations; managers in draft     |
+| `candidates`  | Candidates        | Managers                                           |
+| `eligibility` | Eligibility       | Managers, unless cancelled                         |
+| `attendance`  | Attendance        | Managers, unless cancelled                         |
+| `overrides`   | Overrides         | Managers, unless cancelled                         |
+| `proxies`     | Proxy Voting      | Managers, unless cancelled                         |
+| `voting`      | Cast Vote         | Everyone, while open                               |
+| `results`     | Results           | Closed elections, or `results_visible_immediately` |
+| `integrity`   | Integrity & Audit | Managers, while open or closed                     |
+
+`ElectionWorkflowTabs` is a `<nav>` of links with `aria-current="page"` (no
+longer the WAI-ARIA Tabs pattern), Overview first; members get no section
+links. `ElectionHeaderCard` renders the lifecycle stepper (a named list with
+`aria-current="step"`), the voting window and time left, turnout when the API
+returns it, the winner rule, and the section links. Open Election, Close
+Nominations, Close Election and Certified Results (PDF) moved from the controls
+panel to the header beside the status badge. Integrity & Audit loads its report
+on arrival, and the integrity alert banner links to it.
+
+`ElectionsAreaNav` adds the **Elections pages** row (All Elections, Meeting
+Attendance, Settings; short labels on a phone) to `ElectionsPage`,
+`ElectionAttendancePage` and `ElectionsSettingsPage` for `elections.manage`
+holders.
 
 ### Ballot Voting Page (`/ballot`)
 

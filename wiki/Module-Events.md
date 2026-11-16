@@ -220,6 +220,13 @@ days), so they can extend or close it. Each series is reminded once
 **Needs You** band ("Events needing your response") at the top. The band's
 overflow link narrows the grid to what needs a response.
 
+- **Mandatory RSVP window** _(2026-11-16, #4338)_ — an unanswered mandatory
+  event is urgent (`action`) only when it starts within
+  `EVENT_MANDATORY_RSVP_WINDOW_DAYS` (60) or its RSVP deadline is within 48
+  hours, so a recurring mandatory series no longer floods the band with a
+  year of occurrences. An unparseable start is treated as inside the window.
+  `getEventUrgency` in `utils/eventHelpers.ts` is the one rule for the band and
+  the cards.
 - **Missed mandatory events** — `GET /events/missed-mandatory` supplies the
   mandatory events the caller did not attend, for the band's "missed" rows. A
   member who joined after an event ran, or who was not in its audience, is not

@@ -104,7 +104,11 @@ depends on when you actually checked in and out.
 
 **The Needs You band.** Events that need something from you sit in a **Needs
 You** band at the top of the list — an RSVP that is due, or a check-in that is
-open now. The band clears itself as you respond. A member who joined after an
+open now. The band clears itself as you respond. A **mandatory** event you have
+not answered appears there only once it is **within two months** of starting
+_(2026-11-16)_, so a weekly mandatory drill series no longer fills the band with
+every drill for the year ahead; each one surfaces about two months out. One
+whose RSVP deadline is less than two days away is listed whenever it starts. A member who joined after an
 event ran, or who was not in its audience, is never listed as having missed
 it.
 

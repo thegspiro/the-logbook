@@ -81,32 +81,60 @@ as **View elections** and **Manage elections**.
 | **Election Settings**   | Proxy voting, voter eligibility, features, defaults, test ballots | Roles that can manage elections    |
 | The emailed ballot page | Voting from the link in a ballot email                            | Anyone holding a valid ballot link |
 
-To reach **Election Settings**, select the gear button at the top of the
-Elections list.
+**The Elections pages row** _(2026-11-15)_. Roles that can manage elections
+see a row of links at the top of the Elections list, Meeting Attendance and
+Election Settings: **All Elections**, **Meeting Attendance** and **Settings**.
+On a phone they read **Elections**, **Attendance** and **Settings**, so all
+three fit. The gear button and the Meeting Attendance button that used to sit
+in the list's header are gone. Members do not see the row, because the other
+two pages are for managers only.
 
 ![Elections list showing elections with status badges](./images/14-01-elections-list.png)
 
-### Tabs on an election's page
+### An election's page: the header, the Overview and the sections _(2026-11-15)_
 
-Each tab on an election's page has its own web address. You can send a fellow
-officer a link straight to a tab, and the browser's Back button steps back
-through tab changes.
+On a tablet or computer, every election's page opens with a **header** that
+shows:
 
-| Tab              | What it shows                                                               | Who sees it                                                                  |
-| ---------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| **Ballot**       | The ballot items, in order                                                  | Officers                                                                     |
-| **Nominations**  | The nomination form and nominations so far                                  | Everyone while nominations are open; officers on a draft                     |
-| **Candidates**   | Every candidate, including pending nominations                              | Officers                                                                     |
-| **Eligibility**  | The election's voter rules, and who will and will not get a ballot, and why | Officers                                                                     |
-| **Attendance**   | Who is checked in at the linked meeting                                     | Officers, until the election closes                                          |
-| **Overrides**    | Members let in to vote despite the normal rules                             | Officers                                                                     |
-| **Proxy Voting** | Proxy authorizations                                                        | Officers                                                                     |
-| **Cast Vote**    | Your ballot                                                                 | Everyone, while voting is open                                               |
-| **Results**      | The results                                                                 | Everyone, once the election closes (or during voting if live results are on) |
+- the **stages** — Draft, Nominations, Voting Open, Closed — with the current
+  one marked;
+- when voting opens or closes, and the time left;
+- **Turnout**, when it is available (members do not see it while voting is
+  open);
+- the **Winner** rule (it is no longer repeated in the details card);
+- the button that moves the election to its next stage, beside the status
+  badge: **Open Election**, **Close Nominations**, **Close Election**, or
+  **Certified Results (PDF)** once it is closed;
+- for managers, links to the page's **sections**.
 
-"Officers" here means roles that can manage elections.
+The election's own address opens the **Overview**: the details card with
+every other control, the runoff chain, publishing, live turnout and the
+paper-ballot batches. Each section has its own address, ending in its name —
+for example `/elections/<id>/results` — so you can send a fellow officer, or
+the membership after the vote, a link straight to it. The browser's Back
+button steps back through the sections you opened. Old links ending in
+`?tab=nominations` and the like, including the ones in emails already sent,
+still open the right section.
 
-You can move between the tabs with the arrow keys, Home and End.
+| Section               | Address ends in | What it shows                                                               | Who sees it                                                                  |
+| --------------------- | --------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Overview**          | _(nothing)_     | The details, controls, runoff chain, publishing and paper batches           | Everyone                                                                     |
+| **Ballot**            | `/ballot`       | The ballot items, in order                                                  | Officers                                                                     |
+| **Nominations**       | `/nominations`  | The nomination form and nominations so far                                  | Everyone while nominations are open; officers on a draft                     |
+| **Candidates**        | `/candidates`   | Every candidate, including pending nominations                              | Officers                                                                     |
+| **Eligibility**       | `/eligibility`  | The election's voter rules, and who will and will not get a ballot, and why | Officers                                                                     |
+| **Attendance**        | `/attendance`   | Who is checked in at the linked meeting                                     | Officers                                                                     |
+| **Overrides**         | `/overrides`    | Members let in to vote despite the normal rules                             | Officers                                                                     |
+| **Proxy Voting**      | `/proxies`      | Proxy authorizations                                                        | Officers                                                                     |
+| **Cast Vote**         | `/voting`       | Your ballot                                                                 | Everyone, while voting is open                                               |
+| **Results**           | `/results`      | The results                                                                 | Everyone, once the election closes (or during voting if live results are on) |
+| **Integrity & Audit** | `/integrity`    | The integrity check, voided votes and unusual patterns                      | Officers, while voting is open and after it closes                           |
+
+"Officers" here means roles that can manage elections. Members get no section
+links: their Overview shows whichever of nominations, voting and results
+applies. A section you cannot open, or that does not exist, opens the
+Overview instead. A closed election no longer jumps straight to Results;
+managers land on the Overview, and members' Overview includes the results.
 
 ---
 
@@ -666,7 +694,8 @@ When the election is ready:
 
 1. Check every ballot item and candidate. **Preview Ballot** shows the ballot
    as voters will see it.
-2. Select **Open Election**. The status changes from Draft to Open, and the
+2. Select **Open Election**, at the top of the page beside the status badge.
+   The status changes from Draft to Open, and the
    voter roll is frozen (see below). Voting starts at once, even if the
    scheduled start has not arrived.
 3. **Opening by hand sends no ballots.** Members can vote on the **Cast Vote**
@@ -1141,7 +1170,7 @@ you can make full screen and project in the room:
 
 **Who can do this:** roles that can manage elections.
 
-1. Select **Close Election** and confirm. The buttons read **Close election**
+1. Select **Close Election**, at the top of the page, and confirm. The buttons read **Close election**
    and **Keep it open**. The dialog warns that voting ends at once, and says
    what undoing it would take:
    - **Anonymous election:** closing is final once any vote is recorded; a
@@ -1318,12 +1347,14 @@ Each vote gets a **receipt**, shown when the voter submits. A receipt:
 If an officer voided the vote, the receipt reads "This vote was voided by an
 officer".
 
-### Forensics & Integrity
+### Integrity & Audit
 
 **Who can do this:** roles that can manage elections.
 
-At the bottom of the election's page, open the **Forensics & Integrity**
-section:
+Open the election's **Integrity & Audit** section _(2026-11-15; it was the
+**Forensics & Integrity** panel at the bottom of the page, opened by a
+toggle)_. The report loads when you arrive, and the integrity alert banner
+links to it:
 
 - **Run Check** checks every vote's tamper-evident seal and reports PASS or a
   problem. It runs only when you select it.
@@ -1378,8 +1409,8 @@ report, it is your full defence if the result is disputed.
 
 **Who can do this:** roles that can manage elections.
 
-Open **Elections** and select the gear button. Election Settings has six
-sections.
+Open **Elections** and select **Settings** in the Elections pages row
+_(2026-11-15; it was a gear button)_. Election Settings has six sections.
 
 ### Proxy Voting
 
@@ -1638,7 +1669,7 @@ Results & Publishing panel sends it again, to whoever presses it. She forwards i
 | A proxy holder cannot vote for the other member       | Check the authorization exists on **Proxy Voting** and the election is open. Then use **Voting for** on **Cast Vote**                                                                                             |
 | Results do not show after closing                     | Reload the page. Another officer may have rolled the election back to open                                                                                                                                        |
 | The vote count does not match attendance              | Check for proxy votes and overrides (members not on the attendance list)                                                                                                                                          |
-| **Run Check** shows a problem                         | Open the full **Forensics & Integrity** section, and contact your system administrator                                                                                                                            |
+| **Run Check** shows a problem                         | Open the **Integrity & Audit** section, and contact your system administrator                                                                                                                                     |
 | No runoff was created                                 | Check **Enable Automatic Runoffs** was on and the winning rule was right                                                                                                                                          |
 | A paper batch does not change the results             | It is probably **Pending**. It needs the set number of other officers to select **Attest Count**                                                                                                                  |
 | **Attest Count** is missing or refused                | The recorder cannot confirm their own batch, each officer confirms once, and it works only while voting is open                                                                                                   |

@@ -33,7 +33,7 @@ an open election, live turnout percentage climbing.]**
 
 **[SCREEN: Elections list page, then a quick montage: Ballot Builder,
 Eligibility Roster, the public ballot on a phone, the Results page, the
-Forensics tab.]**
+Integrity & Audit section.]**
 
 > "This is the complete guide. We'll create an election from scratch, build the
 > ballot, configure who's allowed to vote — down to individual ballot items —
@@ -682,7 +682,17 @@ verified, status PASS"]**
 
 ### THE FORENSICS REPORT (34:30 – 36:00)
 
-**[SCREEN: The Forensics tab — walk each section]**
+**[SCREEN: The election's **Integrity & Audit** section (address ending
+`/integrity`) — walk each section]**
+
+**[PRODUCTION NOTE — 2026-11-16. Elections pages were reorganised (#4297,
+merged 2026-11-15): each election has a header with the stages, voting window,
+turnout and winner rule, and the Open / Close Nominations / Close Election /
+Certified Results buttons beside the status badge. Sections are links with
+their own addresses (`/elections/<id>/results`), not tabs. The old Forensics &
+Integrity panel is now the **Integrity & Audit** section and loads on arrival.
+Election Settings is reached from the **Elections pages** row, not a gear.
+Re-shoot any footage of the tabs, the gear or the Forensics toggle.]**
 
 > "For a dispute, pull Forensics — one report with everything: the integrity
 > results; every soft-deleted vote with who deleted it and why — votes are
@@ -1192,7 +1202,7 @@ narrow help popover.]**
 **Length:** 120 seconds
 **Audience:** Leadership, election admins
 
-**[SCREEN: The Forensics tab]**
+**[SCREEN: The Integrity & Audit section]**
 
 > "'The count is wrong.' 'Someone voted twice.' Don't argue — investigate.
 > One report answers it."

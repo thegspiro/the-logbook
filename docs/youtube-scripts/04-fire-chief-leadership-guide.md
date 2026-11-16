@@ -147,15 +147,23 @@ event participation, member activity]**
 > set the start and end time. Remember, the system handles timezone conversion
 > automatically, so enter times in your local timezone."
 
-**[SCREEN: With Training chosen, expand **Training details (optional)** — course,
-category, requirement.]**
+**[SCREEN: With Training chosen, the form switches to the four-step
+training-event form; show its **Training Info** step — Course (No course yet /
+From the Course Library / One-off course name), category, requirement.]**
 
-> "Choosing Training opens an optional **Training details** section — the
-> course, category and requirement this drill counts toward. When the organizer
+> "Choosing Training switches you to the training-event form — the same one
+> Training Administration uses. Its **Training Info** step holds the course,
+> category and requirement this drill counts toward. When the organizer
 > finalizes attendance, every member who checked in is credited on their
-> training record. Leave the details blank and it's filed under the event name
-> as Continuing Education. And training events don't count toward admin hours
+> training record. Leave the course as **No course yet** and records are filed
+> under the event's title. And training events don't count toward admin hours
 > — they count toward training."
+
+**[PRODUCTION NOTE — 2026-11-16. Rewritten for the one training-event form
+(#4347, merged 2026-11-16): the "Training details (optional)" group on Create
+Event is gone, and the old "Continuing Education" default is now "No course
+yet (filed under the event title)" with a training type you pick. Saving
+training details needs **Manage all events**. New footage needed.]**
 
 **[SCREEN: Set date and time fields]**
 
@@ -317,8 +325,8 @@ open **Check-ins → Card Check-ins**.]**
 
 ### DRILL ATTENDANCE THAT COUNTS, AND THE CHIEF'S OVERRIDE (added 2026-11-05)
 
-**[SCREEN: A Training event's form, **Connect to Requirements & Programs** with a
-tick box for a session attendance requirement; then the event list card with
+**[SCREEN: The training-event form's **Training Info** step, **Counts toward
+attendance** with a tick box for a session attendance requirement; then the event list card with
 the **Counts toward attendance** badge beside **Mandatory**.]**
 
 > "Some drills are about turning up, not hours logged — 'attend sixty percent of

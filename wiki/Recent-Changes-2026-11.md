@@ -5,6 +5,43 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 15 – 16, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-15--16-2026).
+
+- **Training events have one form.** **Create Session** in Training
+  Administration and **Create Event** with the type **Training** open the same
+  four-step form. On the event page, the **Training details** card shows what
+  the session counts toward; **Edit training details** changes it. **Require
+  instructor confirmation** is now called **Require sign-off**. Saving training
+  details needs the **Manage all events** permission. See
+  [Training](Module-Training).
+- **Elections pages are reorganised.** Managers get a row of links — **All
+  Elections**, **Meeting Attendance**, **Settings** — in place of the gear
+  button. Each election opens with a header showing its stage, when voting
+  closes, turnout, the winner rule and the button for the next step. Each
+  section (Ballot, Candidates, Results, Integrity & Audit, …) has its own web
+  address you can send to someone; old links still work. See
+  [Elections](Module-Elections).
+- **Course Links.** **Training Admin → Curriculum → Course Links** finds
+  training records typed with a course name that is not in the Course Library,
+  suggests the matching course, and links them when an officer confirms, so
+  they count toward course and certification requirements.
+- **Evaluated Calls** is a new requirement type: the calls recorded on
+  submitted shift evaluations. The existing **Calls** type still counts shift
+  reports.
+- **Shift evaluations:** the evaluations a shift asks for are fixed once it
+  ends; taking a member off a shift or marking them No-show takes back its
+  evaluation credit; a form still in use cannot be deactivated.
+- **Training CSV imports** now show **Imported** as their source.
+- **Events:** an unanswered mandatory event appears in **Needs You** only
+  within two months of its start.
+- **Apparatus:** only current members can be added as operators.
+- **Phones:** the status bar matches the app's navigation bar for the theme
+  you chose in the app.
+- **Security:** changing your own sign-in email asks you to confirm it is you.
+
 ## Recent changes: November 14, 2026 (PayPal)
 
 The engineering audit is

@@ -385,12 +385,21 @@ the CSV and PDF buttons]**
 ### TRAINING EVENTS (8:15 – 9:15)
 
 > "Training and Events are connected. When you create an event with the type
-> 'Training,' fill in the **Training details** section that appears on the form:
-> the course, category and requirement it counts toward. Once the event exists,
-> you change those on its **Requirements & Programs** card."
+> 'Training,' the form switches to the training-event form — the same four
+> steps Training Administration uses. Its **Training Info** step holds the
+> course, category and requirement it counts toward. Once the event exists,
+> **Edit training details** on its **Training details** card opens the same
+> step."
 
-**[SCREEN: Events → Create Event, type "Training", the "Training details
-(optional)" section with a course and a requirement picked.]**
+**[SCREEN: Events → Create Event, type "Training", the switch to the
+training-event form, then its Training Info step with a course from the Course
+Library and a requirement picked.]**
+
+**[PRODUCTION NOTE — 2026-11-16. Rewritten for the one training-event form
+(#4347). The "Training details (optional)" section and the Requirements &
+Programs card are gone; the event page shows a read-only **Training details**
+card. Saving training details needs **Manage all events**. New footage
+needed.]**
 
 > "After the event, **Finalize Attendance** — or **End Event** — writes a
 > training record for every member who checked in, for the time they actually
@@ -399,10 +408,10 @@ the CSV and PDF buttons]**
 > reopened, set their times with **Edit Times**, and finalize again."
 
 **[SCREEN: The event page after Finalize Attendance on a Training event — the
-toast naming the records written, and the Requirements & Programs card.]**
+toast naming the records written, and the Training details card.]**
 
 > "If the session was set to need an officer's confirmation, the attendance comes
-> to you instead: **Review and approve** on the event's Requirements & Programs
+> to you instead: **Review and approve** on the event's Training details
 > card opens the approval page, where you can adjust anyone's minutes before you
 > record it. Until then members see the class as **In Progress**."
 
@@ -411,15 +420,15 @@ toast naming the records written, and the Requirements & Programs card.]**
 
 **[CALLOUT: "Event attendance → automatic training credit"]**
 
-**[SCREEN: Create Training Session → Connect to Requirements & Programs, a
-Session Attendance requirement ticked. Then the event card with the "Counts
+**[SCREEN: The training-event form's Training Info step → Counts toward
+attendance, a Session Attendance requirement ticked. Then the event card with the "Counts
 toward attendance" badge.]**
 
 > "If you run a Session Attendance requirement — 'attend sixty percent of the
 > drills' — a drill only counts if it's linked. So when you create the session,
-> tick the requirement under **Connect to Requirements and Programs**, for a single
-> session or a recurring series. Forgot? Change it from the **Counts toward
-> attendance** editor on the event page, even after attendance is finalized.
+> tick the requirement under **Counts toward attendance**, for a single
+> session or a recurring series. Forgot? Select **Edit training details** on
+> the event page and change the ticks, even after attendance is finalized.
 > Members see a **Counts toward attendance** badge on the event."
 
 **[PRODUCTION NOTE — 2026-11-05. New beat, about 25 seconds; re-time Chapter 4.

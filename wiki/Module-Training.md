@@ -139,7 +139,8 @@ fall short. Certification-style requirements now match records by the stored
 ### Types, frequency and targeting
 
 A requirement has a `requirement_type` (hours, courses, certification, shifts,
-calls, skills_evaluation, checklist, knowledge_test, session_attendance), a `frequency` (annual,
+calls, skills_evaluation, checklist, knowledge_test, evaluated_shifts,
+transports, refusals, evaluated_calls, session_attendance), a `frequency` (annual,
 biannual, quarterly, monthly, one_time) and a `due_date_type`
 (calendar_period, rolling, certification_period, fixed_date). `due_date` only
 means anything for `fixed_date`: create and update clear it for every other
@@ -211,6 +212,34 @@ checklist and knowledge test) is limited to legacy records
 (`name_match_until`) and compares stored match keys, not text; see
 [Compliance](Module-Compliance#one-definition-of-who-is-graded-and-how-2026-10-05).
 
+### Course Links: records that name no course _(2026-11-16, #4345)_
+
+Compliance credits a course or certification requirement only through a
+record's `course_id`. Records with a free-text name, and imported records whose
+name matched no library course, have none, and name matching is switched off
+for requirements created since 2026-10 (`name_match_until`). **Training Admin →
+Curriculum → Course Links** (`CourseLinksPanel`, a tab inside `/training/admin`)
+lists those names and lets an officer link each to a library course.
+
+- **Suggestions only** (owner decision, 2026-11-15). Compliance grading does
+  not fuzzy-match; nothing is linked until an officer confirms.
+- **Grouping.** `name_key` (in `app/services/training_course_links.py`) is the
+  provider-course normalizer followed by `training_match_key`, the key
+  certification grading uses, so case, punctuation, a trailing provider id and
+  a "CAPCE" prefix fold into one name. The suggestion comes from
+  `SuggestionCandidates` (0.85 similarity), the provider-course mapping's
+  matcher.
+- **Writes.** A link sets `course_id`, the course's category
+  (`course_category_id`) and training type on every record carrying the name
+  with `course_id IS NULL`, so a second link is a no-op and a hand-picked course
+  is kept. The spellings are read from the database, not the client; the course
+  must be active and in the caller's org (XC-1). A qualification-granting course
+  syncs through `QualificationService`. Both link endpoints are audited.
+- **Endpoints** (all `training.manage`): `GET /training/course-links`
+  (`search`, `offset`, `limit`), `POST /training/course-links` `{key,
+course_id}`, `POST /training/course-links/link-suggested`. Snake_case like the
+  rest of the module. No migration; no undo endpoint.
+
 ### Freshness window
 
 `recency_days` demands that the completion itself be recent ("CPR taken within
@@ -267,6 +296,13 @@ forecast print N/A where a requirement does not apply.
   row (Fire, EMS, Hazmat, Rescue, …); categories carry an optional
   `registry_code` for NREMT NCCR areas, and category-based compliance (NCCR
   hours, the compliance matrix) reads it.
+- **Source.** `record_sources` labels a record by its provider, "Imported", or
+  The Logbook, reading the `imported_source_records` ledger. Since 2026-11-15
+  (#4344) both Training CSV importers (`POST /training/import/confirm` and
+  `POST /training/records/import-csv`) ledger each record under source system
+  `logbook.training-csv-import`, with the record's own id as `source_id`, in the
+  same transaction. Records they wrote earlier have no ledger row and read The
+  Logbook (see `docs/KNOWN_LIMITATIONS.md`).
 - **Start time.** `start_time` is stored on self-reported submissions and on
   the record an approval creates. A record without one reads blank rather than
   a guessed time.
@@ -846,6 +882,37 @@ offline queue covers an evaluation run with **no connectivity at all** (see
   candidate's own drill notes, not the department's record to hold back
 
 ---
+
+## Shift Evaluations: credit and the frozen requirement list
+
+A submitted shift evaluation credits program requirements of type
+`evaluated_shifts` (one per evaluation), `transports`, `refusals` and, since
+2026-11-15 (#4314, migration `9d044fc1d81b`), `evaluated_calls`, which reads
+`statistics["calls"]`. `evaluated_calls` reuses the `required_calls` target
+column; every reader of that column for the `calls` type checks the type first,
+and `calls` stays fed by shift reports only, so nothing is counted twice. The
+shared table is `EVALUATION_REQUIREMENT_TARGETS` in
+`app/services/shift_evaluation_rules.py`.
+
+- **Frozen at shift end** (#4312, migration `611204dcf8d1`). After a department
+  shift ends, `ShiftEvaluationService._requirements` stores each crew member's
+  requirements in `shifts.evaluation_requirements` (nullable JSON, NULL = not
+  stored yet) on the first read; before it ends the list is computed live
+  (`_live_requirements`). Crew is always read live; forms are reloaded by id,
+  org-scoped. Close-out passes `store=False` so it does not commit inside its
+  shift lock; its own commit saves the value.
+- **Credit re-sync** (#4305). `sync_credit` credits a department-shift
+  evaluation only while its member holds a worked seat
+  (`WORKING_ASSIGNMENT_STATUSES`); `SchedulingService.update_assignment` and
+  `delete_assignment` re-sync. `update_training_requirement` calls
+  `sync_credit_for_requirement` when `requirement_type` or
+  `evaluation_excludes_lowest_rating` changes, revoking credit when the new
+  type takes none. Open: an outside entry moved to a non-evaluating agency, and
+  a combined evaluation whose scope shrinks (`docs/KNOWN_LIMITATIONS.md`).
+- **Forms in use** (#4302). `update_template` refuses `is_active: false` while
+  a program or the general-form setting names the form; an inactive form is
+  refused as a new general form or on program create/update (a program already
+  holding one keeps it). Existing 400s; no API shape change.
 
 ## Shift Completion Reports
 

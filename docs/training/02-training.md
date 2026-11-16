@@ -231,15 +231,22 @@ record for you.
 3. **Search courses** filters by course name. **Type** filters by training
    type. Both narrow the years and the lists together.
 
+4. A record **with no completion date** is grouped under **No completion date**,
+   above the years, whatever you filter by. This includes a record still waiting
+   for approval and a completed record imported without a date; each row shows
+   its own status. (The group was headed "Awaiting approval" before 2026-10-21.)
+
 _Added 2026-11-10._ **Where a record came from.** Training lists, the print page
 and the individual CSV and PDF exports say whether a record was **synced from a
-training provider** (for example "Target Solutions"), written by the **Historical
-Data Import** ("Imported"), or entered in The Logbook. The CSV adds a **Source**
-column at the end; the PDF prints it under the course name. Records added by the
-older CSV importers leave no mark and read "The Logbook". 4. A record **with no completion date** is grouped under **No completion date**,
-above the years, whatever you filter by. This includes a record still waiting
-for approval and a completed record imported without a date; each row shows
-its own status. (The group was headed "Awaiting approval" before 2026-10-21.)
+training provider** (for example "Target Solutions"), written by an import
+("Imported"), or entered in The Logbook. The CSV adds a **Source** column at the
+end; the PDF prints it under the course name.
+
+_Updated 2026-11-16._ The Historical Data Import has always read "Imported".
+Since 2026-11-15, records written by the two Training CSV importers — the
+**CSV import wizard** and **Import CSV** on training records — read "Imported"
+too. Records those importers wrote before that date were not marked at the time
+and still read "The Logbook"; nothing can tell them apart afterwards.
 
 The top of the tab shows your **all-time** courses and hours and how many years
 are on record. The History tab reads your whole record, however long it is.
@@ -424,6 +431,45 @@ the course.
 Courses made up of several classes — a recruit school, a five-night EMT
 refresher — show a class count and a **Manage classes** action. See
 [Multi-Class Courses & Cohorts](#multi-class-courses--cohorts).
+
+### Course Links — Records That Name No Course _(2026-11-16)_
+
+**Who can do this:** roles with `training.manage`.
+
+A course or certification requirement counts a training record only when the
+record is linked to a library course. Records typed with a free-text course
+name, and imported records whose name matched no library course, are linked to
+nothing, so they count toward no course or certification requirement (and,
+since they carry no category, toward no category-based hours either).
+
+Open **Training Admin → Curriculum → Course Links**. The page lists each course
+name that unlinked records carry, most records first:
+
+- Spellings that differ only in capitals, punctuation, a trailing provider id
+  or a "CAPCE" prefix are one row — "CPR Refresher", "C.P.R. refresher" and
+  "CAPCE CPR Refresher (3088740)" are one name. The row says **Also spelled …**
+  for the others.
+- Each row shows how many records and members carry it, and their date range.
+- Where a library course looks like a match, the row says **Suggested:** and
+  the course. Nothing is linked until you say so.
+
+To link one name, choose the library course in its list and select **Link**,
+then confirm (**Link records** / **Not yet**). **Link all suggested (N)** at
+the top links every name that has a suggestion, after one confirmation — check
+the suggestions first. **Search names** finds a name by any of its spellings.
+
+**What linking does.** Every record under that name, in every spelling, gets
+the course, the course's category and its training type, so course,
+certification, category and training-type requirements count it from then on.
+The record keeps its own name, date and hours. A record an officer already
+linked to a course by hand keeps its course. A course that grants a
+qualification updates the members' qualifications. Each link is audited.
+
+> **Important:** there is no undo screen. To unlink, edit the individual
+> records. Linking changes members' compliance; that is its purpose.
+
+When every record names a library course, the page says "Every training record
+names a library course."
 
 ---
 
@@ -1272,10 +1318,20 @@ dialog checks what uses the requirement first.
 | **Skills Evaluation**                 | Pass a hands-on skills evaluation                                 | —                                                                           |
 | **Checklist**                         | Complete a set of check-off items                                 | Checklist items                                                             |
 | **Knowledge Test**                    | Pass a written test                                               | Passing score (%), optional max attempts                                    |
+| **Evaluated Shifts**                  | Complete a number of shifts with a submitted shift evaluation     | Required evaluated shifts                                                   |
+| **Transports**                        | Record a number of transports on submitted shift evaluations      | Required transports                                                         |
+| **Refusals**                          | Record a number of refusals on submitted shift evaluations        | Required refusals                                                           |
+| **Evaluated Calls** _(2026-11-15)_    | Record a number of calls on submitted shift evaluations           | Required evaluated calls                                                    |
 | **Session Attendance** _(2026-11-04)_ | Attend a share of the training sessions linked to the requirement | **Sessions to Attend (%)**                                                  |
 
 The form shows the right value box for the type you choose, and checks it
 before saving.
+
+The four shift-evaluation types — **Evaluated Shifts**, **Transports**,
+**Refusals** and **Evaluated Calls** — count what submitted shift evaluations
+record. **Calls** counts calls from shift reports; **Evaluated Calls** counts
+calls on evaluations; neither counts the other's. See
+[What a submitted evaluation credits](#what-a-submitted-evaluation-credits-and-when-it-changes).
 
 ### Session Attendance — Attend a Share of the Linked Drills _(2026-11-04)_
 
@@ -3305,11 +3361,52 @@ no such program, in a seat the general form covers, gets the general form.
 
 ![The printable shift evaluation: the shift details and statistics, the rating key, Clinical Performance and Professionalism & Affect as tables of ratings and comments, and the closing comments](./images/02-132-shift-evaluation-print.png)
 
-**What a submitted evaluation credits.** It counts toward the member's program
-requirements of three types: an **Evaluated shifts** requirement counts it as
-one shift (or none, where the requirement leaves out an evaluation with any
-item at the form's lowest rating), and **Transports** and **Refusals**
-requirements take the counts on the form's statistics.
+#### What a submitted evaluation credits, and when it changes
+
+A submitted evaluation counts toward the member's program requirements of four
+types:
+
+- **Evaluated shifts** counts it as one shift (or none, where the requirement
+  leaves out an evaluation with any item at the form's lowest rating).
+- **Transports** and **Refusals** take the counts on the form's statistics.
+- **Evaluated Calls** _(2026-11-15)_ takes the calls recorded on the form's
+  statistics. Enter the target as a number of calls; the program shows
+  progress as "x / N calls on evaluations". A draft counts nothing. The
+  existing **Calls** type still counts calls from shift reports, and never
+  from evaluations, so no call is counted twice: pick **Calls** for calls run,
+  **Evaluated Calls** for calls an evaluator watched.
+
+**Credit follows later changes** _(2026-11-16)_:
+
+- Change a requirement's type, or switch its "leave out the lowest rating"
+  setting, and every evaluation's credit toward it is worked out again. If the
+  new type does not take evaluation credit, the credit is removed.
+- Take a member off an ended shift, or mark them **No-show**, and that shift's
+  evaluation stops crediting them. The evaluation itself stays readable. Only
+  a seat the member worked (Assigned or Confirmed) earns credit.
+
+**The evaluations a department shift asks for are fixed when it ends**
+_(2026-11-15)_. Before the shift ends, the list follows the current settings.
+After it ends, each crew member's list is stored on the first look, so turning
+on **combine evaluations**, a member joining another program, or a form
+attached later no longer changes what that shift asks for — submitted
+evaluations are not orphaned and a close-out that passed stays passed. The
+crew is still read live: a member taken off the crew is not asked for, and a
+member added afterwards is worked out by the settings of the day. A deleted
+form drops out. A shift that ended before the upgrade is fixed from the
+settings in force the first time it is read afterwards.
+
+**A form in use cannot be deactivated** _(2026-11-15)_. Deactivating an
+evaluation form that a training program, or the department's general-form
+setting, still uses is refused, naming what uses it — for example "'EMT Shift
+Evaluation' is still in use by Driver Candidate. Choose another form there
+before deactivating this one." An inactive form cannot be newly chosen as the
+general form or for a program. A program that already held one keeps it, so its
+other fields still save.
+
+**Switching forms on an evaluation** _(2026-11-16)_ closes any comment boxes
+you had opened on the old form, so the new form starts with only the comments
+it requires open.
 
 ### Shifts on an outside agency's unit _(2026-11-02)_
 

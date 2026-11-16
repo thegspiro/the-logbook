@@ -802,6 +802,40 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Training: one form for Training events, evaluated calls, and evaluation credit that follows the shift (2026-11-16)
+
+Nothing blocks a restart. Migration `9d044fc1d81b` widens the training
+requirement type list by one value (`evaluated_calls`); migration
+`611204dcf8d1` adds the nullable column `shifts.evaluation_requirements`. No
+existing row changes, and nothing is backfilled.
+
+- **Create Session and Create Event share one training-event form.** Training
+  Admin's **Create Session** and **Events → Create Event** with the type
+  **Training** open the same four-step form, and an event's training details
+  are changed with **Edit training details** on its **Training details** card.
+  **Require instructor confirmation** is now **Require sign-off**, on the
+  **Training Info** step. A new Training event starts with RSVP **off**,
+  check-in opening **60** minutes before, and manual check-out **off** (the
+  old Create Session form started with RSVP on, 15 minutes and check-out on).
+- **Saving training details needs Manage all events.** A training manager
+  without it can still edit a Training event's schedule and settings, sees
+  **Training Info** read-only, and is shown a notice in place of **Create
+  Session**. Check that the officers who create drills hold that permission.
+- **Evaluation credit follows the shift.** Taking a member off an ended
+  shift, or marking them **No-show**, now takes back that shift's
+  shift-evaluation credit toward their program requirements. Changing a
+  requirement's type or its "leave out the lowest rating" setting restates
+  every evaluation's credit toward it.
+- **A department shift's evaluation list is fixed when it ends.** A shift
+  that ended before the upgrade is fixed from the settings in force the first
+  time it is read afterwards; the settings that applied when it ended cannot be
+  recovered.
+- **An evaluation form in use cannot be deactivated**; the refusal names the
+  program or setting that uses it.
+- **Downgrading** turns every **Evaluated Calls** requirement into a
+  **Checklist** requirement (which it was is lost), and drops the stored
+  evaluation lists, so ended shifts follow the current settings again.
+
 ### Leave reminders, an open-ended leave digest, and member leave requests (2026-11-14)
 
 Nothing blocks a restart. Migration `c8d2f61a7e34` creates three empty tables

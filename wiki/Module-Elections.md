@@ -454,7 +454,7 @@ fresh draft from the setup with new dates. It copies ballot items
 (deep-copied), positions, position eligibility, seats and rules — never votes,
 tokens, attendees, overrides, proxy authorizations or the salt (a fresh salt
 is generated) — and optionally copies accepted candidates.
-`results_visible_immediately` is reset. The clone opens on `?tab=ballot`.
+`results_visible_immediately` is reset. The clone opens on its Ballot section (`/elections/<id>/ballot`).
 
 ---
 
@@ -703,7 +703,7 @@ candidate tallies before close.
 | Opening an election whose end date already passed   | Refused — update the dates first                                                         |
 | Reopen closed anonymous election with votes         | Refused — create a new election instead                                                  |
 | Runoff chain for standalone election                | Shows single-node chain                                                                  |
-| Results tab auto-select                             | Navigates to Results when the election is closed                                         |
+| Closed election opened                              | Opens the Overview (since 2026-11-15); members' Overview includes the results            |
 
 ---
 

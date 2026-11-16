@@ -5,6 +5,55 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 15 – 16, 2026
+
+Merged to `main` from `c1293346` (#4323, 2026-11-15 14:48 UTC) through
+`9b68de55` (#4338, 2026-11-16 13:42 UTC): the 24 first-parent merges of the
+25 hours before this pass. Security-review passes (#4328, #4332, #4348) and
+ADV-02 (#4316) are recorded in `docs/security-review/`; forms batch 20 (#4333)
+in `docs/FORMS_REVIEW_2026-11-05.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                          | Guide  | Disposition                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **One training-event form** for Create Session and Create Event → Training; read-only **Training details** card with **Edit training details**; **Require sign-off**; Manage all events needed to save training details (#4347) | 02, 04 | Guides, `TRAINING_PROGRAMS`, wiki and screenshot queue written by the PR. This pass: `UPGRADING.md` entry (new Training defaults, the permission); scripts 04, 05, 16 rewritten |
+| Elections: **Elections pages** row; per-election header with stages, voting window, turnout, winner and the stage button; sections at `/elections/:id/<section>`, `?tab=` forwarded; **Integrity & Audit** section (#4297)      | 14     | Overview and section table rewritten; Integrity & Audit, Settings, Open and Close steps updated; wiki `Module-Elections-Developer` section rewritten; script 12 production note |
+| **Course Links**: Training Admin → Curriculum → Course Links suggests a library course for names on unlinked records; linking sets course, category and type (#4345)                                                            | 02     | New section under Course Library; wiki `Module-Training` subsection                                                                                                             |
+| **Evaluated Calls** requirement type (calls on submitted shift evaluations; migration `9d044fc1d81b`) (#4314)                                                                                                                   | 02     | Requirement Types table gains the four evaluation types (Evaluated Shifts, Transports, Refusals were missing); credit section rewritten; wiki `Module-Training`; `UPGRADING.md` |
+| A department shift's evaluation list fixed when it ends (migration `611204dcf8d1`) (#4312)                                                                                                                                      | 02     | Added to the shift-evaluation section; wiki; `UPGRADING.md`                                                                                                                     |
+| Evaluation credit re-synced when a requirement's type or lowest-rating rule changes, or the member leaves the shift or is marked No-show (#4305)                                                                                | 02     | Added; wiki; `UPGRADING.md`                                                                                                                                                     |
+| Deactivating an evaluation form in use refused; inactive form cannot be newly chosen (#4302)                                                                                                                                    | 02     | Added                                                                                                                                                                           |
+| Switching forms on a shift evaluation closes the old form's opened comment boxes (#4335)                                                                                                                                        | 02     | Added                                                                                                                                                                           |
+| Training CSV importers' records read **Imported** from 2026-11-15 (#4344)                                                                                                                                                       | 02     | History-tab note rewritten (and its list item 4, which had been run into the paragraph, restored); wiki `Module-Training`                                                       |
+| **Needs You** lists an unanswered mandatory event only within two months of its start, or 48 hours before its RSVP deadline (#4338)                                                                                             | 04     | Added; wiki `Module-Events`                                                                                                                                                     |
+| Only current members can be added as apparatus operators (#4340)                                                                                                                                                                | 06     | Added; wiki `Module-Apparatus`                                                                                                                                                  |
+| Phone status bar follows the app's navigation-bar colour for the picked theme; manifest `theme_color` now `#0f172a` (#4325)                                                                                                     | 10     | Installed-app bullet rewritten                                                                                                                                                  |
+| ADV-02: step-up for an own email change and for an authenticator added over a passkey; role reviewers cannot approve their own shift report; draft events refused on side paths (#4316)                                         | 00     | Step-up paragraph extended. The rest is internal; see `ADV-02-adversarial-last-month.md`                                                                                        |
+| Grants deadline text in its last two weeks AAA (#4339)                                                                                                                                                                          | 12     | Screenshot check only                                                                                                                                                           |
+| Store PayPal account (#4301)                                                                                                                                                                                                    | 16, 18 | Already covered by the PayPal pass below                                                                                                                                        |
+| Forms batch 20 (#4333); member sizes answer `null` (#4293); evaluation list query count (#4308)                                                                                                                                 | none   | Recorded in their PRs and the forms review                                                                                                                                      |
+| Pre-push migration-chain check (#4336); Alembic joins (#4323, `1d7fde550351`); WebKit apt fallback (#4327); "not required up to date" decision (`fc6b1d42`)                                                                     | none   | Developer and CI only; `docs/rules/migrations.md` and `KNOWN_LIMITATIONS.md` updated by the PRs                                                                                 |
+
+**Screenshots to create:** Elections header (open and closed), Elections pages
+row at 390px, Course Links list and its confirmation, the requirement form on
+**Evaluated Calls**, a program row reading "calls on evaluations", the
+evaluation form editor's in-use refusal. **Replace:** `14-01-elections-list`,
+`14-19-forensics-report`. **Check:** `14-05`, `14-07`, `14-17`, `14-25` – `14-27`,
+`04-01`, `06-23`, `12-02`, `12-03`, `12-05`. The training-event form's own list
+(#4347) stands. Queued in `docs/training/SCREENSHOT_CURRENCY.md`.
+
+**YouTube scripts:** 04, 05, 12 and 16 edited where they named a screen that is
+gone; each carries a 2026-11-16 production note. Not re-recorded. See
+`docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
+**Not covered — a gap before this window.** The 64 first-parent merges after
+`dcc32fe2` (2026-11-11 13:58 UTC, the last full pass) up to `c1293346` were never
+given a full pass; only the Zeffy (November 13) and PayPal (November 14)
+targeted passes ran. They include leave requests and reminders, waiver request
+workflows, History phases 2 – 4, evaluation data sources, the Elections Meeting
+Attendance page and per-member-type voter eligibility, and the shift evaluation
+review fixes. Many of those PRs wrote their own guide text; none has been
+audited against the guides here.
+
 ## Change audit: PayPal Settings, November 14, 2026
 
 A targeted pass for the PayPal changes of November 14: a **Settings** button on

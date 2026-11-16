@@ -1,5 +1,30 @@
 # Screenshot currency
 
+## Queued by the November 15 – 16 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-15--16-2026).
+Nothing was captured by this pass. The training-event form's own queue, written
+by #4347, is the next section down and is unchanged.
+
+| Guide | Screen                                                                                                                                                                | Action                                                                                       |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 14    | Elections list as an election manager: the **Elections pages** row (All Elections, Meeting Attendance, Settings) and no gear button in the header                      | Replace `14-01-elections-list`                                                               |
+| 14    | An open election's header at a desktop width: stages, Voting closes with time left, Turnout, Winner, **Close Election** beside the status badge, and the section links | Create                                                                                       |
+| 14    | The same header's section links on a closed election, **Integrity & Audit** current                                                                                   | Create                                                                                       |
+| 14    | **Integrity & Audit** section with its report loaded (no toggle)                                                                                                      | Replace `14-19-forensics-report`; rewrite its alt, which names the Forensics & Integrity panel |
+| 14    | Elections pages row at 390px with the short labels Elections / Attendance / Settings                                                                                  | Create                                                                                       |
+| 14    | `14-05-nominations-tab`, `14-07-eligibility-roster`, `14-17-election-results`, `14-25`, `14-26`, `14-27`: the tab strip is now a row of links under the header          | Check; replace any that shows the old tab strip or the controls panel's Open/Close buttons |
+| 02    | **Training Admin → Curriculum → Course Links** with two or more names, one showing **Also spelled …** and **Suggested:**, and **Link all suggested (N)**               | Create                                                                                       |
+| 02    | The Course Links confirmation: "Link "…" to …?" with **Link records** / **Not yet**                                                                                    | Create                                                                                       |
+| 02    | Requirement form with **Requirement Type** set to **Evaluated Calls** and the **Required evaluated calls** box                                                         | Create                                                                                       |
+| 02    | A program's requirement row reading "x / N calls on evaluations"                                                                                                      | Create                                                                                       |
+| 02    | Shift evaluation form editor refusing **Active** off: "'…' is still in use by …"                                                                                       | Create                                                                                       |
+| 02    | Training History record imported by the CSV wizard showing **Imported**                                                                                               | Fold into the November 8 – 10 "source line" capture                                          |
+| 04    | Events list with a weekly mandatory series: only the occurrences within two months in **Needs You**                                                                  | Check `04-01-events-list`; replace if its band shows mandatory events further out          |
+| 06    | Add Operator member list (only current members)                                                                                                                        | Check `06-23-add-operator-member-picker`; replace if a former member is in the list         |
+| 12    | Deadline text in its last two weeks (now red-800, red-400 in dark mode)                                                                                                | Check `12-02`, `12-03`, `12-05`; replace only where such a deadline is in frame              |
+| 10    | Phone status bar matching the navigation bar in Light and Dark                                                                                                        | Device photo only: Playwright does not draw the status bar. Optional                         |
+
 ## Queued by the November 10 – 11 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-10--11-2026).
