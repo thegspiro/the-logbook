@@ -431,6 +431,117 @@ describe('IntegrationsPage', () => {
       }
     });
 
+    // Owner decision, 2026-11-16: Settings cannot move the integration to
+    // another org. A stored refresh token belongs to one org, and Salesforce's
+    // token reply puts the old instance URL back at the next sync.
+    const salesforceConfigured = {
+      ...salesforceConnected,
+      config: {
+        instance_url: 'https://oakvillefd.my.salesforce.com',
+        environment: 'sandbox',
+        sync_direction: 'both',
+        match_strategy: 'email_lastname',
+        graceful_fields: false,
+        auto_sync_enabled: true,
+      },
+    };
+
+    it('opens Settings prefilled, with the org locked, and saves the rest', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([salesforceConfigured]);
+      mockUpdateIntegration.mockResolvedValue(salesforceConfigured);
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-salesforce');
+      await user.click(within(card).getByRole('button', { name: 'Salesforce settings' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Salesforce settings' });
+
+      const instanceUrl = within(dialog).getByLabelText('Salesforce Instance URL');
+      expect(instanceUrl).toHaveValue('https://oakvillefd.my.salesforce.com');
+      expect(instanceUrl).toHaveAttribute('readonly');
+      expect(within(dialog).getByLabelText('Environment')).toHaveValue('sandbox');
+      expect(within(dialog).getByLabelText('Environment')).toBeDisabled();
+      expect(within(dialog).getByLabelText('Contact Matching')).toHaveValue('email_lastname');
+      expect(within(dialog).getByLabelText('Sync Direction')).toHaveValue('both');
+      expect(within(dialog).getByRole('checkbox', { name: /Skip custom fields/ })).not.toBeChecked();
+      expect(within(dialog).getByRole('checkbox', { name: /Sync automatically/ })).toBeChecked();
+      expect(within(dialog).getByLabelText('Refresh Token')).toHaveAttribute(
+        'placeholder',
+        'Leave blank to keep the current token'
+      );
+      expect(dialog).toHaveTextContent('To move to another Salesforce org, disconnect and connect again.');
+      expect(dialog).toHaveTextContent(
+        'Saved settings apply from the next sync. The connected org does not change: to move to another org, disconnect and connect again.'
+      );
+
+      await user.selectOptions(within(dialog).getByLabelText('Sync Direction'), 'push');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('sf-1', {
+        instance_url: undefined,
+        environment: undefined,
+        client_id: undefined,
+        client_secret: undefined,
+        refresh_token: undefined,
+        sync_direction: 'push',
+        match_strategy: 'email_lastname',
+        graceful_fields: false,
+        auto_sync_enabled: true,
+      });
+      expect(mockConnectIntegration).not.toHaveBeenCalled();
+    });
+
+    it('reconnecting keeps the stored sync settings rather than the defaults', async () => {
+      const user = userEvent.setup();
+      // Disconnect keeps the public config, so a reconnect starts from it.
+      mockGetIntegrations.mockResolvedValue([{ ...salesforceConfigured, status: 'available', enabled: false }]);
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-salesforce');
+      await user.click(within(card).getByText('Connect'));
+
+      expect(screen.getByLabelText('Salesforce Instance URL')).toHaveValue('https://oakvillefd.my.salesforce.com');
+      expect(screen.getByLabelText('Salesforce Instance URL')).not.toHaveAttribute('readonly');
+      expect(screen.getByLabelText('Environment')).toHaveValue('sandbox');
+      expect(screen.getByLabelText('Environment')).toBeEnabled();
+      expect(screen.getByLabelText('Sync Direction')).toHaveValue('both');
+      expect(screen.getByRole('checkbox', { name: /Sync automatically/ })).toBeChecked();
+    });
+
+    it('re-authorizes from Settings without moving the org', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([salesforceConfigured]);
+      mockUpdateIntegration.mockResolvedValue(salesforceConfigured);
+      const originalLocation = window.location;
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        writable: true,
+        value: { ...originalLocation, href: '' },
+      });
+
+      try {
+        renderPage();
+        const card = await screen.findByTestId('integration-card-salesforce');
+        await user.click(within(card).getByRole('button', { name: 'Salesforce settings' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Salesforce settings' });
+
+        expect(within(dialog).queryByRole('button', { name: /Connect with Salesforce/i })).not.toBeInTheDocument();
+        await user.click(within(dialog).getByRole('button', { name: 'Re-authorize with Salesforce' }));
+
+        expect(mockUpdateIntegration).toHaveBeenCalledWith(
+          'sf-1',
+          expect.objectContaining({ instance_url: undefined, environment: undefined, sync_direction: 'both' })
+        );
+        expect(window.location.href).toBe('/api/v1/integrations/salesforce/oauth/authorize');
+      } finally {
+        Object.defineProperty(window, 'location', {
+          configurable: true,
+          writable: true,
+          value: originalLocation,
+        });
+      }
+    });
+
     it('readiness check renders missing external-ID fields', async () => {
       const user = userEvent.setup();
       mockGetIntegrations.mockResolvedValue([salesforceConnected]);
