@@ -105,6 +105,26 @@ test.describe('Competency heat-map stays readable as it scrolls', () => {
       expect(nameColumn.position, 'the member column is not pinned').toBe('sticky');
       expect(nameColumn.width, 'the member column crowds out the skills').toBeLessThanOrEqual(MAX_NAME_COLUMN_PX);
 
+      // The name is the only thing telling two rows apart, and a tooltip is
+      // not something a phone can open, so a narrow column wraps it rather
+      // than cutting it off.
+      const clippedNames = await table
+        .getByRole('rowheader')
+        .evaluateAll(
+          (cells) =>
+            cells.filter((cell) =>
+              [cell, ...cell.querySelectorAll('*')].some((el) => el.scrollWidth > el.clientWidth + 1)
+            ).length
+        );
+      expect(clippedNames, 'member names are cut off in the pinned column').toBe(0);
+
+      // Nothing inside the grid takes focus, so the box itself must, or a
+      // keyboard cannot reach the rows and skills past its edges.
+      await expect(
+        page.getByRole('group', { name: 'Competency levels by member and skill' }),
+        'the grid cannot be scrolled from the keyboard'
+      ).toHaveAttribute('tabindex', '0');
+
       const header = await table.evaluate((el) => {
         const box = el.parentElement;
         if (!box) return { scrolled: 0, headerTop: -1, boxTop: 0 };

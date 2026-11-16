@@ -161,9 +161,12 @@ export const CompetencyHeatmap: React.FC = () => {
         // against both. The cells sit 4px apart through their own padding, not
         // border-spacing — spacing would leave gaps in the pinned header row
         // for the coloured cells to show through as they scroll beneath it.
+        // Nothing inside takes focus, so the box itself does: without it a
+        // keyboard has no way to reach the rows and skills past its edges.
         <ScrollCueRow
           className="max-h-[70dvh] overflow-y-auto"
           data-mobile-scroll-region
+          tabIndex={0}
           role="group"
           aria-label="Competency levels by member and skill"
         >
@@ -193,15 +196,14 @@ export const CompetencyHeatmap: React.FC = () => {
               {members.map((member) => (
                 <tr key={member.user_id}>
                   {/* Capped at 7rem so a phone shows twice as many skills
-                      beside it; the full name is in the tooltip, and each
-                      cell's own label names the member in full. */}
+                      beside it. The name wraps rather than truncating: it is
+                      the only thing telling two rows apart, and a tooltip
+                      cannot be opened on a touch screen. */}
                   <th
                     scope="row"
                     className="text-theme-text-primary surface-opaque sticky left-0 z-10 p-0.5 pr-2 text-left font-normal"
                   >
-                    <span className="block max-w-28 truncate" title={member.name}>
-                      {member.name}
-                    </span>
+                    <span className="block max-w-28 break-words">{member.name}</span>
                   </th>
                   {skills.map((skill) => {
                     const cell = cellByMemberSkill.get(`${member.user_id}:${skill.id}`);
