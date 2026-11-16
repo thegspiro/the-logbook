@@ -658,23 +658,30 @@ export const SchedulingReportsPage: React.FC = () => {
               </div>
 
               {/* Table */}
-              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Daily coverage">
-                <table className="w-full text-sm">
+              {/* Cells are px-3 so the five columns stay inside the narrow tier's 32rem with
+                  WebKit's wider text; at px-4 they needed 33-34rem and overflowed a tablet. */}
+              <div
+                className="rwd-table-container overflow-x-auto"
+                tabIndex={0}
+                role="region"
+                aria-label="Daily coverage"
+              >
+                <table className="rwd-table rwd-table-narrow w-full text-sm">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
-                      <th scope="col" className="text-theme-text-secondary px-4 py-3 text-left font-medium">
+                      <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
                         Date
                       </th>
-                      <th scope="col" className="text-theme-text-secondary px-4 py-3 text-right font-medium">
+                      <th scope="col" className="text-theme-text-secondary px-3 py-3 text-right font-medium">
                         Total Shifts
                       </th>
-                      <th scope="col" className="text-theme-text-secondary px-4 py-3 text-right font-medium">
+                      <th scope="col" className="text-theme-text-secondary px-3 py-3 text-right font-medium">
                         Assigned
                       </th>
-                      <th scope="col" className="text-theme-text-secondary px-4 py-3 text-right font-medium">
+                      <th scope="col" className="text-theme-text-secondary px-3 py-3 text-right font-medium">
                         Confirmed
                       </th>
-                      <th scope="col" className="text-theme-text-secondary px-4 py-3 text-right font-medium">
+                      <th scope="col" className="text-theme-text-secondary px-3 py-3 text-right font-medium">
                         Understaffed
                       </th>
                     </tr>
@@ -682,15 +689,21 @@ export const SchedulingReportsPage: React.FC = () => {
                   <tbody>
                     {coverageData.map((row, idx) => (
                       <tr key={idx} className="border-theme-surface-border hover:bg-theme-surface-hover border-b">
-                        <td className="text-theme-text-primary px-4 py-3 font-medium">{formatDate(row.date, tz)}</td>
-                        <td className="text-theme-text-primary px-4 py-3 text-right">{row.total_shifts}</td>
-                        <td className="text-theme-text-secondary px-4 py-3 text-right">{row.total_assigned}</td>
-                        <td className="px-4 py-3 text-right">
+                        <td data-label="Date" className="rwd-table-lead text-theme-text-primary px-3 py-3 font-medium">
+                          {formatDate(row.date, tz)}
+                        </td>
+                        <td data-label="Total Shifts" className="text-theme-text-primary px-3 py-3 text-right">
+                          {row.total_shifts}
+                        </td>
+                        <td data-label="Assigned" className="text-theme-text-secondary px-3 py-3 text-right">
+                          {row.total_assigned}
+                        </td>
+                        <td data-label="Confirmed" className="px-3 py-3 text-right">
                           <span className="inline-flex items-center rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
                             {row.total_confirmed}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td data-label="Understaffed" className="px-3 py-3 text-right">
                           {row.understaffed_shifts > 0 ? (
                             <span className="inline-flex items-center rounded-sm bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-400">
                               {row.understaffed_shifts}
@@ -784,7 +797,7 @@ export const SchedulingReportsPage: React.FC = () => {
 
               {/* Table */}
               <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Call volume">
-                <table className="w-full text-sm">
+                <table className="rwd-table w-full text-sm">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
                       <th scope="col" className="text-theme-text-secondary px-4 py-3 text-left font-medium">
@@ -804,10 +817,20 @@ export const SchedulingReportsPage: React.FC = () => {
                   <tbody>
                     {callVolumeData.map((row, idx) => (
                       <tr key={idx} className="border-theme-surface-border hover:bg-theme-surface-hover border-b">
-                        <td className="text-theme-text-primary px-4 py-3 font-medium">{row.period}</td>
-                        <td className="text-theme-text-primary px-4 py-3 text-right font-medium">{row.total_calls}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-1">
+                        <td
+                          data-label="Period"
+                          className="rwd-table-lead text-theme-text-primary px-4 py-3 font-medium"
+                        >
+                          {row.period}
+                        </td>
+                        <td
+                          data-label="Total Calls"
+                          className="text-theme-text-primary px-4 py-3 text-right font-medium"
+                        >
+                          {row.total_calls}
+                        </td>
+                        <td data-label="By Type" className="px-4 py-3">
+                          <div className="flex min-w-0 flex-wrap gap-1">
                             {Object.entries(row.by_type).map(([type, count]) => (
                               <span
                                 key={type}
@@ -818,7 +841,7 @@ export const SchedulingReportsPage: React.FC = () => {
                             ))}
                           </div>
                         </td>
-                        <td className="text-theme-text-secondary px-4 py-3 text-right">
+                        <td data-label="Avg Response" className="text-theme-text-secondary px-4 py-3 text-right">
                           {formatResponseTime(row.avg_response_seconds)}
                         </td>
                       </tr>
@@ -883,23 +906,30 @@ export const SchedulingReportsPage: React.FC = () => {
               </div>
 
               {/* Table */}
-              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Member availability">
-                <table className="w-full text-sm">
+              {/* Cells are px-3 so the five columns stay inside the narrow tier's 32rem with
+                  WebKit's wider text; at px-4 they needed 33-34rem and overflowed a tablet. */}
+              <div
+                className="rwd-table-container overflow-x-auto"
+                tabIndex={0}
+                role="region"
+                aria-label="Member availability"
+              >
+                <table className="rwd-table rwd-table-narrow w-full text-sm">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
-                      <th scope="col" className="text-theme-text-secondary px-4 py-3 text-left font-medium">
+                      <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
                         Member
                       </th>
-                      <th scope="col" className="text-theme-text-secondary px-4 py-3 text-right font-medium">
+                      <th scope="col" className="text-theme-text-secondary px-3 py-3 text-right font-medium">
                         Shifts Assigned
                       </th>
-                      <th scope="col" className="text-theme-text-secondary px-4 py-3 text-right font-medium">
+                      <th scope="col" className="text-theme-text-secondary px-3 py-3 text-right font-medium">
                         Time Off Days
                       </th>
-                      <th scope="col" className="text-theme-text-secondary px-4 py-3 text-right font-medium">
+                      <th scope="col" className="text-theme-text-secondary px-3 py-3 text-right font-medium">
                         Available Days
                       </th>
-                      <th scope="col" className="text-theme-text-secondary px-4 py-3 text-right font-medium">
+                      <th scope="col" className="text-theme-text-secondary px-3 py-3 text-right font-medium">
                         Unavailable Days
                       </th>
                     </tr>
@@ -910,20 +940,20 @@ export const SchedulingReportsPage: React.FC = () => {
                         key={member.user_id || idx}
                         className="border-theme-surface-border hover:bg-theme-surface-hover border-b"
                       >
-                        <td className="px-4 py-3">
-                          <div>
-                            <p className="text-theme-text-primary font-medium">
+                        <td data-label="Member" className="rwd-table-lead px-3 py-3">
+                          <div className="min-w-0">
+                            <p className="text-theme-text-primary font-medium wrap-break-word">
                               {member.user_name || member.email || member.user_id}
                             </p>
                             {member.email && member.user_name && (
-                              <p className="text-theme-text-muted text-xs">{member.email}</p>
+                              <p className="text-theme-text-muted text-xs break-all">{member.email}</p>
                             )}
                           </div>
                         </td>
-                        <td className="text-theme-text-primary px-4 py-3 text-right">
+                        <td data-label="Shifts Assigned" className="text-theme-text-primary px-3 py-3 text-right">
                           {member.total_shifts_assigned || 0}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td data-label="Time Off Days" className="px-3 py-3 text-right">
                           {(member.time_off_days || 0) > 0 ? (
                             <span className="inline-flex items-center rounded-sm bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
                               {member.time_off_days}
@@ -932,12 +962,12 @@ export const SchedulingReportsPage: React.FC = () => {
                             <span className="text-theme-text-muted">0</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td data-label="Available Days" className="px-3 py-3 text-right">
                           <span className="inline-flex items-center rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
                             {member.available_dates?.length || 0}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td data-label="Unavailable Days" className="px-3 py-3 text-right">
                           {(member.unavailable_dates?.length || 0) > 0 ? (
                             <span className="inline-flex items-center rounded-sm bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-400">
                               {member.unavailable_dates.length}
