@@ -5,6 +5,15 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  # A merge queue tests each pull request on top of the ones queued ahead of
+  # it, and waits for the required checks on that combined commit. Without
+  # this trigger nothing starts them, and every queued pull request sits until
+  # the queue times it out. GitHub offers a merge queue only to repositories
+  # owned by an organization, so nothing sends this event while this one is
+  # owned by a personal account; see "Migration Chain — Branches Need Not Be
+  # Up to Date to Merge" in docs/KNOWN_LIMITATIONS.md.
+  merge_group:
+    types: [checks_requested]
 
 # No job here needs to write to the repository, so drop the token to
 # read-only at the workflow level (matching secret-scan, supply-chain and
@@ -67,8 +76,9 @@ jobs:
   # NOTE this cannot *prevent* the fork. A pull request is checked against the
   # main that existed when its run started, and GitHub does not re-run it when
   # main moves, so a PR validated yesterday can still fork main when merged
-  # today. Only branch protection's "Require branches to be up to date before
-  # merging" closes that gap; this job is what catches it the moment it happens.
+  # today. Only a merge queue, or branch protection's "Require branches to be up
+  # to date before merging", closes that gap; this job is what catches it the
+  # moment it happens.
   migration-chain:
     name: Migration Chain
     runs-on: ubuntu-latest
