@@ -297,9 +297,20 @@ native `required` checks somewhere to run.
 
 ### F-8 — LOW — Unlabelled and placeholder-labelled controls
 
-**Status: the first five forms checked, 2026-11-06** — every control on them is
-labelled through `FormField` or its own label. None of the nine controls listed
-below is on those forms; they are **pending**.
+**Status: fixed**, 2026-11-15. The first five forms were checked on 2026-11-06.
+Of the nine controls below, re-checked against `main`:
+
+- **The four placeholder-labelled controls:** the scheduling notifications
+  email is now inside a labelled `FormField` (forms batch 2). Add Kit's custom
+  item name is named for its line ("Custom item name, line 1"). Both reorder
+  pickers (new request and Receive stock) carry their "Inventory item" label
+  on the picker's own search input, through its `controlProps`; Receive stock
+  puts its required state and error there too, not on a group around it. The
+  Skills Testing search is a `searchbox` named "Search available tests" (or
+  "Search your results").
+- **The five CSV file inputs** are all `display: none` (`className="hidden"`)
+  and opened by a visible, labelled button or drop zone. No assistive
+  technology reaches them, so they need no name of their own.
 
 - **No accessible name (5):** the CSV file inputs on Members › Import CSV,
   Scheduling › History import and Integrations › Historical import, and both
@@ -312,11 +323,15 @@ below is on those forms; they are **pending**.
 
 ### F-9 — LOW — Input types and autofill hints
 
-**Status: fixed on the first five forms**, 2026-11-06: `/account` carries
-`given-name`, `additional-name`, `family-name`, `nickname`, `tel`, `mobile tel`,
-`street-address`, `address-level2`, `address-level1` and `postal-code`; Add
-Member's fields about the new member carry `autocomplete="off"`. The three
-plain-text phone fields below are on other forms and are **pending**.
+**Status: fixed**, 2026-11-15. The first five forms were fixed on
+2026-11-06: `/account` carries `given-name`, `additional-name`, `family-name`,
+`nickname`, `tel`, `mobile tel`, `street-address`, `address-level2`,
+`address-level1` and `postal-code`, and Add Member's fields about the new
+member carry `autocomplete="off"`. Of the three phone fields below: Vendors ›
+Fax is `type="tel"` (forms batch 17); Org Chart › Contact phone is now
+`type="tel"` with `autocomplete="off"`, since it is the position's line, not
+the officer's. Reorder › Vendor Contact stays plain text on purpose: it takes
+"Email or phone".
 
 - **`/account` has no `autocomplete` tokens** on the member's own name, phone
   and address. `given-name`, `family-name`, `tel`, `street-address`,

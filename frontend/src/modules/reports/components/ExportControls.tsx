@@ -1,40 +1,80 @@
 /**
  * ExportControls Component
  *
- * Provides CSV and Print/PDF export buttons for report data.
+ * CSV and PDF downloads of the report on screen. Both are built and audited
+ * on the server, which re-runs the report rather than printing rows the page
+ * holds: the PDF gets the department's letterhead, page numbers, a header row
+ * on every page and the department's time zone, and every download is
+ * recorded, which a browser print could do none of.
  */
 
-import React from 'react';
-import { Download, Printer } from 'lucide-react';
-import { exportReportAsCsv, exportReportAsPrintablePdf } from '../utils/export';
+import React, { useState } from 'react';
+import { Download, FileText, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+import { saveFile } from '@/utils/fileDownload';
+import { getErrorMessage } from '@/utils/errorHandling';
+import { reportsApiService } from '../services/api';
+import { ReportExportFormat, type ReportExportSource } from '../types';
 
 interface ExportControlsProps {
   reportTitle: string;
-  rows: Array<Record<string, unknown>>;
-  columns?: Array<{ key: string; header: string }>;
+  /** What produced the report on screen; null when nothing can be re-run. */
+  source: ReportExportSource | null;
+  /** True when the report has nothing to export. */
   disabled?: boolean;
 }
 
-export const ExportControls: React.FC<ExportControlsProps> = ({ reportTitle, rows, columns, disabled = false }) => {
+const BUTTON_CLASS =
+  'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50';
+
+export const ExportControls: React.FC<ExportControlsProps> = ({ reportTitle, source, disabled = false }) => {
+  const [busy, setBusy] = useState<ReportExportFormat | null>(null);
+
+  const download = async (format: ReportExportFormat) => {
+    if (!source) return;
+    setBusy(format);
+    try {
+      const fallbackName = `${reportTitle.replace(/\s+/g, '_').toLowerCase()}.${format}`;
+      saveFile(await reportsApiService.exportReport(source, format, fallbackName));
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not download the report'));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const unavailable = disabled || source === null || busy !== null;
+
   return (
     <div className="flex items-center gap-2">
       <button
         type="button"
-        disabled={disabled || rows.length === 0}
-        onClick={() => exportReportAsCsv(reportTitle, rows, columns)}
-        className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={unavailable}
+        aria-busy={busy === ReportExportFormat.CSV}
+        onClick={() => void download(ReportExportFormat.CSV)}
+        className={BUTTON_CLASS}
       >
-        <Download className="h-3.5 w-3.5" aria-hidden="true" />
+        {busy === ReportExportFormat.CSV ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+        ) : (
+          <Download className="h-3.5 w-3.5" aria-hidden="true" />
+        )}
         CSV
       </button>
       <button
         type="button"
-        disabled={disabled || rows.length === 0}
-        onClick={() => exportReportAsPrintablePdf(reportTitle, rows, columns)}
-        className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={unavailable}
+        aria-busy={busy === ReportExportFormat.PDF}
+        onClick={() => void download(ReportExportFormat.PDF)}
+        className={BUTTON_CLASS}
       >
-        <Printer className="h-3.5 w-3.5" aria-hidden="true" />
-        Print / PDF
+        {busy === ReportExportFormat.PDF ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+        ) : (
+          <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+        )}
+        PDF
       </button>
     </div>
   );

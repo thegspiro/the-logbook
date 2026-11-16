@@ -14,6 +14,9 @@ import type {
   TrainingProgressReport,
   TrainingSummaryReport,
 } from '../modules/reports/types';
+import type { KnowledgeTest } from '../types/knowledgeTest';
+import type { SkillTemplateListItem, SkillTestListItem } from '../types/skillsTesting';
+import type { CourseCohort, CrewRecordingContext } from '../types/training';
 
 /**
  * Shared E2E fixtures and API mocking.
@@ -317,6 +320,219 @@ const COMMUNITY_ENGAGEMENT = {
     },
   ],
 };
+
+const TRAINING_CREW_CONTEXT: CrewRecordingContext = {
+  can_record: true,
+  members: [
+    { id: 'e2e-user-id', name: 'E2E User' },
+    { id: 'crew-2', name: 'Alex Johnson' },
+    { id: 'crew-3', name: 'Maria Rodriguez-Castellanos' },
+    { id: 'crew-4', name: 'Sam Lee' },
+  ],
+};
+
+const cohort = (overrides: Partial<CourseCohort> & Pick<CourseCohort, 'id' | 'name' | 'status'>): CourseCohort => ({
+  organization_id: 'org-1',
+  course_id: 'course-ff1',
+  start_date: '2026-09-08',
+  date_roll_policy: 'next_meeting_day',
+  requires_rsvp: false,
+  auto_create_records: true,
+  created_at: '2026-08-01T12:00:00Z',
+  course_name: 'Firefighter I',
+  class_count: 24,
+  member_count: 12,
+  ...overrides,
+});
+
+const TRAINING_COHORTS: CourseCohort[] = [
+  cohort({
+    id: 'cohort-1',
+    name: 'Firefighter I — Fall 2026',
+    code: 'FF1-F26',
+    status: 'in_progress',
+    meeting_days: [1, 3],
+    default_start_time: '19:00',
+    location: 'Station 1 Training Room',
+    end_date: '2026-12-16',
+  }),
+  cohort({
+    id: 'cohort-2',
+    name: 'Emergency Vehicle Operator Course — Winter Weekend Intensive',
+    code: 'EVOC-W27',
+    status: 'scheduled',
+    course_name: 'Emergency Vehicle Operator Course',
+    start_date: '2027-01-09',
+    meeting_days: [6],
+    class_count: 4,
+    member_count: 8,
+    end_date: '2027-01-30',
+  }),
+  cohort({
+    id: 'cohort-3',
+    name: 'Hazmat Operations — Spring 2027',
+    status: 'draft',
+    course_name: 'Hazmat Operations',
+    start_date: '2027-03-02',
+    class_count: 6,
+    member_count: 0,
+  }),
+  cohort({
+    id: 'cohort-4',
+    name: 'Firefighter I — Spring 2026',
+    status: 'completed',
+    start_date: '2026-02-02',
+    end_date: '2026-06-10',
+    member_count: 10,
+  }),
+];
+
+const knowledgeTest = (overrides: Partial<KnowledgeTest> & Pick<KnowledgeTest, 'id' | 'name'>): KnowledgeTest => ({
+  description: null,
+  instructions: null,
+  requirement_id: null,
+  requirement_name: null,
+  passing_score: null,
+  effective_passing_score: 70,
+  time_limit_minutes: null,
+  question_count: null,
+  shuffle_questions: true,
+  show_correct_answers: false,
+  status: 'published',
+  active_question_count: 20,
+  attempt_count: 0,
+  my_latest_attempt: null,
+  created_at: '2026-10-01T12:00:00Z',
+  updated_at: '2026-10-01T12:00:00Z',
+  ...overrides,
+});
+
+const TRAINING_KNOWLEDGE_TESTS: KnowledgeTest[] = [
+  knowledgeTest({
+    id: 'kt-1',
+    name: 'Hazardous Materials Awareness — Annual Refresher',
+    description: 'Recognition, isolation and notification under the ERG.',
+    requirement_id: 'req-hazmat',
+    requirement_name: 'Hazmat Awareness (annual)',
+    time_limit_minutes: 45,
+    attempt_count: 1,
+    my_latest_attempt: {
+      id: 'kta-1',
+      test_id: 'kt-1',
+      user_id: 'e2e-user-id',
+      user_name: 'E2E User',
+      status: 'submitted',
+      started_at: '2026-10-20T14:00:00Z',
+      expires_at: null,
+      submitted_at: '2026-10-20T14:31:00Z',
+      score: 85,
+      passed: true,
+      credited: true,
+      credit_note: null,
+    },
+  }),
+  knowledgeTest({
+    id: 'kt-2',
+    name: 'Pump Operations',
+    description: 'Hydraulics and friction loss.',
+    effective_passing_score: 80,
+    active_question_count: 35,
+  }),
+  knowledgeTest({
+    id: 'kt-3',
+    name: 'Bloodborne Pathogens',
+    attempt_count: 1,
+    my_latest_attempt: {
+      id: 'kta-3',
+      test_id: 'kt-3',
+      user_id: 'e2e-user-id',
+      user_name: 'E2E User',
+      status: 'submitted',
+      started_at: '2026-09-02T14:00:00Z',
+      expires_at: null,
+      submitted_at: '2026-09-02T14:20:00Z',
+      score: 60,
+      passed: false,
+      credited: false,
+      credit_note: null,
+    },
+  }),
+];
+
+const skillTemplate = (
+  overrides: Partial<SkillTemplateListItem> & Pick<SkillTemplateListItem, 'id' | 'name'>
+): SkillTemplateListItem => ({
+  status: 'published',
+  visibility: 'all_members',
+  version: 1,
+  section_count: 2,
+  criteria_count: 8,
+  created_at: '2026-08-01T12:00:00Z',
+  updated_at: '2026-08-01T12:00:00Z',
+  ...overrides,
+});
+
+const TRAINING_SKILL_TEMPLATES: SkillTemplateListItem[] = [
+  skillTemplate({
+    id: 'st-1',
+    name: 'SCBA Donning and Doffing',
+    description: 'Full PPE and SCBA on air within 60 seconds.',
+    category: 'Firefighting',
+    tags: ['NFPA 1001'],
+    version: 3,
+  }),
+  skillTemplate({
+    id: 'st-2',
+    name: 'Ground Ladder Raise — 24 ft Extension, Two-Firefighter Beam Raise',
+    category: 'Ladders',
+    section_count: 3,
+    criteria_count: 14,
+  }),
+  skillTemplate({ id: 'st-3', name: 'Patient Assessment — Trauma', category: 'EMS', criteria_count: 22 }),
+];
+
+const skillTest = (
+  overrides: Partial<SkillTestListItem> & Pick<SkillTestListItem, 'id' | 'template_id' | 'template_name'>
+): SkillTestListItem => ({
+  candidate_id: 'e2e-user-id',
+  candidate_name: 'E2E User',
+  examiner_id: 'crew-2',
+  examiner_name: 'Alex Johnson',
+  status: 'completed',
+  result: 'pass',
+  is_practice: false,
+  created_at: '2026-10-12T14:00:00Z',
+  started_at: '2026-10-12T14:00:00Z',
+  completed_at: '2026-10-12T14:25:00Z',
+  released_at: '2026-10-12T15:00:00Z',
+  validated_at: '2026-10-13T12:00:00Z',
+  ...overrides,
+});
+
+const TRAINING_SKILL_TESTS: SkillTestListItem[] = [
+  skillTest({ id: 'stt-1', template_id: 'st-1', template_name: 'SCBA Donning and Doffing', overall_score: 100 }),
+  skillTest({
+    id: 'stt-2',
+    template_id: 'st-2',
+    template_name: 'Ground Ladder Raise — 24 ft Extension, Two-Firefighter Beam Raise',
+    result: 'fail',
+    overall_score: 64,
+    created_at: '2026-09-20T14:00:00Z',
+    started_at: '2026-09-20T14:00:00Z',
+    completed_at: '2026-09-20T14:40:00Z',
+  }),
+  skillTest({
+    id: 'stt-3',
+    template_id: 'st-3',
+    template_name: 'Patient Assessment — Trauma',
+    is_practice: true,
+    result: 'incomplete',
+    status: 'in_progress',
+    completed_at: undefined,
+    released_at: undefined,
+    validated_at: undefined,
+  }),
+];
 
 const EVENT_REQUESTS = [
   {
@@ -4171,6 +4387,20 @@ const routes = ({
   ['**/api/v1/admin-hours/summary**', () => ({ totalHours: 8 })],
 
   ['**/api/v1/training/module-config/my-training**', () => ({ hours_summary: { total_hours: 12 } })],
+
+  // The caller may record crew training, so Record Crew Training draws its
+  // form rather than the "shift officers only" notice.
+  ['**/api/v1/training/submissions/crew/context', () => TRAINING_CREW_CONTEXT],
+  // Exact path and `?**`, so neither answers `/cohorts/mine` or a cohort's own id.
+  ['**/api/v1/training/cohorts', () => (empty ? [] : TRAINING_COHORTS)],
+  ['**/api/v1/training/cohorts?**', () => (empty ? [] : TRAINING_COHORTS)],
+  ['**/api/v1/training/knowledge-tests', () => (empty ? [] : TRAINING_KNOWLEDGE_TESTS)],
+  ['**/api/v1/training/knowledge-tests?**', () => (empty ? [] : TRAINING_KNOWLEDGE_TESTS)],
+  ['**/api/v1/training/skills-testing/templates?**', () => (empty ? [] : TRAINING_SKILL_TEMPLATES)],
+  [
+    '**/api/v1/training/skills-testing/tests?**',
+    () => (empty ? { items: [], total: 0 } : { items: TRAINING_SKILL_TESTS, total: TRAINING_SKILL_TESTS.length }),
+  ],
   // Per-enrollment progress detail. The service fetches
   // `/enrollments/{id}` — not `/{id}/progress` — so this glob must stay a
   // single trailing segment, and must be registered before the `/me` route

@@ -1878,9 +1878,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/training/record-crew',
     source: 'src/modules/training/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      'officer-only sibling of /training/submit, which is the representative ratchet route; every control comes from the shared 44px form-input, form-checkbox and button utilities',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/training/courses',
@@ -1936,8 +1935,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/training/cohorts',
     source: 'src/modules/training/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/training/cohorts/:cohortId',
@@ -2002,20 +2001,20 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/training/log-shift',
     source: 'src/modules/training/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/training/skills-testing',
     source: 'src/modules/training/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/training/skills-testing/templates/new',
     source: 'src/modules/training/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/training/skills-testing/templates/:id',
@@ -2032,8 +2031,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/training/skills-testing/test/new',
     source: 'src/modules/training/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/training/skills-testing/test/:testId',
@@ -2050,8 +2049,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/training/knowledge-tests',
     source: 'src/modules/training/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/training/knowledge-tests/attempts/:attemptId',
