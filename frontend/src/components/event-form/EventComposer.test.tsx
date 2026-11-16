@@ -3,7 +3,7 @@
  * and the training-event form for Training, from one model, so a type change
  * either way carries everything typed (owner decision, 2026-11-10).
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
@@ -189,6 +189,47 @@ describe('EventComposer hand-off to the training form', () => {
     expect(typePicker()).toHaveValue('social');
     expect(screen.getByRole('button', { name: 'Create Event' })).toBeInTheDocument();
     expect(screen.getByLabelText(/^Title/)).toHaveValue('Monday Night Drill');
+  });
+
+  // A browser scrolls a focused control only as far as the viewport's edge,
+  // which on a phone is under the fixed bottom nav; the swap brings the
+  // picker clear of it, as the training form keeps its controls clear.
+  describe('the picker focused after a swap, on a phone', () => {
+    const rectAt = (top: number) => ({ top, bottom: top + 48, left: 0, right: 300, width: 300, height: 48 }) as DOMRect;
+
+    beforeEach(() => {
+      document.documentElement.style.setProperty('--bottom-nav-height', '56px');
+      vi.mocked(Element.prototype.scrollIntoView).mockClear();
+    });
+    afterEach(() => {
+      document.documentElement.style.removeProperty('--bottom-nav-height');
+      vi.restoreAllMocks();
+    });
+
+    const swapBack = async (pickerTop: number) => {
+      const user = userEvent.setup();
+      renderComposer();
+      await user.selectOptions(typePicker(), 'training');
+      vi.spyOn(HTMLSelectElement.prototype, 'getBoundingClientRect').mockReturnValue(rectAt(pickerTop));
+      vi.mocked(Element.prototype.scrollIntoView).mockClear();
+      await user.selectOptions(typePicker(), 'business_meeting');
+      await waitFor(() => expect(typePicker()).toHaveFocus());
+    };
+
+    it('scrolls it out from under the bottom nav', async () => {
+      // jsdom's viewport is 768px tall; the nav covers its last 56.
+      await swapBack(window.innerHeight - 56 - 40);
+
+      await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'center' }));
+      expect(vi.mocked(Element.prototype.scrollIntoView).mock.contexts).toContain(typePicker());
+    });
+
+    it('leaves it where it is when it is clear', async () => {
+      await swapBack(200);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    });
   });
 
   it('keeps the training details through a detour to another type', async () => {

@@ -178,7 +178,21 @@ export const EventComposer: React.FC<EventComposerProps> = ({
   useEffect(() => {
     if (!swapped.current) return;
     swapped.current = false;
-    document.getElementById(EVENT_FIELD_IDS.event_type)?.focus();
+    const picker = document.getElementById(EVENT_FIELD_IDS.event_type);
+    if (!picker) return;
+    picker.focus();
+    // The browser scrolls a focused control only as far as the viewport's
+    // edge, which on a phone is under the fixed bottom nav; bring it clear, as
+    // the training form keeps its focused controls clear. Measured a frame
+    // on, after WebKit's own focus scroll, which waits for a rendering update.
+    requestAnimationFrame(() => {
+      if (document.activeElement !== picker) return;
+      const navHeight =
+        parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bottom-nav-height')) || 0;
+      if (picker.getBoundingClientRect().bottom > window.innerHeight - navHeight) {
+        picker.scrollIntoView({ block: 'center' });
+      }
+    });
   }, [isTraining]);
 
   const changeType = (next: EventType) => {
