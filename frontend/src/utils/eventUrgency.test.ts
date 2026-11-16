@@ -15,6 +15,7 @@ import {
   isUrgentEventState,
 } from './eventHelpers';
 import type { EventListItem } from '../types/event';
+import { EVENT_MANDATORY_RSVP_WINDOW_DAYS } from '../constants/config';
 
 // Wednesday 2026-09-02, 18:00 UTC. Every case below is expressed relative to
 // this instant, and formatted in UTC so the assertions do not depend on the
@@ -104,6 +105,37 @@ describe('getEventUrgency', () => {
 
   it('returns action for an upcoming mandatory event with no RSVP', () => {
     expect(getEventUrgency(makeEvent({ is_mandatory: true }), NOW)).toBe('action');
+  });
+
+  it('returns action for an unanswered mandatory event at the edge of the response window', () => {
+    const event = makeEvent({
+      is_mandatory: true,
+      start_datetime: hoursFromNow(EVENT_MANDATORY_RSVP_WINDOW_DAYS * 24),
+      end_datetime: hoursFromNow(EVENT_MANDATORY_RSVP_WINDOW_DAYS * 24 + 2),
+    });
+    expect(getEventUrgency(event, NOW)).toBe('action');
+  });
+
+  it('does not ask for a response to a mandatory event beyond the response window', () => {
+    // A recurring mandatory series must not demand an answer for every
+    // occurrence a year out; each enters the window as it approaches.
+    const event = makeEvent({
+      is_mandatory: true,
+      start_datetime: hoursFromNow(EVENT_MANDATORY_RSVP_WINDOW_DAYS * 24 + 1),
+      end_datetime: hoursFromNow(EVENT_MANDATORY_RSVP_WINDOW_DAYS * 24 + 3),
+    });
+    expect(getEventUrgency(event, NOW)).toBe('routine');
+  });
+
+  it('still asks for a response beyond the window when the RSVP deadline is within 48 hours', () => {
+    const event = makeEvent({
+      is_mandatory: true,
+      requires_rsvp: false,
+      start_datetime: hoursFromNow(EVENT_MANDATORY_RSVP_WINDOW_DAYS * 24 + 100),
+      end_datetime: hoursFromNow(EVENT_MANDATORY_RSVP_WINDOW_DAYS * 24 + 102),
+      rsvp_deadline: hoursFromNow(12),
+    });
+    expect(getEventUrgency(event, NOW)).toBe('action');
   });
 
   it('returns action when an unanswered RSVP deadline is within 48 hours', () => {

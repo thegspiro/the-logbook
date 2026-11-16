@@ -2,8 +2,9 @@
  * The "Needs You" band above the events grid.
  *
  * It holds only events with an outstanding action — check-in open now, a
- * mandatory event with no RSVP, a mandatory event that ended with no check-in
- * recorded — each next to the single control that clears it. Membership comes
+ * mandatory event starting within the next two months with no RSVP, a
+ * mandatory event that ended with no check-in recorded — each next to the
+ * single control that clears it. Membership comes
  * from the same {@link getEventUrgency} the cards use, so the band can never
  * point at an event the grid renders as routine.
  *
