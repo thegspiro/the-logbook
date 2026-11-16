@@ -948,14 +948,10 @@ describe('MemberProfilePage editing', () => {
     emergency_contacts: [],
   };
 
-  // Contact, Address and Emergency Contacts each carry an "Edit" button, in
-  // that order down the page.
-  const editButton = (which: 'contact' | 'emergency'): HTMLElement => {
-    const buttons = screen.getAllByRole('button', { name: 'Edit' });
-    const button = which === 'contact' ? buttons[0] : buttons[buttons.length - 1];
-    if (!button) throw new Error(`no ${which} Edit button`);
-    return button;
-  };
+  // Contact, Address and Emergency Contacts each carry an Edit button, named
+  // for its section (W10-4).
+  const editButton = (which: 'contact' | 'emergency'): HTMLElement =>
+    screen.getByRole('button', { name: which === 'contact' ? 'Edit contact information' : 'Edit emergency contacts' });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1063,8 +1059,10 @@ describe('MemberProfilePage edit and restricted-PII gates on a colleague', () =>
       renderWithRouter(<MemberProfilePage />);
 
       await screen.findByRole('heading', { name: 'Contact Information' });
-      expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Upload photo' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /^Edit (contact information|address|emergency contacts)$/ })
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /photo$/ })).not.toBeInTheDocument();
       // An empty section would claim "no contacts on file"; the backend
       // withheld them, so there is no section.
       expect(screen.queryByRole('heading', { name: 'Emergency Contacts' })).not.toBeInTheDocument();
@@ -1080,8 +1078,10 @@ describe('MemberProfilePage edit and restricted-PII gates on a colleague', () =>
     renderWithRouter(<MemberProfilePage />);
 
     await screen.findByRole('heading', { name: 'Emergency Contacts' });
-    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Upload photo' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^Edit (contact information|address|emergency contacts)$/ })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /photo$/ })).not.toBeInTheDocument();
   });
 
   it('gives a members-manager every edit control on the full record', async () => {
@@ -1091,9 +1091,24 @@ describe('MemberProfilePage edit and restricted-PII gates on a colleague', () =>
 
     expect(await screen.findByRole('heading', { name: 'Emergency Contacts' })).toBeInTheDocument();
     expect(screen.getByText('Pat Doe')).toBeInTheDocument();
-    // Contact, Address and Emergency Contacts.
-    expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(3);
+    // W10-4: each section's Edit names its section, so a screen reader's
+    // list of buttons is not three identical "Edit"s.
+    for (const name of ['Edit contact information', 'Edit address', 'Edit emergency contacts']) {
+      expect(screen.getByRole('button', { name })).toHaveClass('touch:min-h-11');
+    }
     expect(screen.getByRole('button', { name: 'Upload photo' })).toBeInTheDocument();
+  });
+
+  // W10-4: with a photo on file the button reads "Change", and its name was
+  // still "Upload photo" (WCAG 2.5.3, label in name).
+  it('names the photo button by what it says', async () => {
+    grantedPermissions = ['members.manage'];
+    getUserWithRoles.mockResolvedValue({ ...fullColleague, photo_url: '/photos/x.jpg' });
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByRole('heading', { name: 'Emergency Contacts' });
+    expect(screen.getByRole('button', { name: 'Change photo' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Upload photo' })).not.toBeInTheDocument();
   });
 });
 
@@ -1184,12 +1199,8 @@ describe('MemberProfilePage removing a profile photo', () => {
 // from, which the profile endpoint reports as `service_since`, not hire_date.
 // And officers who can drop a member can first preview what the drop would ask
 // them to return.
-/** The Contact Information card's "Edit", first of the page's Edit buttons. */
-const firstEditButton = (): HTMLElement => {
-  const button = screen.getAllByRole('button', { name: 'Edit' })[0];
-  if (!button) throw new Error('no contact Edit button');
-  return button;
-};
+/** The Contact Information card's Edit button. */
+const firstEditButton = (): HTMLElement => screen.getByRole('button', { name: 'Edit contact information' });
 
 describe('MemberProfilePage credited service and property return preview', () => {
   const returnedColleague: UserWithRoles = {

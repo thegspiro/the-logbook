@@ -899,8 +899,8 @@ export const MemberProfilePage: React.FC = () => {
                       ) : (
                         <button
                           onClick={handlePhotoClick}
-                          className="text-xs font-medium text-white"
-                          aria-label="Upload photo"
+                          className="absolute inset-0 rounded-full text-xs font-medium text-white"
+                          aria-label={user.photo_url ? 'Change photo' : 'Upload photo'}
                         >
                           {user.photo_url ? 'Change' : 'Upload'}
                         </button>
@@ -1191,7 +1191,8 @@ export const MemberProfilePage: React.FC = () => {
                   {canEdit && !editingAddress && (
                     <button
                       onClick={handleEditAddress}
-                      className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                      className="touch:min-h-11 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                      aria-label="Edit address"
                     >
                       Edit
                     </button>
