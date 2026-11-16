@@ -12,6 +12,7 @@ import type {
   OperationsDashboard,
   ActionItemPage,
   CommunityEngagement,
+  CommunityEventReach,
   CommunityPeriod,
   DashboardPulseLayout,
   DashboardPulseResponse,
@@ -456,6 +457,13 @@ export const dashboardService = {
       limit: page.limit ?? 0,
       offset: page.offset ?? 0,
     };
+  },
+  /** Every outreach event held in the period — the full set the report's totals cover, for its export. */
+  async getCommunityEngagementEvents(period: CommunityPeriod): Promise<CommunityEventReach[]> {
+    const response = await api.get<CommunityEventReach[]>('/dashboard/community-engagement/events', {
+      params: { period },
+    });
+    return response.data;
   },
   async getCommunityEngagement(period: CommunityPeriod = 'all'): Promise<CommunityEngagement> {
     const response = await api.get<CommunityEngagement>('/dashboard/community-engagement', { params: { period } });

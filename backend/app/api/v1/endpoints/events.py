@@ -52,6 +52,7 @@ from app.models.user import (
     Position,
     User,
 )
+from app.schemas.base import as_utc
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
     AnalyticsSummary,
@@ -82,6 +83,7 @@ from app.schemas.event import (
     ExternalAttendeeCheckInResponse,
     FinalizeAttendanceResponse,
     GuestCheckInLinkResponse,
+    GuestHeadcountUpdate,
     ManagerAddAttendee,
     QRCheckInData,
     RecordActualTimes,
@@ -100,6 +102,8 @@ from app.schemas.event import (
 from app.schemas.organization import mandatory_for_tiers
 from app.schemas.training_session import TrainingSessionAttach
 from app.services import file_storage_service as file_storage
+from app.services.community_engagement_service import CommunityEngagementService
+from app.services.dashboard_widget_service import is_outreach_event
 from app.services.documents_service import DocumentsService
 from app.services.event_attendance_petition_service import (
     EventAttendancePetitionService,
@@ -550,6 +554,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         postponement_reason=event.postponement_reason,
         attendance_finalized_at=event.attendance_finalized_at,
         attendance_finalized_by=event.attendance_finalized_by,
+        guest_headcount=event.guest_headcount,
         created_by=event.created_by,
         organizer_id=event.organizer_id,
         alternate_organizer_id=event.alternate_organizer_id,
@@ -1605,6 +1610,9 @@ async def get_event(
         can_reopen_attendance=(
             user_has_permission(current_user, "events.reopen_attendance")
             or training_manager_administers(event, current_user)
+        ),
+        can_record_guest_headcount=await guest_headcount_offered(
+            db, event, current_user
         ),
         user_attended=user_attended,
         credited_hours=credited_hours,
@@ -3019,6 +3027,78 @@ async def record_actual_times(
         raise _event_error(error or "An unexpected error occurred")
 
     return _build_event_response(event)
+
+
+async def guest_headcount_offered(
+    db: AsyncSession, event: Event, current_user: User
+) -> bool:
+    """Whether the event page offers this caller a guest headcount.
+
+    The same refusals set_guest_headcount applies — events.manage, an outreach
+    event, started, not cancelled — decided here so the page offers the
+    control exactly when a save would be accepted (CLAUDE.md #29).
+    """
+    return (
+        user_has_permission(current_user, EVENT_MANAGER_PERMISSION)
+        and not event.is_cancelled
+        and as_utc(event.start_datetime) <= datetime.now(dt_timezone.utc)
+        and await is_outreach_event(db, current_user.organization_id, event.id)
+    )
+
+
+@router.put("/{event_id}/guest-headcount", response_model=EventResponse)
+async def set_guest_headcount(
+    event_id: UUID,
+    body: GuestHeadcountUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission(EVENT_MANAGER_PERMISSION)),
+):
+    """
+    Record how many guests were counted at an outreach event, or clear it.
+
+    For an assembly or a block party nobody signs in at: the Community
+    Engagement report reads the count as the event's actual audience. Not
+    locked by finalized attendance, which governs members' credited time and
+    not a count of the public.
+
+    **Authentication required**
+    **Allowed: events.manage**
+    """
+    service = CommunityEngagementService(db)
+    try:
+        event = await service.set_guest_headcount(
+            str(current_user.organization_id), str(event_id), body.guest_headcount
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+    await log_audit_event(
+        db=db,
+        event_type="event_guest_headcount_recorded",
+        event_category="events",
+        severity="info",
+        event_data={"event_id": str(event_id), "guest_headcount": body.guest_headcount},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+    # The commit expired the row, and the builder is synchronous: read it back
+    # with what it touches loaded, or it lazy-loads outside the event loop.
+    event = await service.load_event(str(current_user.organization_id), str(event_id))
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+    return _build_event_response(
+        event,
+        can_record_guest_headcount=True,
+        can_edit_event=True,
+    )
 
 
 @router.post(

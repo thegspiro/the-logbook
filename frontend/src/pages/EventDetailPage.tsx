@@ -84,6 +84,7 @@ import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplate
 import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
 import EventGuestsCard from '../components/event-detail/EventGuestsCard';
+import EventGuestHeadcountCard from '../components/event-detail/EventGuestHeadcountCard';
 import { GuestCheckInQRCard } from '../components/events/GuestCheckInQRCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
@@ -1812,6 +1813,18 @@ export const EventDetailPage: React.FC = () => {
             {/* Pipeline meeting stages can also link prospects to ordinary
                 business events, so this is intentionally not type-gated. */}
             <EventProspectsCard eventId={event.id} createsProspects={event.guest_check_in_creates_prospect ?? false} />
+
+            {/* The headcount for an outreach event nobody signed in at.
+                Merged rather than replaced: the save answers with a plain
+                event, which lacks the detail-only fields this page shows. */}
+            {event.can_record_guest_headcount && (
+              <EventGuestHeadcountCard
+                event={event}
+                onSaved={(updated) =>
+                  setEvent((prev) => (prev ? { ...prev, guest_headcount: updated.guest_headcount ?? null } : prev))
+                }
+              />
+            )}
 
             {/* Guests are listed apart from member attendance and never
                 counted in it (W23-2). */}

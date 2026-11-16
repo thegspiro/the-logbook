@@ -14346,6 +14346,183 @@ class Seeder:
                 {"reason": "The library is closed for renovation until spring."},
             )
 
+    # Outreach already delivered this year, for the Community Engagement tab.
+    # Each reaches its figure a different way, because each draws a different
+    # cell: an estimate from the request, sign-ins against an expectation, a
+    # coordinator's headcount, and department events no request asked for.
+    OUTREACH_HISTORY = [
+        {
+            "title": "Fire prevention assembly",
+            "at": 0.82,
+            "request": {
+                "contact_name": "Janet Ortiz",
+                "contact_email": "jortiz@oakvilleelementary.example.org",
+                "organization_name": "Oakville Elementary School",
+                "outreach_type": "fire_safety_demo",
+                "description": "Our fire prevention week assembly, K through 5.",
+                "audience_size": 120,
+            },
+        },
+        {
+            "title": "CPR class",
+            "at": 0.74,
+            "request": {
+                "contact_name": "Dale Holt",
+                "contact_email": "dholt@holtauto.example.org",
+                "organization_name": "Holt Auto Group",
+                "outreach_type": "cpr_first_aid",
+                "description": "Hands-only CPR for our service department.",
+                "audience_size": 30,
+            },
+            "signed_in": 25,
+        },
+        {
+            "title": "Senior center safety talk",
+            "at": 0.61,
+            "request": {
+                "contact_name": "Marion Feld",
+                "contact_email": "mfeld@stmarks.example.org",
+                "organization_name": "St. Mark's Senior Center",
+                "outreach_type": "fire_safety_demo",
+                "description": "Smoke alarms and kitchen fires, for our residents.",
+                "audience_size": 40,
+            },
+            "signed_in": 31,
+        },
+        {
+            "title": "Pre-K station tour",
+            "at": 0.47,
+            "request": {
+                "contact_name": "Lena Brooks",
+                "contact_email": "lbrooks@brightstart.example.org",
+                "organization_name": "Bright Start Daycare",
+                "outreach_type": "station_tour",
+                "description": "Our two pre-K classes would love to see the engine.",
+                "audience_size": 18,
+            },
+            "headcount": 22,
+        },
+        {
+            "title": "Open house",
+            "at": 0.66,
+            "event_type": "public_education",
+            "signed_in": 12,
+            "headcount": 285,
+        },
+        {
+            "title": "Pancake breakfast",
+            "at": 0.33,
+            "event_type": "fundraiser",
+            "signed_in": 64,
+        },
+    ]
+
+    def seed_outreach_history(self) -> None:
+        """Past outreach events with real reach, for Community Engagement.
+
+        Every other outreach event the demo holds is in the future, so the
+        report read "0 events held" and guide 04's picture of it showed empty
+        charts. These are placed at fractions of the year so far, so each
+        falls inside the tab's default This year period whatever day the
+        seeder runs.
+
+        A requested event goes in the way a real one does: the public form,
+        then the coordinator's moves through the status endpoint — In
+        progress, Scheduled onto the event, Completed — so the completion is
+        logged with its time, which is what the report dates it by. Guests are
+        added and signed in through the event's own guest endpoints, and a
+        headcount through the event page's. Safe to re-run: an event is found
+        by its title and a request by its contact name, and neither is
+        recreated or advanced twice.
+        """
+        org_id = pick(self.api.get("/auth/me"), "organization_id")
+        now = NOW.replace(minute=0, second=0, microsecond=0)
+        year_start = now.replace(month=1, day=1, hour=0)
+        elapsed = now - year_start
+        held = {
+            e.get("title"): e
+            for e in items(
+                self.api.get(
+                    f"/events?limit=500&start_after={iso(year_start)}"
+                    f"&start_before={iso(now)}"
+                ),
+                "events",
+            )
+        }
+        requests = {
+            pick(r, "contact_name"): r
+            for r in items(self.api.get("/event-requests"), "requests")
+        }
+
+        for spec in self.OUTREACH_HISTORY:
+            # 15:00 UTC is mid-morning in the demo department's zone; an hour
+            # long, on the day the fraction of the year lands on.
+            start = (year_start + elapsed * spec["at"]).replace(hour=15)
+            if start + timedelta(hours=1) > now:
+                continue
+            event = held.get(spec["title"])
+            if not event:
+                event = self.api.post(
+                    "/events",
+                    {
+                        "title": spec["title"],
+                        "description": f"{spec['title']}, run by the department.",
+                        "event_type": spec.get("event_type", "public_education"),
+                        "location": "Off-site",
+                        "start_datetime": iso(start),
+                        "end_datetime": iso(start + timedelta(hours=1)),
+                        "requires_rsvp": False,
+                        "is_mandatory": False,
+                        "send_reminders": False,
+                        "is_draft": False,
+                    },
+                )
+            event_id = pick(event, "id")
+            if not event_id:
+                continue
+
+            req = spec.get("request")
+            if req and req["contact_name"] not in requests:
+                created = self.api.post(
+                    f"/event-requests/public?organization_id={org_id}",
+                    {**req, "date_flexibility": "flexible"},
+                )
+                request_id = pick(created, "request_id")
+                if request_id:
+                    for status in ("in_progress", "scheduled", "completed"):
+                        self.api.patch(
+                            f"/event-requests/{request_id}/status",
+                            {
+                                "status": status,
+                                **(
+                                    {"event_id": event_id}
+                                    if status == "scheduled"
+                                    else {}
+                                ),
+                            },
+                        )
+
+            guests = items(
+                self.api.get(f"/events/{event_id}/external-attendees"), "attendees"
+            )
+            for n in range(len(guests), spec.get("signed_in", 0)):
+                guest = self.api.post(
+                    f"/events/{event_id}/external-attendees",
+                    {"name": f"Guest {n + 1}"},
+                )
+                if pick(guest, "id"):
+                    self.api.patch(
+                        f"/events/{event_id}/external-attendees/"
+                        f"{pick(guest, 'id')}/check-in",
+                        {},
+                    )
+
+            if "headcount" in spec:
+                self.api.put(
+                    f"/events/{event_id}/guest-headcount",
+                    {"guest_headcount": spec["headcount"]},
+                )
+
     def seed_event_request_form(self) -> None:
         """The outreach request form itself, published.
 
@@ -21597,6 +21774,7 @@ class Seeder:
         self.step("event request form", self.seed_event_request_form)
         self.step("event request", self.seed_event_request)
         self.step("event request pipeline", self.seed_event_request_pipeline)
+        self.step("outreach history", self.seed_outreach_history)
         self.step("elections", lambda: self.seed_elections(minutes))
         prospect_data = (
             self.step("prospective members", self.seed_prospective_members) or {}

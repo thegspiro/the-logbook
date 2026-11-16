@@ -8,11 +8,21 @@ tests pin the rules that replaced those, against real rows.
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 import pytest
+from fastapi import HTTPException
+from pydantic import ValidationError
 
-from app.api.v1.endpoints.dashboard import get_community_engagement
+from app.api.v1.endpoints.dashboard import (
+    get_community_engagement,
+    get_community_engagement_events,
+)
+from app.api.v1.endpoints.events import (
+    guest_headcount_offered,
+    set_guest_headcount,
+)
 from app.models.event import (
     Event,
     EventExternalAttendee,
@@ -20,9 +30,17 @@ from app.models.event import (
     EventType,
     RSVPStatus,
 )
-from app.models.event_request import EventRequest, EventRequestStatus
+from app.models.event_request import (
+    EventRequest,
+    EventRequestActivity,
+    EventRequestStatus,
+)
 from app.models.user import Organization, User, UserStatus
-from app.services.community_engagement_service import report_bounds
+from app.schemas.event import MAX_GUEST_HEADCOUNT, GuestHeadcountUpdate
+from app.services.community_engagement_service import (
+    RECENT_EVENT_LIMIT,
+    report_bounds,
+)
 from app.services.dashboard_widget_service import DashboardWidgetService
 
 TZ = "America/New_York"
@@ -125,6 +143,29 @@ async def _report(db_session, viewer, period="all"):
     return await get_community_engagement(
         period=period, db=db_session, current_user=viewer
     )
+
+
+async def _completed(db_session, req, at):
+    """The activity row the status endpoint writes on a move to Completed."""
+    db_session.add(
+        EventRequestActivity(
+            request_id=req.id,
+            action="status_changed_to_completed",
+            old_status=EventRequestStatus.SCHEDULED.value,
+            new_status=EventRequestStatus.COMPLETED.value,
+            created_at=at,
+        )
+    )
+    await db_session.flush()
+
+
+def _now_in_month():
+    """Midway through the month so far, so the first hour of a month cannot
+    file a row under the previous one."""
+    now = datetime.now(timezone.utc)
+    start, _, _ = report_bounds("month", now, ZoneInfo(TZ))
+    assert start is not None
+    return start + (now - start) / 2
 
 
 def _ago(**kwargs):
@@ -283,13 +324,59 @@ class TestPeriods:
         self, db_session, dept
     ):
         org, members = dept
-        await _request(db_session, org, None, status=EventRequestStatus.COMPLETED)
+        done = await _request(
+            db_session, org, None, status=EventRequestStatus.COMPLETED
+        )
+        await _completed(db_session, done, at=_now_in_month())
         await _request(db_session, org, None, status=EventRequestStatus.SUBMITTED)
 
         report = await _report(db_session, members[0], "month")
 
         assert report.current.requests_received == 2
         assert report.current.requests_completed == 1
+
+    async def test_a_completion_belongs_to_the_period_it_happened_in(
+        self, db_session, dept
+    ):
+        org, members = dept
+        now = datetime.now(timezone.utc)
+        start, _, previous = report_bounds("month", now, ZoneInfo(TZ))
+        assert start is not None
+        assert previous is not None
+        # Received last month, finished this month: this month's completion,
+        # and last month's receipt.
+        late = await _request(
+            db_session,
+            org,
+            None,
+            status=EventRequestStatus.COMPLETED,
+            created_at=previous[0] + (previous[1] - previous[0]) / 2,
+        )
+        await _completed(db_session, late, at=_now_in_month())
+        # Received this month and still open: received, not completed.
+        await _request(db_session, org, None, status=EventRequestStatus.IN_PROGRESS)
+
+        report = await _report(db_session, members[0], "month")
+
+        assert report.current.requests_received == 1
+        assert report.current.requests_completed == 1
+        assert report.previous is not None
+        assert report.previous.requests_received == 1
+        assert report.previous.requests_completed == 0
+
+    async def test_another_departments_completion_is_not_counted(
+        self, db_session, dept
+    ):
+        org, members = dept
+        other, _ = await _org(db_session, "Elsewhere")
+        theirs = await _request(
+            db_session, other, None, status=EventRequestStatus.COMPLETED
+        )
+        await _completed(db_session, theirs, at=_now_in_month())
+
+        report = await _report(db_session, members[0], "month")
+
+        assert report.current.requests_completed == 0
 
     async def test_buckets_cover_the_whole_span_in_the_departments_months(
         self, db_session, dept
@@ -352,3 +439,193 @@ class TestDashboardCardAgrees:
         report = await _report(db_session, members[0], "month")
 
         assert pulse["public_events"] == report.current.events_held == 2
+
+
+class TestGuestHeadcount:
+    async def test_a_headcount_is_the_actual_figure_in_place_of_sign_ins(
+        self, db_session, dept
+    ):
+        org, members = dept
+        assembly = await _event(
+            db_session, org, "Assembly", _ago(days=5), guest_headcount=140
+        )
+        await _request(db_session, org, assembly, audience_size=120)
+        # Three people stopped at the sheet; the room held 140.
+        await _guests(db_session, org, assembly, 3)
+
+        report = await _report(db_session, members[0])
+        row = report.recent_events[0]
+
+        assert row.people_reached == 140
+        assert row.reach_is_estimate is False
+        assert (row.headcount, row.counted, row.signed_in) == (140, 140, 3)
+        assert report.current.counted == 140
+        assert report.current.signed_in == 3
+        assert report.current.estimated == 0
+        assert (report.turnout.counted, report.turnout.expected) == (140, 120)
+
+    async def test_a_headcount_of_zero_is_a_count_not_a_missing_one(
+        self, db_session, dept
+    ):
+        org, members = dept
+        rained_out = await _event(
+            db_session, org, "Rained out", _ago(days=5), guest_headcount=0
+        )
+        await _request(db_session, org, rained_out, audience_size=80)
+
+        report = await _report(db_session, members[0])
+
+        assert report.recent_events[0].people_reached == 0
+        assert report.recent_events[0].reach_is_estimate is False
+        assert report.current.estimated == 0
+
+    async def test_the_endpoint_records_and_clears_a_count(self, db_session, dept):
+        org, members = dept
+        event = await _event(db_session, org, "Fair", _ago(days=1))
+
+        saved = await set_guest_headcount(
+            event_id=uuid.UUID(event.id),
+            body=GuestHeadcountUpdate(guest_headcount=75),
+            db=db_session,
+            current_user=members[0],
+        )
+        assert saved.guest_headcount == 75
+        assert (await _report(db_session, members[0])).current.counted == 75
+
+        cleared = await set_guest_headcount(
+            event_id=uuid.UUID(event.id),
+            body=GuestHeadcountUpdate(guest_headcount=None),
+            db=db_session,
+            current_user=members[0],
+        )
+        assert cleared.guest_headcount is None
+
+    async def test_the_endpoint_refuses_what_a_count_cannot_mean(
+        self, db_session, dept
+    ):
+        org, members = dept
+        other, _ = await _org(db_session, "Elsewhere")
+        cases = {
+            "upcoming": (await _event(db_session, org, "Soon", _ago(days=-3)), 400),
+            "cancelled": (
+                await _event(db_session, org, "Off", _ago(days=3), is_cancelled=True),
+                400,
+            ),
+            "not outreach": (
+                await _event(
+                    db_session,
+                    org,
+                    "Drill",
+                    _ago(days=3),
+                    event_type=EventType.TRAINING,
+                ),
+                400,
+            ),
+            "another department": (
+                await _event(db_session, other, "Theirs", _ago(days=3)),
+                404,
+            ),
+        }
+        for label, (event, code) in cases.items():
+            with pytest.raises(HTTPException) as refused:
+                await set_guest_headcount(
+                    event_id=uuid.UUID(event.id),
+                    body=GuestHeadcountUpdate(guest_headcount=10),
+                    db=db_session,
+                    current_user=members[0],
+                )
+            assert refused.value.status_code == code, label
+        for event, _ in cases.values():
+            await db_session.refresh(event)
+            assert event.guest_headcount is None
+
+    def test_an_implausible_count_is_refused_at_the_schema(self):
+        with pytest.raises(ValidationError):
+            GuestHeadcountUpdate(guest_headcount=-1)
+        with pytest.raises(ValidationError):
+            GuestHeadcountUpdate(guest_headcount=MAX_GUEST_HEADCOUNT + 1)
+
+
+class TestTypeGroups:
+    async def test_requests_and_department_events_are_grouped_apart(
+        self, db_session, dept
+    ):
+        org, members = dept
+        visit = await _event(db_session, org, "Visit", _ago(days=4))
+        await _request(
+            db_session, org, visit, outreach_type="school_visit", audience_size=60
+        )
+        await _event(db_session, org, "Open house", _ago(days=3), guest_headcount=200)
+
+        report = await _report(db_session, members[0])
+        groups = {(t.group, t.label): t.people_reached for t in report.by_type}
+
+        # Both events are Public Education events; only the request is
+        # labelled by what the requester asked for.
+        assert groups == {
+            ("request", "School Visit"): 60,
+            ("department", "Public Education"): 200,
+        }
+
+
+class TestFullEventList:
+    async def test_the_export_list_is_every_event_not_the_latest_fifty(
+        self, db_session, dept
+    ):
+        org, members = dept
+        for i in range(RECENT_EVENT_LIMIT + 5):
+            await _event(db_session, org, f"Talk {i}", _ago(days=2, minutes=i))
+
+        report = await _report(db_session, members[0])
+        listed = await get_community_engagement_events(
+            period="all", db=db_session, current_user=members[0]
+        )
+
+        assert len(report.recent_events) == RECENT_EVENT_LIMIT
+        assert len(listed) == RECENT_EVENT_LIMIT + 5 == report.current.events_held
+        assert listed[0].title == "Talk 0"
+
+
+class TestHeadcountIsOfferedWhenASaveWouldBeAccepted:
+    async def test_the_detail_flag_follows_the_saves_own_refusals(
+        self, db_session, dept
+    ):
+        org, members = dept
+        cases = {
+            "held": (await _event(db_session, org, "Held", _ago(days=1)), True),
+            "upcoming": (await _event(db_session, org, "Soon", _ago(days=-2)), False),
+            "cancelled": (
+                await _event(db_session, org, "Off", _ago(days=1), is_cancelled=True),
+                False,
+            ),
+            "not outreach": (
+                await _event(
+                    db_session,
+                    org,
+                    "Drill",
+                    _ago(days=1),
+                    event_type=EventType.TRAINING,
+                ),
+                False,
+            ),
+        }
+
+        # events.manage is granted here so the test is about the event-side
+        # conditions, which are the ones this flag can get wrong.
+        with patch(
+            "app.api.v1.endpoints.events.user_has_permission", return_value=True
+        ):
+            for label, (event, expected) in cases.items():
+                offered = await guest_headcount_offered(db_session, event, members[0])
+                assert offered is expected, label
+
+    async def test_a_member_without_events_manage_is_not_offered_it(
+        self, db_session, dept
+    ):
+        org, members = dept
+        event = await _event(db_session, org, "Held", _ago(days=1))
+
+        with patch(
+            "app.api.v1.endpoints.events.user_has_permission", return_value=False
+        ):
+            assert await guest_headcount_offered(db_session, event, members[0]) is False

@@ -287,6 +287,17 @@ export const eventService = {
   },
 
   /**
+   * Record, or clear with null, how many guests were counted at an outreach
+   * event — the Community Engagement report's actual figure for it.
+   */
+  async setGuestHeadcount(eventId: string, guestHeadcount: number | null): Promise<import('../types/event').Event> {
+    const response = await api.put<import('../types/event').Event>(`/events/${eventId}/guest-headcount`, {
+      guest_headcount: guestHeadcount,
+    });
+    return response.data;
+  },
+
+  /**
    * Finalize attendance duration for all checked-in members who didn't check out.
    * Uses actual_end_time (if recorded) or end_datetime minus check-in time.
    * On a Training event the result also reports the training credit written.
