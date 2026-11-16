@@ -411,10 +411,15 @@ class TrainingSessionService:
     async def events_counting_toward_attendance(
         self, event_ids: Sequence[UUID | str], organization_id: UUID | str
     ) -> Set[str]:
-        """Which of ``event_ids`` have a session linked to an attendance requirement.
+        """Which of ``event_ids`` have a session linked to an active attendance requirement.
 
         For the "Counts toward attendance" flag on event lists and pages: one
         query for a whole page of events rather than one per card.
+
+        A link to a deactivated requirement does not count. Compliance grading
+        and the waiver eligibility check read active requirements only, so such
+        a session is charged to no one, and flagging it told members it counts
+        while the same page refused to excuse them from it (pitfall #29).
         """
         ids = {str(e) for e in event_ids}
         if not ids:
@@ -425,9 +430,15 @@ class TrainingSessionService:
                 TrainingSessionRequirement,
                 TrainingSessionRequirement.session_id == TrainingSession.id,
             )
+            .join(
+                TrainingRequirement,
+                TrainingRequirement.id == TrainingSessionRequirement.requirement_id,
+            )
             .where(
                 TrainingSession.event_id.in_(ids),
                 TrainingSession.organization_id == str(organization_id),
+                TrainingRequirement.organization_id == str(organization_id),
+                TrainingRequirement.active.is_(True),
             )
             .distinct()
         )
