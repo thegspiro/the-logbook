@@ -187,6 +187,51 @@ describe('CheckoutPage', () => {
     expect(screen.getByText('Pick up at Station 1')).toBeInTheDocument();
   });
 
+  it('names a missing shipping address on its field and places nothing', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Review your order' });
+
+    await user.click(screen.getByRole('radio', { name: /Ship to me/ }));
+    await user.click(screen.getAllByRole('button', { name: 'Submit order' })[0] as HTMLElement);
+
+    const address = screen.getByLabelText(/Shipping address/);
+    expect(address).toHaveAccessibleDescription('Enter the address to ship to, or choose pickup.');
+    expect(address).toHaveFocus();
+    expect(mockPlaceOrder).not.toHaveBeenCalled();
+  });
+
+  it('puts a refusal of the address on its field', async () => {
+    const user = userEvent.setup();
+    mockPlaceOrder.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ loc: ['body', 'shippingAddress'], msg: 'Address is too long' }] },
+      },
+    });
+    renderPage();
+    await screen.findByRole('heading', { name: 'Review your order' });
+
+    await user.click(screen.getByRole('radio', { name: /Ship to me/ }));
+    await user.type(screen.getByLabelText(/Shipping address/), '1 Main St');
+    await user.click(screen.getAllByRole('button', { name: 'Submit order' })[0] as HTMLElement);
+
+    expect(await screen.findByText('Address is too long.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Shipping address/)).toHaveAccessibleDescription('Address is too long.');
+    expect(screen.queryByText('My orders')).not.toBeInTheDocument();
+  });
+
+  it('keeps a failure no field answers for on the page', async () => {
+    const user = userEvent.setup();
+    mockPlaceOrder.mockRejectedValue({ response: { status: 409, data: { detail: 'This store window has closed' } } });
+    renderPage();
+    await screen.findByRole('heading', { name: 'Review your order' });
+
+    await user.click(screen.getAllByRole('button', { name: 'Submit order' })[0] as HTMLElement);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('This store window has closed');
+  });
+
   it('sends an empty cart back to the store instead of reviewing nothing', async () => {
     useStorefrontStore.setState({ cart: [] });
     renderPage();
