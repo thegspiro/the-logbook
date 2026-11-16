@@ -569,8 +569,11 @@ task loop.
   `SchedulingSetupGuide`, `schedulingHubCards.ts`, `planning/`, `closeout/`,
   `historyImport/`), plus `SchedulingSettingsPage`, `SchedulingPlatoonsPage`,
   `PositionRosterPage` and `SchedulingAdminReportsPage`. Templates are
-  `pages/ShiftTemplatesPage.tsx` with `TemplateFormModal`, `PatternFormModal`,
-  `GenerateShiftsModal` and `shiftTemplateTypes.ts`.
+  `pages/ShiftTemplatesPage.tsx` with `TemplateFormModal` and
+  `shiftTemplateTypes.ts`. Patterns are made, edited and generated only in
+  `pages/scheduling/PatternsTab.tsx` (Planning › Patterns), which opens
+  `PatternFormModal` to edit one _(2026-11-16, W32-6: the Templates page
+  carried a second pattern form, and the two drifted)_.
 - **Administration header** _(2026-10-25)_ — the same area navigation Training
   and Inventory Administration draw. `SchedulingAdminLayout` wraps
   `AdminHubFrame` with seven area cards and a page strip
