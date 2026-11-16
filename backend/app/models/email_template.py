@@ -126,6 +126,10 @@ class EmailTemplateType(str, enum.Enum):
     OPEN_ENDED_LEAVE_DIGEST = "open_ended_leave_digest"
     LEAVE_REQUEST_SUBMITTED = "leave_request_submitted"
     LEAVE_REQUEST_DENIED = "leave_request_denied"
+    # The request conversation and the undecided-request reminder.
+    LEAVE_REQUEST_FOR_MEMBER = "leave_request_for_member"
+    LEAVE_REQUEST_UPDATE = "leave_request_update"
+    LEAVE_REQUEST_REMINDER = "leave_request_reminder"
     CUSTOM = "custom"
 
 

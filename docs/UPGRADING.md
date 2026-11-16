@@ -802,6 +802,27 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Leave requests: extensions, questions, changed dates and reminders (2026-11-16)
+
+Nothing blocks a restart. Migration `e5a9c3d71b28` adds columns to
+`leave_requests` (all nullable, or defaulting to 1), a `round` column to
+`leave_request_votes` (default 1), the new `leave_request_messages` table, and
+three template types. Requests and votes already stored stay as they were, in
+round 1.
+
+- **Approvers start getting reminders.** An approver who has not decided a
+  waiting request is emailed, and notified in the app, three days after it
+  was made and weekly after that. The first daily run after the upgrade
+  reminds about every request already three or more days old.
+- **The daily recheck may settle requests at once.** Under "a majority" or
+  "every approver", a request whose approvals already meet the rule against
+  today's approvers (because one stepped down) is approved or denied on the
+  first run, and its member is emailed.
+- **Leave Requests appears in the menu** for every member of a department
+  that takes requests, and for anyone with one to decide.
+- **Downgrading** drops the conversation table and the new columns. A request
+  with votes from more than one round keeps only its latest round's votes.
+
 ### Leave reminders, an open-ended leave digest, and member leave requests (2026-11-14)
 
 Nothing blocks a restart. Migration `c8d2f61a7e34` creates three empty tables

@@ -4380,8 +4380,34 @@ const routes = ({
   ],
   // A request waiting on the caller, so the vote controls render; the list
   // glob is registered first so the more specific `/me` and `/config` win.
-  ['**/api/v1/users/leave-requests?**', () => [leaveRequestFixture({ member_name: 'Alex Johnson', can_vote: true })]],
-  ['**/api/v1/users/leave-requests/me', () => [leaveRequestFixture({})]],
+  [
+    '**/api/v1/users/leave-requests?**',
+    () => [
+      leaveRequestFixture({
+        member_name: 'Alex Johnson',
+        can_vote: true,
+        can_ask: true,
+        extends_leave: { start_date: '2026-10-01', end_date: '2026-11-30' },
+      }),
+    ],
+  ],
+  // The member's own request waits on their answer, so the answer form and the
+  // conversation render.
+  [
+    '**/api/v1/users/leave-requests/me',
+    () => [
+      leaveRequestFixture({
+        awaiting: 'answer',
+        can_answer: true,
+        messages: [
+          { kind: 'question', author_name: 'Captain Lopez', body: 'Which shifts?', created_at: '2026-11-15T12:00:00Z' },
+        ],
+      }),
+    ],
+  ],
+  // Nothing waiting and requests off, so the navigation every other route is
+  // measured with does not gain an entry; the page itself reads the lists.
+  ['**/api/v1/users/leave-requests/summary', () => ({ requests_enabled: false, to_decide: 0, waiting_on_me: 0 })],
   ['**/api/v1/users/leave-requests/config', () => ({ requests_enabled: true })],
 
   ['**/api/v1/admin-hours/summary**', () => ({ totalHours: 8 })],

@@ -51,9 +51,38 @@ export interface LeaveRequestCreate {
 export interface LeaveRequestVoteEntry {
   voter_id: string;
   voter_name: string;
+  /** The voting round it was cast in; only the request's current round counts. */
+  round?: number;
   vote: LeaveVote;
   note: string | null;
   created_at: string;
+}
+
+export interface LeaveDates {
+  start_date: string;
+  end_date: string | null;
+}
+
+export type LeaveMessageKind = 'question' | 'answer' | 'proposal' | 'proposal_accepted' | 'proposal_declined';
+
+export interface LeaveRequestMessage {
+  kind: LeaveMessageKind;
+  author_name: string;
+  body: string | null;
+  created_at: string;
+}
+
+export interface LeaveProposal extends LeaveDates {
+  proposed_by_name: string;
+  proposed_at: string;
+}
+
+export interface LeaveRequestSummary {
+  requests_enabled: boolean;
+  /** Waiting requests the caller may vote on now and has not. */
+  to_decide: number;
+  /** The caller's own requests waiting on their answer. */
+  waiting_on_me: number;
 }
 
 export interface LeaveRequest {
@@ -71,11 +100,21 @@ export interface LeaveRequest {
   decided_at: string | null;
   decided_by_name: string | null;
   leave_id: string | null;
+  /** The active leave this request extends, as it stands. */
+  extends_leave?: LeaveDates | null;
+  /** Set while the request waits on its member. */
+  awaiting?: 'answer' | 'proposal' | null;
+  proposal?: LeaveProposal | null;
+  messages?: LeaveRequestMessage[];
+  vote_round?: number;
   votes: LeaveRequestVoteEntry[];
   approvals: number;
   denials: number;
   approver_count: number;
   approvals_needed: number;
   can_vote: boolean;
+  can_ask?: boolean;
+  can_answer?: boolean;
+  can_respond_to_changes?: boolean;
   my_vote: LeaveVote | null;
 }

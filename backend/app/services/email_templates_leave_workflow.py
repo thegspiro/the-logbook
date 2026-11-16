@@ -445,3 +445,250 @@ DEFAULT_TEMPLATE_DEFS: List[Dict[str, Any]] = [
         ),
     },
 ]
+
+
+# ----------------------------------------------------------------------
+# The request conversation and the undecided-request reminder (2026-11-16)
+#
+# Neither a question nor an answer is ever in an email: either can be as
+# personal as the reason. Each notice says only that something waits, and the
+# reader opens the request in the Logbook to read it.
+# ----------------------------------------------------------------------
+
+FOR_MEMBER_SUBJECT = "Your leave request needs your answer"
+
+FOR_MEMBER_HTML = build_shell(
+    "Your Leave Request Needs Your Answer",
+    """        <p>Hello {{member_name}},</p>
+        <p>{{summary}}</p>
+"""
+    + facts(
+        [[fact("From", "{{start_date}}"), fact("To", "{{end_date}}")]],
+        panel=True,
+    )
+    + """        <p>The approvers cannot decide your request until you answer.</p>
+"""
+    + action("{{request_url}}", "Open your request"),
+    accent=ACCENT_AMBER,
+    chip=_CHIP,
+)
+
+FOR_MEMBER_TEXT = """Your Leave Request Needs Your Answer
+
+Hello {{member_name}},
+
+{{summary}}
+
+From: {{start_date}}
+To: {{end_date}}
+
+The approvers cannot decide your request until you answer.
+
+Open your request: {{request_url}}
+
+{{footer_text}}"""
+
+UPDATE_SUBJECT = "Leave request: {{member_name}}"
+
+UPDATE_HTML = build_shell(
+    "A Leave Request Was Updated",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{summary}}</p>
+""" + action("{{request_url}}", "Open the request"),
+    accent=ACCENT_BLUE,
+    chip=_CHIP,
+)
+
+UPDATE_TEXT = """A Leave Request Was Updated
+
+Hello {{recipient_name}},
+
+{{summary}}
+
+Open the request: {{request_url}}
+
+{{footer_text}}"""
+
+REMINDER_SUBJECT = "Waiting on your decision: leave request from {{member_name}}"
+
+REMINDER_HTML = build_shell(
+    "A Leave Request Is Waiting on You",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{member_name}}'s request for a leave of absence has waited
+        {{waiting_days}} days, and you have not decided it yet.</p>
+"""
+    + facts(
+        [[fact("From", "{{start_date}}"), fact("To", "{{end_date}}")]],
+        panel=True,
+    )
+    + """        <p>{{rule_sentence}}</p>
+"""
+    + action("{{request_url}}", "Open the request"),
+    accent=ACCENT_AMBER,
+    chip=_CHIP,
+)
+
+REMINDER_TEXT = """A Leave Request Is Waiting on You
+
+Hello {{recipient_name}},
+
+{{member_name}}'s request for a leave of absence has waited {{waiting_days}}
+days, and you have not decided it yet.
+
+From: {{start_date}}
+To: {{end_date}}
+
+{{rule_sentence}}
+
+Open the request: {{request_url}}
+
+{{footer_text}}"""
+
+TEMPLATE_VARIABLES.update(
+    {
+        _T.LEAVE_REQUEST_FOR_MEMBER.value: [
+            {"name": "member_name", "description": "The member who asked"},
+            {
+                "name": "summary",
+                "description": (
+                    "What waits on the member: an approver's question, or "
+                    "changed dates to accept or decline. Never the question "
+                    "itself."
+                ),
+            },
+            {"name": "start_date", "description": "The first day in question"},
+            {"name": "end_date", "description": 'The last day, or "No end date"'},
+            {"name": "request_url", "description": "Link to the member's requests"},
+        ],
+        _T.LEAVE_REQUEST_UPDATE.value: [
+            {"name": "recipient_name", "description": "The approver it is sent to"},
+            {"name": "member_name", "description": "The member who asked"},
+            {
+                "name": "summary",
+                "description": (
+                    "What changed: the member answered a question, or accepted "
+                    "or declined changed dates. Never the answer itself."
+                ),
+            },
+            {"name": "request_url", "description": "Link to the request"},
+        ],
+        _T.LEAVE_REQUEST_REMINDER.value: [
+            {"name": "recipient_name", "description": "The approver it is sent to"},
+            {"name": "member_name", "description": "The member who asked"},
+            {"name": "waiting_days", "description": "Days since the request was made"},
+            {"name": "start_date", "description": "The first day asked for"},
+            {"name": "end_date", "description": 'The last day, or "No end date"'},
+            {
+                "name": "rule_sentence",
+                "description": "How the department's approvers decide it",
+            },
+            {"name": "request_url", "description": "Link to the request"},
+        ],
+    }
+)
+
+SAMPLE_CONTEXT.update(
+    {
+        _T.LEAVE_REQUEST_FOR_MEMBER.value: {
+            "member_name": "Alex Johnson",
+            "summary": (
+                "Captain Maria Lopez asked you a question about your request "
+                "for leave. Open the request to read it and answer."
+            ),
+            "start_date": "December 01, 2026",
+            "end_date": "February 28, 2027",
+            "request_url": "https://example.org/members/leave-requests",
+        },
+        _T.LEAVE_REQUEST_UPDATE.value: {
+            "recipient_name": "Captain Maria Lopez",
+            "member_name": "Alex Johnson",
+            "summary": (
+                "Alex Johnson answered the question on their request for leave. "
+                "Voting can resume."
+            ),
+            "request_url": "https://example.org/members/leave-requests",
+        },
+        _T.LEAVE_REQUEST_REMINDER.value: {
+            "recipient_name": "Captain Maria Lopez",
+            "member_name": "Alex Johnson",
+            "waiting_days": "3",
+            "start_date": "December 01, 2026",
+            "end_date": "February 28, 2027",
+            "rule_sentence": (
+                "It is approved once 3 of the 5 approvers approve it, and "
+                "denied once that can no longer happen."
+            ),
+            "request_url": "https://example.org/members/leave-requests",
+        },
+    }
+)
+
+TEST_RECIPIENT_FIELDS.update(
+    {
+        _T.LEAVE_REQUEST_FOR_MEMBER.value: {"member_name": "full"},
+        _T.LEAVE_REQUEST_UPDATE.value: {"recipient_name": "full"},
+        _T.LEAVE_REQUEST_REMINDER.value: {"recipient_name": "full"},
+    }
+)
+
+SAMPLE_DAYS.update(
+    {
+        _T.LEAVE_REQUEST_FOR_MEMBER.value: {"start_date": 14, "end_date": 90},
+        _T.LEAVE_REQUEST_REMINDER.value: {"start_date": 14, "end_date": 90},
+    }
+)
+
+DEFAULTS.update(
+    {
+        _T.LEAVE_REQUEST_FOR_MEMBER.value: (
+            FOR_MEMBER_SUBJECT,
+            FOR_MEMBER_HTML,
+            FOR_MEMBER_TEXT,
+        ),
+        _T.LEAVE_REQUEST_UPDATE.value: (UPDATE_SUBJECT, UPDATE_HTML, UPDATE_TEXT),
+        _T.LEAVE_REQUEST_REMINDER.value: (
+            REMINDER_SUBJECT,
+            REMINDER_HTML,
+            REMINDER_TEXT,
+        ),
+    }
+)
+
+DEFAULT_TEMPLATE_DEFS.extend(
+    [
+        {
+            "type": _T.LEAVE_REQUEST_FOR_MEMBER,
+            "name": "Leave Request: Answer Needed",
+            "subject": FOR_MEMBER_SUBJECT,
+            "html": FOR_MEMBER_HTML,
+            "text": FOR_MEMBER_TEXT,
+            "description": (
+                "Sent to a member when an approver asks a question about their "
+                "leave request, or approves it with different dates for them "
+                "to accept or decline. Never includes the question."
+            ),
+        },
+        {
+            "type": _T.LEAVE_REQUEST_UPDATE,
+            "name": "Leave Request Updated",
+            "subject": UPDATE_SUBJECT,
+            "html": UPDATE_HTML,
+            "text": UPDATE_TEXT,
+            "description": (
+                "Sent to the approvers when the member answers a question, or "
+                "accepts or declines changed dates. Never includes the answer."
+            ),
+        },
+        {
+            "type": _T.LEAVE_REQUEST_REMINDER,
+            "name": "Leave Request Reminder",
+            "subject": REMINDER_SUBJECT,
+            "html": REMINDER_HTML,
+            "text": REMINDER_TEXT,
+            "description": (
+                "Sent to approvers who have not decided a leave request three "
+                "days after it was made, then weekly while it waits."
+            ),
+        },
+    ]
+)

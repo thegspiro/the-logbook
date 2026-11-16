@@ -12,6 +12,8 @@ const listToDecide = vi.fn();
 const create = vi.fn();
 const vote = vi.fn();
 const withdraw = vi.fn();
+const askQuestion = vi.fn();
+const getSummary = vi.fn();
 
 vi.mock('../services/leaveRequestService', () => ({
   leaveRequestService: {
@@ -21,9 +23,14 @@ vi.mock('../services/leaveRequestService', () => ({
     create: (...a: unknown[]) => create(...a) as unknown,
     vote: (...a: unknown[]) => vote(...a) as unknown,
     withdraw: (...a: unknown[]) => withdraw(...a) as unknown,
+    askQuestion: (...a: unknown[]) => askQuestion(...a) as unknown,
+    getSummary: (...a: unknown[]) => getSummary(...a) as unknown,
   },
 }));
-vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+const toastSuccess = vi.fn();
+vi.mock('react-hot-toast', () => ({
+  default: { success: (...a: unknown[]) => toastSuccess(...a) as unknown, error: vi.fn() },
+}));
 vi.mock('../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 
 const checkPermission = vi.fn();
@@ -60,7 +67,18 @@ const request = (overrides: Record<string, unknown>) => ({
 
 describe('LeaveRequestsPage', () => {
   beforeEach(() => {
-    for (const mock of [getConfig, listMine, listToDecide, create, vote, withdraw, checkPermission]) {
+    for (const mock of [
+      getConfig,
+      listMine,
+      listToDecide,
+      create,
+      vote,
+      withdraw,
+      askQuestion,
+      getSummary,
+      checkPermission,
+      toastSuccess,
+    ]) {
       mock.mockReset();
     }
     checkPermission.mockReturnValue(false);
@@ -69,6 +87,33 @@ describe('LeaveRequestsPage', () => {
     listToDecide.mockResolvedValue([]);
     create.mockResolvedValue(request({}));
     vote.mockResolvedValue(request({ status: 'approved' }));
+    getSummary.mockResolvedValue({ requests_enabled: true, to_decide: 0, waiting_on_me: 0 });
+  });
+
+  it('says when a request will extend the current leave', async () => {
+    const user = userEvent.setup();
+    create.mockResolvedValue(request({ extends_leave: { start_date: '2026-12-01', end_date: '2027-01-31' } }));
+    renderWithRouter(<LeaveRequestsPage />);
+
+    await user.type(await screen.findByLabelText('First day'), '2027-01-15');
+    await user.type(screen.getByLabelText('Last day'), '2027-03-31');
+    await user.click(screen.getByRole('button', { name: 'Send request' }));
+
+    expect(toastSuccess).toHaveBeenCalledWith('Your request to extend your leave was sent to the approvers.');
+  });
+
+  it('an approver asks the member a question from the page', async () => {
+    const user = userEvent.setup();
+    listToDecide.mockResolvedValue([request({ can_vote: true, can_ask: true })]);
+    askQuestion.mockResolvedValue(request({ awaiting: 'answer' }));
+    renderWithRouter(<LeaveRequestsPage />);
+
+    const section = await screen.findByRole('region', { name: 'To decide' });
+    await user.click(within(section).getByRole('button', { name: 'Ask a question' }));
+    await user.type(within(section).getByLabelText('Your question to the member'), 'Which shifts?');
+    await user.click(within(section).getByRole('button', { name: 'Send question' }));
+
+    expect(askQuestion).toHaveBeenCalledWith('r1', 'Which shifts?');
   });
 
   it('sends a request with no end date when the member does not know it', async () => {

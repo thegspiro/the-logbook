@@ -471,3 +471,323 @@ async def send_request_denied(
             await notify_request_denied(session, organization_id, request_id, note)
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("Leave request decision notice failed: {}", exc)
+
+
+# ----------------------------------------------------------------------
+# The request conversation, the undecided-request reminder and the recheck
+# (2026-11-16)
+#
+# Each of these is an email and a bell notice (owner decision 2026-11-16).
+# Neither carries a question or an answer: the reader opens the request.
+# ----------------------------------------------------------------------
+
+KIND_REQUEST_REMINDER = "request_reminder"
+BELL_CATEGORY = "leave_request"
+
+# The first reminder waits this long after the request; later ones follow
+# weekly while it still waits.
+FIRST_REMINDER_DAYS = 3
+REMINDER_EVERY_DAYS = 7
+
+QUESTION_ASKED = "question_asked"
+CHANGES_PROPOSED = "changes_proposed"
+ANSWERED = "answered"
+CHANGES_ACCEPTED = "changes_accepted"
+CHANGES_DECLINED = "changes_declined"
+
+
+def _bell(
+    db: AsyncSession,
+    org_id: str,
+    user: User,
+    subject: str,
+    message: str,
+    request_id: str,
+) -> None:
+    """Queue an in-app notice; committed with the caller's next commit."""
+    from app.models.notification import NotificationChannel, NotificationLog
+
+    db.add(
+        NotificationLog(
+            organization_id=org_id,
+            recipient_id=str(user.id),
+            channel=NotificationChannel.IN_APP,
+            category=BELL_CATEGORY,
+            subject=subject,
+            message=message,
+            action_url=REQUESTS_PATH,
+            notification_metadata={"leave_request_id": request_id},
+            delivered=True,
+        )
+    )
+
+
+async def _commit_bells(db: AsyncSession) -> None:
+    try:
+        await db.commit()
+    except Exception as exc:
+        # The email still carries the notice; a failed bell insert must not
+        # take it down too.
+        await db.rollback()
+        logger.warning("Leave request in-app notice failed: {}", exc)
+
+
+async def _request(db: AsyncSession, org_id: str, request_id: str):
+    return (
+        await db.execute(
+            select(LeaveRequest).where(
+                LeaveRequest.id == str(request_id),
+                LeaveRequest.organization_id == org_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def notify_request_event(
+    db: AsyncSession,
+    organization_id: str,
+    request_id: str,
+    event: str,
+    actor_id: str,
+) -> int:
+    """Tell whoever must act next. Returns how many were emailed.
+
+    A question or changed dates go to the member, who must answer before
+    voting resumes; the member's answer, or their decision on the dates, goes
+    to the approvers.
+    """
+    org_id = str(organization_id)
+    request = await _request(db, org_id, request_id)
+    if request is None or request.status != LeaveRequestStatus.PENDING:
+        return 0
+    service = LeaveRequestService(db)
+    member, approvers, _ = await service.requester_and_approvers(org_id, request)
+    if member is None:
+        return 0
+    actor = await db.get(User, str(actor_id))
+    actor_name = _name(actor, "An approver")
+    org = await db.get(Organization, org_id)
+    member_name = _name(member, "A member")
+    sent = 0
+    rid = str(request.id)
+
+    if event in (QUESTION_ASKED, CHANGES_PROPOSED):
+        if event == QUESTION_ASKED:
+            summary = (
+                f"{actor_name} asked you a question about your request for "
+                "leave. Open the request to read it and answer."
+            )
+            start, end = request.start_date, request.end_date
+            subject = "A question about your leave request"
+        else:
+            summary = (
+                f"{actor_name} would approve your request for leave with "
+                "different dates. Open the request to accept or decline them."
+            )
+            start = request.proposed_start_date or request.start_date
+            end = request.proposed_end_date
+            subject = "Changed dates for your leave request"
+        _bell(db, org_id, member, subject, summary, rid)
+        await _commit_bells(db)
+        if await _send(
+            db,
+            org,
+            member,
+            EmailKind.TRAINING_RECORD_CHANGES,
+            EmailTemplateType.LEAVE_REQUEST_FOR_MEMBER,
+            {
+                "member_name": member_name,
+                "summary": summary,
+                "start_date": _date(start),
+                "end_date": _date(end),
+                "request_url": _url(REQUESTS_PATH),
+            },
+        ):
+            sent += 1
+        return sent
+
+    summaries = {
+        ANSWERED: (
+            f"{member_name} answered the question on their request for leave. "
+            "Voting can resume."
+        ),
+        CHANGES_ACCEPTED: (
+            f"{member_name} accepted the changed dates on their request for "
+            "leave. Voting starts again on the new dates."
+        ),
+        CHANGES_DECLINED: (
+            f"{member_name} declined the changed dates on their request for "
+            "leave. Their own dates stand, and voting can resume."
+        ),
+    }
+    approver_summary = summaries.get(event)
+    if approver_summary is None:
+        raise ValueError(f"Unknown leave request event: {event}")
+    for approver in approvers:
+        _bell(
+            db, org_id, approver, f"Leave request: {member_name}", approver_summary, rid
+        )
+    await _commit_bells(db)
+    for approver in approvers:
+        if await _send(
+            db,
+            org,
+            approver,
+            EmailKind.MEMBERSHIP_ADMIN,
+            EmailTemplateType.LEAVE_REQUEST_UPDATE,
+            {
+                "recipient_name": _name(approver),
+                "member_name": member_name,
+                "summary": approver_summary,
+                "request_url": _url(REQUESTS_PATH),
+            },
+        ):
+            sent += 1
+    return sent
+
+
+async def send_request_event(
+    organization_id: str, request_id: str, event: str, actor_id: str
+) -> None:
+    """Background task: ``notify_request_event`` on its own session."""
+    from app.core.database import database_manager
+
+    try:
+        async for session in database_manager.get_session():
+            await notify_request_event(
+                session, organization_id, request_id, event, actor_id
+            )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Leave request notice failed: {}", exc)
+
+
+def reminder_number(created: date, today: date) -> int:
+    """Which reminder is due by ``today`` for a request made on ``created``.
+
+    0 before the first (three days after), then 1, 2, ... one a week. Each
+    number is claimed once, so a daily run sends each reminder exactly once.
+    """
+    waited = (today - created).days
+    if waited < FIRST_REMINDER_DAYS:
+        return 0
+    return 1 + (waited - FIRST_REMINDER_DAYS) // REMINDER_EVERY_DAYS
+
+
+async def send_request_reminders(db: AsyncSession, org: Organization) -> int:
+    """Remind approvers who have not decided a request still waiting.
+
+    A request waiting on its member is not reminded about: the approvers can
+    do nothing until the member answers.
+    """
+    org_id = str(org.id)
+    today = await resolve_org_today(db, org_id)
+    waiting = (
+        (
+            await db.execute(
+                select(LeaveRequest).where(
+                    LeaveRequest.organization_id == org_id,
+                    LeaveRequest.status == LeaveRequestStatus.PENDING,
+                    LeaveRequest.info_requested_at.is_(None),
+                    LeaveRequest.proposed_at.is_(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    service = LeaveRequestService(db)
+    sent = 0
+    for request in waiting:
+        created = request.created_at.date()
+        number = reminder_number(created, today)
+        if number == 0:
+            continue
+        votes = await service._votes([str(request.id)])
+        voted = {
+            str(v.voter_id)
+            for v in service._current_votes(request, votes.get(str(request.id), []))
+        }
+        member, approvers, count = await service.requester_and_approvers(
+            org_id, request
+        )
+        due = [a for a in approvers if str(a.id) not in voted]
+        if not due:
+            continue
+        claim = await _claim(
+            db, org_id, KIND_REQUEST_REMINDER, f"{request.id}:{number}"
+        )
+        if claim is None:
+            continue
+        member_name = _name(member, "A member")
+        waited = (today - created).days
+        for approver in due:
+            _bell(
+                db,
+                org_id,
+                approver,
+                f"Waiting on your decision: {member_name}",
+                f"{member_name}'s request for leave has waited {waited} days.",
+                str(request.id),
+            )
+        await _commit_bells(db)
+        delivered = False
+        for approver in due:
+            delivered = (
+                await _send(
+                    db,
+                    org,
+                    approver,
+                    EmailKind.MEMBERSHIP_ADMIN,
+                    EmailTemplateType.LEAVE_REQUEST_REMINDER,
+                    {
+                        "recipient_name": _name(approver),
+                        "member_name": member_name,
+                        "waiting_days": str(waited),
+                        "start_date": _date(request.start_date),
+                        "end_date": _date(request.end_date),
+                        "rule_sentence": rule_sentence(request.decision_rule, count),
+                        "request_url": _url(REQUESTS_PATH),
+                    },
+                )
+                or delivered
+            )
+        # The bell notices went out whatever the email did, so the claim
+        # stands: releasing it would put a second bell notice on tomorrow's run.
+        sent += 1 if delivered else 0
+    return sent
+
+
+async def run_request_upkeep(db: AsyncSession, org: Organization) -> int:
+    """The daily pass: settle what the rule already decides, then remind.
+
+    A request a departed approver left decided is settled and its member told,
+    as a vote would have; the rest that still wait are reminded about.
+    """
+    from app.services.leave_of_absence_notices import (
+        RECORDED,
+        UPDATED,
+        deliver_leave_notice,
+    )
+
+    org_id = str(org.id)
+    service = LeaveRequestService(db)
+    done = 0
+    for request in await service.resettle_pending(org_id):
+        done += 1
+        if request.status == LeaveRequestStatus.APPROVED and request.leave_id:
+            extended = request.extends_leave_id == request.leave_id
+            await deliver_leave_notice(
+                db,
+                org_id,
+                str(request.leave_id),
+                str(request.decided_by or ""),
+                UPDATED if extended else RECORDED,
+                summary=(
+                    "Your request to extend your leave was approved."
+                    if extended
+                    else "Your request for a leave of absence was approved."
+                ),
+            )
+        elif request.status == LeaveRequestStatus.DENIED:
+            await notify_request_denied(db, org_id, str(request.id), None)
+    return done + await send_request_reminders(db, org)
