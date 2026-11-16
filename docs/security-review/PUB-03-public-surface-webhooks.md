@@ -1,6 +1,236 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (PR #3399), pass 11 (PR #3558), pass 13 (PR #3804), pass 15 (this PR)
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12), 2026-10-28 (pass 13, watchdog pickup), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup), 2026-11-16 (pass 16, watchdog pickup) · **PR:** #1806 (pass 1), pass 9 (PR #3215), pass 10 (PR #3399), pass 11 (PR #3558), pass 13 (PR #3804), pass 15 (PR #4022), pass 16 (this PR)
+
+---
+
+## Pass 16 (2026-11-16, watchdog pickup) — a new public preceptor shift-evaluation link surface, reviewed fresh; two already-landed cross-feature fixes in this file set re-verified; route count corrected to 51; 0 fixed, 0 new findings
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session remains
+unreachable. Step 0 (done by the delegating watchdog before this run started):
+`list_pull_requests` (state `open`) against the repo found 0 results with a
+`claude/security-review-*` head — PR #4348 (Feature 02, Permissions & roles,
+pass 16) had merged shortly before this iteration began. That PR touched only
+`docs/security-review/PERMISSIONS-ROLES...` and `PROGRESS.md`, not this
+file, so there is nothing of this feature's own to re-verify from it. Row 03
+confirmed the next `⬜` row by reading `PROGRESS.md`'s table directly on a
+freshly-fetched `main`.
+
+**Baseline:** `bc34d7782` (pass 15's merge, PR #4022). **Head:** `4c0934021`
+(PR #4348's merge). `git diff bc34d7782 HEAD --stat -- backend/app/api/public/
+backend/app/core/public_portal_security.py
+backend/app/services/integration_services/webhook_service.py
+backend/app/utils/webhook_replay.py` touches **six** files: a brand-new
+`shift_evaluations.py` (138 lines), `display.py` (+98/-156 net, a function
+extracted to a shared helper plus the lookup-enumeration fix below),
+`event_guest.py` (+16/-18, the same enumeration fix), `finance_approvals.py`
+(+35/-1, approval-decision emails added after commit), `legal.py` (+6/-4,
+comment only) and `portal.py` (+10/-7, a location-name fallback). The three
+webhook receivers (`paypal_webhook.py`, `integrations_webhook.py`,
+`salesforce_webhook.py`), `public_portal_security.py`, `webhook_service.py`,
+`webhook_replay.py` and the other ten route-bearing files under
+`app/api/public/` are byte-identical to pass 15's reviewed state (same diff
+command, no hunks).
+
+**Route re-enumeration (per Step 3's instruction that a repeat pass
+re-derives the count rather than trust it forward):** an AST walk of every
+`@router.<verb>` decorator across all 17 route-bearing files under
+`app/api/public/` (`responses.py` and `__init__.py` excluded), cross-checked
+against a plain `grep -c '^@router\.\(get\|post\|put\|patch\|delete\)'` (both
+agreeing), finds **51 routes**: pass 15's 49 plus `shift_evaluations.py`'s two
+new routes. `display.py`, `event_guest.py`, `finance_approvals.py` and
+`portal.py` each changed logic inside existing handlers, not route counts.
+Every router import was cross-checked against `backend/main.py`'s
+`app.include_router(...)` calls by its actual import alias
+(`public_shift_evaluations_router`) — all 17 are mounted, none orphaned.
+
+**The new surface, read in full against all seven checklist dimensions:**
+
+- **`app/api/public/shift_evaluations.py` (new, 2 routes, prefix
+  `/public/v1/shift-evaluations`) and its collaborator
+  `app/services/shift_evaluation_link_service.py`** — an outside agency's
+  preceptor, who has no account here, opens a QR/emailed link to evaluate one
+  logged outside shift and submits it once; the evaluated member's training
+  credit then lands exactly as if a training officer had entered it.
+  **Auth (dimension 1):** intentionally public; both handlers call
+  `validate_ip_rate_limit(request)` (the shared public-portal IP limiter, same
+  function this feature's other token-addressed routes already use) as the
+  first line of the handler body, ahead of any DB work — read directly, not
+  assumed from the module docstring. **Token handling:** the 43-character
+  `secrets.token_urlsafe(32)` token is looked up only by `token_hash`
+  (SHA-256, unique-constrained — `uq_shift_evaluation_link_token_hash`,
+  migration below); the plaintext `token` column is `EncryptedText`, kept only
+  so the same link can be re-shown, matching the follow-up-form token scheme
+  this feature already established (pass 14). A shape check
+  (`_TOKEN_SHAPE.fullmatch`) runs before the hash lookup so a malformed token
+  cannot reach the database at all. **Fail-closed, no oracle:** `resolve()`
+  returns `None` — the same 404 — for every unusable state alike (unknown,
+  revoked, expired, the shift gone/rejected, the evaluation no longer
+  waiting), and distinguishes only the one state a preceptor who already
+  submitted needs to be told about (`LinkAlreadyUsed` → 409), read directly
+  in `shift_evaluation_link_service.py:304-349` rather than taken from the
+  docstring's claim. `_refuse()` preserves the module's private-response
+  headers on every raised `HTTPException`, including the 429 the shared rate
+  limiter itself raises (`_rate_limited`'s own wrapper) — checked because
+  FastAPI drops headers set on the injected `Response` once an exception is
+  raised instead, which is exactly the gap this module's own comment names.
+  **Tenant isolation (dimension 3):** `organization_id` is never client
+  input anywhere in this module — `resolve()` takes it from the row the token
+  hash names, and every downstream query (`entry_requirements`, `entry_form`,
+  the `Organization` lookup) is reached through that resolved id, not a
+  request parameter. **Account-status gate (Pitfall #32):** `resolve()`
+  explicitly checks `member.is_active` rather than `== UserStatus.ACTIVE`, so
+  a probationary member's outside shift still gets evaluated — read directly
+  at `shift_evaluation_link_service.py:334-337`, not assumed. **Idempotency
+  (Pitfall #36):** `submit()` row-locks the link (`resolve(token, lock=True)`)
+  and marks `link.used_at` inside the same transaction that saves the
+  evaluation, so a second submission (a double-tap, or two tabs) waits on the
+  lock and then finds the link already used rather than writing twice; a
+  refused submission (a validation `ValueError`) rolls back, leaving the link
+  open for the preceptor to correct and resend — the `used_at` write and the
+  evaluation save share one commit/rollback boundary, read directly rather
+  than assumed from the "safe to run twice" docstring claim. The link-creation
+  side (authenticated, out of this feature's scope) separately locks the
+  parent shift row before revoking any open link and inserting the new one
+  (`create()`, `with_for_update()` on `ExternalShiftHours`), closing the
+  two-creates-at-once race the module's own docstring calls out; not
+  re-flagged here since creation is gated by `require_permission`, not a
+  public route. **Injection (dimension 4):** no raw SQL, no `.like()`; every
+  text field on `PreceptorEvaluationSubmit` is length-capped
+  (`MAX_COMMENT_LENGTH`, `MAX_CLOSING_COMMENTS_LENGTH`,
+  `MAX_PRECEPTOR_NAME_LENGTH`, `app/schemas/shift_evaluation.py`), and
+  `header_values`/`responses`/`statistics` dicts are each capped in key
+  count. **Data exposure (dimension 5):** `public_view()` builds
+  `PublicShiftEvaluationView` by naming exactly six fields out (org name,
+  member name, shift date/start/end, unit label, the blank template, link
+  expiry) — no draft a training officer may have started is shown, since the
+  preceptor always fills the form from a blank copy (the service's own
+  comment on this, confirmed against the code: `public_view` never reads an
+  existing `ShiftEvaluation` row). Every response, success or error, carries
+  `Cache-Control: no-store, private`, `Referrer-Policy: no-referrer` and
+  `X-Robots-Tag: noindex, nofollow, noarchive` — the bearer-credential URL and
+  the member's name in the body are kept out of caches, proxies, search
+  indexes and a Referer header. The audit event
+  (`shift_evaluation_submitted`) carries only ids (organization, evaluation,
+  external-shift, member) and the fixed string `"via": "preceptor_link"` — no
+  preceptor name, no answers, matching checklist §5. **Abuse resistance
+  (dimension 6):** the one DB-heavy branch (resolve + save) is reached only
+  after the rate limiter; `submitted_ip`/`submitted_user_agent` are stored
+  truncated (64/500 chars) rather than unbounded. **Schema & migration
+  integrity (dimension 7), migration `533f8aba187e` read in full:** idempotent
+  (`_has_table`/`_has_column` guards, "safe to run twice" per its own
+  docstring), skips the enum-widening step entirely when the target value is
+  already present, and freezes the existing `EmailTemplateType` value list as
+  a literal tuple rather than importing the live enum (Pitfall #20's "frozen"
+  requirement). Every FK on the new table is `nullable=True` where
+  `ondelete="SET NULL"` is used (`created_by`, `evaluation_id` — Pitfall #2);
+  the three `ondelete="CASCADE"` FKs (`organization_id`, `external_shift_id`,
+  `member_id`) are `nullable=False`, correctly, since a cascade delete removes
+  the link rather than orphaning it. `token_hash` carries a real
+  `UniqueConstraint`, not just an index — the DB-level backstop behind the
+  in-process idempotency above.
+
+**Two already-landed fixes in this file set, re-verified rather than
+re-flagged as new (neither originated in this pass or this rotation):**
+
+- **`app/api/public/display.py`'s `guest_lookup` and
+  `app/api/public/event_guest.py`'s `link_guest_lookup` no longer answer
+  `GuestCheckInService.LOOKUP_MEMBER` distinctly** — commit `184b28bc5`
+  (2026-11-08, landed inside this pass's review window, outside this
+  rotation) closed an address-enumeration oracle: the public guest-lookup
+  endpoints previously told a caller "this looks like a department member
+  account" for a matching member email, which let anyone holding the public
+  QR/event link test arbitrary addresses against the department's member
+  roster. Both public handlers now answer the identical
+  `GuestCheckInService.LOOKUP_NOT_FOUND` message for a member address as for
+  an unknown one; the audit row still records the true outcome
+  (`event_guest_lookup`, unchanged), and the authenticated staff-entry path
+  is unaffected (it still reads the real classification). Confirmed identical
+  in both files by reading both diffs directly, not assumed from one.
+- **`app/api/public/display.py`'s `get_public_location_display` now calls
+  the shared `app/services/location_display.build_location_display`
+  (LOC-40, Feature 32's own owner decision, 2026-11-01) instead of building
+  `LocationDisplayInfo` inline** — the public kiosk and the authenticated
+  room page previously filled the same response shape by hand in two places,
+  which is how LOC-1 (a check-in window computed two ways) happened. Re-read
+  the shared builder directly rather than trusting that unifying it preserved
+  this endpoint's own behavior: `recheck_window=True` is passed for this
+  public caller, which still re-evaluates each event's check-in window
+  against the clock now via `EventService._validate_check_in_window` — the
+  one thing this endpoint needs that the authenticated page does not, since a
+  polling, unattended kiosk must not show a STRICT event as ready before its
+  window opens. The exposed field set (`event_description=None`, no roster,
+  no member-specific check-in times) is unchanged. No new route, no new
+  exposure.
+
+**`app/api/public/finance_approvals.py`'s `approve_via_token`/
+`deny_via_token` now call `send_approval_notices` after the commit** — a
+decision-notification email to the requester and next-step approvers,
+previously sent only from the authenticated decision path. Re-checked
+against this feature's own scope: the call happens strictly after
+`await db.commit()`, inside the existing `try`, and `send_approval_notices`
+itself never raises (each queued notice is wrapped in its own `try/except`,
+logged and skipped on failure — `finance_approval_notifications.py:330-352`)
+so a mail failure cannot turn a successful token-approval into a 500. The
+one new log call (`logger.warning("Finance approval notice {} for {} {}
+failed: {}", ...)`) passes every value as a positional argument rather than
+splicing them into the f-string (Pitfall #33) and logs ids, not free text.
+This reuses `FinanceService.take_approval_notices()`/the already-reviewed
+`ApprovalNotice` queue (PUB-4's file, same self-approval guard unaffected —
+the notices are queued by the same `approve_by_token`/`deny_by_token` calls
+PUB-4 already covers, not a new write path). No PII beyond what the existing
+authenticated decision path already emails.
+
+**`app/api/public/legal.py`'s comment update (no behavior change) and
+`app/api/public/portal.py`'s event-location fallback (no new route, a
+data-correctness fix, W76):** read both in full rather than skipped as
+comment-only/cosmetic. `legal.py`'s new comment describes a frontend subset
+parser (`frontend/src/pages/legal/legalMarkup.ts`, new since pass 15) that
+renders a department's privacy/terms text as headings and lists — read in
+full: `parseLegalMarkup` returns plain data (block kind + strings) and
+`LegalMarkup.tsx` puts every string into the page as a React text node (no
+`dangerouslySetInnerHTML` anywhere in the file), and the only parsed value
+that reaches a prop rather than text is a numbered list's start number,
+which is `Number.parseInt`'d from a regex-anchored `\d{1,6}` match before
+being passed to `<ol start={...}>` — a number, not a string, so there is no
+attribute-injection surface. The comment's claim ("rendered as a text node,
+never as HTML") holds by reading the renderer, not merely by reading the
+claim. `portal.py`'s `get_public_events` now prefers `Event.location_obj.name`
+(a department-picked facility) over the free-text `location` column,
+matching the department calendar feed's existing logic; the query change is
+additive-only (`selectinload(Event.location_obj)`, avoiding a lazy-load
+exception on this async session) and the response still passes through
+`filter_data_by_whitelist(...)` before validation — unchanged, re-confirmed
+present in this diff rather than assumed carried forward.
+
+**All 17 files' `Depends()`/rate-limit/signature gates and the three webhook
+handlers:** unchanged, byte-identical to pass 15's already-fully-reviewed
+state (same diff command, no hunks) — not re-read line by line this pass,
+per Step 3's instruction to spend a repeat pass's reading on what changed.
+
+**Nothing to fix, nothing to flag.** PUB-1 through PUB-14 remain fixed
+(unaffected by this diff); PUB-3 (INFO, `ApprovalChain`'s tables remain
+`create_all`-only, by design) is unchanged and still accurate. The new
+`shift_evaluation_links` table has its own dedicated migration (not
+`create_all`-only), with every `SET NULL` FK `nullable=True` and a real
+unique constraint backing the token-hash lookup. No `KNOWN_LIMITATIONS.md`
+entry needed — nothing is flagged.
+
+### Completion gate (pass 16)
+
+| Check                                                                                                                                                                                                                                                                                                                                                                      | Result                                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                                                                                                                                                                                                                                                                                                                      | ✅ 0 violations                                                  |
+| `black --check app/ tests/ alembic/` (26.10.1 — CI's pinned version; a locally-shadowing uv-tool install at 26.5.1 was bypassed via its absolute `/usr/local/bin/black` path before running, same correction pass 12 made)                                                                                                                                                 | ✅ 3246 files unchanged                                          |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                                                                                                                                                                                                                                                                                                          | ✅ clean                                                         |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                                          | ✅ single head `053d3e96b4fa`, 784 revisions                     |
+| scoped pytest (`-k "public or webhook or paypal or salesforce or integrations or minutes or mcp_oauth or calendar or finance_approval or branding or kiosk or guest or event_guest or embed or legal or display or security_txt or portal or next_meeting or follow_up or error_reporting or shift_evaluation or zeffy" -m "not integration and not slow and not docker"`) | ✅ 1943 passed, 1 skipped (`py_vapid`/`pywebpush`, pre-existing) |
+| standing guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, baseline member grants, logging escaping, log-call-shape sweep)                                                                                                                                                                                      | ✅ 183 passed                                                    |
+| `cd frontend && npm run typecheck` (sandbox note: the committed `node_modules` was corrupted on session start — `typescript-native`'s `tsc` segfaulted and `@typescript-eslint/eslint-plugin` had no `package.json` — repaired with `npm ci` from the repo root per CLAUDE.md's own sanctioned recovery path before running either frontend gate)                          | ✅ 0 errors                                                      |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                                                                                                              | ✅ 0 errors, 0 warnings                                          |
+
+Rotation row 03 → ✅ (pending this PR's merge); next is Feature 04
+(Storefront & payments).
 
 ---
 
