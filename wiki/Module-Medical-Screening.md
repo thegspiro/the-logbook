@@ -167,9 +167,13 @@ requirement rather than entered.
 
 ## Rules and gotchas
 
-- **There is no expiry email.** Nothing in the scheduler sends screening
-  reminders; the expiring list, the banner, the admin hub and the member's
-  dashboard card are how lapses surface.
+- **Members are emailed before a screening falls due**, 90, 60, 30 and 7 days
+  out, by the daily `medical_screening_expiry_reminders` task. Only the most
+  urgent tier reached is sent, once. The email names the requirement and the
+  due date and nothing else; its subject names neither. It honours the
+  member's training-reminder email choice and can be switched off under
+  Notifications › Rules (**Medical Screening Expiry**). There is no text and no
+  bell entry. Prospects are not emailed.
 - **Medical screening does not feed the Training/[Compliance](Module-Compliance)
   module's figures.** It is graded on its own.
 - **When an applicant becomes a member, their screening records stay filed
@@ -178,8 +182,9 @@ requirement rather than entered.
   going forward against the new member.
 - **A record with neither an expiration date nor a frequency to derive one
   never lapses.**
-- **The Add Requirement / Add Record buttons show for view-only holders**, but
-  the server refuses the save without `medical_screening.manage`.
+- **Add, edit and delete are offered only with `medical_screening.manage`.** A
+  `medical_screening.view` holder reads the tabs and the roster; the server
+  refuses every write without `.manage` either way.
 
 ## For developers
 

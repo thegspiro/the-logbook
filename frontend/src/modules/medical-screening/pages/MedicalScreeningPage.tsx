@@ -15,6 +15,7 @@ import { ScreeningRecordForm } from '../components/ScreeningRecordForm';
 import { ComplianceDashboard } from '../components/ComplianceDashboard';
 import { SelfRecordedBadge } from '../components/SelfRecordedBadge';
 import { useCanViewNarrative } from '../hooks/useCanViewNarrative';
+import { useAuthStore } from '../../../stores/authStore';
 import AdminPageHeader from '../../../components/admin/AdminPageHeader';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -51,6 +52,9 @@ export const MedicalScreeningPage: React.FC = () => {
   // MS-14: the provider, result summary and notes are clinical narrative,
   // returned only with medical_screening.view_details (or .manage).
   const canViewNarrative = useCanViewNarrative();
+  // The route opens on `.view`; every create, edit and delete needs `.manage`
+  // (MS2-11), so a reader is not offered a form the server will refuse.
+  const canManage = useAuthStore((state) => state.checkPermission('medical_screening.manage'));
   const [showRequirementForm, setShowRequirementForm] = useState(false);
   const [editingRequirement, setEditingRequirement] = useState<ScreeningRequirement | null>(null);
   const [showRecordForm, setShowRecordForm] = useState(false);
@@ -175,7 +179,7 @@ export const MedicalScreeningPage: React.FC = () => {
         description="Set screening requirements, record screenings, and see which ones expire soon."
         className="mb-6"
         actions={
-          activeTab === 'requirements' ? (
+          !canManage ? undefined : activeTab === 'requirements' ? (
             <button
               onClick={() => {
                 setEditingRequirement(null);
@@ -292,25 +296,27 @@ export const MedicalScreeningPage: React.FC = () => {
                   </p>
                   {req.description && <p className="text-theme-text-muted mt-1 text-xs">{req.description}</p>}
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setEditingRequirement(req);
-                      setShowRequirementForm(true);
-                    }}
-                    className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone transition-colors"
-                    aria-label={`Edit ${req.name}`}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget({ type: 'requirement', id: req.id, name: req.name })}
-                    className="text-theme-text-muted touch-target-phone transition-colors hover:text-red-700 dark:hover:text-red-400"
-                    aria-label={`Delete ${req.name}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
+                {canManage && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingRequirement(req);
+                        setShowRequirementForm(true);
+                      }}
+                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone transition-colors"
+                      aria-label={`Edit ${req.name}`}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget({ type: 'requirement', id: req.id, name: req.name })}
+                      className="text-theme-text-muted touch-target-phone transition-colors hover:text-red-700 dark:hover:text-red-400"
+                      aria-label={`Delete ${req.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -361,32 +367,34 @@ export const MedicalScreeningPage: React.FC = () => {
                     {record.expiration_date ? ` — Expires: ${formatCalendarDate(record.expiration_date)}` : ''}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setEditingRecord(record);
-                      setShowRecordForm(true);
-                    }}
-                    className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone transition-colors"
-                    aria-label={`Edit ${record.user_name ?? record.prospect_name ?? 'unlinked'} ${SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type} record`}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() =>
-                      setDeleteTarget({
-                        type: 'record',
-                        id: record.id,
-                        name: SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type,
-                        subject: record.user_name || record.prospect_name || undefined,
-                      })
-                    }
-                    className="text-theme-text-muted touch-target-phone transition-colors hover:text-red-700 dark:hover:text-red-400"
-                    aria-label={`Delete ${record.user_name ?? record.prospect_name ?? 'unlinked'} ${SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type} record`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
+                {canManage && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingRecord(record);
+                        setShowRecordForm(true);
+                      }}
+                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone transition-colors"
+                      aria-label={`Edit ${record.user_name ?? record.prospect_name ?? 'unlinked'} ${SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type} record`}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() =>
+                        setDeleteTarget({
+                          type: 'record',
+                          id: record.id,
+                          name: SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type,
+                          subject: record.user_name || record.prospect_name || undefined,
+                        })
+                      }
+                      className="text-theme-text-muted touch-target-phone transition-colors hover:text-red-700 dark:hover:text-red-400"
+                      aria-label={`Delete ${record.user_name ?? record.prospect_name ?? 'unlinked'} ${SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type} record`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             ))
           )}
