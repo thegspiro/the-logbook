@@ -41,4 +41,5 @@ CHANGELOG.md merge=union
 # still brings it down -- git has no per-folder opt-out for that -- which is
 # why .dockerignore also excludes it from every image build. See
 # video-production/README.md.
+/video-production export-ignore
 /video-production/** export-ignore
