@@ -16,6 +16,7 @@ import {
   PAYMENT_METHOD_LABELS,
   PAYMENT_POLICY_OPTIONS,
   StorePaymentMethod,
+  type ConnectedPayPalAccount,
   type StorePaymentPolicy,
   type StoreSettings,
   type StoreSettingsUpdate,
@@ -36,6 +37,7 @@ interface FormState {
   venmoHandle: string;
   paypalMeUrl: string;
   paypalEmail: string;
+  paypalUseConnected: boolean;
   cashAppCashtag: string;
   zelleHandle: string;
   zelleInstructions: string;
@@ -77,6 +79,7 @@ const toForm = (settings: StoreSettings): FormState => ({
   venmoHandle: settings.venmoHandle ?? '',
   paypalMeUrl: settings.paypalMeUrl ?? '',
   paypalEmail: settings.paypalEmail ?? '',
+  paypalUseConnected: settings.paypalUseConnected,
   cashAppCashtag: settings.cashAppCashtag ?? '',
   zelleHandle: settings.zelleHandle ?? '',
   zelleInstructions: settings.zelleInstructions ?? '',
@@ -204,17 +207,25 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [previewNotice, setPreviewNotice] = useState<string | null>(null);
+  // The connected PayPal integration's link and email, as the backend reports
+  // them. Read-only here: they are edited on the integration's Settings.
+  const [connectedPaypal, setConnectedPaypal] = useState<ConnectedPayPalAccount | null>(null);
+
+  const applySettings = useCallback((settings: StoreSettings) => {
+    setForm(toForm(settings));
+    setConnectedPaypal(settings.connectedPaypal ?? null);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setForm(toForm(await storefrontService.getSettings()));
+      applySettings(await storefrontService.getSettings());
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not load store settings'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applySettings]);
 
   useEffect(() => {
     void load();
@@ -248,6 +259,7 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
       venmoHandle: blankToNull(form.venmoHandle),
       paypalMeUrl: blankToNull(form.paypalMeUrl),
       paypalEmail: blankToNull(form.paypalEmail),
+      paypalUseConnected: form.paypalUseConnected,
       cashAppCashtag: blankToNull(form.cashAppCashtag),
       zelleHandle: blankToNull(form.zelleHandle),
       zelleInstructions: blankToNull(form.zelleInstructions),
@@ -283,7 +295,7 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
 
     setSaving(true);
     try {
-      setForm(toForm(await storefrontService.updateSettings(payload)));
+      applySettings(await storefrontService.updateSettings(payload));
       toast.success('Store settings saved');
       onChanged();
     } catch (err: unknown) {
@@ -291,7 +303,7 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
     } finally {
       setSaving(false);
     }
-  }, [form, onChanged]);
+  }, [form, onChanged, applySettings]);
 
   if (loading || !form) {
     return (
@@ -302,6 +314,30 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
   }
 
   const accepts = (method: string) => form.acceptedPaymentMethods.includes(method);
+  const connectedHas = !!(connectedPaypal?.paypalMeUrl || connectedPaypal?.accountEmail);
+  // What the PayPal button will actually do, stated beside the choice. The
+  // fallback rule is the backend's store_paypal_account; this only words it.
+  const paypalAccountNote: { tone: string; text: string } | null = form.paypalUseConnected
+    ? connectedPaypal === null
+      ? {
+          tone: 'alert-warning',
+          text: 'PayPal is not connected on the Integrations page. Until it is, members are sent to the fallback link and email below.',
+        }
+      : !connectedHas
+        ? {
+            tone: 'alert-warning',
+            text: 'The connected PayPal account has no PayPal.Me link or email yet. Add them under Integrations → PayPal → Settings. Until then, members are sent to the fallback link and email below.',
+          }
+        : {
+            tone: 'alert-info',
+            text: `Members are sent to ${[connectedPaypal.paypalMeUrl, connectedPaypal.accountEmail].filter(Boolean).join(' · ')}. Payments to it are matched to orders automatically.`,
+          }
+    : connectedPaypal !== null
+      ? {
+          tone: 'alert-info',
+          text: 'Payments to an account other than the connected one are not matched to orders automatically; mark them paid by hand.',
+        }
+      : null;
 
   return (
     <div className="space-y-6">
@@ -456,10 +492,41 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
         )}
 
         {accepts(StorePaymentMethod.PAYPAL) && (
+          <fieldset className="space-y-2">
+            <legend className="form-label">PayPal account members pay into</legend>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name="settings-paypal-account"
+                checked={!form.paypalUseConnected}
+                onChange={() => update('paypalUseConnected', false)}
+                className="mt-0.5"
+              />
+              <span className="text-theme-text-primary">The account entered below</span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name="settings-paypal-account"
+                checked={form.paypalUseConnected}
+                onChange={() => update('paypalUseConnected', true)}
+                className="mt-0.5"
+              />
+              <span className="text-theme-text-primary">The connected PayPal account</span>
+            </label>
+            {paypalAccountNote && (
+              <p className={`rounded-lg p-3 text-sm ${paypalAccountNote.tone}`} data-testid="paypal-account-note">
+                {paypalAccountNote.text}
+              </p>
+            )}
+          </fieldset>
+        )}
+
+        {accepts(StorePaymentMethod.PAYPAL) && (
           <div className="form-grid-2">
             <div>
               <label htmlFor="settings-paypal-url" className="form-label">
-                PayPal.Me link
+                {form.paypalUseConnected ? 'Fallback PayPal.Me link' : 'PayPal.Me link'}
               </label>
               <input
                 id="settings-paypal-url"
@@ -472,7 +539,7 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
             </div>
             <div>
               <label htmlFor="settings-paypal-email" className="form-label">
-                PayPal email
+                {form.paypalUseConnected ? 'Fallback PayPal email' : 'PayPal email'}
               </label>
               <input
                 id="settings-paypal-email"

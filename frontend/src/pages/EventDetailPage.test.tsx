@@ -1396,7 +1396,10 @@ describe('EventDetailPage', () => {
       const trainingEvent = (custom: Record<string, unknown>) =>
         ({ ...withCustomFields(custom), event_type: 'training' }) as unknown as Event;
 
-      it('leaves course, type and hours to the card, which shows them live', async () => {
+      // The card now reports the instructor, certification and record
+      // settings from the session as well, and the training form edits them
+      // there, so the copies the event was created with would contradict it.
+      it("leaves the session's fields to the card, which shows them live", async () => {
         mockReportedSession = { id: 'sess-1', require_completion_confirmation: false };
         vi.mocked(eventService.getEvent).mockResolvedValue(
           trainingEvent({
@@ -1405,17 +1408,28 @@ describe('EventDetailPage', () => {
             credit_hours: 4,
             training_type: 'skills_practice',
             instructor: 'Alex Rivera',
+            issuing_agency: 'State Fire Training',
+            expiration_months: 24,
+            issues_certification: true,
+            auto_create_records: true,
+            dress_code: 'Class B uniform',
           })
         );
 
         renderWithRouter(<EventDetailPage />);
 
-        expect(await screen.findByText('Alex Rivera')).toBeInTheDocument();
+        // A field the coordinator typed is still listed.
+        expect(await screen.findByText('Class B uniform')).toBeInTheDocument();
         // Drawn until the card's fetch settles and reports the session.
         await waitFor(() => expect(screen.queryByText('Fire Behavior')).not.toBeInTheDocument());
         expect(screen.queryByText('FB-1')).not.toBeInTheDocument();
         expect(screen.queryByText('4 hours')).not.toBeInTheDocument();
         expect(screen.queryByText('Training Type')).not.toBeInTheDocument();
+        expect(screen.queryByText('Alex Rivera')).not.toBeInTheDocument();
+        expect(screen.queryByText('State Fire Training')).not.toBeInTheDocument();
+        expect(screen.queryByText('24 months')).not.toBeInTheDocument();
+        expect(screen.queryByText(/issues a certification upon completion/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Credited to members' training records/)).not.toBeInTheDocument();
       });
 
       it('draws no card when those were the only training fields', async () => {
@@ -1431,21 +1445,8 @@ describe('EventDetailPage', () => {
         expect(screen.queryByText('Fire Behavior')).not.toBeInTheDocument();
       });
 
-      it('says credit is written at finalize, after approval when the session needs it', async () => {
-        mockReportedSession = { id: 'sess-1', require_completion_confirmation: true };
-        vi.mocked(eventService.getEvent).mockResolvedValue(trainingEvent({ auto_create_records: true }));
-
-        renderWithRouter(<EventDetailPage />);
-
-        expect(
-          await screen.findByText(
-            "Credited to members' training records when attendance is finalized after a training officer approves"
-          )
-        ).toBeInTheDocument();
-        expect(screen.queryByText(/automatically created when members check in/)).not.toBeInTheDocument();
-      });
-
-      it('says credit is written at finalize when no approval is needed', async () => {
+      // With no session the event's own copies are all there is to show.
+      it('says credit is written at finalize when there is no session to say so', async () => {
         vi.mocked(eventService.getEvent).mockResolvedValue(trainingEvent({ auto_create_records: true }));
 
         renderWithRouter(<EventDetailPage />);

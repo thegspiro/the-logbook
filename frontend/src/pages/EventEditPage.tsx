@@ -1,34 +1,81 @@
 /**
  * Event Edit Page
  *
- * Full-page form for editing an existing event.
+ * Full-page form for editing an existing event: the step-by-step training
+ * form for a Training event, with its session's fields, and the single-page
+ * event form for any other (owner decision, 2026-11-10). `?step=training`
+ * opens the training form on Training Info, where the event page's "Edit
+ * training details" leads.
  */
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, useSearchParams } from 'react-router';
 import { Breadcrumbs } from '../components/ux';
 import { EventsPageHeader } from '../components/events/EventsPageHeader';
-import { Calendar, Info } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { eventService } from '../services/api';
+import { eventService, trainingSessionService } from '../services/api';
+import type { TrainingSessionResponse } from '../services/api';
 import type { EventCreate, Event, EventUpdate } from '../types/event';
-import { EventForm } from '../components/EventForm';
-import type { ConflictEvent, InitialRecurrence } from '../components/EventForm';
+import type { ConflictEvent, InitialRecurrence } from '../components/event-form/eventFormTypes';
+import { EventComposer, type EditOptions } from '../components/event-form/EventComposer';
+import type { SeriesScope } from '../components/event-form/SeriesScopeChoice';
+import type { TrainingInfoAccess, TrainingReadOnlyNotice } from '../components/training-event/TrainingInfoStep';
+import {
+  DEFAULT_TRAINING_DETAILS,
+  fromSession,
+  fromSettingCopies,
+  hasSettingCopies,
+} from '../components/training-event/trainingDetailsModel';
+import { EventType as EventTypeEnum } from '../constants/enums';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { getErrorDetail } from '../utils/errorHandling';
 import { withoutAttendanceLockedFields } from '../utils/eventAttendanceLock';
+import { formatDateCustom, toLocalISODate } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 import { useAuthStore } from '../stores/authStore';
+
+/** The most rows the events list returns at once (its server-side cap). */
+const FINALIZED_LOOKUP_LIMIT = 500;
+
+const DATE_ONLY: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+
+/** What a training manager without events.manage is told on Training Info: the API refuses them training details (403). */
+const TRAINING_MANAGER_TITLE = 'Training details are changed by an event manager.';
+const TRAINING_MANAGER_EDITS =
+  "The event's schedule, location, RSVP, check-in and reminder settings on the other steps are yours to edit.";
+const TRAINING_MANAGER_NOTICE: TrainingReadOnlyNotice = {
+  title: TRAINING_MANAGER_TITLE,
+  detail: `You can view them here, including the Training completion settings. ${TRAINING_MANAGER_EDITS}`,
+};
 
 export const EventEditPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const tz = useTimezone();
   const canManage = useAuthStore((state) => state.checkPermission('events.manage'));
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userEvents, setUserEvents] = useState<ConflictEvent[]>([]);
-  const [updateScope, setUpdateScope] = useState<'single' | 'future'>('single');
+  const [updateScope, setUpdateScope] = useState<SeriesScope>('single');
+  // The event's session: null when it has none. Its load failing is not
+  // "none": the form then leaves the training details out of the save rather
+  // than overwrite what it could not read. Read for every type, since a
+  // re-type away from Training takes back the credit and keeps the session
+  // (void_event_credit): changed back, the form opens on what it kept.
+  const [session, setSession] = useState<TrainingSessionResponse | null>(null);
+  const [sessionLoadFailed, setSessionLoadFailed] = useState(false);
+  // A later occurrence's series: the end date and the rolling flag are stored
+  // on the series' first event only (SERIES_PARENT_FIELDS in event_service),
+  // so an occurrence read on its own reports neither.
+  const [seriesParent, setSeriesParent] = useState<Event | null>(null);
+  // The nearest earlier occurrence with finalized attendance, for Review's
+  // "<date>, before it, has finalized attendance.": what tells the officer
+  // that "This and all future events" leaves that one alone.
+  const [finalizedBefore, setFinalizedBefore] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     void eventService
@@ -62,6 +109,48 @@ export const EventEditPage: React.FC = () => {
     try {
       setLoading(true);
       const data = await eventService.getEvent(eventId);
+      try {
+        setSession(await trainingSessionService.getSessionByEvent(eventId));
+      } catch {
+        setSessionLoadFailed(true);
+      }
+      if (data.recurrence_parent_id) {
+        const parentId = data.recurrence_parent_id;
+        let parent: Event | null = null;
+        try {
+          parent = await eventService.getEvent(parentId);
+          setSeriesParent(parent);
+        } catch {
+          /* non-critical: the scope choice leaves out the series' end */
+        }
+        if (data.event_type === EventTypeEnum.TRAINING) {
+          try {
+            // The series alone, so the rest of the calendar cannot crowd the
+            // occurrence wanted out of a capped page. Ascending, so a full
+            // page may still stop short of the nearest: then no date is named
+            // rather than an older one.
+            const earlier = await eventService.getEvents({
+              recurrence_series_id: parentId,
+              ...(parent ? { start_after: parent.start_datetime } : {}),
+              start_before: data.start_datetime,
+              limit: FINALIZED_LOOKUP_LIMIT,
+            });
+            const finalized = (earlier.length < FINALIZED_LOOKUP_LIMIT ? earlier : [])
+              .filter(
+                (e) =>
+                  e.id !== data.id &&
+                  (e.id === parentId || e.recurrence_parent_id === parentId) &&
+                  Boolean(e.attendance_finalized_at) &&
+                  e.start_datetime < data.start_datetime
+              )
+              .map((e) => e.start_datetime)
+              .sort();
+            setFinalizedBefore(finalized[finalized.length - 1]);
+          } catch {
+            /* non-critical: Review leaves out the finalized occurrence */
+          }
+        }
+      }
       setEvent(data);
     } catch (err) {
       setError(getErrorDetail(err) || 'Failed to load event');
@@ -70,7 +159,7 @@ export const EventEditPage: React.FC = () => {
     }
   };
 
-  const handleSubmit = async (data: EventCreate) => {
+  const handleUpdate = async (data: EventUpdate) => {
     if (!eventId) return;
 
     setIsSubmitting(true);
@@ -93,11 +182,13 @@ export const EventEditPage: React.FC = () => {
       }
       void navigate(`/events/${eventId}`);
     } catch (err: unknown) {
-      setError(getErrorDetail(err) || 'Failed to update event. Try again.');
+      // The form shows why, under the field a 422 names or in its banner.
       setIsSubmitting(false);
       throw err;
     }
   };
+
+  const handleSubmit = (data: EventCreate) => handleUpdate(data);
 
   const handleCancel = () => {
     void navigate(`/events/${eventId}`);
@@ -202,20 +293,119 @@ export const EventEditPage: React.FC = () => {
     is_draft: event.is_draft ?? false,
   };
 
+  // A later occurrence carries the pattern and nothing else of the series
+  // (SERIES_PARENT_FIELDS), so the series' own row describes it.
+  const series = seriesParent ?? event;
+
   // Build initial recurrence state when editing a recurring event
   const initialRecurrence: InitialRecurrence | undefined =
     event.is_recurring || event.recurrence_parent_id
       ? {
           is_recurring: true,
-          recurrence_pattern: event.recurrence_pattern,
-          recurrence_end_date: event.recurrence_end_date,
-          recurrence_custom_days: event.recurrence_custom_days,
-          recurrence_weekday: event.recurrence_weekday,
-          recurrence_week_ordinal: event.recurrence_week_ordinal,
-          recurrence_month: event.recurrence_month,
-          recurrence_exceptions: event.recurrence_exceptions,
+          recurrence_pattern: series.recurrence_pattern ?? event.recurrence_pattern,
+          // The form holds the end as the calendar date the officer picked;
+          // the API returns the instant the create stored, 23:59 that day in
+          // the department's zone, which is the next day in UTC west of it.
+          recurrence_end_date: toLocalISODate(series.recurrence_end_date, tz) || undefined,
+          rolling_recurrence: series.rolling_recurrence,
+          recurrence_custom_days: series.recurrence_custom_days,
+          recurrence_weekday: series.recurrence_weekday,
+          recurrence_week_ordinal: series.recurrence_week_ordinal,
+          recurrence_month: series.recurrence_month,
+          recurrence_exceptions: series.recurrence_exceptions,
         }
       : undefined;
+
+  const isSeries = Boolean(event.is_recurring || event.recurrence_parent_id);
+  const attendanceLocked = Boolean(event.attendance_finalized_at);
+
+  // What this editor may change of the session's fields. Only events.manage
+  // may change them (the API refuses a training manager with 403); once
+  // attendance is finalized, only Counts toward attendance, and a session
+  // cannot be added at all until attendance is reopened.
+  const { trainingAccess, readOnlyNotice } = ((): {
+    trainingAccess: TrainingInfoAccess;
+    readOnlyNotice?: TrainingReadOnlyNotice;
+  } => {
+    // Before the reader's notice: a reader is shown the stored details, and a
+    // failed read has none to show, so the defaults would pass for them.
+    if (sessionLoadFailed) {
+      return {
+        trainingAccess: 'readonly',
+        readOnlyNotice: {
+          title: 'The training details could not be loaded.',
+          detail: `Saving leaves them as they are. Reload the page to ${canManage ? 'change' : 'view'} them.`,
+        },
+      };
+    }
+    // The event page's words for an event with no session
+    // (TrainingSessionLinkageCard), which shows the copies beside them as the
+    // step does (pitfall #29).
+    const noDetails = attendanceLocked
+      ? `No training details: attendance is filed under ‘${event.title}’ as Continuing Education.`
+      : `No training details: attendance will be credited as ‘${event.title}’, Continuing Education.`;
+    if (!canManage) {
+      return {
+        trainingAccess: 'readonly',
+        readOnlyNotice: session
+          ? TRAINING_MANAGER_NOTICE
+          : { title: TRAINING_MANAGER_TITLE, detail: `${noDetails} ${TRAINING_MANAGER_EDITS}` },
+      };
+    }
+    if (attendanceLocked && !session) {
+      return {
+        trainingAccess: 'readonly',
+        readOnlyNotice: {
+          title: noDetails,
+          detail: 'Details can be added after someone who can reopen attendance reopens it.',
+        },
+      };
+    }
+    return { trainingAccess: attendanceLocked ? 'finalized' : 'edit' };
+  })();
+
+  // A Training event with no session has only custom_fields' copies of its
+  // settings, which the event page shows as the event's: Training Info opens
+  // on them, so a save carries them into the session rather than dropping
+  // them unseen, and a reader sees what the event page shows. So does an
+  // event of another type that kept them from when it was Training, if it is
+  // changed back.
+  const settingCopies = !session && !sessionLoadFailed ? fromSettingCopies(event.custom_fields) : undefined;
+  const storedTraining = session ? fromSession(session, event) : (settingCopies?.value ?? DEFAULT_TRAINING_DETAILS);
+
+  const editing: EditOptions = {
+    eventId: event.id,
+    initialRecurrence,
+    attendanceLocked,
+    eventTypeLocked: !canManage,
+    storedType: event.event_type,
+    keepsTrainingDetails: Boolean(session) || sessionLoadFailed || hasSettingCopies(event.custom_fields),
+    // A locked step shows the hours as stored: the save leaves them alone, so
+    // following the event's length there would show a figure never saved.
+    initialTraining:
+      trainingAccess === 'edit' || storedTraining.credit_hours_source !== 'duration'
+        ? storedTraining
+        : { ...storedTraining, credit_hours_source: 'manual' },
+    trainingAccess,
+    readOnlyNotice,
+    keptSettingCopies: settingCopies?.hidden,
+    storedCourseName: session?.course_name,
+    finalizedOccurrenceBefore: finalizedBefore,
+    initialStep: searchParams.get('step') === 'training' ? 'training' : 'details',
+    seriesScope: isSeries
+      ? {
+          value: updateScope,
+          onChange: setUpdateScope,
+          occurrenceStart: event.start_datetime,
+          seriesEnd: series.recurrence_end_date,
+          rolling: series.rolling_recurrence,
+          seriesStart: seriesParent?.start_datetime,
+          tz,
+        }
+      : undefined,
+    organizerNames: { organizer: event.organizer_name, alternate: event.alternate_organizer_name },
+    onSubmitUpdate: handleUpdate,
+  };
 
   return (
     <div data-page-main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -223,72 +413,33 @@ export const EventEditPage: React.FC = () => {
         icon={Calendar}
         title="Edit Event"
         breadcrumbLabel="Edit"
-        subtitle={<>Update the details for &ldquo;{event.title}&rdquo;.</>}
+        subtitle={
+          isSeries ? (
+            <>
+              Update the details for &ldquo;{event.title}&rdquo;, the{' '}
+              {formatDateCustom(event.start_datetime, DATE_ONLY, tz)} occurrence.
+            </>
+          ) : (
+            <>
+              Update the details for &ldquo;{event.title}&rdquo;,{' '}
+              {formatDateCustom(event.start_datetime, DATE_ONLY, tz)}.
+            </>
+          )
+        }
         parentCrumbs={[{ label: event.title, path: `/events/${eventId ?? ''}` }]}
       />
       {/* The form keeps its reading width under the full-width strip. */}
       <div className="mx-auto max-w-5xl">
-        {error && (
-          <div
-            className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4"
-            role="alert"
-            aria-live="assertive"
-          >
-            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-          </div>
-        )}
-
-        {(event.is_recurring || event.recurrence_parent_id) && (
-          <div className="mb-6 flex items-start gap-3 rounded-lg border border-indigo-300 bg-indigo-50 p-4 dark:border-indigo-500/30 dark:bg-indigo-500/10">
-            <Info className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-400" />
-            <div className="text-sm text-indigo-700 dark:text-indigo-300">
-              <p className="font-medium">This event is part of a recurring series.</p>
-              <fieldset className="mt-3">
-                <legend className="sr-only">Update scope</legend>
-                <div className="flex flex-col gap-2">
-                  <label className="inline-flex cursor-pointer items-center gap-2">
-                    <input
-                      type="radio"
-                      name="updateScope"
-                      value="single"
-                      checked={updateScope === 'single'}
-                      onChange={() => setUpdateScope('single')}
-                      className="text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span>This event only</span>
-                  </label>
-                  <label className="inline-flex cursor-pointer items-center gap-2">
-                    <input
-                      type="radio"
-                      name="updateScope"
-                      value="future"
-                      checked={updateScope === 'future'}
-                      onChange={() => setUpdateScope('future')}
-                      className="text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span>This and all future events</span>
-                  </label>
-                </div>
-              </fieldset>
-            </div>
-          </div>
-        )}
-
-        {/* Form Card */}
-        <div className="card p-8">
-          <EventForm
-            initialData={initialData}
-            onSubmit={handleSubmit}
-            onCancel={handleCancel}
-            submitLabel="Save Changes"
-            isSubmitting={isSubmitting}
-            initialRecurrence={initialRecurrence}
-            userEvents={userEvents}
-            editingEventId={eventId}
-            attendanceLocked={Boolean(event.attendance_finalized_at)}
-            eventTypeLocked={!canManage}
-          />
-        </div>
+        <EventComposer
+          initialData={initialData}
+          onSubmit={handleSubmit}
+          onCancel={handleCancel}
+          submitLabel="Save Changes"
+          isSubmitting={isSubmitting}
+          trainingSubmitLabel="Save Changes"
+          userEvents={userEvents}
+          editing={editing}
+        />
       </div>
     </div>
   );

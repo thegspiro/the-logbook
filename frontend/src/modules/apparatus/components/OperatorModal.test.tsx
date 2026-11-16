@@ -67,7 +67,9 @@ const renderModal = (editOperator: ApparatusOperator | null = null) =>
 describe('OperatorModal payloads', () => {
   beforeEach(() => {
     mockGetUsers.mockReset();
-    mockGetUsers.mockResolvedValue([{ id: 'user-1', first_name: 'Marcus', last_name: 'Bell', username: 'mbell' }]);
+    mockGetUsers.mockResolvedValue([
+      { id: 'user-1', first_name: 'Marcus', last_name: 'Bell', username: 'mbell', status: 'active' },
+    ]);
     mockGetLevels.mockReset();
     mockGetLevels.mockResolvedValue([{ id: 'evoc-2', levelNumber: 2, name: 'Engine' }]);
     mockCreateOperator.mockReset();
@@ -120,10 +122,34 @@ describe('OperatorModal payloads', () => {
   });
 });
 
+describe('OperatorModal member picker', () => {
+  beforeEach(() => {
+    mockGetUsers.mockReset();
+    mockGetUsers.mockResolvedValue([
+      { id: 'user-1', first_name: 'Marcus', last_name: 'Bell', username: 'mbell', status: 'active' },
+      { id: 'user-2', first_name: 'Dana', last_name: 'Reyes', username: 'dreyes', status: 'probationary' },
+      { id: 'user-3', first_name: 'Former', last_name: 'member 1005', username: 'fm1005', status: 'archived' },
+      { id: 'user-4', first_name: 'Lee', last_name: 'Park', username: 'lpark', status: 'retired' },
+      { id: 'user-5', first_name: 'Sam', last_name: 'Cole', username: 'scole', status: 'inactive' },
+    ]);
+    mockGetLevels.mockReset();
+    mockGetLevels.mockResolvedValue([]);
+  });
+
+  it('lists only current members, probationary included', async () => {
+    renderModal();
+
+    await screen.findByRole('option', { name: 'Marcus Bell' });
+    expect(screen.getAllByRole('option').map((o) => o.getAttribute('value'))).toEqual(['', 'user-1', 'user-2']);
+  });
+});
+
 describe('OperatorModal errors and discarding', () => {
   beforeEach(() => {
     mockGetUsers.mockReset();
-    mockGetUsers.mockResolvedValue([{ id: 'user-1', first_name: 'Marcus', last_name: 'Bell', username: 'mbell' }]);
+    mockGetUsers.mockResolvedValue([
+      { id: 'user-1', first_name: 'Marcus', last_name: 'Bell', username: 'mbell', status: 'active' },
+    ]);
     mockGetLevels.mockReset();
     mockGetLevels.mockResolvedValue([]);
     mockCreateOperator.mockReset();

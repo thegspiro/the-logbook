@@ -28,12 +28,6 @@ import { useAuthStore } from '../../stores/authStore';
 import { formatForDateTimeInput, localToUTC } from '../../utils/dateFormatting';
 import { useOrganizerOptions } from '../../hooks/useOrganizerOptions';
 import { mapServerFieldErrors } from '../../utils/serverFieldErrors';
-import {
-  EMPTY_TRAINING_DETAILS,
-  hasExplicitTrainingDetails,
-  toTrainingDetailsPayload,
-  type TrainingDetailsValue,
-} from '../training/trainingDetailsValue';
 import { asArray } from '../../utils/asArray';
 import { buildingNotInName } from '../../utils/locationLabel';
 import {
@@ -44,7 +38,9 @@ import {
   EVENT_TYPES,
   type EventField,
 } from './eventFormConstants';
-import type { EventFormModelOptions } from './eventFormTypes';
+import type { EventFormModelOptions, MandatoryScope } from './eventFormTypes';
+
+const CUSTOM_DAYS_REQUIRED = 'Select at least one day for custom recurrence.';
 
 export const useEventFormModel = ({
   initialData,
@@ -62,9 +58,6 @@ export const useEventFormModel = ({
   const organizerOptions = useOrganizerOptions(showOrganizerPickers);
   const [organizerId, setOrganizerId] = useState('');
   const [alternateId, setAlternateId] = useState('');
-  // Create Training Session lives in the Training admin hub, which only a
-  // training.manage holder can open; anyone else is pointed at who can.
-  const canCreateTrainingSession = useAuthStore((state) => state.checkPermission('training.manage'));
 
   // Convert any ISO date strings from the API into datetime-local format
   // in the user's timezone so the inputs display correctly.
@@ -87,7 +80,13 @@ export const useEventFormModel = ({
     ...DEFAULT_FORM_DATA,
     ...normalizedInitial,
   });
+  // Announced (role="alert"): a refusal no field owns, read out on arrival
+  // because nothing else would say it.
   const [error, setError] = useState<string | null>(null);
+  // Shown beside it but not announced: the field refusals, each already read
+  // out by its own field once focus reaches it (forms batch 17). Announcing
+  // them as well made a screen reader say every one twice.
+  const [errorSummary, setErrorSummary] = useState<string | null>(null);
   // Each refusal shown under the field it is about, with aria-invalid and the
   // message tied to the control (forms review F-3/F-4), rather than one banner
   // at the top of a long form.
@@ -97,12 +96,19 @@ export const useEventFormModel = ({
     unmatched: string[] = []
   ): EventField | undefined => {
     setFieldErrors(errors);
-    // An error summary at the top, announced as an alert, for whoever does not
-    // reach the field by focus; the message itself stays under its field.
+    // A summary at the top for whoever reads the form from there; the message
+    // itself stays under its field. Announced only when no field takes focus
+    // to read it out.
     const messages = Object.values(errors);
-    const summary = messages.length === 1 ? (messages[0] ?? '') : `Fix the ${messages.length} fields marked below.`;
-    setError([summary, ...unmatched].filter(Boolean).join(' ') || null);
+    const summary =
+      messages.length === 0
+        ? ''
+        : messages.length === 1
+          ? (messages[0] ?? '')
+          : `Fix the ${messages.length} fields marked below.`;
     const first = (Object.keys(EVENT_FIELD_IDS) as EventField[]).find((field) => errors[field]);
+    setErrorSummary(first ? summary || null : null);
+    setError([first ? '' : summary, ...unmatched].filter(Boolean).join(' ') || null);
     if (first) {
       // The "Other" location box and the fallback box share the field.
       const id = first === 'location' && locations.length === 0 ? 'location-text-fallback' : EVENT_FIELD_IDS[first];
@@ -141,7 +147,14 @@ export const useEventFormModel = ({
     initialRecurrence?.recurrence_exceptions || []
   );
   const [newExceptionDate, setNewExceptionDate] = useState('');
-  const [trainingDetails, setTrainingDetails] = useState<TrainingDetailsValue>(EMPTY_TRAINING_DETAILS);
+  // "Mandatory for": every member, or only the ticked member types. Kept apart
+  // from the ticks so choosing All members and back does not lose them. The
+  // backend reads a mandatory event with no member types as every member, and
+  // course-cohort classes, among others, are stored that way, so one loaded
+  // like that opens on All members rather than on an empty list it refuses.
+  const [mandatoryScope, setMandatoryScopeState] = useState<MandatoryScope>(
+    initialData?.is_mandatory && !initialData.mandatory_membership_types?.length ? 'all' : 'some'
+  );
   const checkInLeadTimeEdited = useRef(initialData?.check_in_minutes_before !== undefined);
   const lockNoticeId = useId();
   const scheduleLockHintId = useId();
@@ -365,6 +378,18 @@ export const useEventFormModel = ({
     update({ end_datetime: formatForDateTimeInput(end, tz) });
   };
 
+  const toggleRecurrenceCustomDay = (day: number) => {
+    setRecurrenceCustomDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+    setFieldErrors(({ recurrence_custom_days: _cleared, ...rest }) => rest);
+  };
+
+  // Only the custom pattern draws Days of the Week, so its refusal goes with it
+  // rather than staying in the banner with nothing on screen to fix.
+  const handleRecurrencePatternChange = (pattern: RecurrencePattern) => {
+    setRecurrencePattern(pattern);
+    setFieldErrors(({ recurrence_custom_days: _cleared, ...rest }) => rest);
+  };
+
   const handleRecurrenceEndDateChange = (value: string) => {
     setRecurrenceEndDate(value);
     setFieldErrors(({ recurrence_end_date: _cleared, ...rest }) => rest);
@@ -381,7 +406,9 @@ export const useEventFormModel = ({
 
   // Unless the reminder audience was chosen by hand, it follows the mandatory
   // switch: everyone is reminded of a mandatory event, sign-ups otherwise.
-  const handleMandatoryChange = (isMandatory: boolean) => {
+  // `scopeOnTick` is where "Mandatory for" opens: each form says which.
+  const handleMandatoryChange = (isMandatory: boolean, scopeOnTick: MandatoryScope = 'some') => {
+    if (isMandatory) setMandatoryScopeState(scopeOnTick);
     update({
       is_mandatory: isMandatory,
       mandatory_membership_types: isMandatory ? formData.mandatory_membership_types : undefined,
@@ -401,12 +428,26 @@ export const useEventFormModel = ({
     update({ send_reminders: target !== 'none', reminder_target: target });
   };
 
-  // The backend reads a mandatory event with no member types as mandatory for
-  // every member. Course-cohort classes, among others, are stored that way, so
-  // an event loaded like that keeps meaning everyone rather than refusing every
-  // save until somebody narrows it. Creating an event still asks for a choice.
-  const storedMandatoryForEveryone =
-    Boolean(editingEventId) && Boolean(initialData?.is_mandatory) && !initialData?.mandatory_membership_types?.length;
+  // Whether the officer has set "Mandatory for" by hand, in either form. Held
+  // here, with the model, rather than in the training form's pre-fill, so it
+  // survives the hand-off between the two forms and a remount of either: a
+  // choice made on the single-page form is still the officer's on Settings.
+  const mandatoryForEdited = useRef(false);
+
+  /** Mandatory for, changed by the officer: a pre-fill no longer replaces it. */
+  const setMandatoryScope = (scope: MandatoryScope) => {
+    mandatoryForEdited.current = true;
+    suggestMandatoryScope(scope);
+  };
+  /** Mandatory for, changed on the officer's behalf (a pre-fill): it stays theirs to change. */
+  const suggestMandatoryScope = (scope: MandatoryScope) => {
+    setMandatoryScopeState(scope);
+    if (fieldErrors.mandatory_membership_types) {
+      setFieldErrors(({ mandatory_membership_types: _cleared, ...rest }) => rest);
+    }
+  };
+  /** Mandatory for every member: an explicit choice, saved as no member types. */
+  const mandatoryForEveryone = Boolean(formData.is_mandatory) && mandatoryScope === 'all';
   // A saved type the department has since removed or renamed would otherwise
   // be required by the server while no box shows it, with no way to untick it.
   // Drawn from what was saved as well as what is ticked, so unticking one keeps
@@ -423,6 +464,7 @@ export const useEventFormModel = ({
   );
 
   const toggleMandatoryMembershipType = (membershipType: string, checked: boolean) => {
+    mandatoryForEdited.current = true;
     const selected = formData.mandatory_membership_types || [];
     update({
       mandatory_membership_types: checked
@@ -467,28 +509,28 @@ export const useEventFormModel = ({
     return parts.join(', ');
   };
 
-  const formatLocationLabel = (loc: Location) => {
+  /**
+   * A location's name for a list or a summary. `address` says how its street
+   * address follows: after a dash (the Events form's picker), after a comma
+   * (the training form's Review), or not at all (the training form's picker,
+   * whose preview card under the select already shows it).
+   */
+  const formatLocationLabel = (loc: Location, address: 'dash' | 'comma' | 'none' = 'dash') => {
     const roomName = hasSingleFacility && loc.facility_room_id ? loc.name.split(' — ', 1)[0] : loc.name;
     if (hasSingleFacility && loc.facility_room_id) return roomName;
     const parts = [roomName];
     const building = buildingNotInName(loc.name, loc.building);
     if (building) parts.push(`(${building})`);
+    const name = parts.join(' ');
     const addr = [loc.address, loc.city].filter(Boolean).join(', ');
-    if (addr) parts.push(`— ${addr}`);
-    return parts.join(' ');
+    if (!addr || address === 'none') return name;
+    return address === 'comma' ? `${name}, ${addr}` : `${name} — ${addr}`;
   };
 
   // Mirrors EventCreate.validate_dates on the backend, which is the only place
   // it applies: EventUpdate and RecurringEventCreate accept an RSVP event with
   // no deadline (a single fixed deadline has no meaning across a series).
   const rsvpDeadlineRequired = formData.requires_rsvp && !editingEventId && !(isRecurring && onSubmitRecurring);
-
-  // Training details are picked only while creating: an existing event's are
-  // edited on its detail page, where the attendance lock can be checked. This
-  // form still leaves them off a rolling series, which the backend accepts
-  // since 2026-11-11; the single training-event form replaces this block.
-  const showsTrainingDetails = formData.event_type === EventTypeEnum.TRAINING && !editingEventId;
-  const submitsRollingSeries = isRecurring && Boolean(onSubmitRecurring) && isRolling;
 
   /**
    * Every field check, collected so all of them show at once and focus goes to
@@ -522,22 +564,21 @@ export const useEventFormModel = ({
     if (isRecurring && onSubmitRecurring && !isRolling && !recurrenceEndDate) {
       invalid.recurrence_end_date = 'Choose the date the series ends.';
     }
-    return invalid;
-  };
-
-  /** The refusal for a mandatory event with no member type chosen, or null. */
-  const checkMandatory = (): string | null => {
-    if (formData.is_mandatory && !formData.mandatory_membership_types?.length && !storedMandatoryForEveryone) {
-      return 'Select at least one member type for mandatory attendance';
+    if (isRecurring && onSubmitRecurring && recurrencePattern === 'custom' && recurrenceCustomDays.length === 0) {
+      invalid.recurrence_custom_days = CUSTOM_DAYS_REQUIRED;
     }
-    return null;
+    // "Only these member types" with none ticked. Saved as is, the server
+    // would read the empty list as every member, which is All members' job.
+    if (formData.is_mandatory && mandatoryScope === 'some' && !formData.mandatory_membership_types?.length) {
+      invalid.mandatory_membership_types = 'Select at least one member type, or choose All members.';
+    }
+    return invalid;
   };
 
   /**
    * The cleaned-up, UTC-converted single-event payload the form would save.
-   * Assumes `validate()` and `checkMandatory()` have passed. The old training
-   * block's details are set (or left out) here; a form that edits training
-   * details itself replaces `training_details` on the result.
+   * Assumes `validate()` has passed. Carries no `training_details`: the
+   * training-event form adds its own to the result.
    */
   const buildSinglePayload = (): EventCreate => {
     // Clean up data before submit
@@ -550,12 +591,8 @@ export const useEventFormModel = ({
       submitData.alternate_organizer_id = alternateId || undefined;
     }
 
-    // Only an explicit pick attaches a training session; an untouched section
-    // leaves the event to be credited under its title as Continuing Education.
+    // Only the training-event form sends training details, from its own state.
     delete submitData.training_details;
-    if (showsTrainingDetails && !submitsRollingSeries && hasExplicitTrainingDetails(trainingDetails)) {
-      submitData.training_details = toTrainingDetailsPayload(trainingDetails);
-    }
 
     // What a blank or inapplicable field becomes. A create omits it; an edit
     // sends null, because the update path reads an omitted key as "leave
@@ -588,6 +625,9 @@ export const useEventFormModel = ({
     if (!submitData.location_details) submitData.location_details = cleared;
     if (!submitData.rsvp_deadline) submitData.rsvp_deadline = cleared;
     if (!submitData.custom_category) submitData.custom_category = cleared;
+    // All members is no member types. An edit sends the empty list, which
+    // clears types saved before; a create leaves the key out.
+    if (mandatoryForEveryone) submitData.mandatory_membership_types = editingEventId ? [] : undefined;
     // An emptied capacity box is undefined in form state; it means unlimited.
     if (typeof submitData.max_attendees !== 'number' || Number.isNaN(submitData.max_attendees)) {
       submitData.max_attendees = cleared;
@@ -605,8 +645,10 @@ export const useEventFormModel = ({
 
   /** The series payload built on a single-event one, or the refusal that stops it. */
   const buildRecurringPayload = (submitData: EventCreate): { recurring: RecurringEventCreate } | { error: string } => {
+    // validate() refuses this under Days of the Week first; kept for a
+    // caller that builds the series without validating.
     if (recurrencePattern === 'custom' && recurrenceCustomDays.length === 0) {
-      return { error: 'Select at least one day for custom recurrence' };
+      return { error: CUSTOM_DAYS_REQUIRED };
     }
     const needsWeekday = recurrencePattern === 'monthly_weekday' || recurrencePattern === 'annually_weekday';
     return {
@@ -643,6 +685,7 @@ export const useEventFormModel = ({
     if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
       return showFieldErrors(mapped.fieldErrors, mapped.unmatched);
     }
+    setErrorSummary(null);
     setError(mapped?.unmatched.join(' ') || getErrorMessage(err, 'An error occurred'));
     return undefined;
   };
@@ -650,23 +693,17 @@ export const useEventFormModel = ({
   /** Clear the banner and every field error, as a fresh submit does. */
   const clearErrors = () => {
     setError(null);
+    setErrorSummary(null);
     setFieldErrors({});
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setFieldErrors({});
+    clearErrors();
 
     const invalid = validate();
     if (Object.keys(invalid).length > 0) {
       showFieldErrors(invalid);
-      return;
-    }
-
-    const mandatoryError = checkMandatory();
-    if (mandatoryError) {
-      setError(mandatoryError);
       return;
     }
 
@@ -708,19 +745,21 @@ export const useEventFormModel = ({
     tz,
     currentUserId,
     organizerOptions,
-    canCreateTrainingSession,
     // Form values
     formData,
     setIsDraft,
     update,
     error,
+    errorSummary,
     fieldErrors,
     organizerId,
     setOrganizerId,
     alternateId,
     setAlternateId,
-    trainingDetails,
-    setTrainingDetails,
+    mandatoryScope,
+    setMandatoryScope,
+    suggestMandatoryScope,
+    mandatoryForEdited,
     // Reference data
     locations,
     locationMode,
@@ -735,12 +774,14 @@ export const useEventFormModel = ({
     setIsRecurring,
     recurrencePattern,
     setRecurrencePattern,
+    handleRecurrencePatternChange,
     recurrenceEndDate,
     handleRecurrenceEndDateChange,
     isRolling,
     setIsRolling,
     recurrenceCustomDays,
     setRecurrenceCustomDays,
+    toggleRecurrenceCustomDay,
     recurrenceWeekday,
     setRecurrenceWeekday,
     recurrenceWeekOrdinal,
@@ -761,13 +802,11 @@ export const useEventFormModel = ({
     insertMarkdown,
     // Derived values
     conflicts,
-    storedMandatoryForEveryone,
+    mandatoryForEveryone,
     unlistedMandatoryTypes,
     unlistedCategories,
     selectedLocation,
     rsvpDeadlineRequired,
-    showsTrainingDetails,
-    submitsRollingSeries,
     formatLocationAddress,
     formatLocationLabel,
     // Handlers
@@ -785,9 +824,11 @@ export const useEventFormModel = ({
     // the same checks, show their results, build the same payload and show a
     // refused save without a FormEvent.
     validate,
-    checkMandatory,
     showFieldErrors,
+    // For a form that places and focuses errors itself, across steps.
+    setFieldErrors,
     showFormError: setError,
+    showFormErrorSummary: setErrorSummary,
     clearErrors,
     buildSinglePayload,
     buildRecurringPayload,

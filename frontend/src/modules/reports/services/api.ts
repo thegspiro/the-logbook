@@ -5,9 +5,12 @@
  */
 
 import { createApiClient } from '../../../utils/createApiClient';
+import { filenameFromContentDisposition, type DownloadedFile } from '../../../utils/fileDownload';
 import type {
   AvailableReportsResponse,
   ReportData,
+  ReportExportFormat,
+  ReportExportSource,
   ReportRequest,
   SavedReportConfig,
   SavedReportCreate,
@@ -30,6 +33,23 @@ export const reportsApiService = {
   async generateReport(request: ReportRequest): Promise<ReportData> {
     const response = await api.post<ReportData>('/reports/generate', request);
     return response.data;
+  },
+
+  /**
+   * Download a report as a PDF or CSV the server builds and audits, named as
+   * the server names it (the report's title and the department's date).
+   */
+  async exportReport(
+    source: ReportExportSource,
+    format: ReportExportFormat,
+    fallbackName: string
+  ): Promise<DownloadedFile> {
+    const response = await api.post<Blob>('/reports/export', { ...source, format }, { responseType: 'blob' });
+    const header: unknown = response.headers['content-disposition'];
+    return {
+      blob: response.data,
+      filename: filenameFromContentDisposition(typeof header === 'string' ? header : undefined) ?? fallbackName,
+    };
   },
 };
 
