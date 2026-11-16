@@ -13,6 +13,9 @@ import { Link, Navigate, useNavigate } from 'react-router';
 import { ArrowLeft, Banknote, Building2, CheckCircle2, CreditCard, MapPin, Smartphone, Truck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { SkeletonPage } from '../../../components/ux/Skeleton';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { useUnsavedChanges } from '../../../hooks/useUnsavedChanges';
 import { formatCurrency } from '../../../utils/dateFormatting';
 import { cartLineKey, cartLineMeta } from '../utils/cartLines';
 import { productGlyph } from '../utils/productGlyph';
@@ -38,6 +41,16 @@ const TILE_BASE =
 const TILE_SELECTED = 'border-2 border-red-800 bg-red-50 dark:border-red-600 dark:bg-red-500/15';
 const TILE_IDLE = 'border-theme-surface-border hover:bg-theme-surface-hover border';
 
+type CheckoutField = 'shippingAddress' | 'memberNotes';
+// The store's request schema is camelCase (alias_generator=to_camel), so a 422
+// names `shippingAddress`; the snake_case name is listed too in case a
+// refusal reports the attribute rather than the alias.
+const CHECKOUT_FIELDS: FieldSpecs<CheckoutField> = {
+  shippingAddress: { id: 'checkout-address', label: 'Shipping address', apiKeys: ['shipping_address'] },
+  memberNotes: { id: 'checkout-notes', label: 'Notes for the quartermaster', apiKeys: ['member_notes'] },
+};
+const CHECKOUT_FORM_ID = 'checkout-form';
+
 const CheckoutPage: React.FC = () => {
   const navigate = useNavigate();
   const { storefront, cart, isLoading, isSubmitting, loadStorefront, placeOrder } = useStorefrontStore();
@@ -46,6 +59,12 @@ const CheckoutPage: React.FC = () => {
   const [fulfillmentMethod, setFulfillmentMethod] = useState<string>(StoreFulfillmentMethod.PICKUP);
   const [shippingAddress, setShippingAddress] = useState('');
   const [memberNotes, setMemberNotes] = useState('');
+  const checkoutErrors = useFieldErrors(CHECKOUT_FIELDS);
+  const { setError: clearCheckoutError } = checkoutErrors;
+
+  // A typed address or note is lost on a reload or a closed tab; the cart is
+  // kept in browser storage, but these two boxes are not (forms review F-6).
+  useUnsavedChanges({ hasChanges: !isSubmitting && (shippingAddress.trim() !== '' || memberNotes.trim() !== '') });
 
   // A member who reloads on this URL, or lands on it from a bookmark, has no
   // storefront in memory — the cart is deliberately unpersisted, but the tax
@@ -75,6 +94,18 @@ const CheckoutPage: React.FC = () => {
   const itemCount = cart.reduce((sum, line) => sum + line.quantity, 0);
 
   const handleSubmit = useCallback(async () => {
+    checkoutErrors.setFormError(null);
+    // Named on the field rather than in a toast after the round trip (forms
+    // review F-3). The order is not placed until it is fixed.
+    const problems: FieldErrors<CheckoutField> = {};
+    if (fulfillmentMethod === StoreFulfillmentMethod.SHIP && !shippingAddress.trim()) {
+      problems.shippingAddress = 'Enter the address to ship to, or choose pickup.';
+    }
+    checkoutErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      checkoutErrors.focusFirst(problems);
+      return;
+    }
     try {
       const order = await placeOrder({
         paymentMethod: paymentMethod || undefined,
@@ -85,9 +116,21 @@ const CheckoutPage: React.FC = () => {
       toast.success(`Order ${order.orderNumber} submitted`);
       void navigate(`/store/orders?highlight=${order.id}`);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Could not place your order');
+      // The store rethrows with the request's error as its cause. A refusal a
+      // field answers for is put on it; anything else stays on the page, by the
+      // button that was pressed, rather than in a toast that goes away.
+      const cause = err instanceof Error && err.cause !== undefined ? err.cause : err;
+      const placed = placeApiError(CHECKOUT_FIELDS, cause);
+      if (placed) {
+        checkoutErrors.setErrors(placed.fieldErrors);
+        checkoutErrors.setFormError(placed.unmatched.length ? placed.unmatched.join(' ') : null);
+        checkoutErrors.focusFirst(placed.fieldErrors);
+      } else {
+        checkoutErrors.setErrors({});
+        checkoutErrors.setFormError(err instanceof Error ? err.message : 'Could not place your order');
+      }
     }
-  }, [fulfillmentMethod, memberNotes, navigate, paymentMethod, placeOrder, shippingAddress]);
+  }, [checkoutErrors, fulfillmentMethod, memberNotes, navigate, paymentMethod, placeOrder, shippingAddress]);
 
   if (isLoading && !storefront) {
     return <SkeletonPage />;
@@ -194,7 +237,15 @@ const CheckoutPage: React.FC = () => {
 
         <h1 className="text-theme-text-primary mb-5 text-2xl font-bold">Review your order</h1>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <form
+          id={CHECKOUT_FORM_ID}
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleSubmit();
+          }}
+          className="grid grid-cols-1 gap-6 lg:grid-cols-3"
+        >
           <div className="flex flex-col gap-4 lg:col-span-2">
             <section className="card p-4 sm:p-5">
               <h2 className="text-theme-text-primary mb-3.5 text-[15px] font-bold">
@@ -331,33 +382,50 @@ const CheckoutPage: React.FC = () => {
               )}
 
               {fulfillmentMethod === StoreFulfillmentMethod.SHIP && (
-                <div className="mt-3.5">
-                  <label htmlFor="checkout-address" className="form-label">
-                    Shipping address
-                  </label>
-                  <textarea
-                    id="checkout-address"
-                    rows={3}
-                    value={shippingAddress}
-                    onChange={(e) => setShippingAddress(e.target.value)}
-                    className="form-input"
-                  />
-                </div>
+                <FormField
+                  id={CHECKOUT_FIELDS.shippingAddress.id}
+                  label="Shipping address"
+                  required
+                  error={checkoutErrors.errors.shippingAddress}
+                  className="mt-3.5"
+                >
+                  {(field) => (
+                    <textarea
+                      {...field}
+                      rows={3}
+                      value={shippingAddress}
+                      onChange={(e) => {
+                        setShippingAddress(e.target.value);
+                        clearCheckoutError('shippingAddress', null);
+                      }}
+                      className="form-input"
+                      autoComplete="shipping street-address"
+                    />
+                  )}
+                </FormField>
               )}
 
-              <div className="mt-3.5">
-                <label htmlFor="checkout-notes" className="form-label">
-                  Notes for the quartermaster (optional)
-                </label>
-                <textarea
-                  id="checkout-notes"
-                  rows={2}
-                  value={memberNotes}
-                  onChange={(e) => setMemberNotes(e.target.value)}
-                  className="form-input"
-                  placeholder="Anything the quartermaster should know"
-                />
-              </div>
+              <FormField
+                id={CHECKOUT_FIELDS.memberNotes.id}
+                label="Notes for the quartermaster"
+                optional
+                error={checkoutErrors.errors.memberNotes}
+                className="mt-3.5"
+              >
+                {(field) => (
+                  <textarea
+                    {...field}
+                    rows={2}
+                    value={memberNotes}
+                    onChange={(e) => {
+                      setMemberNotes(e.target.value);
+                      clearCheckoutError('memberNotes', null);
+                    }}
+                    className="form-input"
+                    placeholder="Anything the quartermaster should know"
+                  />
+                )}
+              </FormField>
             </section>
           </div>
 
@@ -395,11 +463,16 @@ const CheckoutPage: React.FC = () => {
 
               <p className="text-theme-text-secondary text-xs leading-relaxed">{vendorGate}</p>
 
+              {checkoutErrors.formError && (
+                <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                  {checkoutErrors.formError}
+                </p>
+              )}
+
               <button
-                type="button"
+                type="submit"
                 className="btn-primary mt-1 hidden min-h-[48px] w-full font-bold lg:block"
                 disabled={isSubmitting}
-                onClick={() => void handleSubmit()}
               >
                 {isSubmitting ? 'Submitting…' : 'Submit order'}
               </button>
@@ -412,7 +485,7 @@ const CheckoutPage: React.FC = () => {
               )}
             </section>
           </div>
-        </div>
+        </form>
       </div>
 
       <div className="sticky-action-bar flex items-center gap-3 lg:hidden">
@@ -420,11 +493,14 @@ const CheckoutPage: React.FC = () => {
           <p className="text-theme-text-secondary text-xs">Total due</p>
           <p className="text-theme-text-primary font-mono text-[19px] font-bold">{formatCurrency(totals.total)}</p>
         </div>
+        {/* Outside the <form> so it can stick to the bottom of the viewport;
+            `form` ties it to the checkout form so Enter and this button take
+            the same path. */}
         <button
-          type="button"
+          type="submit"
+          form={CHECKOUT_FORM_ID}
           className="btn-primary min-h-[48px] px-6 font-bold"
           disabled={isSubmitting}
-          onClick={() => void handleSubmit()}
         >
           {isSubmitting ? 'Submitting…' : 'Submit order'}
         </button>
