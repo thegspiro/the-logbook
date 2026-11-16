@@ -387,8 +387,10 @@ conflict this used to describe — both branches appending under
 freeze; while any remain open, resolve it the same way: keep both sets and move
 on.
 
-The exceptions are the two docs a job does parse, and they are cheap to check
-on their own rather than by running everything:
+The exceptions are the prose a CI job does parse: links in any Markdown file,
+and the permission claims in endpoint docstrings, which are documentation even
+though they sit in `.py` files. Each is cheap to check on its own rather than
+by running everything:
 
 | Changed                                        | Run                                                                          |
 | ---------------------------------------------- | ---------------------------------------------------------------------------- |
