@@ -99,4 +99,17 @@ describe('StepUndo', () => {
       '3 shifts and seats it used but did not make are left as they are; a member it moved to another seat keeps that seat.'
     );
   });
+
+  it("shows the server's reason when the step must wait", async () => {
+    mockPreview.mockResolvedValue({
+      steps: {
+        shifts: step({ blocked_reason: 'Commit or discard the shift batches still in review first.' }),
+      },
+      members_created: 0,
+    });
+    renderWithRouter(<StepUndo importId="hist-1" step="shifts" noun="shift hours" onUndone={onUndone} />);
+
+    expect(await screen.findByRole('button', { name: 'Undo this step' })).toBeDisabled();
+    expect(screen.getByText('Commit or discard the shift batches still in review first.')).toBeInTheDocument();
+  });
 });

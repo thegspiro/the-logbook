@@ -594,6 +594,8 @@ class UndoStepPreview(BaseModel):
     committed: bool
     # The later steps that must be undone first, by name.
     blocked_by: List[str]
+    # Why the step cannot be undone yet, as a sentence to show.
+    blocked_reason: Optional[str] = None
     removable: int
     kept_total: int
     # The first few kept records; kept_total is the whole count.

@@ -63,7 +63,7 @@ const StepUndo: React.FC<StepUndoProps> = ({ importId, step, noun, onUndone }) =
     return kept && kept.total > 0 ? <KeptList kept={kept} noun={noun} /> : null;
   }
 
-  const blocked = preview.blocked_by.length > 0;
+  const blocked = Boolean(preview.blocked_reason) || preview.blocked_by.length > 0;
 
   const undo = async () => {
     const lines = [
@@ -113,7 +113,8 @@ const StepUndo: React.FC<StepUndoProps> = ({ importId, step, noun, onUndone }) =
     <div className="split-row gap-3 sm:items-center">
       <p className="split-row-main text-theme-text-secondary text-sm">
         {blocked
-          ? `To undo this step, first undo the ${preview.blocked_by.join(' and ')} step, which builds on it.`
+          ? (preview.blocked_reason ??
+            `To undo this step, first undo the ${preview.blocked_by.join(' and ')} step, which builds on it.`)
           : `Undoing removes the ${noun} this step wrote, so you can change the decisions and commit it again.`}
       </p>
       <button

@@ -27,21 +27,30 @@ makes the step whole again: committing it once more writes every row afresh.
 from __future__ import annotations
 
 import copy
+import importlib
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from types import SimpleNamespace
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from loguru import logger
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import Base
 from app.models.admin_hours import AdminHoursEntry
+from app.models.call_tracking import CallSource, OrgCall, OrgCallResponse
 from app.models.event import Event, EventRSVP
+from app.models.external_shift_hours import ExternalShiftHours
 from app.models.historical_import import (
     HistoricalImport,
     ImportedRecordKind,
     ImportedSourceRecord,
+)
+from app.models.shift_history_import import (
+    ShiftHistoryImport,
+    ShiftHistoryImportStatus,
 )
 from app.models.training import (
     RequirementProgressCredit,
@@ -67,17 +76,23 @@ STEP_ADMIN = "admin"
 STEP_TRAINING = "training"
 STEP_DRILLS = "drills"
 STEP_STAFFING = "staffing"
+STEP_SHIFTS = "shifts"
 
-UNDOABLE_STEPS = (STEP_ADMIN, STEP_TRAINING, STEP_DRILLS, STEP_STAFFING)
+UNDOABLE_STEPS = (STEP_SHIFTS, STEP_ADMIN, STEP_TRAINING, STEP_DRILLS, STEP_STAFFING)
 
 # A step and the later steps that build on it: undo those first.
-_DEPENDENTS: Dict[str, Sequence[str]] = {STEP_TRAINING: (STEP_DRILLS,)}
+_DEPENDENTS: Dict[str, Sequence[str]] = {
+    STEP_TRAINING: (STEP_DRILLS,),
+    # The roster fills the shifts the hours import made, and re-seats its crew.
+    STEP_SHIFTS: (STEP_STAFFING,),
+}
 
 _STEP_LABELS = {
     STEP_ADMIN: "administrative hours",
     STEP_TRAINING: "training",
     STEP_DRILLS: "company drills",
     STEP_STAFFING: "staffing roster",
+    STEP_SHIFTS: "shift hours",
 }
 
 _CHUNK = 500
@@ -102,6 +117,8 @@ class StepUndoPlan:
     step: str
     committed: bool
     blocked_by: List[str] = field(default_factory=list)
+    # The sentence to show when the step cannot be undone yet.
+    blocked_reason: Optional[str] = None
     removable: int = 0
     kept: List[KeptRecord] = field(default_factory=list)
     kept_total: int = 0
@@ -152,6 +169,7 @@ class HistoricalImportUndoService:
             steps[step] = {
                 "committed": plan.committed,
                 "blocked_by": plan.blocked_by,
+                "blocked_reason": plan.blocked_reason,
                 "removable": plan.removable,
                 "kept_total": plan.kept_total,
                 "kept": [
@@ -170,7 +188,13 @@ class HistoricalImportUndoService:
         if step not in UNDOABLE_STEPS:
             raise UndoNotAllowed("That step cannot be undone.")
         results = record.results if isinstance(record.results, dict) else {}
-        plan = StepUndoPlan(step=step, committed=isinstance(results.get(step), dict))
+        if step == STEP_SHIFTS:
+            committed = bool(
+                await self._batches(record, ShiftHistoryImportStatus.COMMITTED)
+            )
+        else:
+            committed = isinstance(results.get(step), dict)
+        plan = StepUndoPlan(step=step, committed=committed)
         if not plan.committed:
             return plan
         plan.blocked_by = [
@@ -188,8 +212,19 @@ class HistoricalImportUndoService:
             )
         elif step == STEP_DRILLS:
             await self._plan_drills(record, plan)
-        else:
+        elif step == STEP_STAFFING:
             await self._plan_staffing(record, plan)
+        else:
+            if await self._batches(record, ShiftHistoryImportStatus.DRAFT):
+                plan.blocked_reason = (
+                    "Commit or discard the shift batches still in review first."
+                )
+            await self._plan_shifts(record, plan)
+        if plan.blocked_by and not plan.blocked_reason:
+            plan.blocked_reason = (
+                f"Undo the {' and '.join(plan.blocked_by)} step first: it builds "
+                f"on the {_STEP_LABELS[step]}."
+            )
         return plan
 
     async def _ledger(
@@ -488,6 +523,250 @@ class HistoricalImportUndoService:
         )
         return removed
 
+    async def _plan_shifts(self, record: HistoricalImport, plan: StepUndoPlan) -> None:
+        """The shift batches' attendance, outside-agency hours, and the shifts,
+        seats and calls they made.
+
+        Attendance has no time of last change, so it is removed whatever has
+        happened to it since (owner decision 2026-11-16). Outside-agency hours
+        changed since are kept. A shift or seat is the batch's when it was
+        created within ``EDIT_TOLERANCE`` of the attendance it carries; a shift
+        the batch only added crew to is used, and loses only that crew.
+        """
+        org_id = record.organization_id
+        attendance_entries = await self._ledger(
+            record, ImportedRecordKind.SHIFT_ATTENDANCE
+        )
+        hours_entries = await self._ledger(
+            record, ImportedRecordKind.EXTERNAL_SHIFT_HOURS
+        )
+
+        attendance: Dict[str, ShiftAttendance] = {}
+        ids = sorted({e.record_id for e in attendance_entries})
+        for chunk in _chunks(ids):
+            found = await self.db.execute(
+                select(ShiftAttendance)
+                .join(Shift, Shift.id == ShiftAttendance.shift_id)
+                .where(Shift.organization_id == org_id, ShiftAttendance.id.in_(chunk))
+            )
+            attendance.update({str(a.id): a for a in found.scalars().all()})
+        plan.already_gone += len(set(ids) - set(attendance))
+        entered: Dict[str, datetime] = {}
+        for e in attendance_entries:
+            at = _aware(e.created_at) or datetime.now(timezone.utc)
+            entered[e.record_id] = min(entered.get(e.record_id, at), at)
+
+        # Per shift: when its imported crew was entered, and who they are.
+        crew: Dict[str, set[str]] = {}
+        shift_entered: Dict[str, datetime] = {}
+        for att_id, att in attendance.items():
+            shift_id = str(att.shift_id)
+            crew.setdefault(shift_id, set()).add(str(att.user_id))
+            at = entered[att_id]
+            shift_entered[shift_id] = min(shift_entered.get(shift_id, at), at)
+        remove_attendance = sorted(attendance)
+
+        shifts = await self._load(Shift, org_id, sorted(crew))
+        remove_seats: List[str] = []
+        seats_left: Dict[str, int] = {}
+        for chunk in _chunks(sorted(shifts)):
+            found = await self.db.execute(
+                select(ShiftAssignment).where(ShiftAssignment.shift_id.in_(chunk))
+            )
+            for seat in found.scalars().all():
+                shift_id = str(seat.shift_id)
+                made = _aware(seat.created_at)
+                ours = (
+                    str(seat.user_id) in crew.get(shift_id, set())
+                    and made is not None
+                    and abs(made - shift_entered[shift_id]) <= EDIT_TOLERANCE
+                )
+                if ours:
+                    remove_seats.append(str(seat.id))
+                else:
+                    seats_left[shift_id] = seats_left.get(shift_id, 0) + 1
+
+        remove_shifts: List[str] = []
+        for shift_id, shift in shifts.items():
+            made = _aware(shift.created_at)
+            if made is None or abs(made - shift_entered[shift_id]) > EDIT_TOLERANCE:
+                plan.reused += 1
+                continue
+            occupied = seats_left.get(shift_id, 0) or await self._shift_has_more(
+                shift_id, set(remove_attendance)
+            )
+            if occupied or changed_since(shift.updated_at, shift_entered[shift_id]):
+                plan.kept.append(
+                    KeptRecord(
+                        ImportedRecordKind.SHIFT.value,
+                        shift_id,
+                        _label(ImportedRecordKind.SHIFT, shift),
+                    )
+                )
+            else:
+                remove_shifts.append(shift_id)
+
+        hours = await self._load(
+            ExternalShiftHours, org_id, sorted({e.record_id for e in hours_entries})
+        )
+        hours_at = {e.record_id: _aware(e.created_at) for e in hours_entries}
+        remove_hours: List[str] = []
+        kept_hours: set[str] = set()
+        for hours_id, entry in hours.items():
+            at = hours_at[hours_id] or datetime.now(timezone.utc)
+            if changed_since(entry.updated_at, at):
+                kept_hours.add(hours_id)
+                plan.kept.append(
+                    KeptRecord(
+                        ImportedRecordKind.EXTERNAL_SHIFT_HOURS.value,
+                        hours_id,
+                        (
+                            f"Outside-agency hours on {entry.shift_date.isoformat()}"
+                            if entry.shift_date
+                            else "Outside-agency hours"
+                        ),
+                    )
+                )
+            else:
+                remove_hours.append(hours_id)
+        plan.already_gone += len(set(hours_at) - set(hours))
+
+        plan._remove_by_kind = {
+            ImportedRecordKind.SHIFT_ATTENDANCE.value: remove_attendance,
+            ImportedRecordKind.SHIFT_ASSIGNMENT.value: sorted(remove_seats),
+            ImportedRecordKind.SHIFT.value: sorted(remove_shifts),
+            ImportedRecordKind.EXTERNAL_SHIFT_HOURS.value: sorted(remove_hours),
+            # Every shift the batches touched, for its calls and totals.
+            "touched_shifts": sorted(shifts),
+        }
+        plan.removable = (
+            len(remove_attendance)
+            + len(remove_seats)
+            + len(remove_shifts)
+            + len(remove_hours)
+        )
+        plan.kept_total = len(plan.kept)
+        plan._ledger_ids = [e.id for e in attendance_entries] + [
+            e.id for e in hours_entries if e.record_id not in kept_hours
+        ]
+        plan.kept.sort(key=lambda k: k.label)
+
+    async def _shift_has_more(self, shift_id: str, leaving: set[str]) -> bool:
+        """Whether anything but the batch's own crew and calls is on a shift:
+        attendance it did not write, or a row in any other table that refers
+        to the shift (a completion report, an equipment check, a swap)."""
+        attendance = await self.db.execute(
+            select(ShiftAttendance.id).where(ShiftAttendance.shift_id == shift_id)
+        )
+        if any(str(a) not in leaving for a in attendance.scalars().all()):
+            return True
+        responses = await self.db.execute(
+            select(OrgCallResponse.id)
+            .join(OrgCall, OrgCall.id == OrgCallResponse.call_id)
+            .where(
+                OrgCallResponse.shift_id == shift_id,
+                OrgCall.source != CallSource.IMPORT,
+            )
+            .limit(1)
+        )
+        if responses.scalar_one_or_none() is not None:
+            return True
+        return bool(await count_shift_references(self.db, shift_id))
+
+    async def _delete_shifts(self, org_id: str, plan: StepUndoPlan) -> int:
+        by_kind = plan._remove_by_kind
+        touched = by_kind.get("touched_shifts", [])
+        removed = 0
+        # The calls the batches filed: an imported call whose every response
+        # is on one of these shifts. A call shared with another shift, or
+        # filed any other way, stays.
+        import_calls: List[str] = []
+        for chunk in _chunks(touched):
+            rows = await self.db.execute(
+                select(OrgCall.id)
+                .join(OrgCallResponse, OrgCallResponse.call_id == OrgCall.id)
+                .where(
+                    OrgCall.organization_id == org_id,
+                    OrgCall.source == CallSource.IMPORT,
+                    OrgCallResponse.shift_id.in_(chunk),
+                )
+                .distinct()
+            )
+            import_calls.extend(str(c) for c in rows.scalars().all())
+        touched_set = set(touched)
+        solely: List[str] = []
+        for chunk in _chunks(sorted(set(import_calls))):
+            pairs = await self.db.execute(
+                select(OrgCallResponse.call_id, OrgCallResponse.shift_id).where(
+                    OrgCallResponse.call_id.in_(chunk)
+                )
+            )
+            on: Dict[str, set[Optional[str]]] = {}
+            for call_id, shift_id in pairs.all():
+                on.setdefault(str(call_id), set()).add(
+                    str(shift_id) if shift_id else None
+                )
+            solely.extend(c for c, s in on.items() if s <= touched_set)
+        recalled: set[str] = set()
+        for chunk in _chunks(sorted(solely)):
+            rows = await self.db.execute(
+                select(OrgCallResponse.shift_id).where(
+                    OrgCallResponse.call_id.in_(chunk)
+                )
+            )
+            recalled.update(str(s) for s in rows.scalars().all() if s)
+        # Not counted in "removed": the preview counts records, and a call is
+        # a shift's figure, recomputed below where the shift stays.
+        await self._delete_ids(OrgCall, org_id, sorted(solely))
+
+        for chunk in _chunks(
+            by_kind.get(ImportedRecordKind.SHIFT_ATTENDANCE.value, [])
+        ):
+            result = await self.db.execute(
+                delete(ShiftAttendance)
+                .where(ShiftAttendance.id.in_(chunk))
+                .where(
+                    ShiftAttendance.shift_id.in_(
+                        select(Shift.id).where(Shift.organization_id == org_id)
+                    )
+                )
+                .execution_options(synchronize_session=False)
+            )
+            removed += int(getattr(result, "rowcount", 0) or 0)
+        removed += await self._delete_ids(
+            ShiftAssignment,
+            org_id,
+            by_kind.get(ImportedRecordKind.SHIFT_ASSIGNMENT.value, []),
+        )
+        removed += await self._delete_ids(
+            ExternalShiftHours,
+            org_id,
+            by_kind.get(ImportedRecordKind.EXTERNAL_SHIFT_HOURS.value, []),
+        )
+        gone = set(by_kind.get(ImportedRecordKind.SHIFT.value, []))
+        removed += await self._delete_ids(Shift, org_id, sorted(gone))
+
+        # A shift that stays: its calls and totals are recomputed from what is
+        # left on it, as the import computed them when it added the crew.
+        from app.services.pre_shift_work_service import PreShiftWorkService
+
+        totals = PreShiftWorkService(self.db)
+        for shift_id in sorted(touched_set - gone):
+            values: Dict[str, Any] = {}
+            if shift_id in recalled:
+                values["call_count"] = None
+            shift = await self.db.get(Shift, shift_id)
+            if shift is not None and shift.is_finalized:
+                values["total_hours"] = await totals.shift_total_hours(shift_id)
+            if values:
+                await self.db.execute(
+                    update(Shift)
+                    .where(Shift.id == shift_id, Shift.organization_id == org_id)
+                    .values(**values)
+                    .execution_options(synchronize_session=False)
+                )
+        return removed
+
     # ------------------------------------------------------------------
     # Undo
     # ------------------------------------------------------------------
@@ -504,11 +783,8 @@ class HistoricalImportUndoService:
             raise UndoNotAllowed(
                 f"The {_STEP_LABELS[step]} step has not been committed."
             )
-        if plan.blocked_by:
-            raise UndoNotAllowed(
-                f"Undo the {' and '.join(plan.blocked_by)} step first: it builds on "
-                f"the {_STEP_LABELS[step]}."
-            )
+        if plan.blocked_reason:
+            raise UndoNotAllowed(plan.blocked_reason)
         org_id = record.organization_id
         counts: Dict[str, Any] = {"removed": 0, "kept": plan.kept_total}
         if step == STEP_ADMIN:
@@ -521,8 +797,10 @@ class HistoricalImportUndoService:
             )
         elif step == STEP_DRILLS:
             counts["removed"] = await self._delete_drills(record, plan._remove_ids)
-        else:
+        elif step == STEP_STAFFING:
             counts["removed"] = await self._delete_staffing(org_id, plan)
+        else:
+            counts["removed"] = await self._delete_shifts(org_id, plan)
         for chunk in _chunks(plan._ledger_ids):
             await self.db.execute(
                 delete(ImportedSourceRecord).where(
@@ -534,6 +812,17 @@ class HistoricalImportUndoService:
             await self._remove_unused_members(record)
         )
 
+        if step == STEP_SHIFTS:
+            # The batches' rows are routable again once their ledger entries
+            # are gone; the committed drafts would only read as still standing.
+            await self.db.execute(
+                delete(ShiftHistoryImport).where(
+                    ShiftHistoryImport.organization_id == org_id,
+                    ShiftHistoryImport.historical_import_id == record.id,
+                    ShiftHistoryImport.status
+                    == ShiftHistoryImportStatus.COMMITTED.value,
+                )
+            )
         now = datetime.now(timezone.utc)
         results = (
             copy.deepcopy(record.results) if isinstance(record.results, dict) else {}
@@ -678,16 +967,36 @@ class HistoricalImportUndoService:
     # ------------------------------------------------------------------
 
     async def _created_members(self, record: HistoricalImport) -> List[User]:
-        reason = f"Created by historical import of {record.source_filename}"[:1000]
+        """Former members this import made: by its own steps, and by the shift
+        batches it sent to the shift history import, each of which names
+        itself in the member's status reason."""
+        reasons = [f"Created by historical import of {record.source_filename}"]
+        reasons += [
+            f"Created by shift history import of {b.source_filename}"
+            for b in await self._batches(record)
+        ]
         rows = await self.db.execute(
             select(User).where(
                 User.organization_id == record.organization_id,
                 User.status == UserStatus.ARCHIVED,
-                User.status_change_reason == reason,
+                User.status_change_reason.in_([r[:1000] for r in reasons]),
                 User.password_hash.is_(None),
             )
         )
         return list(rows.scalars().all())
+
+    async def _batches(
+        self,
+        record: HistoricalImport,
+        status: Optional[ShiftHistoryImportStatus] = None,
+    ) -> List[ShiftHistoryImport]:
+        query = select(ShiftHistoryImport).where(
+            ShiftHistoryImport.organization_id == record.organization_id,
+            ShiftHistoryImport.historical_import_id == record.id,
+        )
+        if status is not None:
+            query = query.where(ShiftHistoryImport.status == status.value)
+        return list((await self.db.execute(query)).scalars().all())
 
     async def _remove_unused_members(self, record: HistoricalImport) -> tuple[int, int]:
         """Delete the former members this import created that nothing refers
@@ -743,6 +1052,40 @@ class HistoricalImportUndoService:
             ):
                 changed[key] = {"action": "create"}
         record.member_mappings = changed
+
+
+# Tables whose rows on a shift the undo accounts for itself: the batch's crew,
+# seats and calls. Any other row that refers to a shift is somebody's work.
+_SHIFT_CHILDREN_HANDLED = frozenset(
+    {"shift_attendance", "shift_assignments", "org_call_responses"}
+)
+
+
+@lru_cache(maxsize=1)
+def _shift_references() -> tuple[tuple[str, str], ...]:
+    importlib.import_module("app.models")
+    found = []
+    for table in Base.metadata.sorted_tables:
+        if table.name in _SHIFT_CHILDREN_HANDLED:
+            continue
+        for column in table.columns:
+            for fk in column.foreign_keys:
+                if fk.target_fullname.split(".")[-2:] == ["shifts", "id"]:
+                    found.append((table.name, column.name))
+    return tuple(sorted(found))
+
+
+async def count_shift_references(db: AsyncSession, shift_id: str) -> int:
+    """Rows in any other table that refer to the shift, in one statement."""
+    branches = [
+        select(func.count().label("n"))
+        .select_from(Base.metadata.tables[t])
+        .where(Base.metadata.tables[t].c[c] == shift_id)
+        for t, c in _shift_references()
+    ]
+    if not branches:
+        return 0
+    return sum(int(n or 0) for (n,) in (await db.execute(union_all(*branches))).all())
 
 
 def _label(kind: ImportedRecordKind, row: Any) -> str:

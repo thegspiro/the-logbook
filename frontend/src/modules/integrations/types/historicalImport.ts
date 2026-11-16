@@ -452,6 +452,7 @@ export const HistoricalUndoStep = {
   TRAINING: 'training',
   DRILLS: 'drills',
   STAFFING: 'staffing',
+  SHIFTS: 'shifts',
 } as const;
 export type HistoricalUndoStep = (typeof HistoricalUndoStep)[keyof typeof HistoricalUndoStep];
 
@@ -465,6 +466,8 @@ export interface UndoStepPreview {
   committed: boolean;
   /** Later steps, by name, that must be undone first. */
   blocked_by: string[];
+  /** Why the step cannot be undone yet, as a sentence to show. */
+  blocked_reason?: string | null;
   removable: number;
   kept_total: number;
   /** The first few kept records; `kept_total` is the whole count. */
