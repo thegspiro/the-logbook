@@ -97,8 +97,8 @@ export function useMandatoryTierPrefill(
   useEffect(() => {
     current.current = { scope: model.mandatoryScope, types: model.formData.mandatory_membership_types ?? [] };
   });
-  const rememberBeforeFill = () => {
-    beforeFill.current ??= { scope: current.current.scope, types: [...current.current.types] };
+  const rememberBeforeFill = (scope: MandatoryScope = current.current.scope) => {
+    beforeFill.current ??= { scope, types: [...current.current.types] };
   };
 
   const writeInto = (s: Suggestion) => {
@@ -164,7 +164,11 @@ export function useMandatoryTierPrefill(
     ...model,
     handleMandatoryChange: (checked, scopeOnTick) => {
       if (checked && suggestion && !touched.current) {
-        rememberBeforeFill();
+        // What the tick would have opened on without the fill: Mandatory was
+        // off, so the scope the form rests on was never shown, and on an event
+        // stored as not mandatory it is "Only these member types" with none
+        // ticked, which Settings refuses.
+        rememberBeforeFill(scopeOnTick ?? 'some');
         handleMandatoryChange(true, suggestion.scope);
         if (suggestion.scope === 'some') update({ mandatory_membership_types: suggestion.tierIds });
         return;

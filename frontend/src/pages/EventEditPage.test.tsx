@@ -1672,6 +1672,41 @@ describe('EventEditPage', () => {
         expect(sent()).toEqual(expect.objectContaining({ is_mandatory: true, mandatory_membership_types: ['active'] }));
       });
 
+      // On an event stored as not mandatory, the Mandatory tick that applied
+      // the fill remembered the form's resting "Only these member types" with
+      // none ticked as the choice to put back, a state the officer never saw
+      // and Settings refuses. What it puts back is where the tick alone opens.
+      it('puts back where the Mandatory tick opens when it applied the fill', async () => {
+        vi.mocked(eventService.getEvent).mockResolvedValue({ ...trainingEvent, is_mandatory: false });
+        vi.mocked(trainingSessionService.getMandatoryTiers).mockResolvedValue({
+          everyone: false,
+          tier_ids: ['active'],
+          unmapped: [],
+          source_ids: ['req-att', 'req-att-2'],
+        });
+        linkageRequirements.value = [attendanceRequirement, officerAttendance];
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await screen.findByText('Step 1 of 4 · Event Details');
+        await next(user);
+        await user.click(screen.getByLabelText(/Officer Meeting Attendance/));
+        await waitFor(() => expect(trainingSessionService.getMandatoryTiers).toHaveBeenCalledTimes(1));
+        await next(user);
+        await user.click(screen.getByLabelText('Mandatory attendance'));
+        expect(screen.getByRole('radio', { name: 'Only these member types' })).toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Active' })).toBeChecked();
+        await user.click(screen.getByRole('button', { name: 'Previous' }));
+        await user.click(screen.getByLabelText(/Officer Meeting Attendance/));
+        await next(user);
+
+        expect(screen.getByLabelText('Mandatory attendance')).toBeChecked();
+        expect(screen.getByRole('radio', { name: 'All members' })).toBeChecked();
+        await next(user);
+        expect(await screen.findByText('Step 4 of 4 · Review')).toBeInTheDocument();
+        expect(screen.queryByText(/Select at least one member type/)).not.toBeInTheDocument();
+      });
+
       // Unticked and ticked again, Counts toward attendance is what was
       // stored, so nothing changed and the stored Mandatory for stands.
       it('leaves the stored choice alone when the ticks end where they started', async () => {
