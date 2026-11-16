@@ -253,8 +253,7 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
     return fromCourse ? `${fromCourse} months (from the course)` : '—';
   };
 
-  const creditLabel = (value: TrainingDetailsForm): string => {
-    const hours = effectiveCreditHours(value, durationHours);
+  const creditLabel = (value: TrainingDetailsForm, hours = effectiveCreditHours(value, durationHours)): string => {
     if (!hours) return '—';
     return `${hoursLabel(hours)}${
       creditHoursFromCourse(value, courseOf(value))
@@ -269,11 +268,21 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
     TRAINING_TYPE_LABELS[value.training_type] ?? value.training_type;
 
   /** What a training row read before this edit, when the edit changed it. */
-  const was = (label: (value: TrainingDetailsForm) => string): string | undefined => {
+  const was = (
+    label: (value: TrainingDetailsForm) => string,
+    labelBefore: (value: TrainingDetailsForm) => string = label
+  ): string | undefined => {
     if (!original) return undefined;
-    const before = label(original);
+    const before = labelBefore(original);
     return before === label(training) ? undefined : before;
   };
+
+  // The hours as stored (fromSession keeps them even where they follow the
+  // length), not the stored source read at today's length: hours that follow
+  // the length travel as null, so moving the event moves the credit with it.
+  // A Training event with no session has none stored, and reads as before.
+  const storedCreditLabel = (value: TrainingDetailsForm): string =>
+    creditLabel(value, value.credit_hours.trim() || effectiveCreditHours(value, durationHours));
 
   const attendanceNames = training.attendance_requirement_ids.map((id) =>
     linkedAttendanceLabel(id, requirements, retiredAttendanceNames)
@@ -415,7 +424,7 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
           <Row label="Lead Instructor" was={was(instructorLabel)}>
             {instructorLabel(training)}
           </Row>
-          <Row label="Credit Hours" was={was(creditLabel)}>
+          <Row label="Credit Hours" was={was(creditLabel, storedCreditLabel)}>
             {creditLabel(training)}
           </Row>
           <Row label="Certification">

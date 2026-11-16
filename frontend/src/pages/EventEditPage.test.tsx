@@ -884,6 +884,21 @@ describe('EventEditPage', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/events/evt-1');
     });
 
+    // Hours that follow the length travel as null, so a new length changes
+    // the credit. Review compared the stored hours at the new length too, so
+    // the move from 2 to 4 hours read as no change at all.
+    it('says the credit hours changed when hours that follow the length move with it', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await screen.findByText('Step 1 of 4 · Event Details');
+      await user.click(screen.getByRole('button', { name: '4 hours' }));
+      await toReview(user);
+
+      expect(screen.getByText("4 hours (the event's length)")).toBeInTheDocument();
+      expect(screen.getByText("was 2 hours (the event's length)")).toBeInTheDocument();
+    });
+
     // Training Admin's old create path wrote the session's instructor,
     // certification, agency, expiry and auto-create settings to the event's
     // custom_fields as well. The event page lists a copy that differs from the
