@@ -16,6 +16,56 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#SF04-PENDING](#)** (branch `claude/security-review-storefront-payments`):
+Feature 04 (Storefront & payments), pass 16 — watchdog-delegated iteration.
+PR #4349 (Feature 03, Public surface & webhooks, pass 16) had merged
+before this iteration started. A fresh `list_pull_requests` (state `open`)
+found no `claude/security-review-*` head, and row 04 was the next `⬜`
+row, confirmed on a freshly fetched, pulled `main`.
+
+Baseline `9a365b9f3` (pass 15's merge, PR #4040). Real delta this time — 26
+files, +2589/-721, from 8 non-merge commits: two owner-directed
+`fix(storefront)` hardening commits (W67b-4: refuses an order status move
+backward into a payment state, routes a status-route cancel through
+`cancel_order` for a real cancellation date/reason/notice, makes a
+same-status call a no-op; W67b-5: an admin cancel-from-dialog UI using the
+already-gated, already-org-scoped `/orders/{id}/cancel` route), a new
+connected-PayPal-account feature (new `store_settings.paypal_use_connected`
+column, migration `053d3e96b4fa`, NOT NULL/server_default/`create_all`-tolerant;
+org-scoped `Integration` lookup; threaded through a per-request
+`connected_paypal` map every settlement/notification call site loads before
+reading), new read-only order-delivery/charge-line display components, and
+several shared forms-rollout/CSS commits adopting `FormField`/
+`useFieldErrors`/`useDiscardGuard` in the checkout, product and window
+forms. 48 routes re-enumerated by AST — unchanged from pass 15, no new
+route. All five self-settlement separation-of-duties guards, the price/
+amount integrity guard, capacity locking, the PayPal webhook idempotency
+guard, and SF14-04-1's account-status filter all re-verified unchanged.
+0 fixed, 0 new findings — the real delta above was already hardened and
+tested by its own (non-rotation) commits; this pass re-verified it rather
+than finding anything to fix. Full write-up:
+`docs/security-review/SF-04-storefront-payments.md`'s **Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+single head `053d3e96b4fa`, 784 revisions; `check_route_permissions.py
+--strict` — 327 routes, 0 errors/warnings; scoped backend suite — 1050
+passed, 1 pre-existing environment-only skip (`pywebpush`); standing guard
+suites — 196 passed; `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors, 0 warnings (`eslint --max-warnings 10`).
+
+This commit also carries the Step 0 ride-along: PR #4349 (Feature 03,
+Public surface & webhooks, pass 16) merged with its own **Open PR** note
+already in place on `main`, so no separate edit was needed beyond this
+rewrite.
+
+Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
+approvals) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 16, PR #4349, merged), preserved for history</summary>
+
 **PR [#4349](https://github.com/thegspiro/the-logbook/pull/4349)** (branch
 `claude/security-review-public-surface-webhooks`): Feature 03 (Public
 surface & webhooks), pass 16 — watchdog pickup, 0 fixed, 0 new findings. PR
@@ -61,9 +111,9 @@ committed `node_modules` this session started with had a segfaulting
 `typescript-native` binary and a corrupted `@typescript-eslint/eslint-plugin`
 install, both pre-existing environment damage unrelated to this diff).
 
-Row 03 → ✅ (pending this PR's merge); next is Feature 04 (Storefront &
-payments) — re-check `list_pull_requests` fresh rather than trusting this
-note.
+Row 03 → ✅ (merged, PR #4349); next is Feature 04 (Storefront & payments).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 16, PR #4348, merged), preserved for history</summary>
@@ -26294,7 +26344,7 @@ iteration's commit" rule.
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                                                                                                                             | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                                                                                                                              | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (51 unauth routes, added pass 16), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                                                    | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                       | ⬜     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                       | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `quickbooks_online.py` (8 routes, added pass 17)                                                                                                                            | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                                                                                                                           | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (9 routes, added pass 17)                                                                                                                                    | ⬜     |
@@ -26368,6 +26418,58 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-16 — Feature 03 (Public surface & webhooks, pass 16) merged; Feature 04 (Storefront & payments, pass 16) — watchdog-delegated, real delta re-verified, 0 fixed, 0 new findings
+
+Watchdog-delegated iteration: the dedicated `/loop 30m /security-review`
+session is unreachable, so a separate watchdog session delegated this pass.
+PR #4349 (Feature 03, Public surface & webhooks, pass 16) had merged before
+this iteration started — docs-only from this rotation's perspective beyond
+its own feature's findings, so only the Open PR row's rewrite rides along
+here, per the "PR merged since last iteration" rule. `list_pull_requests`
+(state `open`) found no head branch starting `claude/security-review-`; row
+04 (Storefront & payments) was the next `⬜` row, confirmed on a freshly
+fetched, pulled `main`.
+
+Baseline `9a365b9f3` (pass 15's merge, PR #4040). Unlike pass 15's true
+zero-delta, this window has a real delta: 26 files, +2589/-721, across 8
+non-merge commits. Two are owner-directed `fix(storefront)` hardening
+commits that landed outside this rotation (W67b-4: `update_order_status`
+now refuses a backward move into a payment state, routes a status-route
+cancel through `cancel_order` for a real cancellation record, and makes a
+repeated same-status call a no-op; W67b-5: an admin cancel-from-dialog UI
+using the existing, already-gated `/orders/{id}/cancel` route). One is a
+genuine feature addition (a connected-PayPal-account option: new
+`store_settings.paypal_use_connected` column with a `create_all`-tolerant,
+twice-safe migration, an org-scoped `Integration` lookup, and a per-request
+map threaded into every settlement/notification call site that was traced
+and confirmed to load it before use). The rest are shared forms-rollout and
+CSS commits (`FormField`/`useFieldErrors`/`useDiscardGuard` adoption in
+checkout/product/window forms; two table-reflow fixes) plus new read-only
+order-delivery/charge-line display components — none introduce
+`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, or a new
+route. 48 routes re-enumerated by AST, unchanged from pass 15. All five
+self-settlement separation-of-duties guards, the price/amount integrity
+guard, capacity locking, the PayPal webhook idempotency guard, and
+SF14-04-1's account-status filter all re-verified unchanged and correct in
+the new code. 0 fixed, 0 new findings — SF-1 through SF-11, SF8-04-1/2/3
+and SF14-04-1 remain the full, closed finding history for this feature.
+Full write-up: `docs/security-review/SF-04-storefront-payments.md`'s
+**Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+single head `053d3e96b4fa`, 784 revisions; `check_route_permissions.py
+--strict` — 327 routes, 0 errors/warnings; scoped backend suite
+(`-k "storefront or stripe or payment or refund or checkout or paypal"`) —
+1050 passed, 1 pre-existing environment-only skip (`pywebpush`); standing
+guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE
+escaping, `create_all`-table tolerance, baseline member grants,
+account-status gates, log-call-shape, logging) — 196 passed; `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors/warnings.
+
+Row 04 → ✅ (pending this PR's merge). Next is Feature 05 (Finance &
+approvals).
 
 ### 2026-11-16 — Feature 02 (Permissions & roles, pass 16) merged; Feature 03 (Public surface & webhooks, pass 16) — watchdog pickup, 0 fixed, 0 new findings
 
