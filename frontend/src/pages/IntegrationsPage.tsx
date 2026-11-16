@@ -668,7 +668,7 @@ const IntegrationsPage: React.FC = () => {
     setSfMatchStrategy('email');
     setSfGracefulFields(true);
     setSfAutoSync(false);
-    setDocumensoBaseUrl('');
+    setDocumensoBaseUrl(typeof stored['api_base_url'] === 'string' ? stored['api_base_url'] : '');
     setDocumensoApiToken('');
     setDocumensoWebhookSecret('');
     setCalcomBaseUrl(typeof stored['api_base_url'] === 'string' ? stored['api_base_url'] : '');
@@ -871,14 +871,22 @@ const IntegrationsPage: React.FC = () => {
     const integration = integrations.find((i) => i.id === integrationId);
     if (!integration) return;
 
-    // The stored key belongs to the current Cal.com host, and the API refuses
-    // to move it to a new one, so a changed base URL needs its key in the same
-    // save. Said here in words, rather than as the API's 422.
-    if (integration.integration_type === 'calcom') {
+    // A stored credential belongs to the host it was made on, and the API
+    // refuses to move it to a new one, so a changed base URL needs its
+    // credential in the same save. Said here in words, rather than as the
+    // API's 422.
+    const baseUrlCredential =
+      integration.integration_type === 'calcom'
+        ? { baseUrl: calcomBaseUrl, credential: calcomApiKey, noun: 'key' }
+        : integration.integration_type === 'documenso'
+          ? { baseUrl: documensoBaseUrl, credential: documensoApiToken, noun: 'token' }
+          : null;
+    if (baseUrlCredential) {
       const storedBaseUrl = integration.config?.['api_base_url'];
-      const newBaseUrl = calcomBaseUrl.trim();
-      if (newBaseUrl && newBaseUrl !== storedBaseUrl && !calcomApiKey.trim()) {
-        toast.error('Enter the API key for the new base URL. The saved key belongs to the current one.');
+      const newBaseUrl = baseUrlCredential.baseUrl.trim();
+      if (newBaseUrl && newBaseUrl !== storedBaseUrl && !baseUrlCredential.credential.trim()) {
+        const { noun } = baseUrlCredential;
+        toast.error(`Enter the API ${noun} for the new base URL. The saved ${noun} belongs to the current one.`);
         return;
       }
     }
@@ -1912,11 +1920,15 @@ const IntegrationsPage: React.FC = () => {
                 type="password"
                 value={documensoApiToken}
                 onChange={(e) => setDocumensoApiToken(e.target.value)}
-                placeholder="api_..."
+                placeholder={editingSettings ? 'Leave blank to keep the current token' : 'api_...'}
                 className={inputClass}
+                autoComplete="off"
               />
+              {/* Documenso cannot connect without a token, so on a connected
+                  card one is certainly stored. It is never sent back. */}
               <p className="text-theme-text-muted mt-1 text-xs">
                 Create an API token in Documenso under Settings &rarr; API.
+                {editingSettings && ' Enter a new one only to replace the token.'}
               </p>
             </div>
             <div>
@@ -1932,7 +1944,9 @@ const IntegrationsPage: React.FC = () => {
                 className={inputClass}
               />
               <p className="text-theme-text-muted mt-1 text-xs">
-                Leave blank for Documenso Cloud. Self-hosted instances use https://your-host/api/v1.
+                {editingSettings
+                  ? 'Changing it needs the API token for the new address in the same save. To return to Documenso Cloud, enter https://app.documenso.com/api/v1.'
+                  : 'Leave blank for Documenso Cloud. Self-hosted instances use https://your-host/api/v1.'}
               </p>
             </div>
             <div>
@@ -1946,9 +1960,11 @@ const IntegrationsPage: React.FC = () => {
                 onChange={(e) => setDocumensoWebhookSecret(e.target.value)}
                 placeholder="Shared secret for inbound webhooks"
                 className={inputClass}
+                autoComplete="off"
               />
               <p className="text-theme-text-muted mt-1 text-xs">
-                Set a secret to auto-advance a prospect&apos;s signing stage when they finish signing. Add this Webhook
+                Set a secret to auto-advance a prospect&apos;s signing stage when they finish signing.
+                {editingSettings && ' Leave it blank to keep the saved secret, if one was entered.'} Add this Webhook
                 URL in Documenso (send it as the <code>X-Documenso-Secret</code> header):
               </p>
               <code className="bg-theme-surface-secondary text-theme-text-secondary mt-1 block rounded px-2 py-1 text-xs break-all">
@@ -2549,6 +2565,7 @@ const IntegrationsPage: React.FC = () => {
                         integration.integration_type === 'zeffy' ||
                         integration.integration_type === 'paypal' ||
                         integration.integration_type === 'calcom' ||
+                        integration.integration_type === 'documenso' ||
                         (isDirectory(integration.integration_type) && canChange(integration.integration_type))) && (
                         <button
                           onClick={() => {
@@ -3173,7 +3190,9 @@ const IntegrationsPage: React.FC = () => {
                                       ? 'A new key or signing secret is used from the next sync or webhook message. Linked campaigns and the webhook address do not change.'
                                       : selectedIntegration.integration_type === 'calcom'
                                         ? 'A new key or base URL is used from the next booking lookup, and a new webhook secret from the next message Cal.com sends. The webhook address does not change.'
-                                        : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
+                                        : selectedIntegration.integration_type === 'documenso'
+                                          ? 'A new token or base URL is used from the next request to Documenso, and a new webhook secret from the next message Documenso sends. The webhook address does not change.'
+                                          : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
                               : activation
                                 ? 'Activating turns this feature on for your organization. You can deactivate it at any time.'
                                 : 'Connecting turns this integration on for your organization. You can disconnect it at any time.'}
