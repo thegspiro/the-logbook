@@ -39,8 +39,10 @@ import type {
   CourseClassCreate,
   CourseClassUpdate,
   CourseCohort,
+  CourseLinkHistory,
   CourseLinkResult,
   CourseLinksView,
+  CourseUnlinkResult,
   CourseCohortClass,
   CourseCohortCreate,
   CourseCohortDetail,
@@ -254,6 +256,18 @@ export const trainingService = {
   /** Link every unlinked record carrying a name to a library course. */
   async linkCourseName(key: string, courseId: string): Promise<CourseLinkResult> {
     const response = await api.post<CourseLinkResult>('/training/course-links', { key, course_id: courseId });
+    return response.data;
+  },
+
+  /** The department's course links, newest first. */
+  async getCourseLinkHistory(params: { offset: number; limit: number }): Promise<CourseLinkHistory> {
+    const response = await api.get<CourseLinkHistory>('/training/course-links/history', { params });
+    return response.data;
+  },
+
+  /** Put a link's records back as they were before it. */
+  async undoCourseLink(linkId: string): Promise<CourseUnlinkResult> {
+    const response = await api.post<CourseUnlinkResult>(`/training/course-links/${linkId}/undo`);
     return response.data;
   },
 

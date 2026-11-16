@@ -7,12 +7,16 @@ import type { CourseLinksView } from '../../types/training';
 const mockGet = vi.fn();
 const mockLink = vi.fn();
 const mockLinkSuggested = vi.fn();
+const mockHistory = vi.fn();
+const mockUndo = vi.fn();
 
 vi.mock('../../services/api', () => ({
   trainingService: {
     getCourseLinks: (...a: unknown[]) => mockGet(...a) as unknown,
     linkCourseName: (...a: unknown[]) => mockLink(...a) as unknown,
     linkSuggestedCourseNames: (...a: unknown[]) => mockLinkSuggested(...a) as unknown,
+    getCourseLinkHistory: (...a: unknown[]) => mockHistory(...a) as unknown,
+    undoCourseLink: (...a: unknown[]) => mockUndo(...a) as unknown,
   },
 }));
 
@@ -62,7 +66,9 @@ const VIEW: CourseLinksView = {
 
 describe('CourseLinksPanel', () => {
   beforeEach(() => {
-    for (const mock of [mockGet, mockLink, mockLinkSuggested]) mock.mockReset();
+    for (const mock of [mockGet, mockLink, mockLinkSuggested, mockHistory, mockUndo]) mock.mockReset();
+    mockHistory.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 10 });
+    mockUndo.mockResolvedValue({ reverted: 11, kept: 1 });
     mockGet.mockResolvedValue(VIEW);
     mockLink.mockResolvedValue({ names: 1, records: 4 });
     mockLinkSuggested.mockResolvedValue({ names: 1, records: 12 });
@@ -110,5 +116,52 @@ describe('CourseLinksPanel', () => {
 
     expect(await screen.findByText('Every training record names a library course')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Link all suggested/ })).not.toBeInTheDocument();
+  });
+
+  it('lists past links and undoes one after confirmation', async () => {
+    mockHistory.mockResolvedValue({
+      items: [
+        {
+          id: 'link-1',
+          course_id: 'c-cpr',
+          course_name: 'CPR Refresher',
+          label: 'CPR Refresher',
+          record_count: 12,
+          linked_by_name: 'Pat Officer',
+          linked_at: '2026-11-16T12:00:00Z',
+          undone_at: null,
+          undone_by_name: null,
+        },
+        {
+          id: 'link-0',
+          course_id: 'c-ladders',
+          course_name: 'Ladder Operations',
+          label: 'Ladder raises',
+          record_count: 4,
+          linked_by_name: 'Pat Officer',
+          linked_at: '2026-11-15T12:00:00Z',
+          undone_at: '2026-11-15T13:00:00Z',
+          undone_by_name: 'Pat Officer',
+        },
+      ],
+      total: 2,
+      offset: 0,
+      limit: 10,
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<CourseLinksPanel />);
+
+    const recent = await screen.findByRole('region', { name: 'Recent links' });
+    expect(recent).toHaveTextContent('Ladder raises → Ladder Operations');
+    expect(recent).toHaveTextContent('undone');
+    // Only the link still standing can be undone.
+    expect(within(recent).getAllByRole('button', { name: /Undo the link/ })).toHaveLength(1);
+    await user.click(within(recent).getByRole('button', { name: 'Undo the link of CPR Refresher' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Its 12 records go back to no course');
+    await user.click(within(dialog).getByRole('button', { name: 'Undo link' }));
+
+    await waitFor(() => expect(mockUndo).toHaveBeenCalledWith('link-1'));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
   });
 });

@@ -17,7 +17,7 @@ import { EmptyState, Pagination } from '../../components/ux';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { useTimezone } from '../../hooks/useTimezone';
 import { trainingService } from '../../services/api';
-import type { CourseLinkName, CourseLinksView } from '../../types/training';
+import type { CourseLinkHistory, CourseLinkName, CourseLinksView } from '../../types/training';
 import { formatDate, formatNumber } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 
@@ -37,6 +37,8 @@ const CourseLinksPanel: React.FC = () => {
   const [chosen, setChosen] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Bumped after each link, so the history below re-reads.
+  const [linkVersion, setLinkVersion] = useState(0);
 
   const load = useCallback(async (target: number, query: string) => {
     try {
@@ -88,6 +90,7 @@ const CourseLinksPanel: React.FC = () => {
     try {
       const result = await trainingService.linkCourseName(name.key, course.id);
       toast.success(`${plural(result.records, 'record', 'records')} linked to ${course.name}`);
+      setLinkVersion((v) => v + 1);
       await load(page, search);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not link those records'));
@@ -104,7 +107,7 @@ const CourseLinksPanel: React.FC = () => {
         view.suggested_records,
         'record',
         'records'
-      )}) are linked to the course suggested for each. Check the suggestions first: a link is not undone from here.`,
+      )}) are linked to the course suggested for each. Each link can be undone afterwards under Recent links.`,
       confirmLabel: 'Link all suggested',
       cancelLabel: 'Not yet',
       variant: 'info',
@@ -115,6 +118,7 @@ const CourseLinksPanel: React.FC = () => {
       const result = await trainingService.linkSuggestedCourseNames();
       toast.success(`${plural(result.names, 'name', 'names')} linked (${plural(result.records, 'record', 'records')})`);
       setPage(1);
+      setLinkVersion((v) => v + 1);
       await load(1, search);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not link the suggested courses'));
@@ -241,7 +245,104 @@ const CourseLinksPanel: React.FC = () => {
           )}
         </>
       )}
+
+      <RecentLinks version={linkVersion} onUndone={() => void load(page, search)} />
     </div>
+  );
+};
+
+const HISTORY_SIZE = 10;
+
+/**
+ * The department's links, newest first, each undoable once. Undoing puts the
+ * records back as they were before it; one changed since keeps its course.
+ */
+const RecentLinks: React.FC<{ version: number; onUndone: () => void }> = ({ version, onUndone }) => {
+  const { confirm } = useConfirm();
+  const tz = useTimezone();
+  const [history, setHistory] = useState<CourseLinkHistory | null>(null);
+  const [page, setPage] = useState(1);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async (target: number) => {
+    try {
+      setHistory(
+        await trainingService.getCourseLinkHistory({ offset: (target - 1) * HISTORY_SIZE, limit: HISTORY_SIZE })
+      );
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not read the recent links'));
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(page);
+  }, [load, page, version]);
+
+  if (!history || history.total === 0) return null;
+
+  const undo = async (item: CourseLinkHistory['items'][number]) => {
+    const ok = await confirm({
+      title: `Undo the link of “${item.label}” to ${item.course_name}?`,
+      message: `Its ${plural(item.record_count, 'record goes', 'records go')} back to no course, with the category and training type each had before, and stop counting toward the requirements that name ${item.course_name}. A record changed since the link keeps its course.`,
+      confirmLabel: 'Undo link',
+      cancelLabel: 'Keep it',
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const result = await trainingService.undoCourseLink(item.id);
+      toast.success(
+        `${plural(result.reverted, 'record', 'records')} unlinked${
+          result.kept ? `; ${plural(result.kept, 'record', 'records')} changed since kept ${item.course_name}` : ''
+        }`
+      );
+      await load(page);
+      onUndone();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not undo that link'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="space-y-2" aria-labelledby="course-links-recent-heading">
+      <h3 id="course-links-recent-heading" className="text-theme-text-primary font-semibold">
+        Recent links
+      </h3>
+      <ul className="divide-theme-surface-border card divide-y">
+        {history.items.map((item) => (
+          <li key={item.id} className="split-row gap-3 p-4 sm:items-center">
+            <div className="split-row-main min-w-0 text-sm">
+              <p className="text-theme-text-primary font-medium break-words">
+                {item.label} → {item.course_name}
+              </p>
+              <p className="text-theme-text-secondary">
+                {plural(item.record_count, 'record', 'records')} · linked {formatDate(item.linked_at, tz)}
+                {item.linked_by_name ? ` by ${item.linked_by_name}` : ''}
+                {item.undone_at
+                  ? ` · undone ${formatDate(item.undone_at, tz)}${item.undone_by_name ? ` by ${item.undone_by_name}` : ''}`
+                  : ''}
+              </p>
+            </div>
+            {!item.undone_at && (
+              <button
+                type="button"
+                className="split-row-aside btn-secondary"
+                disabled={busy}
+                aria-label={`Undo the link of ${item.label}`}
+                onClick={() => void undo(item)}
+              >
+                Undo
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {history.total > HISTORY_SIZE && (
+        <Pagination currentPage={page} totalItems={history.total} pageSize={HISTORY_SIZE} onPageChange={setPage} />
+      )}
+    </section>
   );
 };
 
