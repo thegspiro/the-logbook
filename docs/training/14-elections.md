@@ -1685,9 +1685,12 @@ recorder.
 Excused meetings and meetings during a leave of absence are not counted
 against a member, and meetings before a member joined are left out.
 
-_(2026-11-13)_ The **Voting** column on **Minutes → Attendance** now gives the
-same answer as the ballots. Before, it read the old tier settings and could
-disagree once the voter rules were edited.
+_(2026-11-13)_ The **Voting** column on **Minutes → Attendance**, and its two
+voting tiles, now judge each member by the **Regular business meeting** rules
+in Election Settings, the same check the ballot send uses. Those rules count
+their own meetings, whatever period that page shows. Before, the column read
+the membership tier's attendance look-back and could disagree with the
+ballots once the voter rules were edited.
 
 ### How to Link an Election to a Meeting
 

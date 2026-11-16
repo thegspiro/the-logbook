@@ -421,7 +421,7 @@ _options_. This guide does too.
 | --------------------------------------------- | ------------------------------------------------------------------- |
 | **Name**, **SKU (optional)**, **Description** |                                                                     |
 | **Category**                                  | Used for grouping                                                   |
-| **Price**                                     | The price before any option adds to it                              |
+| **Price**                                     | Required. The price before any option adds to it. Type 0 for free   |
 | **Department cost (optional)**                | What you pay the vendor. Never shown to members                     |
 | **Status**                                    | **Draft** (hidden), **Active (for sale)** or **Archived** (retired) |
 | **Max per member**                            | How many one member can order                                       |

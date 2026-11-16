@@ -864,6 +864,22 @@ existing row changes, and nothing is backfilled.
   **Checklist** requirement (which it was is lost), and drops the stored
   evaluation lists, so ended shifts follow the current settings again.
 
+### Shift evaluations: linked department requirements count evaluations, and no-show crew are excused (2026-11-14)
+
+No migration. Two changes to how shift evaluations are counted:
+
+- **A department requirement of type Evaluated shifts, Transports or Refusals
+  is credited from submitted shift evaluations, not training records.** Linked
+  into a program, such a requirement used to fall back to matching training
+  records by type. It now counts the member's submitted evaluations (once each,
+  however many programs one is scoped to), and **a training record no longer
+  satisfies it**. Members' standing on these requirements can change at the
+  upgrade, in either direction; every compliance screen reads the same count.
+- **Only Assigned and Confirmed crew need a trainee report or a shift
+  evaluation.** A trainee marked No-show, or still pending, no longer holds up
+  close-out, and close-out no longer drafts a report or asks an evaluation for
+  them.
+
 ### Leave reminders, an open-ended leave digest, and member leave requests (2026-11-14)
 
 Nothing blocks a restart. Migration `c8d2f61a7e34` creates three empty tables
@@ -931,6 +947,34 @@ list by one value; no existing row changes.
 - **Downgrading** deletes the new template's rows (a department's edits to it
   included) and narrows the type list again.
 
+### Training: a leave that keeps training requirements excuses no training, and a leave counts once (2026-11-13)
+
+No migration. A leave of absence recorded as applying to **meetings only**
+(the officer chose to keep the member's training requirements through it) used
+to reduce the member's training targets anyway. It now excuses nothing, so
+**those members' training targets go up** to what the officer meant them to be.
+The leave still shows wherever leaves are listed.
+
+Recording a leave also writes a matching training waiver, and the two were
+counted as two reasons, so every month read both "on leave" and "waived". The
+waiver is now read as that leave, so a month is counted once.
+
+### Shift evaluations: outside-agency preceptor links, and credit only for programs joined by the shift (2026-11-13)
+
+Migration `563f8aba187e` creates `shift_evaluation_links` (empty), adds
+`training_module_configs.shift_evaluation_link_days` with a server default of
+**7**, and adds the `shift_evaluation_preceptor_link` email template type. An
+outside agency's preceptor can now fill in a trainee's evaluation through a
+no-login link, emailed to them, that stays open that many days after the
+shift. The downgrade drops the table, so outstanding links stop working.
+
+- **An outside shift awaiting approval now shows "Evaluation needed"** where
+  an evaluation is due.
+- **A shift counts only toward programs the member had joined by the shift's
+  date.** An evaluation of an earlier shift no longer credits a program joined
+  afterwards, and **a requirement already marked complete can reopen** when a
+  re-sync leaves its credit short.
+
 ### Waiver requests nobody decides close after seven days (2026-11-13)
 
 Nothing blocks a restart, and no migration is involved.
@@ -953,6 +997,20 @@ Nothing blocks a restart, and no migration is involved.
 - **A waiver policy's CC positions are copied in the app only.** Holders get
   the bell, not an email; to email a copy of each decision, add the positions
   to the _Waiver Decided_ template's CC positions.
+
+### Shift decline and equipment-check alerts reach the Fire Chief, and only current members (2026-11-11)
+
+No migration. The positions a department picks to hear about a declined shift,
+and about a failed equipment check, were matched against position names as
+written: the setting's `chief` never matched the seeded **Fire Chief** position
+(`fire_chief`), so the Chief was never told. They are now matched by office,
+so the Fire Chief receives them, and only **current members** holding the
+position do (a former member left on a position no longer gets them).
+
+**A department that never saved its shift-decline settings now gets the
+defaults the settings screen shows**: alerts to holders of Chief, Deputy Chief
+and Captain. Before, an unsaved setting notified no position at all. Review
+**Scheduling settings → Notifications** if that is not wanted.
 
 ### Email templates: saved CC and BCC addresses start being used, and waiver requests are emailed (2026-11-11)
 

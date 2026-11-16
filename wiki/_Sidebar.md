@@ -55,6 +55,7 @@
 - [Grants & Fundraising](Module-Grants-Fundraising)
 - [Finance](Module-Finance)
 - [Meeting Minutes](Module-Meeting-Minutes)
+- [History](Module-History)
 - [Prospective Members](Module-Prospective-Members)
 - [Medical Screening](Module-Medical-Screening)
 - [Performance Evaluations](Module-Evaluations)

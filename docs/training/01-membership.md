@@ -2838,8 +2838,10 @@ enough.
 
 The **Department History** page shows:
 
-- cards for **Past members** and **Honor Roll**, and **Titles and clearance**
-  if you can configure the module;
+- cards for **Past members**, **Photos and media**, **Documents** and
+  **Honor Roll** _(media 2026-11-13, documents 2026-11-14)_, **Import a
+  roster** if you can edit records _(2026-11-13)_, and **Titles and
+  clearance** if you can configure the module;
 - **Awaiting my clearance**, if a record is waiting for you to review it;
 - **Drafts**, if you can edit records; and
 - **From the archive**, the latest published records.
@@ -3024,11 +3026,14 @@ list and submit the record again.
 - **Public records are not shown outside the app yet.** Publishing to the
   public saves a cleared copy, but no public website reads it. The person
   page says so beside the button.
-- **No photos, documents or other files.** History stores no files yet.
-- **Two records for one person cannot be merged.** You are warned about a
-  likely duplicate when you enter it, but combining two records is done by
-  hand.
-- **There is no bulk import.** Each person is added one at a time.
+- **Events, timelines, articles and a "Today in history" widget** are later
+  phases.
+
+> **Since 2026-11-13.** History now keeps photos, audio and video, and
+> documents (each with its own clearance), merges two records for one
+> person, and imports a roster from a spreadsheet. See the wiki's
+> [History Module](../../wiki/Module-History.md) page for how each works.
+
 - **Anonymizing a member does not change their History record.** See
   [Anonymizing a Former Member](#anonymizing-a-former-member).
 
