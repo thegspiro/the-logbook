@@ -69,8 +69,11 @@ async def is_outreach_event(
     """Whether one event counts as outreach, by the same rule as the counts."""
     found = await db.scalar(
         select(Event.id).where(
-            outreach_event_clause(str(organization_id)),
+            # Also inside outreach_event_clause; repeated here so the by-id
+            # filter is visible where the id is used (CLAUDE.md pitfall #14).
+            Event.organization_id == str(organization_id),
             Event.id == str(event_id),
+            outreach_event_clause(str(organization_id)),
         )
     )
     return found is not None

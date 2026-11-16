@@ -3051,7 +3051,7 @@ async def set_guest_headcount(
     event_id: UUID,
     body: GuestHeadcountUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission(EVENT_MANAGER_PERMISSION)),
+    current_user: User = Depends(require_permission("events.manage")),
 ):
     """
     Record how many guests were counted at an outreach event, or clear it.
@@ -3062,7 +3062,7 @@ async def set_guest_headcount(
     not a count of the public.
 
     **Authentication required**
-    **Allowed: events.manage**
+    **Requires permission: events.manage**
     """
     service = CommunityEngagementService(db)
     try:
