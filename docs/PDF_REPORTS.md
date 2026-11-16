@@ -9,8 +9,8 @@ PHI-bearing documents.
 
 Everything is rendered on the server with **ReportLab** (`reportlab==5.1.0`),
 with **pypdf** for appending attachments to minutes. Nothing converts HTML to
-PDF, and the frontend has no PDF library: a browser "Print / PDF" button opens
-the system print dialog.
+PDF, and the frontend has no PDF library: every PDF and report CSV is
+downloaded from the server.
 
 | Document                                        | Renderer                                                   | Layout                            |
 | ----------------------------------------------- | ---------------------------------------------------------- | --------------------------------- |
@@ -21,6 +21,7 @@ the system print dialog.
 | Equipment-check compliance, failures, one check | `app/services/equipment_check_pdf.py`                      | **`pdf_report_kit.py`**           |
 | Inventory impact plan                           | `app/utils/impact_plan_pdf.py`                             | its own                           |
 | Labels, member ID cards                         | `label_renderer.py`, `id_card_renderer.py`                 | canvas, fixed stock sizes         |
+| Reports page: all 13 reports, PDF and CSV       | `app/services/report_export.py` via `POST /reports/export` | **`pdf_report_kit.py`**           |
 
 ## Rules for a PDF
 
@@ -162,6 +163,41 @@ structure it checked. To run it locally, resolve the
 `org.verapdf.apps:greenfield-apps` jars from Maven Central and run
 `java -cp "lib/*" org.verapdf.apps.GreenfieldCliWrapper --flavour 2b FILE.pdf`.
 
+## Reports page downloads
+
+The Reports page's **CSV** and **PDF** buttons download a file the server
+builds (`POST /reports/export`). Until 2026-11-15 both were built in the
+browser: the PDF was a browser print with no page numbers, no repeated header
+and the browser's time zone, and neither left an audit row.
+
+- **The server re-runs the report** under the same gates as Generate and Run:
+  `reports.view`, the source permission for a report listing members'
+  personal data (`PII_REPORT_PERMISSIONS`), and the prospect-privacy filter.
+  It never prints rows the browser sends, so the file is what the server
+  would show this caller.
+- **The page remembers what produced the report on screen**: the request, or
+  the saved report's id. A download therefore matches the report on screen
+  even after the date picker has moved. A saved report's dates are resolved
+  exactly as Run resolves them (`_saved_report_dates`).
+- **Columns come from one contract**, `backend/app/data/report_export_columns.json`.
+  `app/services/report_tables.py` builds each type's table from it, and
+  `frontend/src/modules/reports/exportColumnsParity.test.ts` fails if a
+  renderer's export columns or a card's title drift from it.
+  - The CSV keeps the columns, order and cell spelling the browser export
+    used, so spreadsheets built on it keep working. It is written with
+    `SafeCsvWriter`, and numbers are passed as numbers, so a negative figure
+    is not mistaken for a formula.
+  - Call volume's columns are one per call type. When there are many, the PDF
+    prints them in bands.
+- **Headline figures** above the PDF table are the report's own summary values
+  under the page's tile labels. Tiles the page computes in the browser are
+  left out, rather than recomputed and risking disagreement (Pitfall #29).
+- **Audited** as `report_exported`, after the file is built, with the report
+  type, format, dates, saved report id, filter names and row count. Content is
+  never logged, and a refused export writes no row.
+- **Not PDF/A.** These are working reports, not records. Confidentiality is
+  printed on the PII report types only.
+
 ## The report layout
 
 `pdf_report_kit.render_report(meta, body)` gives every tabular report the same
@@ -206,13 +242,10 @@ Recorded in `docs/KNOWN_LIMITATIONS.md` under "PDF Reports".
 - **Older layouts.** Minutes, the impact plan and the election documents keep
   their own layouts, and their page numbers are "Page N" rather than "of Y"
   (the ballot excepted).
-- **Browser-printed reports.** The Reports page's "Print / PDF" prints an HTML
-  table with no page numbers, no repeated header and no audit row.
 
 ## Roadmap (owner decisions of 2026-11-09)
 
 - **Phase 3, fonts and archival records** — **done 2026-11-10**; see
   "Fonts" and "Archival records (PDF/A)" above.
-- **Phase 4, Reports page.** Replace the browser print with a **server-side
-  PDF** built on the kit and audited on the server, so every report has the
-  same footer, numbering and trail on every browser.
+- **Phase 4, Reports page** — **done 2026-11-15**; see "Reports page
+  downloads" above.
