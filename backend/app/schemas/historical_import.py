@@ -599,6 +599,8 @@ class UndoStepPreview(BaseModel):
     # The first few kept records; kept_total is the whole count.
     kept: List[UndoKeptRecord]
     already_gone: int
+    # Shifts and seats the step used but did not make: left as they are.
+    reused: int = 0
 
 
 class UndoPreview(BaseModel):

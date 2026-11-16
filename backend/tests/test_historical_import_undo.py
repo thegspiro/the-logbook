@@ -19,10 +19,16 @@ from sqlalchemy import func, select, update
 
 from app.api.v1.endpoints.historical_import import undo_step
 from app.models.admin_hours import AdminHoursEntry
-from app.models.event import Event
+from app.models.event import Event, EventRSVP
 from app.models.historical_import import ImportedRecordKind, ImportedSourceRecord
 from app.models.qualification import MemberQualification
-from app.models.training import TrainingRecord, TrainingSession, TrainingStatus
+from app.models.training import (
+    Shift,
+    ShiftAssignment,
+    TrainingRecord,
+    TrainingSession,
+    TrainingStatus,
+)
 from app.models.user import User
 from app.services.historical_import_undo import (
     EDIT_TOLERANCE,
@@ -335,3 +341,177 @@ class TestTrainingQualifications:
         await _undo(db_session, service, org, record.id, "training", admin)
 
         assert await _count(db_session, MemberQualification, org) == 0
+
+
+class TestStaffingRoster:
+    """The roster fills the hours import's shift for LA106 on 2 May 2016 and
+    re-seats Alice on it; everything else it makes."""
+
+    async def _committed(self, db_session):
+        from app.models.training import Shift as ShiftModel
+        from app.services.historical_staffing_commit import (
+            HistoricalStaffingCommitService,
+        )
+        from tests.test_historical_staffing_commit import (
+            _hours_shift,
+            _setup,
+            _user,
+        )
+
+        org, admin, import_id = await _setup(db_session)
+        alice = await _user(db_session, org, "101")
+        hours_shift = await _hours_shift(db_session, org, alice)
+        # Made by an earlier step, as it would have been: a day before.
+        earlier = datetime.now(timezone.utc) - timedelta(days=1)
+        await db_session.execute(
+            update(ShiftModel)
+            .where(ShiftModel.id == hours_shift.id)
+            .values(created_at=earlier, updated_at=earlier)
+        )
+        await db_session.execute(
+            update(ShiftAssignment)
+            .where(ShiftAssignment.shift_id == hours_shift.id)
+            .values(created_at=earlier, updated_at=earlier)
+        )
+        await db_session.commit()
+        await HistoricalStaffingCommitService(db_session).commit(org, import_id, admin)
+        from app.services.historical_import_service import HistoricalImportService
+
+        return HistoricalImportService(db_session), org, admin, import_id, hours_shift
+
+    async def test_undo_removes_what_the_roster_made_and_keeps_what_it_used(
+        self, db_session
+    ):
+        service, org, admin, import_id, hours_shift = await self._committed(db_session)
+        alice_seat = (
+            (
+                await db_session.execute(
+                    select(ShiftAssignment).where(
+                        ShiftAssignment.shift_id == hours_shift.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(alice_seat) == 2  # Alice re-seated, Bob added
+
+        preview = await HistoricalImportUndoService(db_session).preview(
+            await service.get(org, import_id)
+        )
+        counts = await _undo(db_session, service, org, import_id, "staffing", admin)
+
+        # The hours shift and Alice's seat on it were used, not made.
+        assert preview["steps"]["staffing"]["reused"] == 2
+        assert counts["kept"] == 0
+        remaining = (
+            (
+                await db_session.execute(
+                    select(ShiftAssignment.position).where(
+                        ShiftAssignment.organization_id == org
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert remaining == ["driver"]  # Alice keeps the roster's seat
+        assert await db_session.get(Shift, hours_shift.id) is not None
+        assert await _count(db_session, Shift, org) == 1
+        assert await _count(db_session, Event, org) == 0
+        assert await _count(db_session, EventRSVP, org) == 0
+        for kind in (
+            ImportedRecordKind.SHIFT,
+            ImportedRecordKind.SHIFT_ASSIGNMENT,
+            ImportedRecordKind.EVENT,
+            ImportedRecordKind.EVENT_RSVP,
+        ):
+            assert await _ledger(db_session, org, kind) == 0
+        assert "staffing" not in (await service.get(org, import_id)).results
+
+    async def test_a_roster_event_someone_was_added_to_is_kept(self, db_session):
+        service, org, admin, import_id, _ = await self._committed(db_session)
+        party = (
+            await db_session.execute(
+                select(Event).where(
+                    Event.organization_id == org, Event.title == "Birthday Party"
+                )
+            )
+        ).scalar_one()
+        db_session.add(
+            EventRSVP(
+                organization_id=org,
+                event_id=party.id,
+                user_id=admin,
+                status="going",
+            )
+        )
+        await db_session.commit()
+
+        counts = await _undo(db_session, service, org, import_id, "staffing", admin)
+
+        assert counts["kept"] == 1
+        kept = await db_session.get(Event, party.id)
+        assert kept is not None
+        # Its ledger entry stays, so committing again uses it, not a copy.
+        assert await _ledger(db_session, org, ImportedRecordKind.EVENT) == 1
+
+    async def test_the_roster_commits_again_after_undo(self, db_session):
+        from app.services.historical_staffing_commit import (
+            HistoricalStaffingCommitService,
+        )
+
+        service, org, admin, import_id, _ = await self._committed(db_session)
+        await _undo(db_session, service, org, import_id, "staffing", admin)
+
+        counts = await HistoricalStaffingCommitService(db_session).commit(
+            org, import_id, admin
+        )
+
+        assert counts["events_created"] == 3
+        assert counts["shifts_created"] == 1
+        assert counts["shifts_filled"] == 1
+
+    async def test_an_hours_shift_made_minutes_before_still_counts_as_used(
+        self, db_session
+    ):
+        """The two commits ran close together, so the timestamps cannot tell;
+        the hours import's attendance on the shift does."""
+        from app.models.training import ShiftAttendance
+        from app.services.historical_import_service import HistoricalImportService
+        from app.services.historical_staffing_commit import (
+            HistoricalStaffingCommitService,
+        )
+        from tests.test_historical_staffing_commit import (
+            _hours_shift,
+            _setup,
+            _user,
+        )
+
+        org, admin, import_id = await _setup(db_session)
+        alice = await _user(db_session, org, "101")
+        hours_shift = await _hours_shift(db_session, org, alice)
+        db_session.add(
+            ShiftAttendance(
+                shift_id=hours_shift.id, user_id=alice, duration_minutes=600
+            )
+        )
+        await db_session.commit()
+        await HistoricalStaffingCommitService(db_session).commit(org, import_id, admin)
+        service = HistoricalImportService(db_session)
+
+        await _undo(db_session, service, org, import_id, "staffing", admin)
+
+        assert await db_session.get(Shift, hours_shift.id) is not None
+        seats = (
+            (
+                await db_session.execute(
+                    select(ShiftAssignment.user_id).where(
+                        ShiftAssignment.shift_id == hours_shift.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert seats == [alice]

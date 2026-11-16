@@ -37,7 +37,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin_hours import AdminHoursEntry
-from app.models.event import Event
+from app.models.event import Event, EventRSVP
 from app.models.historical_import import (
     HistoricalImport,
     ImportedRecordKind,
@@ -45,6 +45,9 @@ from app.models.historical_import import (
 )
 from app.models.training import (
     RequirementProgressCredit,
+    Shift,
+    ShiftAssignment,
+    ShiftAttendance,
     TrainingRecord,
     TrainingSession,
 )
@@ -63,8 +66,9 @@ EDIT_TOLERANCE = timedelta(minutes=2)
 STEP_ADMIN = "admin"
 STEP_TRAINING = "training"
 STEP_DRILLS = "drills"
+STEP_STAFFING = "staffing"
 
-UNDOABLE_STEPS = (STEP_ADMIN, STEP_TRAINING, STEP_DRILLS)
+UNDOABLE_STEPS = (STEP_ADMIN, STEP_TRAINING, STEP_DRILLS, STEP_STAFFING)
 
 # A step and the later steps that build on it: undo those first.
 _DEPENDENTS: Dict[str, Sequence[str]] = {STEP_TRAINING: (STEP_DRILLS,)}
@@ -73,6 +77,7 @@ _STEP_LABELS = {
     STEP_ADMIN: "administrative hours",
     STEP_TRAINING: "training",
     STEP_DRILLS: "company drills",
+    STEP_STAFFING: "staffing roster",
 }
 
 _CHUNK = 500
@@ -101,8 +106,13 @@ class StepUndoPlan:
     kept: List[KeptRecord] = field(default_factory=list)
     kept_total: int = 0
     already_gone: int = 0
+    # Records the step used but did not make (a shift the hours import made, a
+    # member re-seated on it): left as they are, and counted for the preview.
+    reused: int = 0
     # Filled in by the plan's own steps, consumed by ``undo``.
     _remove_ids: List[str] = field(default_factory=list, repr=False)
+    # The staffing roster removes several kinds at once, by kind.
+    _remove_by_kind: Dict[str, List[str]] = field(default_factory=dict, repr=False)
     _ledger_ids: List[str] = field(default_factory=list, repr=False)
 
 
@@ -149,6 +159,7 @@ class HistoricalImportUndoService:
                     for k in plan.kept[:_KEPT_EXAMPLES]
                 ],
                 "already_gone": plan.already_gone,
+                "reused": plan.reused,
             }
         return {
             "steps": steps,
@@ -175,8 +186,10 @@ class HistoricalImportUndoService:
             await self._plan_rows(
                 record, plan, ImportedRecordKind.TRAINING_RECORD, TrainingRecord
             )
-        else:
+        elif step == STEP_DRILLS:
             await self._plan_drills(record, plan)
+        else:
+            await self._plan_staffing(record, plan)
         return plan
 
     async def _ledger(
@@ -268,6 +281,213 @@ class HistoricalImportUndoService:
         plan._ledger_ids = [e.id for e in ledger if e.record_id not in kept_ids]
         plan.kept.sort(key=lambda k: k.label)
 
+    async def _plan_staffing(
+        self, record: HistoricalImport, plan: StepUndoPlan
+    ) -> None:
+        """The roster's shifts, seats, calendar events and check-ins.
+
+        Its ledger does not say whether a shift or seat was made or only used:
+        the roster fills the hours import's shift for a date and unit, and
+        re-seats a member the hours import already put on it. A record made
+        by the commit was stamped with its ledger entry, so one created within
+        ``EDIT_TOLERANCE`` of the entry was made by it (owner decision
+        2026-11-16); anything older was used and is left as it is. A re-seated
+        member keeps the roster's seat: the seat they had before was not
+        recorded.
+
+        Kept as an officer's work: a record changed since, a shift or event
+        someone else has since been added to.
+        """
+        org_id = record.organization_id
+        entries = {
+            kind: await self._ledger(record, kind)
+            for kind in (
+                ImportedRecordKind.EVENT_RSVP,
+                ImportedRecordKind.SHIFT_ASSIGNMENT,
+                ImportedRecordKind.EVENT,
+                ImportedRecordKind.SHIFT,
+            )
+        }
+        models = {
+            ImportedRecordKind.EVENT_RSVP: EventRSVP,
+            ImportedRecordKind.SHIFT_ASSIGNMENT: ShiftAssignment,
+            ImportedRecordKind.EVENT: Event,
+            ImportedRecordKind.SHIFT: Shift,
+        }
+        rows = {
+            kind: await self._load(
+                models[kind], org_id, sorted({e.record_id for e in kind_entries})
+            )
+            for kind, kind_entries in entries.items()
+        }
+        remove: Dict[ImportedRecordKind, set[str]] = {k: set() for k in entries}
+        keep: set[str] = set()
+
+        def made_and_untouched(
+            kind: ImportedRecordKind, row: Any, at: datetime
+        ) -> Optional[bool]:
+            """True: made by the commit and unchanged. False: made by it, then
+            edited. None: not made by it."""
+            made = _aware(
+                row.responded_at
+                if kind == ImportedRecordKind.EVENT_RSVP
+                else row.created_at
+            )
+            if made is None or abs(made - at) > EDIT_TOLERANCE:
+                return None
+            return not changed_since(row.updated_at, at)
+
+        def entered(kind: ImportedRecordKind) -> Dict[str, datetime]:
+            times: Dict[str, datetime] = {}
+            for e in entries[kind]:
+                at = _aware(e.created_at) or datetime.now(timezone.utc)
+                times[e.record_id] = min(times.get(e.record_id, at), at)
+            return times
+
+        def classify(kind: ImportedRecordKind) -> None:
+            for record_id, at in entered(kind).items():
+                row = rows[kind].get(record_id)
+                if row is None:
+                    plan.already_gone += 1
+                    continue
+                verdict = made_and_untouched(kind, row, at)
+                if verdict is None:
+                    plan.reused += 1
+                elif verdict:
+                    remove[kind].add(record_id)
+                else:
+                    keep.add(record_id)
+                    plan.kept.append(
+                        KeptRecord(kind.value, record_id, _label(kind, row))
+                    )
+
+        classify(ImportedRecordKind.EVENT_RSVP)
+        classify(ImportedRecordKind.SHIFT_ASSIGNMENT)
+        classify(ImportedRecordKind.EVENT)
+        classify(ImportedRecordKind.SHIFT)
+
+        # A seat whose member has attendance on that shift belongs to the hours
+        # import, however close in time the two commits ran: the roster writes
+        # no attendance. Reused, so it stays.
+        seats = rows[ImportedRecordKind.SHIFT_ASSIGNMENT]
+        for seat_id in sorted(remove[ImportedRecordKind.SHIFT_ASSIGNMENT]):
+            seat = seats[seat_id]
+            attended = await self.db.scalar(
+                select(ShiftAttendance.id)
+                .where(
+                    ShiftAttendance.shift_id == seat.shift_id,
+                    ShiftAttendance.user_id == seat.user_id,
+                )
+                .limit(1)
+            )
+            if attended is not None:
+                remove[ImportedRecordKind.SHIFT_ASSIGNMENT].discard(seat_id)
+                plan.reused += 1
+
+        # A shift or event the roster made is kept when anything it did not
+        # write, or keeps, is still on it.
+        await self._keep_occupied(
+            plan,
+            remove,
+            keep,
+            ImportedRecordKind.EVENT,
+            EventRSVP,
+            EventRSVP.event_id,
+            remove[ImportedRecordKind.EVENT_RSVP],
+            rows,
+        )
+        await self._keep_occupied(
+            plan,
+            remove,
+            keep,
+            ImportedRecordKind.SHIFT,
+            ShiftAssignment,
+            ShiftAssignment.shift_id,
+            remove[ImportedRecordKind.SHIFT_ASSIGNMENT],
+            rows,
+        )
+        for shift_id in sorted(remove[ImportedRecordKind.SHIFT]):
+            attended = await self.db.scalar(
+                select(ShiftAttendance.id)
+                .where(ShiftAttendance.shift_id == shift_id)
+                .limit(1)
+            )
+            if attended is not None:
+                remove[ImportedRecordKind.SHIFT].discard(shift_id)
+                keep.add(shift_id)
+                plan.kept.append(
+                    KeptRecord(
+                        ImportedRecordKind.SHIFT.value,
+                        shift_id,
+                        _label(
+                            ImportedRecordKind.SHIFT,
+                            rows[ImportedRecordKind.SHIFT][shift_id],
+                        ),
+                    )
+                )
+
+        plan._remove_by_kind = {k.value: sorted(v) for k, v in remove.items()}
+        plan.removable = sum(len(v) for v in remove.values())
+        plan.kept_total = len(keep)
+        plan._ledger_ids = [
+            e.id
+            for kind_entries in entries.values()
+            for e in kind_entries
+            if e.record_id not in keep
+        ]
+        plan.kept.sort(key=lambda k: k.label)
+
+    async def _keep_occupied(
+        self,
+        plan: StepUndoPlan,
+        remove: Dict[ImportedRecordKind, set[str]],
+        keep: set[str],
+        parent_kind: ImportedRecordKind,
+        child: Any,
+        parent_column: Any,
+        leaving: set[str],
+        rows: Dict[ImportedRecordKind, Dict[str, Any]],
+    ) -> None:
+        parents = sorted(remove[parent_kind])
+        for chunk in _chunks(parents):
+            children = await self.db.execute(
+                select(parent_column, child.id).where(parent_column.in_(chunk))
+            )
+            occupied = {str(p) for p, cid in children.all() if str(cid) not in leaving}
+            for parent_id in occupied:
+                remove[parent_kind].discard(parent_id)
+                keep.add(parent_id)
+                plan.kept.append(
+                    KeptRecord(
+                        parent_kind.value,
+                        parent_id,
+                        _label(parent_kind, rows[parent_kind][parent_id]),
+                    )
+                )
+
+    async def _delete_staffing(self, org_id: str, plan: StepUndoPlan) -> int:
+        """Check-ins and seats first, then the events and shifts they were on."""
+        removed = 0
+        by_kind = plan._remove_by_kind
+        removed += await self._delete_ids(
+            EventRSVP, org_id, by_kind.get(ImportedRecordKind.EVENT_RSVP.value, [])
+        )
+        removed += await self._delete_ids(
+            ShiftAssignment,
+            org_id,
+            by_kind.get(ImportedRecordKind.SHIFT_ASSIGNMENT.value, []),
+        )
+        event_ids = by_kind.get(ImportedRecordKind.EVENT.value, [])
+        if event_ids:
+            from app.services.attendance_waiver_service import void_pending_for_events
+
+            await void_pending_for_events(self.db, org_id, event_ids, "deleted")
+        removed += await self._delete_ids(Event, org_id, event_ids)
+        removed += await self._delete_ids(
+            Shift, org_id, by_kind.get(ImportedRecordKind.SHIFT.value, [])
+        )
+        return removed
+
     # ------------------------------------------------------------------
     # Undo
     # ------------------------------------------------------------------
@@ -299,8 +519,10 @@ class HistoricalImportUndoService:
             counts["removed"] = await self._delete_training(
                 org_id, plan._remove_ids, undone_by
             )
-        else:
+        elif step == STEP_DRILLS:
             counts["removed"] = await self._delete_drills(record, plan._remove_ids)
+        else:
+            counts["removed"] = await self._delete_staffing(org_id, plan)
         for chunk in _chunks(plan._ledger_ids):
             await self.db.execute(
                 delete(ImportedSourceRecord).where(
@@ -534,4 +756,14 @@ def _label(kind: ImportedRecordKind, row: Any) -> str:
             f"{start.date().isoformat() if start else 'undated'}: "
             f"{round((row.duration_minutes or 0) / 60, 2)} h"
         )
+    if kind == ImportedRecordKind.EVENT:
+        start = _aware(row.start_datetime)
+        return f"{row.title} ({start.date().isoformat() if start else 'undated'})"
+    if kind == ImportedRecordKind.SHIFT:
+        day = row.shift_date.isoformat() if row.shift_date else "undated"
+        return f"Shift on {day}" + (" (outreach sheet)" if row.is_outreach else "")
+    if kind == ImportedRecordKind.SHIFT_ASSIGNMENT:
+        return f"Seat: {row.outreach_role or row.position or 'unnamed'}"
+    if kind == ImportedRecordKind.EVENT_RSVP:
+        return "Event check-in"
     return str(row.id)

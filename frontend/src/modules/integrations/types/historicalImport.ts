@@ -451,6 +451,7 @@ export const HistoricalUndoStep = {
   ADMIN: 'admin',
   TRAINING: 'training',
   DRILLS: 'drills',
+  STAFFING: 'staffing',
 } as const;
 export type HistoricalUndoStep = (typeof HistoricalUndoStep)[keyof typeof HistoricalUndoStep];
 
@@ -469,6 +470,8 @@ export interface UndoStepPreview {
   /** The first few kept records; `kept_total` is the whole count. */
   kept: UndoKeptRecord[];
   already_gone: number;
+  /** Shifts and seats the step used but did not make: left as they are. */
+  reused?: number;
 }
 
 export interface UndoPreview {
