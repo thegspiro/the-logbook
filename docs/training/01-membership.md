@@ -2831,8 +2831,8 @@ they go public.
 History is an optional module, and it is off until an administrator turns it
 on in **Settings → Modules → Additional Modules**.
 
-Once it is on, select **History** in the menu. It has three pages:
-**Overview**, **Past Members** and **Honor Roll**. You need no permission to
+Once it is on, select **History** in the menu. Its overview leads to
+**Past members**, **Photos and media**, **Documents** and **Honor Roll**. You need no permission to
 read published records. Being a signed-in member of the department is
 enough.
 
@@ -2840,7 +2840,7 @@ The **Department History** page shows:
 
 - cards for **Past members**, **Photos and media**, **Documents** and
   **Honor Roll** _(media 2026-11-13, documents 2026-11-14)_, **Import a
-  roster** if you can edit records _(2026-11-13)_, and **Titles and
+  roster** if you hold `history.manage` _(2026-11-13)_, and **Titles and
   clearance** if you can configure the module;
 - **Awaiting my clearance**, if a record is waiting for you to review it;
 - **Drafts**, if you can edit records; and

@@ -961,7 +961,7 @@ waiver is now read as that leave, so a month is counted once.
 
 ### Shift evaluations: outside-agency preceptor links, and credit only for programs joined by the shift (2026-11-13)
 
-Migration `563f8aba187e` creates `shift_evaluation_links` (empty), adds
+Migration `533f8aba187e` creates `shift_evaluation_links` (empty), adds
 `training_module_configs.shift_evaluation_link_days` with a server default of
 **7**, and adds the `shift_evaluation_preceptor_link` email template type. An
 outside agency's preceptor can now fill in a trainee's evaluation through a
