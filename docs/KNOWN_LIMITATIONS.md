@@ -1476,7 +1476,7 @@ the owner, because closing them changes how members get into their accounts:
   is; the email change itself is now ceiling-bound, step-up gated, audited and
   reported to the previous address.
 
-## Separation of Duties — Four Decisions Left Open (ADV-02, 2026-11-14)
+## Separation of Duties — Three Decisions Left Open (ADV-02, 2026-11-14)
 
 The adversarial pass over the month to 2026-11-14 found these items. Its
 findings are in `docs/security-review/ADV-02-adversarial-last-month.md`. Each
@@ -1490,9 +1490,13 @@ fix changes a workflow some departments rely on, so the owner decides:
   step-up. On upgrade, an evaluation already waiting on an approval whose only
   position holder is its evaluator stays open until a manager names someone.
   See `docs/EVALUATIONS_MODULE.md`.
-- **A shift officer can write their own close-out hours (ADV2-8).** Pre-shift
-  work and event attendance refuse the self case. On a one-person shift nobody
-  else could record it.
+- ~~**A shift officer can write their own close-out hours (ADV2-8).**~~ ✅
+  Resolved 2026-11-20 (owner: block it). A shift officer without
+  `scheduling.manage` cannot change their own times or hours at close-out, or
+  add themselves as an attendee there; their own row comes from their check-in
+  and check-out. On a one-person shift where the officer missed a check-in or
+  check-out, a scheduling admin now records their hours. See
+  `docs/security-review/ADV-02-adversarial-last-month.md`.
 - **An officer can grant themselves a leave, and with it a training waiver
   (ADV2-9).** This needs `members.manage` and `scheduling.assign`.
 - **An applicant's edited email or name and birth date can make a coordinator's
