@@ -83,4 +83,20 @@ describe('StepUndo', () => {
     await waitFor(() => expect(mockPreview).toHaveBeenCalledWith('hist-1'));
     expect(screen.queryByRole('button', { name: 'Undo this step' })).not.toBeInTheDocument();
   });
+
+  it('says the roster leaves the shifts and seats it only used', async () => {
+    mockPreview.mockResolvedValue({
+      steps: { staffing: step({ reused: 3, kept_total: 0, kept: [] }) },
+      members_created: 0,
+    });
+    const user = userEvent.setup();
+    renderWithRouter(
+      <StepUndo importId="hist-1" step="staffing" noun="roster's shifts, seats and events" onUndone={onUndone} />
+    );
+    await user.click(await screen.findByRole('button', { name: 'Undo this step' }));
+
+    expect(await screen.findByRole('dialog')).toHaveTextContent(
+      '3 shifts and seats it used but did not make are left as they are; a member it moved to another seat keeps that seat.'
+    );
+  });
 });
