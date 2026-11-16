@@ -119,6 +119,44 @@ describe('TrainingEventWizard › a real form', () => {
   });
 });
 
+describe('TrainingEventWizard › picking a library course', () => {
+  beforeEach(resetMocks);
+
+  // Picking a course replaces its hours, expiry, instructor and type, but
+  // cleared only the Course refusal: one under Credit Hours stayed drawn,
+  // aria-invalid, under the course's valid figure until the next check.
+  it('takes down a refusal under a value the course replaced', async () => {
+    getCourses.mockResolvedValue([
+      {
+        id: 'cpr',
+        organization_id: 'org-1',
+        name: 'CPR Recertification',
+        training_type: 'certification',
+        credit_hours: 4,
+        active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]);
+    const user = userEvent.setup();
+    renderForm();
+    await user.type(screen.getByLabelText(/^Title/), 'CPR recert night');
+    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
+    await next(user);
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: /From the Course Library/ }));
+    const hours = screen.getByLabelText(/^Credit Hours/);
+    await user.clear(hours);
+    await next(user);
+    expect(hours).toHaveAttribute('aria-invalid', 'true');
+
+    await user.selectOptions(screen.getByLabelText(/^Course/), 'cpr');
+
+    expect(hours).toHaveValue(4);
+    expect(hours).not.toHaveAttribute('aria-invalid', 'true');
+  });
+});
+
 describe('TrainingEventWizard › the series controls', () => {
   beforeEach(resetMocks);
 

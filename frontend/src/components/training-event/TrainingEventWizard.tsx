@@ -489,7 +489,14 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     });
     // Only the officer's ticks: loading an event's links never pre-fills.
     if (patch.attendance_requirement_ids) prefill.requirementsChanged(patch.attendance_requirement_ids);
-    const touched = Object.keys(patch).map((key) => (key === 'instructor' ? 'instructor_id' : key));
+    clearTrainingErrors(Object.keys(patch));
+  };
+
+  /** Take down the refusals under the fields a change just wrote. */
+  const clearTrainingErrors = (keys: string[]) => {
+    const touched = keys.map((key) =>
+      key === 'instructor' ? 'instructor_id' : key === 'credit_hours_source' ? 'credit_hours' : key
+    );
     if (touched.some((key) => key in trainingErrors)) {
       setTrainingErrors((prev) => {
         const next = { ...prev };
@@ -504,16 +511,20 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
       updateTraining({ course_id: '' });
       return;
     }
-    setTraining((prev) =>
-      applyLibraryCourse(
-        prev,
-        course,
-        members,
-        linkageData.programs.map((p) => p.id),
-        prev.course_mode === 'library' ? courses.find((c) => c.id === prev.course_id) : undefined
-      )
+    const picked = applyLibraryCourse(
+      training,
+      course,
+      members,
+      linkageData.programs.map((p) => p.id),
+      training.course_mode === 'library' ? courses.find((c) => c.id === training.course_id) : undefined
     );
-    setTrainingErrors(({ course_id: _picked, ...rest }) => rest);
+    setTraining(picked);
+    // The course's hours, expiry, instructor and type replace what was there,
+    // so a refusal of the value replaced no longer describes the field.
+    clearTrainingErrors([
+      'course_id',
+      ...(Object.keys(picked) as (keyof TrainingDetailsForm)[]).filter((key) => picked[key] !== training[key]),
+    ]);
     if (course.max_participants) model.update({ max_attendees: course.max_participants });
   };
 
