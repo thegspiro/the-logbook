@@ -23,7 +23,11 @@ import type { EventCreate, EventType, EventUpdate, RecurringEventCreate } from '
 import { EventType as EventTypeEnum } from '../../constants/enums';
 import { getEventTypeLabel } from '../../utils/eventHelpers';
 import { TrainingEventWizard } from '../training-event/TrainingEventWizard';
-import { DEFAULT_TRAINING_DETAILS, type TrainingDetailsForm } from '../training-event/trainingDetailsModel';
+import {
+  DEFAULT_TRAINING_DETAILS,
+  type SessionSettingCopy,
+  type TrainingDetailsForm,
+} from '../training-event/trainingDetailsModel';
 import type { TrainingInfoAccess, TrainingReadOnlyNotice } from '../training-event/TrainingInfoStep';
 import { EventFormView } from './EventFormView';
 import type { ConflictEvent, InitialRecurrence } from './eventFormTypes';
@@ -81,6 +85,8 @@ export interface EditOptions {
   initialTraining: TrainingDetailsForm;
   trainingAccess: TrainingInfoAccess;
   readOnlyNotice?: TrainingReadOnlyNotice | undefined;
+  /** custom_fields' copies of session settings Training Info cannot show, which a save keeps. */
+  keptSettingCopies?: readonly SessionSettingCopy[] | undefined;
   storedCourseName?: string | undefined;
   initialStep?: 'details' | 'training' | undefined;
   /** On an occurrence of a series: which occurrences the save reaches. */
@@ -281,6 +287,7 @@ export const EventComposer: React.FC<EventComposerProps> = ({
               // its details are new, and the edit page has no reason to lock them.
               trainingAccess: storedTraining ? editing.trainingAccess : 'edit',
               readOnlyNotice: storedTraining ? editing.readOnlyNotice : undefined,
+              keptSettingCopies: storedTraining ? editing.keptSettingCopies : undefined,
               originalTraining: storedTraining ? editing.initialTraining : undefined,
               storedCourseName: editing.storedCourseName,
               initialStep: storedTraining && !typeSwapped ? editing.initialStep : undefined,

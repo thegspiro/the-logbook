@@ -43,7 +43,10 @@ interface TrainingSessionLinkageCardProps {
    * match the session and are not listed. The training form drops the copies
    * whenever it saves the session's settings (withoutSessionSettingCopies), so
    * a copy never outlives an edit to be listed as a value the officer did not
-   * get.
+   * get. The one exception is an agency or expiry copied beside no
+   * certification on an event with no session: the form has nowhere to show
+   * those, so it keeps them, and once a session is attached they are listed
+   * here, truthfully, as never applied.
    */
   customFields?: Record<string, unknown> | null | undefined;
 }

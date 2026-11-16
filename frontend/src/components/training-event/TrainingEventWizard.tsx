@@ -77,6 +77,7 @@ import {
   withLoadedCourseHours,
   withoutSessionSettingCopies,
   type InstructorOption,
+  type SessionSettingCopy,
   type TrainingDetailsForm,
   type TrainingField,
 } from './trainingDetailsModel';
@@ -218,6 +219,8 @@ interface TrainingEventWizardProps {
   /** What an edit may change on Training Info; a create is always `edit`. */
   trainingAccess?: TrainingInfoAccess | undefined;
   readOnlyNotice?: TrainingReadOnlyNotice | undefined;
+  /** custom_fields' copies of session settings this form cannot show, which an edit's save keeps. */
+  keptSettingCopies?: readonly SessionSettingCopy[] | undefined;
   /** The training details as stored, for the Review step's "was" notes. */
   originalTraining?: TrainingDetailsForm | undefined;
   /** The stored session's course name, for a course the library no longer lists. */
@@ -259,6 +262,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   onSubmitUpdate,
   trainingAccess = 'edit',
   readOnlyNotice,
+  keptSettingCopies,
   originalTraining,
   storedCourseName,
   initialStep = 'details',
@@ -705,7 +709,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     // attendance links alone, and a reader nothing, so there the copies are
     // still news.
     if (trainingAccess === 'edit' && eventFields.custom_fields) {
-      eventFields.custom_fields = withoutSessionSettingCopies(eventFields.custom_fields);
+      eventFields.custom_fields = withoutSessionSettingCopies(eventFields.custom_fields, keptSettingCopies);
     }
     const details = trainingUpdate();
     const payload: EventUpdate = details ? { ...eventFields, training_details: details } : eventFields;

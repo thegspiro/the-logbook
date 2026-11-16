@@ -482,11 +482,56 @@ export const SESSION_SETTING_COPIES = [
   'auto_create_records',
 ] as const;
 
-/** The event's custom_fields without those copies; everything else is kept. */
-export const withoutSessionSettingCopies = <T>(customFields: Record<string, T>): Record<string, T> => {
+export type SessionSettingCopy = (typeof SESSION_SETTING_COPIES)[number];
+
+/**
+ * The event's custom_fields without those copies; everything else is kept,
+ * including any copy named in `keep`.
+ */
+export const withoutSessionSettingCopies = <T>(
+  customFields: Record<string, T>,
+  keep: readonly SessionSettingCopy[] = []
+): Record<string, T> => {
   const kept = { ...customFields };
-  for (const key of SESSION_SETTING_COPIES) delete kept[key];
+  for (const key of SESSION_SETTING_COPIES) if (!keep.includes(key)) delete kept[key];
   return kept;
+};
+
+type CustomFieldValue = string | number | boolean | null | undefined;
+
+const copyText = (value: CustomFieldValue): string =>
+  typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : '';
+
+/**
+ * Training Info for a Training event with no session, opened on the copies
+ * of its settings: the old Events form wrote them to custom_fields only, and
+ * the event page shows them as the event's, so they are what the officer
+ * last saw. The save then writes them to the session it attaches, and
+ * dropping the copies loses nothing. `hidden` names the copies the form has
+ * nowhere to show — an agency or expiry without a certification, since those
+ * boxes appear only once one is issued — which a save must keep, as it can
+ * neither show nor carry them.
+ */
+export const fromSettingCopies = (
+  customFields: Record<string, CustomFieldValue> | null | undefined
+): { value: TrainingDetailsForm; hidden: SessionSettingCopy[] } => {
+  const fields = customFields ?? {};
+  const issues = fields.issues_certification === true;
+  const value: TrainingDetailsForm = {
+    ...DEFAULT_TRAINING_DETAILS,
+    instructor: copyText(fields.instructor),
+    issues_certification: issues,
+    issuing_agency: issues ? copyText(fields.issuing_agency) : '',
+    expiration_months: issues ? copyText(fields.expiration_months) : '',
+    auto_create_records:
+      typeof fields.auto_create_records === 'boolean'
+        ? fields.auto_create_records
+        : DEFAULT_TRAINING_DETAILS.auto_create_records,
+  };
+  const hidden = issues
+    ? []
+    : (['issuing_agency', 'expiration_months'] as const).filter((key) => copyText(fields[key]) !== '');
+  return { value, hidden };
 };
 
 /**

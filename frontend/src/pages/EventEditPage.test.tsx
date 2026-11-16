@@ -921,6 +921,77 @@ describe('EventEditPage', () => {
       );
     });
 
+    // An event the old Events form made with no session holds its training
+    // settings only as those copies, and the event page shows them as the
+    // event's. The form opens on them, so the officer sees them, and the save
+    // writes them to the session it attaches before dropping the copies.
+    describe('with no session, only the copies', () => {
+      const copies = {
+        instructor: 'Owen Kittredge',
+        issuing_agency: 'AHA',
+        expiration_months: 24,
+        issues_certification: true,
+        auto_create_records: false,
+        crew_note: 'Bring gloves',
+      };
+
+      beforeEach(() => {
+        vi.mocked(trainingSessionService.getSessionByEvent).mockResolvedValue(null);
+      });
+
+      it('opens Training Info on the copies and saves them as the session', async () => {
+        vi.mocked(eventService.getEvent).mockResolvedValue({ ...trainingEvent, custom_fields: copies });
+        window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await screen.findByText('Step 2 of 4 · Training Info');
+        expect(screen.getByText('Owen Kittredge, not a member')).toBeInTheDocument();
+        expect(screen.getByLabelText('This training issues a certification')).toBeChecked();
+        expect(screen.getByLabelText(/Issuing Agency/)).toHaveValue('AHA');
+        expect(screen.getByLabelText(/Expiration \(months\)/)).toHaveValue(24);
+        await toReview(user);
+        await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+        await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+        expect(sent()?.custom_fields).toEqual({ crew_note: 'Bring gloves' });
+        expect(sent()?.training_details).toMatchObject({
+          instructor: 'Owen Kittredge',
+          issues_certification: true,
+          issuing_agency: 'AHA',
+          expiration_months: 24,
+          auto_create_records: false,
+        });
+      });
+
+      // Without a certification the form never shows the agency or expiry, so
+      // a save cannot carry them; the copies the event page shows are kept.
+      it('keeps an agency and expiry the form had no place to show', async () => {
+        vi.mocked(eventService.getEvent).mockResolvedValue({
+          ...trainingEvent,
+          custom_fields: { ...copies, issues_certification: false },
+        });
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await screen.findByText('Step 1 of 4 · Event Details');
+        await toReview(user);
+        await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+        await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+        expect(sent()?.custom_fields).toEqual({
+          issuing_agency: 'AHA',
+          expiration_months: 24,
+          crew_note: 'Bring gloves',
+        });
+        expect(sent()?.training_details).toMatchObject({
+          instructor: 'Owen Kittredge',
+          issues_certification: false,
+          auto_create_records: false,
+        });
+      });
+    });
+
     // A link to a requirement since deactivated is kept by every save, so the
     // form shows it: ticked, named and marked, where it can be unticked, and
     // the section is shown even when no active requirement is left to offer.

@@ -21,7 +21,11 @@ import type { ConflictEvent, InitialRecurrence } from '../components/event-form/
 import { EventComposer, type EditOptions } from '../components/event-form/EventComposer';
 import type { SeriesScope } from '../components/event-form/SeriesScopeChoice';
 import type { TrainingInfoAccess, TrainingReadOnlyNotice } from '../components/training-event/TrainingInfoStep';
-import { DEFAULT_TRAINING_DETAILS, fromSession } from '../components/training-event/trainingDetailsModel';
+import {
+  DEFAULT_TRAINING_DETAILS,
+  fromSession,
+  fromSettingCopies,
+} from '../components/training-event/trainingDetailsModel';
 import { EventType as EventTypeEnum } from '../constants/enums';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { getErrorDetail } from '../utils/errorHandling';
@@ -335,7 +339,15 @@ export const EventEditPage: React.FC = () => {
     return { trainingAccess: attendanceLocked ? 'finalized' : 'edit' };
   })();
 
-  const storedTraining = session ? fromSession(session, event) : DEFAULT_TRAINING_DETAILS;
+  // A Training event with no session has only custom_fields' copies of its
+  // settings, which the event page shows as the event's: Training Info opens
+  // on them, so a save carries them into the session rather than dropping
+  // them unseen. A reader's step is locked and shows no session at all.
+  const settingCopies =
+    !session && event.event_type === EventTypeEnum.TRAINING && trainingAccess === 'edit'
+      ? fromSettingCopies(event.custom_fields)
+      : undefined;
+  const storedTraining = session ? fromSession(session, event) : (settingCopies?.value ?? DEFAULT_TRAINING_DETAILS);
   const series = seriesParent ?? event;
 
   const editing: EditOptions = {
@@ -352,6 +364,7 @@ export const EventEditPage: React.FC = () => {
         : { ...storedTraining, credit_hours_source: 'manual' },
     trainingAccess,
     readOnlyNotice,
+    keptSettingCopies: settingCopies?.hidden,
     storedCourseName: session?.course_name,
     finalizedOccurrenceBefore: finalizedBefore,
     initialStep: searchParams.get('step') === 'training' ? 'training' : 'details',
