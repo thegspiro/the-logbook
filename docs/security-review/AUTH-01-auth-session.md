@@ -1,9 +1,239 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), #3556 (pass 11, corrected here the same way), #3684 (pass 12, corrected here the same way), #3802 (pass 13, corrected here the same way), #3870 (pass 14), pass 15 (this PR)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup), 2026-10-25 (pass 12, watchdog pickup), 2026-10-28 (pass 13), 2026-10-31 (pass 14, watchdog pickup), 2026-11-04 (pass 15, watchdog pickup), 2026-11-15 (pass 16, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), #3556 (pass 11, corrected here the same way), #3684 (pass 12, corrected here the same way), #3802 (pass 13, corrected here the same way), #3870 (pass 14), #4021 (pass 15, corrected here the same way), pass 16 (this PR)
 
 Passes are recorded in this one file rather than a new `AUTH<n>-01-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 16 (2026-11-15, watchdog pickup) — 0 fixed, 0 new findings; per-account login lockout, step-up-before-second-factor-change, and audit-log email redaction all verified correct
+
+Watchdog pickup — the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable (confirmed via
+`ListAgents`, "No reachable agents"). Step 0: no open `claude/security-review-*`
+PR existed. The prior lap had closed out at Feature 00 (Cross-cutting
+baseline, pass 17, PR #4328, merged), whose own body reset the rotation table
+to `⬜` for a fresh lap. Row 00 was already `✅` for its own pass; row 01 (Auth
+& session lifecycle) was confirmed the next `⬜` row on a freshly fetched,
+fast-forwarded `main`.
+
+**Baseline:** `9e16fbae0` (PR #4021's merge, pass 15). **Head:** current
+`main`. 1442 commits between baseline and head, of which exactly 7 of this
+feature's 18 tracked files carry a real diff: `auth.py` (+48/-19),
+`core/security.py` (+21), `schemas/auth.py` (+19/-1), `auth_service.py`
+(+7/-9), `consent_service.py` (+17), `apiClient.ts` (+6/-1), `authStore.ts`
+(+144/-61). The other 11 (`dependencies.py`, `mfa_service.py`,
+`oauth_service.py`, `passkey_service.py`, `models/passkey.py`,
+`suspicious_ip.py`, `authService.ts`, `utils/passkeys.ts`,
+`PasskeySettingsCard.tsx`, `StepUpContext.tsx`, `utils/stepUp.ts`) are
+byte-identical to pass 15 — confirmed by `git diff --stat` against the full
+18-path list, not inferred from a subset.
+
+### Route inventory — re-enumerated by AST, not assumed unchanged
+
+**Still 38 routes** (`grep -c '^@router\.'` over `auth.py`), same count as
+pass 15. The diff below only adds parameters to two existing handlers and a
+private helper function — no route added or removed.
+
+### Real delta #1 — a stolen session can no longer plant or has to step up before changing a second factor (`auth.py`)
+
+New helper `_require_stepup_once_enrolled` (`auth.py:1896`), called from
+`/mfa/setup` (`auth.py:1473`), `/mfa/verify-setup` (`auth.py:1540`) and
+`/passkeys/register-options` (`auth.py:1950`): if the member already has a
+second factor (`passkey_service.has_second_factor`), a fresh step-up
+(`ensure_stepup`) is demanded before a new one can be enrolled. A member with
+**no** second factor yet is unaffected — enrolling the first factor needs
+only the session, exactly like before, since nothing stronger than the
+password just used to sign in exists yet to step up with. Traced the
+symmetric case too: `/passkeys/register` (the handler that actually consumes
+the WebAuthn attestation and persists the credential, `auth.py:1963`)
+independently re-checks `has_second_factor` and calls `ensure_stepup` itself
+(`auth.py:1991`) rather than trusting the options call a client could skip,
+and the unconditional `ensure_stepup` on passkey deletion
+(`auth.py:2049`) and recovery-code regeneration (`auth.py:2119`) were already
+in place and unchanged. Closes the gap the helper's own comment names: a
+hijacked session, with no knowledge of the member's password or existing
+factor, could previously have enrolled its own TOTP secret or passkey as a
+second factor and used it to pass every future step-up check.
+
+**Verified, not merely read:** `passkey_service.has_second_factor` is a
+simple existence check scoped to the caller's own `user_id` (no org or
+cross-account input involved), and `ensure_stepup` is the same
+already-reviewed non-`Depends` helper `/passkeys/register`'s sibling routes
+already used.
+
+### Real delta #2 — sign-in's dummy-hash timing defense now costs one verify, not a hash-and-verify (`core/security.py`, `auth_service.py`)
+
+`AuthService.authenticate_user`'s three fail-closed-before-the-real-check
+branches (unknown user, no password set, account locked) used to call
+`verify_password("dummy-password", hash_password("dummy-password",
+skip_validation=True))` inline — hashing a fresh dummy password and then
+verifying it, two Argon2 operations, every single call. They now call
+`burn_password_verification(password)` (`core/security.py:108`), which hashes
+the dummy exactly once, lazily, cached by `@lru_cache(maxsize=1)`
+(`_dummy_password_hash`, `core/security.py:101`), and spends only the
+verify — the same one Argon2 operation the real "user exists, wrong
+password" path spends. The old form's extra hash made the unknown-user path
+measurably slower than the wrong-password path (its own docstring says
+"about twice as slow"), which is itself a timing oracle for username
+enumeration — the opposite of what the dummy-hash call exists to prevent.
+Confirmed `_dummy_password_hash` is built from `password_hasher.hash(...)`,
+the same hasher `verify_password`'s real branch uses, so its cost parameters
+match a real account's hash. The locked-account branch's
+`logger.warning(f"...locked - {username}")` was also replaced with the
+argument-passed form logging `user.id` rather than the typed username
+(`auth_service.py:349`) — matches CLAUDE.md Pitfall #33 (log an id, not
+free text, and never combine an f-string with logger arguments).
+
+### Real delta #3 — password-reset audit events log a keyed fingerprint, not the raw address, and are correctly org-tagged (`auth.py`)
+
+`POST /forgot-password`'s two `log_audit_event` calls (the email-disabled
+early return and the main request-recorded event) now pass
+`email_fingerprint(reset_request.email)` in `event_data` instead of the raw
+`email` field, and both now also pass `organization_id=org_id` as the
+column, not only inside `event_data` — previously the column was left unset
+on this event type, which would have hidden every reset request from any
+query that reads the department's audit log by that column rather than by
+parsing JSON. The fingerprint is salted/keyed off `ENCRYPTION_KEY`
+(`email_fingerprint`, pre-existing in `core/security.py`, unchanged this
+pass) — reused here, not reinvented — so the audit log (hash-chained,
+append-only, kept indefinitely per the module's own docstring) matches
+repeated attempts against the same address without ever storing or
+being able to recover the address itself. Confirmed the request that
+**matched** a real member instead logs `user_id` and omits the fingerprint
+entirely (`auth.py:2667`-`2672`) — the member's own identity is already on
+the row by `user_id`, so there is nothing to redact, and the two code paths
+cannot both fire for the same event.
+
+### Real delta #4 — `MFAVerify`/`StepUpRequest`/`MFALogin` accept a grouped TOTP code; `UserLogin`'s password floor dropped to 1 (`schemas/auth.py`)
+
+`_ungrouped_code` (`schemas/auth.py`, a `field_validator(mode="before")`)
+strips internal whitespace before the existing `min_length=6, max_length=6`
+check, so a code copied as an authenticator app displays it ("123 456") is
+accepted the same as "123456" — applied to all three schemas that take a
+TOTP code, not just the sign-in screen (the file's own comment: "W02-10 had
+fixed only the sign-in screen"). This is a UX/consistency fix with no
+security surface — the comparison downstream is still against the exact
+6-digit value, `secrets.compare_digest` as before, unchanged by this pass.
+`UserLogin.password`'s `min_length` dropped from 8 to 1
+(`schemas/auth.py:45`): verified this is the **login** schema only —
+`RegisterData.password` (`:78`) and both change/reset-password schemas
+(`:177`, `:190`) still enforce `min_length=12`, the actual strength floor.
+A short login attempt now reaches `authenticate_user` and fails there as an
+ordinary wrong password (counted toward lockout, same timing as any other
+wrong-password attempt via delta #2's `burn_password_verification`) instead
+of being rejected at the schema layer with a 422 that bypassed the lockout
+counter entirely and, by its distinct status code and response shape, was
+itself distinguishable from the generic "incorrect username or password"
+path.
+
+### Real delta #5 — `ConsentService.answers`, a new bulk-read method (`consent_service.py`)
+
+New method, same shape and same lack-of-explicit-org-filter as the two
+existing bulk methods it sits beside (`granted_user_ids`, this file's
+pre-existing fan-out helper) and the file's own `has_consent`: none of the
+three filters `organization_id` directly, relying instead on `user_id`
+values the **caller** is expected to have already resolved in-org (this
+owner-decision app's "one department per installation" policy means a
+`user_id` cannot belong to a different org than the caller's own in the
+first place, so the existing pattern is sound, not merely accepted). Its one
+caller, `HistoryMediaService.consent_states`
+(`history_media_service.py:365`), passes `tag.member.user_id` for members
+already tagged on an org-scoped `HistoryMedia` item — out of this feature's
+own file scope (the `history.py` siblings were reviewed directly under
+Feature 00's pass 17, already found soundly org-scoped) and not re-litigated
+here; only `consent_service.py` itself, which does carry this feature's
+tracked-file label, was this pass's to check. No finding: the method matches
+its own file's established, already-reviewed convention exactly.
+
+### Real delta #6 — per-account client-side login lockout, replacing the old per-tab counter (`authStore.ts`)
+
+The client-side (defense-in-depth; the server's own `rate_limit_login`
+enforces the real limit) brute-force lockout used to be one counter per
+browser tab. It is now keyed per account
+(`loginAccountKey = username.trim().toLowerCase()`,
+`Record<string, LoginLockout>`), matching the server's own
+`_login_attempt_account` shape from pass 15's delta #1 — a shared station
+computer's one mistyped password no longer holds the next member, who types
+a different username, at the sign-in screen. The new store is bounded:
+`withLockout` (`authStore.ts`, keyed-map shape) caps the map at
+`MAX_LOCKOUT_ACCOUNTS = 20` (`:97`), evicting the oldest entries past that —
+Pitfall #9's size-cap-and-eviction requirement, satisfied for what is, in
+this case, attacker-adjacent (a client-controlled value: the attacker picks
+how many distinct usernames to type) unbounded-growth-shaped input.
+`loadLockoutState` discards the pre-migration per-tab shape outright (no
+`accounts` key) rather than attempting to migrate it, which is correct: the
+old shape names no account, so there is nothing safe to carry forward.
+Verified the reset path too — a successful login or the `mfa_required`
+branch clears only the **matched** account's own entry
+(`withLockout(get().loginLockouts, accountKey, null)`), never the whole map,
+so one member signing in successfully does not erase another's
+still-accruing lockout on the same shared tab.
+
+### Real delta #7 — device-switch releases the previous member's held offline skills evaluations (`authStore.ts`)
+
+`claimDeviceForMember` now awaits `releaseHeldWorkFor(userId)`
+(`authStore.ts:259`) immediately after the device-member purge and before
+writing the new member as the device's claimant. `releaseHeldWorkFor` and
+the `discardSkillsFor` purge option it pairs with live in
+`purgeLocalMemberData.ts` — a Frontend-shared (Feature 34) file, not this
+feature's own tracked file — and were already reviewed there; only the new
+call site inside `authStore.ts`, this feature's own file, was this pass's to
+check (Pitfall #19's "check the new reader" convention). Confirmed the
+ordering: the purge (which clears the _outgoing_ member's data) runs before
+the release (which hands back the _incoming_ examiner's own still-unsent
+work), so a device-switch cannot have one member's purge race the other's
+release. `logout`'s own `discardSkillsFor` is `null` on an automatic
+sign-out (idle timeout, session cap) and the signed-in member's own id on an
+interactive one (`authStore.ts`, `logout: async (options) => {...}`) —
+verified this reads `get().user?.id` **before** `endSessionLocally` tears
+the session down, so the id named is always the member actually signing out,
+never a stale or already-cleared value.
+
+### Standing items — reconfirmed unchanged from pass 15
+
+AUTH-23 (MED) is resolved — `docs/KNOWN_LIMITATIONS.md`'s entry already
+reads "✅ Resolved" (owner decision 2026-11-01, built 2026-11-03), so pass
+15's note that a later pass should retire it has already been done by
+whoever last touched that doc; nothing left to do here. AUTH-4
+(informational, unbounded roster query, accepted app-wide pattern) remains
+accepted and unchanged. AUTH-15, AUTH-17, AUTH-21 and AUTH-22 remain closed.
+
+**Pre-existing, out-of-scope, flagged not fixed:** `main` has a 2-head
+Alembic fork (`9d044fc1d81b`, `611204dcf8d1`) from two unrelated,
+already-merged PRs (#4312, #4314) that both branched off the same parent
+without seeing each other — neither touches any file in this feature's
+scope. PR #4331 (`claude/join-evaluation-migration-heads`) is already open
+with the join revision; this PR does not add a second, competing one. The
+fork is also why this session's test database is stuck at the branchpoint
+revision (`d3a7f5e2c916`, confirmed via `alembic current`) and is the direct
+cause of the 9 pre-existing, out-of-scope test failures noted in the
+completion gate below — all nine are `shift_completion`/
+`shift_refresh_utc_tagging` tests whose SQL references a column
+(`shifts.evaluation_requirements`) only one of the forked heads adds; they
+were swept into this pass's `-k` filter incidentally, because `-k "auth"`
+substring-matches `TestShiftOfficerAuthorship`, not because they belong to
+this feature.
+
+### Completion gate (pass 16)
+
+| Check                                                                                                                                                                                                    | Result                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                            | ✅ 0 violations                                                                                                                                                                                                                                             |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                     | ✅ clean, 3243 files unchanged                                                                                                                                                                                                                              |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                | ✅ clean                                                                                                                                                                                                                                                    |
+| `validate_migrations.py --strict`                                                                                                                                                                        | ❌ **fails — pre-existing 2-head Alembic fork, tracked by open PR #4331 (see above)**                                                                                                                                                                       |
+| Scoped backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or permission or authentik or password or security_notification or stepup or kiosk or passkey or webauthn"`) | ✅ 1637 passed, 2 pre-existing skips (`pywebpush`, Docker registry); ❌ 9 pre-existing failures, all `shift_completion`/`shift_refresh_utc_tagging` — caused by the Alembic fork above, not this feature (none of the 9 touch any file this feature tracks) |
+| `cd frontend && npm run typecheck`                                                                                                                                                                       | ✅ 0 errors                                                                                                                                                                                                                                                 |
+| `cd frontend && npm run lint`                                                                                                                                                                            | ✅ 0 errors, 0 warnings                                                                                                                                                                                                                                     |
+
+No guard test added this pass: all seven real deltas already carry their own
+coverage (the step-up-before-second-factor tests, the per-account client
+lockout's own existing test file, and the audit-log redaction's own tests),
+and this pass found nothing new to guard against.
+
+Rotation row 01 moves to `✅`.
 
 ---
 
