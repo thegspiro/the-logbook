@@ -188,6 +188,10 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // The `alert-warning` heading ("A member who has not answered has not
   // agreed"), the shared token /members/admin/settings/tiers carries below.
   '/communications/photo-use-consent': 1,
+  // The selected mode card's description, `text-theme-text-muted` on its
+  // red-50 tint (6.92:1): the shared muted token, as on the email-templates
+  // row above.
+  '/training/skills-testing/test/new': 1,
   // Measured the first time the scheduling fixtures put templates on it: the
   // optional-seat chips ("EMT (opt)") and the inactive filter, all
   // `text-theme-text-muted` on `bg-theme-surface-hover` (6.91:1) — the same

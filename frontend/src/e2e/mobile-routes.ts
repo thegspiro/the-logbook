@@ -317,7 +317,7 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: ['training.manage'],
-    expectText: 'No test records found',
+    expectText: 'Candidate: E2E User · Examiner: Alex Johnson',
   },
   {
     path: '/training/admin?page=enhancements&tab=reports',
@@ -556,6 +556,46 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/training/courses', maxSmallTargets: 0, maxTinyText: 0 },
   // manage: so its header buttons render — see the note on /events.
   { path: '/training/programs', maxSmallTargets: 0, maxTinyText: 0, permissions: ['training.manage'] },
+  // The rest of the member and officer training screens. Each `expectText`
+  // is drawn only from its populated fixture (helpers.ts) or its own form,
+  // never by an empty state or the "shift officers only" notice.
+  {
+    path: '/training/record-crew',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Who was there?',
+  },
+  {
+    path: '/training/cohorts',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Emergency Vehicle Operator Course — Winter Weekend Intensive',
+  },
+  {
+    path: '/training/log-shift',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Overall Shift Narrative',
+  },
+  { path: '/training/knowledge-tests', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Pump Operations' },
+  { path: '/training/skills-testing', maxSmallTargets: 0, maxTinyText: 0, expectText: 'SCBA Donning and Doffing' },
+  {
+    path: '/training/skills-testing/templates/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Add Criterion',
+  },
+  {
+    path: '/training/skills-testing/test/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['training.manage'],
+    expectText: 'Begin Evaluation',
+  },
   // manage: so its header buttons render — see the note on /events.
   { path: '/scheduling', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
   // Every route under /scheduling/admin is gated on `scheduling.manage`, which
