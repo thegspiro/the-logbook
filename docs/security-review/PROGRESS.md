@@ -59,6 +59,22 @@ suite — 1637 passed, 2 pre-existing skips, 9 pre-existing failures (Alembic
 fork, see above); `npm run typecheck` — 0 errors; `npm run lint` — 0
 errors/warnings.
 
+**Tend (watchdog, 2026-11-16):** CI on this PR's head SHA was red on every
+backend job (Migration Chain, Backend Unit/Integration/API Contract Tests,
+`CI Success`) for the reason already named above — the 2-head Alembic fork.
+That fork was since fixed on `main` directly (`a6d94fa81`, "port the
+revision that joins main's two evaluation heads"), landing the same join
+revision PR #4331 carries, so PR #4331 is now redundant with `main` rather
+than still blocking this one. No review comments needed action (two bot
+comments: Codex failed to run, Copilot reviewer out of quota). No merge
+conflict — merged `main` into this branch cleanly and pushed. Re-ran the
+full local gate on the merged head: `flake8`/`black --check`/
+`isort --check-only` clean; `validate_migrations.py --strict` now passes
+(single head `1d7fde550351`); scoped backend suite — 1646 passed, 2
+pre-existing env-only skips, **0 failures** (the 9 fork-caused failures are
+gone); `npm run typecheck` — 0 errors; `npm run lint` — 0 errors/warnings.
+CI re-running on the new head.
+
 Row 01 → ✅ (pending this PR's merge); next is Feature 02 (Permissions &
 roles) — re-check `list_pull_requests` fresh rather than trusting this note.
 
