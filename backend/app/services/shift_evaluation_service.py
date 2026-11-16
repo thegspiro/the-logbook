@@ -1453,13 +1453,81 @@ class ShiftEvaluationService:
     async def _sync_own_credit(
         self, evaluation: ShiftEvaluation, organization_id: UUID | str
     ) -> None:
-        """The ledger credit to the program's own requirements."""
+        """The ledger credit to the program's own requirements.
+
+        Owner decision (2026-11-16): the credit follows the programs the
+        evaluation counts for now. A program that dropped out of a combined
+        evaluation's scope before this save loses the credit the evaluation
+        gave it (:meth:`_dropped_rows`).
+        """
         enrollment_ids = [str(e) for e in (evaluation.enrollment_ids or [])]
-        if not enrollment_ids:
+        rows = await self._credited_rows(evaluation, enrollment_ids, organization_id)
+        dropped = await self._dropped_rows(
+            evaluation, {str(progress.id) for progress, _, _ in rows}, organization_id
+        )
+        if not rows and not dropped:
             return
         visible = await self.visible_to_member(
             evaluation, organization_id
         ) and await self._still_on_crew(evaluation, organization_id)
+        program_service = TrainingProgramService(self.db)
+        credited = (
+            set(
+                (
+                    await self.db.execute(
+                        select(RequirementProgressCredit.progress_id).where(
+                            RequirementProgressCredit.progress_id.in_(
+                                [str(progress.id) for progress, _, _ in rows]
+                            ),
+                            RequirementProgressCredit.source_type
+                            == ProgressCreditSource.SHIFT_EVALUATION,
+                            RequirementProgressCredit.source_id == str(evaluation.id),
+                        )
+                    )
+                ).scalars()
+            )
+            if rows
+            else set()
+        )
+        # Plain values first: a ledger conflict rolls the session back and
+        # expires every loaded row.
+        plan = [
+            (
+                str(progress.id),
+                credit_units(evaluation, requirement) if visible else 0.0,
+                str(progress.id) in credited,
+                enrollment.status == EnrollmentStatus.ACTIVE
+                and progress.status not in _CLOSED_PROGRESS,
+                progress.status == RequirementProgressStatus.NOT_STARTED,
+                _met_by_value(progress, requirement),
+            )
+            for progress, requirement, enrollment in rows
+        ] + [
+            # Worth nothing to a program the evaluation no longer counts for:
+            # _apply_plan's revoke branch takes its credit back.
+            (
+                str(progress.id),
+                0.0,
+                True,
+                False,
+                False,
+                _met_by_value(progress, requirement),
+            )
+            for progress, requirement in dropped
+        ]
+        await self._apply_plan(evaluation, plan, program_service, organization_id)
+
+    async def _credited_rows(
+        self,
+        evaluation: ShiftEvaluation,
+        enrollment_ids: list[str],
+        organization_id: UUID | str,
+    ) -> list[Any]:
+        """The program-owned rows of evaluation types in the enrollments the
+        evaluation counts for; a linked row is the grader's
+        (``_refresh_linked_rows`` re-reads it)."""
+        if not enrollment_ids:
+            return []
         rows = (
             await self.db.execute(
                 select(RequirementProgress, TrainingRequirement, ProgramEnrollment)
@@ -1484,46 +1552,61 @@ class ShiftEvaluationService:
                 )
             )
         ).all()
-        program_service = TrainingProgramService(self.db)
-        linked = await program_service.linked_requirement_ids(
+        linked = await TrainingProgramService(self.db).linked_requirement_ids(
             list({str(enrollment.program_id) for _, _, enrollment in rows})
         )
-        # A linked row is the grader's; _refresh_linked_rows re-reads it.
-        rows = [
+        return [
             row
             for row in rows
             if str(row[1].id) not in linked.get(str(row[2].program_id), set())
         ]
-        if not rows:
-            return
-        credited = set(
-            (
-                await self.db.execute(
-                    select(RequirementProgressCredit.progress_id).where(
-                        RequirementProgressCredit.progress_id.in_(
-                            [str(progress.id) for progress, _, _ in rows]
-                        ),
-                        RequirementProgressCredit.source_type
-                        == ProgressCreditSource.SHIFT_EVALUATION,
-                        RequirementProgressCredit.source_id == str(evaluation.id),
-                    )
-                )
-            ).scalars()
-        )
-        # Plain values first: a ledger conflict rolls the session back and
-        # expires every loaded row.
-        plan = [
-            (
-                str(progress.id),
-                credit_units(evaluation, requirement) if visible else 0.0,
-                str(progress.id) in credited,
-                enrollment.status == EnrollmentStatus.ACTIVE
-                and progress.status not in _CLOSED_PROGRESS,
-                progress.status == RequirementProgressStatus.NOT_STARTED,
-                _met_by_value(progress, requirement),
+
+    async def _dropped_rows(
+        self,
+        evaluation: ShiftEvaluation,
+        kept: set[str],
+        organization_id: UUID | str,
+    ) -> list[Any]:
+        """Rows this evaluation credited that it no longer counts for.
+
+        Read from the ledger rather than from the evaluation's previous scope,
+        which is not kept: whatever the evaluation credited outside the rows it
+        credits now is a program that dropped out of it.
+        """
+        query = (
+            select(RequirementProgress, TrainingRequirement)
+            .join(
+                RequirementProgressCredit,
+                RequirementProgressCredit.progress_id == RequirementProgress.id,
             )
-            for progress, requirement, enrollment in rows
-        ]
+            .join(
+                TrainingRequirement,
+                TrainingRequirement.id == RequirementProgress.requirement_id,
+            )
+            .join(
+                ProgramEnrollment,
+                ProgramEnrollment.id == RequirementProgress.enrollment_id,
+            )
+            .where(
+                RequirementProgressCredit.source_type
+                == ProgressCreditSource.SHIFT_EVALUATION,
+                RequirementProgressCredit.source_id == str(evaluation.id),
+                ProgramEnrollment.organization_id == str(organization_id),
+                ProgramEnrollment.user_id == evaluation.member_id,
+            )
+        )
+        if kept:
+            query = query.where(RequirementProgress.id.not_in(kept))
+        return [tuple(row) for row in (await self.db.execute(query)).all()]
+
+    async def _apply_plan(
+        self,
+        evaluation: ShiftEvaluation,
+        plan: list[tuple[str, float, bool, bool, bool, bool]],
+        program_service: TrainingProgramService,
+        organization_id: UUID | str,
+    ) -> None:
+        """Credit, restate or revoke each planned row."""
         evaluation_id = str(evaluation.id)
         evaluator_id = evaluation.evaluator_id
         for (
