@@ -12,8 +12,27 @@ import { SCALE, SCREEN, bottomMost, centre, prepare, recordShots, settle, tap } 
  */
 
 const EVENT_ID = 'evt-awards';
-const START = '2026-12-13T00:00:00Z'; // Sat Dec 12, 6:00 PM Central
-const END = '2026-12-13T04:00:00Z';
+const ZONE = 'America/Chicago'; // the browser's zone below, so times read as written
+
+/** The UTC instant of a wall-clock time in ZONE on the given calendar day. */
+function zoned(day: Date, hour: number, minute: number): Date {
+  const wall = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), hour, minute);
+  // Read the zone's offset at that moment, then shift by it. Correct across
+  // daylight saving, since the offset is taken for the day itself.
+  const asZone = new Date(new Date(wall).toLocaleString('en-US', { timeZone: ZONE }));
+  const asUtc = new Date(new Date(wall).toLocaleString('en-US', { timeZone: 'UTC' }));
+  return new Date(wall + (asUtc.getTime() - asZone.getTime()));
+}
+
+// Dated from the render, not fixed: the event page offers RSVP only before the
+// deadline, and the dashboard's opening shot lists only the next 30 days. So
+// the banquet is the first Saturday at least two weeks out, 6-10 PM, with RSVP
+// closing the Saturday before.
+const saturday = new Date(Date.now() + 14 * 86_400_000);
+saturday.setUTCDate(saturday.getUTCDate() + ((6 - saturday.getUTCDay() + 7) % 7));
+const START = zoned(saturday, 18, 0).toISOString();
+const END = zoned(saturday, 22, 0).toISOString();
+const RSVP_DEADLINE = zoned(new Date(saturday.getTime() - 7 * 86_400_000), 23, 59).toISOString();
 
 type RsvpStatus = 'going' | 'not_going' | 'maybe';
 let myRsvp: RsvpStatus | undefined;
@@ -36,7 +55,7 @@ const listItem = () => ({
   occupied_seats: 23 + (myRsvp === 'going' ? 1 : 0),
   waitlist_count: 0,
   allowed_rsvp_statuses: ['going', 'not_going', 'maybe'],
-  rsvp_deadline: '2026-12-06T05:59:00Z',
+  rsvp_deadline: RSVP_DEADLINE,
   ...(myRsvp ? { user_rsvp_status: myRsvp } : {}),
 });
 
@@ -87,7 +106,7 @@ async function mockEvent(page: Page) {
   );
 }
 
-test.use({ viewport: SCREEN, deviceScaleFactor: SCALE, timezoneId: 'America/Chicago' });
+test.use({ viewport: SCREEN, deviceScaleFactor: SCALE, timezoneId: ZONE });
 
 test('capture 8a-rsvp', async ({ page }) => {
   await prepare(page);
