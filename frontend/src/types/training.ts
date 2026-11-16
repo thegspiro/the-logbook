@@ -3824,3 +3824,44 @@ export interface RequirementOverrideCreate {
   end_date: string;
   reason: string;
 }
+
+// ── Course links ──────────────────────────────────────────────────
+
+/** A library course, as the course-links screen offers it. */
+export interface CourseLinkCourse {
+  id: string;
+  name: string;
+  code?: string | null;
+}
+
+/**
+ * One name training records with no library course carry. Spellings that
+ * differ only in case, punctuation, a trailing provider id or a "CAPCE"
+ * prefix are one name; `key` is what a link names it by.
+ */
+export interface CourseLinkName {
+  key: string;
+  label: string;
+  spellings: { name: string; records: number }[];
+  records: number;
+  members: number;
+  first_date: string | null;
+  last_date: string | null;
+  suggested_course: CourseLinkCourse | null;
+}
+
+export interface CourseLinksView {
+  items: CourseLinkName[];
+  total: number;
+  offset: number;
+  limit: number;
+  /** Across every name, not just this page. */
+  suggested_names: number;
+  suggested_records: number;
+  courses: CourseLinkCourse[];
+}
+
+export interface CourseLinkResult {
+  names: number;
+  records: number;
+}

@@ -68,6 +68,7 @@ const SkillsTestingTestRecordsTab = lazyWithRetry(() => import('./SkillsTestingT
 const TrainingEnhancementsTab = lazyWithRetry(() => import('./TrainingEnhancementsTab'));
 const ComplianceOfficerDashboard = lazyWithRetry(() => import('./ComplianceOfficerDashboard'));
 const CourseLibraryPage = lazyWithRetry(() => import('./CourseLibraryPage'));
+const CourseLinksPanel = lazyWithRetry(() => import('./training/CourseLinksPanel'));
 const CohortsPage = lazyWithRetry(() => import('./training/CohortsPage'));
 const MemberTrainingStatusPage = lazyWithRetry(() => import('./MemberTrainingStatusPage'));
 
@@ -119,6 +120,8 @@ const TabContent: React.FC<{
       return <TrainingRequirementsPage />;
     case 'courses':
       return <CourseLibraryPage embedded />;
+    case 'course-links':
+      return <CourseLinksPanel />;
     case 'pipelines':
       return view === PROGRAM_WIZARD_VIEW ? <CreatePipelinePage /> : <TrainingProgramsPage embedded />;
     case 'skill-evaluations':
