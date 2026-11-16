@@ -85,6 +85,9 @@ def _quiet(monkeypatch):
         training_endpoints, "_check_duplicate_records", AsyncMock(return_value=[])
     )
     monkeypatch.setattr(training_endpoints, "_sync_qualifications", AsyncMock())
+    # The fake session models rows and savepoints, not the import ledger;
+    # test_training_record_source.py covers the ledger against a database.
+    monkeypatch.setattr(training_endpoints, "ledger_csv_imports", AsyncMock())
     monkeypatch.setattr(training_endpoints, "log_audit_event", AsyncMock())
 
 
@@ -208,6 +211,22 @@ class TestHistoricalImport:
         assert result.failed == 1
         assert result.errors[0].startswith("Row 1: Invalid training_type 'drill'")
         assert not any(isinstance(obj, TrainingCourse) for obj in db.added)
+
+    async def test_a_row_whose_insert_rolled_back_is_not_ledgered(self):
+        member_id = uuid4()
+        db = _Session(results=[_rows([(str(member_id),)])], failing_savepoints={1})
+        request = HistoricalImportConfirmRequest(
+            rows=[
+                _historical_row(member_id, 1, course="Rejected"),
+                _historical_row(member_id, 2, course="Kept"),
+            ]
+        )
+
+        result = await confirm_historical_import(request, db, _user())
+
+        assert (result.imported, result.failed) == (1, 1)
+        ledgered = training_endpoints.ledger_csv_imports.await_args.args[2]
+        assert [r.course_name for r in ledgered] == ["Kept"]
 
     async def test_a_row_type_in_another_case_is_kept(self):
         member_id = uuid4()

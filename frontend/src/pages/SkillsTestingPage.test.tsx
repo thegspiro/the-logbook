@@ -169,6 +169,13 @@ describe('SkillsTestingPage', () => {
       expect(searchInput).toBeInTheDocument();
     });
 
+    // Forms review F-8: the placeholder was the box's only name.
+    it('names the search box on its own', () => {
+      renderWithRouter(<SkillsTestingPage />);
+
+      expect(screen.getByRole('searchbox', { name: 'Search available tests' })).toBeInTheDocument();
+    });
+
     it('should filter templates by search', async () => {
       const user = userEvent.setup();
       renderWithRouter(<SkillsTestingPage />);

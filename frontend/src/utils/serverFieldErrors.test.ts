@@ -66,4 +66,21 @@ describe('friendlyFieldMessage', () => {
     expect(friendlyFieldMessage('Expected a number.', { label: 'Hours' })).toBe('Hours needs a number.');
     expect(friendlyFieldMessage('Value is too long.', { label: 'Notes' })).toBe('Notes is too long.');
   });
+
+  it('words Pydantic’s range bounds with the label and the bound', () => {
+    const hours = { label: 'Credit hours' };
+    expect(friendlyFieldMessage('Input should be greater than or equal to 0', hours)).toBe(
+      'Credit hours must be 0 or more.'
+    );
+    expect(friendlyFieldMessage('Input should be greater than 0', hours)).toBe('Credit hours must be more than 0.');
+    expect(friendlyFieldMessage('Input should be less than or equal to 30', hours)).toBe(
+      'Credit hours must be 30 or less.'
+    );
+    expect(friendlyFieldMessage('Input should be less than 1000.5', hours)).toBe(
+      'Credit hours must be less than 1000.5.'
+    );
+    expect(friendlyFieldMessage('Input should be greater than or equal to -1', hours)).toBe(
+      'Credit hours must be -1 or more.'
+    );
+  });
 });

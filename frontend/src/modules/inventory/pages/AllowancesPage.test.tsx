@@ -153,7 +153,7 @@ describe('AllowancesPage', () => {
 
     await waitFor(() =>
       expect(screen.getByLabelText(/^Max Quantity/)).toHaveAccessibleDescription(
-        'Input should be less than or equal to 2147483647'
+        'Max Quantity must be 2147483647 or less.'
       )
     );
     expect(screen.getByRole('dialog')).toBeInTheDocument();

@@ -89,7 +89,14 @@ requests, templates, analytics, and the public outreach request pipeline.
 ## Creating and Editing Events
 
 Events are created from **Events Admin Hub → Create Event** (or a template)
-and edited at `/events/:id/edit`; both use `EventForm`.
+and edited at `/events/:id/edit`. Both render `EventComposer`
+(`components/event-form/`), which owns one `useEventFormModel` and draws the
+single-page `EventForm` for every type but **Training**, and the step-by-step
+`TrainingEventWizard` (`components/training-event/`) for Training _(2026-11-11)_.
+Changing the type swaps the form in place and carries every value across, both
+ways. Training Admin's **Create Session** renders the same composer with the
+type fixed. `?template=<id>` on Create Event applies a template; a Training
+template opens the wizard.
 
 - **Compact layout** — a two-column grid pairing related sections, with
   **Check-In Settings** and **Notifications** side by side.
@@ -147,7 +154,14 @@ controls are labeled **Series end date**, **Date to skip**, **Start time** and
   without affecting the others.
 - **Rolling series** (`rolling_recurrence`) keep a 12-month horizon: a daily
   scheduled task (`rolling_recurrence_extend`) generates further occurrences
-  as the horizon approaches. Rolling series copy the organizer pair.
+  as the horizon approaches. Each new occurrence copies the **latest**
+  occurrence that is not cancelled, not the parent (`ROLLING_OCCURRENCE_FIELDS`
+  in `scheduled_tasks.py`, including `mandatory_membership_types` and
+  `attendee_visibility`), so a "this and all future events" edit carries
+  forward. Rolling series copy the organizer pair. On a Training series the
+  job also clones the latest occurrence's training session and its
+  attendance-requirement links on to each new occurrence
+  (`clone_sessions_for_events`); a second run adds nothing _(2026-11-11)_.
 - **Duplicate detection** — creating a recurring event checks each occurrence
   for an existing event at the same time and location.
 
@@ -340,6 +354,13 @@ cancel, delete, templates, meetings) and reminders stay with `events.manage`.
 The page reads `can_edit_event` and `can_reopen_attendance` from
 `GET /events/{id}`; `/events/:id/edit` admits `training.manage` and then asks
 the event.
+
+Training details are not theirs to change _(2026-11-11)_: an event edit from a
+caller admitted only as a training manager that carries `training_details` is
+refused with 403, because every session write needs `events.manage`. The edit
+form shows them Training Info read-only ("Training details are changed by an
+event manager.") and leaves `training_details` out of the save. Training
+Admin's **Create Session** shows them a notice instead of a form.
 
 ### Manager tools on the detail page
 
@@ -945,10 +966,17 @@ large messages.
 
 ## Training and Admin Hours Integration
 
-- **Training sessions** — a Training event can generate a linked training
-  session (`TrainingSessionLinkageCard`); finalizing attendance writes the
-  training records. Course cohorts generate events in the other direction —
-  see [Module-Training](Module-Training#multi-class-courses--cohorts).
+- **Training sessions** — a Training event carries a linked training session;
+  finalizing attendance writes the training records. Since 2026-11-11 the
+  training-event form sends the session as `training_details` on `POST /events`
+  and `/events/recurring` (`TrainingSessionAttach`, course optional) and on
+  `PATCH /events/{id}` and `/update-future` (`TrainingSessionDetailsUpdate`,
+  three-state: left out is untouched, `null` clears), so every Training event it
+  creates has a session. The event page's `TrainingSessionLinkageCard` is a
+  read-only summary with **Edit training details** (`events.manage`) linking to
+  `/events/:id/edit?step=training`. A duplicate copies the session and its
+  links, not its finalized state. Course cohorts generate events in the other
+  direction — see [Module-Training](Module-Training#multi-class-courses--cohorts).
 - **Admin hours** — `event_hour_mappings` map an event type or custom category
   to an admin hours category with a percentage split (e.g. 70% Training, 30%
   Professional Development). Configured in **Event settings → Hour Tracking**.

@@ -142,16 +142,23 @@ const DISPLAYED_TRAINING_FIELD_KEYS = [
 ] as const;
 
 /**
- * Training keys the Requirements & Programs card reports live from the
- * event's training session. The copies here were written when the event was
- * created and go stale the moment that card edits the session, so once a
- * session is reported they are not drawn at all rather than contradicting it.
+ * Training keys the Training details card reports live from the event's
+ * training session. The copies here were written when the event was created
+ * and go stale the moment the training form edits the session, so once a
+ * session is reported they are not drawn here at all rather than contradicting
+ * it; the card lists one that disagrees with the session as not applied.
+ * An event with no session still shows them: they are all it has.
  */
 const SESSION_REPORTED_TRAINING_KEYS: ReadonlySet<string> = new Set([
   'course_name',
   'course_code',
   'training_type',
   'credit_hours',
+  'instructor',
+  'issuing_agency',
+  'expiration_months',
+  'issues_certification',
+  'auto_create_records',
 ]);
 
 /** True when the column holds anything the details card would draw. */
@@ -262,7 +269,7 @@ export const EventDetailPage: React.FC = () => {
   const [bulkAddLoading, setBulkAddLoading] = useState(false);
   const [rsvpHistory, setRsvpHistory] = useState<RSVPHistory[]>([]);
   const [linkedElections, setLinkedElections] = useState<ElectionListItem[]>([]);
-  // The training session the Requirements & Programs card found, if any. The
+  // The training session the Training details card found, if any. The
   // card owns the fetch; the page only needs it to describe the event the way
   // the card does.
   const [trainingSession, setTrainingSession] = useState<TrainingSessionResponse | null>(null);
@@ -1690,21 +1697,21 @@ export const EventDetailPage: React.FC = () => {
                         </div>
                       )}
 
-                      {event.custom_fields.instructor && (
+                      {!trainingSessionReported && event.custom_fields.instructor && (
                         <div>
                           <p className="text-theme-text-secondary text-sm font-medium">Instructor</p>
                           <p className="text-theme-text-primary text-sm">{event.custom_fields.instructor}</p>
                         </div>
                       )}
 
-                      {event.custom_fields.issuing_agency && (
+                      {!trainingSessionReported && event.custom_fields.issuing_agency && (
                         <div>
                           <p className="text-theme-text-secondary text-sm font-medium">Issuing Agency</p>
                           <p className="text-theme-text-primary text-sm">{event.custom_fields.issuing_agency}</p>
                         </div>
                       )}
 
-                      {event.custom_fields.expiration_months && (
+                      {!trainingSessionReported && event.custom_fields.expiration_months && (
                         <div>
                           <p className="text-theme-text-secondary text-sm font-medium">Certification Valid For</p>
                           <p className="text-theme-text-primary text-sm">
@@ -1713,7 +1720,7 @@ export const EventDetailPage: React.FC = () => {
                         </div>
                       )}
 
-                      {event.custom_fields.issues_certification && (
+                      {!trainingSessionReported && event.custom_fields.issues_certification && (
                         <div className="sm:col-span-2">
                           <div className="flex items-center rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-500/30 dark:bg-green-500/10">
                             <CheckCircle
@@ -1727,15 +1734,12 @@ export const EventDetailPage: React.FC = () => {
                         </div>
                       )}
 
-                      {event.custom_fields.auto_create_records && (
+                      {!trainingSessionReported && event.custom_fields.auto_create_records && (
                         <div className="sm:col-span-2">
                           <div className="flex items-center rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-500/30 dark:bg-blue-500/10">
                             <Zap className="mr-2 h-5 w-5 text-blue-600" aria-hidden="true" />
                             <span className="text-sm font-medium text-blue-800 dark:text-blue-400">
                               Credited to members&apos; training records when attendance is finalized
-                              {trainingSession?.require_completion_confirmation
-                                ? ' after a training officer approves'
-                                : ''}
                             </span>
                           </div>
                         </div>
@@ -1758,9 +1762,6 @@ export const EventDetailPage: React.FC = () => {
               </div>
             )}
 
-            {/* The training details the credit is filed under, and the approval
-                it waits on. With no session it says what the credit falls back
-                to, to those who can change that or approve it. */}
             {/* Whether the session counts against this member is the server's
                 answer; the card renders nothing when it does not. */}
             {isTrainingEvent && <AttendanceWaiverCard eventId={event.id} eventTitle={event.title} timezone={tz} />}
@@ -1792,6 +1793,9 @@ export const EventDetailPage: React.FC = () => {
               />
             )}
 
+            {/* The training details the credit is filed under, and the approval
+                it waits on. With no session it says what the credit falls back
+                to, to those who can change that or approve it. */}
             {isTrainingEvent && (
               <TrainingSessionLinkageCard
                 eventId={event.id}
@@ -1801,6 +1805,7 @@ export const EventDetailPage: React.FC = () => {
                 attendanceFinalized={isAttendanceFinalized}
                 refreshKey={trainingRefreshKey}
                 onSessionChange={setTrainingSession}
+                customFields={event.custom_fields}
               />
             )}
 

@@ -13,6 +13,7 @@ import pytest
 
 from app.models.storefront import StorePaymentMethod, StoreSettings
 from app.utils.storefront_payments import (
+    PayPalAccount,
     build_payment_method_summaries,
     build_payment_options,
 )
@@ -283,3 +284,60 @@ class TestPreOrderMethodSummaries:
         ]
 
         assert summaries == placed
+
+
+class TestConnectedPayPalAccount:
+    """The PayPal button can use the connected PayPal integration's account.
+
+    With ``paypal_use_connected`` on, the integration's link and email lead;
+    when the integration is disconnected (None) or has neither, the store's
+    own link and email are the fallback (owner decision, 2026-11-14).
+    """
+
+    CONNECTED = PayPalAccount(
+        paypal_me_url="https://paypal.me/oakvillefd",
+        email="treasurer@oakvillefd.org",
+    )
+
+    def _paypal(self, settings, connected):
+        options = build_payment_options(
+            settings, Decimal("25.00"), "ORD-2026-0007", connected
+        )
+        return _by_method(options).get("paypal")
+
+    def test_the_connected_account_is_used_when_chosen(self):
+        option = self._paypal(_settings(paypal_use_connected=True), self.CONNECTED)
+        assert option["payment_url"] == "https://paypal.me/oakvillefd/25.00"
+        assert option["handle"] == "https://paypal.me/oakvillefd"
+
+    def test_the_stores_own_account_is_used_when_not_chosen(self):
+        option = self._paypal(_settings(paypal_use_connected=False), self.CONNECTED)
+        assert option["payment_url"] == "https://paypal.me/fcfd/25.00"
+
+    def test_falls_back_to_the_stores_account_when_paypal_is_not_connected(self):
+        option = self._paypal(_settings(paypal_use_connected=True), None)
+        assert option["payment_url"] == "https://paypal.me/fcfd/25.00"
+
+    def test_falls_back_when_the_connected_account_has_no_link_or_email(self):
+        empty = PayPalAccount(paypal_me_url=None, email=None)
+        option = self._paypal(_settings(paypal_use_connected=True), empty)
+        assert option["payment_url"] == "https://paypal.me/fcfd/25.00"
+
+    def test_a_connected_email_alone_is_enough(self):
+        email_only = PayPalAccount(paypal_me_url=None, email="treasurer@oakvillefd.org")
+        option = self._paypal(_settings(paypal_use_connected=True), email_only)
+        assert option["payment_url"] is None
+        assert option["handle"] == "treasurer@oakvillefd.org"
+
+    def test_no_button_when_neither_account_has_anything(self):
+        settings = _settings(
+            paypal_use_connected=True, paypal_me_url=None, paypal_email=None
+        )
+        assert self._paypal(settings, None) is None
+
+    def test_the_pre_order_summary_names_the_connected_account(self):
+        summaries = build_payment_method_summaries(
+            _settings(paypal_use_connected=True), self.CONNECTED
+        )
+        paypal = next(s for s in summaries if s["method"] == "paypal")
+        assert paypal["handle"] == "https://paypal.me/oakvillefd"

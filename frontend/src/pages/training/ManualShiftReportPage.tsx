@@ -711,7 +711,7 @@ export const ManualShiftReportPage: React.FC = () => {
                 void handleSubmit(true);
               }}
               disabled={savingDraft || submitting}
-              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
             >
               {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Save as Draft
@@ -721,7 +721,7 @@ export const ManualShiftReportPage: React.FC = () => {
                 void handleSubmit(false);
               }}
               disabled={submitting || savingDraft}
-              className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
+              className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-violet-700 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
               Submit Report{selectedIds.size > 1 ? `s (${selectedIds.size})` : ''}
