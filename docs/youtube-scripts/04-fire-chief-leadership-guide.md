@@ -698,14 +698,17 @@ Form and Application Contact Details Changed, which cannot be switched off.]**
 > rules."
 
 > "Who may vote now has department-wide rules too. In **Election Settings →
-> Voter Eligibility** you set a meeting-attendance rule — say, six of the last
-> twelve meetings — and a waiting period for each kind of member. A new election
-> copies the rules for the meeting it's held at, and you can adjust them on the
-> election's **Eligibility** tab until voting opens. After that they're fixed."
+> Voter Eligibility** there's a row for each kind of member: may they vote, a
+> waiting period, and meeting-attendance rules — say, six of the last twelve
+> meetings. A new election copies the rules for its **Kind of vote** — a
+> regular business meeting, the annual meeting, a bylaws amendment or a
+> special meeting — and you can adjust them on the election's **Eligibility**
+> tab until voting opens. After that they're fixed."
 
 **[PRODUCTION NOTE — 2026-11-05. New, about 25 seconds (2026-10-29). Detail in
-Script 12. Administrative and social members follow their class for the
-waiting period; everyone else follows their status.]**
+Script 12.]** **[PRODUCTION NOTE — 2026-11-16. Rows per member type and Kind of
+vote since 2026-11-13; administrative and social members must now pass both
+their status row and their class row.]**
 
 ### MANAGING CANDIDATES AND OFFICES (15:30 – 16:30)
 

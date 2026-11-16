@@ -153,8 +153,8 @@ sections of the form]**
 > valid at all. Percentage quorum — say, fifty-one percent turnout — or a
 > fixed count of voters. Here's the important part: the turnout denominator
 > only counts members who are actually allowed to vote. If your organization
-> has social or junior tiers marked not voting-eligible, they don't count
-> against your quorum. If quorum fails, results still display, but every
+> has social or junior members whose voter rules say they may not vote, they
+> don't count against your quorum. If quorum fails, results still display, but every
 > winner flag is cleared and the results are marked advisory."
 
 > "**Runoffs**: enable them and pick a style — top-two advance, or eliminate
@@ -1166,7 +1166,7 @@ re-shoot every cue. The narration below has been corrected.]**
 > the outcome advisory. No accidental certification of a hollow vote."
 
 > "And the denominator is fair: only members _allowed_ to vote count toward
-> it. Social members in a non-voting tier can't sink your quorum — and
+> it. Social members who may not vote can't sink your quorum — and
 > members you granted overrides count in."
 
 **[CALLOUT: "Quorum failed = numbers shown, no winners declared"]**

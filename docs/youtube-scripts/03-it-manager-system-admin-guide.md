@@ -692,14 +692,14 @@ Outside Apparatus is new (2026-09-27). New footage needed.]**
 > so you can preview what members see. Voting method, victory condition and
 > ballot secrecy are chosen per election, on the election's own form."
 
-**[SCREEN: Elections → Settings → Voter Eligibility. Regular business meeting vs Annual meeting at the top; Rules every voter must meet — meeting attendance and a waiting period per member type.]**
+**[SCREEN: Elections → Settings → Voter Eligibility. The four kinds of vote at the top (Regular business meeting, Annual meeting, Bylaws amendment, Special meeting); Rules by member type — one row per type with May vote, Waiting period and meeting-attendance rules.]** **[PRODUCTION NOTE — 2026-11-16. Rewritten for the per-member-type rows of 2026-11-13; re-shoot this cue.]**
 
 > "One section matters most for the secretary's life and yours: **Voter
-> Eligibility**. It holds the department's default rules for who may vote —
-> a meeting-attendance requirement and a waiting period for each member type,
-> from none, to a number of months, to never eligible. There's one set for
-> regular business meetings and, if you switch it on, a different set for the
-> annual meeting. Each new election copies the defaults when it's created and
+> Eligibility**. It holds the department's default rules for who may vote — one
+> row per member type: may they vote, a waiting period, and any
+> meeting-attendance rules they must all meet. The regular business meeting
+> has a set, and an annual meeting, a bylaws amendment or a special meeting can
+> each be given its own; until then they use the regular set. Each new election copies the defaults when it's created and
 > can change its own copy until voting opens. Changing the settings later never
 > alters an election that already exists, and a secretary's voter override still
 > lets in a member who fails the rules. Each change saves as you make it."
