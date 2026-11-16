@@ -201,6 +201,19 @@ Two tick boxes finish the form:
 - **Sync automatically every 30 minutes** in the direction you chose. The
   manual sync buttons still work.
 
+**To change these later**, use **Settings** on the connected card. Contact
+matching, sync direction and the two tick boxes take effect from the next sync.
+A Client ID, Client Secret or Refresh Token box left blank keeps what is saved.
+**Re-authorize with Salesforce** signs in again and replaces the stored token,
+for when it was revoked or has expired; sign in to the same org.
+
+The **Instance URL** and **Environment** are shown but cannot be changed in
+Settings. The saved sign-in belongs to one Salesforce org, so moving to another
+org would keep syncing to the old one. To change org, disconnect and connect
+again.
+
+![Salesforce settings on a connected card: the Instance URL and Environment shown read-only with the note to disconnect and connect again to change org, Contact Matching, the Re-authorize with Salesforce button, the Client ID, Client Secret and Refresh Token boxes with notes that blank keeps what is saved, Sync Direction, the two tick boxes, and the notice that saved settings apply from the next sync](./images/16-29-salesforce-settings.png)
+
 ### Choose an Authentication Method
 
 **Interactive (best when an administrator manages Salesforce):** select

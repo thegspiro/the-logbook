@@ -5,6 +5,20 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 16, 2026 (Salesforce)
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-salesforce-settings-november-16-2026).
+
+- **Salesforce**: a connected Salesforce card has a **Settings** button. Change
+  contact matching, sync direction and the sync options without disconnecting,
+  or **Re-authorize with Salesforce** if the sign-in was revoked or expired.
+  The Instance URL and Environment can't be changed there: to change org,
+  disconnect and connect again. See
+  [Salesforce Integration](Integration-Salesforce).
+- **Reconnecting Salesforce** now keeps the sync settings you had, instead of
+  resetting them to the defaults.
+
 ## Recent changes: November 16, 2026 (Documenso)
 
 The engineering audit is

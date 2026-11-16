@@ -294,6 +294,12 @@ saved.
 `https://sign.oakvillefd.org/api/v1`; it is not a real Documenso server. The
 dialog is opened and never saved.
 
+**`16-29-salesforce-settings` added 2026-11-16**, with Salesforce's own
+**Settings** button, from the same mock with an example org,
+`https://oakvillefd.my.salesforce.com`, and its sync settings filled in; it is
+not a real Salesforce org. The frame is 1900px tall so the whole dialog fits.
+The dialog is opened and never saved.
+
 ## The October 16 – November 1 queues, captured 2026-11-02
 
 Every queue from the October 16 – 18 pass to the October 31 – November 1 pass

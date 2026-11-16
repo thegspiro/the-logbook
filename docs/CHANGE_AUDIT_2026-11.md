@@ -5,6 +5,20 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: Salesforce Settings, November 16, 2026
+
+A targeted pass for the **Settings** button on a connected Salesforce card.
+`CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                                          | Guide | Disposition                                             |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------- |
+| **Settings** on a connected Salesforce card: edit contact matching, sync direction, field handling, auto-sync and, optionally, the Connected App credentials or refresh token without disconnecting; blank credential boxes keep the saved ones | 16    | Paragraph written; `16-29-salesforce-settings` captured |
+| In Settings, the Instance URL and Environment are read-only and left out of the save (owner decision, 2026-11-16): the stored token belongs to one org. To change org, disconnect and connect again                                             | 16    | Note written; `wiki/Integration-Salesforce.md` updated  |
+| **Re-authorize with Salesforce** in Settings runs the sign-in again and replaces the stored token                                                                                                                                               | 16    | Written                                                 |
+| Connect on a disconnected Salesforce card now starts from the stored settings; before, a reconnection put sync direction, matching and auto-sync back to their defaults                                                                         | 16    | Covered by the Settings paragraph                       |
+
+**Screenshots:** none queued.
+
 ## Change audit: Documenso Settings, November 16, 2026
 
 A targeted pass for the **Settings** button on a connected Documenso card, the
