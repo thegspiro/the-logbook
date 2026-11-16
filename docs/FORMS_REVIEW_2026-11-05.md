@@ -530,6 +530,35 @@ overview, files and settings sections and list; medical supply lots and
 import/export; store settings, order detail and checkout. The other rows of the
 batch 18 list are unchanged.
 
+## Rollout status, 2026-11-11 (batch 20)
+
+The same steps, on these:
+
+| Area                 | Converted                                                                                                                                                                                |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inventory and assets | store checkout; the store order dialog (payment, waive, status, send an update, internal notes, cancel); Medical Supplies › lots (add, edit row) and import; the size preferences dialog |
+
+Checkout touches payments, so only its presentation changed: the shipping
+address and the note go through `FormField` inside a real `<form>`, a shipped
+order with no address is named on the field before anything is sent, and a
+refusal no field answers for stays on the page by the Submit button. The order
+payload, payment methods, totals and provider handling are unchanged.
+
+The order dialog was five small forms in one panel sharing one reload: a
+refusal reloaded the order and reseeded the payment boxes, so the amount and
+reference just refused were thrown away. Each section now has its own field
+errors and reloads only when its request succeeds. Send update and medical
+Import were greyed out until answered; they now say what is missing. A lot's
+delete refusal stays a toast, because deleting is not a form. Size
+preferences keeps Save disabled after a failed load: that guard stops a blank
+form from clearing sizes the load never saw, and is not a missing answer.
+
+**Still not converted**, from the inventory-and-assets row: catalog quick add,
+stock lots (the inventory module's), the checklist builder and settings pages;
+the full apparatus form and documents; the facility overview, files and
+settings sections and list; store settings. The other rows of the batch 18
+list are unchanged.
+
 ## Suggested order
 
 1. **F-1** — small, backend-led, stops a data-integrity hole.
