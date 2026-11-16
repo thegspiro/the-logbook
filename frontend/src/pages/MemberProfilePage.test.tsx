@@ -838,6 +838,35 @@ describe('MemberProfilePage membership and privacy', () => {
     );
   });
 
+  // W11-14: the dialog offered every status, so a member on leave could be
+  // set to Probationary and the officer learned only from the server's 400.
+  it('offers only the changes the server will take from the current status', async () => {
+    const user = userEvent.setup();
+    grantedPermissions = ['members.manage'];
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, status: UserStatus.LEAVE });
+    getStatusChange.mockResolvedValue({
+      user_id: TARGET_ID,
+      status: 'leave',
+      status_changed_at: null,
+      status_change_reason: null,
+      allowed_next_statuses: ['active', 'inactive', 'retired'],
+    });
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByTitle('Change member status'));
+    const select = await screen.findByRole('combobox', { name: 'New Status' });
+
+    // The current status stays as the starting choice; the rest are the
+    // server's list, in the dialog's usual order.
+    await waitFor(() =>
+      expect(
+        within(select)
+          .getAllByRole('option')
+          .map((o) => o.getAttribute('value'))
+      ).toEqual(['active', 'inactive', 'leave', 'retired'])
+    );
+  });
+
   it('asks when a current member left, and sends the date given', async () => {
     const user = userEvent.setup();
     grantedPermissions = ['members.manage'];
