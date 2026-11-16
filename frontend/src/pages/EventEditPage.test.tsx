@@ -1107,6 +1107,25 @@ describe('EventEditPage', () => {
       expect(eventService.updateEvent).not.toHaveBeenCalled();
     });
 
+    // The API returns the series end as the instant the create stored,
+    // 23:59 on the chosen day in the department's zone: in New York, 31 Dec
+    // is 2027-01-01T04:59Z. Read as a calendar date, it showed a day late.
+    it("shows the series' end on the department's calendar day", async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...trainingEvent,
+        is_recurring: true,
+        recurrence_pattern: 'weekly',
+        recurrence_end_date: '2027-01-01T04:59:00Z',
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await screen.findByText('Step 1 of 4 · Event Details');
+      await toReview(user);
+      expect(screen.getByText('Until Thu, Dec 31, 2026')).toBeInTheDocument();
+      expect(screen.queryByText(/Jan 1, 2027/)).not.toBeInTheDocument();
+    });
+
     // The series end and the rolling flag are stored on the series' first
     // event only (SERIES_PARENT_FIELDS); a later occurrence carries neither.
     describe('on a later occurrence of a series', () => {
@@ -1210,6 +1229,42 @@ describe('EventEditPage', () => {
         await toReview(user);
         expect(screen.getByText('Sun, Mar 15, 2026, in a series running since Sun, Jan 4, 2026.')).toBeInTheDocument();
         expect(screen.queryByText(/has finalized attendance/)).not.toBeInTheDocument();
+      });
+
+      // Review's Recurrence section read the occurrence, which carries the
+      // pattern and nothing else, so Duration said "—" and Skipped dates
+      // "None" while the scope choice beside them named the series' end.
+      it("shows the series' end and skipped dates, read from its first event", async () => {
+        vi.mocked(eventService.getEvent).mockImplementation((id: string) =>
+          Promise.resolve(
+            id === 'series-1'
+              ? { ...parent, recurrence_end_date: '2026-06-16T03:59:00Z', recurrence_exceptions: ['2026-04-05'] }
+              : child
+          )
+        );
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await screen.findByText('Step 1 of 4 · Event Details');
+        await toReview(user);
+        expect(screen.getByText('Until Mon, Jun 15, 2026')).toBeInTheDocument();
+        expect(screen.getByText('Sun, Apr 5, 2026')).toBeInTheDocument();
+      });
+
+      it("shows a rolling series' cycle, read from its first event", async () => {
+        vi.mocked(eventService.getEvent).mockImplementation((id: string) =>
+          Promise.resolve(
+            id === 'series-1'
+              ? { ...parent, rolling_recurrence: true, recurrence_end_date: '2027-01-04T23:59:00Z' }
+              : child
+          )
+        );
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await screen.findByText('Step 1 of 4 · Event Details');
+        await toReview(user);
+        expect(screen.getByText('Rolling 12-month cycle')).toBeInTheDocument();
       });
 
       it('says that occurrences a rolling series adds later copy the changes', async () => {

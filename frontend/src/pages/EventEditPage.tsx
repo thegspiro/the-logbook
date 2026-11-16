@@ -30,7 +30,7 @@ import { EventType as EventTypeEnum } from '../constants/enums';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { getErrorDetail } from '../utils/errorHandling';
 import { withoutAttendanceLockedFields } from '../utils/eventAttendanceLock';
-import { formatDateCustom } from '../utils/dateFormatting';
+import { formatDateCustom, toLocalISODate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { useAuthStore } from '../stores/authStore';
 
@@ -290,19 +290,26 @@ export const EventEditPage: React.FC = () => {
     is_draft: event.is_draft ?? false,
   };
 
+  // A later occurrence carries the pattern and nothing else of the series
+  // (SERIES_PARENT_FIELDS), so the series' own row describes it.
+  const series = seriesParent ?? event;
+
   // Build initial recurrence state when editing a recurring event
   const initialRecurrence: InitialRecurrence | undefined =
     event.is_recurring || event.recurrence_parent_id
       ? {
           is_recurring: true,
-          recurrence_pattern: event.recurrence_pattern,
-          recurrence_end_date: event.recurrence_end_date,
-          rolling_recurrence: event.rolling_recurrence,
-          recurrence_custom_days: event.recurrence_custom_days,
-          recurrence_weekday: event.recurrence_weekday,
-          recurrence_week_ordinal: event.recurrence_week_ordinal,
-          recurrence_month: event.recurrence_month,
-          recurrence_exceptions: event.recurrence_exceptions,
+          recurrence_pattern: series.recurrence_pattern ?? event.recurrence_pattern,
+          // The form holds the end as the calendar date the officer picked;
+          // the API returns the instant the create stored, 23:59 that day in
+          // the department's zone, which is the next day in UTC west of it.
+          recurrence_end_date: toLocalISODate(series.recurrence_end_date, tz) || undefined,
+          rolling_recurrence: series.rolling_recurrence,
+          recurrence_custom_days: series.recurrence_custom_days,
+          recurrence_weekday: series.recurrence_weekday,
+          recurrence_week_ordinal: series.recurrence_week_ordinal,
+          recurrence_month: series.recurrence_month,
+          recurrence_exceptions: series.recurrence_exceptions,
         }
       : undefined;
 
@@ -348,7 +355,6 @@ export const EventEditPage: React.FC = () => {
       ? fromSettingCopies(event.custom_fields)
       : undefined;
   const storedTraining = session ? fromSession(session, event) : (settingCopies?.value ?? DEFAULT_TRAINING_DETAILS);
-  const series = seriesParent ?? event;
 
   const editing: EditOptions = {
     eventId: event.id,
