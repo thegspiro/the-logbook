@@ -69,6 +69,11 @@ const UPDATE_FIELDS: FieldSpecs<UpdateField> = {
   message: { id: 'update-message', label: 'Message to the member' },
   channels: { id: 'update-in-app', label: 'Notification channels', apiKeys: ['notifyEmail', 'notifyInApp'] },
 };
+type RefundField = 'amount' | 'reason';
+const REFUND_FIELDS: FieldSpecs<RefundField> = {
+  amount: { id: 'refund-amount', label: 'Amount to refund' },
+  reason: { id: 'refund-reason', label: 'Refund reason' },
+};
 type CancelField = 'reason';
 const CANCEL_FIELDS: FieldSpecs<CancelField> = {
   reason: { id: 'cancel-reason', label: 'Reason for cancelling' },
@@ -89,6 +94,7 @@ interface Seeded {
   paymentMethod: string;
   statusChoice: string;
   adminNotes: string;
+  refundAmount: string;
 }
 
 const SectionError: React.FC<{ message: string | null }> = ({ message }) =>
@@ -119,6 +125,8 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
   const [adminNotes, setAdminNotes] = useState('');
   const [waiveReason, setWaiveReason] = useState('');
   const [cancelReason, setCancelReason] = useState('');
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundReason, setRefundReason] = useState('');
   const [seeded, setSeeded] = useState<Seeded | null>(null);
 
   const paymentErrors = useFieldErrors(PAYMENT_FIELDS);
@@ -127,6 +135,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
   const updateErrors = useFieldErrors(UPDATE_FIELDS);
   const notesErrors = useFieldErrors(NOTES_FIELDS);
   const cancelErrors = useFieldErrors(CANCEL_FIELDS);
+  const refundErrors = useFieldErrors(REFUND_FIELDS);
 
   // Anything typed that no request has taken yet: the boxes seeded from the
   // order count once they differ from what loaded, the three that start
@@ -142,7 +151,9 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
       statusMessage.trim() !== '' ||
       updateMessage.trim() !== '' ||
       waiveReason.trim() !== '' ||
-      cancelReason.trim() !== '');
+      cancelReason.trim() !== '' ||
+      refundAmount !== seeded.refundAmount ||
+      refundReason.trim() !== '');
   const requestClose = useDiscardGuard({ isDirty, onClose });
 
   const load = useCallback(async () => {
@@ -157,12 +168,14 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
         paymentMethod: fetched.paymentMethod ?? '',
         statusChoice: fetched.status,
         adminNotes: fetched.adminNotes ?? '',
+        refundAmount: fetched.amountPaid,
       };
       setPaymentAmount(next.paymentAmount);
       setPaymentReference(next.paymentReference);
       setPaymentMethod(next.paymentMethod);
       setStatusChoice(next.statusChoice);
       setAdminNotes(next.adminNotes);
+      setRefundAmount(next.refundAmount);
       setSeeded(next);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not load the order'));
@@ -368,20 +381,48 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
     });
   };
 
-  const refund = () =>
-    withBusy(async () => {
-      if (!order) return false;
-      paymentErrors.clear();
+  /** Money going back to the member: an amount, a reason they are shown, and
+   *  a question first. It used to be one tap that refunded everything and
+   *  emailed the member (W67b-8). */
+  const refund = async () => {
+    if (!order) return;
+    refundErrors.clear();
+    const paid = Number(order.amountPaid);
+    const amount = Number(refundAmount);
+    // Compared in cents, so 68.15 typed against 68.15 paid is not "more".
+    let problem: string | null = null;
+    if (!amount || amount <= 0) problem = 'Enter an amount greater than zero.';
+    else if (Math.round(amount * 100) > Math.round(paid * 100))
+      problem = `Enter no more than the ${formatCurrency(paid)} paid.`;
+    if (problem) {
+      const problems: FieldErrors<RefundField> = { amount: problem };
+      refundErrors.setErrors(problems);
+      refundErrors.focusFirst(problems);
+      return;
+    }
+    const reason = refundReason.trim();
+    const ok = await confirm({
+      title: `Refund ${formatCurrency(amount)} to ${order.customerName}?`,
+      message: `Records ${formatCurrency(amount)} going back to the member, who is emailed${reason ? ' the reason' : ''}. Send the money itself the way it came in.`,
+      confirmLabel: `Refund ${formatCurrency(amount)}`,
+      cancelLabel: 'Not now',
+    });
+    if (!ok) return;
+    await withBusy(async () => {
       try {
         await storefrontService.refundOrder(order.id, {
+          amount,
+          reason: reason || undefined,
           notifyMember: true,
         });
+        setRefundReason('');
         toast.success('Refund recorded');
         return true;
       } catch (err: unknown) {
-        return refuse(paymentErrors, err, 'Could not record the refund');
+        return refuse(refundErrors, err, 'Could not record the refund');
       }
     });
+  };
 
   /** A PayPal capture applied for more than the balance leaves money that is
    *  the member's; the server reports how much (W67b-7). */
@@ -397,7 +438,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
     });
     if (!ok) return;
     await withBusy(async () => {
-      paymentErrors.clear();
+      refundErrors.clear();
       try {
         await storefrontService.refundOrder(order.id, {
           amount: excess,
@@ -407,7 +448,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
         toast.success('Refund recorded');
         return true;
       } catch (err: unknown) {
-        return refuse(paymentErrors, err, 'Could not record the refund');
+        return refuse(refundErrors, err, 'Could not record the refund');
       }
     });
   };
@@ -574,7 +615,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
               </div>
             )}
 
-            {(!cancelled || Number(order.amountPaid) > 0) && (
+            {!cancelled && (
               <form
                 noValidate
                 aria-labelledby="order-payment-heading"
@@ -686,19 +727,77 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                       Record payment
                     </button>
                   )}
-                  {Number(order.amountPaid) > 0 && (
-                    <button
-                      type="button"
-                      className="btn-secondary btn-md"
-                      disabled={busy}
-                      onClick={() => {
-                        void refund();
-                      }}
-                    >
-                      <Undo2 className="h-4 w-4" aria-hidden="true" />
-                      Refund
-                    </button>
-                  )}
+                </div>
+              </form>
+            )}
+
+            {/* Its own section, cancelled orders included: refunding is how the
+                money on a cancelled order goes back (W67b-8). */}
+            {Number(order.amountPaid) > 0 && (
+              <form
+                noValidate
+                aria-labelledby="order-refund-heading"
+                onSubmit={submitWith(refund)}
+                className="card-secondary space-y-2 p-3"
+              >
+                <h3
+                  id="order-refund-heading"
+                  className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold"
+                >
+                  <Undo2 className="h-4 w-4" aria-hidden="true" />
+                  Refund
+                </h3>
+                <p className="text-theme-text-muted text-xs">
+                  Records money going back to the member. {formatCurrency(Number(order.amountPaid))} has been paid.
+                </p>
+                <SectionError message={refundErrors.formError} />
+                <div className="flex flex-wrap items-end gap-2">
+                  <FormField
+                    id={REFUND_FIELDS.amount.id}
+                    label="Amount to refund"
+                    labelClassName="form-label-sm"
+                    error={refundErrors.errors.amount}
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={refundAmount}
+                        onChange={(e) => {
+                          setRefundAmount(e.target.value);
+                          refundErrors.setError('amount', null);
+                        }}
+                        className="form-input-sm w-28"
+                      />
+                    )}
+                  </FormField>
+                  <FormField
+                    id={REFUND_FIELDS.reason.id}
+                    label="Refund reason (shown to the member)"
+                    labelClassName="form-label-sm"
+                    error={refundErrors.errors.reason}
+                    className="min-w-[12rem] flex-1"
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="text"
+                        maxLength={500}
+                        value={refundReason}
+                        onChange={(e) => {
+                          setRefundReason(e.target.value);
+                          refundErrors.setError('reason', null);
+                        }}
+                        className="form-input-sm"
+                        placeholder="Hoodie returned unworn"
+                      />
+                    )}
+                  </FormField>
+                  <button type="submit" className="btn-secondary btn-md" disabled={busy}>
+                    Record refund
+                  </button>
                 </div>
               </form>
             )}

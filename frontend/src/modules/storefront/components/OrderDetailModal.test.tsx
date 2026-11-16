@@ -203,7 +203,7 @@ describe('OrderDetailModal cancelling an order', () => {
     await within(dialog).findByText('Ship to the member');
 
     expect(within(dialog).getByText(/Vendor discontinued it/)).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: /Refund/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Record refund' })).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: 'Cancel ORD-2026-0007' })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: /Mark paid in full/ })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: 'Record payment' })).not.toBeInTheDocument();
@@ -425,5 +425,76 @@ describe('OrderDetailModal overpaid orders', () => {
     await within(dialog).findByText('Ship to the member');
 
     expect(within(dialog).queryByRole('button', { name: /excess/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('OrderDetailModal refunds', () => {
+  // W67b-8: Refund was one tap, asked nothing, and always refunded everything.
+  const paidOrder = {
+    ...structuredClone(shippedOrder),
+    status: 'paid',
+    paymentStatus: 'paid',
+    amountPaid: '68.15',
+    balanceDue: '0.00',
+  };
+
+  beforeEach(() => {
+    mockGetOrder.mockReset();
+    mockGetOrder.mockResolvedValue(structuredClone(paidOrder));
+    mockRefundOrder.mockReset();
+    mockRefundOrder.mockResolvedValue(structuredClone(paidOrder));
+  });
+
+  it('offers the whole amount paid, and refunds the amount and reason given once confirmed', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const dialog = await findOrderDialog();
+    await within(dialog).findByText('Ship to the member');
+
+    const amount = within(dialog).getByLabelText('Amount to refund');
+    expect(amount).toHaveValue(68.15);
+    await user.clear(amount);
+    await user.type(amount, '20');
+    await user.type(within(dialog).getByLabelText(/Refund reason/), 'Hoodie returned');
+    await user.click(within(dialog).getByRole('button', { name: 'Record refund' }));
+
+    const confirmDialog = await screen.findByRole('dialog', { name: 'Refund $20.00 to A. Member?' });
+    await user.click(within(confirmDialog).getByRole('button', { name: 'Refund $20.00' }));
+
+    await waitFor(() => expect(mockRefundOrder).toHaveBeenCalled());
+    expect(mockRefundOrder).toHaveBeenCalledWith('o1', {
+      amount: 20,
+      reason: 'Hoodie returned',
+      notifyMember: true,
+    });
+  });
+
+  it('records nothing when the officer backs out', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const dialog = await findOrderDialog();
+    await within(dialog).findByText('Ship to the member');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Record refund' }));
+    const confirmDialog = await screen.findByRole('dialog', { name: 'Refund $68.15 to A. Member?' });
+    await user.click(within(confirmDialog).getByRole('button', { name: 'Not now' }));
+
+    expect(mockRefundOrder).not.toHaveBeenCalled();
+  });
+
+  it('names an amount above what was paid on its field, and asks nothing', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const dialog = await findOrderDialog();
+    await within(dialog).findByText('Ship to the member');
+
+    const amount = within(dialog).getByLabelText('Amount to refund');
+    await user.clear(amount);
+    await user.type(amount, '100');
+    await user.click(within(dialog).getByRole('button', { name: 'Record refund' }));
+
+    expect(await within(dialog).findByText('Enter no more than the $68.15 paid.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /^Refund \$/ })).not.toBeInTheDocument();
+    expect(mockRefundOrder).not.toHaveBeenCalled();
   });
 });

@@ -2705,3 +2705,48 @@ class TestTypedOverpayment:
 
         assert paid.amount_paid == Decimal("15.00")
         assert paid.payment_status == StorePaymentStatus.PAID
+
+
+class TestPickupKeepsNoAddress:
+    """W67b-9: a pickup order stored whatever address came with it."""
+
+    async def test_a_pickup_order_stores_no_shipping_address(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org, allow_shipping=True)
+        member = await _make_member(db_session, org)
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+
+        order = await service.create_order(
+            org.id,
+            member,
+            {
+                **_cart(product.id),
+                "fulfillment_method": StoreFulfillmentMethod.PICKUP,
+                "shipping_address": "12 Elm St, Springfield",
+            },
+        )
+
+        assert order.fulfillment_method == StoreFulfillmentMethod.PICKUP
+        assert order.shipping_address is None
+
+    async def test_a_shipped_order_keeps_its_address(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org, allow_shipping=True)
+        member = await _make_member(db_session, org)
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+
+        order = await service.create_order(
+            org.id,
+            member,
+            {
+                **_cart(product.id),
+                "fulfillment_method": StoreFulfillmentMethod.SHIP,
+                "shipping_address": "12 Elm St, Springfield",
+            },
+        )
+
+        assert order.shipping_address == "12 Elm St, Springfield"

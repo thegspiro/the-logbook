@@ -210,8 +210,6 @@ Fixed 2026-11-16:
 
 Open:
 
-- W67b-8 (LOW): refund is one tap and always refunds everything;
-- W67b-9 (LOW): a pickup order keeps a home address it does not need;
 - W67b-10 (LOW): loading checkout directly bounces to the store;
 - W67b-18 (LOW): a shipped order's progress steps end at "Ready for
   pickup".
@@ -223,6 +221,19 @@ order, payment reports and notification gaps). Details in
 Gate for the W67b-3, -4 and -5 fixes: typecheck, lint, flake8, black, isort
 and the mypy ratchet clean; 313 frontend storefront and integrity tests and 571
 backend storefront, payment, locking and SoD tests pass.
+
+Fixed 2026-11-16, later the same day:
+
+- W67b-8 (LOW): Refund was one tap and refunded everything. It is now its own
+  section, with an amount (defaulting to all paid, checked against it), a
+  reason the member sees, and a confirmation.
+- W67b-9 (LOW): a pickup order stored the address typed for shipping.
+  Checkout no longer sends it and the server no longer stores it. Addresses
+  already stored on pickup orders are left for the owner to decide on.
+
+Gate for the W67b-8 and -9 fixes: typecheck, lint, flake8, black, isort and the
+mypy ratchet clean; 338 frontend storefront and integrity tests and 693 backend
+storefront, payment, PayPal, Zeffy, locking and SoD tests pass.
 
 Gate for the W67b-6 and -7 fixes: typecheck, lint, flake8, black, isort and the
 mypy ratchet clean; 334 frontend storefront and integrity tests and 691 backend

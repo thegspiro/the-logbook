@@ -110,7 +110,11 @@ const CheckoutPage: React.FC = () => {
       const order = await placeOrder({
         paymentMethod: paymentMethod || undefined,
         fulfillmentMethod,
-        shippingAddress: shippingAddress.trim() || undefined,
+        // Only a shipped order carries an address. The box keeps its text when
+        // the member switches back to pickup, and sending it stored a home
+        // address the order had no use for (W67b-9).
+        shippingAddress:
+          fulfillmentMethod === StoreFulfillmentMethod.SHIP ? shippingAddress.trim() || undefined : undefined,
         memberNotes: memberNotes.trim() || undefined,
       });
       toast.success(`Order ${order.orderNumber} submitted`);

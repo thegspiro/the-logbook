@@ -501,7 +501,7 @@ The only failed request was the deliberate refusal.
 Record payment. The server now refuses it ("This order is already paid in
 full"), so nothing wrong is recorded, but the control could be hidden.
 
-### W67b-8 — LOW — Refund is one tap and always refunds everything — OPEN
+### W67b-8 — LOW — Refund is one tap and always refunds everything — ✅ FIXED (2026-11-16)
 
 Read from code, not clicked:
 
@@ -512,7 +512,40 @@ Read from code, not clicked:
 
 **Where:** `components/OrderDetailModal.tsx` `refund`.
 
-### W67b-9 — LOW — A pickup order keeps the home address typed for shipping — OPEN
+**Fix:** Refund now has its own section in the order dialog, in place of the
+one-tap button in the Payment row. Frontend only.
+
+- **An amount,** defaulting to everything paid, so a partial refund is
+  possible. An amount of zero, or above what was paid, is named on its field
+  ("Enter no more than the $15.00 paid.") before anything is asked or sent.
+- **A reason,** shown to the member.
+- **A question first:** "Refund $5.00 to Jordan Avery?" with "Not now" and
+  "Refund $5.00".
+- **Shown whenever money has been paid,** cancelled orders included: that is
+  how money on a cancelled order goes back. A cancelled order no longer shows
+  a Payment section, since nothing in it applies.
+
+**Tests:** three new cases in `components/OrderDetailModal.test.tsx`:
+
+- the whole amount paid is offered, and the amount and reason given are
+  refunded once confirmed;
+- backing out records nothing;
+- an amount above what was paid is named on its field, and nothing is asked
+  or sent.
+
+All three failed against the old dialog. In the existing cancelled-order
+case, the selector for the refund button changed from `/Refund/` to "Record
+refund" to match the new label; what it checks is unchanged.
+
+**Re-driven:** see W67b-9. ORD-2026-0010 was marked paid ($15.00).
+
+1. The Refund amount defaulted to 15.00.
+2. Entering 100 showed the field error and opened no confirmation.
+3. Entering 5 with a reason asked "Refund $5.00 to Jordan Avery?".
+4. After confirming, the order read $10.00 paid, Partially paid, $5.00 due,
+   with the reason on the timeline.
+
+### W67b-9 — LOW — A pickup order keeps the home address typed for shipping — ✅ FIXED (2026-11-16)
 
 **Did:**
 
@@ -528,6 +561,31 @@ an order that has no use for it.
 
 **Where:** `pages/CheckoutPage.tsx` `handleSubmit`; `storefront_service.py`
 `create_order`.
+
+**Fix:** both ends.
+
+- Checkout sends an address only when the order ships.
+- `create_order` stores one only for a shipped order, whatever a client sends.
+- The order screens already hide an address on a pickup order (W67b-3).
+
+**Tests:**
+
+- `CheckoutPage.test.tsx`: an address typed for shipping is not sent after
+  the member switches back to pickup.
+- `TestPickupKeepsNoAddress` in `tests/test_storefront_service.py`: a pickup
+  order stores no address, and a shipped order keeps its address.
+
+The two cases checking the fix failed against the old code; the
+shipped-order case passed before and after, as a guard.
+
+**Re-driven:** as `member`, checked out a Ball Cap, typed an address under
+"Ship to me", switched back to pickup and submitted. ORD-2026-0010 was stored
+`pickup` with no address.
+
+**Not changed: addresses already stored on pickup orders.** Clearing them
+would mean a data migration that deletes member data, which needs the
+owner's go-ahead. Until then they stay in the database, though no screen
+shows them.
 
 ### W67b-10 — LOW — Loading the checkout page directly sends the member back to the store — OPEN
 

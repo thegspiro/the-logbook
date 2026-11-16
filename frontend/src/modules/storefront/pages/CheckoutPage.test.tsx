@@ -169,6 +169,25 @@ describe('CheckoutPage', () => {
     expect(await screen.findByText('My orders')).toBeInTheDocument();
   });
 
+  it('drops an address typed for shipping when the member switches back to pickup', async () => {
+    // W67b-9: the hidden box kept its text and the home address was stored on
+    // a pickup order that had no use for it.
+    const user = userEvent.setup();
+    mockPlaceOrder.mockResolvedValue({ id: 'o1', orderNumber: 'ORD-1' });
+    renderPage();
+    await screen.findByRole('heading', { name: 'Review your order' });
+
+    await user.click(screen.getByRole('radio', { name: /Ship to me/ }));
+    await user.type(screen.getByLabelText(/Shipping address/), '12 Elm St');
+    await user.click(screen.getByRole('radio', { name: /Pick up/ }));
+    await user.click(screen.getAllByRole('button', { name: 'Submit order' })[0] as HTMLElement);
+
+    await waitFor(() => expect(mockPlaceOrder).toHaveBeenCalled());
+    expect(mockPlaceOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ fulfillmentMethod: 'pickup', shippingAddress: undefined })
+    );
+  });
+
   it('states the department payment policy rather than a generic promise', async () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Review your order' });

@@ -1601,7 +1601,14 @@ class StorefrontService:
             total=total,
             amount_paid=Decimal("0.00"),
             fulfillment_method=fulfillment,
-            shipping_address=data.get("shipping_address"),
+            # Kept only for an order that ships. A member who typed an address
+            # and then chose pickup still sent it, and a home address was
+            # stored on an order with no use for it (W67b-9).
+            shipping_address=(
+                data.get("shipping_address")
+                if fulfillment == StoreFulfillmentMethod.SHIP
+                else None
+            ),
             member_notes=data.get("member_notes"),
             submitted_at=_utcnow(),
         )
