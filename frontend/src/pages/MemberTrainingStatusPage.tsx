@@ -288,7 +288,7 @@ const MemberTrainingStatusPage: React.FC = () => {
           { label: 'Hours logged', value: formatHours(summary.totalHours) },
           { label: 'Behind on requirements', value: summary.behind },
         ].map((t) => (
-          <div key={t.label} className="card">
+          <div key={t.label} className="card p-4">
             <p className="text-theme-text-primary text-2xl font-bold">{t.value}</p>
             <p className="text-theme-text-muted text-xs">{t.label}</p>
           </div>
