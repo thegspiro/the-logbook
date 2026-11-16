@@ -159,6 +159,25 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 ## Log
 
+### W10 second pass — Find a member and read their profile — 2026-11-16
+
+The owner asked to continue with W10. Driven as `member`, `member2` and
+`admin` at 1280×900, with the directory and both profiles at 390×844.
+
+Held:
+
+- search, filters and the stat tiles, with probationary members counted as current;
+- a colleague's profile and API record carry only what a member may see;
+- every new by-member endpoint (supervisor, service history, leave, consents) refuses a colleague's record to a member;
+- the contact-visibility ceiling and a member's own choice, in the page, the API and search;
+- no failed request or broken value on any profile.
+
+Fixed:
+
+- W10-4 (LOW): on a member's own profile, the three Edit buttons were 20px and all named "Edit", View Full History was 40px, and the photo button was 16px and misnamed when it read "Change".
+
+Gate: typecheck and lint clean, no warnings; 121 profile tests pass, and the changed cases failed before the fix; docs links clean. Next: W11 when the owner asks.
+
 ### W67b — The department store, follow-up — 2026-11-13
 
 The owner asked for a review of the department store. Driven as
