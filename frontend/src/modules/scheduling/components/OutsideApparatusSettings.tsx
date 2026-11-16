@@ -204,7 +204,7 @@ export const OutsideApparatusSettings: React.FC = () => {
       </div>
 
       {agencies.length === 0 ? (
-        <div className="card-secondary py-8 text-center">
+        <div className="card-secondary px-4 py-8 text-center">
           <p className="text-theme-text-muted text-sm">
             No outside departments yet. Until one is added, members can&apos;t log shifts with other departments.
           </p>

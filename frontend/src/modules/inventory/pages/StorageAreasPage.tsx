@@ -1039,7 +1039,7 @@ const StorageAreasPage: React.FC = () => {
           <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
         </div>
       ) : displayTree.length === 0 ? (
-        <div className="card-secondary py-16 text-center">
+        <div className="card-secondary px-4 py-16 text-center">
           {isShowingSearch ? (
             <Box className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           ) : (
