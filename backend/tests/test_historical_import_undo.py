@@ -515,3 +515,208 @@ class TestStaffingRoster:
             .all()
         )
         assert seats == [alice]
+
+
+class TestShiftHours:
+    """The shift and on-call rows, sent as shift history batches and
+    committed: in-station and on-call shifts on LA106 with their calls, and
+    outside-agency hours on E116."""
+
+    async def _committed(self, db_session):
+        from app.services.historical_import_service import HistoricalImportService
+        from tests.test_historical_import import _commit_all_batches, _upload, _world
+
+        org, admin = await _world(db_session)
+        record = await _upload(db_session, org, admin)
+        await _commit_all_batches(db_session, org, admin, record.id)
+        return HistoricalImportService(db_session), org, admin, record.id
+
+    async def test_undo_removes_the_shifts_crew_hours_and_calls(self, db_session):
+        from app.models.call_tracking import OrgCall
+        from app.models.external_shift_hours import ExternalShiftHours
+        from app.models.shift_history_import import ShiftHistoryImport
+        from app.models.training import ShiftAttendance
+
+        service, org, admin, import_id = await self._committed(db_session)
+        assert await _count(db_session, Shift, org) > 0
+        assert await _count(db_session, OrgCall, org) > 0
+
+        preview = await HistoricalImportUndoService(db_session).preview(
+            await service.get(org, import_id)
+        )
+        counts = await _undo(db_session, service, org, import_id, "shifts", admin)
+
+        assert preview["steps"]["shifts"]["committed"] is True
+        assert counts["removed"] == preview["steps"]["shifts"]["removable"]
+        assert await _count(db_session, Shift, org) == 0
+        assert await _count(db_session, ShiftAssignment, org) == 0
+        assert await _count(db_session, ExternalShiftHours, org) == 0
+        assert await _count(db_session, OrgCall, org) == 0
+        attendance = await db_session.scalar(
+            select(func.count()).select_from(ShiftAttendance)
+        )
+        assert attendance == 0
+        for kind in (
+            ImportedRecordKind.SHIFT_ATTENDANCE,
+            ImportedRecordKind.EXTERNAL_SHIFT_HOURS,
+        ):
+            assert await _ledger(db_session, org, kind) == 0
+        assert await _count(db_session, ShiftHistoryImport, org) == 0
+
+    async def test_the_rows_can_be_sent_and_committed_again(self, db_session):
+        from tests.test_historical_import import _commit_all_batches
+
+        service, org, admin, import_id = await self._committed(db_session)
+        before = await _count(db_session, Shift, org)
+        await _undo(db_session, service, org, import_id, "shifts", admin)
+
+        await _commit_all_batches(db_session, org, admin, import_id)
+
+        assert await _count(db_session, Shift, org) == before
+
+    async def test_a_shift_someone_else_was_put_on_is_kept(self, db_session):
+        service, org, admin, import_id = await self._committed(db_session)
+        shift = (
+            await db_session.execute(
+                select(Shift).where(Shift.organization_id == org).limit(1)
+            )
+        ).scalar_one()
+        db_session.add(
+            ShiftAssignment(
+                organization_id=org,
+                shift_id=shift.id,
+                user_id=admin,
+                position="officer",
+            )
+        )
+        await db_session.commit()
+
+        counts = await _undo(db_session, service, org, import_id, "shifts", admin)
+
+        assert counts["kept"] == 1
+        assert await db_session.get(Shift, shift.id) is not None
+        seats = (
+            (
+                await db_session.execute(
+                    select(ShiftAssignment.user_id).where(
+                        ShiftAssignment.shift_id == shift.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert seats == [admin]  # the batch's crew went; the added officer stays
+
+    async def test_edited_outside_hours_are_kept(self, db_session):
+        from app.models.external_shift_hours import ExternalShiftHours
+
+        service, org, admin, import_id = await self._committed(db_session)
+        await db_session.execute(
+            update(ExternalShiftHours)
+            .where(ExternalShiftHours.organization_id == org)
+            .values(updated_at=datetime.now(timezone.utc) + timedelta(hours=1))
+        )
+        await db_session.commit()
+
+        counts = await _undo(db_session, service, org, import_id, "shifts", admin)
+
+        assert counts["kept"] == 1
+        assert await _count(db_session, ExternalShiftHours, org) == 1
+        assert (
+            await _ledger(db_session, org, ImportedRecordKind.EXTERNAL_SHIFT_HOURS) == 1
+        )
+
+    async def test_a_batch_still_in_review_blocks_it(self, db_session):
+        from app.services.historical_import_service import HistoricalImportService
+        from tests.test_historical_import import _upload, _world
+
+        org, admin = await _world(db_session)
+        record = await _upload(db_session, org, admin)
+        service = HistoricalImportService(db_session)
+        await service.create_shift_batches(org, record.id, admin)
+
+        preview = await HistoricalImportUndoService(db_session).preview(
+            await service.get(org, record.id)
+        )
+
+        # Nothing committed yet, so there is nothing to undo either.
+        assert preview["steps"]["shifts"]["committed"] is False
+
+    async def test_the_roster_must_be_undone_first(self, db_session):
+        service, org, admin, import_id = await self._committed(db_session)
+        record = await service.get(org, import_id, for_update=True)
+        record.results = {**(record.results or {}), "staffing": {"committed_at": "x"}}
+        await db_session.commit()
+
+        preview = await HistoricalImportUndoService(db_session).preview(
+            await service.get(org, import_id)
+        )
+        with pytest.raises(UndoNotAllowed, match="staffing roster step first"):
+            await _undo(db_session, service, org, import_id, "shifts", admin)
+
+        assert preview["steps"]["shifts"]["blocked_by"] == ["staffing roster"]
+
+    async def test_a_shift_that_already_existed_loses_only_the_batch_crew(
+        self, db_session
+    ):
+        """The in-station crew of 14 Nov 2015 lands on a shift already on the
+        schedule for LA106; undoing takes the crew and the calls it filed off
+        that shift and leaves the shift."""
+        from app.models.call_tracking import OrgCall
+        from app.models.training import BasicApparatus, ShiftAttendance
+        from app.services.historical_import_service import HistoricalImportService
+        from tests.test_historical_import import _commit_all_batches, _upload, _world
+
+        org, admin = await _world(db_session)
+        ladder = (
+            await db_session.execute(
+                select(BasicApparatus).where(BasicApparatus.organization_id == org)
+            )
+        ).scalar_one()
+        earlier = datetime.now(timezone.utc) - timedelta(days=30)
+        existing = Shift(
+            organization_id=org,
+            shift_date=datetime(2015, 11, 14).date(),
+            start_time=datetime(2015, 11, 14, 11, 45, tzinfo=timezone.utc),
+            end_time=datetime(2015, 11, 14, 23, 45, tzinfo=timezone.utc),
+            apparatus_id=ladder.id,
+            is_finalized=True,
+        )
+        db_session.add(existing)
+        await db_session.flush()
+        await db_session.execute(
+            update(Shift)
+            .where(Shift.id == existing.id)
+            .values(created_at=earlier, updated_at=earlier)
+        )
+        await db_session.commit()
+        record = await _upload(db_session, org, admin)
+        await _commit_all_batches(db_session, org, admin, record.id)
+        crew_before = await db_session.scalar(
+            select(func.count())
+            .select_from(ShiftAttendance)
+            .where(ShiftAttendance.shift_id == existing.id)
+        )
+        assert crew_before == 2  # the batch attached to it
+        service = HistoricalImportService(db_session)
+
+        preview = await HistoricalImportUndoService(db_session).preview(
+            await service.get(org, record.id)
+        )
+        await _undo(db_session, service, org, record.id, "shifts", admin)
+
+        assert preview["steps"]["shifts"]["reused"] == 1
+        kept = await db_session.get(Shift, existing.id)
+        await db_session.refresh(kept)
+        assert kept is not None
+        assert kept.call_count is None
+        assert not kept.total_hours
+        crew_after = await db_session.scalar(
+            select(func.count())
+            .select_from(ShiftAttendance)
+            .where(ShiftAttendance.shift_id == existing.id)
+        )
+        assert crew_after == 0
+        assert await _count(db_session, ShiftAssignment, org) == 0
+        assert await _count(db_session, OrgCall, org) == 0
