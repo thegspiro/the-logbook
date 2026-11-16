@@ -148,6 +148,15 @@ export const evaluationsService = {
     return asArray(response.data);
   },
 
+  /** A review period's evaluations as CSV, with each finalized one's grade. */
+  async exportPeriod(periodId: string): Promise<Blob> {
+    const response = await api.get<Blob>('/evaluations/export', {
+      responseType: 'blob',
+      params: { period_id: periodId },
+    });
+    return response.data;
+  },
+
   async draftOptions(): Promise<DraftOptions> {
     const response = await api.get<Partial<DraftOptions>>('/evaluations/draft-options');
     const body = response.data;

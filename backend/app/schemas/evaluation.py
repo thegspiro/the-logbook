@@ -879,6 +879,9 @@ class EvaluationSummary(BaseModel):
     current_step: Optional[str] = None
     current_step_due: Optional[date] = None
     created_at: Optional[datetime] = None
+    # The finalized review's overall grade, for a caller holding
+    # ``evaluations.view_all`` on the conduct list only; None otherwise.
+    overall_grade: Optional[str] = None
 
 
 class SigningOption(BaseModel):

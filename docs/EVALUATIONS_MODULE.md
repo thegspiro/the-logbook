@@ -291,6 +291,23 @@ evaluator without `evaluations.view_all`) gets nothing. It is shown on the
 screen beside the form and is not printed on the PDF: the PDF is the record of
 this review alone.
 
+## Period results
+
+For a holder of `evaluations.view_all`, the conduct list (`GET /evaluations`)
+gives each finalized evaluation its `overall_grade`: the result that stood, from
+`standing_overall` (a sectioned form's overall grade, the evaluator's override
+where they changed it; a weighted form's percentage; an evaluator-rated form's
+overall rating). Anyone else gets `null`, and so does a review still in
+progress, whose grade is not settled. A manager runs the process without
+reading personnel content, so `evaluations.manage` alone does not show grades.
+
+On the screen, choosing a period on the list shows how many of its reviews are
+complete and how many stand at each grade, counted from the rows the server
+sent. `GET /evaluations/export?period_id=` (view_all) downloads the period as
+CSV, one row per evaluation with its grade, written with `SafeCsvWriter`. Each
+export is audited as `evaluation_period_exported`. The caller's own evaluation
+is left out of both, as the list leaves it out.
+
 ## Emails
 
 All seven are editable templates under Communications → Email Templates →
@@ -327,6 +344,7 @@ All under `/api/v1/evaluations`.
 | `GET /draft-options`, `POST ""`                                                                                               | `conduct` or `manage`                                                                         |
 | `GET /bulk-preview`, `POST /bulk`                                                                                             | `manage`                                                                                      |
 | `GET /removed`                                                                                                                | `view_all`, `manage` or `delete`                                                              |
+| `GET /export?period_id=`                                                                                                      | `view_all`                                                                                    |
 | `GET /mine`, `/mine/live-data`, `/mine/removed`                                                                               | sign-in                                                                                       |
 | `GET /crew`                                                                                                                   | sign-in; lists only the evaluations of members the caller supervises today                    |
 | `GET /{id}` and its actions                                                                                                   | anyone with a part in it; the service decides who may do what, and answers 404 to anyone else |

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import io
 import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -83,6 +84,7 @@ from app.services.evaluation_grading import (
 )
 from app.services.evaluation_notice_service import EvaluationNoticeService
 from app.services.member_supervisor_service import MemberSupervisorService
+from app.utils.csv_export import SafeCsvWriter
 from app.utils.membership import canonical_member_status, effective_member_class
 from app.utils.org_timezone import resolve_scheduling_timezone, today_in
 
@@ -341,6 +343,35 @@ def _name(user: Optional[User]) -> Optional[Dict[str, str]]:
     return {"id": user.id, "name": user.full_name}
 
 
+def standing_overall(
+    definition: TemplateDefinition, content: PartContent
+) -> Optional[str]:
+    """The overall grade that stands on the evaluator's part, in words, or
+    None when the form has none.
+
+    A sectioned form gives its overall grade (the evaluator's override where
+    they changed the calculated one), a weighted form its percentage, and an
+    evaluator-rated form the overall rating chosen. One definition for every
+    place a review's result is summarised: the last-review panel, the conduct
+    list's grade column and the period export.
+    """
+    grades = grade_content(definition, content)
+    if grades is not None:
+        label = grades["overall"].get("label")
+        return str(label) if label else None
+    if definition.overall_mode == "weighted":
+        pct = weighted_overall(
+            content, form_items(definition, EvaluationPartKind.EVALUATOR.value)
+        )
+        return f"{pct:g}% (weighted)" if pct is not None else None
+    if definition.overall_mode == "evaluator" and content.overall_rating:
+        return next(
+            (lv.label for lv in OVERALL_LEVELS if lv.value == content.overall_rating),
+            None,
+        )
+    return None
+
+
 def previous_review_summary(view: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """What a later evaluation shows of an earlier one, from the earlier one's
     detail as the viewer may see it: the overall grade, each section's grade,
@@ -361,22 +392,16 @@ def previous_review_summary(view: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         None,
     )
 
-    overall: Optional[str] = None
-    sections: List[Dict[str, str]] = []
-    if grades:
-        overall = grades["overall"].get("label")
-        sections = [
+    overall = standing_overall(definition, evaluator) if evaluator else None
+    sections: List[Dict[str, str]] = (
+        [
             {"key": g["key"], "title": g["title"], "label": g["label"]}
             for g in grades["sections"]
             if g.get("label")
         ]
-    elif view.get("weighted_overall") is not None:
-        overall = f"{view['weighted_overall']:g}% (weighted)"
-    elif evaluator is not None and evaluator.overall_rating:
-        overall = next(
-            (lv.label for lv in OVERALL_LEVELS if lv.value == evaluator.overall_rating),
-            None,
-        )
+        if grades
+        else []
+    )
 
     goals: List[Dict[str, str]] = []
     if evaluator is not None:
@@ -1018,7 +1043,89 @@ class EvaluationService:
         if status:
             query = query.where(Evaluation.status == status)
         evaluations = list((await self.db.execute(query)).scalars().all())
-        return await self._summaries(organization_id, evaluations, None)
+        summaries = await self._summaries(organization_id, evaluations, None)
+        grades = (
+            await self._finalized_grades(organization_id, evaluations)
+            if user_has_permission(viewer, "evaluations.view_all")
+            else {}
+        )
+        for summary in summaries:
+            summary["overall_grade"] = grades.get(summary["id"])
+        return summaries
+
+    async def period_results_csv(
+        self, organization_id: str, viewer: User, period_id: str
+    ) -> Optional[str]:
+        """Every evaluation in a review period as CSV, with the overall grade
+        of each finalized one, or None when the period is not this
+        department's.
+
+        For a holder of ``evaluations.view_all`` only (the endpoint's gate):
+        the same rows and grades the conduct list shows them. Written with
+        ``SafeCsvWriter`` (CLAUDE.md pitfall #15) since names and form titles
+        are typed by people and the file is opened in a spreadsheet. The
+        caller's own evaluation is left out, as the list leaves it out.
+        """
+        period = await self.db.scalar(
+            select(EvaluationPeriod.id).where(
+                EvaluationPeriod.id == str(period_id),
+                EvaluationPeriod.organization_id == organization_id,
+            )
+        )
+        if period is None:
+            return None
+        rows = await self.list_evaluations(organization_id, viewer, period_id=period)
+        out = io.StringIO()
+        writer = SafeCsvWriter(out)
+        writer.writerow(
+            ["Member", "Form", "Evaluator", "Status", "Waiting on", "Overall grade"]
+        )
+        for row in sorted(rows, key=lambda r: r["member"]["name"].lower()):
+            writer.writerow(
+                [
+                    row["member"]["name"],
+                    row["template_name"],
+                    (row["evaluator"] or {}).get("name", ""),
+                    "Finalized" if row["status"] == "finalized" else "In progress",
+                    row["current_step"] or "",
+                    row["overall_grade"] or "",
+                ]
+            )
+        return out.getvalue()
+
+    async def _finalized_grades(
+        self, organization_id: str, evaluations: Sequence[Evaluation]
+    ) -> Dict[str, str]:
+        """``{evaluation_id: overall grade}`` for the finalized ones.
+
+        Only for a caller holding ``evaluations.view_all``, who may open each
+        evaluator's part anyway: a manager runs the process without reading
+        personnel content, and a conductor sees only their own reviews' grades
+        by opening them. A draft's grade is not settled, so it is left out.
+        """
+        finalized = {
+            e.id: e for e in evaluations if e.status == EvaluationStatus.FINALIZED.value
+        }
+        if not finalized:
+            return {}
+        rows = await self.db.execute(
+            select(EvaluationPart).where(
+                EvaluationPart.organization_id == organization_id,
+                EvaluationPart.evaluation_id.in_(list(finalized)),
+                EvaluationPart.kind == EvaluationPartKind.EVALUATOR.value,
+            )
+        )
+        grades: Dict[str, str] = {}
+        for part in rows.scalars().all():
+            evaluation = finalized[part.evaluation_id]
+            if part.revision != evaluation.revision:
+                continue
+            grade = standing_overall(
+                self._definition(evaluation), PartContent.model_validate(part.content)
+            )
+            if grade:
+                grades[evaluation.id] = grade
+        return grades
 
     async def list_mine(
         self, organization_id: str, member: User

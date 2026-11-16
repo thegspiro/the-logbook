@@ -387,6 +387,8 @@ export interface EvaluationSummary {
   current_step: string | null;
   current_step_due: string | null;
   created_at: string | null;
+  /** A finalized review's overall grade, sent only to holders of `evaluations.view_all`. */
+  overall_grade?: string | null | undefined;
 }
 
 export type SignatureDisposition = 'signed' | 'acknowledged' | 'refused';
