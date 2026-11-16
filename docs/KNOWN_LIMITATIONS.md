@@ -10545,6 +10545,15 @@ beyond the feature.
   member's linked rows. An evaluation scoped to several programs counts once
   toward a department requirement, and a general-form evaluation counts too:
   the requirement is the member's, not one enrollment's.
+- ~~**My Training's due date for a rolling evaluation-credited requirement
+  came from training records**, which never count toward these types, so
+  the member saw no due date, or one from an unrelated record.~~ Resolved
+  2026-11-16 (owner decision: show it). It is now the latest counted
+  evaluation plus the rolling period, as a rolling shifts-worked requirement
+  falls due from the latest shift (`latest_evaluation_credit`). My Training,
+  the at-risk list and the single-requirement progress check load evaluation
+  credit with full history, so an evaluation older than the window dates it
+  overdue. `tests/test_evaluation_rolling_due_date.py`.
 
 **Accepted for now**
 
