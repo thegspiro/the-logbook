@@ -671,7 +671,7 @@ const IntegrationsPage: React.FC = () => {
     setDocumensoBaseUrl('');
     setDocumensoApiToken('');
     setDocumensoWebhookSecret('');
-    setCalcomBaseUrl('');
+    setCalcomBaseUrl(typeof stored['api_base_url'] === 'string' ? stored['api_base_url'] : '');
     setCalcomApiKey('');
     setCalcomWebhookSecret('');
     setPaypalEnvironment(typeof stored['environment'] === 'string' ? stored['environment'] : 'sandbox');
@@ -870,6 +870,18 @@ const IntegrationsPage: React.FC = () => {
   const handleSaveSettings = async (integrationId: string) => {
     const integration = integrations.find((i) => i.id === integrationId);
     if (!integration) return;
+
+    // The stored key belongs to the current Cal.com host, and the API refuses
+    // to move it to a new one, so a changed base URL needs its key in the same
+    // save. Said here in words, rather than as the API's 422.
+    if (integration.integration_type === 'calcom') {
+      const storedBaseUrl = integration.config?.['api_base_url'];
+      const newBaseUrl = calcomBaseUrl.trim();
+      if (newBaseUrl && newBaseUrl !== storedBaseUrl && !calcomApiKey.trim()) {
+        toast.error('Enter the API key for the new base URL. The saved key belongs to the current one.');
+        return;
+      }
+    }
 
     setConnecting(true);
     try {
@@ -1958,11 +1970,15 @@ const IntegrationsPage: React.FC = () => {
                 type="password"
                 value={calcomApiKey}
                 onChange={(e) => setCalcomApiKey(e.target.value)}
-                placeholder="cal_..."
+                placeholder={editingSettings ? 'Leave blank to keep the current key' : 'cal_...'}
                 className={inputClass}
+                autoComplete="off"
               />
+              {/* Cal.com cannot connect without a key, so on a connected card
+                  one is certainly stored. It is never sent back. */}
               <p className="text-theme-text-muted mt-1 text-xs">
                 Create an API key in Cal.com under Settings &rarr; Developer &rarr; API keys.
+                {editingSettings && ' Enter a new one only to replace the key.'}
               </p>
             </div>
             <div>
@@ -1978,7 +1994,9 @@ const IntegrationsPage: React.FC = () => {
                 className={inputClass}
               />
               <p className="text-theme-text-muted mt-1 text-xs">
-                Leave blank for Cal.com Cloud. Self-hosted instances use https://your-host/api/v1.
+                {editingSettings
+                  ? 'Changing it needs the API key for the new address in the same save. To return to Cal.com Cloud, enter https://api.cal.com/v1.'
+                  : 'Leave blank for Cal.com Cloud. Self-hosted instances use https://your-host/api/v1.'}
               </p>
             </div>
             <div>
@@ -1992,10 +2010,12 @@ const IntegrationsPage: React.FC = () => {
                 onChange={(e) => setCalcomWebhookSecret(e.target.value)}
                 placeholder="Signing secret for inbound webhooks"
                 className={inputClass}
+                autoComplete="off"
               />
               <p className="text-theme-text-muted mt-1 text-xs">
-                Set a secret to auto-advance a prospect&apos;s interview stage once their meeting has finished. Add this
-                URL as a Cal.com webhook (MEETING_ENDED) using the same secret:
+                Set a secret to auto-advance a prospect&apos;s interview stage once their meeting has finished.
+                {editingSettings && ' Leave it blank to keep the saved secret, if one was entered.'} Add this URL as a
+                Cal.com webhook (MEETING_ENDED) using the same secret:
               </p>
               <code className="bg-theme-surface-secondary text-theme-text-secondary mt-1 block rounded px-2 py-1 text-xs break-all">
                 {webhookCallbackUrl('calcom', integration.id)}
@@ -2528,6 +2548,7 @@ const IntegrationsPage: React.FC = () => {
                         integration.integration_type === 'ical' ||
                         integration.integration_type === 'zeffy' ||
                         integration.integration_type === 'paypal' ||
+                        integration.integration_type === 'calcom' ||
                         (isDirectory(integration.integration_type) && canChange(integration.integration_type))) && (
                         <button
                           onClick={() => {
@@ -3150,7 +3171,9 @@ const IntegrationsPage: React.FC = () => {
                                     ? 'Saved settings apply to the next payment PayPal reports. The webhook address does not change.'
                                     : selectedIntegration.integration_type === 'zeffy'
                                       ? 'A new key or signing secret is used from the next sync or webhook message. Linked campaigns and the webhook address do not change.'
-                                      : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
+                                      : selectedIntegration.integration_type === 'calcom'
+                                        ? 'A new key or base URL is used from the next booking lookup, and a new webhook secret from the next message Cal.com sends. The webhook address does not change.'
+                                        : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
                               : activation
                                 ? 'Activating turns this feature on for your organization. You can deactivate it at any time.'
                                 : 'Connecting turns this integration on for your organization. You can disconnect it at any time.'}
