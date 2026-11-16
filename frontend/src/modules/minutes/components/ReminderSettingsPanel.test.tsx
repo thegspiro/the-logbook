@@ -143,7 +143,7 @@ describe('ReminderSettingsPanel', () => {
 
     const repeat = screen.getByLabelText('Repeat while overdue, every this many days');
     await waitFor(() =>
-      expect(repeat).toHaveAccessibleDescription(expect.stringContaining('Input should be less than or equal to 90'))
+      expect(repeat).toHaveAccessibleDescription(expect.stringContaining('Repeat while overdue must be 90 or less.'))
     );
     expect(repeat).toHaveAttribute('aria-invalid', 'true');
     const retried = (mockUpdate.mock.calls[1]?.[0] as { minutes: Record<string, unknown> }).minutes;

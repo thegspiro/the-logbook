@@ -17,7 +17,7 @@
  * still converts to UTC exactly once, just through a wrapper.
  *
  * Asserted against the source (same approach as
- * CreateTrainingSessionPage.datetime.test.tsx): the bug is a missing wrapper
+ * ScheduleSection.datetime.test.tsx): the bug is a missing wrapper
  * around a payload value, and a render test would need the full page with API
  * mocks to reach the same line.
  */

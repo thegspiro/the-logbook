@@ -7,7 +7,7 @@ Used by both the dashboard admin-summary and the training compliance-matrix endp
 
 import calendar
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -2232,7 +2232,13 @@ _CLASS_MEMBERSHIP_WORDS = frozenset({"administrative", "honorary"})
 class UnmappedRequirement:
     requirement_id: str
     name: str
+    # Shown to the officer as written, after the requirement's name, so it is
+    # plain language: no "tier" or "member class".
     reason: str
+    # It grades no member at all, so it adds no one to "Mandatory for". The
+    # others grade members no tier stands for, and the form offers All
+    # members for them; it tells the two apart by this, not by the wording.
+    applies_to_no_one: bool = False
 
 
 @dataclass(frozen=True)
@@ -2242,6 +2248,22 @@ class MandatoryTiers:
     everyone: bool
     tier_ids: List[str]
     unmapped: List[UnmappedRequirement]
+    # The requirements the suggestion comes from, in the order given: those
+    # that contributed a tier, or with ``everyone`` every one that grades
+    # someone. A requirement can be both a source and in ``unmapped`` (one
+    # member type on a tier, another not), so the form names its sources from
+    # here rather than from what ``unmapped`` leaves out.
+    source_ids: List[str] = field(default_factory=list)
+
+
+def _applies_to_no_one(req_id: str, name: str) -> UnmappedRequirement:
+    return UnmappedRequirement(
+        req_id,
+        name,
+        "It applies to no members, since no member categories, ranks or "
+        "positions are set",
+        applies_to_no_one=True,
+    )
 
 
 def mandatory_tiers_for_requirements(
@@ -2255,14 +2277,21 @@ def mandatory_tiers_for_requirements(
     :func:`requirement_applies_to_member`, which decides who a requirement
     actually grades; keep the two in step (pitfall #29).
 
-    - ``applies_to_all`` means everyone, which covers every other requirement.
+    - ``applies_to_all`` means everyone, which covers every other requirement
+      that grades someone; one that grades no one (below) is still reported.
     - Each ``required_membership_types`` word becomes the tiers it canonically
       stands on. ``probationary`` also takes a ``junior`` tier, because a
       junior member's legacy membership type derives to probationary.
     - A class word (administrative, honorary), a word with no tier on this
       ladder, or a requirement scoped only by rank or position is reported
       unmapped rather than guessed at.
-    - A requirement naming nobody contributes nothing.
+    - A requirement naming nobody grades no member, so it suggests no tier
+      and is reported unmapped, saying so, rather than read as a source of
+      the tiers the others suggest. The Counts toward attendance checklist
+      says the same of it.
+    - So does one no longer active, whatever its scope: an edited session
+      keeps its link to a requirement since deactivated, and nothing grades
+      through that requirement any more.
 
     Grandfathering and compliance profiles are ignored: they decide which
     members a requirement grades, not which tiers an event is mandatory for.
@@ -2271,6 +2300,8 @@ def mandatory_tiers_for_requirements(
     """
     tiers: List[str] = []
     unmapped: List[UnmappedRequirement] = []
+    contributed: List[str] = []
+    everyone = False
     by_standing: Dict[str, List[str]] = {}
     for tier_id in ladder:
         standing = canonical_member_status(tier_id)
@@ -2279,20 +2310,39 @@ def mandatory_tiers_for_requirements(
 
     for req in requirements:
         req_id, name = str(req.id), str(req.name)
+        if getattr(req, "active", True) is False:
+            # Only the fact, as the no-scope reason gives only its "since":
+            # the form adds what follows from it ("so it adds no one").
+            unmapped.append(
+                UnmappedRequirement(
+                    req_id, name, "It is no longer active", applies_to_no_one=True
+                )
+            )
+            continue
         if req.applies_to_all:
-            return MandatoryTiers(everyone=True, tier_ids=[], unmapped=[])
+            everyone = True
+            contributed.append(req_id)
+            continue
         if req.required_membership_types:
-            for word in req.required_membership_types:
-                key = (word or "").strip().lower()
-                if not key:
-                    continue
+            words = [
+                key
+                for key in (
+                    (w or "").strip().lower() for w in req.required_membership_types
+                )
+                if key
+            ]
+            if not words:
+                # Blank words match no member's type, and the grader does not
+                # go on to ranks or positions once the list is non-empty.
+                unmapped.append(_applies_to_no_one(req_id, name))
+            for key in words:
                 if key in _CLASS_MEMBERSHIP_WORDS:
                     unmapped.append(
                         UnmappedRequirement(
                             req_id,
                             name,
-                            f"{key.capitalize()} is a member class, "
-                            "not a membership tier",
+                            f"{key.capitalize()} members can't be chosen "
+                            "by member type",
                         )
                     )
                     continue
@@ -2302,22 +2352,49 @@ def mandatory_tiers_for_requirements(
                 if not matched:
                     unmapped.append(
                         UnmappedRequirement(
-                            req_id, name, f"No membership tier stands for {key}"
+                            req_id,
+                            name,
+                            f"No member type here stands for {key} members",
                         )
                     )
                 tiers.extend(matched)
+                if matched and req_id not in contributed:
+                    contributed.append(req_id)
         elif req.required_roles or req.required_positions:
             unmapped.append(
                 UnmappedRequirement(
-                    req_id, name, "It applies by rank or position, not membership"
+                    req_id,
+                    name,
+                    "It applies by rank or position, which can't be chosen "
+                    "as a member type",
                 )
             )
+        else:
+            unmapped.append(_applies_to_no_one(req_id, name))
 
+    if everyone:
+        # All members covers every requirement that grades someone, whether or
+        # not a tier stands for them; one that grades no one is still named,
+        # or the form would list it as a source of All members. The loop runs
+        # to the end for it, whatever the order.
+        no_one = [u for u in unmapped if u.applies_to_no_one]
+        graded_by_no_one = {u.requirement_id for u in no_one}
+        return MandatoryTiers(
+            everyone=True,
+            tier_ids=[],
+            unmapped=no_one,
+            source_ids=[
+                req_id
+                for req_id in dict.fromkeys(str(req.id) for req in requirements)
+                if req_id not in graded_by_no_one
+            ],
+        )
     picked = set(tiers)
     return MandatoryTiers(
         everyone=False,
         tier_ids=[tier_id for tier_id in ladder if tier_id in picked],
         unmapped=unmapped,
+        source_ids=contributed,
     )
 
 

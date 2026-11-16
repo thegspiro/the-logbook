@@ -1815,6 +1815,7 @@ class SecurityMonitoringMiddleware:
         "/api/v1/medical-supplies/lots/export",
         "/api/v1/nfc-tags/taps/export",
         "/api/v1/organization/template/export",
+        "/api/v1/reports/export",
         "/api/v1/security/audit-log/export",
         "/api/v1/store/orders/export",
         "/api/v1/training/module-config/my-training/export",

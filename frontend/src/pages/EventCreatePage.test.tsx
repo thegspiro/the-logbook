@@ -39,17 +39,17 @@ vi.mock('../services/api', () => ({
   locationsService: {
     getLocations: vi.fn().mockResolvedValue([]),
   },
-  // Behind EventForm's Training details section.
+  // Behind the training-event form's course choice.
   trainingService: {
     getCourses: vi.fn(),
-    getCategories: vi.fn(),
-    getRequirements: vi.fn(),
-  },
-  trainingProgramService: {
-    getPrograms: vi.fn(),
-    getProgramPhases: vi.fn(),
   },
 }));
+
+// The rest of what the training-event form loads.
+vi.mock('../hooks/useTrainingLinkageData', () => ({
+  useTrainingLinkageData: () => ({ categories: [], requirements: [], programs: [], phases: [] }),
+}));
+vi.mock('../hooks/useRanks', () => ({ useRanks: () => ({ formatRank: (rank: string) => rank }) }));
 
 // Mock the useTimezone hook used by EventForm
 vi.mock('../hooks/useTimezone', () => ({
@@ -144,11 +144,9 @@ describe('EventCreatePage', () => {
       // Submit
       await user.click(screen.getByRole('button', { name: /create event/i }));
 
-      await waitFor(() => {
-        // Error appears in both EventCreatePage and EventForm error displays
-        const errors = screen.getAllByText('Title is already taken');
-        expect(errors.length).toBeGreaterThanOrEqual(1);
-      });
+      // Once: the form reports its own failed save, as on the edit page.
+      expect(await screen.findByText('Title is already taken')).toBeInTheDocument();
+      expect(screen.getAllByText('Title is already taken')).toHaveLength(1);
     });
   });
 
@@ -219,63 +217,45 @@ describe('EventCreatePage', () => {
     });
   });
 
-  describe('Training details', () => {
+  // Training events are created in the step-by-step training form, which the
+  // page's form hands off to (EventComposer.test.tsx covers the hand-off).
+  describe('Training events', () => {
     // Pitfall #28: state every mock this block depends on, reset first.
     beforeEach(() => {
-      const { trainingService, trainingProgramService } = apiModule;
-      vi.mocked(trainingService.getCourses).mockReset();
-      vi.mocked(trainingService.getCourses).mockResolvedValue([]);
-      vi.mocked(trainingService.getCategories).mockReset();
-      vi.mocked(trainingService.getCategories).mockResolvedValue([]);
-      vi.mocked(trainingService.getRequirements).mockReset();
-      vi.mocked(trainingService.getRequirements).mockResolvedValue([]);
-      vi.mocked(trainingProgramService.getPrograms).mockReset();
-      vi.mocked(trainingProgramService.getPrograms).mockResolvedValue([]);
-      vi.mocked(trainingProgramService.getProgramPhases).mockReset();
-      vi.mocked(trainingProgramService.getProgramPhases).mockResolvedValue([]);
+      vi.mocked(apiModule.trainingService.getCourses).mockReset();
+      vi.mocked(apiModule.trainingService.getCourses).mockResolvedValue([]);
+      vi.mocked(eventService.getVisibleEventTypesWithCategories).mockReset();
+      vi.mocked(eventService.getVisibleEventTypesWithCategories).mockResolvedValue({
+        visible_event_types: ['business_meeting', 'training'],
+        custom_event_categories: [],
+        visible_custom_categories: [],
+        membership_types: [],
+      });
       vi.mocked(eventService.createEvent).mockReset();
       vi.mocked(eventService.createEvent).mockResolvedValue({ id: 'evt-new' } as unknown as Event);
-      vi.mocked(eventService.createRecurringEvent).mockReset();
-      vi.mocked(eventService.createRecurringEvent).mockResolvedValue([{ id: 'evt-a' }] as unknown as Event[]);
     });
 
-    const fillTrainingEvent = async (user: ReturnType<typeof userEvent.setup>) => {
+    it('creates a Training event through the training form, with its session', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventCreatePage />);
+
       await user.type(screen.getByLabelText(/title/i), 'Ladder drill');
-      await user.selectOptions(screen.getByLabelText(/event type/i), 'training');
-      await user.selectOptions(screen.getByLabelText('Training Type'), 'orientation');
       fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2026-04-01' } });
-      fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-02' } });
-    };
+      await user.selectOptions(screen.getByLabelText(/event type/i), 'training');
+      expect(screen.getByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+      for (let step = 0; step < 3; step += 1) await user.click(screen.getByRole('button', { name: 'Next' }));
+      await user.click(screen.getByRole('button', { name: 'Create Event' }));
 
-    it('passes the picked details through on a single event', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<EventCreatePage />);
-
-      await fillTrainingEvent(user);
-      await user.click(screen.getByRole('button', { name: /create event/i }));
-
-      await waitFor(() => {
+      await waitFor(() =>
         expect(eventService.createEvent).toHaveBeenCalledWith(
-          expect.objectContaining({ event_type: 'training', training_details: { training_type: 'orientation' } })
-        );
-      });
-    });
-
-    it('passes the picked details through on a recurring series', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<EventCreatePage />);
-
-      await fillTrainingEvent(user);
-      await user.click(screen.getByLabelText('Make this a recurring event'));
-      fireEvent.change(screen.getByLabelText('Series end date'), { target: { value: '2026-06-30' } });
-      await user.click(screen.getByRole('button', { name: /create event/i }));
-
-      await waitFor(() => {
-        expect(eventService.createRecurringEvent).toHaveBeenCalledWith(
-          expect.objectContaining({ event_type: 'training', training_details: { training_type: 'orientation' } })
-        );
-      });
-      expect(eventService.createEvent).not.toHaveBeenCalled();
+          expect.objectContaining({
+            title: 'Ladder drill',
+            event_type: 'training',
+            training_details: expect.objectContaining({ training_type: 'continuing_education' }) as unknown,
+          })
+        )
+      );
+      await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/events/evt-new'));
     });
   });
 
@@ -297,7 +277,7 @@ describe('EventCreatePage starting from a template (workflow review W21)', () =>
   const template = {
     id: 'tpl-1',
     name: 'Monday Drill',
-    event_type: 'training',
+    event_type: 'business_meeting',
     default_title: 'Monday Night Drill',
     default_duration_minutes: 120,
     is_active: true,
@@ -349,5 +329,168 @@ describe('EventCreatePage starting from a template (workflow review W21)', () =>
     expect(screen.getByLabelText('End Date & Time *')).toHaveValue('2026-10-13');
     expect(screen.getByLabelText('End time hour')).toHaveDisplayValue('12');
     expect(screen.getByLabelText('End time AM/PM')).toHaveDisplayValue('AM');
+  });
+});
+
+describe('EventCreatePage templates', () => {
+  const { eventService } = apiModule;
+  const meeting = {
+    id: 'tpl-meeting',
+    name: 'Monthly Business Meeting',
+    description: 'Second Tuesday, 7 PM',
+    event_type: 'business_meeting',
+    default_title: 'Monthly Business Meeting',
+    default_duration_minutes: 90,
+    is_active: true,
+    requires_rsvp: false,
+    is_mandatory: false,
+    allow_guests: false,
+  };
+  const cpr = {
+    id: 'tpl-cpr',
+    name: 'CPR Renewal',
+    description: 'Two-year recertification',
+    event_type: 'training',
+    default_title: 'CPR Renewal',
+    default_duration_minutes: 240,
+    is_active: true,
+    requires_rsvp: false,
+    is_mandatory: false,
+    allow_guests: false,
+  };
+
+  // Pitfall #28: state every mock this block depends on, reset first.
+  beforeEach(() => {
+    vi.mocked(eventService.getTemplates).mockReset();
+    vi.mocked(eventService.getTemplates).mockResolvedValue([meeting, cpr] as never);
+    vi.mocked(eventService.createEvent).mockReset();
+    vi.mocked(eventService.createEvent).mockResolvedValue({ id: 'evt-new' } as unknown as Event);
+    vi.mocked(eventService.createRecurringEvent).mockReset();
+    vi.mocked(eventService.createRecurringEvent).mockResolvedValue([{ id: 'evt-a' }] as unknown as Event[]);
+    vi.mocked(eventService.getVisibleEventTypesWithCategories).mockReset();
+    vi.mocked(eventService.getVisibleEventTypesWithCategories).mockResolvedValue({
+      visible_event_types: ['business_meeting', 'training'],
+      custom_event_categories: [],
+      visible_custom_categories: [],
+      membership_types: [],
+    });
+    vi.mocked(apiModule.trainingService.getCourses).mockReset();
+    vi.mocked(apiModule.trainingService.getCourses).mockResolvedValue([]);
+    window.history.pushState({}, '', '/events/admin?tab=create');
+  });
+
+  afterEach(() => {
+    window.history.pushState({}, '', '/');
+    vi.mocked(eventService.getTemplates).mockReset();
+    vi.mocked(eventService.getTemplates).mockResolvedValue([]);
+  });
+
+  const picker = () => screen.findByRole('combobox', { name: 'Start from a template' });
+
+  // The Events list's "Use template" sent ?template=<id>, and nothing read it:
+  // the tab opened blank.
+  it('starts from the template the link names', async () => {
+    window.history.pushState({}, '', '/events/admin?tab=create&template=tpl-meeting');
+    renderWithRouter(<EventCreatePage />);
+
+    await waitFor(async () => expect(await picker()).toHaveValue('tpl-meeting'));
+    expect(screen.getByLabelText(/title/i)).toHaveValue('Monthly Business Meeting');
+  });
+
+  it('starts blank when the link names a template that is not on offer', async () => {
+    window.history.pushState({}, '', '/events/admin?tab=create&template=tpl-gone');
+    renderWithRouter(<EventCreatePage />);
+
+    await screen.findByRole('option', { name: /CPR Renewal/ });
+    expect(await picker()).toHaveValue('');
+    expect(screen.getByLabelText(/title/i)).toHaveValue('');
+  });
+
+  it('marks a Training template, and opens the training form from it', async () => {
+    renderWithRouter(<EventCreatePage />);
+
+    const option = await screen.findByRole('option', {
+      name: 'CPR Renewal — Two-year recertification (Training)',
+    });
+    expect(await picker()).toHaveAccessibleDescription(
+      'Pick a template to pre-fill common settings, or start blank. A Training template opens the step-by-step form.'
+    );
+    fireEvent.change(await picker(), { target: { value: (option as HTMLOptionElement).value } });
+
+    expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Title/)).toHaveValue('CPR Renewal');
+    expect(screen.queryByText('Switched to the training form')).not.toBeInTheDocument();
+  });
+
+  // The page drew its own banner as well as the training form's.
+  it("says once that a Training event's save failed", async () => {
+    vi.mocked(eventService.createEvent).mockRejectedValue(new Error('Network Error'));
+    window.history.pushState({}, '', '/events/admin?tab=create&template=tpl-cpr');
+    const user = userEvent.setup();
+    renderWithRouter(<EventCreatePage />);
+
+    await screen.findByText('Step 1 of 4 · Event Details');
+    for (let step = 0; step < 3; step += 1) await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Create Event' }));
+
+    expect(await screen.findByText('Failed to create event. Try again.')).toBeInTheDocument();
+    expect(screen.getAllByText('Failed to create event. Try again.')).toHaveLength(1);
+  });
+
+  // A pick on a later step remounted the form, discarding every step.
+  it('offers templates on the training form’s first step only', async () => {
+    window.history.pushState({}, '', '/events/admin?tab=create&template=tpl-cpr');
+    const user = userEvent.setup();
+    renderWithRouter(<EventCreatePage />);
+
+    await screen.findByText('Step 1 of 4 · Event Details');
+    expect(await picker()).toHaveValue('tpl-cpr');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Start from a template' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Previous' }));
+    expect(await picker()).toHaveValue('tpl-cpr');
+  });
+
+  it('opens the training form from a link to a Training template', async () => {
+    window.history.pushState({}, '', '/events/admin?tab=create&template=tpl-cpr');
+    renderWithRouter(<EventCreatePage />);
+
+    expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Title/)).toHaveValue('CPR Renewal');
+  });
+
+  // RecurringEventCreate takes template_id; the page never sent it.
+  it('records the template a series was created from', async () => {
+    const user = userEvent.setup();
+    window.history.pushState({}, '', '/events/admin?tab=create&template=tpl-meeting');
+    renderWithRouter(<EventCreatePage />);
+    await waitFor(() => expect(screen.getByLabelText(/title/i)).toHaveValue('Monthly Business Meeting'));
+
+    await user.click(screen.getByLabelText('Make this a recurring event'));
+    fireEvent.change(screen.getByLabelText(/^Series end date/), { target: { value: '2027-06-30' } });
+    await user.click(screen.getByRole('button', { name: /create event/i }));
+
+    await waitFor(() =>
+      expect(eventService.createRecurringEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Monthly Business Meeting', template_id: 'tpl-meeting' })
+      )
+    );
+  });
+
+  it('sends no template on a series started blank', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EventCreatePage />);
+    await screen.findByRole('option', { name: /CPR Renewal/ });
+
+    await user.type(screen.getByLabelText(/title/i), 'Open house');
+    fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2027-04-01' } });
+    await user.click(screen.getByLabelText('Make this a recurring event'));
+    fireEvent.change(screen.getByLabelText(/^Series end date/), { target: { value: '2027-06-30' } });
+    await user.click(screen.getByRole('button', { name: /create event/i }));
+
+    await waitFor(() => expect(eventService.createRecurringEvent).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(eventService.createRecurringEvent).mock.calls[0]?.[0].template_id).toBeUndefined();
   });
 });

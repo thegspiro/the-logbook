@@ -14,7 +14,7 @@ repository rules, not Claude-only rules, and the other agents working this
 repository cannot read `.claude/skills/`. Keep it that way: new rules go in
 `docs/rules/migrations.md`, not in this file.
 
-## The two that hurt most
+## The three that hurt most
 
 1. **A table you are altering may not exist yet.** 65 of 306 tables are built
    only by `create_all()` at app startup, and CI runs `alembic upgrade head`
@@ -28,6 +28,14 @@ repository cannot read `.claude/skills/`. Keep it that way: new rules go in
    id, so editing one in place does nothing for any installation that already
    stamped it — which is exactly the set the edit exists to reach. Ship the
    delta as a new child revision that supersedes it.
+
+3. **Your branch can be valid and still fork `main`.** Another session may
+   have merged a migration on the same parent since you branched. Before
+   pushing, run `sh scripts/check-migration-heads.sh` (`.husky/pre-push` runs
+   it too). If it reports a fork, `git merge origin/main` and set your
+   migration's `down_revision` to the head it prints. Re-point only a revision
+   that has not reached `main`; once both are there, add a merge revision
+   instead.
 
 ## Before you finish
 
@@ -45,8 +53,9 @@ repository cannot read `.claude/skills/`. Keep it that way: new rules go in
 ## Full text
 
 - [docs/rules/migrations.md](../../../docs/rules/migrations.md) — how the
-  schema is actually built, the hygiene rules CI enforces, the `create_all`
-  rule, and the seeded-grant rule.
+  schema is actually built, the hygiene rules CI enforces, keeping a single
+  head across parallel branches, the `create_all` rule, and the seeded-grant
+  rule.
 - `CLAUDE.md` pitfalls **#8** (seed data / `SEED_DATA_FILES`), **#12** (JSON
   column mutation) and **#20** (canonical JSON shape) stay in CLAUDE.md — they
   have no machine check, so they are not behind this skill.

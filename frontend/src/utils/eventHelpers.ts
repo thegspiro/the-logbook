@@ -6,7 +6,11 @@
  */
 
 import type { EventListItem, RSVPStatus } from '../types/event';
-import { EVENT_RELATIVE_LABEL_WINDOW_MS, EVENT_RSVP_DEADLINE_SOON_MS } from '../constants/config';
+import {
+  EVENT_MANDATORY_RSVP_WINDOW_DAYS,
+  EVENT_RELATIVE_LABEL_WINDOW_MS,
+  EVENT_RSVP_DEADLINE_SOON_MS,
+} from '../constants/config';
 import { formatDateCustom, formatTime, toLocalDateString } from './dateFormatting';
 
 /**
@@ -208,6 +212,19 @@ const isRsvpDeadlineSoon = (event: EventListItem, nowMs: number): boolean => {
 };
 
 /**
+ * Whether a mandatory event starts close enough that an unanswered RSVP is due.
+ *
+ * Without this, one recurring mandatory series filled the band with every
+ * occurrence for the year ahead. An unparseable start is treated as inside the
+ * window, so a malformed payload cannot silently drop a required response.
+ */
+const isWithinMandatoryRsvpWindow = (event: EventListItem, nowMs: number): boolean => {
+  const startsAt = Date.parse(event.start_datetime);
+  if (Number.isNaN(startsAt)) return true;
+  return startsAt - nowMs <= EVENT_MANDATORY_RSVP_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+};
+
+/**
  * Whether the API will refuse a member's RSVP on time grounds alone.
  *
  * Mirrors the two time checks in `EventService.create_or_update_rsvp`: the
@@ -257,7 +274,11 @@ export function getEventUrgency(event: EventListItem, now: Date = new Date()): E
   if (hasEnded && event.is_mandatory && event.user_attended === false) return 'missed';
 
   if (!hasEnded && !event.user_rsvp_status) {
-    if (event.is_mandatory) return 'action';
+    // A deadline about to pass outranks the window: a mandatory event whose
+    // RSVP closes in two days needs the answer now, however far off it starts.
+    if (event.is_mandatory && (isWithinMandatoryRsvpWindow(event, nowMs) || isRsvpDeadlineSoon(event, nowMs))) {
+      return 'action';
+    }
     if (event.requires_rsvp && isRsvpDeadlineSoon(event, nowMs)) return 'action';
   }
 

@@ -56,6 +56,19 @@ export interface ReportRequest {
   filters?: Record<string, unknown>;
 }
 
+/**
+ * What the server re-runs to build a download: the request that produced the
+ * report on screen, or the saved report that was run. Never the rows the page
+ * holds — the server prints what it would show, and audits that.
+ */
+export interface ReportExportSource {
+  report_type?: string | undefined;
+  start_date?: string | undefined;
+  end_date?: string | undefined;
+  filters?: Record<string, unknown> | undefined;
+  saved_report_id?: string | undefined;
+}
+
 // ============================================================================
 // Report Card (UI metadata)
 // ============================================================================

@@ -23,6 +23,8 @@ from reportlab.lib.units import inch
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
 from app.services import equipment_check_pdf
+from app.services.report_export import render_report_pdf
+from app.services.report_tables import build_export_table
 from app.utils.certified_results_pdf import render_certified_results_pdf
 from app.utils.election_ballot_pdf import render_printable_ballot_pdf
 from app.utils.evaluation_pdf import render_evaluation_pdf
@@ -239,7 +241,54 @@ def _impact_plan() -> bytes:
     ).getvalue()
 
 
+def _reports_page(report_type: str, data: Dict[str, Any]) -> Callable[[], bytes]:
+    def render() -> bytes:
+        return render_report_pdf(
+            build_export_table(report_type, data),
+            org_name=LONG,
+            logo=None,
+            generated_at="2026-11-15 10:00 EST",
+            generated_by="Chief Ames",
+            parameters=[("Period", "2026-01-01 to 2026-06-30")],
+        )
+
+    return render
+
+
+_ROSTER = {
+    "total_members": 60,
+    "members": [
+        {
+            "first_name": f"Alexandria{i}",
+            "last_name": "Wellington-Fairbanks",
+            "email": f"alexandria{i}@example-department.org",
+            "rank": "Lieutenant",
+            "status": "active",
+            "station": "Station 12 West",
+            "membership_number": f"M-{i:04d}",
+            "roles": ["Officer", "EMT", "Driver/Operator"],
+            "joined_date": "2015-06-01",
+        }
+        for i in range(60)
+    ],
+}
+_CALLS = {
+    "call_type_labels": {f"type{i}": f"Call Type Number {i}" for i in range(14)},
+    "summary": {"total_calls": 10, "avg_calls_per_day": 1.0},
+    "entries": [
+        {
+            "date": f"2026-11-{d:02d}",
+            "total_calls": 14,
+            "by_type": {f"type{i}": 1 for i in range(14)},
+        }
+        for d in range(1, 29)
+    ],
+}
+
+
 DOCUMENTS: Dict[str, Callable[[], bytes]] = {
+    "reports page, roster (landscape)": _reports_page("member_roster", _ROSTER),
+    "reports page, call volume (banded)": _reports_page("call_volume", _CALLS),
     "report kit, portrait (equipment failure log)": _equipment_failures,
     "report kit, landscape": _wide_report,
     "evaluation": lambda: render_evaluation_pdf(EVALUATION),
