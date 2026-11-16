@@ -1,7 +1,7 @@
 """Store: let the PayPal button use the connected PayPal account
 
 Revision ID: 053d3e96b4fa
-Revises: d3a7f5e2c916
+Revises: 1d7fde550351
 Create Date: 2026-11-14 15:16:11.919506
 
 Adds ``store_settings.paypal_use_connected``. When true, the store's PayPal
@@ -26,7 +26,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "053d3e96b4fa"
-down_revision: Union[str, None] = "d3a7f5e2c916"
+down_revision: Union[str, None] = "1d7fde550351"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
