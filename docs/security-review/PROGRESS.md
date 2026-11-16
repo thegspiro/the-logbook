@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD](https://github.com/thegspiro/the-logbook/pull/TBD)** (branch
+**PR [#4349](https://github.com/thegspiro/the-logbook/pull/4349)** (branch
 `claude/security-review-public-surface-webhooks`): Feature 03 (Public
 surface & webhooks), pass 16 — watchdog pickup, 0 fixed, 0 new findings. PR
 #4348 (Feature 02, Permissions & roles, pass 16) had merged
