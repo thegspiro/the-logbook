@@ -730,6 +730,18 @@ a refused name back instead of clearing it. Not converted, and still listed in
 form and its documents, and a facility's extended sections (utilities, keys,
 shutoffs, capital projects, insurance, occupants).
 
+**Rolled out further on 2026-11-16** (batch 22): the full apparatus form (add
+and edit) and the Documents tab's upload form, and a facility's six extended
+sections (utilities with their readings, access keys, shutoffs, capital
+projects, insurance, occupants). The same rules apply: adding refuses until
+every flagged box is fixed, and an edit saves the rest and keeps a refused box
+flagged. One coupling on the apparatus form: a status that needs a reason is
+never saved without one, so a refused reason holds the status change back with
+it rather than marking a rig Out of Service with no record of why. The
+apparatus form lists every open problem at the top of the page. Not converted,
+and still listed in `docs/FORMS_REVIEW_2026-11-05.md`: the equipment checklist
+builder.
+
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
 

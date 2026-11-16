@@ -626,6 +626,35 @@ the full apparatus form and its documents; and a facility's extended sections
 which share one `ResourceSection` and were not on earlier lists. The other rows
 of the batch 18 list are unchanged.
 
+## Rollout status, 2026-11-16 (batch 22)
+
+The same steps, on these:
+
+| Area                 | Converted                                                                                                                                                                                                      |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inventory and assets | Apparatus › the full add / edit form and the Documents tab's upload form; Facilities › the six extended sections (utilities and their readings, access keys, shutoffs, capital projects, insurance, occupants) |
+
+The apparatus form is the longest page converted so far, about forty boxes in
+seven cards, so it carries an `ErrorSummary` at the top. Adding refuses until
+every flagged box is fixed. An edit saves the rest and keeps a flagged box
+flagged, with one coupling: a status that needs a reason (Out of Service, as
+seeded) is never saved without one, so a refused reason holds the status
+change back with it. Each number is checked against the bound the server
+enforces before anything is sent, and Cancel and leaving the page ask before
+throwing typed changes away. The payload, including the explicit nulls for
+cleared boxes, is built exactly as before.
+
+The six extended sections share one `ResourceSection`, so one change covers
+them. Its update is split into a payload builder and a sender so an edit can
+leave a refused box out; the boxes whose request key differs from their name
+(`project_name`, `estimated_cost`, `carrier_name`, `unit_name`,
+`effective_date`) carry it, so a refusal lands on the right box. The readings
+form under each utility account is converted with it.
+
+**Still not converted**, from the inventory-and-assets row: the checklist
+builder (`EquipmentCheckTemplateBuilder`, some 7,300 lines, its own batch). The
+other rows of the batch 18 list are unchanged.
+
 ## Suggested order
 
 1. **F-1** — small, backend-led, stops a data-integrity hole.
