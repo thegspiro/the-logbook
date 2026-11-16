@@ -5,6 +5,18 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: Cal.com Settings, November 16, 2026
+
+A targeted pass for the **Settings** button on a connected Cal.com card, the
+Cal.com counterpart of Zeffy's and PayPal's. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                          | Guide | Disposition                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | --------------------------------------------------- |
+| **Settings** on a connected Cal.com card: edit the API key, base URL and webhook secret without disconnecting; the base URL in use is shown, and blank key and secret boxes keep the saved ones | 16    | Paragraph written; `16-27-calcom-settings` captured |
+| Moving Cal.com to a different base URL needs that server's API key in the same save. The API already refused this with 422; the dialog now says so and asks before sending                      | 16    | Note written; `wiki/Integration-Calcom.md` updated  |
+
+**Screenshots:** none queued.
+
 ## Change audit: PayPal Settings, November 14, 2026
 
 A targeted pass for the PayPal changes of November 14: a **Settings** button on

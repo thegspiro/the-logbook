@@ -372,6 +372,16 @@ or your own Cal.com server.
 
 After saving, select **Test** on the card to check the key.
 
+To change any of these later, use **Settings** on the connected card. Cal.com
+stays connected and the webhook address does not change. Leave the **API Key**
+or **Webhook Secret** box blank to keep the saved one. The **API Base URL** box
+shows the address in use. **Moving to a different Cal.com server needs that
+server's API key in the same save**: a key works only on the server it was
+created on, so The Logbook will not send the saved key to a new address. To
+return to Cal.com Cloud, enter `https://api.cal.com/v1` with a Cloud key.
+
+![Cal.com settings on a connected card: the API Key box reading Leave blank to keep the current key, the API Base URL box showing the department's own Cal.com server with the note that changing it needs that server's key in the same save, the Webhook Secret box with its note that a blank box keeps the saved secret, the webhook address, and the notice that a new key or base URL is used from the next booking lookup](./images/16-27-calcom-settings.png)
+
 ### Viewing Bookings
 
 On the connected Cal.com card, select **Bookings**. It lists upcoming bookings
