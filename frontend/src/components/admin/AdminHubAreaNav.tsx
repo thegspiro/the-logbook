@@ -47,6 +47,13 @@ interface AdminHubAreaNavProps<A extends string, T extends string, D extends Adm
   attentionCounts: Record<string, number>;
   /** The line under the strip saying what a page is for. */
   hintOf: (destination: D) => string;
+  /**
+   * The strip's title for a page whose screen has a name of its own, separate
+   * from its tab label — Records › Sessions is the Create Training Session
+   * form. The tab label then moves up beside the area's name. Absent, or
+   * returning the label, the strip shows the tab label as its title.
+   */
+  titleOf?: (destination: D) => string;
   /** Names the area tablist ("Training admin areas"). */
   label: string;
   /** Prefix for the area cards' ids, unique on the page. */
@@ -71,6 +78,7 @@ export function AdminHubAreaNav<A extends string, T extends string, D extends Ad
   onTabChange,
   attentionCounts,
   hintOf,
+  titleOf,
   label,
   idPrefix,
   tabId,
@@ -81,6 +89,8 @@ export function AdminHubAreaNav<A extends string, T extends string, D extends Ad
   const activeDestination =
     activeArea.destinations.find((destination) => destination.id === activeTab) ?? activeArea.destinations[0];
   const ActiveIcon = activeDestination?.icon;
+  const activeTitle = activeDestination ? (titleOf?.(activeDestination) ?? activeDestination.label) : '';
+  const titleIsOwn = activeDestination !== undefined && activeTitle !== activeDestination.label;
 
   const areaCount = (area: AdminHubAreaNavArea<A, D>) =>
     area.destinations.reduce((total, destination) => total + (attentionCounts[destination.id] ?? 0), 0);
@@ -185,8 +195,11 @@ export function AdminHubAreaNav<A extends string, T extends string, D extends Ad
               </span>
             )}
             <p className="text-theme-text-muted min-w-0 text-sm">
-              <span className="block text-xs">{activeArea.label}</span>
-              <span className="text-theme-text-primary font-semibold">{activeDestination.label}</span>
+              <span className="block text-xs">
+                {activeArea.label}
+                {titleIsOwn && <> · {activeDestination.label}</>}
+              </span>
+              <span className="text-theme-text-primary font-semibold">{activeTitle}</span>
               <span aria-hidden="true"> — </span>
               <span className="sr-only">: </span>
               {hintOf(activeDestination)}

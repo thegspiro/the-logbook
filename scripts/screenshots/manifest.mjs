@@ -827,12 +827,13 @@ export function withIdsFromApi(apiPath, listKey, limit = 6) {
 }
 
 /**
- * Fill the Create Training Session form's start date and time.
+ * Fill the training-event form's start date and time (Create Session, or
+ * Create Event with the type set to Training).
  *
- * Two controls below it are conditional on it: the Quick Duration row renders
- * only once `start_datetime` is set, and the recurrence block's preview has
- * nothing to describe without one. The date is fixed rather than computed from
- * today so the shot does not change every day it is re-taken.
+ * The Quick Duration buttons need it to have something to add a duration to,
+ * and the recurrence block's preview has nothing to describe without one. The
+ * date is fixed rather than computed from today so the shot does not change
+ * every day it is re-taken.
  */
 export async function setSessionStart(page) {
   const block = page
@@ -853,11 +854,12 @@ export async function setSessionStart(page) {
 }
 
 /**
- * Advance the Create Training Session wizard to its Training Info step.
+ * Advance the training-event form to its Training Info step.
  *
- * The form is a four-step wizard — Event Details, Training Info, Settings,
- * Review — and the course picker lives on step 2, not on the page the route
- * opens. Step 1 needs a title and a start/end time before Next will move.
+ * The form has four steps — Event Details, Training Info, Settings, Review —
+ * and the course, the links and the completion settings live on step 2, not
+ * on the page the route opens. Step 1 needs a title and a start/end time
+ * before Next will move.
  */
 export async function openSessionTrainingInfo(page) {
   await page
@@ -5381,22 +5383,17 @@ export const SHOTS = [
     alt: "The course picker with an existing course chosen and its details preview card underneath",
     route: "/training/admin?tab=sessions",
     prepare: async (page) => {
+      // Rewritten 2026-11-11 for the training-event form, and not yet run
+      // against it (SCREENSHOT_CURRENCY.md marks this shot REPLACE). The
+      // course is three radios and "No course yet" is selected at first, so
+      // the library branch, with its picker and card, has to be chosen. The
+      // radio's name is its title followed by its description.
       await openSessionTrainingInfo(page);
-      // Step 2 has defaulted to "Create new course for this training", which
-      // has no picker and no preview card — the section is about the other
-      // branch. Checked rather than clicked: the form now opens on the library
-      // branch once the department has courses, and the label was renamed
-      // from "Use existing course template".
       await page
-        .getByRole("radio", {
-          name: /^Use (existing course template|a course from the Course Library)$/,
-        })
+        .getByRole("radio", { name: /^From the Course Library/ })
         .check({ timeout: 15_000 });
       await page.waitForTimeout(500);
-      const picker = page
-        .locator("select")
-        .filter({ hasText: "Select a course" })
-        .first();
+      const picker = page.locator("#training-course");
       const options = await picker
         .locator("option")
         .evaluateAll((els) =>
@@ -5406,7 +5403,9 @@ export const SHOTS = [
       await picker.selectOption(options[0]);
       await page.waitForTimeout(600);
     },
-    selector: "div:has(> select):has(> div.border-blue-500\\/30)",
+    // The library option's own box: its radio, the picker and the card.
+    selector:
+      "div.rounded-lg:has(> label input[name='training-course-mode'][value='library'])",
   },
   {
     id: "02-81-session-quarter-hour",
@@ -5429,8 +5428,9 @@ export const SHOTS = [
     alt: "The Quick Duration row — 1 hour, 2 hours, 4 hours and 8 hours",
     route: "/training/admin?tab=sessions",
     prepare: async (page) => {
-      // The row is conditional on a start time being set: with the field
-      // empty there is nothing to add a duration to and nothing renders.
+      // The row is drawn from the start, but with no start time its buttons
+      // only say "Set a start date first"; a start makes the frame read as a
+      // form in use.
       await setSessionStart(page);
     },
     selector: "div:has(> span:text-is('Quick Duration'))",
@@ -5444,24 +5444,24 @@ export const SHOTS = [
     alt: "The recurrence block with Monthly (by weekday) chosen and its ordinal and weekday pickers",
     route: "/training/admin?tab=sessions",
     prepare: async (page) => {
+      // Rewritten 2026-11-11 for the training-event form, whose recurrence is
+      // the event form's own section ("Make this a recurring event", a series
+      // end date or a rolling cycle). Not yet run against it
+      // (SCREENSHOT_CURRENCY.md marks this shot REPLACE). Addressed by the
+      // section's ids rather than by position.
       await setSessionStart(page);
-      await page
-        .getByLabel(/Make this a recurring training session/i)
-        .check({ timeout: 15_000 });
+      await page.locator("#is-recurring").check({ timeout: 15_000 });
       await page.waitForTimeout(500);
-      const block = page.locator("div.border-l-2").first();
-      await block
-        .locator("select")
-        .first()
+      await page
+        .locator("#recurrence-pattern")
         .selectOption({ label: "Monthly (by weekday)" });
       await page.waitForTimeout(600);
       // Fill the whole block. Left at their defaults the two dropdowns read
-      // "1st"/"Mon" with an empty Repeat Until beside them, which pictures the
-      // controls without picturing a pattern.
-      await block.locator('input[type="date"]').first().fill("2027-09-15");
-      const pickers = block.locator("select");
-      await pickers.nth(1).selectOption({ label: "2nd" });
-      await pickers.nth(2).selectOption({ label: "Tue" });
+      // "1st"/"Mon" with an empty series end date beside them, which pictures
+      // the controls without picturing a pattern.
+      await page.locator("#recurrence-end-date").fill("2027-09-15");
+      await page.locator("#recurrence-ordinal").selectOption({ label: "2nd" });
+      await page.locator("#recurrence-weekday").selectOption({ label: "Tue" });
       await page.waitForTimeout(600);
     },
     selector: "div.border-l-2:has(select)",
@@ -6602,33 +6602,22 @@ export const SHOTS = [
     doc: "02-training.md",
     line: 715,
     anchor: "The Create Training Session form (Step 3)",
-    alt: "Step 3 of the Create Session form — the settings, with Require instructor confirmation among them",
+    alt: "Training Info's Training completion settings on the training-event form, with Require sign-off among them",
     // `/training/sessions/new` redirects here; the form is a tab of the
     // training admin page rather than a route of its own.
     route: "/training/admin?page=records&tab=sessions",
     prepare: async (page) => {
-      // Step 3 is behind two Next buttons, and Next is disabled until the
-      // step's required fields are filled: a title and a type on step 1, the
-      // date and times on step 2.
-      // The labels are not associated with their inputs, so `getByLabel` finds
-      // nothing — reach the field by its placeholder.
-      await page
-        .getByPlaceholder(/CPR\/AED Renewal Training/i)
-        .first()
-        .fill("Ladder Company Drill", { timeout: 20_000 });
-      await page.waitForTimeout(300);
-      for (let step = 0; step < 2; step += 1) {
-        const next = page.getByRole("button", { name: /^Next/ }).first();
-        await next.waitFor({ timeout: 15_000 });
-        await next.click();
-        await page.waitForTimeout(1200);
-      }
-      await page
-        .locator("#require_completion_confirmation")
-        .waitFor({ timeout: 15_000 });
+      // Rewritten 2026-11-11 for the training-event form, and not yet run
+      // against it (SCREENSHOT_CURRENCY.md marks this shot REPLACE). Require
+      // sign-off moved from step 3 to Training Info's "Training completion",
+      // at the foot of step 2.
+      await openSessionTrainingInfo(page);
+      const signOff = page.locator("#training-require-sign-off");
+      await signOff.waitFor({ timeout: 15_000 });
+      await signOff.scrollIntoViewIfNeeded();
       await page.waitForTimeout(600);
     },
-    fullPage: false,
+    selector: "fieldset:has(h3:text-is('Training completion'))",
   },
   {
     id: "02-92-requirement-evaluation-period",
@@ -10086,8 +10075,11 @@ export const SHOTS = [
     expect: "Attendance for this event is finalized",
   },
   {
-    // Not submitted. The first course in the picker fills Training Type and
-    // Category, which is what the placeholder asks to see.
+    // Not submitted. Rewritten 2026-11-11, and not yet run (SCREENSHOT_CURRENCY.md
+    // marks this shot REPLACE): Create Event has no "Training details
+    // (optional)" group any more. Choosing Training swaps the single-page form
+    // for the training-event form, so the frame is that form's Training Info
+    // step after the hand-off, with the first library course picked.
     id: "04-61-training-details-create",
     allowEmptyState:
       '"No category" is the Training Category select\'s empty option.',
@@ -10095,17 +10087,20 @@ export const SHOTS = [
     line: 1025,
     anchor:
       "Admin with events.manage and training.manage at /events/admin?tab=create",
-    alt: "Create Event with the type set to Training: the Training details (optional) group with a course picked, its training type and category filled in, and the Create Training Session link",
+    alt: "Create Event after choosing Training: the training-event form's Training Info step, From the Course Library chosen with a course picked and the card of what it filled in, under the Switched to the training form note",
     route: "/events/admin?tab=create",
     prepare: async (page) => {
       await page
         .locator("#event-type")
         .selectOption("training", { timeout: 15_000 });
-      const group = page.getByRole("group", {
-        name: "Training details (optional)",
-      });
-      await group.waitFor({ timeout: 10_000 });
-      const course = group.locator("select").first();
+      await page
+        .getByText("Switched to the training form")
+        .waitFor({ timeout: 10_000 });
+      await openSessionTrainingInfo(page);
+      await page
+        .getByRole("radio", { name: /^From the Course Library/ })
+        .check({ timeout: 15_000 });
+      const course = page.locator("#training-course");
       await course
         .locator("option:nth-child(2)")
         .waitFor({ state: "attached", timeout: 15_000 });
@@ -10113,10 +10108,11 @@ export const SHOTS = [
         .locator("option:nth-child(2)")
         .getAttribute("value");
       await course.selectOption(value ?? "");
+      await page.evaluate(() => window.scrollTo(0, 0));
       await page.waitForTimeout(600);
     },
-    selector: "[role='group'][aria-labelledby='training-details-heading']",
-    expect: "Create Training Session",
+    fullPage: false,
+    expect: "Switched to the training form",
   },
   {
     // Opened and dismissed with Keep it open: the confirmation is the subject,
@@ -20509,21 +20505,15 @@ export const SHOTS = [
     alt: "Step 2 of the training-session wizard: an existing course selected, and the category, requirement and program links under a plain-language line saying what attendance will advance",
     route: "/training/admin?page=records&tab=sessions",
     prepare: async (page) => {
+      // Rewritten 2026-11-11 for the training-event form, and not yet run
+      // against it (SCREENSHOT_CURRENCY.md marks this shot REPLACE). Step 1
+      // needs a title and times before Next moves, and the course is three
+      // radios with "No course yet" selected at first; see 02-80.
+      await openSessionTrainingInfo(page);
       await page
-        .getByRole("button", { name: /^Next$/ })
-        .click({ timeout: 20_000 });
-      // Renamed from "Use existing course template"; see 02-80.
-      await page
-        .getByRole("radio", {
-          name: /^Use (existing course template|a course from the Course Library)$/,
-        })
+        .getByRole("radio", { name: /^From the Course Library/ })
         .check({ timeout: 15_000 });
-      // Located by its own placeholder option, not by label: the "Select
-      // Course" label on this wizard carries no `htmlFor` and the select no
-      // `id`, so it has no accessible name to match on.
-      const course = page.locator(
-        'select:has(option:text-is("Select a course..."))',
-      );
+      const course = page.locator("#training-course");
       await course.waitFor({ timeout: 10_000 });
       // Option labels carry the record's code -- "PUMP - Pump Operations",
       // "Driver / Operator Pipeline (DRV-OP)" -- and `selectOption({ label })`
@@ -20564,7 +20554,7 @@ export const SHOTS = [
     // Clipped to the step itself: the page's own title is screen-reader only
     // now that the wizard renders inside the hub, so there is no visible
     // heading to frame on above it.
-    selector: "div.space-y-6:has(> h2:text-is('Training Information'))",
+    selector: "section:has(h2:has-text('Training Information'))",
     allowEmptyState:
       '"No category" is the unselected first <option> of the category select, ' +
       "not a state this form is in -- the control reads Driver/Operator " +

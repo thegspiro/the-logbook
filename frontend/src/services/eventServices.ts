@@ -50,6 +50,8 @@ export const eventService = {
       include_cancelled?: boolean;
       include_drafts?: boolean;
       mandatory_only?: boolean;
+      /** A series' first event: lists that series alone. */
+      recurrence_series_id?: string;
       skip?: number;
       limit?: number;
     },
