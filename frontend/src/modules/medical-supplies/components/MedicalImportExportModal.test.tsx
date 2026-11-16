@@ -120,10 +120,13 @@ describe('MedicalImportExportModal', () => {
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Server unavailable'));
   });
 
-  it('keeps Import disabled until a file is chosen', () => {
+  it('names a missing file on the file field instead of greying out Import', async () => {
     renderModal();
 
-    expect(screen.getByRole('button', { name: /^import$/i })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: /^import$/i }));
+
+    expect(screen.getByLabelText(/csv file to import/i)).toHaveAccessibleDescription('Choose a CSV file to import.');
+    expect(mockImport).not.toHaveBeenCalled();
   });
 
   it('imports the chosen file and shows created categories and row errors', async () => {
@@ -148,7 +151,9 @@ describe('MedicalImportExportModal', () => {
     expect(screen.getByText(/Created 1 new medical supply category/)).toBeInTheDocument();
     expect(screen.getByText('Row 3: Category is required')).toBeInTheDocument();
     // Cleared so a second tap cannot import (and duplicate) the same rows.
-    expect(screen.getByRole('button', { name: /^import$/i })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: /^import$/i }));
+    expect(mockImport).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText(/csv file to import/i)).toHaveAccessibleDescription('Choose a CSV file to import.');
   });
 
   it('refreshes the page on close only when the import wrote something', async () => {
@@ -192,7 +197,33 @@ describe('MedicalImportExportModal', () => {
       applyAccept: false,
     });
 
-    expect(mockToastError).toHaveBeenCalledWith('Choose a .csv file');
-    expect(screen.getByRole('button', { name: /^import$/i })).toBeDisabled();
+    expect(screen.getByLabelText(/csv file to import/i)).toHaveAccessibleDescription(
+      'supplies.xlsx is not a CSV file. Choose a .csv file.'
+    );
+    expect(mockToastError).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: /^import$/i }));
+    expect(mockImport).not.toHaveBeenCalled();
+  });
+
+  it('keeps a failed import in the form rather than a toast', async () => {
+    mockImport.mockRejectedValue({ response: { status: 400, data: { detail: 'The file has no header row' } } });
+    renderModal();
+
+    await userEvent.upload(screen.getByLabelText(/csv file to import/i), csvFile());
+    await userEvent.click(screen.getByRole('button', { name: /^import$/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The file has no header row');
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('asks before Done throws away a chosen file that was not imported', async () => {
+    renderModal();
+
+    await userEvent.upload(screen.getByLabelText(/csv file to import/i), csvFile());
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.click(await screen.findByRole('button', { name: /Discard/ }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
