@@ -1845,21 +1845,27 @@ opens **Records → Sessions**.
 
 The areas are:
 
-| Area                     | What is in it                                                                                                                      |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **Overview**             | Dashboard, Compliance Matrix, Expiring Certs, Training Waivers                                                                     |
-| **Records**              | Submissions to Review, Sessions, Course Cohorts, Shift Reports, Monthly Status                                                     |
-| **Curriculum**           | Requirements, Course Library, Programs                                                                                             |
-| **Evaluations**          | Practical-skills tools, Knowledge Tests                                                                                            |
-| **Program Management**   | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                                     |
-| **Compliance Reporting** | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast, and **Configure**                                            |
-| **Settings & Data**      | Manual Entry Rules, Practical Skills, Shift Evaluations, Compliance Settings, Integrations, Import Past Training, Headline Metrics |
+| Area                     | What is in it                                                                                                                                |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Overview**             | Dashboard, Compliance Matrix, Expiring Certs, Training Waivers                                                                               |
+| **Records**              | Submissions to Review, Waiver Requests, Sessions, Course Cohorts, Shift Reports, Monthly Status                                              |
+| **Curriculum**           | Requirements, Course Library, Course Links, Programs                                                                                         |
+| **Evaluations**          | Practical-skills tools, Knowledge Tests                                                                                                      |
+| **Program Management**   | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                                               |
+| **Compliance Reporting** | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast, and **Configure**                                                      |
+| **Settings & Data**      | Manual Entry, Practical Skills, Session Waivers, Shift Evaluations, Requirements, Compliance, Integrations, Import History, Headline Metrics |
 
 **Evaluations** shows **Skill Evaluations** or **Skills Test Templates** and
 **Skills Test Records**, depending on which practical-skills system your
 department runs (see [Skills Testing](#skills-testing)).
 
-**Compliance Settings** _(2026-11-04)_ is listed under **Settings & Data** only
+_(2026-11-08)_ Three **Settings & Data** tabs carry shorter names so the row
+fits a 1280px screen: **Manual Entry** (was Manual Entry Rules),
+**Compliance** (was Compliance Settings) and **Import History** (was Import
+Past Training). The command palette still finds each by its old name.
+**Requirements** there opens **Curriculum → Requirements**.
+
+**Compliance** _(2026-11-04)_ is listed under **Settings & Data** only
 for an officer who can also change the department's settings or holds
 "Manage compliance records", because only they can save it. It lists what the
 compliance settings hold — the department-wide threshold, compliance profiles
@@ -2343,7 +2349,7 @@ position, not only to membership types. Use it when two groups share a class
 and status but owe different training — for example, life members who still
 ride and life members who have stopped.
 
-1. Open **Training Admin → Settings & Data → Compliance Settings** and select
+1. Open **Training Admin → Settings & Data → Compliance** and select
    **Open compliance settings** _(2026-11-04)_. (**Configure** under
    **Compliance Reporting** opens the same page.)
 2. Open the **Profiles** tab and select **Add Profile** (or **Edit** on an
@@ -2474,7 +2480,7 @@ like any other training, and the monthly hours show it under the month's
 **Who can do this:** compliance officers (`compliance.manage`) or
 administrators (`settings.manage`).
 
-1. Open **Training Admin → Settings & Data → Compliance Settings** and select
+1. Open **Training Admin → Settings & Data → Compliance** and select
    **Open compliance settings** _(2026-11-04)_. (**Configure** under
    **Compliance Reporting** opens the same page.)
 2. On the **Thresholds** tab, find **Months on leave**.
@@ -2525,7 +2531,7 @@ month or stops at the end of last month.
 
 ### Setting the Department Default
 
-1. Open **Training Admin → Settings & Data → Compliance Settings** and select
+1. Open **Training Admin → Settings & Data → Compliance** and select
    **Open compliance settings** _(2026-11-04)_. This opens **Compliance
    Requirements Configuration**. (**Configure** under **Compliance Reporting**
    opens the same page.)
@@ -3520,8 +3526,8 @@ A member in a training program can ride another department's unit — an
 internship on a neighbouring agency's ambulance, say — and log it under
 **Shifts with other departments** (see
 [Shifts & Scheduling](./03-scheduling.md#shifts-with-other-departments)). That
-agency's preceptor evaluates them on paper, and a training officer types the
-form in.
+agency's preceptor evaluates them, either on paper for a training officer to
+type in, or _(2026-11-13)_ through a no-login preceptor link (below).
 
 **Turning it on, per agency.** A scheduling officer (`scheduling.manage`) opens
 **Scheduling Admin → Settings → Outside Apparatus** and ticks **Evaluate shifts
@@ -3569,8 +3575,10 @@ read-only.
 agency's preceptor can fill the evaluation out themselves, with no account.
 
 1. The member selects **Preceptor link** on the shift in **Shifts with other
-   departments**, or a training officer selects it on the shift in **Outside
-   shifts awaiting an evaluation**.
+   departments** (see
+   [Shifts & Scheduling](./03-scheduling.md#shifts-with-other-departments)),
+   or a training officer selects it on the shift in **Outside shifts awaiting
+   an evaluation**.
 2. In the **Preceptor link** dialog, select **Make link**, or type the
    **Preceptor's email (optional)** and select **Make and email link**. Show
    the preceptor the QR code, or **Copy** the link.
@@ -3642,7 +3650,7 @@ instead of picking a scheduled shift.
 ### Admin Configuration
 
 Administrators set up manual shift entry under **Training Admin → Settings &
-Data → Manual Entry Rules**:
+Data → Manual Entry**:
 
 | Setting                 | What it does                                                                             |
 | ----------------------- | ---------------------------------------------------------------------------------------- |
@@ -3921,7 +3929,7 @@ deleting the program afterwards leaves them in your requirement list.
 
 **Who can do this:** training officers.
 
-Open **Training Admin → Settings & Data → Import Past Training** to bring in past
+Open **Training Admin → Settings & Data → Import History** to bring in past
 training records from a CSV file.
 Training hours that sit in a previous records system's all-hours export,
 alongside shifts and administrative time, come in through **Integrations →
@@ -4266,7 +4274,7 @@ views: **Annual Report**, **ISO Readiness**, **Record Quality**,
 opens **Compliance Settings** — thresholds, compliance
 profiles, automatic reports and report history (see
 [Setting the Department Default](#setting-the-department-default)). Its usual
-home is now **Settings & Data → Compliance Settings → Open compliance
+home is now **Settings & Data → Compliance → Open compliance
 settings** _(2026-11-04)_; both open the same page.
 
 ### ISO Readiness
@@ -5381,9 +5389,9 @@ have moved, been renamed or work differently.
   Curriculum, Evaluations, Program Management, Compliance Reporting, and
   Settings & Data. There is no **Setup** or **Advanced** area. Requirements,
   the Course Library and Programs are under **Curriculum**; Knowledge Tests and
-  Skill Evaluations under **Evaluations**; Integrations, Import Past Training, Manual
-  Entry Rules, Practical Skills, Shift Evaluations and Compliance Settings under
-  **Settings & Data**; Recertification,
+  Skill Evaluations under **Evaluations**; Integrations, Import History (then named Import
+  Past Training), Manual Entry, Practical Skills, Shift Evaluations and
+  Compliance under **Settings & Data**; Recertification,
   Competency, Instructors, Effectiveness, Multi-Agency and Reports under
   **Program Management**. Old links still open the right page.
 - **Compliance settings** are reached from **Settings & Data → Compliance

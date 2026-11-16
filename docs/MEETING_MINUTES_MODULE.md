@@ -684,8 +684,9 @@ addition. The bell task is unchanged.
   (`minutes_action_items`), the minutes reminder
   (`minutes_action_item_reminder`), the weekly digest
   (`minutes_open_items_digest`) and the meeting-record reminder
-  (`meeting_action_item_reminder`) — are email templates, seeded by migration
-  `c4e81b7a2d95` with the text that used to be built in code
+  (`meeting_action_item_reminder`) — are email templates. Migration
+  `c4e81b7a2d95` adds the template types; `ensure_default_templates` creates
+  each department's rows with the text that used to be built in code
   (`app/services/email_templates_minutes.py`). Each `template_type` is the name
   the sender already logged under, so the send log is unbroken. Item lists are
   built and escaped by the sender and passed as `action_items_html` /
@@ -1367,7 +1368,7 @@ Found driving workflow review W51 (`docs/workflow-review/W51-minutes.md`):
 | W51-6 The submitter was offered Approve                                     | Replaced by the "Waiting for another officer to approve" notice; Reject stays as a withdraw                                                                                                                                                                                                                                                                                                                                                                      |
 | W51-7 Meetings list                                                         | Dates read "Thu, Oct 1, 2026 at 7:00 PM" instead of `2026-10-01` / `19:00`; the create dialog is a named modal dialog; **Start Recording** stays disabled without the required date; the card's icon buttons have `aria-label`s naming the meeting and are 44px on phones                                                                                                                                                                                        |
 | W51-8 (flagged) Minutes already created from meetings keep the shifted date | A backfill could recompute from `meeting_id`, but cannot tell a date a secretary corrected by hand from a shifted one — owner decision, `docs/KNOWN_LIMITATIONS.md`                                                                                                                                                                                                                                                                                              |
-| W51-9 (open) A meeting's own status badge never moves                       | Nothing advances a meeting record's status, so it reads "Draft" beside approved minutes                                                                                                                                                                                                                                                                                                                                                                          |
+| W51-9 A meeting's own status badge never moved                              | **Fixed 2026-11-03.** Approving minutes now approves the meeting they record (`MinuteService._approve_linked_meeting`): same approver and moment; an already-approved meeting keeps its stamp; recalling the minutes leaves the meeting approved. Migration `6b81e95d4157` approves meetings whose minutes were already approved                                                                                                                                 |
 
 Related, 2026-09-26: a meeting created from an event copied its date and times
 from the event's UTC timestamp, so a 7 PM Eastern meeting read 11 PM and one

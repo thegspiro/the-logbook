@@ -391,7 +391,7 @@ the grant dates **before** you move the application to Awarded.
 2. To add a task, select **Add Task** and enter the **Task Type**, **Title**,
    **Description (optional)**, **Due Date**, **Priority** and **Report Template
    (optional)**.
-   _(2026-11-06)_ The form has an **Assign to** choice, so a task can name its
+   _(2026-11-06)_ The form has an **Assigned To (optional)** choice, so a task can name its
    member when it is created, not only afterwards. Only members of your
    department can be chosen.
 3. Change a task's status as the work moves along, and select **Mark Complete**
@@ -412,10 +412,9 @@ Each reminder is sent once. If you change a task's due date, its reminders
 start again for the new date.
 
 The reminder goes to the member the task is assigned to, if they are active
-and can open Grants & Fundraising. The **Add Task** form does not assign a
-task, so most reminders go to every active member with **Manage
-fundraising**. Reminders are email only. Each member can turn them off under
-their email preferences (_Grants and fundraising reminders_), unless your
+and can open Grants & Fundraising. A task assigned to nobody (**Unassigned**)
+is reminded to every active member with **Manage fundraising**. Reminders
+are email only. Each member can turn them off under their email preferences (_Grants and fundraising reminders_), unless your
 department has made them required.
 
 Use **Compliance Tasks Due** on the dashboard (the next 30 days) and
@@ -537,6 +536,9 @@ For each donor: their contact details, **total donated**, how many donations,
 and the date of their last donation. Search by name or a complete email address
 (part of an address no longer matches, since addresses are stored encrypted),
 or filter by type.
+Contact details (email, phone and address) are shown only to people with
+**Manage fundraising**. With view access alone the email column reads
+**Managers only**, and a search matches names only _(2026-10-22)_.
 A donor's first and last donation dates use the department's date, so an evening
 gift is dated the day it was given.
 

@@ -116,7 +116,7 @@ program enrollments, external training integrations, and compliance reporting.
 - **Manual Shift Report Page** — `/training/log-shift`, for departments without
   the Scheduling module
 - **Manual Entry Admin Config** — `ManualEntrySettingsPanel` (Training Admin →
-  Settings & Data → Manual Entry Rules) controls manual entry availability,
+  Settings & Data → Manual Entry) controls manual entry availability,
   allowed apparatus types, default start times, and default shift duration
 
 ---
@@ -1075,7 +1075,7 @@ A descriptive scale with no labels falls back to numeric display (1–5).
 Scheduling module. Officers enter shift date, start/end times, apparatus, crew
 members, and trainee evaluations, with apparatus-specific skill/task
 auto-population. Availability, allowed apparatus types, default start times and
-default duration come from **Manual Entry Rules** in the admin hub.
+default duration come from **Manual Entry** in the admin hub.
 
 ---
 

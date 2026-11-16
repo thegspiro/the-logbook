@@ -1281,7 +1281,7 @@ days.
 > **What if a member forgets to clock out?** A session that runs past its
 > category's **Max hours per session** is closed for the member. Every 30
 > minutes, The Logbook caps a forgotten clock-in at the limit, sets it to
-> **Pending Review** and notes "Auto-closed: exceeded _N_h session limit" on the
+> **Pending Review** and notes "Auto-closed: exceeded \_N_h session limit" on the
 > entry. Each one is recorded in the audit log — the member, the entry, the
 > capped times, and whether the regular check or an officer's **Close Stale
 > Sessions** (Categories tab) closed it — so a disputed session can be looked
@@ -1378,7 +1378,7 @@ Messages can be escalated by email or text message according to priority, can
 require acknowledgement with a report of who has not acknowledged, can be
 scheduled, and can be edited after posting.
 
-1. Open **Messages** and select **New message**.
+1. Open **Department Messages** and select **New message**.
 2. Enter the title and body, and set the priority and audience. _(2026-10-18)_ An audience of **By status → Probationary** or **Retired** now matches a member on either their membership status or their account status, so a new member added as a probationary member is included without an admin changing the account status. Active, Leave and Inactive still match the account status only.
 3. Optionally tick **Keep in inbox after it is read** (persistent) or **Require
    acknowledgment**, or set a send time.

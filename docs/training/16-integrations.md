@@ -157,7 +157,9 @@ webhooks, Cal.com and Documenso. Use the service's public web address.
 Cal.com and Salesforce refuse to connect until their keys are filled in, with a
 message naming what is missing, such as "PayPal needs: client_id,
 client_secret". Before, they connected with blank keys and showed as connected
-until a test failed.
+until a test failed. Slack, Discord, Microsoft Teams and the generic webhook
+likewise refuse to connect without the address to post to, with "Enter the
+webhook URL for {name}" _(2026-10-16)_.
 
 > **What if a test fails with a general message?** When something unexpected
 > goes wrong, the message reads "An unexpected error occurred. Please try

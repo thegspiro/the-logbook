@@ -95,10 +95,24 @@ Draft  ──(publish)──>  Published  ──(archive)──>  Archived
 
 ### Public Endpoints (no authentication required)
 
-| Method | Path                                 | Rate Limit | Description             |
-| ------ | ------------------------------------ | ---------- | ----------------------- |
-| `GET`  | `/api/public/v1/forms/{slug}`        | 60/min/IP  | Get public form by slug |
-| `POST` | `/api/public/v1/forms/{slug}/submit` | 10/min/IP  | Submit public form      |
+| Method | Path                                       | Rate Limit | Description                                     |
+| ------ | ------------------------------------------ | ---------- | ----------------------------------------------- |
+| `GET`  | `/api/public/v1/forms/{slug}`              | 60/min/IP  | Get public form by slug                         |
+| `POST` | `/api/public/v1/forms/{slug}/submit`       | 10/min/IP  | Submit public form                              |
+| `GET`  | `/api/public/v1/forms/{slug}/embed-policy` | 60/min/IP  | Websites that may frame the form _(2026-10-25)_ |
+
+### Embedding on a department website _(2026-10-25)_
+
+A public, published form with `forms.allow_embed` on (migration
+`0a8d11fcada1`; the **Allow embedding on your website** tick in the Share
+window, `FormEmbedShare.tsx`) can be shown in an iframe at `/embed/f/<slug>`,
+on the sites listed in the organization setting `forms.embed_allowed_origins`
+(**Settings → Forms**, `FormsEmbedSection.tsx`). nginx asks `embed-policy`
+through `auth_request` each time it serves that page and copies the answer
+(`X-Embed-Frame-Ancestors`) into the page's `frame-ancestors`. Anything else,
+including an unknown slug, answers `'none'` with a 200, so the page renders
+but cannot be framed. A host nginx needs the `auth_request` module — see
+`docs/UPGRADING.md`. The member guide is `docs/training/07-documents-forms.md`.
 
 ---
 
