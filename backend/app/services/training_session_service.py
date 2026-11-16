@@ -69,7 +69,7 @@ from app.services.training_compliance import (
 )
 from app.utils.json_ids import json_array_contains
 from app.utils.model_updates import apply_updates
-from app.utils.org_scoping import is_in_org
+from app.utils.org_scoping import assert_current_members, is_in_org
 from app.utils.org_timezone import local_and_utc_dates, resolve_scheduling_timezone
 
 # What a copied session takes from its source: the course, filing and credit
@@ -590,6 +590,19 @@ class TrainingSessionService:
         linkage_error = await self._validate_linkage_ids(details, organization_id)
         if linkage_error:
             return None, linkage_error
+        # A new session's lead instructor is picked from current members only.
+        # Checked here, not in create_training_session, because cohort
+        # generation creates sessions from class templates that may name an
+        # instructor who has since left.
+        try:
+            await assert_current_members(
+                self.db,
+                [details.instructor_id],
+                organization_id,
+                label="the lead instructor",
+            )
+        except ValueError as e:
+            return None, str(e)
         if details.course_id is None:
             return None, None
         course = await self._course_in_org(details.course_id, organization_id)
@@ -757,6 +770,17 @@ class TrainingSessionService:
             )
         )
         sessions = {str(s.event_id): s for s in result.scalars().all()}
+        # A lead instructor is picked from current members only. One these
+        # sessions already name may stay after leaving, so an edit that leaves
+        # the instructor alone still saves.
+        if payload.get("instructor_id"):
+            await assert_current_members(
+                self.db,
+                [payload["instructor_id"]],
+                organization_id,
+                keep=[s.instructor_id for s in sessions.values()],
+                label="the lead instructor",
+            )
         stored_links = await self.attendance_requirement_ids(
             [str(s.id) for s in sessions.values()]
         )

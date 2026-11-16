@@ -63,7 +63,11 @@ from app.services.training_record_source import RecordSource, record_sources
 from app.services.training_waiver_service import WaiverPeriod, fetch_org_waivers
 from app.utils.csv_export import SafeCsvChunks, collect_csv
 from app.utils.model_updates import apply_updates
-from app.utils.org_scoping import assert_all_in_org, assert_in_org
+from app.utils.org_scoping import (
+    assert_all_in_org,
+    assert_current_members,
+    assert_in_org,
+)
 from app.utils.org_timezone import (
     format_in_org_timezone,
     local_date,
@@ -647,6 +651,10 @@ class InstructorQualificationService:
         """Create an instructor qualification"""
         data = _stringify_uuids(data)
         await self._validate_references(organization_id, data)
+        # A new qualification is recorded for a current member only.
+        await assert_current_members(
+            self.db, [data.get("user_id")], organization_id, label="the member"
+        )
         qual = InstructorQualification(
             organization_id=organization_id,
             created_by=created_by,

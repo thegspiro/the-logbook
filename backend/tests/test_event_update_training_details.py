@@ -1091,3 +1091,65 @@ class TestListingOneSeries:
 
         assert sorted(str(item.id) for item in listed) == sorted(weekly)
         assert not {str(item.id) for item in listed} & set(other + [lone])
+
+
+async def _retire(db, user_id: str) -> None:
+    await db.execute(
+        text("UPDATE users SET status = 'retired' WHERE id = :u"), {"u": user_id}
+    )
+
+
+class TestTheLeadInstructorIsACurrentMember:
+    """A lead instructor is picked from current members only.
+
+    The picker hides imported former members, and the server refuses one
+    named anyway. A session whose instructor has since left still saves when
+    the edit leaves the instructor alone.
+    """
+
+    async def test_a_new_session_refuses_a_former_member(self, db_session, dept):
+        former = await _insert_user(db_session, dept["org"], "Owen")
+        await _retire(db_session, former)
+
+        with pytest.raises(ValueError, match="Only current members"):
+            await _event(db_session, dept, {"instructor_id": former})
+
+    async def test_a_new_session_takes_a_current_member(self, db_session, dept):
+        current = await _insert_user(db_session, dept["org"], "Rita")
+
+        event_id = await _event(db_session, dept, {"instructor_id": current})
+
+        assert await _session(db_session, event_id) is not None
+
+    async def test_an_edit_keeps_an_instructor_who_has_since_left(
+        self, db_session, dept
+    ):
+        owen = await _insert_user(db_session, dept["org"], "Owen")
+        event_id = await _event(db_session, dept, {"instructor_id": owen})
+        await _retire(db_session, owen)
+
+        await _edit(
+            db_session,
+            dept,
+            event_id,
+            training_details=TrainingSessionDetailsUpdate(
+                instructor_id=owen, credit_hours=1.5
+            ),
+        )
+
+        session = await _session(db_session, event_id)
+        assert session["credit_hours"] == 1.5
+
+    async def test_an_edit_refuses_choosing_a_former_member(self, db_session, dept):
+        rita = await _insert_user(db_session, dept["org"], "Rita")
+        event_id = await _event(db_session, dept, {"instructor_id": rita})
+        former = await _insert_user(db_session, dept["org"], "Lee")
+        await _retire(db_session, former)
+
+        with pytest.raises(ValueError, match="Only current members"):
+            await _edit(
+                db_session,
+                dept,
+                event_id,
+                training_details=TrainingSessionDetailsUpdate(instructor_id=former),
+            )

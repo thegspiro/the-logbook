@@ -148,7 +148,7 @@ from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.contact_visibility import load_contact_policy
 from app.utils.model_updates import apply_updates
-from app.utils.org_scoping import assert_in_org
+from app.utils.org_scoping import assert_current_members, assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
 
 router = APIRouter()
@@ -1307,6 +1307,20 @@ async def update_event_settings(
                 pipeline_update["default_assignee_id"],
                 current_user.organization_id,
                 allow_none=True,
+                label="default coordinator",
+            )
+            # Only a current member can be made the default coordinator. The
+            # one already saved may stay after leaving; that is a separate
+            # decision from choosing them again.
+            await assert_current_members(
+                db,
+                [pipeline_update["default_assignee_id"]],
+                current_user.organization_id,
+                keep=[
+                    (current_events.get("request_pipeline") or {}).get(
+                        "default_assignee_id"
+                    )
+                ],
                 label="default coordinator",
             )
         except ValueError as e:
