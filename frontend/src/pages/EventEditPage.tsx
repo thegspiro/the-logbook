@@ -41,10 +41,12 @@ const FINALIZED_LOOKUP_LIMIT = 500;
 const DATE_ONLY: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
 
 /** What a training manager without events.manage is told on Training Info: the API refuses them training details (403). */
+const TRAINING_MANAGER_TITLE = 'Training details are changed by an event manager.';
+const TRAINING_MANAGER_EDITS =
+  "The event's schedule, location, RSVP, check-in and reminder settings on the other steps are yours to edit.";
 const TRAINING_MANAGER_NOTICE: TrainingReadOnlyNotice = {
-  title: 'Training details are changed by an event manager.',
-  detail:
-    "You can view them here, including the Training completion settings. The event's schedule, location, RSVP, check-in and reminder settings on the other steps are yours to edit.",
+  title: TRAINING_MANAGER_TITLE,
+  detail: `You can view them here, including the Training completion settings. ${TRAINING_MANAGER_EDITS}`,
 };
 
 export const EventEditPage: React.FC = () => {
@@ -325,21 +327,36 @@ export const EventEditPage: React.FC = () => {
     trainingAccess: TrainingInfoAccess;
     readOnlyNotice?: TrainingReadOnlyNotice;
   } => {
-    if (!canManage) return { trainingAccess: 'readonly', readOnlyNotice: TRAINING_MANAGER_NOTICE };
+    // Before the reader's notice: a reader is shown the stored details, and a
+    // failed read has none to show, so the defaults would pass for them.
     if (sessionLoadFailed) {
       return {
         trainingAccess: 'readonly',
         readOnlyNotice: {
           title: 'The training details could not be loaded.',
-          detail: 'Saving leaves them as they are. Reload the page to change them.',
+          detail: `Saving leaves them as they are. Reload the page to ${canManage ? 'change' : 'view'} them.`,
         },
+      };
+    }
+    // The event page's words for an event with no session
+    // (TrainingSessionLinkageCard), which shows the copies beside them as the
+    // step does (pitfall #29).
+    const noDetails = attendanceLocked
+      ? `No training details: attendance is filed under ‘${event.title}’ as Continuing Education.`
+      : `No training details: attendance will be credited as ‘${event.title}’, Continuing Education.`;
+    if (!canManage) {
+      return {
+        trainingAccess: 'readonly',
+        readOnlyNotice: session
+          ? TRAINING_MANAGER_NOTICE
+          : { title: TRAINING_MANAGER_TITLE, detail: `${noDetails} ${TRAINING_MANAGER_EDITS}` },
       };
     }
     if (attendanceLocked && !session) {
       return {
         trainingAccess: 'readonly',
         readOnlyNotice: {
-          title: `No training details: attendance is filed under ‘${event.title}’ as Continuing Education.`,
+          title: noDetails,
           detail: 'Details can be added after someone who can reopen attendance reopens it.',
         },
       };
@@ -350,10 +367,10 @@ export const EventEditPage: React.FC = () => {
   // A Training event with no session has only custom_fields' copies of its
   // settings, which the event page shows as the event's: Training Info opens
   // on them, so a save carries them into the session rather than dropping
-  // them unseen. So does an event of another type that kept them from when
-  // it was Training, if it is changed back. A reader's step is locked and
-  // shows no session at all.
-  const settingCopies = !session && trainingAccess === 'edit' ? fromSettingCopies(event.custom_fields) : undefined;
+  // them unseen, and a reader sees what the event page shows. So does an
+  // event of another type that kept them from when it was Training, if it is
+  // changed back.
+  const settingCopies = !session && !sessionLoadFailed ? fromSettingCopies(event.custom_fields) : undefined;
   const storedTraining = session ? fromSession(session, event) : (settingCopies?.value ?? DEFAULT_TRAINING_DETAILS);
 
   const editing: EditOptions = {

@@ -992,6 +992,42 @@ describe('EventEditPage', () => {
           auto_create_records: false,
         });
       });
+
+      // A training manager is shown the details read-only. With no session the
+      // step showed the defaults under "You can view them here", where the
+      // event page shows the copies and says there are no training details.
+      it('shows a training manager the copies, and says the event has no training details', async () => {
+        mockPermissions.clear();
+        mockPermissions.add('training.manage');
+        vi.mocked(eventService.getEvent).mockResolvedValue({ ...trainingEvent, custom_fields: copies });
+        window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
+        renderWithRouter(<EventEditPage />);
+
+        expect(await screen.findByText('Training details are changed by an event manager.')).toBeInTheDocument();
+        expect(
+          screen.getByText(
+            /^No training details: attendance will be credited as ‘Hose Testing Night’, Continuing Education\./
+          )
+        ).toBeInTheDocument();
+        expect(screen.queryByText(/You can view them here/)).not.toBeInTheDocument();
+        expect(screen.getByText('Owen Kittredge, not a member')).toBeInTheDocument();
+        expect(screen.getByLabelText('This training issues a certification')).toBeChecked();
+        expect(screen.getByLabelText(/Issuing Agency/)).toHaveValue('AHA');
+      });
+    });
+
+    // A failed read has nothing to show: a training manager was shown the
+    // defaults as the event's details, under "You can view them here".
+    it('tells a training manager the details could not be loaded, rather than showing defaults', async () => {
+      mockPermissions.clear();
+      mockPermissions.add('training.manage');
+      vi.mocked(trainingSessionService.getSessionByEvent).mockRejectedValue(new Error('Network Error'));
+      window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
+      renderWithRouter(<EventEditPage />);
+
+      expect(await screen.findByText('The training details could not be loaded.')).toBeInTheDocument();
+      expect(screen.getByText('Saving leaves them as they are. Reload the page to view them.')).toBeInTheDocument();
+      expect(screen.queryByText(/You can view them here/)).not.toBeInTheDocument();
     });
 
     // A link to a requirement since deactivated is kept by every save, so the
