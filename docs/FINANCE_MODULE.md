@@ -469,7 +469,14 @@ with, so the flag and the refusal cannot disagree. Audited as
 **Budget requests** — table `budget_requests`. A request is for an existing
 draft-year line (`budgetId`), or proposes a line that does not exist yet
 (`categoryId`, optional `stationId`, and the `ownerPositionId` that will own it).
-Amounts are `Numeric(12, 2)`, ≥ 0; `justification` is required.
+Amounts are `Numeric(12, 2)`, ≥ 0. A `draft` may have no `requestedAmount`
+and no `justification` _(owner decision, 2026-11-11; migration
+`0136dd6d4144` made both columns nullable)_. **Submit** refuses an unfinished
+draft with a 422 naming each missing field (`BudgetRequestIncompleteError`,
+`[{field, message}]`), and a `PUT` on a `submitted` request may not clear
+either. The owner screen checks first and reopens the draft with the fields
+flagged; the review screen shows a blank amount as _Not entered yet_ and
+leaves it out of the totals.
 
 | Status      | Who moves it there                          | From                    |
 | ----------- | ------------------------------------------- | ----------------------- |
@@ -1979,7 +1986,7 @@ The dashboard carries no grant figures.
 
 **QuickBooks Export:**
 
-- **`export_mappings`** table — id, organization_id, internal_category (budget_category name), qb_account_name, qb_account_number, qb_offset_account_name _(2026-10-08)_, mapping_type (EXPENSE, INCOME, ASSET), created_at, updated_at
+- **`export_mappings`** table — `id`, `organization_id`, `internal_category` (`budget_category` name), `qb_account_name`, `qb_account_number`, `qb_offset_account_name` _(2026-10-08)_, `mapping_type` (EXPENSE, INCOME, ASSET), `created_at`, `updated_at`
 - **`export_logs`** table — id, organization_id, export_type, date_range_start, date_range_end, record_count, file_format (CSV, IIF), exported_by, exported_at
 
 **Endpoints:**

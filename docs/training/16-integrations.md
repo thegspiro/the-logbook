@@ -609,6 +609,7 @@ twice, however it arrives. **Sync now** on the Zeffy page runs it at once.
 The sync reads payments by the day they were made and looks back seven days
 each time. A refund made more than seven days after the sale is therefore seen
 only through the webhook.
+
 ---
 
 ## Google Workspace — Member Accounts
@@ -1382,7 +1383,7 @@ Details:
 - The provider card's **Auto-Sync** line shows both, for example "Every 1h ·
   review daily at 02:00".
 
-Other providers show only "Every _N_h". Their form has a single **Sync
+Other providers show only the interval, such as "Every 6h". Their form has a single **Sync
 Interval**, counted from the previous sync.
 
 #### Course mappings

@@ -196,8 +196,14 @@ See the member/officer how-to in the
 
 The template catalogue had grown past three dozen entries rendered as a single
 flat scroll. Templates are now grouped into collapsible categories with
-per-category counts: **Members & Accounts, Events & Scheduling, Training,
-Elections, Inventory, Department Store, Other**.
+per-category counts. _(2026-11-14)_ The categories are now **Members &
+Accounts, Prospective Members, Events & Scheduling, Training & Certifications,
+Meetings & Minutes, Elections & Voting, Inventory & Property, Performance
+Evaluations, Suggestion Boxes, Department Store** and **Other**. Within a
+category, templates follow the order `TEMPLATE_CATEGORIES` declares, then
+name; they used to follow the `template_type` ENUM's declaration order. A
+drift guard in `TemplateList.test.tsx` fails when any type but `custom` lands
+in **Other**.
 
 Two behaviours that keep the grouping from getting in the way:
 
@@ -205,6 +211,54 @@ Two behaviours that keep the grouping from getting in the way:
   collapsed header.
 - The category holding the **selected** template is force-expanded, so the
   selection cannot scroll out of view.
+
+### Template copies on every send, and CC by position _(2026-11-13)_
+
+Until #4248 a template's **Default CC** and **Default BCC** were used only by
+scheduled emails; every immediate send dropped them (defect D1).
+
+- `send_email` now adds the stored template's CC, CC positions and BCC to
+  every send that names a template type. Test sends and the scheduled-email
+  task pass `apply_template_copies=False`; the scheduled task merges its own
+  copies.
+- **Never copied:** the credential templates (`ALWAYS_SENT_TYPES`: welcome,
+  password reset, IT password, ballot, applicant status link, follow-up
+  form, contact changed), `custom`, the attendance-waiver types (which send
+  their own copies without buttons, category or the decider's note) and the
+  pre-meeting package. The editor says so on a credential template: _"This
+  email carries a password, a sign-in or reset link, a ballot link or an
+  applicant's private link, so it is never copied to anyone."_
+- **CC positions** (`email_templates.default_cc_position_ids`): a checkbox
+  list under **Default CC / BCC Recipients**. Whoever holds a chosen position
+  when an email is sent is CC'd, limited to current members. Saving checks
+  each position is in the department, and is audited.
+- Saved CC addresses that never fired before now do; `docs/UPGRADING.md` asks
+  operators to review them.
+
+### Election and minutes notices are templates _(2026-11-14)_
+
+Ten notices built in code became templates a department can reword, preview,
+test-send, CC and switch off (#4295):
+
+| Category           | Template types                                                                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Elections & Voting | `election_nominations_open`, `election_nominated`, `election_nomination_accepted_for_you`, `election_proxy_authorized`, `pre_meeting_package` |
+| Meetings & Minutes | `minutes_circulated`, `minutes_action_items`, `minutes_action_item_reminder`, `minutes_open_items_digest`, `meeting_action_item_reminder`     |
+
+- Default wording matches the old built-in emails; the minutes types and
+  `pre_meeting_package` keep the `template_type` they already logged under.
+- The three election-manager delivery alarms (ballots, nominations
+  announcement, automatic reminder not all sent) stay in code, so switching a
+  template off cannot hide a mail failure.
+- A switched-off **Pre-meeting package** refuses **Send** before the PDF is
+  built. A switched-off reminder leaves its items unmarked.
+- The minutes senders now pass the organization, so they use the
+  department's mail settings, logo and footer.
+
+The same week added the training-session waiver, preceptor-link
+(`shift_evaluation_preceptor_link`) and leave templates under **Training &
+Certifications**, and the business-meeting waiver templates under **Meetings &
+Minutes** (#4248, #4264, #4303).
 
 ### Officer Signature Variables
 

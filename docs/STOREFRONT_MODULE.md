@@ -173,6 +173,17 @@ would force a false ordering on two independent things.
 A refused move answers 400 with the reason. The bulk endpoint skips the order
 and reports why.
 
+**The admin order dialog** (`OrderDetailModal`, W67b-3 and W67b-5,
+2026-11-14) shows the delivery choice, the shipping address (only for a
+shipped order), the member's notes, and the subtotal, tax, shipping and
+discount lines (`OrderDeliveryDetails`); **My Orders** shows the same to the
+member. Its **Change status** list offers Awaiting payment through Fulfilled
+and the server refuses what the rules above forbid. A **Cancel order** section
+calls `POST /store/orders/{id}/cancel` with an optional reason (shown to the
+member) and emails the member; the confirmation names any money already
+recorded, which cancelling does not refund. A cancelled order's dialog then
+offers **Refund** and nothing the server would refuse.
+
 `pending_verification` exists because a member can _report_ having sent
 payment. That is a claim, not a receipt — it moves the order into a queue for
 somebody to confirm, and never marks it paid on its own.
@@ -256,8 +267,8 @@ rather than disappearing — the quartermaster has to see who is being left out
 before the order goes in.
 
 Only those transitions are gated (`_PAYMENT_GATED_STATUSES`). Messaging the
-member, moving an order back to awaiting payment, and cancelling all still run
-under every rule.
+member and cancelling still run under every rule. Moving an order back to
+awaiting payment is no longer possible under any rule (W67b-4, above).
 `bulk_update_status` delegates to the same check, so advancing a whole window
 moves the settled orders and returns the rest by order number with the balance
 in the message.

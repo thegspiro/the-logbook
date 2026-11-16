@@ -111,7 +111,7 @@ Retiring one keeps it under **Show retired**; it is not added back.
 2. Filter by category: Equipment, Staffing, Training, Prevention, Facilities,
    Vehicles, Wellness, Community or Other.
 3. Search by name or agency.
-4. Check the deadline. Within 14 days it shows in red as "_n_d left"; within 30
+4. Check the deadline. Within 14 days it shows in red as days left, such as "9d left"; within 30
    days, in amber. A past deadline reads **Expired**, and a program with no date
    reads **Recurring deadline** (an application cycle that repeats, such as
    the four programs above) or **Rolling deadline**.
@@ -513,7 +513,9 @@ business and organization that supports the department.
    **Organization Name**; a contact is optional. The list sorts an
    organization by its name among the surnames and leads with that name when
    there is no contact.
-4. Save.
+4. Select **Save Donor**. A missing or refused field is flagged on the field
+   itself, and **Cancel** asks before throwing away what you typed
+   _(2026-11-11)_.
 
 ![The New Donor form with Donor Type Business: Organization Name Oakville Lumber & Supply filled in, Contact First Name and Contact Last Name left empty because a contact is optional, and the email and address fields](./images/12-17-donor-business.png)
 

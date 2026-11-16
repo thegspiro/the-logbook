@@ -113,6 +113,16 @@ responded to, call response rate (hidden when call tracking is off),
 administrative hours, skills tests passed, certifications held, and positions
 held.
 
+_Updated 2026-11-14._ The list is grouped by area (Training, Business
+meetings, Events, Shifts, Calls, Administrative hours, Membership) and also
+offers field shift evaluation scores, certifications expiring soon, event
+attendance by type, and waiver requests for training sessions and business
+meetings (shown, never scored). A source whose module or call tracking is off
+reads "(turned off)". When the score bands leave values uncovered, the editor
+says "No rating is suggested for values …". Each figure now shows the counts
+behind it ("6 of 8 meetings attended"), on screen and in the PDF, and the
+call response rate leaves out calls during a leave or a gap in membership.
+
 _Updated 2026-11-10._ **Training session attendance** follows the
 session-attendance requirement that applies to the member: only the sessions
 linked to it, attendance as finalized, every waiver and leave excusing a

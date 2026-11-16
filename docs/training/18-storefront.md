@@ -403,7 +403,7 @@ and send. They share a template, so word it to read for both. The standard
 wording does.
 
 Everything the store sends is logged in **Communications → Message History**,
-with a type beginning **storefront_**. So "did she ever get the reminder?" has
+with a type beginning `storefront_`. So "did she ever get the reminder?" has
 an answer.
 
 ![The Department Store console on Store Settings: the activity counts, the four area cards with Store Settings chosen, and the Settings page with Store is live for members, the storefront details, the payment method checkboxes and the three choices under What happens to an unpaid order?](./images/18-02-store-admin.png)
@@ -547,8 +547,9 @@ Select **Department Store** in the sidebar.
    current catalog, and a line whose product or size is no longer offered is
    dropped. The saved cart is removed when you place the order, when the window
    closes, and at sign-out. _(2026-10-27)_
-6. On the checkout page, choose pickup or shipping. Shipping asks for an
-   address.
+6. On the checkout page, under **Pickup or shipping**, choose **Pick up** or
+   **Ship to me**. Shipping asks for a **Shipping address**; leave it blank and
+   the box is flagged before anything is sent.
 7. Choose how you will pay.
 8. Add **Notes for the quartermaster (optional)** if you need to, then tap
    **Submit order**.
@@ -648,8 +649,29 @@ Open an order to work on it:
 | **Change status** → **Update status** | Moves the order on: Awaiting payment, Paid, Ordered from vendor, Ready for pickup, Fulfilled                                         |
 | **Send an update** → **Send update**  | Sends the member a note, in the app, by email, or both                                                                               |
 | **Internal notes** → **Save notes**   | Notes only staff see                                                                                                                 |
+| **Cancel order**                      | For an order that will not be filled. Takes an optional **Reason for cancelling (shown to the member)** and emails the member        |
 
 The order also shows its **Timeline**: everything that has happened to it.
+
+**Delivery details** _(2026-11-14)_. The order shows whether the member chose
+pickup or **Ship to the member**, the address for a shipped order, the
+**Member's notes** from checkout, and the subtotal, tax and shipping. The
+member sees the same on **My Orders** (**Ship to me**, **Your notes**).
+
+**Which status changes are allowed** _(2026-11-14)_. Moving an order forward is
+always offered. Moving it back is only for correcting fulfilment, between
+**Ordered from vendor**, **Ready for pickup** and **Fulfilled**; moving back out
+of **Fulfilled** clears its fulfilled date. An order never moves back to
+**Awaiting payment** or **Paid**: those follow the payments recorded on it. A
+refused change shows the reason, such as _"An order cannot move back from ordered
+from vendor to paid. Its payment stages follow the payments recorded against
+it."_ Picking the status the order already has does nothing and sends no email.
+
+**Cancelling an order** _(2026-11-14)_. **Cancel order** asks first, naming the
+order, with **Keep order** and **Cancel order**. If money has been recorded, it
+says so: cancelling does not refund it. Use **Refund** to record the money going
+back; a cancelled order still offers **Refund**. A cancelled order cannot be
+reopened or change status.
 
 To move many orders at once, select them on the **Orders** tab. Then use
 **Mark selected paid** or **New status for selected orders**. "Everything's in,

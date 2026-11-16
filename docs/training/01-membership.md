@@ -335,17 +335,17 @@ member in without showing their card.
 
 **Right column:**
 
-| Section                 | What it shows                                                                            | Who sees it                                                                               |
-| ----------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| **Contact Information** | Email, personal email, phone, mobile                                                     | Depends on the department setting and the member's own choices (see below)                |
-| **Address**             | Home address                                                                             | Where visible                                                                             |
-| **Emergency Contacts**  | The member's emergency contacts                                                          | **Only the member and officers who can manage members.** No setting can show it to others |
-| **Membership**          | Rank, member class and membership status, station, platoon and "Member since"            | Everyone; officers also see the status here                                               |
-| **Service History**     | Credited and earlier length of service, stint by stint                                   | The member, and officers who can manage members                                           |
-| **Reports To**          | Who the member reports to now, and who they reported to before                           | The member, and officers who can manage members                                           |
-| **Qualifications**      | What the member is certified to do (EMT, Paramedic, Driver / Operator, Firefighter I/II) | Officers who can manage members only                                                      |
-| **Quick Stats**         | Training, hours and equipment counts                                                     | Only the counts you are allowed to see                                                    |
-| **Leave of Absence**    | Any active leave periods                                                                 | The member, and officers who can manage members                                           |
+| Section                 | What it shows                                                                                                       | Who sees it                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Contact Information** | Email, personal email, phone, mobile                                                                                | Depends on the department setting and the member's own choices (see below)                |
+| **Address**             | Home address                                                                                                        | Where visible                                                                             |
+| **Emergency Contacts**  | The member's emergency contacts                                                                                     | **Only the member and officers who can manage members.** No setting can show it to others |
+| **Membership**          | Rank, member class and membership status, station, platoon and "Member since"                                       | Everyone; officers also see the status here                                               |
+| **Service History**     | Credited and earlier length of service, stint by stint                                                              | The member, and officers who can manage members                                           |
+| **Reports To**          | Who the member reports to now, and who they reported to before                                                      | The member, and officers who can manage members                                           |
+| **Qualifications**      | What the member is certified to do (EMT, Paramedic, Driver / Operator, Firefighter I/II)                            | Officers who can manage members only                                                      |
+| **Quick Stats**         | Training, hours and equipment counts                                                                                | Only the counts you are allowed to see                                                    |
+| **Leave of Absence**    | Any active leave periods. On your own profile, **Ask for leave** when your department takes requests _(2026-11-14)_ | The member, and officers who can manage members                                           |
 
 Date of birth is restricted the same way as emergency contacts.
 
@@ -575,8 +575,10 @@ button on the **Members** page, which goes to the same place.
 
 **Status.** Under Department Information, **Status** offers **Active** (the
 default), **Inactive** and **On Leave**. The member is created with the one
-you pick. Retired and dropped are not offered. Set those from the member's
-profile once they are added, so their service history is recorded.
+you pick. A member added **Inactive** or **On Leave** cannot sign in until
+their status is set to Active. Retired and dropped are not offered. Set those
+from the member's profile once they are added, so their service history is
+recorded.
 
 **Rank or Position?** They share names, such as Chief or Captain, and both
 give access. The form explains each one:
@@ -832,22 +834,22 @@ file.
 
 **CSV columns.** The template has all of them. The order does not matter.
 
-| Column                                                                           | Notes                                                                           |
-| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `firstName`, `lastName`                                                          | **Required**                                                                    |
-| `email`                                                                          | **Required.** Must be unique in the department                                  |
-| `middleName`                                                                     |                                                                                 |
-| `membershipNumber`                                                               | Must be unique. Leave blank to have one given when automatic numbering is on    |
-| `username`                                                                       | Sign-in name. If blank, it is the part of the email before `@`                  |
-| `dateOfBirth`, `joinDate`                                                        | Write dates as `YYYY-MM-DD` or `MM/DD/YYYY`                                     |
-| `street`, `city`, `state`, `zipCode`                                             | Put double quotes around any value that has a comma in it                       |
-| `primaryPhone`, `secondaryPhone`                                                 |                                                                                 |
-| `membershipType`                                                                 | `probationary`, `regular`, `life` or `administrative`. Blank imports as regular |
-| `rank`, `station`, `platoon`                                                     |                                                                                 |
-| `role`                                                                           | Must match a role name set up under **Roles**                                   |
-| `emergencyName1`, `emergencyRelationship1`, `emergencyPhone1`                    | Fill in all three, or leave all three blank                                     |
-| `emergencyEmail1`                                                                |                                                                                 |
-| `emergencyName2`, `emergencyRelationship2`, `emergencyPhone2`, `emergencyEmail2` | Optional second contact, same rule                                              |
+| Column                                                                           | Notes                                                                                                                                                              |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `firstName`, `lastName`                                                          | **Required**                                                                                                                                                       |
+| `email`                                                                          | **Required.** Must be unique in the department                                                                                                                     |
+| `middleName`                                                                     |                                                                                                                                                                    |
+| `membershipNumber`                                                               | Must be unique. Leave blank to have one given when automatic numbering is on. The page's instructions name the next number, or say numbering is off _(2026-11-13)_ |
+| `username`                                                                       | Sign-in name. If blank, it is the part of the email before `@`                                                                                                     |
+| `dateOfBirth`, `joinDate`                                                        | Write dates as `YYYY-MM-DD` or `MM/DD/YYYY`                                                                                                                        |
+| `street`, `city`, `state`, `zipCode`                                             | Put double quotes around any value that has a comma in it                                                                                                          |
+| `primaryPhone`, `secondaryPhone`                                                 |                                                                                                                                                                    |
+| `membershipType`                                                                 | `probationary`, `regular`, `life` or `administrative`. Blank imports as regular                                                                                    |
+| `rank`, `station`, `platoon`                                                     |                                                                                                                                                                    |
+| `role`                                                                           | Must match a role name set up under **Roles**                                                                                                                      |
+| `emergencyName1`, `emergencyRelationship1`, `emergencyPhone1`                    | Fill in all three, or leave all three blank                                                                                                                        |
+| `emergencyEmail1`                                                                |                                                                                                                                                                    |
+| `emergencyName2`, `emergencyRelationship2`, `emergencyPhone2`, `emergencyEmail2` | Optional second contact, same rule                                                                                                                                 |
 
 Only `firstName`, `lastName` and `email` are required. A file with just those
 three columns imports. Older templates called the membership number column
@@ -867,18 +869,19 @@ once**, and each reason names the column and the value that is wrong.
 
 What is checked before anything is created:
 
-| Check                                      | Example message                                                                       |
-| ------------------------------------------ | ------------------------------------------------------------------------------------- |
-| Required fields present                    | `Missing required field: lastName`                                                    |
-| Email looks like an email                  | `email "5715551212" is not an email address — that looks like a phone number, …`      |
-| Date format                                | `dateOfBirth "31/12/1990" is not a recognized date — use YYYY-MM-DD or MM/DD/YYYY`    |
-| Field lengths                              | `rank is 104 characters long; the limit is 100`                                       |
-| Username at least 3 characters             | Includes a username made from a short email, even if your file has no username column |
-| Emergency contacts complete                | Names both columns by number                                                          |
-| `role` matches a role that is set up       | `role "Engine Operator" does not match any role configured under Roles — …`           |
-| Duplicates **inside the file**             | `email "…" is already used on line 14 of this file`                                   |
-| Duplicates **against your current roster** | `membershipNumber "214" already belongs to J. Alvarez in this organization — …`       |
-| Row longer than the header                 | `Row has 21 values but the header has 19 columns, …`                                  |
+| Check                                              | Example message                                                                                                                    |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Required fields present                            | `Missing required field: lastName`                                                                                                 |
+| Email looks like an email                          | `email "5715551212" is not an email address — that looks like a phone number, …`                                                   |
+| Date format                                        | `dateOfBirth "31/12/1990" is not a recognized date — use YYYY-MM-DD or MM/DD/YYYY`                                                 |
+| Field lengths                                      | `rank is 104 characters long; the limit is 100`                                                                                    |
+| Username at least 3 characters                     | Includes a username made from a short email, even if your file has no username column                                              |
+| Emergency contacts complete                        | Names both columns by number                                                                                                       |
+| `role` matches a role that is set up               | `role "Engine Operator" does not match any role configured under Roles — …`                                                        |
+| No rank on an administrative member _(2026-11-13)_ | `rank "Captain" is set on an administrative member, who holds no operational rank — clear the rank or make the member operational` |
+| Duplicates **inside the file**                     | `email "…" is already used on line 14 of this file`                                                                                |
+| Duplicates **against your current roster**         | `membershipNumber "214" already belongs to J. Alvarez in this organization — …`                                                    |
+| Row longer than the header                         | `Row has 21 values but the header has 19 columns, …`                                                                               |
 
 The review tells you the count before anything happens, for example
 **"2 of 6 rows are ready; 4 will be skipped"**. It previews the rows that will
@@ -2135,12 +2138,34 @@ The Logbook reduces requirements counted in hours, shifts or calls in
 proportion to the time the member was away.
 
 **Example.** A requirement asks for 12 hours of training over 12 months. A
-member is on leave for 3 months. They now need 9 hours (12 × 9 ÷ 12).
+member is on leave for 3 whole months. They now need 9 hours (12 × 9 ÷ 12).
 
-- A month counts as "away" when the leave covers **15 days or more** of that
-  calendar month.
-- A month with fewer than 15 days of leave still counts in full.
-- Overlapping leaves and waivers are not counted twice.
+- A month the leave covers entirely is always excused.
+- A month the leave covers only partly is decided by the department's
+  **Months on leave** rule. The default, **Full month (default)**, excuses the
+  whole month if the leave covers any day of it. See
+  [Months on leave — the department rule](./02-training.md#months-on-leave--the-department-rule-2026-11-02).
+  _(2026-11-02: before then, a month was excused only when the leave covered
+  15 or more of its days.)_
+- Overlapping leaves and waivers are not counted twice. A recorded leave and
+  the training waiver it creates count as one leave, not two _(2026-11-13)_.
+- A leave created with only **Meeting Attendance & Shift Requirements** ticked
+  excuses no training month. Before 2026-11-13 it still excused them; members
+  with such a leave now owe their full training target for those months.
+- Shift and call targets are rounded down. When leave brings one to zero, the
+  requirement card reads **Nothing owed (on leave)** _(2026-11-14)_.
+
+**What the member sees** _(2026-11-14)_. **My Training** lists the member's
+own leaves (type and dates, never the reason) and the department's rule, in
+the same **Leave of absence** box the officer sees. A leave that keeps training
+requirements reads "(training requirements stay in force)".
+
+**The member is emailed** _(2026-11-14)_ when an officer records, changes or
+removes their leave, with its dates and what it does to their training
+requirements. The email never includes the reason or the type, and members
+cannot switch it off. An officer changing their own leave is not emailed. The
+wording is the **Leave of Absence Notice** template under **Communications →
+Email Templates → Training & Certifications**.
 
 ### Viewing Leaves
 
@@ -2179,12 +2204,13 @@ When you create a leave with **Training Requirements** ticked, The Logbook
 
 ### Leave reminders, the open-ended digest and leave requests _(2026-11-14)_
 
-Set in **Members → Administration → Settings → Leave of Absence**, by
-officers who can manage member profiles. Every change is recorded in the audit
-log.
+Set in **Members Admin → Settings → Leave of Absence**
+(`/members/admin/settings/leave`), by officers who can manage member profiles.
+The **Waivers** page links to it. Every change is recorded in the audit log.
 
-**Before a leave ends.** The member is emailed the chosen number of days
-before their leave's end date (7 by default; 0 sends none), saying when their
+**Before a leave ends.** Under **Remind the member this many days ahead**, the
+member is emailed that many days before their leave's end date (7 by default;
+0 sends none), saying when their
 training requirements apply again under the department's **Months on leave**
 rule. With **Copy the officers who manage leave** on (the default), everyone
 who can record leave is emailed the same day. Each leave is reminded once;
@@ -2194,18 +2220,25 @@ moving its end date earns a new reminder.
 leave receive one email listing every leave with no end date that began six or
 more months ago, so none is forgotten. Nothing is sent when there are none.
 
-**Leave requests** (off until the department turns them on):
+**Leave requests** (off until the department turns on **Members may ask for
+leave**):
 
-1. A member opens **Leave Requests** (from **Ask for leave** on their own
-   profile, or `/members/leave-requests`), chooses the kind of leave and its
-   dates (or **I don&rsquo;t know the last day yet**), adds a reason if they
-   wish, and sends it.
+1. A member opens **Leave Requests** (from **Ask for leave** on the **Leave of
+   Absence** card of their own profile, or `/members/leave-requests`). Under
+   **Ask for leave** they choose the **Kind of leave**, the **First day** and
+   **Last day** (or tick **I don&rsquo;t know the last day yet**), add a
+   **Reason (optional)**, and select **Send request**. No permission is needed.
+   While requests are off, the page says the department records leave through
+   its officers.
 2. The approvers are emailed. Who they are is the department's choice of
    positions under **Who decides**. When nobody else holds those positions,
    the request goes to the Chief, then to everyone who can record leave. A
    member never decides their own request.
 3. Each approver opens **Leave Requests**, reads the reason under **To
-   decide**, and approves or denies, with an optional note to the member.
+   decide**, adds a **Note to the member (optional)**, and selects **Approve**
+   or **Deny** (Deny asks to confirm). Officers who can manage member profiles
+   can tick **Show decided requests** to see past ones. A position nobody
+   holds is marked **vacant** in the settings.
 4. How many must agree is the department's **How they decide**:
 
    | Choice                      | Approved when                         | Denied when                         |
@@ -2220,9 +2253,10 @@ more months ago, so none is forgotten. Nothing is sent when there are none.
 5. An approval records the leave exactly as an officer would: the training
    waiver, the dropped shift assignments, and the member's **Leave of absence
    recorded** email. A denial emails the member with the approver's note. A
-   member can withdraw a request while it waits.
+   member can **Withdraw** a request while it waits, under **Your requests**.
 
-The reason is shown to the member and their approvers only. No email, from
+The reason is shown to the member, their approvers and officers who can manage
+member profiles only. No email, from
 any of these, carries a leave's reason or its type. The wording of each is a
 template under **Communications → Email Templates → Training &
 Certifications**.
@@ -2519,19 +2553,23 @@ count the **Needs attention** list is about. See
 
 ### Where Each Lifecycle Task Lives
 
-| Task                                         | Where to do it                                                                                                              |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **Change a member's status**                 | Member profile → status control. Archiving happens automatically; it is not a choice                                        |
-| **Create a leave of absence**                | [Waivers](#waivers)                                                                                                         |
-| **See a leave of absence**                   | Member profile (read-only card), and on the Waivers page and Training Waivers                                               |
-| **Change a leave's dates or reason**         | Waivers → Active Waivers → **Edit**                                                                                         |
-| **End a leave of absence**                   | Waivers → Active Waivers → **Deactivate**                                                                                   |
-| **Find and reactivate an archived member**   | Members list → status filter **Archived** → **Reactivate**, or the member's profile                                         |
-| **Chase property a former member still has** | Inventory → Member Equipment, or Members Admin → Member Management. Use **Send due reminders** to email everyone who is due |
-| **Set up membership tiers**                  | Members Admin → Settings → Membership Tiers (see [Membership Tiers](#membership-tiers))                                     |
+| Task                                         | Where to do it                                                                                                                  |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Change a member's status**                 | Member profile → status control. Archiving happens automatically; it is not a choice                                            |
+| **Create a leave of absence**                | [Waivers](#waivers)                                                                                                             |
+| **See a leave of absence**                   | Member profile (read-only card), and on the Waivers page and Training Waivers                                                   |
+| **Change a leave's dates or reason**         | Waivers → Active Waivers → **Edit**                                                                                             |
+| **End a leave of absence**                   | Waivers → Active Waivers → **Deactivate**                                                                                       |
+| **Ask for leave (a member)**                 | Own profile → **Ask for leave**, or `/members/leave-requests`, when the department takes requests                               |
+| **Decide a leave request**                   | **Leave Requests** → **To decide** (see [Leave requests](#leave-reminders-the-open-ended-digest-and-leave-requests-2026-11-14)) |
+| **Set leave reminders and who decides**      | Members Admin → Settings → Leave of Absence                                                                                     |
+| **Find and reactivate an archived member**   | Members list → status filter **Archived** → **Reactivate**, or the member's profile                                             |
+| **Chase property a former member still has** | Inventory → Member Equipment, or Members Admin → Member Management. Use **Send due reminders** to email everyone who is due     |
+| **Set up membership tiers**                  | Members Admin → Settings → Membership Tiers (see [Membership Tiers](#membership-tiers))                                         |
 
 > **Tip.** A leave of absence lives on the Waivers page, not on the member's
-> profile. The profile only shows it.
+> profile. The profile only shows it, and an approved leave request is
+> recorded there exactly as an officer's would be.
 
 ---
 

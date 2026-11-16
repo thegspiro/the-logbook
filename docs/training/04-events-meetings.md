@@ -297,7 +297,9 @@ wrong times. Confirm with **Withdraw request** (or **Keep it** to back out).
 
 **Deciding it (organizers).** The event's organizer, its alternate and
 officers who can manage events see an **Attendance Requests** card on the
-event page. Each request shows the member, when they asked, their reason and
+event page. So does a member a request was sent to because nobody else could
+be reached (see **Who is told**, below), even without permission to manage
+events; they decide the requests sent to them _(2026-11-11)_. Each request shows the member, when they asked, their reason and
 the times they gave, with **Approve** and **Decline**. A request the member
 withdrew and sent again says so — _"Withdrawn and sent again once"_ (or
 _twice_) — which is why you may have been told about it more than once.
@@ -775,10 +777,15 @@ page asks for an email address instead of a name:
 
 Anyone else is stopped with a message rather than signed in:
 
-| The email belongs to                                   | The guest is told                      |
-| ------------------------------------------------------ | -------------------------------------- |
-| A member account (active or probationary)              | To scan the **member** QR code instead |
-| Nobody — or a withdrawn, rejected or on-hold applicant | To see a member of staff               |
+| The email belongs to                                                              | The guest is told        |
+| --------------------------------------------------------------------------------- | ------------------------ |
+| Nobody, a member account, or a withdrawn, rejected or on-hold applicant           | To see a member of staff |
+
+_(2026-11-08)_ A member's own email gets the same answer as an unknown one:
+_"We couldn't find you. Please see a member of staff to sign in."_ Telling
+members to scan the member QR code also told anyone holding the public link
+which emails belong to your members. A member who reaches this page should scan
+the event's member QR code.
 
 > **First-time visitors are not signed in by the kiosk at these events.** A
 > recruitment event's kiosk records the attendance of people already in your
@@ -951,6 +958,10 @@ Choose another room or time.
 is ready, open it and select **Publish**. Editing and saving a draft keeps it a
 draft; before 2026-10-26 the edit form did not know the event was a draft, and
 saving it published it.
+
+_(2026-11-15)_ Nobody can check in to a draft: a QR scan, an NFC tap and a
+kiosk all refuse it with "Cannot check in to an unpublished event", and its QR
+code shows nothing about the event. Publish it first.
 
 **Lead time when you edit.** An event saved without a lead time opens the form
 with the value the server uses: 15 minutes on a Window-type event, 60 on others.
@@ -2262,6 +2273,12 @@ the weekly open-items list. Changing them needs the settings permission.
 
 ![Minutes Settings, Reminders: the email switch, the first-reminder and repeat-while-overdue day fields, and the weekly open-items list switch](./images/04-75-minutes-settings-reminders.png)
 
+**Changing the wording** _(2026-11-14)_. The minutes and action-item emails
+are templates you can edit under **Communications → Email Templates**, in the
+**Meetings & Minutes** group: **Minutes Ready for Review**, **Action Items
+Assigned**, **Action Item Reminder (Minutes)**, **Open Action Items Digest**
+and **Action Item Reminder (Meetings)**. Until then their wording was fixed.
+
 ### Attendance Dashboard (Secretary)
 
 **Who can see it:** officers with the **Manage meetings** permission.
@@ -2275,7 +2292,17 @@ opens **Meeting Attendance**.
    many members may vote, and how many are blocked by attendance.
 3. The table lists each active member: attendance percentage, meetings
    attended out of those counted, absences, waived meetings, meetings during
-   leave, and whether they may vote (with the reason when not).
+   leave, and **Voting**: **Eligible** or **Not eligible**, with the reason
+   when not.
+
+_(2026-11-13)_ **Voting** and the two voting tiles report whether the member
+could vote in a new election held at a regular business meeting, under the
+**Regular business meeting** rules on **Election Settings → Voter
+Eligibility** (see
+[Elections → Voter Eligibility](./14-elections.md#voter-eligibility-2026-10-29)).
+It is the same check a ballot applies, so this screen and an election cannot
+disagree. Those rules carry their own look-back; the **Period** you choose here
+changes only the attendance columns.
 
 A member with no meeting to count reads **Not applicable**, not a
 percentage.
@@ -2290,8 +2317,8 @@ percentage.
 **The member's window** runs from the later of:
 
 - the start of the look-back period, in calendar months — the **Period** you
-  chose here, or, for the voting check, **Over the last (months)** on the
-  member's membership tier _(2026-10-29)_ — and
+  chose here, or, for the voting check, the look-back in the voter rules —
+  and
 - the start of the member's current service — their latest service period,
   otherwise their hire date —
 
@@ -2301,8 +2328,7 @@ not charged with meetings held while they were away. Nobody is charged with
 next week's meetings. A meeting that is both waived and during a leave is
 left out once, not twice.
 
-This dashboard and the voting-eligibility check use the same calculation, so
-they always agree.
+This dashboard and the voting-eligibility check count meetings the same way.
 
 **Not yet on this screen:** granting a waiver for one meeting. Waivers are
 granted from the meeting.
@@ -2656,7 +2682,9 @@ connected to the pipeline — one made by the generate button, or any form
 given an **Event Request** integration. Your other published forms (a
 near-miss report, a gear-sizing survey) never appear there. Answers to a form
 without that integration are kept as form submissions; they do not open
-requests.
+requests. A draft form carries the warning "This form must be published
+before it can accept submissions." with a **Go to Forms to edit and publish**
+link to the Forms list _(2026-11-14)_.
 
 Officers who can manage events see this page without needing any Forms
 permission.

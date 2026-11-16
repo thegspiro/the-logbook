@@ -372,15 +372,6 @@ person.
 The **My Shifts** tab shows only your own shifts. It has three views:
 **Upcoming**, **Past** and **Hours**.
 
-**Past view by year and month** _(2026-11-09)_. **Past** opens on your newest
-year. A **Year** dropdown picks another year or **All time**, and the three
-stat tiles follow it. A bar chart shows hours worked by month (by year under
-**All time**); tap a bar to jump to that month, or to open that year. Shifts are
-listed under month headings that stay pinned as you scroll and carry the
-month's shift count and hours. Before, Past was one flat list with no year on
-any card, so a long-serving member saw "Sat, Oct 11" twice with nothing to tell
-the years apart. _Screenshot: replace the Past view image._
-
 For each shift you see:
 
 - the date and time;
@@ -405,10 +396,11 @@ month headers such as **December 2026 · 2 shifts**. The year is in every header
 so a schedule that runs past New Year reads December, then January. The cards
 and their Confirm, Decline, Swap and Details actions are unchanged.
 
-**Past** opens on your newest year. Pick another year, or **All time**, from the
-**Year** dropdown; the three stat tiles follow it. A bar chart shows hours worked
-by month (by year under **All time**), and tapping a bar jumps to that month.
-Shifts are listed under month headers carrying the month's shift count and hours,
+**Past view by year and month** _(2026-11-09)_. **Past** opens on your newest
+year. Pick another year, or **All time**, from the **Year** dropdown; the three
+stat tiles follow it. A bar chart shows hours worked by month (by year under
+**All time**); tap a bar to jump to that month, or to open that year. Shifts
+are listed under pinned month headers carrying the month's shift count and hours,
 and a header always equals the sum of the **Xh worked** pills under it. Shifts you
 declined or that were cancelled no longer appear in Past, because you did not work
 them; a seat you declined but then worked still shows, with its hours.
@@ -584,6 +576,18 @@ the shift carries a badge: **Evaluation needed**, **Evaluation started** or
 **Evaluated**. The agency's preceptor fills out the paper form, and a training
 officer enters it. Nothing about logging the shift changes, and nothing waits
 on the evaluation.
+
+**Preceptor link** _(2026-11-13)_. While a shift reads **Evaluation needed**
+or **Evaluation started**, it has a **Preceptor link** button. It opens a
+dialog with a QR code and the **Link**, which you can **Copy**, or type the
+**Preceptor's email (optional)** and select **Make and email link**. The
+preceptor opens it without an account, enters their name, fills out the form
+and submits it once. The link works for the number of days your department
+sets after the shift ends (7 by default) and says until when. **Make a new
+link** stops the old one; **Turn off link** stops it outright. A training
+officer can make the same link. A shift still **Awaiting approval** can be
+evaluated too, but the credit waits for the approval. See
+[Training > Shifts on an outside agency's unit](./02-training.md#shifts-on-an-outside-agencys-unit-2026-11-02).
 
 > **What if an old entry has only a date and hours?** Some entries were logged
 > that way. They open with _"This shift was logged as a date and hours,
@@ -1427,7 +1431,9 @@ work, see [Equipment Check System](#equipment-checks).
 training program, or if they were assigned to a **Training position** seat
 (see [Training positions](#training-positions-on-the-crew)). Members with
 neither get no draft. If one trainee's draft fails, the others still get
-theirs.
+theirs. Only crew who took the shift (**Assigned** or **Confirmed**) get one;
+a trainee marked **No-show**, or still **Pending**, gets no draft
+_(2026-11-14)_.
 
 #### After close-out
 
@@ -2031,9 +2037,15 @@ Drafts are also made automatically when a shift is closed out. See
 Shift reports are built to survive a poor signal.
 
 **Your work is saved on the device as you type.** This covers the shift you
-picked, all the fields, who is ticked, each trainee's evaluation and the
-remarks. If the connection drops, the tab closes or the browser crashes, open
-the same shift again and your work comes back.
+picked, all the fields, who is ticked, each trainee's evaluation, each
+member's calls and the remarks. If the connection drops, the tab closes or the
+browser crashes, open the same shift again and your work comes back.
+
+**Going to a shift evaluation and back keeps it all** _(2026-11-14)_. The
+report also saves the moment you leave it, for example by following a
+trainee's evaluation link. Coming back restores every trainee's rating, notes,
+skills and tasks, and each member's calls, not just the crew and the
+narrative. Crew no longer on the shift are skipped.
 
 - The device keeps up to 20 saved forms. When there are more, the oldest is
   removed.
@@ -2254,6 +2266,18 @@ Pick one section at a time from the list. There are seven:
 > file the reports first; an officer with **Manage schedules** can tick **Close
 > out anyway** and give a reason, which goes on the record. The box only
 > applies while **Enable post-shift validation** is on.
+>
+> A trainee whose program has a required shift evaluation form blocks
+> close-out the same way until the evaluation is submitted. The close-out
+> screen lists them under _"A shift evaluation is still needed for:"_ with
+> **Open the shift report to fill them in**. See
+> [Training > Shift Evaluations](./02-training.md#shift-evaluations-2026-10-31--11-01).
+>
+> **No-show and pending crew are not asked** _(2026-11-14)_. Only crew who took
+> the shift (**Assigned** or **Confirmed**) need a trainee report or a shift
+> evaluation before close-out. A trainee marked **No-show**, or still
+> **Pending**, no longer blocks it. The Shift Completion Report still lists
+> pending members, so you can file for one who did work.
 
 The reminder goes only to shifts that have a Shift Officer. In departments
 that record a call count at close-out, it also asks the officer to record the
@@ -3667,6 +3691,13 @@ once email is ticked.
 | **Shift Assignment Alerts**        | The member, when an officer assigns them to a shift                                             |
 | **Start-of-Shift Reminders**       | Members assigned to a shift that is about to start                                              |
 | **Equipment Check Alerts**         | Chosen ranks and the shift officer, when an equipment check fails                               |
+
+**Shift Decline / Drop Alerts** _(2026-11-11)_. A rank you pick reaches every
+current member who holds that position, including a Chief seeded as **Fire
+Chief**; former members are never told. A department that has never saved this
+group gets the boxes the screen already shows ticked (**Chief**, **Deputy
+Chief** and **Captain**). Before, those departments told nobody. Equipment
+Check Alerts match ranks the same way.
 
 **Shift Assignment Alerts.** The in-app notice gives the seat, the shift date
 and its start time in your department's time zone. If the shift has

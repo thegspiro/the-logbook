@@ -876,7 +876,8 @@ The maintenance types offered are your department's own list, set up in
 2. Select **New Record**. The dialog opens over the middle of the screen.
 3. On the department-wide page, choose the **Facility**.
 4. Fill in **Description** and **Maintenance Type** (both required). If you
-   leave out the type, the form stops you before saving.
+   leave out the type, the form stops you before saving, with _"Choose a
+   maintenance type."_ under the field.
 5. Add the **Scheduled Date** or **Due Date**, and if you like **Performed
    By**, **Vendor**, **Cost**, **Work Order #** and notes.
 6. Select **Create Record** (**Save Changes** when editing).
@@ -919,6 +920,13 @@ To keep the inspector's report, upload it on the facility's
 Every facility dialog's save button names what it saves: **Create Record**,
 **Create Inspection**, **Save Room**, **Save System**, **Save Contact**. When
 editing, it reads **Save Changes**.
+
+**A refused save points at the field** _(2026-11-11)_. In the maintenance,
+inspection, room, system and compliance checklist forms, a missing or refused
+value is shown under its own field rather than in a passing message. Closing
+or cancelling one of these forms after typing in it asks _"Discard your
+changes?"_: **Keep editing** returns to the form, **Discard changes** closes
+it.
 
 ![Facility inspections table with type, date, inspector, and result](./images/06-14-facility-inspections.png)
 

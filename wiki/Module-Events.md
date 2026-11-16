@@ -587,10 +587,12 @@ The real application form is what the follow-up email links to.
 
 At an event **with** the pipeline switch the page is email-first
 _(2026-10-25)_. The guest enters an email; an **active** applicant is shown their
-first name and last initial ("Is this you, Jane S.?") and confirms; a member
-account (active or probationary) is told to scan the member QR code; anyone else
-— including a withdrawn, rejected or on-hold applicant — is asked to see a member
-of staff. **The kiosk opens no new applicants at these events**, and the typed
+first name and last initial ("Is this you, Jane S.?") and confirms; anyone else
+— a member account, a withdrawn, rejected or on-hold applicant, or an unknown
+address — is asked to see a member of staff. _(2026-11-08)_ A member account
+used to be told to scan the member QR code, which let anyone holding the public
+link test which addresses belong to members; the audit row still records the
+true outcome. **The kiosk opens no new applicants at these events**, and the typed
 `guest-check-in` endpoint refuses them with `LB-EVT-006`, so hiding the form is
 not the only thing stopping it. The confirm call carries a ten-minute signed
 token bound to the applicant, event, room and department; the browser never

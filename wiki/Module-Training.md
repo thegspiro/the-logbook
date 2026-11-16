@@ -62,6 +62,14 @@ program enrollments, external training integrations, and compliance reporting.
   proportional requirement adjustment. Supports permanent waivers (no end date),
   a New Member waiver type, and multi-select "Applies To" (Training + Meetings +
   Shifts can be combined)
+- **Session Waiver Requests** _(2026-11-11)_ — a member asks to be excused from
+  one training session that counts toward their attendance requirement
+  (**Request to be excused** on the event page; **My Training > My Waiver
+  Requests**). Policy at **Training Admin > Settings & Data > Session
+  Waivers**; deciders use **Training Admin > Records > Waiver Requests** or
+  `/attendance-waivers/{id}`, which never decides on load. Optional supporting
+  documents, emails at each step, a seven-day expiry. See
+  `backend/app/docs/TRAINING_WAIVERS.md`, "Session Waiver Requests"
 - **Bulk Record Creation** — Up to 500 records per request with duplicate
   detection (same member + course name + completion date within ±1 day)
 - **Rank & Station Snapshots** — `rank_at_completion` and
@@ -913,6 +921,29 @@ shared table is `EVALUATION_REQUIREMENT_TARGETS` in
   a program or the general-form setting names the form; an inactive form is
   refused as a new general form or on program create/update (a program already
   holding one keeps it). Existing 400s; no API shape change.
+- **Linked department requirements** (#4311, 2026-11-14). A department-level
+  `evaluated_shifts`, `transports` or `refusals` requirement linked into a
+  program is graded in `training_compliance.py` from
+  `load_evaluation_credits`, not from training records. An evaluation counted
+  for several programs counts once; general-form evaluations count.
+- **Worked crew only** (#4300). `WORKING_ASSIGNMENT_STATUSES` (Assigned,
+  Confirmed) decides who close-out asks for a trainee report or an evaluation;
+  no-show and pending crew are not asked and get no draft report.
+- **Review fixes** (#4275, 2026-11-13). A department shift counts only toward
+  enrollments begun by its date (`_Scope.as_of`); under required report review
+  a member with no report sees the evaluation once the shift is finalized; a
+  COMPLETED requirement keeps taking credit and reopens to In progress when
+  credit falls below target (a manual completion stays); waiver proration
+  rounds evaluation targets to whole units; an edit to a submitted evaluation
+  is held to the submission rules.
+- **Preceptor links** (#4264, migration `533f8aba187e`). For an outside shift,
+  the member or a training manager makes a single-use, no-login link
+  (`/shift-evaluation/:token`), shown as a QR code, copied or emailed (10
+  emails per member per hour). It stays open
+  `training_module_configs.shift_evaluation_link_days` (default 7, 1–60) after
+  the shift; one open link per evaluation; rejecting the shift or the member
+  leaving closes it. Outside shifts awaiting approval are now evaluated too;
+  credit and visibility wait for approval.
 
 ## Shift Completion Reports
 
@@ -1214,6 +1245,11 @@ certification or knowledge test is unchanged by leave, and the member's
 requirement _count_ never moves. No print page shows the leave period, the
 waived months or the adjusted target — the sheet reports the outcome, not the
 allowance behind it.
+
+_(2026-11-13, #4272)_ A recorded leave and the training waiver it writes are
+read as one leave, not as months both on leave and waived. A leave marked
+`exempt_from_training_waiver` (Applies To without **Training Requirements**)
+now excuses no training month; before, it still did.
 
 ---
 

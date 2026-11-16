@@ -548,7 +548,11 @@ with a type breakdown and average response time.
   it.**
 - **Only `ASSIGNED` and `CONFIRMED` crew are listed.** Every listed member gets
   the apparatus's full call count by default, so declined, pending and no-show
-  members are left off.
+  members are left off. _(2026-11-14)_ The same rule,
+  `WORKING_ASSIGNMENT_STATUSES` in `models/training.py`, now also decides who
+  needs a trainee report or a shift evaluation before close-out and who gets a
+  close-out draft report, so a no-show or pending trainee no longer blocks
+  close-out. A no-show still holds a seat for staffing, swaps and counts.
 - **Assigned members who never checked in are still listed**, with empty times
   to fill in, so the officer can give them hours and credit.
 - **A member credited with fewer calls than the apparatus ran gets a count, not
@@ -590,6 +594,16 @@ shift**:
   **Outside apparatus staffed** per-unit summary.
 - Reported **beside** worked hours (`external_*`), but **added into** each
   member's totals on the Shift Compliance report.
+- **Preceptor link** _(2026-11-13)_. An entry that needs a shift evaluation
+  (**Evaluation needed** / **Evaluation started**) has a **Preceptor link**
+  button. The member who logged it, or a `training.manage` holder, makes a
+  single-use, no-login link for the outside agency's preceptor, shown as a QR
+  code, copied or emailed. It stays open for
+  `shift_evaluation_link_days` after the shift ends (default 7, 1–60, in
+  Training's Shift Evaluations settings); making a new one or turning it off
+  stops the old one. The public page is `/shift-evaluation/:token`. An entry
+  still **Awaiting approval** can now be evaluated; its credit waits for the
+  approval. Table `shift_evaluation_links` (migration `533f8aba187e`).
 
 Tables `external_agencies`, `external_apparatus` and `external_shift_hours`;
 API under `/api/v1/scheduling/external-hours` (see
@@ -674,8 +688,13 @@ given hours manually.
 ### Drafts and offline submission
 
 - In-progress forms are saved to `localStorage` (shift, form values, crew
-  selections and evaluations, crew remarks, timestamp). Up to **20 drafts** are
-  kept; the oldest is evicted past that.
+  selections and evaluations, per-member calls, crew remarks, timestamp). Up to
+  **20 drafts** are kept; the oldest is evicted past that, and one older than
+  24 hours is discarded. _(2026-11-14)_ The draft is also written at once when
+  the form closes, so following a trainee's shift-evaluation link and coming
+  back restores everything, including the report's own fields; crew no longer
+  on the shift are skipped and the open shift is never replaced by the
+  draft's.
 - A submission made without connectivity is queued in **IndexedDB** with its
   full `BatchShiftReportCreate` payload, a queued timestamp and a retry count,
   and is sent when connectivity returns; a failed retry increments the counter

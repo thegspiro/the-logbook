@@ -1422,6 +1422,12 @@ and **Honorary** are left as you set them either way.
 Requirements saved before 2026-11-06 with **Retired** ticked keep it. Open one
 and untick **Retired** if retired members should no longer be graded on it.
 
+**Your department's own tiers are listed too** _(2026-11-14)_. After the
+built-in categories, **Member Categories** lists any membership tier your
+department added, such as Senior. A requirement scoped to Active and
+Probationary leaves out a Senior member unless you tick Senior as well, so
+check requirements saved before this date if you have custom tiers.
+
 ![A new requirement's Member Categories with Applies to all members unticked and Operational members selected: its check mark, and Active, Probationary and Life ticked while Retired, Administrative and Honorary are not](./images/02-135-requirement-operational-members.png)
 
 ### The Chief's override of a session attendance requirement
@@ -2429,6 +2435,12 @@ like any other training, and the monthly hours show it under the month's
   waiver was the reason), with the original and adjusted targets. **Show
   monthly hours** labels each excused month (see
   [Checking an Hours Requirement Month by Month](#checking-an-hours-requirement-month-by-month)).
+  _(2026-11-14)_ Shift and call requirements have the same breakdown, under
+  **Show monthly shifts** or **Show monthly calls**. A target that leave brings
+  down to zero reads **Nothing owed (on leave)**. My Training also lists the
+  member's own leaves and the department's rule for a partly covered month; a
+  leave that does not waive training is marked "(training requirements stay
+  in force)".
 - **The member's Training History page** (from their profile), for officers
   with `training.manage` — a **Requirements** section above the records lists
   the member's requirements with the same cards the member sees on My
@@ -2661,16 +2673,78 @@ This one page covers:
 - **Meeting and shift waivers** — leave meetings out of attendance figures,
   and keep members off the schedule, during leave.
 
-> **Coming next: members asking to be excused** _(2026-11-10)_. The Logbook
-> can now take a member's request to be excused from one training session that
-> counts toward a session-attendance requirement, and route it to the positions
-> your department chooses (falling back to the Chief). An approved request
-> takes that one session out of the member's held and attended counts. **There
-> is no screen for it yet**, and it is off until a training officer saves a
-> request policy (deadline, yearly cap, categories, whether a reason is
-> required, who decides). Until the screens ship, nothing changes for members.
-> The rules are in `backend/app/docs/TRAINING_WAIVERS.md`, under "Session
-> Waiver Requests".
+### Asking to be excused from a training session _(2026-11-11)_
+
+A member can ask to be excused from one training session that counts toward
+their session-attendance requirement. An approved request takes that session
+out of both what they attended and what was held, so missing it does not
+count against them. It is off until a training officer turns it on. The full
+rules are in `backend/app/docs/TRAINING_WAIVERS.md`, under "Session Waiver
+Requests".
+
+**Turning it on** (training officers with `training.manage`):
+
+1. Open **Training Admin > Settings & Data > Session Waivers**.
+2. Tick **Members may ask to be excused**. Off, members see no button and
+   nothing else changes.
+3. Under **Deadline to ask**, choose **Before the session starts**, **Up to 24
+   hours after it ends** or **Up to 7 days after it ends**.
+4. Under **Limit**, tick **Limit how many waivers a member can have** to set
+   **Most waivers per member** (1 to 365) and whether it is **Counted over**
+   **Each calendar year** or **Any 12 months in a row**. Only approved
+   requests count, including a denial the Chief overrode.
+5. Under **What a request asks for**, add **Reason categories** (such as
+   Work, Illness or Family) with **Add a category**, tick **A member must
+   choose a category** if one is needed, and set **Written explanation** to
+   **Not asked**, **Optional** or **Required**.
+6. Set **Supporting documents** to **Not taken**, **Optional** or
+   **Required**, and how long to **Keep documents for** (365 days unless you
+   change it).
+7. Under **Who decides**, tick the positions whose holders decide. With none
+   chosen, or nobody holding them, requests go to the Chief, and failing a
+   Chief the training managers.
+8. Select **Save**.
+
+**Asking** (any member):
+
+1. Open the training session's event page. When the session counts toward
+   your attendance requirement, a card reads "This session counts toward …
+   Can't make it? Ask to be excused.", with the deadline and, when your
+   department sets a limit, how many waivers you have left.
+2. Select **Request to be excused**. The **Ask to be excused** dialog shows
+   only the fields your department asks for: **Reason category**,
+   **Explanation** and **Supporting document**. Only you and the officers who
+   decide can see them.
+3. Select **Send request**.
+
+The card then shows the request as waiting, approved or not approved, with
+who decided and their note. While it is waiting you can **Withdraw request**
+and ask again before the deadline. A member who has checked in cannot ask,
+and the card says why when the deadline has passed or no waivers are left.
+Every request you have made is listed under **My Waiver Requests** on **My
+Training**.
+
+**Supporting documents.** A request can carry up to three documents (PDF,
+JPEG, PNG or HEIC, 10 MB each), filed with the request or added while it is
+waiting. Only the member and the people who decide it can open them, and the
+file name is not kept. They are deleted when the **Keep documents for**
+period ends after the decision; the request itself is kept.
+
+**Deciding** (the holders of the positions under **Who decides**, and the
+Chief and the President):
+
+1. Each new request is emailed to you with **Approve** and **Deny** buttons.
+   They open the request's page and only pre-select a choice: nothing is
+   decided until you confirm. The email never contains the member's reason.
+   Training officers can also open **Training Admin > Records > Waiver
+   Requests**, which shows how many are waiting on you.
+2. On the request's page, under **Decide**, choose **Approve** or **Deny**.
+   A denial needs a **Note to the member**.
+3. Select **Record decision** and confirm.
+
+The first decision stands. The Chief alone can approve a request that was
+denied, with a **Reason for the override**, under **Chief override**. Nobody
+decides their own request. The member is emailed the decision.
 
 ### Requests nobody decides close after seven days _(2026-11-13)_
 
@@ -3319,7 +3393,7 @@ many sign-offs have been recorded.
 
 A shift evaluation is the department's own form, filled out for a member after
 a shift. It is not the same as a skills evaluation or a member's yearly
-performance evaluation (that is still being built; only its storage exists).
+performance evaluation (see [Member Performance Evaluations](#member-performance-evaluations)).
 
 **Building the forms.** **Training Admin → Settings & Data → Shift
 Evaluations** lists the department's forms (needs `training.configure` or
@@ -3346,13 +3420,25 @@ evaluation has a status line (not started, in progress, submitted, optional)
 linking to their evaluation page. A member enrolled in a program with a form is
 evaluated on it, once per program (or once for all, if combined). A member in
 no such program, in a seat the general form covers, gets the general form.
+_(2026-11-13)_ A shift counts only toward the programs the member had joined
+by the shift's date. _(2026-11-14)_ Opening an evaluation from the report and
+coming back keeps everything you had typed on the report, each trainee's
+ratings, notes and calls included.
+
+_(2026-11-14)_ Only crew who worked the shift (**Assigned** or **Confirmed**)
+are asked for a trainee report or an evaluation. A trainee marked **No-show**,
+or still **Pending**, no longer holds up close-out, and close-out writes them
+no draft report. They are still listed on the report, so you can file for a
+pending member who did work.
 
 ![The Shift Completion Report's crew list with an EMT Field Internship Evaluation status line under each of three interns: Submitted with its average, In progress with how many items are rated, and Not started, required before close-out](./images/02-130-shift-evaluation-status-lines.png)
 
 - The shift officer or a `training.manage` holder fills it out; **never your own**.
 - Rating buttons are full-size touch targets; required comments open by themselves.
-- Drafts autosave. **Submit evaluation** files it and fixes which form it is
-  on. A submitted evaluation can still be corrected: the button then reads
+- Drafts autosave while you work, and also when you move to another crew
+  member, follow a back link or leave the page _(2026-11-13)_. Switching to
+  another form with unsaved answers asks first. **Submit evaluation** files it
+  and fixes which form it is on. A submitted evaluation can still be corrected: the button then reads
   **Save changes**, and the credit follows the correction.
 - A **print** view gives the paper layout.
 - Ratings and comments are encrypted at rest.
@@ -3375,6 +3461,26 @@ types:
   existing **Calls** type still counts calls from shift reports, and never
   from evaluations, so no call is counted twice: pick **Calls** for calls run,
   **Evaluated Calls** for calls an evaluator watched.
+
+**Department requirements linked into a program** _(2026-11-14)_. An
+**Evaluated shifts**, **Transports** or **Refusals** requirement of the
+department's own, added to a program with **Link existing**, is credited by
+shift evaluations the same way as the program's own. A training record no
+longer satisfies one. An evaluation that counts for several programs counts
+once toward a department requirement, and general-form evaluations count too.
+
+**A requirement reopens when its credit falls** _(2026-11-13)_. When credit is
+taken back and a completed requirement drops below its target, it returns to
+**In progress**. A requirement an officer marked complete by hand stays
+complete. A leave or waiver reduces an evaluation target to a whole number.
+
+**When the member sees it** _(2026-11-13)_. Where your department reviews
+trainee reports before they count, a member with a report on file sees the
+evaluation, and gets its credit, once that report is approved. A member with
+no report sees it once the shift is closed out. Being the shift officer or a
+training manager does not let you read an evaluation about yourself sooner:
+your own opens read-only with no answers, and its line on the report shows
+the status without the scores.
 
 **Credit follows later changes** _(2026-11-16)_:
 
@@ -3427,7 +3533,10 @@ agency's units needs an evaluation if:
 
 - the member is enrolled in a program with a **Shift evaluation form**, and was
   already enrolled on the shift's date; and
-- the shift still counts — a rejected one drops off the list.
+- the shift still counts — a rejected one drops off the list. _(2026-11-13)_
+  A shift still awaiting approval is listed too, so it can be evaluated
+  straight away; its credit, and the member's view of it, wait for the
+  approval.
 
 The department's general form is never used for an outside shift, because the
 general form is chosen by seat and an outside shift has none. Nothing is
@@ -3455,6 +3564,27 @@ other departments** list and in the officers' review on Member Hours:
 
 Nobody enters an evaluation of their own shift: on your own, the form is
 read-only.
+
+**A preceptor link** _(2026-11-13)_. Instead of typing in a paper form, the
+agency's preceptor can fill the evaluation out themselves, with no account.
+
+1. The member selects **Preceptor link** on the shift in **Shifts with other
+   departments**, or a training officer selects it on the shift in **Outside
+   shifts awaiting an evaluation**.
+2. In the **Preceptor link** dialog, select **Make link**, or type the
+   **Preceptor's email (optional)** and select **Make and email link**. Show
+   the preceptor the QR code, or **Copy** the link.
+3. The preceptor opens it, enters **Your name** and fills out the form. It can
+   be submitted once.
+
+A link stays open for the number of days after the shift set in **Training
+Admin → Settings & Data → Shift Evaluations**, **Preceptor links stay open for
+(days after the shift)**: 7 unless you change it, 1 to 60. Each shift has one
+open link: **Make a new link** stops the old one, and **Turn off link** closes
+it. Rejecting the shift, or the member leaving the department, closes it too.
+A member can email a link at most 10 times an hour. A submitted evaluation
+credits the program and reads as entered by the named preceptor through a
+preceptor link, and says so when the member made the link.
 
 **Credit and visibility.** A submitted outside-shift evaluation credits the
 member's program exactly as a department shift's does (above). The member sees
@@ -4297,6 +4427,8 @@ Configuration**).
 | A permanent waiver (no end date)              | Shows as **Permanent** and never ends.                                                                                                  |
 | A leave of absence is turned off by an edit   | Its linked training waiver is turned off in the same save. Turning the leave back on restores it. Deleting the leave also removes it.   |
 | A leave with an unusual leave type            | Its linked training waiver is typed **Other**. It still works.                                                                          |
+| A leave with its linked training waiver       | Counted once, as the leave. It no longer reads as both months on leave and waived months. _(2026-11-13)_                                |
+| A leave that does not waive training          | Excuses no training: the member owes the full target for those months. Before 2026-11-13 it still excused them.                         |
 
 ---
 
@@ -5161,6 +5293,28 @@ neither includes an officer-only section, since that needs your own ranks.
 6. **Deleting.** Only the Chief (`evaluations.delete`) can delete, with a reason
    and a re-verified session. A record of who, when and why is kept and shown
    under **Removed evaluations**; the member is emailed without the reason.
+
+### Figures on the form _(2026-11-14)_
+
+When you build a template, an item's **Data shown with this item** list is
+grouped by area: Training, Business meetings, Events, Shifts, Calls,
+Administrative hours and Membership. It now also offers **field shift
+evaluation scores** (an average per form, shown but never scored),
+**certifications expiring soon** (within 90 days after the period ends),
+**event attendance by type**, and the member's **waiver requests** for
+training sessions and business meetings (never scored, and never with the
+member's reason or a decider's note).
+
+- A source whose module or call tracking is off reads "(turned off)" in the
+  list, and the editor says the figure may have nothing to measure.
+- When the score bands leave values uncovered, the editor warns: "No rating
+  is suggested for values …". A member whose figure falls there is rated
+  without a suggestion.
+- On the evaluation and in the PDF, a figure shows the counts behind it, for
+  example "6 of 8 meetings attended".
+- The **call response rate** leaves out calls during a member's leave or a
+  gap in membership, on both sides. Evaluations already taken keep the figure
+  they hold.
 
 ### Grading by section _(2026-11-04)_
 
