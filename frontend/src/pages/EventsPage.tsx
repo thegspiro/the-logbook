@@ -613,7 +613,7 @@ export const EventsPage: React.FC = () => {
   /** One builder for both export paths, so a fix to either cannot miss the other. */
   const exportEventsToCsv = useCallback(
     (events: EventListItem[], filename: string) => {
-      const headers = ['Title', 'Type', 'Date', 'Location', 'Mandatory', 'Cancelled'];
+      const headers = ['Title', 'Type', 'Date', 'Location', 'Mandatory', 'Cancelled', 'Source'];
       const rows = events.map((e) => [
         e.title,
         getEventTypeLabel(e.event_type),
@@ -621,6 +621,7 @@ export const EventsPage: React.FC = () => {
         e.location || '',
         e.is_mandatory ? 'Yes' : 'No',
         e.is_cancelled ? 'Yes' : 'No',
+        e.source_label || '',
       ]);
       downloadCsv(buildCsv([headers, ...rows]), filename);
     },
