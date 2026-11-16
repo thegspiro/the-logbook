@@ -226,7 +226,11 @@ describe('MembersAdminPage — Reset Password (workflow review W11)', () => {
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       'Password does not meet every rule listed below'
     );
-    expect(within(dialog).getByRole('list', { name: 'Password rules' })).toHaveTextContent(/○ No runs like 123 or abc/);
+    // W11-12: each rule says in text whether it is met; the ✓/○ is hidden.
+    const rules = within(within(dialog).getByRole('list', { name: 'Password rules' })).getAllByRole('listitem');
+    const rule = (name: string) => rules.find((li) => li.textContent?.endsWith(name));
+    expect(rule('No runs like 123 or abc')).toHaveTextContent('Not met: No runs like 123 or abc');
+    expect(rule('At least 12 characters')).toHaveTextContent('Met: At least 12 characters');
     expect(userService.adminResetPassword).not.toHaveBeenCalled();
   });
 

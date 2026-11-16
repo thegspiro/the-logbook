@@ -1224,7 +1224,10 @@ export const MembersAdminPage: React.FC<MembersAdminPageProps> = ({ population =
                     const met = resetPasswordChecks[key];
                     return (
                       <li key={key} className={met ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}>
-                        {met ? '✓' : '○'} {label}
+                        {/* The mark is decorative; this is the state a screen reader hears (W11-12, as W03-10). */}
+                        <span aria-hidden="true">{met ? '✓' : '○'} </span>
+                        <span className="sr-only">{met ? 'Met: ' : 'Not met: '}</span>
+                        {label}
                       </li>
                     );
                   })}
