@@ -989,6 +989,40 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/elections', maxSmallTargets: 0, maxTinyText: 0, permissions: ['elections.manage'] },
   // manage: so its header buttons render — see the note on /events.
   { path: '/minutes', maxSmallTargets: 0, maxTinyText: 0, permissions: ['minutes.manage'] },
+  // The secretary's attendance and waiver screens (`meetings.manage`) and the
+  // minutes outlines and settings (`minutes.manage`). Each `expectText` is
+  // drawn only by its populated fixture (helpers.ts) or its own form.
+  {
+    path: '/minutes/attendance',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['meetings.manage'],
+    expectText: 'Attended 37.5% of business meetings in the last 12 months; 50% is required to vote.',
+  },
+  {
+    path: '/minutes/attendance/waiver-settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['meetings.manage'],
+    expectText: 'Positions copied on waiver decisions',
+  },
+  // No permission of its own: the queue lists only requests routed to the
+  // viewer, and the fixture marks the pending one as theirs to decide.
+  { path: '/meetings/waiver-requests', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Waiting for a decision (1)' },
+  {
+    path: '/minutes/outlines',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['minutes.manage'],
+    expectText: 'Make default',
+  },
+  {
+    path: '/minutes/settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['minutes.manage'],
+    expectText: 'How attendance is listed',
+  },
   { path: '/action-items', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/forms', maxSmallTargets: 0, maxTinyText: 0, permissions: ['forms.manage'] },
   { path: '/store', maxSmallTargets: 0, maxTinyText: 0, permissions: ['storefront.view'] },
