@@ -3467,6 +3467,15 @@ async def delete_photo(
     return {"message": "Photo removed successfully"}
 
 
+def _stored_name_in_words(name: object) -> str:
+    """A stored field name or status as the officer reads it (W11-11).
+
+    The history is read by people: "membership_number" and "dropped_voluntary"
+    are how the rows store them, not what the screen should say.
+    """
+    return str(name).replace("_", " ")
+
+
 # Human-readable descriptions for audit event types
 _AUDIT_EVENT_DESCRIPTIONS = {
     "user_created": "Member account created",
@@ -3614,7 +3623,9 @@ async def get_member_audit_history(
         if log.event_type == "user_profile_updated":
             fields = data.get("fields_updated", [])
             if fields:
-                description += f": {', '.join(fields)}"
+                description += ": " + ", ".join(
+                    _stored_name_in_words(f) for f in fields
+                )
         elif log.event_type == "user_role_assigned":
             action = data.get("action", "")
             role_name = data.get("role_name", "")
@@ -3628,7 +3639,11 @@ async def get_member_audit_history(
             prev = data.get("previous_status", "")
             new = data.get("new_status", "")
             if prev and new:
-                description = f"Status changed: {prev} → {new}"
+                description = (
+                    "Status changed: "
+                    f"{_stored_name_in_words(prev).capitalize()} → "
+                    f"{_stored_name_in_words(new).capitalize()}"
+                )
 
         entries.append(
             MemberAuditLogEntry(
