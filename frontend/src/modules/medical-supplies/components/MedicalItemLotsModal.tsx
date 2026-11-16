@@ -23,6 +23,10 @@ import { formatCalendarDate, formatNumber, getTodayLocalDate } from '../../../ut
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
 import { supplyLabel } from '../types';
 import { SupplyWhereSection } from './SupplyWhereSection';
 
@@ -41,6 +45,23 @@ interface LotForm {
 }
 
 const EMPTY_FORM: LotForm = { lot_number: '', expiration_date: '', quantity: '' };
+
+type LotField = keyof LotForm;
+// Ordered as on screen, so the first refusal takes focus. Limits mirror
+// InventoryLotBase / InventoryLotUpdate (lot_number max_length=100).
+const ADD_FIELDS: FieldSpecs<LotField> = {
+  lot_number: { id: 'new-lot-number', label: 'Lot #' },
+  expiration_date: { id: 'new-lot-expires', label: 'Expires' },
+  quantity: { id: 'new-lot-qty', label: 'Quantity' },
+};
+// One row is edited at a time, so the edit row's controls share fixed ids.
+const EDIT_FIELDS: FieldSpecs<LotField> = {
+  lot_number: { id: 'edit-lot-number', label: 'Lot number' },
+  expiration_date: { id: 'edit-lot-expires', label: 'Expiration date' },
+  quantity: { id: 'edit-lot-qty', label: 'Quantity' },
+};
+const LOT_ORDER = Object.keys(EDIT_FIELDS) as LotField[];
+const LOT_NUMBER_MAX = 100;
 
 /** Whole days from the department's today to a YYYY-MM-DD date; negative once it has passed. */
 function daysUntil(dateOnly: string, today: string): number {
@@ -64,9 +85,24 @@ export const MedicalItemLotsModal: React.FC<MedicalItemLotsModalProps> = ({ item
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<LotForm>(EMPTY_FORM);
+  // What the edit row held when it opened (or last saved), so its Cancel asks
+  // before throwing a typed change away.
+  const [editBaseline, setEditBaseline] = useState<LotForm>(EMPTY_FORM);
   const [addForm, setAddForm] = useState<LotForm>(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [changed, setChanged] = useState(false);
+  const addErrors = useFieldErrors(ADD_FIELDS);
+  const editErrors = useFieldErrors(EDIT_FIELDS);
+  const editDirty = editingId !== null && JSON.stringify(editForm) !== JSON.stringify(editBaseline);
+  const addDirty = JSON.stringify(addForm) !== JSON.stringify(EMPTY_FORM);
+  const setAdd = (patch: Partial<LotForm>) => {
+    setAddForm((f) => ({ ...f, ...patch }));
+    for (const key of Object.keys(patch)) addErrors.setError(key as LotField, null);
+  };
+  const setEdit = (patch: Partial<LotForm>) => {
+    setEditForm((f) => ({ ...f, ...patch }));
+    for (const key of Object.keys(patch)) editErrors.setError(key as LotField, null);
+  };
 
   const today = getTodayLocalDate(tz);
   const label = supplyLabel(item);
@@ -87,41 +123,83 @@ export const MedicalItemLotsModal: React.FC<MedicalItemLotsModalProps> = ({ item
     if (!apparatusOnly) void load();
   }, [load, apparatusOnly]);
 
-  const close = () => {
-    if (changed) onChanged();
-    onClose();
-  };
+  // Done, Escape and the X ask before a typed lot or an open, changed edit
+  // row is thrown away (forms review F-6).
+  const close = useDiscardGuard({
+    isDirty: editDirty || addDirty,
+    onClose: () => {
+      if (changed) onChanged();
+      onClose();
+    },
+  });
 
   const startEdit = (lot: InventoryLot) => {
-    setEditingId(lot.id);
-    setEditForm({
+    const seeded: LotForm = {
       lot_number: lot.lot_number ?? '',
       expiration_date: lot.expiration_date ?? '',
       quantity: String(lot.quantity),
-    });
+    };
+    setEditingId(lot.id);
+    setEditForm(seeded);
+    setEditBaseline(seeded);
+    editErrors.clear();
+  };
+
+  const cancelEdit = async () => {
+    if (
+      editDirty &&
+      !(await confirm({
+        title: 'Discard changes?',
+        message: 'This lot has changes that have not been saved.',
+        confirmLabel: 'Discard changes',
+        cancelLabel: 'Keep editing',
+      }))
+    )
+      return;
+    setEditingId(null);
+    editErrors.clear();
   };
 
   const saveEdit = async (lot: InventoryLot) => {
+    // Named on the field rather than in a toast (forms review F-3).
+    const problems: FieldErrors<LotField> = {};
     const quantity = Number(editForm.quantity);
-    if (editForm.quantity === '' || !Number.isInteger(quantity) || quantity < 0) {
-      toast.error('Enter a quantity of 0 or more');
-      return;
-    }
+    if (editForm.quantity === '' || !Number.isInteger(quantity) || quantity < 0)
+      problems.quantity = 'Enter a whole number, 0 or more.';
+    editErrors.setFormError(null);
+    editErrors.setErrors(problems);
     setBusy(true);
     try {
       // Update: a cleared box is sent as null so the clear persists, rather
-      // than omitted and silently kept (CLAUDE.md pitfall #1).
-      await medicalSuppliesService.updateLot(lot.id, {
-        lot_number: editForm.lot_number.trim() || null,
-        expiration_date: editForm.expiration_date || null,
-        quantity,
+      // than omitted and silently kept (CLAUDE.md pitfall #1). A refused field
+      // is left out and the rest saves (owner rule, 2026-11-05).
+      const { refused } = await saveExceptRefused<LotField, unknown>({
+        payload: {
+          lot_number: editForm.lot_number.trim() || null,
+          expiration_date: editForm.expiration_date || null,
+          quantity,
+        },
+        refused: problems,
+        send: (body) => medicalSuppliesService.updateLot(lot.id, body),
+        place: (err) => placeApiError(EDIT_FIELDS, err),
       });
-      setEditingId(null);
       setChanged(true);
-      toast.success('Lot updated');
       await load();
+      const first = firstRefused(LOT_ORDER, refused);
+      if (first) {
+        // The row stays open with the refused field flagged; only that field
+        // still counts as unsaved.
+        editErrors.setErrors(refused);
+        editErrors.setFormError(`Lot saved, except ${EDIT_FIELDS[first].label.toLowerCase()}. Fix it and save again.`);
+        editErrors.focusFirst(refused);
+        const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, editBaseline[k as LotField]]));
+        setEditBaseline({ ...editForm, ...keep });
+        return;
+      }
+      setEditingId(null);
+      toast.success('Lot updated');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to update the lot'));
+      editErrors.focusFirst(editErrors.setFromApiError(err, 'Failed to update the lot'));
     } finally {
       setBusy(false);
     }
@@ -149,9 +227,16 @@ export const MedicalItemLotsModal: React.FC<MedicalItemLotsModalProps> = ({ item
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Named on the field rather than in a toast (forms review F-3). A new lot
+    // is not created until every field is fixed (owner rule, 2026-11-05).
+    const problems: FieldErrors<LotField> = {};
     const quantity = Number(addForm.quantity);
-    if (addForm.quantity === '' || !Number.isInteger(quantity) || quantity < 1) {
-      toast.error('A new lot needs a quantity of 1 or more');
+    if (addForm.quantity === '' || !Number.isInteger(quantity) || quantity < 1)
+      problems.quantity = 'A new lot needs a whole number of 1 or more.';
+    addErrors.setFormError(null);
+    addErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      addErrors.focusFirst(problems);
       return;
     }
     setBusy(true);
@@ -168,7 +253,9 @@ export const MedicalItemLotsModal: React.FC<MedicalItemLotsModalProps> = ({ item
       toast.success('Lot added');
       await load();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to add the lot'));
+      // A refused field is flagged on it; anything no field answers for is
+      // said in the form rather than a toast.
+      addErrors.focusFirst(addErrors.setFromApiError(err, 'Failed to add the lot'));
     } finally {
       setBusy(false);
     }
@@ -252,26 +339,44 @@ export const MedicalItemLotsModal: React.FC<MedicalItemLotsModalProps> = ({ item
                       <tr key={lot.id} className="border-theme-surface-border border-b last:border-0">
                         <td data-label="Lot" className="px-3 py-2 font-mono text-xs">
                           {editing ? (
-                            <input
-                              className="form-input w-32"
-                              aria-label={`Lot number for lot ${lotName}`}
-                              maxLength={100}
-                              value={editForm.lot_number}
-                              onChange={(e) => setEditForm((f) => ({ ...f, lot_number: e.target.value }))}
-                            />
+                            <FormField
+                              id={EDIT_FIELDS.lot_number.id}
+                              label={`Lot number for lot ${lotName}`}
+                              labelClassName="sr-only"
+                              error={editErrors.errors.lot_number}
+                              maxLength={LOT_NUMBER_MAX}
+                            >
+                              {(field) => (
+                                <input
+                                  {...field}
+                                  className="form-input w-32"
+                                  value={editForm.lot_number}
+                                  onChange={(e) => setEdit({ lot_number: e.target.value })}
+                                />
+                              )}
+                            </FormField>
                           ) : (
                             lot.lot_number || '—'
                           )}
                         </td>
                         <td data-label="Expires" className="px-3 py-2">
                           {editing ? (
-                            <input
-                              type="date"
-                              className="form-input w-40"
-                              aria-label={`Expiration date for lot ${lotName}`}
-                              value={editForm.expiration_date}
-                              onChange={(e) => setEditForm((f) => ({ ...f, expiration_date: e.target.value }))}
-                            />
+                            <FormField
+                              id={EDIT_FIELDS.expiration_date.id}
+                              label={`Expiration date for lot ${lotName}`}
+                              labelClassName="sr-only"
+                              error={editErrors.errors.expiration_date}
+                            >
+                              {(field) => (
+                                <input
+                                  {...field}
+                                  type="date"
+                                  className="form-input w-40"
+                                  value={editForm.expiration_date}
+                                  onChange={(e) => setEdit({ expiration_date: e.target.value })}
+                                />
+                              )}
+                            </FormField>
                           ) : lot.expiration_date ? (
                             <span>
                               {formatCalendarDate(lot.expiration_date)}
@@ -285,14 +390,24 @@ export const MedicalItemLotsModal: React.FC<MedicalItemLotsModalProps> = ({ item
                         </td>
                         <td data-label="On hand" className="px-3 py-2 text-right tabular-nums">
                           {editing ? (
-                            <input
-                              type="number"
-                              min="0"
-                              className="form-input w-24 text-right"
-                              aria-label={`Quantity for lot ${lotName}`}
-                              value={editForm.quantity}
-                              onChange={(e) => setEditForm((f) => ({ ...f, quantity: e.target.value }))}
-                            />
+                            <FormField
+                              id={EDIT_FIELDS.quantity.id}
+                              label={`Quantity for lot ${lotName}`}
+                              labelClassName="sr-only"
+                              error={editErrors.errors.quantity}
+                            >
+                              {(field) => (
+                                <input
+                                  {...field}
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  className="form-input w-24 text-right"
+                                  value={editForm.quantity}
+                                  onChange={(e) => setEdit({ quantity: e.target.value })}
+                                />
+                              )}
+                            </FormField>
                           ) : (
                             formatNumber(lot.quantity)
                           )}
@@ -316,7 +431,7 @@ export const MedicalItemLotsModal: React.FC<MedicalItemLotsModalProps> = ({ item
                                   type="button"
                                   className={smallButton}
                                   disabled={busy}
-                                  onClick={() => setEditingId(null)}
+                                  onClick={() => void cancelEdit()}
                                 >
                                   Cancel
                                 </button>
@@ -351,11 +466,17 @@ export const MedicalItemLotsModal: React.FC<MedicalItemLotsModalProps> = ({ item
                 </tbody>
               </table>
             </div>
+            {editingId !== null && editErrors.formError && (
+              <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                {editErrors.formError}
+              </p>
+            )}
           </>
         )}
 
         {canManage && lots && (
           <form
+            noValidate
             onSubmit={(e) => void add(e)}
             className="border-theme-surface-border space-y-2 rounded-md border p-3"
             aria-labelledby="add-lot-heading"
@@ -363,45 +484,52 @@ export const MedicalItemLotsModal: React.FC<MedicalItemLotsModalProps> = ({ item
             <h3 id="add-lot-heading" className="text-theme-text-primary text-sm font-semibold">
               Add a lot
             </h3>
+            {addErrors.formError && (
+              <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                {addErrors.formError}
+              </p>
+            )}
             <div className="grid gap-2 sm:grid-cols-4">
-              <div>
-                <label htmlFor="new-lot-number" className="form-label">
-                  Lot #
-                </label>
-                <input
-                  id="new-lot-number"
-                  className="form-input w-full"
-                  maxLength={100}
-                  value={addForm.lot_number}
-                  onChange={(e) => setAddForm((f) => ({ ...f, lot_number: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label htmlFor="new-lot-expires" className="form-label">
-                  Expires
-                </label>
-                <input
-                  id="new-lot-expires"
-                  type="date"
-                  className="form-input w-full"
-                  value={addForm.expiration_date}
-                  onChange={(e) => setAddForm((f) => ({ ...f, expiration_date: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label htmlFor="new-lot-qty" className="form-label">
-                  Quantity <span aria-hidden="true">*</span>
-                </label>
-                <input
-                  id="new-lot-qty"
-                  type="number"
-                  min="1"
-                  className="form-input w-full"
-                  value={addForm.quantity}
-                  onChange={(e) => setAddForm((f) => ({ ...f, quantity: e.target.value }))}
-                  required
-                />
-              </div>
+              <FormField
+                id={ADD_FIELDS.lot_number.id}
+                label="Lot #"
+                error={addErrors.errors.lot_number}
+                maxLength={LOT_NUMBER_MAX}
+                count={addForm.lot_number.length}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    className="form-input w-full"
+                    value={addForm.lot_number}
+                    onChange={(e) => setAdd({ lot_number: e.target.value })}
+                  />
+                )}
+              </FormField>
+              <FormField id={ADD_FIELDS.expiration_date.id} label="Expires" error={addErrors.errors.expiration_date}>
+                {(field) => (
+                  <input
+                    {...field}
+                    type="date"
+                    className="form-input w-full"
+                    value={addForm.expiration_date}
+                    onChange={(e) => setAdd({ expiration_date: e.target.value })}
+                  />
+                )}
+              </FormField>
+              <FormField id={ADD_FIELDS.quantity.id} label="Quantity" required error={addErrors.errors.quantity}>
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    min="1"
+                    step="1"
+                    className="form-input w-full"
+                    value={addForm.quantity}
+                    onChange={(e) => setAdd({ quantity: e.target.value })}
+                  />
+                )}
+              </FormField>
               <div className="flex items-end">
                 <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={busy}>
                   <Plus className="h-4 w-4" aria-hidden="true" />

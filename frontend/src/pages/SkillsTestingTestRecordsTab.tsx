@@ -49,12 +49,12 @@ const isOpenForScoring = (test: SkillTestListItem): boolean => test.status === '
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const styles: Record<string, string> = {
-    in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-    voided: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-    pass: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    fail: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    in_progress: 'bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-300',
+    completed: 'bg-green-100 text-green-900 dark:bg-green-900/30 dark:text-green-300',
+    cancelled: 'bg-red-100 text-red-900 dark:bg-red-900/30 dark:text-red-300',
+    voided: 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300',
+    pass: 'bg-green-100 text-green-900 dark:bg-green-900/30 dark:text-green-300',
+    fail: 'bg-red-100 text-red-900 dark:bg-red-900/30 dark:text-red-300',
     incomplete: 'bg-theme-surface-secondary text-theme-text-primary',
   };
   // The badge printed the stored code ("in progress", "pass"); these are the
@@ -96,14 +96,15 @@ const TestCard: React.FC<{
 }> = ({ test, onClick, onDelete, onVoid, onCancel, onRelease, onValidate, selectable, selected, onToggleSelected }) => {
   const tz = useTimezone();
   return (
+    // The card holds its own actions (select, validate, release, void…), so it
+    // cannot itself be a button: axe's nested-interactive, and a screen reader
+    // announced one button containing several. The title is the button, and
+    // its ::after spans the card so a tap anywhere still opens the test; the
+    // checkbox and the actions sit above that layer (`relative z-10`).
     <div
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onClick();
-      }}
-      className="card w-full cursor-pointer p-4 text-left hover:border-red-500/50"
+      role="group"
+      aria-label={`${test.template_name}, ${test.candidate_name}`}
+      className="card relative w-full p-4 text-left hover:border-red-500/50"
     >
       {/* On a phone the score and actions take their own row under the title:
           beside it they left the template name a few characters before it
@@ -119,12 +120,18 @@ const TestCard: React.FC<{
               onClick={(e) => e.stopPropagation()}
               onChange={() => onToggleSelected?.()}
               aria-label={`Select ${test.candidate_name}'s ${test.template_name} result`}
-              className="form-checkbox mr-3 shrink-0"
+              className="form-checkbox relative z-10 mr-3 shrink-0"
             />
           )}
           <div className="min-w-0 flex-1">
             <div className="mb-1 flex flex-wrap items-center gap-2">
-              <p className="text-theme-text-primary font-medium break-words sm:truncate">{test.template_name}</p>
+              <button
+                type="button"
+                onClick={onClick}
+                className="text-theme-text-primary focus-visible:after:ring-theme-focus-ring touch:min-h-11 touch:py-2.5 min-w-0 text-left font-medium break-words after:absolute after:inset-0 after:rounded-lg focus-visible:outline-hidden focus-visible:after:ring-2 sm:truncate"
+              >
+                {test.template_name}
+              </button>
               <StatusBadge status={test.status} />
               {test.result !== 'incomplete' && <StatusBadge status={test.result} />}
               {test.is_practice && (
@@ -144,7 +151,7 @@ const TestCard: React.FC<{
             </p>
           </div>
         </div>
-        <div className="split-row-aside flex flex-wrap items-center gap-3 sm:ml-auto sm:pl-4">
+        <div className="split-row-aside relative z-10 flex flex-wrap items-center gap-3 sm:ml-auto sm:pl-4">
           <div className="mr-auto sm:mr-0 sm:text-right">
             {test.overall_score != null && (
               <p className="text-theme-text-primary text-lg font-bold">{formatScore(test.overall_score)}</p>
@@ -161,7 +168,7 @@ const TestCard: React.FC<{
                  is closed — the one row on this screen that is explicitly
                  read-only. */
               isOpenForScoring(test) && (
-                <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                <p className="text-xs font-medium text-blue-900 dark:text-blue-300">
                   {test.started_at ? 'Resume' : 'Start'}
                 </p>
               )
@@ -182,7 +189,7 @@ const TestCard: React.FC<{
                 e.stopPropagation();
                 onDelete();
               }}
-              className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+              className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
               aria-label={`Delete practice attempt for ${test.candidate_name}`}
             >
               <Trash2 className="h-4 w-4" />
@@ -198,7 +205,7 @@ const TestCard: React.FC<{
                     e.stopPropagation();
                     onValidate();
                   }}
-                  className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-purple-50 hover:text-purple-600 dark:hover:bg-purple-900/20"
+                  className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-purple-50 hover:text-purple-600 dark:hover:bg-purple-900/20"
                   aria-label={`Validate result for ${test.candidate_name}`}
                 >
                   <CheckCircle2 className="h-4 w-4" />
@@ -214,7 +221,7 @@ const TestCard: React.FC<{
                     e.stopPropagation();
                     onRelease();
                   }}
-                  className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20"
+                  className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20"
                   aria-label={`Release results to ${test.candidate_name}`}
                 >
                   <Send className="h-4 w-4" />
@@ -225,7 +232,7 @@ const TestCard: React.FC<{
                   e.stopPropagation();
                   onVoid();
                 }}
-                className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20"
+                className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20"
                 aria-label={`Void test for ${test.candidate_name}`}
               >
                 <Ban className="h-4 w-4" />
@@ -237,7 +244,7 @@ const TestCard: React.FC<{
                 e.stopPropagation();
                 onCancel();
               }}
-              className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20"
+              className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20"
               aria-label={`Cancel unfinished test for ${test.candidate_name}`}
             >
               <CircleSlash className="h-4 w-4" />

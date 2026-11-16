@@ -93,65 +93,35 @@ export interface TrainingSession {
   created_by?: string;
 }
 
-export interface TrainingSessionCreate {
-  // Event details
-  title: string;
-  description?: string | undefined;
-  location_id?: string | undefined;
-  location?: string | undefined;
-  location_details?: string | undefined;
-  start_datetime: string;
-  end_datetime: string;
-  requires_rsvp?: boolean | undefined;
-  rsvp_deadline?: string | undefined;
-  max_attendees?: number | undefined;
-  is_mandatory?: boolean | undefined;
-
-  // Use existing course or create new
-  use_existing_course?: boolean | undefined;
-  course_id?: string | undefined; // If using existing course
-
-  // Category and program linkage
-  category_id?: string | undefined; // Training category (Fire, EMS, Hazmat, etc.)
-  program_id?: string | undefined; // Training program (Recruit School, Driver Training, etc.)
-  phase_id?: string | undefined; // Program phase
-  requirement_id?: string | undefined; // Specific requirement this satisfies
-  // Session-attendance requirements whose members are charged with attending
-  attendance_requirement_ids?: string[] | undefined;
-
-  // Training details (for new course)
-  course_name?: string | undefined;
-  course_code?: string | undefined;
-  training_type: TrainingType;
-  credit_hours: number;
-  instructor?: string | undefined;
-  /** The member teaching it; the backend checks they are in the org and runs qualification checks against them. */
-  instructor_id?: string | undefined;
-
-  // Certification
-  issues_certification?: boolean | undefined;
-  certification_number_prefix?: string | undefined;
-  issuing_agency?: string | undefined;
-  expiration_months?: number | undefined;
-
-  // Requirements
-  prerequisites?: string[] | undefined;
-  materials_required?: string[] | undefined;
-
-  // Auto-completion settings
-  counts_toward_certification?: boolean | undefined; // Feed linked certificate requirements
-  auto_create_records?: boolean | undefined; // Create TrainingRecords on check-in
-  require_completion_confirmation?: boolean | undefined; // Instructor must confirm completion
+/**
+ * Who a set of session-attendance requirements grades, as an event's
+ * "Mandatory for": `everyone` is All members, otherwise `tier_ids` are
+ * membership tier ids in ladder order. A requirement (or a membership word in
+ * one) that no tier stands for is named in `unmapped`, with why, for the form
+ * to say so rather than guess. From `POST /training/sessions/mandatory-tiers`.
+ */
+export interface MandatoryTiersUnmapped {
+  requirement_id: string;
+  name: string;
+  reason: string;
+  /**
+   * It grades no member at all (it names no one, or is no longer active), so
+   * it adds no one to Mandatory for. The others grade members no member type
+   * stands for, and the note offers All members for them.
+   */
+  applies_to_no_one: boolean;
 }
 
-export interface RecurringTrainingSessionCreate extends TrainingSessionCreate {
-  recurrence_pattern: import('./event').RecurrencePattern;
-  recurrence_end_date: string;
-  recurrence_custom_days?: number[] | undefined;
-  recurrence_weekday?: number | undefined;
-  recurrence_week_ordinal?: number | undefined;
-  recurrence_month?: number | undefined;
-  recurrence_exceptions?: string[] | undefined;
+export interface MandatoryTiersResponse {
+  everyone: boolean;
+  tier_ids: string[];
+  unmapped: MandatoryTiersUnmapped[];
+  /**
+   * The requirements the suggestion comes from: those that gave a tier, or
+   * with `everyone` each that grades someone. One that maps only partly is
+   * here and in `unmapped` both.
+   */
+  source_ids: string[];
 }
 
 // Training Category Types
@@ -3853,4 +3823,45 @@ export interface RequirementOverrideCreate {
   start_date: string;
   end_date: string;
   reason: string;
+}
+
+// ── Course links ──────────────────────────────────────────────────
+
+/** A library course, as the course-links screen offers it. */
+export interface CourseLinkCourse {
+  id: string;
+  name: string;
+  code?: string | null;
+}
+
+/**
+ * One name training records with no library course carry. Spellings that
+ * differ only in case, punctuation, a trailing provider id or a "CAPCE"
+ * prefix are one name; `key` is what a link names it by.
+ */
+export interface CourseLinkName {
+  key: string;
+  label: string;
+  spellings: { name: string; records: number }[];
+  records: number;
+  members: number;
+  first_date: string | null;
+  last_date: string | null;
+  suggested_course: CourseLinkCourse | null;
+}
+
+export interface CourseLinksView {
+  items: CourseLinkName[];
+  total: number;
+  offset: number;
+  limit: number;
+  /** Across every name, not just this page. */
+  suggested_names: number;
+  suggested_records: number;
+  courses: CourseLinkCourse[];
+}
+
+export interface CourseLinkResult {
+  names: number;
+  records: number;
 }

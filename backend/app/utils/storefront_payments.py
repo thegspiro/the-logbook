@@ -19,6 +19,7 @@ administrator, so the URL builders here are strict allowlists — a stored
 """
 
 import re
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Set
 from urllib.parse import quote, urlparse
@@ -185,11 +186,40 @@ def normalize_zelle_handle(value: Optional[str]) -> Optional[str]:
     return f"({digits[0:3]}) {digits[3:6]}-{digits[6:]}"
 
 
+@dataclass(frozen=True)
+class PayPalAccount:
+    """The PayPal.Me link and email members are sent to."""
+
+    paypal_me_url: Optional[str]
+    email: Optional[str]
+
+
+def store_paypal_account(
+    settings: StoreSettings, connected: Optional[PayPalAccount]
+) -> PayPalAccount:
+    """The PayPal account the store's Pay button uses.
+
+    *connected* is the PayPal integration's link and email, or None when the
+    department has no connected PayPal integration. A store set to use the
+    connected account falls back to its own link and email when the
+    integration cannot supply either: an owner decision of 2026-11-14, so a
+    disconnect does not take the PayPal button away from members who owe.
+    """
+    if (
+        settings.paypal_use_connected
+        and connected is not None
+        and (normalize_paypal_me(connected.paypal_me_url) or connected.email)
+    ):
+        return connected
+    return PayPalAccount(settings.paypal_me_url, settings.paypal_email)
+
+
 def build_payment_option(
     method: StorePaymentMethod,
     settings: StoreSettings,
     balance: Decimal,
     reference: str,
+    connected_paypal: Optional[PayPalAccount] = None,
 ) -> Optional[Dict[str, Any]]:
     """Describe one way to settle, or None when it is not configured.
 
@@ -213,8 +243,9 @@ def build_payment_option(
         }
 
     if method == StorePaymentMethod.PAYPAL:
-        url = build_paypal_url(settings.paypal_me_url, balance)
-        handle = normalize_paypal_me(settings.paypal_me_url) or settings.paypal_email
+        account = store_paypal_account(settings, connected_paypal)
+        url = build_paypal_url(account.paypal_me_url, balance)
+        handle = normalize_paypal_me(account.paypal_me_url) or account.email
         if not url and not handle:
             return None
         return {
@@ -297,7 +328,9 @@ def build_payment_option(
     return None
 
 
-def build_payment_method_summaries(settings: StoreSettings) -> List[Dict[str, Any]]:
+def build_payment_method_summaries(
+    settings: StoreSettings, connected_paypal: Optional[PayPalAccount] = None
+) -> List[Dict[str, Any]]:
     """Accepted methods and their handles, for the pre-order checkout screen.
 
     Deliberately carries no payment_url. Before an order exists there is no
@@ -316,12 +349,17 @@ def build_payment_method_summaries(settings: StoreSettings) -> List[Dict[str, An
             "handle": option["handle"],
             "instructions": option["instructions"],
         }
-        for option in build_payment_options(settings, Decimal("0"), "")
+        for option in build_payment_options(
+            settings, Decimal("0"), "", connected_paypal
+        )
     ]
 
 
 def build_payment_options(
-    settings: StoreSettings, balance: Decimal, reference: str
+    settings: StoreSettings,
+    balance: Decimal,
+    reference: str,
+    connected_paypal: Optional[PayPalAccount] = None,
 ) -> List[Dict[str, Any]]:
     """Every configured way to settle, in the order the department listed.
 
@@ -342,7 +380,9 @@ def build_payment_options(
         if method in seen:
             continue
         seen.add(method)
-        option = build_payment_option(method, settings, balance, reference)
+        option = build_payment_option(
+            method, settings, balance, reference, connected_paypal
+        )
         if option:
             options.append(option)
     return options

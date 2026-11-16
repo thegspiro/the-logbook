@@ -290,7 +290,13 @@ export default defineConfig({
         orientation: 'any',
         lang: 'en-US',
         dir: 'ltr',
-        theme_color: '#991b1b',
+        // Android colours an installed app's system gesture bar with this, and
+        // it cannot change per theme — the value is baked in when the app is
+        // installed. It matches the dark-mode navigation bar (--nav-bg) so the
+        // bottom bar does not appear to float on a strip of another colour.
+        // The status bar is driven at runtime from the theme-color meta tags,
+        // which ThemeContext keeps in step with the theme picked in the app.
+        theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',
         // Each src is served by the backend with the department's own logo

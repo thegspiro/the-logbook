@@ -207,6 +207,7 @@ class StorefrontPreviewService:
 
         captured: List[Dict[str, Any]] = []
         notifier = StorefrontNotificationService(self.db, capture=captured)
+        notifier.connected_paypal = service.connected_paypal
         await self._compose(notice, notifier, settings, organization)
 
         if not captured:

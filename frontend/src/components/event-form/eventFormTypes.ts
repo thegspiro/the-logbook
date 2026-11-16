@@ -39,3 +39,6 @@ export interface EventFormModelOptions {
   attendanceLocked: boolean;
   eventTypeLocked: boolean;
 }
+
+/** "Mandatory for": every member, or only the member types ticked. */
+export type MandatoryScope = 'all' | 'some';

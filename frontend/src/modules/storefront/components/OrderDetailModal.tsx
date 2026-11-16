@@ -10,7 +10,10 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Ban, CircleDollarSign, MessageSquare, Undo2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCurrency, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -42,6 +45,59 @@ const ADVANCEABLE_STATUSES: string[] = [
   StoreOrderStatus.FULFILLED,
 ];
 
+// Each section is its own request, and two of them send a key called
+// `message` or `reference`, so each has its own set of field errors. The store
+// API is camelCase (alias_generator=to_camel); the snake_case names are listed
+// in case a refusal reports the attribute rather than the alias.
+type PaymentField = 'amount' | 'paymentMethod' | 'reference';
+const PAYMENT_FIELDS: FieldSpecs<PaymentField> = {
+  amount: { id: 'payment-amount', label: 'Amount' },
+  paymentMethod: { id: 'payment-method', label: 'Paid by', apiKeys: ['payment_method'] },
+  reference: { id: 'payment-ref', label: 'Reference' },
+};
+type WaiveField = 'reason';
+const WAIVE_FIELDS: FieldSpecs<WaiveField> = {
+  reason: { id: 'waive-reason', label: 'Reason' },
+};
+type StatusField = 'status' | 'message';
+const STATUS_FIELDS: FieldSpecs<StatusField> = {
+  status: { id: 'status-choice', label: 'Status' },
+  message: { id: 'status-message', label: 'Note to the member' },
+};
+type UpdateField = 'message' | 'channels';
+const UPDATE_FIELDS: FieldSpecs<UpdateField> = {
+  message: { id: 'update-message', label: 'Message to the member' },
+  channels: { id: 'update-in-app', label: 'Notification channels', apiKeys: ['notifyEmail', 'notifyInApp'] },
+};
+type CancelField = 'reason';
+const CANCEL_FIELDS: FieldSpecs<CancelField> = {
+  reason: { id: 'cancel-reason', label: 'Reason for cancelling' },
+};
+type NotesField = 'adminNotes';
+const NOTES_FIELDS: FieldSpecs<NotesField> = {
+  adminNotes: { id: 'admin-notes', label: 'Internal notes', apiKeys: ['admin_notes'] },
+};
+// StoreOrderPaymentRecord / StoreOrderMarkPaid: reference max_length=200.
+const REFERENCE_MAX = 200;
+// The cancel box's existing client limit (W67b-5).
+const CANCEL_REASON_MAX = 500;
+
+/** What the payment, status and notes boxes held when the order loaded. */
+interface Seeded {
+  paymentAmount: string;
+  paymentReference: string;
+  paymentMethod: string;
+  statusChoice: string;
+  adminNotes: string;
+}
+
+const SectionError: React.FC<{ message: string | null }> = ({ message }) =>
+  message ? (
+    <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+      {message}
+    </p>
+  ) : null;
+
 export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onClose, onChanged }) => {
   const tz = useTimezone();
   const { confirm } = useConfirm();
@@ -63,6 +119,31 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
   const [adminNotes, setAdminNotes] = useState('');
   const [waiveReason, setWaiveReason] = useState('');
   const [cancelReason, setCancelReason] = useState('');
+  const [seeded, setSeeded] = useState<Seeded | null>(null);
+
+  const paymentErrors = useFieldErrors(PAYMENT_FIELDS);
+  const waiveErrors = useFieldErrors(WAIVE_FIELDS);
+  const statusErrors = useFieldErrors(STATUS_FIELDS);
+  const updateErrors = useFieldErrors(UPDATE_FIELDS);
+  const notesErrors = useFieldErrors(NOTES_FIELDS);
+  const cancelErrors = useFieldErrors(CANCEL_FIELDS);
+
+  // Anything typed that no request has taken yet: the boxes seeded from the
+  // order count once they differ from what loaded, the three that start
+  // empty count once they hold text (forms review F-6).
+  const isDirty =
+    orderId !== null &&
+    seeded !== null &&
+    (paymentAmount !== seeded.paymentAmount ||
+      paymentReference !== seeded.paymentReference ||
+      paymentMethod !== seeded.paymentMethod ||
+      statusChoice !== seeded.statusChoice ||
+      adminNotes !== seeded.adminNotes ||
+      statusMessage.trim() !== '' ||
+      updateMessage.trim() !== '' ||
+      waiveReason.trim() !== '' ||
+      cancelReason.trim() !== '');
+  const requestClose = useDiscardGuard({ isDirty, onClose });
 
   const load = useCallback(async () => {
     if (!orderId) return;
@@ -70,11 +151,19 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
     try {
       const fetched = await storefrontService.getOrder(orderId);
       setOrder(fetched);
-      setPaymentAmount(fetched.balanceDue);
-      setPaymentReference(fetched.paymentReference ?? '');
-      setPaymentMethod(fetched.paymentMethod ?? '');
-      setStatusChoice(fetched.status);
-      setAdminNotes(fetched.adminNotes ?? '');
+      const next: Seeded = {
+        paymentAmount: fetched.balanceDue,
+        paymentReference: fetched.paymentReference ?? '',
+        paymentMethod: fetched.paymentMethod ?? '',
+        statusChoice: fetched.status,
+        adminNotes: fetched.adminNotes ?? '',
+      };
+      setPaymentAmount(next.paymentAmount);
+      setPaymentReference(next.paymentReference);
+      setPaymentMethod(next.paymentMethod);
+      setStatusChoice(next.statusChoice);
+      setAdminNotes(next.adminNotes);
+      setSeeded(next);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not load the order'));
     } finally {
@@ -86,20 +175,37 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
     void load();
   }, [load]);
 
-  const withBusy = async (action: () => Promise<void>) => {
+  /**
+   * Run one section's request. The order is reloaded only when it succeeded:
+   * reloading after a refusal reseeded the payment boxes and threw away the
+   * amount and reference that had just been refused.
+   */
+  const withBusy = async (action: () => Promise<boolean>) => {
     setBusy(true);
     try {
-      await action();
-      await load();
-      onChanged();
+      if (await action()) {
+        await load();
+        onChanged();
+      }
     } finally {
       setBusy(false);
     }
   };
 
+  /** A refusal goes on the field it names, or in the section that sent it. */
+  const refuse = <F extends string>(
+    errors: ReturnType<typeof useFieldErrors<F>>,
+    err: unknown,
+    fallback: string
+  ): false => {
+    errors.focusFirst(errors.setFromApiError(err, fallback));
+    return false;
+  };
+
   const markPaidInFull = () =>
     withBusy(async () => {
-      if (!order) return;
+      if (!order) return false;
+      paymentErrors.clear();
       try {
         await storefrontService.markOrderPaid(order.id, {
           paymentMethod: paymentMethod || undefined,
@@ -107,14 +213,16 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
           notifyMember: true,
         });
         toast.success('Marked paid in full');
+        return true;
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Could not mark the order paid'));
+        return refuse(paymentErrors, err, 'Could not mark the order paid');
       }
     });
 
   const waivePayment = () =>
     withBusy(async () => {
-      if (!order) return;
+      if (!order) return false;
+      waiveErrors.clear();
       try {
         await storefrontService.waiveOrderPayment(order.id, {
           reason: waiveReason.trim() || undefined,
@@ -122,18 +230,25 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
         });
         setWaiveReason('');
         toast.success('Payment waived');
+        return true;
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Could not waive the payment'));
+        return refuse(waiveErrors, err, 'Could not waive the payment');
       }
     });
 
   const recordPayment = () =>
     withBusy(async () => {
-      if (!order) return;
+      if (!order) return false;
+      paymentErrors.clear();
       const amount = Number(paymentAmount);
+      // Named on the field, not in a toast (forms review F-3). Nothing is
+      // recorded until it is fixed: a payment is money, and half of one is
+      // not a thing to save.
       if (!amount || amount <= 0) {
-        toast.error('Enter an amount greater than zero');
-        return;
+        const problems: FieldErrors<PaymentField> = { amount: 'Enter an amount greater than zero.' };
+        paymentErrors.setErrors(problems);
+        paymentErrors.focusFirst(problems);
+        return false;
       }
       try {
         await storefrontService.recordPayment(order.id, {
@@ -144,14 +259,22 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
           notifyMember: true,
         });
         toast.success('Payment recorded');
+        return true;
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Could not record the payment'));
+        return refuse(paymentErrors, err, 'Could not record the payment');
       }
     });
 
   const changeStatus = () =>
     withBusy(async () => {
-      if (!order || !statusChoice) return;
+      if (!order) return false;
+      statusErrors.clear();
+      if (!statusChoice) {
+        const problems: FieldErrors<StatusField> = { status: 'Choose a status.' };
+        statusErrors.setErrors(problems);
+        statusErrors.focusFirst(problems);
+        return false;
+      }
       try {
         await storefrontService.updateOrderStatus(order.id, {
           status: statusChoice,
@@ -160,14 +283,27 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
         });
         setStatusMessage('');
         toast.success('Status updated. The member was notified.');
+        return true;
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Could not update the status'));
+        return refuse(statusErrors, err, 'Could not update the status');
       }
     });
 
   const postUpdate = () =>
     withBusy(async () => {
-      if (!order || !updateMessage.trim()) return;
+      if (!order) return false;
+      updateErrors.clear();
+      // The button used to sit greyed out until both were answered, without
+      // saying which was missing (forms review F-3).
+      const problems: FieldErrors<UpdateField> = {};
+      if (!updateMessage.trim()) problems.message = 'Write the update to send.';
+      if (!notifyUpdateByEmail && !notifyUpdateInApp)
+        problems.channels = 'Choose in-app, email or both, so the member hears about it.';
+      if (Object.keys(problems).length > 0) {
+        updateErrors.setErrors(problems);
+        updateErrors.focusFirst(problems);
+        return false;
+      }
       try {
         await storefrontService.addOrderMessage(order.id, {
           message: updateMessage.trim(),
@@ -178,24 +314,28 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
         });
         setUpdateMessage('');
         toast.success('Update sent');
+        return true;
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Could not send the update'));
+        return refuse(updateErrors, err, 'Could not send the update');
       }
     });
 
   const saveNotes = () =>
     withBusy(async () => {
-      if (!order) return;
+      if (!order) return false;
+      notesErrors.clear();
       try {
         await storefrontService.setOrderNotes(order.id, adminNotes.trim() || undefined);
         toast.success('Notes saved');
+        return true;
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Could not save the notes'));
+        return refuse(notesErrors, err, 'Could not save the notes');
       }
     });
 
   const cancelOrder = async () => {
     if (!order) return;
+    cancelErrors.clear();
     const paid = Number(order.amountPaid);
     const reason = cancelReason.trim();
     // Cancelling leaves amount_paid alone, so money already recorded is still
@@ -221,36 +361,46 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
         });
         setCancelReason('');
         toast.success(`${order.orderNumber} cancelled`);
+        return true;
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Could not cancel the order'));
+        return refuse(cancelErrors, err, 'Could not cancel the order');
       }
     });
   };
 
   const refund = () =>
     withBusy(async () => {
-      if (!order) return;
+      if (!order) return false;
+      paymentErrors.clear();
       try {
         await storefrontService.refundOrder(order.id, {
           notifyMember: true,
         });
         toast.success('Refund recorded');
+        return true;
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Could not record the refund'));
+        return refuse(paymentErrors, err, 'Could not record the refund');
       }
     });
 
   const cancelled = order?.status === StoreOrderStatus.CANCELLED;
 
+  const submitWith =
+    (action: () => Promise<void>) =>
+    (e: React.FormEvent): void => {
+      e.preventDefault();
+      void action();
+    };
+
   return (
     <Modal
       isOpen={orderId !== null}
-      onClose={onClose}
+      onClose={requestClose}
       title={order ? `Order ${order.orderNumber}` : 'Order'}
       size="xl"
       footer={
         <div className="flex justify-end">
-          <button type="button" className="btn-secondary btn-md" onClick={onClose}>
+          <button type="button" className="btn-secondary btn-md" onClick={requestClose}>
             Close
           </button>
         </div>
@@ -377,14 +527,22 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
             )}
 
             {(!cancelled || Number(order.amountPaid) > 0) && (
-              <section className="card-secondary space-y-3 p-3">
-                <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
-                  <CircleDollarSign className="h-4 w-4" />
+              <form
+                noValidate
+                aria-labelledby="order-payment-heading"
+                onSubmit={submitWith(recordPayment)}
+                className="card-secondary space-y-3 p-3"
+              >
+                <h3
+                  id="order-payment-heading"
+                  className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold"
+                >
+                  <CircleDollarSign className="h-4 w-4" aria-hidden="true" />
                   Payment
                 </h3>
 
                 {/* The server refuses a payment on a cancelled order; only the
-                  refund of what was already taken still applies. */}
+                    refund of what was already taken still applies. */}
                 {Number(order.balanceDue) > 0 && !cancelled && (
                   <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -400,31 +558,45 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                     <span className="text-theme-text-muted text-xs">or record a partial amount below</span>
                   </div>
                 )}
-                <div className="flex flex-wrap items-end gap-2">
-                  {!cancelled && (
-                    <>
-                      <div>
-                        <label htmlFor="payment-amount" className="form-label-sm">
-                          Amount
-                        </label>
+                <SectionError message={paymentErrors.formError} />
+                {!cancelled && (
+                  <div className="flex flex-wrap items-start gap-2">
+                    <FormField
+                      id={PAYMENT_FIELDS.amount.id}
+                      label="Amount"
+                      labelClassName="form-label-sm"
+                      error={paymentErrors.errors.amount}
+                    >
+                      {(field) => (
                         <input
-                          id="payment-amount"
+                          {...field}
                           type="number"
                           min="0"
                           step="0.01"
+                          inputMode="decimal"
                           value={paymentAmount}
-                          onChange={(e) => setPaymentAmount(e.target.value)}
+                          onChange={(e) => {
+                            setPaymentAmount(e.target.value);
+                            paymentErrors.setError('amount', null);
+                          }}
                           className="form-input-sm w-28"
                         />
-                      </div>
-                      <div>
-                        <label htmlFor="payment-method" className="form-label-sm">
-                          Paid by
-                        </label>
+                      )}
+                    </FormField>
+                    <FormField
+                      id={PAYMENT_FIELDS.paymentMethod.id}
+                      label="Paid by"
+                      labelClassName="form-label-sm"
+                      error={paymentErrors.errors.paymentMethod}
+                    >
+                      {(field) => (
                         <select
-                          id="payment-method"
+                          {...field}
                           value={paymentMethod}
-                          onChange={(e) => setPaymentMethod(e.target.value)}
+                          onChange={(e) => {
+                            setPaymentMethod(e.target.value);
+                            paymentErrors.setError('paymentMethod', null);
+                          }}
                           className="form-input-sm"
                         >
                           <option value="">Not recorded</option>
@@ -434,30 +606,37 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                             </option>
                           ))}
                         </select>
-                      </div>
-                      <div className="min-w-[10rem] flex-1">
-                        <label htmlFor="payment-ref" className="form-label-sm">
-                          Reference
-                        </label>
+                      )}
+                    </FormField>
+                    <FormField
+                      id={PAYMENT_FIELDS.reference.id}
+                      label="Reference"
+                      labelClassName="form-label-sm"
+                      error={paymentErrors.errors.reference}
+                      maxLength={REFERENCE_MAX}
+                      count={paymentReference.length}
+                      className="min-w-[10rem] flex-1"
+                    >
+                      {(field) => (
                         <input
-                          id="payment-ref"
+                          {...field}
                           type="text"
                           value={paymentReference}
-                          onChange={(e) => setPaymentReference(e.target.value)}
+                          onChange={(e) => {
+                            setPaymentReference(e.target.value);
+                            paymentErrors.setError('reference', null);
+                          }}
                           className="form-input-sm"
                         />
-                      </div>
-                      <button
-                        type="button"
-                        className="btn-success btn-md"
-                        disabled={busy}
-                        onClick={() => {
-                          void recordPayment();
-                        }}
-                      >
-                        Record payment
-                      </button>
-                    </>
+                      )}
+                    </FormField>
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {!cancelled && (
+                    <button type="submit" className="btn-success btn-md" disabled={busy}>
+                      Record payment
+                    </button>
                   )}
                   {Number(order.amountPaid) > 0 && (
                     <button
@@ -468,205 +647,277 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                         void refund();
                       }}
                     >
-                      <Undo2 className="h-4 w-4" />
+                      <Undo2 className="h-4 w-4" aria-hidden="true" />
                       Refund
                     </button>
                   )}
                 </div>
-              </section>
+              </form>
             )}
 
             {order.paymentStatus !== 'waived' && Number(order.balanceDue) > 0 && !cancelled && (
-              <section className="card-secondary space-y-2 p-3">
-                <h3 className="text-theme-text-primary text-sm font-semibold">Waive payment</h3>
+              <form
+                noValidate
+                aria-labelledby="order-waive-heading"
+                onSubmit={submitWith(waivePayment)}
+                className="card-secondary space-y-2 p-3"
+              >
+                <h3 id="order-waive-heading" className="text-theme-text-primary text-sm font-semibold">
+                  Waive payment
+                </h3>
                 <p className="text-theme-text-muted text-xs">
                   Settles the balance without collecting money. The window&apos;s collected total does not change.
                 </p>
+                <SectionError message={waiveErrors.formError} />
                 <div className="flex flex-wrap items-end gap-2">
-                  <div className="min-w-[12rem] flex-1">
-                    <label htmlFor="waive-reason" className="form-label-sm">
-                      Reason (shown to the member)
-                    </label>
-                    <input
-                      id="waive-reason"
-                      type="text"
-                      value={waiveReason}
-                      onChange={(e) => setWaiveReason(e.target.value)}
-                      className="form-input-sm"
-                      placeholder="Comped — 25 years of service"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-secondary btn-md"
-                    disabled={busy}
-                    onClick={() => {
-                      void waivePayment();
-                    }}
+                  <FormField
+                    id={WAIVE_FIELDS.reason.id}
+                    label="Reason (shown to the member)"
+                    labelClassName="form-label-sm"
+                    error={waiveErrors.errors.reason}
+                    className="min-w-[12rem] flex-1"
                   >
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="text"
+                        value={waiveReason}
+                        onChange={(e) => {
+                          setWaiveReason(e.target.value);
+                          waiveErrors.setError('reason', null);
+                        }}
+                        className="form-input-sm"
+                        placeholder="Comped — 25 years of service"
+                      />
+                    )}
+                  </FormField>
+                  <button type="submit" className="btn-secondary btn-md" disabled={busy}>
                     Waive payment
                   </button>
                 </div>
-              </section>
+              </form>
             )}
 
             {!cancelled && (
-              <section className="card-secondary space-y-3 p-3">
-                <h3 className="text-theme-text-primary text-sm font-semibold">Change status</h3>
+              <form
+                noValidate
+                aria-labelledby="order-status-heading"
+                onSubmit={submitWith(changeStatus)}
+                className="card-secondary space-y-3 p-3"
+              >
+                <h3 id="order-status-heading" className="text-theme-text-primary text-sm font-semibold">
+                  Change status
+                </h3>
+                <SectionError message={statusErrors.formError} />
                 <div className="flex flex-wrap items-end gap-2">
-                  <div>
-                    <label htmlFor="status-choice" className="form-label-sm">
-                      Status
-                    </label>
-                    <select
-                      id="status-choice"
-                      value={statusChoice}
-                      onChange={(e) => setStatusChoice(e.target.value)}
-                      className="form-input-sm"
-                    >
-                      {ADVANCEABLE_STATUSES.map((value) => (
-                        <option key={value} value={value}>
-                          {ORDER_STATUS_LABELS[value] ?? value}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="min-w-[12rem] flex-1">
-                    <label htmlFor="status-message" className="form-label-sm">
-                      Note to the member (optional)
-                    </label>
-                    <input
-                      id="status-message"
-                      type="text"
-                      value={statusMessage}
-                      onChange={(e) => setStatusMessage(e.target.value)}
-                      className="form-input-sm"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-primary btn-md"
-                    disabled={busy}
-                    onClick={() => {
-                      void changeStatus();
-                    }}
+                  <FormField
+                    id={STATUS_FIELDS.status.id}
+                    label="Status"
+                    labelClassName="form-label-sm"
+                    error={statusErrors.errors.status}
                   >
+                    {(field) => (
+                      <select
+                        {...field}
+                        value={statusChoice}
+                        onChange={(e) => {
+                          setStatusChoice(e.target.value);
+                          statusErrors.setError('status', null);
+                        }}
+                        className="form-input-sm"
+                      >
+                        {ADVANCEABLE_STATUSES.map((value) => (
+                          <option key={value} value={value}>
+                            {ORDER_STATUS_LABELS[value] ?? value}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </FormField>
+                  <FormField
+                    id={STATUS_FIELDS.message.id}
+                    label="Note to the member"
+                    optional
+                    labelClassName="form-label-sm"
+                    error={statusErrors.errors.message}
+                    className="min-w-[12rem] flex-1"
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="text"
+                        value={statusMessage}
+                        onChange={(e) => {
+                          setStatusMessage(e.target.value);
+                          statusErrors.setError('message', null);
+                        }}
+                        className="form-input-sm"
+                      />
+                    )}
+                  </FormField>
+                  <button type="submit" className="btn-primary btn-md" disabled={busy}>
                     Update status
                   </button>
                 </div>
-              </section>
+              </form>
             )}
 
-            <section className="card-secondary space-y-3 p-3">
-              <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
-                <MessageSquare className="h-4 w-4" />
+            <form
+              noValidate
+              aria-labelledby="order-update-heading"
+              onSubmit={submitWith(postUpdate)}
+              className="card-secondary space-y-3 p-3"
+            >
+              <h3
+                id="order-update-heading"
+                className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold"
+              >
+                <MessageSquare className="h-4 w-4" aria-hidden="true" />
                 Send an update
               </h3>
-              <textarea
-                rows={2}
-                value={updateMessage}
-                onChange={(e) => setUpdateMessage(e.target.value)}
-                className="form-input"
-                aria-label="Message to the member"
-                placeholder="Your shirt came in a size large by mistake — swap available."
-              />
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <fieldset className="flex flex-wrap gap-4">
-                  <legend className="sr-only">Notification channels</legend>
-                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="form-checkbox"
-                      checked={notifyUpdateInApp}
-                      onChange={(event) => setNotifyUpdateInApp(event.target.checked)}
-                    />
-                    In-app notification
-                  </label>
-                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="form-checkbox"
-                      checked={notifyUpdateByEmail}
-                      onChange={(event) => setNotifyUpdateByEmail(event.target.checked)}
-                    />
-                    Email
-                  </label>
-                </fieldset>
-                <button
-                  type="button"
-                  className="btn-secondary btn-md"
-                  disabled={busy || !updateMessage.trim() || (!notifyUpdateByEmail && !notifyUpdateInApp)}
-                  onClick={() => {
-                    void postUpdate();
-                  }}
+              <SectionError message={updateErrors.formError} />
+              <FormField
+                id={UPDATE_FIELDS.message.id}
+                label="Message to the member"
+                labelClassName="sr-only"
+                error={updateErrors.errors.message}
+              >
+                {(field) => (
+                  <textarea
+                    {...field}
+                    rows={2}
+                    value={updateMessage}
+                    onChange={(e) => {
+                      setUpdateMessage(e.target.value);
+                      updateErrors.setError('message', null);
+                    }}
+                    className="form-input"
+                    placeholder="Your shirt came in a size large by mistake — swap available."
+                  />
+                )}
+              </FormField>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <fieldset
+                  className="min-w-0"
+                  {...(updateErrors.errors.channels ? { 'aria-describedby': 'update-channels-error' } : {})}
                 >
+                  <legend className="sr-only">Notification channels</legend>
+                  <div className="flex flex-wrap gap-4">
+                    <label className="text-theme-text-secondary touch:min-h-11 flex items-center gap-2 text-sm">
+                      <input
+                        id={UPDATE_FIELDS.channels.id}
+                        type="checkbox"
+                        className="form-checkbox"
+                        checked={notifyUpdateInApp}
+                        {...(updateErrors.errors.channels ? { 'aria-invalid': true as const } : {})}
+                        onChange={(event) => {
+                          setNotifyUpdateInApp(event.target.checked);
+                          updateErrors.setError('channels', null);
+                        }}
+                      />
+                      In-app notification
+                    </label>
+                    <label className="text-theme-text-secondary touch:min-h-11 flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="form-checkbox"
+                        checked={notifyUpdateByEmail}
+                        {...(updateErrors.errors.channels ? { 'aria-invalid': true as const } : {})}
+                        onChange={(event) => {
+                          setNotifyUpdateByEmail(event.target.checked);
+                          updateErrors.setError('channels', null);
+                        }}
+                      />
+                      Email
+                    </label>
+                  </div>
+                  {updateErrors.errors.channels && (
+                    <p id="update-channels-error" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+                      {updateErrors.errors.channels}
+                    </p>
+                  )}
+                </fieldset>
+                <button type="submit" className="btn-secondary btn-md" disabled={busy}>
                   Send update
                 </button>
               </div>
-            </section>
+            </form>
 
-            <section>
-              <label htmlFor="admin-notes" className="form-label">
-                Internal notes
-              </label>
-              <textarea
-                id="admin-notes"
-                rows={2}
-                value={adminNotes}
-                onChange={(e) => setAdminNotes(e.target.value)}
-                className="form-input"
-              />
+            <form noValidate onSubmit={submitWith(saveNotes)}>
+              <SectionError message={notesErrors.formError} />
+              <FormField id={NOTES_FIELDS.adminNotes.id} label="Internal notes" error={notesErrors.errors.adminNotes}>
+                {(field) => (
+                  <textarea
+                    {...field}
+                    rows={2}
+                    value={adminNotes}
+                    onChange={(e) => {
+                      setAdminNotes(e.target.value);
+                      notesErrors.setError('adminNotes', null);
+                    }}
+                    className="form-input"
+                  />
+                )}
+              </FormField>
               <div className="mt-2 flex justify-end">
-                <button
-                  type="button"
-                  className="btn-secondary btn-sm"
-                  disabled={busy}
-                  onClick={() => {
-                    void saveNotes();
-                  }}
-                >
+                <button type="submit" className="btn-secondary btn-sm" disabled={busy}>
                   Save notes
                 </button>
               </div>
-            </section>
+            </form>
 
             {!cancelled && (
-              <section className="card-secondary space-y-2 p-3">
-                <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
+              <form
+                noValidate
+                aria-labelledby="order-cancel-heading"
+                onSubmit={submitWith(cancelOrder)}
+                className="card-secondary space-y-2 p-3"
+              >
+                <h3
+                  id="order-cancel-heading"
+                  className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold"
+                >
                   <Ban className="h-4 w-4" aria-hidden="true" />
                   Cancel order
                 </h3>
                 <p className="text-theme-text-muted text-xs">
                   For an order that will not be filled. It cannot be reopened, and the member is emailed.
                 </p>
+                <SectionError message={cancelErrors.formError} />
                 <div className="flex flex-wrap items-end gap-2">
-                  <div className="min-w-[12rem] flex-1">
-                    <label htmlFor="cancel-reason" className="form-label-sm">
-                      Reason for cancelling (shown to the member)
-                    </label>
-                    <input
-                      id="cancel-reason"
-                      type="text"
-                      maxLength={500}
-                      value={cancelReason}
-                      onChange={(e) => setCancelReason(e.target.value)}
-                      className="form-input-sm"
-                      placeholder="The vendor discontinued this item"
-                    />
-                  </div>
+                  <FormField
+                    id={CANCEL_FIELDS.reason.id}
+                    label="Reason for cancelling (shown to the member)"
+                    labelClassName="form-label-sm"
+                    error={cancelErrors.errors.reason}
+                    maxLength={CANCEL_REASON_MAX}
+                    count={cancelReason.length}
+                    className="min-w-[12rem] flex-1"
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="text"
+                        value={cancelReason}
+                        onChange={(e) => {
+                          setCancelReason(e.target.value);
+                          cancelErrors.setError('reason', null);
+                        }}
+                        className="form-input-sm"
+                        placeholder="The vendor discontinued this item"
+                      />
+                    )}
+                  </FormField>
                   <button
-                    type="button"
+                    type="submit"
                     className="btn-secondary btn-md"
                     disabled={busy}
                     aria-label={`Cancel ${order.orderNumber}`}
-                    onClick={() => {
-                      void cancelOrder();
-                    }}
                   >
                     Cancel order
                   </button>
                 </div>
-              </section>
+              </form>
             )}
 
             {order.events.length > 0 && (

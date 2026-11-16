@@ -698,6 +698,9 @@ class EventListItem(UTCResponseBase):
     postponed_from_start: Optional[datetime] = None
     is_recurring: bool = False
     recurrence_parent_id: Optional[UUID] = None
+    # The attendance lock, so a series edit can say which earlier occurrence
+    # is finalized without fetching each one.
+    attendance_finalized_at: Optional[datetime] = None
     rsvp_count: Optional[int] = None
     going_count: Optional[int] = None
     # How many are waiting, for the "N waiting" line on a waitlisted card.

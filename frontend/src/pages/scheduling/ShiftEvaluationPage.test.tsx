@@ -507,6 +507,51 @@ describe('ShiftEvaluationPage — keeping the officer’s work', () => {
     expect(screen.queryByText(/Marcus’s form/)).not.toBeInTheDocument();
   });
 
+  it('closes an opened comment box when the officer switches to another form', async () => {
+    const user = userEvent.setup();
+    const options = [
+      { id: 'tpl-1', name: 'EMT Shift Evaluation' },
+      { id: 'tpl-2', name: 'Driver Evaluation' },
+    ];
+    const first = form({ requirement: { ...requirement, template_options: options } });
+    // The second form asks about vital signs too, under the same item key.
+    const second = form({
+      requirement: { ...requirement, template_options: options },
+      template_id: 'tpl-2',
+      template: { ...form().template, name: 'Driver Evaluation' },
+    });
+    mockGetForm.mockReset();
+    mockGetForm.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    renderWithRouter(<ShiftEvaluationPage />);
+
+    await user.click(await screen.findByRole('button', { name: '+ Add comment' }));
+    expect(screen.queryByRole('button', { name: '+ Add comment' })).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Form'), 'tpl-2');
+    expect(await screen.findByRole('heading', { name: 'Driver Evaluation — Marcus Bell' })).toBeInTheDocument();
+
+    // The empty box opened on the first form is not carried onto the second.
+    expect(screen.getByRole('button', { name: '+ Add comment' })).toBeInTheDocument();
+  });
+
+  it('closes an opened comment box when the officer moves to another crew member', async () => {
+    const user = userEvent.setup();
+    const priya = form({
+      requirement: { ...requirement, member_id: 'u3', member_name: 'Priya Natarajan', scope_key: 'en-2' },
+    });
+    const { rerender } = renderWithRouter(<ShiftEvaluationPage />);
+
+    await user.click(await screen.findByRole('button', { name: '+ Add comment' }));
+    expect(screen.queryByRole('button', { name: '+ Add comment' })).not.toBeInTheDocument();
+
+    mockGetForm.mockResolvedValueOnce(priya);
+    params = { shiftId: 'sh1', memberId: 'u3', scopeKey: 'en-2' };
+    rerender(<ShiftEvaluationPage />);
+    expect(await screen.findByRole('heading', { name: 'EMT Shift Evaluation — Priya Natarajan' })).toBeInTheDocument();
+
+    expect(screen.getByRole('button', { name: '+ Add comment' })).toBeInTheDocument();
+  });
+
   it('keeps the form and the answers when another form fails to open', async () => {
     const user = userEvent.setup();
     const twoForms = form({

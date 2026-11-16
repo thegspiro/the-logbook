@@ -8,6 +8,11 @@ export interface TrainingLinkageData {
   requirements: TrainingRequirement[];
   programs: TrainingProgram[];
   phases: ProgramPhase[];
+  /**
+   * Whether the requirements request has settled. Until it has, a linked
+   * requirement missing from `requirements` is not yet known to be gone.
+   */
+  requirementsLoaded?: boolean | undefined;
 }
 
 /**
@@ -23,6 +28,7 @@ export function useTrainingLinkageData(programId?: string): TrainingLinkageData 
   const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
   const [programs, setPrograms] = useState<TrainingProgram[]>([]);
   const [phases, setPhases] = useState<ProgramPhase[]>([]);
+  const [requirementsLoaded, setRequirementsLoaded] = useState(false);
 
   useEffect(() => {
     trainingService
@@ -36,7 +42,8 @@ export function useTrainingLinkageData(programId?: string): TrainingLinkageData 
       .then(setRequirements)
       .catch(() => {
         /* non-critical */
-      });
+      })
+      .finally(() => setRequirementsLoaded(true));
     trainingProgramService
       .getPrograms({ is_template: false })
       .then((data) => setPrograms(data.filter((p) => p.active)))
@@ -64,5 +71,5 @@ export function useTrainingLinkageData(programId?: string): TrainingLinkageData 
     };
   }, [programId]);
 
-  return { categories, requirements, programs, phases };
+  return { categories, requirements, programs, phases, requirementsLoaded };
 }

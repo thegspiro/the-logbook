@@ -372,6 +372,9 @@ class UnmappedRequirementResponse(BaseModel):
     requirement_id: str
     name: str
     reason: str
+    # It grades no member at all (no scope, or no longer active), so it adds
+    # no one; the others grade members no tier stands for.
+    applies_to_no_one: bool = False
 
 
 class MandatoryTiersResponse(BaseModel):
@@ -380,12 +383,15 @@ class MandatoryTiersResponse(BaseModel):
     ``everyone`` is "All members"; otherwise ``tier_ids`` are membership tier
     ids in ladder order. ``unmapped`` names each requirement (or membership
     word in one) that no tier stands for, for the form to say so rather than
-    guess.
+    guess. ``source_ids`` are the requirements the suggestion comes from, in
+    the order sent; a requirement that maps only partly is in both it and
+    ``unmapped``.
     """
 
     everyone: bool
     tier_ids: List[str]
     unmapped: List[UnmappedRequirementResponse]
+    source_ids: List[str] = Field(default_factory=list)
 
 
 class TrainingSessionResponse(UTCResponseBase):

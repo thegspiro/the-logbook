@@ -28,10 +28,20 @@ vi.mock('../../../services/api', () => ({
 
 // The picker searches the catalog through its own service import; its search
 // is covered in InventoryItemPicker.test.tsx. Here it only has to hand back a
-// pick, and show what is linked.
+// pick, show what is linked, and put the field wiring it is given on its
+// search input, as the real picker does.
 vi.mock('../components/InventoryItemPicker', () => ({
-  default: ({ value, onChange }: { value?: string; onChange: (id: string | undefined, name?: string) => void }) => (
+  default: ({
+    value,
+    onChange,
+    controlProps,
+  }: {
+    value?: string;
+    onChange: (id: string | undefined, name?: string) => void;
+    controlProps?: Record<string, unknown>;
+  }) => (
     <div>
+      <input type="text" {...controlProps} />
       <span>{value ? `Linked: ${value}` : 'Not linked'}</span>
       <button type="button" onClick={() => onChange('it-9', 'Nitrile Gloves L')}>
         Pick Nitrile Gloves L
@@ -169,6 +179,15 @@ describe('ReorderRequestsPage', () => {
   });
 
   // W41-5: receiving needs a linked item, and nothing on this page set one.
+  // Forms review F-8: the visible "Inventory item" text was not tied to the
+  // picker's input, whose only name was a placeholder that vanishes on typing.
+  it('names the inventory item picker by its label', async () => {
+    renderWithRouter(<ReorderRequestsPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /New Request/i }));
+
+    expect(await screen.findByRole('textbox', { name: 'Inventory item' })).toBeInTheDocument();
+  });
+
   it('links the picked inventory item, naming the order after it', async () => {
     const user = userEvent.setup();
     renderWithRouter(<ReorderRequestsPage />);
@@ -467,7 +486,8 @@ describe('ReorderRequestsPage — opened from the attention queue', () => {
     expect(within(dialog).queryByRole('textbox', { name: /Storage location/ })).not.toBeInTheDocument();
     // The button stays pressable and says what is missing (forms review F-3).
     await user.click(within(dialog).getByRole('button', { name: 'Receive stock' }));
-    const item = within(dialog).getByRole('group', { name: 'Inventory item' });
+    const item = within(dialog).getByRole('textbox', { name: 'Inventory item' });
+    expect(item).toHaveAttribute('aria-required', 'true');
     expect(item).toHaveAccessibleDescription('Choose the inventory item the stock goes onto.');
     expect(item).toHaveFocus();
     expect(mockReceiveReorderStock).not.toHaveBeenCalled();

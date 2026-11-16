@@ -126,7 +126,7 @@ describe('SkillsTestingTestRecordsTab', () => {
       mockTests = [{ ...draft, status: 'draft' as const }];
       renderWithRouter(<SkillsTestingTestRecordsTab />);
 
-      const row = screen.getByRole('button', { name: new RegExp(unfinishedTest.template_name) });
+      const row = screen.getByRole('group', { name: new RegExp(unfinishedTest.template_name) });
       expect(within(row).getByText('Start')).toBeInTheDocument();
     });
 
@@ -138,7 +138,7 @@ describe('SkillsTestingTestRecordsTab', () => {
       renderWithRouter(<SkillsTestingTestRecordsTab />);
 
       // Scoped to the row: the page's own "Start Test" button reads "Start" on a phone.
-      const row = screen.getByRole('button', { name: /Ladder Evolution/ });
+      const row = screen.getByRole('group', { name: /Ladder Evolution/ });
       expect(within(row).queryByText('Resume')).not.toBeInTheDocument();
       expect(within(row).queryByText('Start')).not.toBeInTheDocument();
     });

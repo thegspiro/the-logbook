@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useId } from 'react';
 import type { TrainingRequirement } from '../../types/training';
 import { attendanceRequirements } from '../../utils/attendanceRequirements';
+import { MEMBERSHIP_TYPE_LABELS } from '../../constants/enums';
 
 interface AttendanceRequirementChecklistProps {
   /** Every active requirement; only session-attendance ones are offered. */
@@ -8,39 +9,130 @@ interface AttendanceRequirementChecklistProps {
   value: string[];
   onChange: (next: string[]) => void;
   disabled?: boolean | undefined;
+  /**
+   * Linked requirements no longer offered (deactivated since), by name. Each
+   * is drawn ticked and marked so the officer can see the link and untick
+   * it; once unticked it is gone, as it can no longer be chosen.
+   */
+  retired?: readonly { id: string; name: string }[] | undefined;
 }
 
 /**
- * One tick box per session-attendance requirement. A ticked requirement
- * charges the members it grades with attending the session; none ticked
- * leaves the session optional. Shared by the create form and the event page
- * so the two offer the same choice the same way.
+ * Whom a requirement applies to, as configured on it: its own fields, in the
+ * requirement editor's words ("Member Categories"). A requirement stores
+ * legacy membership words while the department's tiers are ids of another
+ * vocabulary, so the words are never looked up as tiers here; which tiers a
+ * requirement stands for is the backend's projection
+ * (mandatory_tiers_for_requirements), which Mandatory for's pre-fill shows.
+ *
+ * The order is the grader's, requirement_applies_to_member in
+ * app/services/training_compliance.py: applies_to_all, then member
+ * categories, then rank or position, and a requirement naming none of them
+ * applies to nobody (pitfall #29). That last state is reachable, since
+ * applies_to_all and the scope lists are independent fields; reading it as
+ * "all members" told an officer the opposite of what the grader does.
+ */
+const NO_MEMBERS = 'Applies to no members: no member categories, ranks or positions are set';
+
+const appliesTo = (requirement: TrainingRequirement): string => {
+  if (requirement.applies_to_all) return 'Applies to all members';
+  const listed = requirement.required_membership_types ?? [];
+  if (listed.length) {
+    // Blank words match no member's category, and the grader does not go on
+    // to ranks or positions once the list is non-empty, so a list of only
+    // blanks applies to no one (training_compliance.mandatory_tiers_for_requirements).
+    const types = listed.map((type) => type.trim()).filter(Boolean);
+    if (!types.length) return NO_MEMBERS;
+    const label = (type: string) => MEMBERSHIP_TYPE_LABELS[type] ?? type.replace(/_/g, ' ');
+    return `Member categories: ${types.map(label).join(', ')}`;
+  }
+  if (requirement.required_roles?.length || requirement.required_positions?.length) {
+    return 'Applies to members by rank or position';
+  }
+  return NO_MEMBERS;
+};
+
+/**
+ * One option per session-attendance requirement. Attendance at a session
+ * counts toward the ticked requirements' percentages; ticking one does not by
+ * itself make attending mandatory (owner decision, 2026-11-10), which is
+ * Mandatory attendance's job on the Settings step. None ticked: the session
+ * counts toward no attendance requirement.
  */
 const AttendanceRequirementChecklist: React.FC<AttendanceRequirementChecklistProps> = ({
   requirements,
   value,
   onChange,
   disabled = false,
+  retired = [],
 }) => {
+  const idPrefix = useId();
   const toggle = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
 
   return (
-    <div className="space-y-2">
-      {attendanceRequirements(requirements).map((r) => (
-        <label key={r.id} className="text-theme-text-primary flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="form-checkbox"
-            checked={value.includes(r.id)}
-            onChange={() => toggle(r.id)}
-            disabled={disabled}
-          />
-          {r.name}
-          {r.required_attendance_pct ? (
-            <span className="text-theme-text-muted">({r.required_attendance_pct}%)</span>
-          ) : null}
-        </label>
-      ))}
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      {attendanceRequirements(requirements).map((r) => {
+        const checked = value.includes(r.id);
+        const descriptionId = `${idPrefix}-${r.id}`;
+        return (
+          <label
+            key={r.id}
+            className={`touch:min-h-11 flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm ${
+              checked ? 'bg-theme-surface-secondary border-red-700 dark:border-red-500' : 'border-theme-surface-border'
+            } ${disabled ? 'cursor-not-allowed' : ''}`}
+          >
+            <input
+              type="checkbox"
+              className="form-checkbox mt-0.5 shrink-0"
+              checked={checked}
+              onChange={() => toggle(r.id)}
+              disabled={disabled}
+              aria-describedby={descriptionId}
+            />
+            <span className="min-w-0">
+              <span className="text-theme-text-primary block font-medium">
+                {r.required_attendance_pct ? `${r.name} (${r.required_attendance_pct}%)` : r.name}
+              </span>
+              {/* Its description, not part of its name: aria-describedby still
+                  reads it, and the name stays the requirement's alone. */}
+              <span id={descriptionId} aria-hidden="true" className="text-theme-text-muted block">
+                {appliesTo(r)}
+              </span>
+            </span>
+          </label>
+        );
+      })}
+      {retired
+        .filter((r) => value.includes(r.id))
+        .map((r) => {
+          const descriptionId = `${idPrefix}-${r.id}`;
+          return (
+            <label
+              key={r.id}
+              className={`touch:min-h-11 bg-theme-surface-secondary flex cursor-pointer items-start gap-3 rounded-lg border border-red-700 p-3 text-sm dark:border-red-500 ${
+                disabled ? 'cursor-not-allowed' : ''
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5 shrink-0"
+                checked
+                onChange={() => toggle(r.id)}
+                disabled={disabled}
+                aria-describedby={descriptionId}
+              />
+              <span className="min-w-0">
+                <span className="text-theme-text-primary block font-medium">{r.name}</span>
+                <span id={descriptionId} aria-hidden="true" className="text-theme-text-secondary block">
+                  <span className="badge mr-1 bg-amber-500/15 text-xs text-amber-800 dark:text-amber-300">
+                    No longer active
+                  </span>{' '}
+                  Still linked. Untick to remove it; it can&apos;t be chosen again.
+                </span>
+              </span>
+            </label>
+          );
+        })}
     </div>
   );
 };
