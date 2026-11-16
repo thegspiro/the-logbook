@@ -1521,6 +1521,11 @@ async def assign_user_roles(
     # first would both hide the retained positions from that diff (so their
     # rows would never be re-inserted) and leave the loaded collection stale,
     # making the delete of a dropped position raise StaleDataError.
+    # Named before the assignment replaces the loaded collection: the audit row
+    # says what changed, which the resulting id list alone cannot (W11-13).
+    roles_added = sorted(r.name for r in roles if str(r.id) not in held)
+    roles_removed = sorted(r.name for r in user.roles if str(r.id) not in kept_ids)
+
     note_position_actor(db, current_user.id)
     user.roles = roles
     await db.commit()
@@ -1551,6 +1556,8 @@ async def assign_user_roles(
             "target_user_id": str(user_id),
             "role_ids": [str(r) for r in role_assignment.role_ids],
             "action": "roles_replaced",
+            "roles_added": roles_added,
+            "roles_removed": roles_removed,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -3634,7 +3641,22 @@ async def get_member_audit_history(
             elif action == "role_removed" and role_name:
                 description = f"Role removed: {role_name}"
             elif action == "roles_replaced":
-                description = "All roles replaced"
+                added = data.get("roles_added")
+                removed = data.get("roles_removed")
+                if added is None and removed is None:
+                    # Written before W11-13: only the resulting ids were kept.
+                    description = "All roles replaced"
+                else:
+                    parts = []
+                    if added:
+                        parts.append(f"added {', '.join(added)}")
+                    if removed:
+                        parts.append(f"removed {', '.join(removed)}")
+                    description = (
+                        f"Positions changed: {'; '.join(parts)}"
+                        if parts
+                        else "Positions saved with no change"
+                    )
         elif log.event_type == "member_status_changed":
             prev = data.get("previous_status", "")
             new = data.get("new_status", "")

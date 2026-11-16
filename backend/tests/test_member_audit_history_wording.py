@@ -113,3 +113,49 @@ async def test_a_status_change_reads_as_words(
     (entry,) = await _history(db_session, officer, member_id)
 
     assert entry.description == "Status changed: Active → Dropped voluntary"
+
+
+async def _role_row(db_session, officer, member_id, extra):
+    await log_audit_event(
+        db=db_session,
+        event_type="user_role_assigned",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": member_id,
+            "role_ids": ["r1"],
+            "action": "roles_replaced",
+            **extra,
+        },
+        user_id=str(officer.id),
+        username=officer.username,
+    )
+    await db_session.flush()
+
+
+async def test_a_position_change_names_what_changed(
+    db_session: AsyncSession, officer_and_member
+):
+    """W11-13: every change from the admin screens read "All roles replaced"."""
+    officer, member_id = officer_and_member
+    await _role_row(
+        db_session,
+        officer,
+        member_id,
+        {"roles_added": ["Historian"], "roles_removed": ["Driver"]},
+    )
+
+    (entry,) = await _history(db_session, officer, member_id)
+
+    assert entry.description == "Positions changed: added Historian; removed Driver"
+
+
+async def test_a_row_written_before_the_change_keeps_its_wording(
+    db_session: AsyncSession, officer_and_member
+):
+    officer, member_id = officer_and_member
+    await _role_row(db_session, officer, member_id, {})
+
+    (entry,) = await _history(db_session, officer, member_id)
+
+    assert entry.description == "All roles replaced"
