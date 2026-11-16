@@ -155,7 +155,8 @@ describe('DocumentsTab', () => {
       dataTransfer: { files: [new File(['%PDF-1.4'], 'scan0003.pdf', { type: 'application/pdf' })] },
     });
 
-    const title = await screen.findByLabelText('Title');
+    // The title is required and its label carries the marker, so it is found by prefix.
+    const title = await screen.findByLabelText(/^Title/);
     expect(title).toHaveValue('scan0003');
     await user.clear(title);
     await user.type(title, 'Pump manual');
@@ -170,5 +171,68 @@ describe('DocumentsTab', () => {
         expirationDate: undefined,
       })
     );
+  });
+
+  describe('the upload form (forms batch 22)', () => {
+    const pick = async () => {
+      grantedPermissions = new Set(['apparatus.view', 'apparatus.edit']);
+      renderWithRouter(<DocumentsTab id="a-1" />);
+      const dropzone = await screen.findByRole('button', { name: /Upload a registration, manual/ });
+      fireEvent.drop(dropzone, {
+        dataTransfer: { files: [new File(['%PDF-1.4'], 'scan0003.pdf', { type: 'application/pdf' })] },
+      });
+      return screen.findByRole('textbox', { name: /^Title/ });
+    };
+
+    it('names a missing title on its field and uploads nothing', async () => {
+      const user = userEvent.setup();
+      const title = await pick();
+      await user.clear(title);
+      await user.click(screen.getByRole('button', { name: 'Upload document' }));
+      expect(title).toHaveAccessibleDescription('Give the document a title.');
+      expect(title).toHaveFocus();
+      expect(uploadDocument).not.toHaveBeenCalled();
+    });
+
+    it('puts a refusal from the server on the field it names and keeps the file', async () => {
+      uploadDocument.mockRejectedValue(
+        Object.assign(new Error('Unprocessable'), {
+          isAxiosError: true,
+          response: {
+            status: 422,
+            data: { detail: [{ loc: ['body', 'expiration_date'], msg: 'Input should be a valid date' }] },
+          },
+        })
+      );
+      const user = userEvent.setup();
+      await pick();
+      await user.click(screen.getByRole('button', { name: 'Upload document' }));
+      expect(await screen.findByLabelText(/^Expires/)).toHaveAccessibleDescription('Input should be a valid date.');
+      expect(screen.getByText('scan0003.pdf')).toBeInTheDocument();
+    });
+
+    it('keeps a failure no field answers for in the form', async () => {
+      uploadDocument.mockRejectedValue(
+        Object.assign(new Error('Too large'), {
+          isAxiosError: true,
+          response: { status: 413, data: { detail: 'The file is larger than this department allows' } },
+        })
+      );
+      const user = userEvent.setup();
+      await pick();
+      await user.click(screen.getByRole('button', { name: 'Upload document' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('The file is larger than this department allows');
+      expect(screen.getByRole('textbox', { name: /^Title/ })).toHaveValue('scan0003');
+    });
+
+    it('asks before Cancel throws a typed title away', async () => {
+      const user = userEvent.setup();
+      const title = await pick();
+      await user.type(title, ' v2');
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(await screen.findByRole('button', { name: 'Keep editing' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+      expect(screen.getByRole('textbox', { name: /^Title/ })).toHaveValue('scan0003 v2');
+    });
   });
 });
