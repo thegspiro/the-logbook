@@ -168,3 +168,55 @@ describe('TrainingEnhancementsTab multi-agency exercises', () => {
     expect(await screen.findByRole('heading', { name: 'County Tabletop' })).toBeInTheDocument();
   });
 });
+
+// Each label was drawn beside its control with no htmlFor, so a screen reader
+// announced the box with no name (axe: label, select-name).
+describe('TrainingEnhancementsTab add dialogs name every control', () => {
+  beforeEach(() => {
+    getQualifications.mockReset();
+    getQualifications.mockResolvedValue([]);
+    getExercises.mockReset();
+    getExercises.mockResolvedValue([]);
+    getUsers.mockReset();
+    getUsers.mockResolvedValue([]);
+  });
+
+  it.each([
+    [
+      'instructors',
+      'Add Qualification',
+      [
+        'Member *',
+        'Qualification Type *',
+        'Certification Level',
+        'Certification Number',
+        'Issuing Agency',
+        'Issued Date',
+        'Expiration Date',
+      ],
+    ],
+    [
+      'multi-agency',
+      'Add Exercise',
+      [
+        'Exercise Name *',
+        'Exercise Type *',
+        'Exercise Date *',
+        'Description',
+        'Lead Agency',
+        'Total Participants',
+        'Organization Name',
+        'Role',
+        'NIMS/ICS Compliant',
+      ],
+    ],
+  ] as const)('on %s, %s', async (activeTab, opener, labels) => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingEnhancementsTab activeTab={activeTab} />);
+    await user.click(await screen.findByRole('button', { name: opener }));
+    const dialog = screen.getByRole('dialog');
+
+    const unnamed = labels.filter((label) => within(dialog).queryByLabelText(label, { exact: true }) === null);
+    expect(unnamed).toEqual([]);
+  });
+});
