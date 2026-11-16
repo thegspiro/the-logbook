@@ -86,7 +86,7 @@ describe('TrainingEventWizard › refusals on their fields', () => {
     getUsers.mockResolvedValue([]);
     getCourses.mockResolvedValue([]);
     getLocations.mockResolvedValue([]);
-    getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [] });
+    getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [], source_ids: [] });
     getVisibleEventTypesWithCategories.mockResolvedValue({
       visible_event_types: ['training'],
       custom_event_categories: [],
@@ -244,7 +244,7 @@ describe('TrainingEventWizard › a refusal on an earlier step', () => {
     getUsers.mockResolvedValue([]);
     getCourses.mockResolvedValue([]);
     getLocations.mockResolvedValue([]);
-    getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [] });
+    getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [], source_ids: [] });
     getVisibleEventTypesWithCategories.mockResolvedValue({
       visible_event_types: ['training'],
       custom_event_categories: [],
@@ -333,7 +333,7 @@ describe('TrainingEventWizard › a refusal is announced once', () => {
     getUsers.mockResolvedValue([]);
     getCourses.mockResolvedValue([]);
     getLocations.mockResolvedValue([]);
-    getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [] });
+    getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [], source_ids: [] });
     getVisibleEventTypesWithCategories.mockResolvedValue({
       visible_event_types: ['training'],
       custom_event_categories: [],

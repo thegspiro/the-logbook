@@ -62,7 +62,7 @@ function resetMocks() {
   getUsers.mockResolvedValue([]);
   getCourses.mockResolvedValue([]);
   getLocations.mockResolvedValue([]);
-  getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [] });
+  getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [], source_ids: [] });
   getVisibleEventTypesWithCategories.mockResolvedValue({
     visible_event_types: ['training'],
     custom_event_categories: [],

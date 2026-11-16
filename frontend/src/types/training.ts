@@ -116,6 +116,12 @@ export interface MandatoryTiersResponse {
   everyone: boolean;
   tier_ids: string[];
   unmapped: MandatoryTiersUnmapped[];
+  /**
+   * The requirements the suggestion comes from: those that gave a tier, or
+   * with `everyone` each that grades someone. One that maps only partly is
+   * here and in `unmapped` both.
+   */
+  source_ids: string[];
 }
 
 // Training Category Types

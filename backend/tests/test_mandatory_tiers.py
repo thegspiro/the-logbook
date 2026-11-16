@@ -231,3 +231,54 @@ class TestTheProjection:
         tiers = mandatory_tiers_for_requirements([_req(types=["life"])], DEFAULT_LADDER)
 
         assert tiers.tier_ids == ["life"]
+
+
+class TestTheSources:
+    """Which requirements the note credits with the suggestion.
+
+    A requirement can map partly: some of its member types stand on a tier
+    and another does not. It is still a source of the tiers it contributed,
+    so the form must not read "named in unmapped" as "contributed nothing".
+    """
+
+    def test_a_partly_mapped_requirement_is_a_source_of_its_tiers(self):
+        tiers = mandatory_tiers_for_requirements(
+            [
+                _req("A", types=["probationary", "honorary"]),
+                _req("B", types=["active"]),
+            ],
+            ["active", "probationary", "life"],
+        )
+
+        assert tiers.tier_ids == ["active", "probationary"]
+        assert [u.requirement_id for u in tiers.unmapped] == ["req-a"]
+        assert tiers.source_ids == ["req-a", "req-b"]
+
+    def test_a_requirement_that_maps_to_no_tier_is_no_source(self):
+        tiers = mandatory_tiers_for_requirements(
+            [
+                _req("Admin", types=["administrative"]),
+                _req("Ranks", roles=["captain"]),
+                _req("Empty"),
+                _req("B", types=["active"]),
+            ],
+            DEFAULT_LADDER,
+        )
+
+        assert tiers.source_ids == ["req-b"]
+
+    # All members stands for every requirement that grades someone, whether a
+    # tier stands for its members or not; one that grades no one is not.
+    def test_all_members_is_sourced_by_every_requirement_that_grades_someone(self):
+        tiers = mandatory_tiers_for_requirements(
+            [
+                _req("Admin", types=["administrative"]),
+                _req("Empty"),
+                _req("All", applies_to_all=True),
+                _req("Retired", active=False, applies_to_all=True),
+            ],
+            DEFAULT_LADDER,
+        )
+
+        assert tiers.everyone is True
+        assert tiers.source_ids == ["req-admin", "req-all"]

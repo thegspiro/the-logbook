@@ -108,6 +108,8 @@ class TestTheEndpoint:
         assert response.everyone is False
         assert response.tier_ids == ["active"]
         assert [u.requirement_id for u in response.unmapped] == [drills]
+        # Partly mapped, it is still the source of the tier it maps to.
+        assert response.source_ids == [drills]
 
     async def test_tiers_come_from_the_department_s_own_ladder(self, db_session):
         org = await _org(

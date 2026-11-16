@@ -129,6 +129,7 @@ describe('EventEditPage', () => {
       everyone: false,
       tier_ids: [],
       unmapped: [],
+      source_ids: [],
     });
     vi.mocked(trainingService.getCourses).mockReset();
     vi.mocked(trainingService.getCourses).mockResolvedValue([]);
@@ -1029,6 +1030,7 @@ describe('EventEditPage', () => {
           everyone: false,
           tier_ids: ['active'],
           unmapped: [],
+          source_ids: ['req-retired', 'req-att'],
         });
         const user = userEvent.setup();
         renderWithRouter(<EventEditPage />);
@@ -1551,6 +1553,7 @@ describe('EventEditPage', () => {
           everyone: true,
           tier_ids: [],
           unmapped: [],
+          source_ids: ['req-att', 'req-att-2'],
         });
       });
 

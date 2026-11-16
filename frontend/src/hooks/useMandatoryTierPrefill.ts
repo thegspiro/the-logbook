@@ -57,8 +57,9 @@ type AttendanceModel = Pick<
  *   type, still counts.
  * - A requirement that applies to everyone suggests All members.
  * - Requirements no tier stands for are named in the note, as is one that
- *   applies to no member at all or is no longer active, and neither is listed
- *   as a source; when none of the ticked ones maps, Mandatory for is left as
+ *   applies to no member at all or is no longer active. The sources listed
+ *   are the backend's (`source_ids`), so one that maps partly is both named
+ *   and a source; when none of the ticked ones maps, Mandatory for is left as
  *   it was rather than falling back to everyone.
  * - Unticking every requirement leaves Mandatory and Mandatory for alone.
  */
@@ -138,12 +139,14 @@ export function useMandatoryTierPrefill(
         const next: Suggestion = result.everyone
           ? { scope: 'all', tierIds: [] }
           : { scope: 'some', tierIds: result.tier_ids };
-        const unmappedIds = new Set(unmapped.map((u) => u.requirement_id));
+        // The backend names the sources: a requirement that maps partly is in
+        // unmapped and still gave tiers, so what unmapped leaves out is not it.
+        const sourceIds = new Set(result.source_ids);
         setSuggestion(next);
         setNote({
           kind: 'filled',
           everyone: result.everyone,
-          sources: ids.filter((id) => !unmappedIds.has(id)).map(requirementName),
+          sources: ids.filter((id) => sourceIds.has(id)).map(requirementName),
           tierIds: next.tierIds,
           unmapped,
         });

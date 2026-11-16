@@ -56,7 +56,7 @@ function resetMocks() {
     mock.mockReset();
   }
   linkageRequirements.value = [];
-  getMandatoryTiers.mockResolvedValue({ everyone: true, tier_ids: [], unmapped: [] });
+  getMandatoryTiers.mockResolvedValue({ everyone: true, tier_ids: [], unmapped: [], source_ids: [] });
   onCancel.mockReset();
   getUsers.mockResolvedValue([]);
   getCourses.mockResolvedValue([]);

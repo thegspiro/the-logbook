@@ -314,7 +314,7 @@ POST   /api/v1/training/sessions/recurring                 # Create a recurring 
 GET    /api/v1/training/sessions/by-event/{event_id}       # The session behind a Training event (200 with null when it has none)
 POST   /api/v1/training/sessions/by-event/{event_id}       # Attach training details to a Training event (events.manage)
 GET    /api/v1/training/sessions/by-event/{event_id}/approval  # Where the event's approval stands (events.manage or training.manage; 200 with null when it has none)
-POST   /api/v1/training/sessions/mandatory-tiers           # {requirement_ids} -> {everyone, tier_ids, unmapped} (events.manage or training.manage)
+POST   /api/v1/training/sessions/mandatory-tiers           # {requirement_ids} -> {everyone, tier_ids, unmapped, source_ids} (events.manage or training.manage)
 PATCH  /api/v1/training/sessions/{id}                      # Relink course/program/requirement (events.manage; locked while attendance is finalized)
 PUT    /api/v1/training/sessions/{id}/attendance-requirements  # Replace the Counts toward attendance set (events.manage; allowed after finalize)
 POST   /api/v1/training/sessions/{id}/finalize             # Runs the event's Finalize Attendance (events.manage)

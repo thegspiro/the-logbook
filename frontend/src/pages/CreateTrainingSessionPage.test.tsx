@@ -113,7 +113,7 @@ function resetApi() {
   });
   createEvent.mockResolvedValue({ id: 'event-1' });
   createRecurringEvent.mockResolvedValue([{ id: 'event-1' }, { id: 'event-2' }]);
-  getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [] });
+  getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [], source_ids: [] });
   getTemplates.mockResolvedValue([]);
 }
 
@@ -1199,8 +1199,9 @@ describe('CreateTrainingSessionPage mandatory pre-fill', () => {
               everyone: false,
               tier_ids: ['probationary', 'active'],
               unmapped: ids.includes('req-admin') ? [ADMIN_UNMAPPED] : [],
+              source_ids: ['req-drills'],
             }
-          : { everyone: false, tier_ids: [], unmapped: [ADMIN_UNMAPPED] }
+          : { everyone: false, tier_ids: [], unmapped: [ADMIN_UNMAPPED], source_ids: [] }
       )
     );
   });
@@ -1250,6 +1251,29 @@ describe('CreateTrainingSessionPage mandatory pre-fill', () => {
     expect(sentEvent()).toMatchObject({ is_mandatory: true, mandatory_membership_types: ['probationary', 'active'] });
   });
 
+  // A requirement can map partly: one member type stands on a tier and
+  // another does not. It is named in unmapped and still a source of its tier,
+  // so the note credits each tier to the requirement the backend says gave it.
+  it('credits a partly mapped requirement with the tiers it gave', async () => {
+    getMandatoryTiers.mockResolvedValue({
+      everyone: false,
+      tier_ids: ['probationary', 'active'],
+      unmapped: [ADMIN_UNMAPPED],
+      source_ids: ['req-admin', 'req-drills'],
+    });
+    const user = userEvent.setup();
+    await toTrainingInfo(user);
+    await tick(user, /Company Drill Attendance/);
+    await tick(user, /Administrative Drill Attendance/);
+    await waitFor(() => expect(getMandatoryTiers).toHaveBeenLastCalledWith(['req-drills', 'req-admin']));
+    await next(user);
+    await user.click(screen.getByRole('checkbox', { name: 'Mandatory attendance' }));
+
+    expect(
+      screen.getByText('Company Drill Attendance, Administrative Drill Attendance → Probationary, Active Member.')
+    ).toBeInTheDocument();
+  });
+
   it('writes straight into Mandatory for when Mandatory is already on', async () => {
     const user = userEvent.setup();
     await toTrainingInfo(user);
@@ -1267,7 +1291,7 @@ describe('CreateTrainingSessionPage mandatory pre-fill', () => {
   });
 
   it('chooses All members for a requirement that applies to every member', async () => {
-    getMandatoryTiers.mockResolvedValue({ everyone: true, tier_ids: [], unmapped: [] });
+    getMandatoryTiers.mockResolvedValue({ everyone: true, tier_ids: [], unmapped: [], source_ids: ['req-drills'] });
     const user = userEvent.setup();
     await toTrainingInfo(user);
     await tick(user, /Company Drill Attendance/);
@@ -1298,6 +1322,7 @@ describe('CreateTrainingSessionPage mandatory pre-fill', () => {
           applies_to_no_one: true,
         },
       ],
+      source_ids: ['req-drills'],
     });
     const user = userEvent.setup();
     await toTrainingInfo(user);
@@ -1377,13 +1402,13 @@ describe('CreateTrainingSessionPage mandatory pre-fill', () => {
     let releaseFirst: (value: unknown) => void = () => {};
     getMandatoryTiers
       .mockImplementationOnce(() => new Promise((resolve) => (releaseFirst = resolve)))
-      .mockResolvedValueOnce({ everyone: true, tier_ids: [], unmapped: [] });
+      .mockResolvedValueOnce({ everyone: true, tier_ids: [], unmapped: [], source_ids: ['req-drills', 'req-admin'] });
     const user = userEvent.setup();
     await toTrainingInfo(user);
     await tick(user, /Company Drill Attendance/);
     await tick(user, /Administrative Drill Attendance/);
     await waitFor(() => expect(getMandatoryTiers).toHaveBeenCalledTimes(2));
-    releaseFirst({ everyone: false, tier_ids: ['senior'], unmapped: [] });
+    releaseFirst({ everyone: false, tier_ids: ['senior'], unmapped: [], source_ids: ['req-drills'] });
     await next(user);
     await user.click(screen.getByRole('checkbox', { name: 'Mandatory attendance' }));
 

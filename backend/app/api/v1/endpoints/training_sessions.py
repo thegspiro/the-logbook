@@ -357,6 +357,7 @@ async def get_mandatory_tiers(
             )
             for u in tiers.unmapped
         ],
+        source_ids=tiers.source_ids,
     )
 
 

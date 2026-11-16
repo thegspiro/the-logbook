@@ -7,7 +7,7 @@ Used by both the dashboard admin-summary and the training compliance-matrix endp
 
 import calendar
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -2248,6 +2248,12 @@ class MandatoryTiers:
     everyone: bool
     tier_ids: List[str]
     unmapped: List[UnmappedRequirement]
+    # The requirements the suggestion comes from, in the order given: those
+    # that contributed a tier, or with ``everyone`` every one that grades
+    # someone. A requirement can be both a source and in ``unmapped`` (one
+    # member type on a tier, another not), so the form names its sources from
+    # here rather than from what ``unmapped`` leaves out.
+    source_ids: List[str] = field(default_factory=list)
 
 
 def _applies_to_no_one(req_id: str, name: str) -> UnmappedRequirement:
@@ -2294,6 +2300,7 @@ def mandatory_tiers_for_requirements(
     """
     tiers: List[str] = []
     unmapped: List[UnmappedRequirement] = []
+    contributed: List[str] = []
     everyone = False
     by_standing: Dict[str, List[str]] = {}
     for tier_id in ladder:
@@ -2314,6 +2321,7 @@ def mandatory_tiers_for_requirements(
             continue
         if req.applies_to_all:
             everyone = True
+            contributed.append(req_id)
             continue
         if req.required_membership_types:
             words = [
@@ -2350,6 +2358,8 @@ def mandatory_tiers_for_requirements(
                         )
                     )
                 tiers.extend(matched)
+                if matched and req_id not in contributed:
+                    contributed.append(req_id)
         elif req.required_roles or req.required_positions:
             unmapped.append(
                 UnmappedRequirement(
@@ -2367,16 +2377,24 @@ def mandatory_tiers_for_requirements(
         # not a tier stands for them; one that grades no one is still named,
         # or the form would list it as a source of All members. The loop runs
         # to the end for it, whatever the order.
+        no_one = [u for u in unmapped if u.applies_to_no_one]
+        graded_by_no_one = {u.requirement_id for u in no_one}
         return MandatoryTiers(
             everyone=True,
             tier_ids=[],
-            unmapped=[u for u in unmapped if u.applies_to_no_one],
+            unmapped=no_one,
+            source_ids=[
+                req_id
+                for req_id in dict.fromkeys(str(req.id) for req in requirements)
+                if req_id not in graded_by_no_one
+            ],
         )
     picked = set(tiers)
     return MandatoryTiers(
         everyone=False,
         tier_ids=[tier_id for tier_id in ladder if tier_id in picked],
         unmapped=unmapped,
+        source_ids=contributed,
     )
 
 
