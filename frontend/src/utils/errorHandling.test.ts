@@ -4,6 +4,7 @@ import {
   toAppError,
   getErrorDetail,
   getErrorMessage,
+  getLoadFailureMessage,
   getSaveFailureMessage,
   isNetworkError,
   isNonRetryableHttpError,
@@ -555,6 +556,40 @@ describe('errorHandling', () => {
       expect(isNonRetryableHttpError({ response: { status: 429 } })).toBe(false);
     });
   });
+  describe('getLoadFailureMessage', () => {
+    const http = (status: number, data: Record<string, unknown> = {}) => ({ response: { status, data } });
+
+    it('blames the connection only when nothing came back', () => {
+      expect(
+        getLoadFailureMessage({ request: {}, code: 'ERR_NETWORK', message: 'Network Error' }, 'members and positions')
+      ).toBe('Could not load members and positions. Check your connection and refresh the page.');
+    });
+
+    it('says the server failed, with the support code, on a 5xx', () => {
+      const message = getLoadFailureMessage(
+        http(500, { detail: 'Internal server error', code: 'LB-SYS-001' }),
+        'members and positions'
+      );
+
+      expect(message).toBe(
+        'Could not load members and positions: the server hit a problem on its end. Refresh the page in a moment. If it keeps happening, tell IT (Error code: LB-SYS-001).'
+      );
+      expect(message).not.toContain('connection');
+    });
+
+    it('says permission is missing on a 403, with the server’s reason', () => {
+      expect(getLoadFailureMessage(http(403, { detail: 'Requires positions.view.' }), 'members and positions')).toBe(
+        'You do not have permission to see members and positions. Requires positions.view. Ask an administrator if you need it.'
+      );
+    });
+
+    it('passes any other answer through as the server wrote it', () => {
+      expect(getLoadFailureMessage(http(404, { detail: 'Organization not found' }), 'members and positions')).toBe(
+        'Organization not found'
+      );
+    });
+  });
+
   describe('getSaveFailureMessage', () => {
     it('names the action, reassures, and keeps the support code on a server fault', () => {
       const message = getSaveFailureMessage(

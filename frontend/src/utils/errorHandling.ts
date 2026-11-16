@@ -220,6 +220,31 @@ export function getSaveFailureMessage(error: unknown, action: string): string {
 }
 
 /**
+ * A message for a screen whose data failed to load, that says why.
+ *
+ * Pages wrote "Unable to load X. Check your connection and refresh the page."
+ * for every failure, so a server fault read as a network problem: the
+ * Members screen said it for days while one stored record made the server
+ * answer 500, and the officer was left checking Wi-Fi. `what` names the data,
+ * e.g. "members and positions".
+ */
+export function getLoadFailureMessage(error: unknown, what: string): string {
+  if (isNetworkError(error)) {
+    return `Could not load ${what}. Check your connection and refresh the page.`;
+  }
+  const appError = toAppError(error);
+  const code = appError.code ? ` (Error code: ${appError.code})` : '';
+  if (appError.status === 403) {
+    const reason = getErrorDetail(error);
+    return `You do not have permission to see ${what}.${reason ? ` ${reason}` : ''} Ask an administrator if you need it${code}.`;
+  }
+  if (appError.status !== undefined && appError.status >= 500) {
+    return `Could not load ${what}: the server hit a problem on its end. Refresh the page in a moment. If it keeps happening, tell IT${code}.`;
+  }
+  return getErrorMessage(error, `Could not load ${what}`);
+}
+
+/**
  * True when a request never received an answer from the server — the device is
  * offline, DNS/TLS failed, or the client timed out waiting.
  *
