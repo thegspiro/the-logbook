@@ -837,7 +837,8 @@ describe('EventEditPage', () => {
 
       expect(await screen.findByRole('button', { name: /save changes/i })).toBeInTheDocument();
       expect(screen.queryByText(/Step 1 of 4/)).not.toBeInTheDocument();
-      expect(trainingSessionService.getSessionByEvent).not.toHaveBeenCalled();
+      // Read for every type: a re-type away from Training keeps the session.
+      expect(trainingSessionService.getSessionByEvent).toHaveBeenCalledWith('evt-1');
     });
 
     it("opens on Training Info with ?step=training, showing the session's details", async () => {
@@ -1941,6 +1942,51 @@ describe('EventEditPage', () => {
 
       await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
       expect(sent()).toEqual(expect.objectContaining({ event_type: 'business_meeting' }));
+      expect(sent()).not.toHaveProperty('training_details');
+    });
+
+    // A re-type away from Training takes back the credit and keeps the
+    // session. Changed back, the form opened on No course yet, and the save
+    // replaced the stored course, instructor and links with those blanks.
+    it('opens a once-Training event changed back to Training on the details it kept, and saves them', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...trainingEvent, event_type: 'business_meeting' });
+      vi.mocked(eventService.getVisibleEventTypesWithCategories).mockResolvedValue({
+        ...visibleTypesWith(),
+        visible_event_types: ['business_meeting', 'training'],
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await user.selectOptions(await screen.findByLabelText(/event type/i), 'training');
+
+      expect(screen.getByText(/Training Info opens on the training details this event kept/)).toBeInTheDocument();
+      await next(user);
+      expect(screen.getByLabelText(/Training Type/)).toHaveValue('skills_practice');
+      await toReview(user);
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+      await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+      expect(sent()).toEqual(expect.objectContaining({ event_type: 'training', training_details: unchangedDetails }));
+    });
+
+    it('leaves the training details alone on a change to Training when it could not tell whether the event has any', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...trainingEvent, event_type: 'business_meeting' });
+      vi.mocked(trainingSessionService.getSessionByEvent).mockRejectedValue(new Error('Network Error'));
+      vi.mocked(eventService.getVisibleEventTypesWithCategories).mockResolvedValue({
+        ...visibleTypesWith(),
+        visible_event_types: ['business_meeting', 'training'],
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await user.selectOptions(await screen.findByLabelText(/event type/i), 'training');
+      await next(user);
+      expect(screen.getByText('The training details could not be loaded.')).toBeInTheDocument();
+      await toReview(user);
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+      await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+      expect(sent()).toEqual(expect.objectContaining({ event_type: 'training' }));
       expect(sent()).not.toHaveProperty('training_details');
     });
 

@@ -81,6 +81,14 @@ export interface EditOptions {
   eventTypeLocked: boolean;
   /** The event's type as stored: a change away from or to Training is said so under the picker. */
   storedType: EventType;
+  /**
+   * Whether the event keeps training details (a session, or custom_fields'
+   * copies of its settings), or its session could not be read. An event of
+   * another type can: a re-type away from Training keeps them. Changed back,
+   * the training form opens on them as it does for a Training event, and the
+   * save changes them, rather than replacing them unseen with No course yet.
+   */
+  keepsTrainingDetails?: boolean | undefined;
   /** The session's fields as stored, or the defaults when it has none. */
   initialTraining: TrainingDetailsForm;
   trainingAccess: TrainingInfoAccess;
@@ -209,6 +217,7 @@ export const EventComposer: React.FC<EventComposerProps> = ({
   const composed = { ...model, handleEventTypeChange: changeType };
 
   const storedTraining = editing?.storedType === EventTypeEnum.TRAINING;
+  const detailsStored = storedTraining || Boolean(editing?.keepsTrainingDetails);
   const scope = editing?.seriesScope;
 
   if (!isTraining) {
@@ -241,11 +250,17 @@ export const EventComposer: React.FC<EventComposerProps> = ({
   // which way the type is going.
   // A locked picker says why it is locked instead.
   const typeChangeable = editing && !editing.attendanceLocked && !editing.eventTypeLocked;
+  // A changeable type rules out the reasons the details lock but one: a
+  // session that could not be read.
   const editTypeHint = typeChangeable ? (
     <p id="training-wizard-type-hint" className="text-theme-text-muted mt-2 text-sm">
       {storedTraining
         ? 'Training uses this step-by-step form. Pick another type to use the single-page form; your changes carry over.'
-        : 'Training uses the step-by-step form. Your changes carry over, and Training Info opens with No course yet; saving adds the training details.'}
+        : !detailsStored
+          ? 'Training uses the step-by-step form. Your changes carry over, and Training Info opens with No course yet; saving adds the training details.'
+          : editing.trainingAccess === 'readonly'
+            ? 'Training uses the step-by-step form. Your changes carry over. The training details could not be loaded, so saving leaves them as they are.'
+            : 'Training uses the step-by-step form. Your changes carry over, and Training Info opens on the training details this event kept from when it was Training; saving changes them.'}
     </p>
   ) : null;
 
@@ -297,12 +312,13 @@ export const EventComposer: React.FC<EventComposerProps> = ({
               submittingLabel: 'Saving...',
               failureMessage: 'Failed to update event. Try again.',
               onSubmitUpdate: editing.onSubmitUpdate,
-              // A non-Training event changed to Training has no session yet:
-              // its details are new, and the edit page has no reason to lock them.
-              trainingAccess: storedTraining ? editing.trainingAccess : 'edit',
-              readOnlyNotice: storedTraining ? editing.readOnlyNotice : undefined,
-              keptSettingCopies: storedTraining ? editing.keptSettingCopies : undefined,
-              originalTraining: storedTraining ? editing.initialTraining : undefined,
+              // A non-Training event changed to Training with nothing kept
+              // from an earlier spell as one: its details are new, and the
+              // edit page has no reason to lock them.
+              trainingAccess: detailsStored ? editing.trainingAccess : 'edit',
+              readOnlyNotice: detailsStored ? editing.readOnlyNotice : undefined,
+              keptSettingCopies: detailsStored ? editing.keptSettingCopies : undefined,
+              originalTraining: detailsStored ? editing.initialTraining : undefined,
               storedCourseName: editing.storedCourseName,
               initialStep: storedTraining && !typeSwapped ? editing.initialStep : undefined,
               organizerNames: editing.organizerNames,

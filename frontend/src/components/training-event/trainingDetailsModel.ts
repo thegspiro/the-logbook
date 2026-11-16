@@ -503,6 +503,16 @@ const copyText = (value: CustomFieldValue): string =>
   typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : '';
 
 /**
+ * Whether custom_fields holds any copy of a session setting: an event the old
+ * Events form saved as Training, which a re-type away has left them on.
+ */
+export const hasSettingCopies = (customFields: Record<string, CustomFieldValue> | null | undefined): boolean =>
+  SESSION_SETTING_COPIES.some((key) => {
+    const value = customFields?.[key];
+    return typeof value === 'boolean' || copyText(value) !== '';
+  });
+
+/**
  * Training Info for a Training event with no session, opened on the copies
  * of its settings: the old Events form wrote them to custom_fields only, and
  * the event page shows them as the event's, so they are what the officer

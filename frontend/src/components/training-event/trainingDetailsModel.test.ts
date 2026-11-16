@@ -5,6 +5,7 @@ import {
   DEFAULT_TRAINING_DETAILS,
   applyLibraryCourse,
   fromSession,
+  hasSettingCopies,
   scheduledHours,
   strippedForFinalized,
   toAttachPayload,
@@ -449,6 +450,20 @@ describe('withLoadedCourseHours', () => {
     expect(withLoadedCourseHours(unlike, [NO_HOURS], 2)).toBe(unlike);
     const gone = loaded('course-ladder', 2);
     expect(withLoadedCourseHours(gone, [COURSE], 2)).toBe(gone);
+  });
+});
+
+describe('hasSettingCopies', () => {
+  it('finds a copy the old Events form wrote, a false or a number included', () => {
+    expect(hasSettingCopies({ instructor: 'Owen Kittredge' })).toBe(true);
+    expect(hasSettingCopies({ issues_certification: false })).toBe(true);
+    expect(hasSettingCopies({ expiration_months: 24 })).toBe(true);
+  });
+
+  it('finds none in other fields, blanks, or no custom_fields at all', () => {
+    expect(hasSettingCopies({ uniform: 'Class B', instructor: '  ', issuing_agency: null })).toBe(false);
+    expect(hasSettingCopies({})).toBe(false);
+    expect(hasSettingCopies(null)).toBe(false);
   });
 });
 

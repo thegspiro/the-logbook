@@ -25,6 +25,7 @@ import {
   DEFAULT_TRAINING_DETAILS,
   fromSession,
   fromSettingCopies,
+  hasSettingCopies,
 } from '../components/training-event/trainingDetailsModel';
 import { EventType as EventTypeEnum } from '../constants/enums';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -58,9 +59,11 @@ export const EventEditPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [userEvents, setUserEvents] = useState<ConflictEvent[]>([]);
   const [updateScope, setUpdateScope] = useState<SeriesScope>('single');
-  // A Training event's session: null when it has none. Its load failing is
-  // not "none": the form then leaves the training details out of the save
-  // rather than overwrite what it could not read.
+  // The event's session: null when it has none. Its load failing is not
+  // "none": the form then leaves the training details out of the save rather
+  // than overwrite what it could not read. Read for every type, since a
+  // re-type away from Training takes back the credit and keeps the session
+  // (void_event_credit): changed back, the form opens on what it kept.
   const [session, setSession] = useState<TrainingSessionResponse | null>(null);
   const [sessionLoadFailed, setSessionLoadFailed] = useState(false);
   // A later occurrence's series: the end date and the rolling flag are stored
@@ -104,12 +107,10 @@ export const EventEditPage: React.FC = () => {
     try {
       setLoading(true);
       const data = await eventService.getEvent(eventId);
-      if (data.event_type === EventTypeEnum.TRAINING) {
-        try {
-          setSession(await trainingSessionService.getSessionByEvent(eventId));
-        } catch {
-          setSessionLoadFailed(true);
-        }
+      try {
+        setSession(await trainingSessionService.getSessionByEvent(eventId));
+      } catch {
+        setSessionLoadFailed(true);
       }
       if (data.recurrence_parent_id) {
         const parentId = data.recurrence_parent_id;
@@ -349,11 +350,10 @@ export const EventEditPage: React.FC = () => {
   // A Training event with no session has only custom_fields' copies of its
   // settings, which the event page shows as the event's: Training Info opens
   // on them, so a save carries them into the session rather than dropping
-  // them unseen. A reader's step is locked and shows no session at all.
-  const settingCopies =
-    !session && event.event_type === EventTypeEnum.TRAINING && trainingAccess === 'edit'
-      ? fromSettingCopies(event.custom_fields)
-      : undefined;
+  // them unseen. So does an event of another type that kept them from when
+  // it was Training, if it is changed back. A reader's step is locked and
+  // shows no session at all.
+  const settingCopies = !session && trainingAccess === 'edit' ? fromSettingCopies(event.custom_fields) : undefined;
   const storedTraining = session ? fromSession(session, event) : (settingCopies?.value ?? DEFAULT_TRAINING_DETAILS);
 
   const editing: EditOptions = {
@@ -362,6 +362,7 @@ export const EventEditPage: React.FC = () => {
     attendanceLocked,
     eventTypeLocked: !canManage,
     storedType: event.event_type,
+    keepsTrainingDetails: Boolean(session) || sessionLoadFailed || hasSettingCopies(event.custom_fields),
     // A locked step shows the hours as stored: the save leaves them alone, so
     // following the event's length there would show a figure never saved.
     initialTraining:
