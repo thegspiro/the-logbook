@@ -13808,6 +13808,39 @@ export const SHOTS = [
     prepare: clickByName(/^Maple Street HOA/),
   },
   {
+    // The outreach report on its default period, This year. The seeder's
+    // outreach history puts events of each reach kind inside the year so
+    // far — an estimate, sign-ins against an expectation, headcounts and
+    // department events — so every cell and both type groups have a row.
+    id: "04-100-community-engagement",
+    doc: "04-events-meetings.md",
+    line: 2603,
+    anchor: "The Community Engagement tab for this year",
+    alt: "The Community Engagement tab for this year: events held, people reached split into counted and estimated, member hours and requests completed, each with its change since last year; people reached by month; the breakdown by public request type and by department event type; and the recent outreach events table",
+    route: "/events/admin?tab=community",
+    // A heading present only once the report has loaded with events in it.
+    expect: "Department events",
+    fullPage: true,
+  },
+  {
+    // The headcount card alone, on the seeded pre-K tour, which carries one.
+    // Found by title through the events API because its id is generated.
+    id: "04-101-guest-headcount",
+    doc: "04-events-meetings.md",
+    line: 2659,
+    anchor: "The Guest headcount card on an event's page",
+    alt: "The Guest headcount card on an event's page: the Guests counted box holding 22, with the Save headcount and Clear buttons",
+    route: "/events",
+    prepare: openFirstFromApi(
+      "/events?limit=500",
+      (id) => `/events/${id}`,
+      "events",
+      (event) => event.title === "Pre-K station tour",
+    ),
+    expect: "Guests counted",
+    selector: "section[aria-labelledby='event-headcount-heading']",
+  },
+  {
     id: "08-01-setup-checklist",
     doc: "08-admin-reports.md",
     line: 43,
