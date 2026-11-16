@@ -36,11 +36,13 @@ vi.mock('../../stores/authStore', () => ({
   useAuthStore: (selector: (state: { user: { id: string } }) => unknown) => selector({ user: { id: 'me' } }),
 }));
 const toastError = vi.hoisted(() => vi.fn());
-vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: toastError } }));
+const toastDismiss = vi.hoisted(() => vi.fn());
+vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: toastError, dismiss: toastDismiss } }));
 
 import { EventComposer } from '../event-form/EventComposer';
 import { EventType } from '../../constants/enums';
 import { DEFAULT_TRAINING_DETAILS } from './trainingDetailsModel';
+import { STEP_TOAST_ID } from './TrainingEventWizard';
 
 type User = ReturnType<typeof userEvent.setup>;
 
@@ -151,7 +153,9 @@ describe('TrainingEventWizard › refusals on their fields', () => {
     await submit(user);
 
     expect(await screen.findByText(`Step ${step === 'Event Details' ? 1 : 2} of 4 · ${step}`)).toBeInTheDocument();
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith(`Back to ${step}: fix the flagged field`));
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(`Back to ${step}: fix the flagged field`, { id: STEP_TOAST_ID })
+    );
     expect(toastError).toHaveBeenCalledTimes(1);
   });
 
@@ -207,7 +211,7 @@ describe('TrainingEventWizard › refusals on their fields', () => {
     const stepLine = await screen.findByText('Step 3 of 4 · Settings');
     await waitFor(() => expect(stepLine).toHaveFocus());
     expect(screen.getByRole('alert')).toHaveTextContent('Unknown member type');
-    expect(toastError).toHaveBeenCalledWith('Back to Settings: nothing was saved');
+    expect(toastError).toHaveBeenCalledWith('Back to Settings: nothing was saved', { id: STEP_TOAST_ID });
     expect(toastError).toHaveBeenCalledTimes(1);
   });
 
@@ -238,6 +242,7 @@ describe('TrainingEventWizard › a refusal on an earlier step', () => {
       getMandatoryTiers,
       onSubmitUpdate,
       toastError,
+      toastDismiss,
     ]) {
       mock.mockReset();
     }
@@ -254,12 +259,8 @@ describe('TrainingEventWizard › a refusal on an earlier step', () => {
     onSubmitUpdate.mockResolvedValue(undefined);
   });
 
-  // The event page's "Edit training details" opens on Training Info, so Event
-  // Details is first checked by the save. The refusal is read out by the
-  // focused field; the toast says only where the form went, so a screen
-  // reader does not hear the same sentence twice.
-  it('names the step it went back to rather than repeating the refusal', async () => {
-    const user = userEvent.setup();
+  /** An untitled Training event, edited from Training Info. */
+  const renderEditOnTrainingInfo = () =>
     renderWithRouter(
       <EventComposer
         initialData={{
@@ -283,6 +284,14 @@ describe('TrainingEventWizard › a refusal on an earlier step', () => {
         }}
       />
     );
+
+  // The event page's "Edit training details" opens on Training Info, so Event
+  // Details is first checked by the save. The refusal is read out by the
+  // focused field; the toast says only where the form went, so a screen
+  // reader does not hear the same sentence twice.
+  it('names the step it went back to rather than repeating the refusal', async () => {
+    const user = userEvent.setup();
+    renderEditOnTrainingInfo();
     expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
     await next(user); // to Settings
     await next(user); // to Review
@@ -293,8 +302,29 @@ describe('TrainingEventWizard › a refusal on an earlier step', () => {
     expect(title).toHaveAccessibleDescription(/Enter a title for the event\./);
     await waitFor(() => expect(title).toHaveFocus());
     expect(toastError).toHaveBeenCalledTimes(1);
-    expect(toastError).toHaveBeenCalledWith('Back to Event Details: fix the flagged field');
+    expect(toastError).toHaveBeenCalledWith('Back to Event Details: fix the flagged field', { id: STEP_TOAST_ID });
     expect(onSubmitUpdate).not.toHaveBeenCalled();
+  });
+
+  // The toast names the step the form went back to; once the officer moves
+  // on, it names a step they are no longer on, so it goes.
+  it('takes the step toast down once the officer moves to another step', async () => {
+    const user = userEvent.setup();
+    renderEditOnTrainingInfo();
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    await next(user); // to Settings
+    await next(user); // to Review
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    toastDismiss.mockClear();
+    // Fixing the field on the step the toast names leaves it up.
+    await user.type(screen.getByLabelText(/^Title/), 'CPR recert night');
+    expect(toastDismiss).not.toHaveBeenCalled();
+
+    await next(user);
+
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    expect(toastDismiss).toHaveBeenCalledWith(STEP_TOAST_ID);
   });
 
   it('says nothing in a toast for a refusal on the step already open', async () => {

@@ -59,7 +59,7 @@ vi.mock('react-router', async (importOriginal) => ({
 
 const toastError = vi.hoisted(() => vi.fn());
 vi.mock('react-hot-toast', () => ({
-  default: { success: vi.fn(), error: toastError },
+  default: { success: vi.fn(), error: toastError, dismiss: vi.fn() },
 }));
 
 import CreateTrainingSessionPage from './CreateTrainingSessionPage';
@@ -1056,7 +1056,9 @@ describe('CreateTrainingSessionPage saving', () => {
       /Course name is too long — keep it to 255 characters\./
     );
     expect(toastError).toHaveBeenCalledTimes(1);
-    expect(toastError).toHaveBeenCalledWith('Back to Training Info: fix the flagged field');
+    expect(toastError).toHaveBeenCalledWith('Back to Training Info: fix the flagged field', {
+      id: 'training-wizard-step',
+    });
   });
 
   it('shows a failure that names no field on the Review step', async () => {

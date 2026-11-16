@@ -88,6 +88,14 @@ const SETTINGS = 2;
 const REVIEW = 3;
 type WizardStep = typeof DETAILS | typeof TRAINING | typeof SETTINGS | typeof REVIEW;
 
+/**
+ * The toast naming the step a refused save went back to. One id, so a later
+ * refusal replaces it rather than stacking beside it, and so it can be taken
+ * down once the officer moves on: left up, it names a step they are no
+ * longer on.
+ */
+export const STEP_TOAST_ID = 'training-wizard-step';
+
 /** Each step's name: the stepper, the step line and the toast all read it here. */
 const STEP_TITLES: Record<WizardStep, string> = {
   [DETAILS]: 'Event Details',
@@ -284,6 +292,21 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   useEffect(() => {
     onDetailsStepChange?.(step === DETAILS);
   }, [step, onDetailsStepChange]);
+  // The step the step toast names, while it is up.
+  const toastStep = useRef<WizardStep | null>(null);
+  const dismissStepToast = () => {
+    toastStep.current = null;
+    toast.dismiss(STEP_TOAST_ID);
+  };
+  const showStepToast = (target: WizardStep, message: string) => {
+    toastStep.current = target;
+    toast.error(message, { id: STEP_TOAST_ID });
+  };
+  useEffect(() => {
+    if (toastStep.current !== null && toastStep.current !== step) dismissStepToast();
+  });
+  // A type changed away from Training swaps this form out; its toast goes too.
+  useEffect(() => () => void toast.dismiss(STEP_TOAST_ID), []);
   const [trainingErrors, setTrainingErrors] = useState<TrainingErrors>({});
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
   const [coursesLoaded, setCoursesLoaded] = useState(false);
@@ -571,12 +594,12 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
             : EVENT_FIELD_IDS[field as EventField];
       requestFocus(controlId, {
         onFound: () => {
-          if (moved) toast.error(`Back to ${STEP_TITLES[target]}: fix the flagged field`);
+          if (moved) showStepToast(target, `Back to ${STEP_TITLES[target]}: fix the flagged field`);
         },
         onMissing: () => {
           model.showFormErrorSummary(null);
           model.showFormError([summary, ...others].filter(Boolean).join('\n') || null);
-          if (moved) toast.error(`Back to ${STEP_TITLES[target]}: nothing was saved`);
+          if (moved) showStepToast(target, `Back to ${STEP_TITLES[target]}: nothing was saved`);
         },
       });
     } else {
@@ -723,6 +746,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   };
 
   const handleSubmit = async () => {
+    dismissStepToast();
     const { event, training: trainingInvalid, messages } = collect();
     if (showErrors(event, trainingInvalid, messages)) return;
     clearAllErrors();

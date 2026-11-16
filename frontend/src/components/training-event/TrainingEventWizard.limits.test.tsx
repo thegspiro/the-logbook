@@ -36,7 +36,8 @@ vi.mock('../../stores/authStore', () => ({
   useAuthStore: (selector: (state: { user: { id: string } }) => unknown) => selector({ user: { id: 'me' } }),
 }));
 const toastError = vi.hoisted(() => vi.fn());
-vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: toastError } }));
+const toastDismiss = vi.hoisted(() => vi.fn());
+vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: toastError, dismiss: toastDismiss } }));
 
 import { EventComposer } from '../event-form/EventComposer';
 import { EventType } from '../../constants/enums';
