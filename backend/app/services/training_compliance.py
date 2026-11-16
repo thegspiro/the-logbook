@@ -2164,8 +2164,8 @@ def requirement_applies_to_member(
 ) -> bool:
     """Whether a requirement applies to a member.
 
-    Matches ``TrainingService.get_applicable_requirements`` (the
-    member-facing ``/my-training`` path) precedence exactly:
+    The precedence every grader applies after a member's compliance profile
+    (``ComplianceGrading.for_member``) has narrowed the set:
     ``applies_to_all`` wins outright; otherwise ``required_membership_types``
     is checked; otherwise the member matches if their rank is named in
     ``required_roles`` or they hold a position named in

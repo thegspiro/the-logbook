@@ -6829,6 +6829,42 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   does a previously filed report, which stores what it said when generated.
   `tests/test_annual_report_compliance_profiles.py` holds the three surfaces
   to the same figures for a profile org.
+- **My Training was not compliance-profile-aware (D10) — ✅ fixed, owner
+  decision 2026-11-16.** A member's own training views chose the requirements
+  that grade them without consulting compliance profiles, while the matrix,
+  the dashboard, the annual and monthly reports and the compliance emails
+  narrowed to the member's highest-priority matching active profile. Every
+  member-facing view now resolves the set through
+  `ComplianceGrading.for_member`, the one definition: `GET /my-training`, the
+  officer's `GET /training/module-config/members/{id}/requirements`, the
+  profile card (`GET /training/compliance-summary/{id}`) and
+  `TrainingService.get_applicable_requirements`, behind
+  `/training/requirements/progress/{id}`, `/training/reports/user/{id}` and
+  the MCP `get_member_requirements_progress` tool. **Reported numbers change
+  for departments that use compliance profiles**: for a member whose matching
+  profile lists required requirements, those views list only that profile's
+  requirements (that also apply by type, rank, position and join date), so
+  outstanding items the department never grades them on disappear and the
+  "N of M met", the average progress and the Upcoming list move. Unchanged: a
+  department with no compliance configuration or no profiles, a
+  threshold-only profile (`required_requirement_ids` unset), a member who
+  matches no active profile, the evaluator, waivers, catch-up and
+  not-yet-held handling, and compliance-exempt members, who are still graded
+  on My Training. No migration. Tests:
+  `tests/test_my_training_compliance_profiles.py`.
+- **The profile card's colour re-derives its thresholds (D10 follow-up) —
+  open, owner decision needed.** `get_compliance_summary` colours the card
+  red / yellow / green with its own fixed rule instead of
+  `classify_standing` with the matching profile's threshold overrides, so the
+  card can disagree with the matrix's standing for the same member (CLAUDE.md
+  pitfall #29). D10 narrowed its denominator only and left the colour rule
+  as it was; narrowing can still flip a member's colour. Remaining surfaces
+  that are not yet profile-aware, all officer-facing: the period roster
+  (`GET /training/records/member-status`, which also ignores profile
+  threshold overrides), the competency matrix, the compliance CSV/PDF export
+  cells, the compliance forecast and Scheduling's Shift Compliance report.
+  Separately, `optional_requirement_ids` has no reader, and two active
+  profiles of equal priority resolve in an undefined order.
 - **A requirement with zero currently-applicable members renders as a
   failing 0% (CMP4-4, LOW) — ✅ fixed 2026-09-29, workflow review W29-4.**
   `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`
