@@ -286,9 +286,13 @@ now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
   5160 alignment were fixed on 2026-11-09; see "Printing" in
   `docs/PDF_REPORTS.md`.)
 - **Minutes, the inventory impact plan and the election documents keep their
-  own layouts**, numbered "Page N" rather than "Page X of Y" (except the
-  ballot). They escape correctly and are audited; moving them onto the kit is
-  a layout change, not a fix.
+  own layouts.** Minutes, the evaluation and the election documents are
+  numbered "Page N" rather than "Page X of Y" (except the ballot), and the
+  impact plan carries no footer or page numbers at all. Since 2026-11-16 every
+  one of them repeats the department's logo, name and the document's title at
+  the top of each later page, so a loose page is still identifiable. They
+  escape correctly and are audited; moving them onto the kit's footer is a
+  layout change, not a fix.
 
 ## Medical Screening — What Is Still Plaintext at Rest (MS-18, 2026-11-05)
 
