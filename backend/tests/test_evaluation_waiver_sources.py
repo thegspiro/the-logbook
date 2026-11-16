@@ -26,6 +26,7 @@ from app.core.database import get_db
 from app.models.attendance_waiver import (
     LIVE_STATUSES,
     AttendanceWaiverAction,
+    AttendanceWaiverAttachment,
     AttendanceWaiverRequest,
     AttendanceWaiverRequestAction,
     AttendanceWaiverStatus,
@@ -392,6 +393,42 @@ class TestWaiverSources:
             ("chief_override", chief),
         ]
         assert line["history"][0]["on"] == "2025-08-03"
+
+    async def test_an_attachment_on_file_is_reported_and_nothing_else_of_it(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        with_file = await _request(
+            dept,
+            date(2025, 3, 4),
+            steps=((AttendanceWaiverAction.APPROVED, dept.officer),),
+            status=AttendanceWaiverStatus.APPROVED,
+            title="Hose drill",
+        )
+        await _request(dept, date(2025, 4, 1), title="Ladder drill")
+        dept.db.add(
+            AttendanceWaiverAttachment(
+                organization_id=dept.org,
+                request_id=with_file.id,
+                ordinal=1,
+                file_path=f"/app/uploads/{dept.org}/attendance-waivers/x/note.pdf",
+                mime_type="application/pdf",
+                file_size=1024,
+                sha256="0" * 64,
+                uploaded_by=dept.member.id,
+            )
+        )
+        await dept.db.flush()
+
+        _, history = _training(await _figures(dept, make_client))
+
+        attached, plain = history
+        assert attached["attachment_on_file"] is True
+        assert attached["label"].endswith("; attachment on file")
+        assert plain["attachment_on_file"] is False
+        assert "attachment" not in plain["label"]
+        # Only the fact: no path, type, size or name of the file.
+        assert "note.pdf" not in json.dumps(history)
+        assert "application/pdf" not in json.dumps(history)
 
     async def test_a_standing_denial_counts_as_denied(
         self, dept: _Dept, make_client: ClientFactory

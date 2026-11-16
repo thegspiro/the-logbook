@@ -35,6 +35,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
+    AttendanceWaiverAttachment,
     AttendanceWaiverRequest,
     AttendanceWaiverRequestAction,
     AttendanceWaiverStatus,
@@ -1240,15 +1241,27 @@ class EvaluationDataService:
     async def _waiver_attachments_on_file(
         self, org_id: str, request_ids: Sequence[str]
     ) -> set:
-        """The requests with at least one attachment on file.
+        """The requests with at least one attachment on file now.
 
-        Attachments are being added by a separate change and have no table on
-        this branch, so nothing is on file yet and every line reads no. When
-        that table lands, return the ids of ``request_ids`` with a row in it
-        for ``org_id``. Only the fact is reported, never the file or its
-        name: an attachment is the member's evidence, often medical.
+        Only the fact is reported, never the file, its type or its name: an
+        attachment is the member's evidence, often medical, and only the
+        member and the request's deciders may open one
+        (``attendance_waiver_attachments``). Attachments are deleted
+        ``attachment_retention_days`` after a request closes, so a request
+        whose files have gone reads no; a snapshot keeps what was true when
+        it was taken, as every figure does.
         """
-        return set()
+        if not request_ids:
+            return set()
+        result = await self.db.execute(
+            select(AttendanceWaiverAttachment.request_id)
+            .where(
+                AttendanceWaiverAttachment.organization_id == org_id,
+                AttendanceWaiverAttachment.request_id.in_(list(request_ids)),
+            )
+            .distinct()
+        )
+        return {str(row[0]) for row in result.all()}
 
 
 def _as_utc(value: datetime) -> datetime:
