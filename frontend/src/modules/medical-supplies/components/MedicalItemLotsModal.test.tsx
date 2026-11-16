@@ -184,6 +184,87 @@ describe('MedicalItemLotsModal', () => {
     expect(screen.queryByRole('button', { name: 'Add lot' })).not.toBeInTheDocument();
   });
 
+  it('names a missing quantity on its field and adds nothing', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByText('GZ-11');
+
+    await user.type(screen.getByLabelText(/^Lot #/), 'GZ-12');
+    await user.click(screen.getByRole('button', { name: 'Add lot' }));
+
+    const quantity = screen.getByLabelText(/^Quantity/);
+    expect(quantity).toHaveAccessibleDescription('A new lot needs a whole number of 1 or more.');
+    expect(quantity).toHaveFocus();
+    expect(mockAddItemLot).not.toHaveBeenCalled();
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('puts a refused lot number on its field', async () => {
+    mockAddItemLot.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ loc: ['body', 'lot_number'], msg: 'Lot number is too long' }] } },
+    });
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByText('GZ-11');
+
+    await user.type(screen.getByLabelText(/^Lot #/), 'GZ-12');
+    await user.type(screen.getByLabelText(/^Quantity/), '3');
+    await user.click(screen.getByRole('button', { name: 'Add lot' }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^Lot #/)).toHaveAccessibleDescription(/Lot number is too long\./);
+    });
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('saves the rest of an edit and keeps a bad quantity flagged', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByText('GZ-11');
+
+    await user.click(screen.getByRole('button', { name: 'Edit lot GZ-11' }));
+    await user.clear(screen.getByLabelText('Lot number for lot GZ-11'));
+    await user.type(screen.getByLabelText('Lot number for lot GZ-11'), 'GZ-11A');
+    await user.clear(screen.getByLabelText('Quantity for lot GZ-11'));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(mockUpdateLot).toHaveBeenCalledWith('lot-1', { lot_number: 'GZ-11A', expiration_date: '2099-01-31' })
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('Lot saved, except quantity.');
+    expect(screen.getByLabelText('Quantity for lot GZ-11')).toHaveAccessibleDescription(
+      'Enter a whole number, 0 or more.'
+    );
+  });
+
+  it('asks before Done throws away a typed lot', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByText('GZ-11');
+
+    await user.type(screen.getByLabelText(/^Quantity/), '4');
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog', { name: /Discard/ });
+    await user.click(within(dialog).getByRole('button', { name: /Discard/ }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks before an edit row's Cancel throws a change away", async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByText('GZ-11');
+
+    await user.click(screen.getByRole('button', { name: 'Edit lot GZ-11' }));
+    await user.type(screen.getByLabelText('Lot number for lot GZ-11'), 'X');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Discard changes?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByLabelText('Lot number for lot GZ-11')).toHaveValue('GZ-11X');
+  });
+
   it('shows the load failure instead of an empty list', async () => {
     mockGetItemLots.mockRejectedValue(new Error('Server unavailable'));
     renderModal();
