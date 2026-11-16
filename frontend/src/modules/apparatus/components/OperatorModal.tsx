@@ -17,6 +17,7 @@ import { blankToNull } from '../../../utils/formValues';
 import { apparatusOperatorService, evocLevelService } from '../services/api';
 import type { ApparatusOperator, ApparatusOperatorCreate, ApparatusOperatorUpdate, EvocLevel } from '../types';
 import { displayNameOf } from '../../../utils/memberName';
+import { isActiveAccount } from '../../../constants/enums';
 
 interface OperatorModalProps {
   isOpen: boolean;
@@ -120,7 +121,10 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
         });
       void userService
         .getUsers()
-        .then(setMembers)
+        // Only current members can be certified to drive. GET /users also
+        // returns separated and imported former members, who would otherwise
+        // crowd the picker; editing an existing operator never shows it.
+        .then((rows) => setMembers(rows.filter((m) => isActiveAccount(m.status))))
         .catch(() => {
           /* the picker falls back to disabled rather than to a UUID box */
         });

@@ -77,6 +77,14 @@ export function friendlyFieldMessage(message: string, spec: ServerFieldSpec): st
   if (/^invalid date format/i.test(message)) return `${label} needs a valid date.`;
   if (/^expected a number/i.test(message)) return `${label} needs a number.`;
   if (/out of the allowed range/i.test(message)) return `${label} is outside the allowed range.`;
+  // Pydantic's ge/gt/le/lt: "Input should be greater than or equal to 0".
+  const bound = /\b(greater|less) than( or equal to)? (-?\d+(?:\.\d+)?)\b/i.exec(message);
+  if (bound) {
+    const [, direction = '', orEqual, value = ''] = bound;
+    const greater = direction.toLowerCase() === 'greater';
+    if (orEqual) return `${label} must be ${value} ${greater ? 'or more' : 'or less'}.`;
+    return `${label} must be ${greater ? 'more' : 'less'} than ${value}.`;
+  }
   if (/^invalid id format/i.test(message) || /^invalid value\.?$/i.test(message)) {
     return `${label} isn't a value this form accepts.`;
   }

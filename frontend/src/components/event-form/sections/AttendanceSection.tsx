@@ -1,32 +1,71 @@
 import React from 'react';
 import { Users } from 'lucide-react';
-import { checkboxClass, labelClass } from '../eventFormConstants';
+import { FIELD_ERROR_CLASS } from '../../ux/FormField';
+import { EVENT_FIELD_IDS, checkboxClass, labelClass } from '../eventFormConstants';
+import type { MandatoryScope } from '../eventFormTypes';
 import type { EventFormModel } from '../useEventFormModel';
+
+const MANDATORY_FOR_ERROR_ID = 'mandatory-for-error';
 
 interface AttendanceSectionProps {
   model: Pick<
     EventFormModel,
     | 'formData'
+    | 'fieldErrors'
     | 'handleMandatoryChange'
-    | 'storedMandatoryForEveryone'
+    | 'mandatoryScope'
+    | 'setMandatoryScope'
     | 'membershipTypes'
     | 'membershipTypesLoaded'
     | 'unlistedMandatoryTypes'
     | 'toggleMandatoryMembershipType'
   >;
+  /** Where "Mandatory for" opens when Mandatory attendance is ticked. */
+  scopeOnTick?: MandatoryScope | undefined;
+  /** A note about "Mandatory for", shown while Mandatory attendance is ticked. */
+  scopeNote?: React.ReactNode;
+  /** `before`: above Mandatory for; `after` (the default): under its choices. */
+  scopeNotePlacement?: 'before' | 'after' | undefined;
+  /** The member-type boxes on one wrapping row, as the training form's Settings step draws them. */
+  typesInRow?: boolean | undefined;
+  /**
+   * The "Select one or more" line above the member-type boxes. The training
+   * form's approved Settings step has none; a refusal after Next says it.
+   */
+  typesHint?: boolean | undefined;
 }
 
-/** Whether attendance is mandatory, and for which member types. */
-export const AttendanceSection: React.FC<AttendanceSectionProps> = ({ model }) => {
+/** Whether attendance is mandatory, and for every member or which member types. */
+export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
+  model,
+  scopeOnTick = 'some',
+  scopeNote,
+  scopeNotePlacement = 'after',
+  typesInRow = false,
+  typesHint = true,
+}) => {
   const {
     formData,
+    fieldErrors,
     handleMandatoryChange,
-    storedMandatoryForEveryone,
+    mandatoryScope,
+    setMandatoryScope,
     membershipTypes,
     membershipTypesLoaded,
     unlistedMandatoryTypes,
     toggleMandatoryMembershipType,
   } = model;
+  const error = fieldErrors.mandatory_membership_types;
+  const selected = formData.mandatory_membership_types || [];
+  const typeBoxes = [
+    ...membershipTypes.map((type) => ({ value: type.value, label: type.label })),
+    ...unlistedMandatoryTypes.map((saved) => ({
+      value: saved,
+      // Only once the department's own list has loaded: the built-in
+      // fallback lacks real tiers such as senior.
+      label: membershipTypesLoaded ? `${saved} (not a current member type)` : saved,
+    })),
+  ];
   return (
     <section className="space-y-4">
       <h2 className="text-theme-text-primary flex items-center space-x-2 text-lg font-bold">
@@ -39,48 +78,73 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({ model }) =
           type="checkbox"
           id="is-mandatory"
           checked={formData.is_mandatory}
-          onChange={(e) => handleMandatoryChange(e.target.checked)}
+          onChange={(e) => handleMandatoryChange(e.target.checked, scopeOnTick)}
           className={checkboxClass}
         />
         <span className="text-theme-text-secondary text-sm">Mandatory attendance</span>
       </label>
 
+      {formData.is_mandatory && scopeNotePlacement === 'before' && scopeNote}
+
       {formData.is_mandatory && (
-        <fieldset className="space-y-2 border-l-2 border-red-500/30 pl-4">
+        <fieldset
+          className="space-y-2 border-l-2 border-red-500/30 pl-4"
+          aria-describedby={error ? MANDATORY_FOR_ERROR_ID : undefined}
+        >
           <legend className={labelClass}>Mandatory for</legend>
-          <p className="text-theme-text-muted text-xs">
-            {storedMandatoryForEveryone && !formData.mandatory_membership_types?.length
-              ? 'Mandatory for every member. Tick member types to narrow it.'
-              : 'Select one or more member types required to attend.'}
-          </p>
-          {membershipTypes.map((membershipType) => (
-            <label key={membershipType.value} className="mobile-touch-target flex items-center justify-start space-x-3">
-              <input
-                type="checkbox"
-                id={`mandatory-${membershipType.value}`}
-                checked={(formData.mandatory_membership_types || []).includes(membershipType.value)}
-                onChange={(e) => toggleMandatoryMembershipType(membershipType.value, e.target.checked)}
-                className={checkboxClass}
-              />
-              <span className="text-theme-text-secondary text-sm">{membershipType.label}</span>
-            </label>
-          ))}
-          {unlistedMandatoryTypes.map((saved) => (
-            <label key={saved} className="mobile-touch-target flex items-center justify-start space-x-3">
-              <input
-                type="checkbox"
-                id={`mandatory-${saved}`}
-                checked={(formData.mandatory_membership_types || []).includes(saved)}
-                onChange={(e) => toggleMandatoryMembershipType(saved, e.target.checked)}
-                className={checkboxClass}
-              />
-              <span className="text-theme-text-secondary text-sm">
-                {/* Only once the department's own list has loaded: the
-                    built-in fallback lacks real tiers such as senior. */}
-                {membershipTypesLoaded ? `${saved} (not a current member type)` : saved}
-              </span>
-            </label>
-          ))}
+          <label className="mobile-touch-target flex items-center justify-start space-x-3">
+            <input
+              type="radio"
+              name="mandatory-scope"
+              id="mandatory-scope-all"
+              checked={mandatoryScope === 'all'}
+              onChange={() => setMandatoryScope('all')}
+              className={checkboxClass}
+            />
+            <span className="text-theme-text-secondary text-sm">All members</span>
+          </label>
+          <label className="mobile-touch-target flex items-center justify-start space-x-3">
+            <input
+              type="radio"
+              name="mandatory-scope"
+              id="mandatory-scope-some"
+              checked={mandatoryScope === 'some'}
+              onChange={() => setMandatoryScope('some')}
+              className={checkboxClass}
+            />
+            <span className="text-theme-text-secondary text-sm">Only these member types</span>
+          </label>
+
+          {mandatoryScope === 'some' && (
+            <div className="space-y-2 pl-7">
+              {typesHint && (
+                <p className="text-theme-text-muted text-xs">Select one or more member types required to attend.</p>
+              )}
+              <div className={typesInRow ? 'flex flex-wrap gap-x-6' : 'space-y-2'}>
+                {typeBoxes.map((type, index) => (
+                  <label key={type.value} className="mobile-touch-target flex items-center justify-start space-x-3">
+                    <input
+                      type="checkbox"
+                      // The first box takes the field's id, so a refusal can focus it.
+                      id={index === 0 ? EVENT_FIELD_IDS.mandatory_membership_types : `mandatory-${type.value}`}
+                      checked={selected.includes(type.value)}
+                      onChange={(e) => toggleMandatoryMembershipType(type.value, e.target.checked)}
+                      aria-invalid={error ? true : undefined}
+                      aria-describedby={error ? MANDATORY_FOR_ERROR_ID : undefined}
+                      className={checkboxClass}
+                    />
+                    <span className="text-theme-text-secondary text-sm">{type.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          {error && (
+            <p id={MANDATORY_FOR_ERROR_ID} className={`text-sm ${FIELD_ERROR_CLASS}`}>
+              {error}
+            </p>
+          )}
+          {scopeNotePlacement === 'after' && scopeNote}
         </fieldset>
       )}
     </section>

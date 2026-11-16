@@ -1,0 +1,170 @@
+{
+  "_comment": "The Reports page's export columns, per report type. The server-side PDF and CSV exports (app/services/report_tables.py) are built from this file, and frontend/src/modules/reports/exportColumnsParity.test.ts fails if a renderer's get<X>ExportData columns or a report card's title stop matching it. Change both sides together. 'rows' names the result key holding the table's records; 'dynamic' marks columns appended per result (call volume's call types).",
+  "member_roster": {
+    "title": "Member Roster",
+    "rows": "members",
+    "columns": [
+      { "key": "first_name", "header": "First Name" },
+      { "key": "last_name", "header": "Last Name" },
+      { "key": "email", "header": "Email" },
+      { "key": "rank", "header": "Rank" },
+      { "key": "status", "header": "Status" },
+      { "key": "station", "header": "Station" },
+      { "key": "membership_number", "header": "Member #" },
+      { "key": "roles", "header": "Roles" },
+      { "key": "joined_date", "header": "Joined" }
+    ]
+  },
+  "training_summary": {
+    "title": "Training & Program Progress Summary",
+    "rows": "entries",
+    "columns": [
+      { "key": "member_name", "header": "Member" },
+      { "key": "total_courses", "header": "Total Courses" },
+      { "key": "completed_courses", "header": "Completed" },
+      { "key": "total_hours", "header": "Hours" }
+    ]
+  },
+  "event_attendance": {
+    "title": "Event Attendance",
+    "rows": "events",
+    "columns": [
+      { "key": "event_title", "header": "Event" },
+      { "key": "event_date", "header": "Date" },
+      { "key": "total_rsvps", "header": "RSVPs" },
+      { "key": "attended", "header": "Attended" },
+      { "key": "attendance_rate", "header": "Attendance Rate %" }
+    ]
+  },
+  "training_progress": {
+    "title": "Training Progress",
+    "rows": "entries",
+    "columns": [
+      { "key": "member_name", "header": "Member" },
+      { "key": "program_name", "header": "Program" },
+      { "key": "progress_percentage", "header": "Progress %" },
+      { "key": "requirements_completed", "header": "Completed Reqs" },
+      { "key": "requirements_total", "header": "Total Reqs" },
+      { "key": "status", "header": "Status" },
+      { "key": "enrolled_at", "header": "Enrolled At" },
+      { "key": "target_completion", "header": "Target Date" }
+    ]
+  },
+  "annual_training": {
+    "title": "Annual Training Report",
+    "rows": "entries",
+    "columns": [
+      { "key": "member_name", "header": "Member" },
+      { "key": "rank", "header": "Rank" },
+      { "key": "training_hours", "header": "Training Hours" },
+      { "key": "shift_hours", "header": "Shift Hours" },
+      { "key": "courses_completed", "header": "Courses Completed" },
+      { "key": "shifts_completed", "header": "Shifts Completed" },
+      { "key": "calls_responded", "header": "Calls Responded" },
+      { "key": "leave_months", "header": "Months on Leave" },
+      { "key": "leave_periods_text", "header": "Leave Periods" },
+      { "key": "avg_performance_rating", "header": "Avg Rating" }
+    ]
+  },
+  "admin_hours": {
+    "title": "Admin Hours Report",
+    "rows": "entries",
+    "columns": [
+      { "key": "member_name", "header": "Member" },
+      { "key": "category_name", "header": "Category" },
+      { "key": "date", "header": "Date" },
+      { "key": "hours", "header": "Hours" },
+      { "key": "entry_method", "header": "Method" },
+      { "key": "status", "header": "Status" }
+    ]
+  },
+  "department_overview": {
+    "title": "Department Overview",
+    "rows": null,
+    "columns": [
+      { "key": "metric", "header": "Metric" },
+      { "key": "value", "header": "Value" }
+    ]
+  },
+  "certification_expiration": {
+    "title": "Certification Expiration",
+    "rows": "entries",
+    "columns": [
+      { "key": "member_name", "header": "Member" },
+      { "key": "rank", "header": "Rank" },
+      { "key": "course_name", "header": "Certification" },
+      { "key": "certification_number", "header": "Cert #" },
+      { "key": "issuing_agency", "header": "Issuing Agency" },
+      { "key": "completion_date", "header": "Completed" },
+      { "key": "expiration_date", "header": "Expires" },
+      { "key": "days_until_expiry", "header": "Days Until Expiry" },
+      { "key": "expiry_status", "header": "Status" }
+    ]
+  },
+  "compliance_status": {
+    "title": "Program Requirement Progress",
+    "rows": "entries",
+    "columns": [
+      { "key": "member_name", "header": "Member" },
+      { "key": "rank", "header": "Rank" },
+      { "key": "total_requirements", "header": "Total Requirements" },
+      { "key": "completed_requirements", "header": "Completed" },
+      { "key": "compliance_percentage", "header": "Program Progress %" },
+      { "key": "overdue_items", "header": "Outstanding" },
+      { "key": "on_leave_text", "header": "On Leave Now" },
+      { "key": "leave_periods_text", "header": "Leave in Past Year" }
+    ]
+  },
+  "apparatus_status": {
+    "title": "Fleet / Apparatus Status",
+    "rows": "entries",
+    "columns": [
+      { "key": "name", "header": "Apparatus" },
+      { "key": "apparatus_type", "header": "Type" },
+      { "key": "status", "header": "Status" },
+      { "key": "station", "header": "Station" },
+      { "key": "year", "header": "Year" },
+      { "key": "mileage", "header": "Mileage" },
+      { "key": "last_inspection_date", "header": "Last Inspection" },
+      { "key": "next_inspection_due", "header": "Next Inspection" },
+      { "key": "open_work_orders", "header": "Open Work Orders" }
+    ]
+  },
+  "inventory_status": {
+    "title": "Inventory Status",
+    "rows": "entries",
+    "columns": [
+      { "key": "name", "header": "Item" },
+      { "key": "item_type", "header": "Type" },
+      { "key": "category_name", "header": "Category" },
+      { "key": "total_quantity", "header": "Total Qty" },
+      { "key": "assigned_quantity", "header": "Assigned" },
+      { "key": "available_quantity", "header": "Available" },
+      { "key": "condition", "header": "Condition" },
+      { "key": "is_low_stock", "header": "Low Stock" },
+      { "key": "last_audit_date", "header": "Last Audit" }
+    ]
+  },
+  "call_volume": {
+    "title": "Incident / Call Volume",
+    "rows": "entries",
+    "columns": [
+      { "key": "date", "header": "Date" },
+      { "key": "total_calls", "header": "Total Calls" }
+    ],
+    "dynamic": "type_<call type>, headed by call_type_labels; total_calls is headed 'Unit Responses' or 'Member-Reported Calls' when the result says it counts those"
+  },
+  "pipeline_overview": {
+    "title": "Pipeline Overview",
+    "rows": "prospects",
+    "columns": [
+      { "key": "name", "header": "Name" },
+      { "key": "email", "header": "Email" },
+      { "key": "status", "header": "Status" },
+      { "key": "current_group", "header": "Current Group" },
+      { "key": "current_stage", "header": "Current Stage" },
+      { "key": "days_in_pipeline", "header": "Days in Pipeline" },
+      { "key": "applied_at", "header": "Applied At" }
+    ]
+  }
+}

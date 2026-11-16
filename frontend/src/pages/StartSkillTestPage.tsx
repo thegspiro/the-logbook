@@ -410,7 +410,7 @@ export const StartSkillTestPage: React.FC = () => {
             >
               <Award className={`h-8 w-8 ${!isPractice ? 'text-red-600' : 'text-theme-text-muted'}`} />
               <span
-                className={`text-sm font-bold ${!isPractice ? 'text-red-700 dark:text-red-300' : 'text-theme-text-primary'}`}
+                className={`text-sm font-bold ${!isPractice ? 'text-red-900 dark:text-red-300' : 'text-theme-text-primary'}`}
               >
                 Official Evaluation
               </span>
@@ -435,7 +435,7 @@ export const StartSkillTestPage: React.FC = () => {
             >
               <BookOpen className={`h-8 w-8 ${isPractice ? 'text-blue-600' : 'text-theme-text-muted'}`} />
               <span
-                className={`text-sm font-bold ${isPractice ? 'text-blue-700 dark:text-blue-300' : 'text-theme-text-primary'}`}
+                className={`text-sm font-bold ${isPractice ? 'text-blue-900 dark:text-blue-300' : 'text-theme-text-primary'}`}
               >
                 Practice Run
               </span>

@@ -1657,6 +1657,19 @@ class ApparatusService:
             organization_id,
             label="member",
         )
+        # Only a current member (active or probationary, not deleted) may be
+        # certified to drive. The roster import brings in former members, and
+        # the picker hiding them is not a guard. Existing operator rows for
+        # members who have since left are untouched and remain editable.
+        current_member = await self.db.execute(
+            select(User.id).where(
+                User.id == str(operator_data.user_id),
+                User.organization_id == str(organization_id),
+                User.is_active,
+            )
+        )
+        if current_member.scalar_one_or_none() is None:
+            raise ValueError("Only current members can be added as operators")
         await assert_in_org(
             self.db,
             EvocLevel,

@@ -1,0 +1,452 @@
+/**
+ * A refusal, from the server or the form itself, is written under the field it
+ * is about, and the training-event form goes back to the step holding it and
+ * focuses it (forms batch 17, carried over from the Create Training Session
+ * wizard this form replaced). The form saves through the events endpoints, so
+ * one 422 can name an event field (`title`) or a training one
+ * (`training_details.course_name`); each lands on its own step.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { renderWithRouter } from '../../test/utils';
+
+const getUsers = vi.fn();
+const getCourses = vi.fn();
+const getLocations = vi.fn();
+const getVisibleEventTypesWithCategories = vi.fn();
+const getMandatoryTiers = vi.fn();
+
+vi.mock('../../services/api', () => ({
+  userService: { getUsers: (...args: unknown[]) => getUsers(...args) as unknown },
+  trainingService: { getCourses: (...args: unknown[]) => getCourses(...args) as unknown },
+  trainingSessionService: { getMandatoryTiers: (...args: unknown[]) => getMandatoryTiers(...args) as unknown },
+  locationsService: { getLocations: (...args: unknown[]) => getLocations(...args) as unknown },
+  eventService: {
+    getVisibleEventTypesWithCategories: (...args: unknown[]) => getVisibleEventTypesWithCategories(...args) as unknown,
+  },
+}));
+
+vi.mock('../../hooks/useTrainingLinkageData', () => ({
+  useTrainingLinkageData: () => ({ categories: [], requirements: [], programs: [], phases: [] }),
+}));
+vi.mock('../../hooks/useRanks', () => ({ useRanks: () => ({ formatRank: (rank: string) => rank }) }));
+vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
+vi.mock('../../stores/authStore', () => ({
+  useAuthStore: (selector: (state: { user: { id: string } }) => unknown) => selector({ user: { id: 'me' } }),
+}));
+const toastError = vi.hoisted(() => vi.fn());
+const toastDismiss = vi.hoisted(() => vi.fn());
+vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: toastError, dismiss: toastDismiss } }));
+
+import { EventComposer } from '../event-form/EventComposer';
+import { EventType } from '../../constants/enums';
+import { DEFAULT_TRAINING_DETAILS } from './trainingDetailsModel';
+import { STEP_TOAST_ID } from './TrainingEventWizard';
+
+type User = ReturnType<typeof userEvent.setup>;
+
+const onSubmit = vi.fn();
+const onSubmitUpdate = vi.fn();
+
+const renderForm = () =>
+  renderWithRouter(<EventComposer lockedType={EventType.TRAINING} onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+const next = (user: User) => user.click(screen.getByRole('button', { name: 'Next' }));
+
+/** Title and a start; the end follows two hours later. */
+async function fillEventDetails(user: User) {
+  await user.type(screen.getByLabelText(/^Title/), 'CPR recert night');
+  await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
+}
+
+async function fillAndReachReview(user: User) {
+  await fillEventDetails(user);
+  await next(user); // to Training Info
+  await user.click(screen.getByRole('radio', { name: /One-off course name/ }));
+  await user.type(screen.getByLabelText(/Course Name/), 'CPR');
+  await next(user); // to Settings
+  await next(user); // to Review
+}
+
+const submit = (user: User) => user.click(screen.getByRole('button', { name: 'Create Training Session' }));
+
+describe('TrainingEventWizard › refusals on their fields', () => {
+  beforeEach(() => {
+    for (const mock of [
+      getUsers,
+      getCourses,
+      getLocations,
+      getVisibleEventTypesWithCategories,
+      getMandatoryTiers,
+      onSubmit,
+      onSubmitUpdate,
+      toastError,
+    ]) {
+      mock.mockReset();
+    }
+    getUsers.mockResolvedValue([]);
+    getCourses.mockResolvedValue([]);
+    getLocations.mockResolvedValue([]);
+    getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [], source_ids: [] });
+    getVisibleEventTypesWithCategories.mockResolvedValue({
+      visible_event_types: ['training'],
+      custom_event_categories: [],
+      visible_custom_categories: [],
+      membership_types: [{ value: 'active', label: 'Active Member' }],
+    });
+    onSubmit.mockResolvedValue(undefined);
+    onSubmitUpdate.mockResolvedValue(undefined);
+  });
+
+  it("takes the officer back to the server's refused title, flagged and focused", async () => {
+    onSubmit.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'title', message: 'String should have at most 200 characters' }] },
+      },
+    });
+    const user = userEvent.setup();
+    renderForm();
+    await fillAndReachReview(user);
+    await submit(user);
+
+    expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+    const title = screen.getByLabelText(/^Title/);
+    expect(title).toHaveAccessibleDescription(/Title is too long — keep it to 200 characters\./);
+    expect(title).toHaveAttribute('aria-invalid', 'true');
+    await waitFor(() => expect(title).toHaveFocus());
+  });
+
+  it('takes the officer back to a refused training field on Training Info, focused', async () => {
+    onSubmit.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: {
+          detail: [{ field: 'training_details.course_name', message: 'String should have at most 255 characters' }],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderForm();
+    await fillAndReachReview(user);
+    await submit(user);
+
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    const courseName = screen.getByLabelText(/Course Name/);
+    expect(courseName).toHaveAccessibleDescription(/Course name is too long — keep it to 255 characters\./);
+    expect(courseName).toHaveAttribute('aria-invalid', 'true');
+    await waitFor(() => expect(courseName).toHaveFocus());
+  });
+
+  // The save was pressed on Review and the form is now on another step: the
+  // toast is what says the save did not go through, as a refusal of the
+  // form's own does (forms batch 17).
+  it.each([
+    ['title', 'String should have at most 200 characters', 'Event Details'],
+    ['training_details.course_name', 'String should have at most 255 characters', 'Training Info'],
+  ])('names the step a 422 on %s went back to', async (field, message, step) => {
+    onSubmit.mockRejectedValueOnce({ response: { status: 422, data: { detail: [{ field, message }] } } });
+    const user = userEvent.setup();
+    renderForm();
+    await fillAndReachReview(user);
+    await submit(user);
+
+    expect(await screen.findByText(`Step ${step === 'Event Details' ? 1 : 2} of 4 · ${step}`)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(`Back to ${step}: fix the flagged field`, { id: STEP_TOAST_ID })
+    );
+    expect(toastError).toHaveBeenCalledTimes(1);
+  });
+
+  // One 422 can refuse fields on two steps. The form goes to the earlier one,
+  // the banner says where the other is rather than "marked below", and Next
+  // keeps the later step's refusal under its own field.
+  it('keeps a 422 on a later step marked on that step after Next', async () => {
+    onSubmit.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: {
+          detail: [
+            { field: 'title', message: 'String should have at most 200 characters' },
+            { field: 'training_details.course_code', message: 'String should have at most 50 characters' },
+          ],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderForm();
+    await fillAndReachReview(user);
+    await submit(user);
+
+    expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+    expect(screen.getByText(/^Fix the 2 refused fields: 1 marked below, 1 on Training Info\./)).toBeInTheDocument();
+    expect(screen.queryByText(/fields marked below/)).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText(/^Title/)).toHaveFocus());
+
+    await next(user);
+
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    const courseCode = screen.getByLabelText(/Course Code/);
+    expect(courseCode).toHaveAttribute('aria-invalid', 'true');
+    expect(courseCode).toHaveAccessibleDescription(/Course code is too long — keep it to 50 characters\./);
+    await waitFor(() => expect(courseCode).toHaveFocus());
+  });
+
+  // Mandatory unticked, so no member-type box is drawn to hold the refusal or
+  // take focus: it is announced in the step's banner, and focus goes to the
+  // step line rather than dropping to the page.
+  it('announces a 422 on a field the step does not draw, and focuses the step', async () => {
+    onSubmit.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'mandatory_membership_types', message: 'Unknown member type' }] },
+      },
+    });
+    const user = userEvent.setup();
+    renderForm();
+    await fillAndReachReview(user);
+    await submit(user);
+
+    const stepLine = await screen.findByText('Step 3 of 4 · Settings');
+    await waitFor(() => expect(stepLine).toHaveFocus());
+    expect(screen.getByRole('alert')).toHaveTextContent('Unknown member type');
+    expect(toastError).toHaveBeenCalledWith('Back to Settings: nothing was saved', { id: STEP_TOAST_ID });
+    expect(toastError).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates nothing without a course name and flags it on its step', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /One-off course name/ }));
+    await next(user);
+
+    const courseName = screen.getByLabelText(/Course Name/);
+    expect(courseName).toHaveAccessibleDescription(/Enter a course name\./);
+    expect(courseName).toHaveAttribute('aria-invalid', 'true');
+    await waitFor(() => expect(courseName).toHaveFocus());
+    expect(screen.getByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+describe('TrainingEventWizard › a refusal on an earlier step', () => {
+  beforeEach(() => {
+    for (const mock of [
+      getUsers,
+      getCourses,
+      getLocations,
+      getVisibleEventTypesWithCategories,
+      getMandatoryTiers,
+      onSubmitUpdate,
+      toastError,
+      toastDismiss,
+    ]) {
+      mock.mockReset();
+    }
+    getUsers.mockResolvedValue([]);
+    getCourses.mockResolvedValue([]);
+    getLocations.mockResolvedValue([]);
+    getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [], source_ids: [] });
+    getVisibleEventTypesWithCategories.mockResolvedValue({
+      visible_event_types: ['training'],
+      custom_event_categories: [],
+      visible_custom_categories: [],
+      membership_types: [{ value: 'active', label: 'Active Member' }],
+    });
+    onSubmitUpdate.mockResolvedValue(undefined);
+  });
+
+  /** An untitled Training event, edited from Training Info. */
+  const renderEditOnTrainingInfo = () =>
+    renderWithRouter(
+      <EventComposer
+        initialData={{
+          title: '',
+          event_type: EventType.TRAINING,
+          start_datetime: '2030-05-01T19:00',
+          end_datetime: '2030-05-01T21:00',
+        }}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+        trainingSubmitLabel="Save Changes"
+        editing={{
+          eventId: 'event-1',
+          attendanceLocked: false,
+          eventTypeLocked: false,
+          storedType: EventType.TRAINING,
+          initialTraining: { ...DEFAULT_TRAINING_DETAILS, credit_hours: '2', credit_hours_source: 'manual' },
+          trainingAccess: 'edit',
+          initialStep: 'training',
+          onSubmitUpdate,
+        }}
+      />
+    );
+
+  // The event page's "Edit training details" opens on Training Info, so Event
+  // Details is first checked by the save. The refusal is read out by the
+  // focused field; the toast says only where the form went, so a screen
+  // reader does not hear the same sentence twice.
+  it('names the step it went back to rather than repeating the refusal', async () => {
+    const user = userEvent.setup();
+    renderEditOnTrainingInfo();
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    await next(user); // to Settings
+    await next(user); // to Review
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+    const title = screen.getByLabelText(/^Title/);
+    expect(title).toHaveAccessibleDescription(/Enter a title for the event\./);
+    await waitFor(() => expect(title).toHaveFocus());
+    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(toastError).toHaveBeenCalledWith('Back to Event Details: fix the flagged field', { id: STEP_TOAST_ID });
+    expect(onSubmitUpdate).not.toHaveBeenCalled();
+  });
+
+  // The toast names the step the form went back to; once the officer moves
+  // on, it names a step they are no longer on, so it goes.
+  it('takes the step toast down once the officer moves to another step', async () => {
+    const user = userEvent.setup();
+    renderEditOnTrainingInfo();
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    await next(user); // to Settings
+    await next(user); // to Review
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    toastDismiss.mockClear();
+    // Fixing the field on the step the toast names leaves it up.
+    await user.type(screen.getByLabelText(/^Title/), 'CPR recert night');
+    expect(toastDismiss).not.toHaveBeenCalled();
+
+    await next(user);
+
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    expect(toastDismiss).toHaveBeenCalledWith(STEP_TOAST_ID);
+  });
+
+  it('says nothing in a toast for a refusal on the step already open', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await next(user);
+
+    expect(screen.getByLabelText(/^Title/)).toHaveAttribute('aria-invalid', 'true');
+    expect(toastError).not.toHaveBeenCalled();
+  });
+});
+
+/** Everything a screen reader is told without moving to it. */
+const announcedText = () =>
+  (['alert', 'status', 'log'] as const)
+    .flatMap((role) => screen.queryAllByRole(role))
+    .map((region) => region.textContent ?? '')
+    .join('\n');
+
+// Forms batch 17: the focused field reads its refusal out through its
+// description, so a live banner repeating it made a screen reader say it
+// twice. Only a refusal no field owns is announced.
+describe('TrainingEventWizard › a refusal is announced once', () => {
+  beforeEach(() => {
+    for (const mock of [
+      getUsers,
+      getCourses,
+      getLocations,
+      getVisibleEventTypesWithCategories,
+      getMandatoryTiers,
+      onSubmit,
+      toastError,
+    ]) {
+      mock.mockReset();
+    }
+    getUsers.mockResolvedValue([]);
+    getCourses.mockResolvedValue([]);
+    getLocations.mockResolvedValue([]);
+    getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [], source_ids: [] });
+    getVisibleEventTypesWithCategories.mockResolvedValue({
+      visible_event_types: ['training'],
+      custom_event_categories: [],
+      visible_custom_categories: [],
+      membership_types: [{ value: 'active', label: 'Active Member' }],
+    });
+    onSubmit.mockResolvedValue(undefined);
+  });
+
+  it('leaves a refused Next to the focused field', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await next(user);
+
+    const title = screen.getByLabelText(/^Title/);
+    expect(title).toHaveAccessibleDescription(/Enter a title for the event\./);
+    await waitFor(() => expect(title).toHaveFocus());
+    expect(announcedText()).not.toContain('Enter a title for the event.');
+  });
+
+  it('leaves a refused training field on Next to the focused field', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /One-off course name/ }));
+    await next(user);
+
+    const courseName = screen.getByLabelText(/Course Name/);
+    await waitFor(() => expect(courseName).toHaveFocus());
+    expect(courseName).toHaveAccessibleDescription(/Enter a course name\./);
+    expect(announcedText()).not.toContain('Enter a course name.');
+  });
+
+  it('leaves a mapped 422 to the focused field', async () => {
+    onSubmit.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'title', message: 'String should have at most 200 characters' }] },
+      },
+    });
+    const user = userEvent.setup();
+    renderForm();
+    await fillAndReachReview(user);
+    await submit(user);
+
+    const title = await screen.findByLabelText(/^Title/);
+    await waitFor(() => expect(title).toHaveFocus());
+    expect(title).toHaveAccessibleDescription(/Title is too long — keep it to 200 characters\./);
+    expect(announcedText()).not.toContain('Title is too long');
+  });
+
+  it('announces the part of a 422 no field owns, and only that part', async () => {
+    onSubmit.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: {
+          detail: [
+            { field: 'training_details.course_name', message: 'String should have at most 255 characters' },
+            { field: 'nothing_here', message: 'The session could not be filed.' },
+          ],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderForm();
+    await fillAndReachReview(user);
+    await submit(user);
+
+    const courseName = await screen.findByLabelText(/Course Name/);
+    await waitFor(() => expect(courseName).toHaveFocus());
+    expect(courseName).toHaveAccessibleDescription(/Course name is too long/);
+    expect(screen.getByRole('alert')).toHaveTextContent('The session could not be filed.');
+    expect(announcedText()).not.toContain('Course name is too long');
+  });
+
+  it('announces a refusal with no field to hold it', async () => {
+    onSubmit.mockRejectedValueOnce({ response: { status: 500, data: { detail: 'The server is down.' } } });
+    const user = userEvent.setup();
+    renderForm();
+    await fillAndReachReview(user);
+    await submit(user);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The server is down.');
+  });
+});

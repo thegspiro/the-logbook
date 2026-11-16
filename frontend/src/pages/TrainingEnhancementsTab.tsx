@@ -159,8 +159,11 @@ const AddPathwayModal: React.FC<AddPathwayModalProps> = ({ isOpen, onClose, onSa
     >
       <div className="space-y-4">
         <div>
-          <label className={labelClass}>Name *</label>
+          <label htmlFor="pathway-name" className={labelClass}>
+            Name *
+          </label>
           <input
+            id="pathway-name"
             className={inputClass}
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -169,8 +172,11 @@ const AddPathwayModal: React.FC<AddPathwayModalProps> = ({ isOpen, onClose, onSa
           />
         </div>
         <div>
-          <label className={labelClass}>Description</label>
+          <label htmlFor="pathway-description" className={labelClass}>
+            Description
+          </label>
           <textarea
+            id="pathway-description"
             className={inputClass}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -180,8 +186,11 @@ const AddPathwayModal: React.FC<AddPathwayModalProps> = ({ isOpen, onClose, onSa
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className={labelClass}>Renewal Type *</label>
+            <label htmlFor="pathway-renewal-type" className={labelClass}>
+              Renewal Type *
+            </label>
             <select
+              id="pathway-renewal-type"
               className={selectClass}
               value={renewalType}
               onChange={(e) => setRenewalType(e.target.value as RecertificationPathwayCreate['renewal_type'])}
@@ -194,8 +203,11 @@ const AddPathwayModal: React.FC<AddPathwayModalProps> = ({ isOpen, onClose, onSa
             </select>
           </div>
           <div>
-            <label className={labelClass}>Required Hours</label>
+            <label htmlFor="pathway-required-hours" className={labelClass}>
+              Required Hours
+            </label>
             <input
+              id="pathway-required-hours"
               className={inputClass}
               type="number"
               min="0"
@@ -208,8 +220,11 @@ const AddPathwayModal: React.FC<AddPathwayModalProps> = ({ isOpen, onClose, onSa
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className={labelClass}>Renewal Window (days)</label>
+            <label htmlFor="pathway-renewal-window-days" className={labelClass}>
+              Renewal Window (days)
+            </label>
             <input
+              id="pathway-renewal-window-days"
               className={inputClass}
               type="number"
               min="1"
@@ -218,8 +233,11 @@ const AddPathwayModal: React.FC<AddPathwayModalProps> = ({ isOpen, onClose, onSa
             />
           </div>
           <div>
-            <label className={labelClass}>Grace Period (days)</label>
+            <label htmlFor="pathway-grace-period-days" className={labelClass}>
+              Grace Period (days)
+            </label>
             <input
+              id="pathway-grace-period-days"
               className={inputClass}
               type="number"
               min="0"
@@ -307,8 +325,11 @@ const AddMatrixModal: React.FC<AddMatrixModalProps> = ({ isOpen, onClose, onSave
     >
       <div className="space-y-4">
         <div>
-          <label className={labelClass}>Name *</label>
+          <label htmlFor="matrix-name" className={labelClass}>
+            Name *
+          </label>
           <input
+            id="matrix-name"
             className={inputClass}
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -317,8 +338,11 @@ const AddMatrixModal: React.FC<AddMatrixModalProps> = ({ isOpen, onClose, onSave
           />
         </div>
         <div>
-          <label className={labelClass}>Position *</label>
+          <label htmlFor="matrix-position" className={labelClass}>
+            Position *
+          </label>
           <input
+            id="matrix-position"
             className={inputClass}
             value={position}
             onChange={(e) => setPosition(e.target.value)}
@@ -327,8 +351,11 @@ const AddMatrixModal: React.FC<AddMatrixModalProps> = ({ isOpen, onClose, onSave
           />
         </div>
         <div>
-          <label className={labelClass}>Description</label>
+          <label htmlFor="matrix-description" className={labelClass}>
+            Description
+          </label>
           <textarea
+            id="matrix-description"
             className={inputClass}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -488,8 +515,11 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className={labelClass}>Qualification Type *</label>
+            <label htmlFor="qualification-type" className={labelClass}>
+              Qualification Type *
+            </label>
             <select
+              id="qualification-type"
               className={selectClass}
               value={qualificationType}
               onChange={(e) => setQualificationType(e.target.value as InstructorQualificationType)}
@@ -502,8 +532,11 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
             </select>
           </div>
           <div>
-            <label className={labelClass}>Certification Level</label>
+            <label htmlFor="qualification-certification-level" className={labelClass}>
+              Certification Level
+            </label>
             <input
+              id="qualification-certification-level"
               className={inputClass}
               value={certificationLevel}
               onChange={(e) => setCertificationLevel(e.target.value)}
@@ -513,8 +546,11 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className={labelClass}>Certification Number</label>
+            <label htmlFor="qualification-certification-number" className={labelClass}>
+              Certification Number
+            </label>
             <input
+              id="qualification-certification-number"
               className={inputClass}
               value={certificationNumber}
               onChange={(e) => setCertificationNumber(e.target.value)}
@@ -522,8 +558,11 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
             />
           </div>
           <div>
-            <label className={labelClass}>Issuing Agency</label>
+            <label htmlFor="qualification-issuing-agency" className={labelClass}>
+              Issuing Agency
+            </label>
             <input
+              id="qualification-issuing-agency"
               className={inputClass}
               value={issuingAgency}
               onChange={(e) => setIssuingAgency(e.target.value)}
@@ -533,8 +572,11 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className={labelClass}>Issued Date</label>
+            <label htmlFor="qualification-issued-date" className={labelClass}>
+              Issued Date
+            </label>
             <input
+              id="qualification-issued-date"
               className={inputClass}
               type="date"
               value={issuedDate}
@@ -542,8 +584,11 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
             />
           </div>
           <div>
-            <label className={labelClass}>Expiration Date</label>
+            <label htmlFor="qualification-expiration-date" className={labelClass}>
+              Expiration Date
+            </label>
             <input
+              id="qualification-expiration-date"
               className={inputClass}
               type="date"
               value={expirationDate}
@@ -656,8 +701,11 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
     >
       <div className="space-y-4">
         <div>
-          <label className={labelClass}>Exercise Name *</label>
+          <label htmlFor="exercise-name" className={labelClass}>
+            Exercise Name *
+          </label>
           <input
+            id="exercise-name"
             className={inputClass}
             value={exerciseName}
             onChange={(e) => setExerciseName(e.target.value)}
@@ -667,8 +715,11 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className={labelClass}>Exercise Type *</label>
+            <label htmlFor="exercise-type" className={labelClass}>
+              Exercise Type *
+            </label>
             <select
+              id="exercise-type"
               className={selectClass}
               value={exerciseType}
               onChange={(e) => setExerciseType(e.target.value as MultiAgencyTrainingCreate['exercise_type'])}
@@ -681,8 +732,11 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
             </select>
           </div>
           <div>
-            <label className={labelClass}>Exercise Date *</label>
+            <label htmlFor="exercise-date" className={labelClass}>
+              Exercise Date *
+            </label>
             <input
+              id="exercise-date"
               className={inputClass}
               type="date"
               value={exerciseDate}
@@ -692,8 +746,11 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
           </div>
         </div>
         <div>
-          <label className={labelClass}>Description</label>
+          <label htmlFor="exercise-description" className={labelClass}>
+            Description
+          </label>
           <textarea
+            id="exercise-description"
             className={inputClass}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -703,8 +760,11 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className={labelClass}>Lead Agency</label>
+            <label htmlFor="exercise-lead-agency" className={labelClass}>
+              Lead Agency
+            </label>
             <input
+              id="exercise-lead-agency"
               className={inputClass}
               value={leadAgency}
               onChange={(e) => setLeadAgency(e.target.value)}
@@ -712,8 +772,11 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
             />
           </div>
           <div>
-            <label className={labelClass}>Total Participants</label>
+            <label htmlFor="exercise-total-participants" className={labelClass}>
+              Total Participants
+            </label>
             <input
+              id="exercise-total-participants"
               className={inputClass}
               type="number"
               min="1"
@@ -727,8 +790,11 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
           <legend className="text-theme-text-secondary px-1 text-sm font-medium">Participating Organization</legend>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className={labelClass}>Organization Name</label>
+              <label htmlFor="exercise-organization-name" className={labelClass}>
+                Organization Name
+              </label>
               <input
+                id="exercise-organization-name"
                 className={inputClass}
                 value={orgName}
                 onChange={(e) => setOrgName(e.target.value)}
@@ -736,8 +802,11 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
               />
             </div>
             <div>
-              <label className={labelClass}>Role</label>
+              <label htmlFor="exercise-role" className={labelClass}>
+                Role
+              </label>
               <select
+                id="exercise-role"
                 className={selectClass}
                 value={orgRole}
                 onChange={(e) => setOrgRole(e.target.value as ParticipatingOrganization['role'])}

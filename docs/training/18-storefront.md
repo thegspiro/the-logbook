@@ -171,6 +171,29 @@ something.
 **General payment note (shown with every order)** adds a line of your own to
 every order.
 
+#### Which PayPal account members pay into
+
+With PayPal ticked, choose where its button sends members:
+
+- **The account entered below** — the PayPal.Me link and email you type here.
+  This is how every store worked before November 14, 2026, and stays the
+  default.
+- **The connected PayPal account** — the PayPal.Me link and email entered on
+  the PayPal integration (**Integrations → PayPal → Settings**). Payments to it
+  are matched to orders automatically; see
+  [Automatic PayPal Reconciliation](#automatic-paypal-reconciliation).
+
+With **the connected PayPal account** chosen, the boxes below become the
+**fallback**: members are sent there if PayPal is disconnected, or if the
+integration has no link or email yet. A note under the choice says which
+applies today. With **the account entered below** chosen while PayPal is
+connected, the note reminds you that payments to that other account are not
+matched automatically, so you mark them paid by hand.
+
+![PayPal account members pay into, with The connected PayPal account chosen and the note that members are sent to https://paypal.me/oakvillefd and treasurer@oakvillefd.org, and that payments to it are matched to orders automatically](./images/18-07-store-paypal-account.png)
+
+![PayPal account members pay into, with The connected PayPal account chosen and the warning that PayPal is not connected on the Integrations page, so until it is, members are sent to the fallback link and email below](./images/18-08-store-paypal-fallback.png)
+
 Cash App and Zelle details are **checked when you save**. A mistyped
 `$cashtag` gives an error, rather than a button that quietly goes missing.
 

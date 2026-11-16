@@ -39,6 +39,8 @@ import type {
   CourseClassCreate,
   CourseClassUpdate,
   CourseCohort,
+  CourseLinkResult,
+  CourseLinksView,
   CourseCohortClass,
   CourseCohortCreate,
   CourseCohortDetail,
@@ -120,6 +122,7 @@ import type {
   UserTrainingStats,
   RequirementOverride,
   RequirementOverrideCreate,
+  MandatoryTiersResponse,
 } from '../types/training';
 import type { ComplianceMatrix, ExpiringCertification } from './communicationsServices';
 
@@ -187,9 +190,7 @@ export interface TrainingDashboardSummary {
 }
 import type {
   TrainingSessionResponse,
-  TrainingSessionCreate,
   TrainingSessionLinkageUpdate,
-  RecurringTrainingSessionCreate,
   TrainingSessionAttach,
   TrainingApprovalSummary,
   TrainingApprovalData,
@@ -234,6 +235,31 @@ export const trainingService = {
    */
   async updateCourse(courseId: string, updates: TrainingCourseUpdate): Promise<TrainingCourse> {
     const response = await api.patch<TrainingCourse>(`/training/courses/${courseId}`, updates);
+    return response.data;
+  },
+
+  /**
+   * The names training records with no library course carry, with a
+   * suggested course for each.
+   */
+  async getCourseLinks(params: {
+    search?: string | undefined;
+    offset: number;
+    limit: number;
+  }): Promise<CourseLinksView> {
+    const response = await api.get<CourseLinksView>('/training/course-links', { params });
+    return response.data;
+  },
+
+  /** Link every unlinked record carrying a name to a library course. */
+  async linkCourseName(key: string, courseId: string): Promise<CourseLinkResult> {
+    const response = await api.post<CourseLinkResult>('/training/course-links', { key, course_id: courseId });
+    return response.data;
+  },
+
+  /** Link every name that has a suggested course to it. */
+  async linkSuggestedCourseNames(): Promise<CourseLinkResult> {
+    const response = await api.post<CourseLinkResult>('/training/course-links/link-suggested');
     return response.data;
   },
 
@@ -1272,14 +1298,17 @@ export const trainingSessionService = {
     return asArray(response.data);
   },
 
-  async createSession(data: TrainingSessionCreate): Promise<TrainingSessionResponse> {
-    const response = await api.post<TrainingSessionResponse>('/training/sessions', data);
+  /**
+   * Who the given session-attendance requirements grade, as an event's
+   * "Mandatory for", for the form to pre-fill. The backend projects each
+   * requirement's member types onto the department's tiers
+   * (`mandatory_tiers_for_requirements`); the form does not translate them.
+   */
+  async getMandatoryTiers(requirementIds: string[]): Promise<MandatoryTiersResponse> {
+    const response = await api.post<MandatoryTiersResponse>('/training/sessions/mandatory-tiers', {
+      requirement_ids: requirementIds,
+    });
     return response.data;
-  },
-
-  async createRecurringSessions(data: RecurringTrainingSessionCreate): Promise<TrainingSessionResponse[]> {
-    const response = await api.post<TrainingSessionResponse[]>('/training/sessions/recurring', data);
-    return asArray(response.data);
   },
 
   /**

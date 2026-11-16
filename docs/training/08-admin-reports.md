@@ -921,7 +921,10 @@ report shows **Open Work Orders**.
 3. Select **Generate Report** on a card. Selecting the card itself does nothing.
 4. The report opens on screen:
    - **CSV** downloads it for a spreadsheet;
-   - **Print / PDF** prints it, or saves it as a PDF;
+   - **PDF** downloads a PDF with the department's letterhead, page numbers and
+     a header row on every page, ready to print or attach;
+   - both are built by the server and recorded in the audit log, and both
+     cover the report on screen even if you have since changed the dates;
    - **Compare** shows the previous period of the same length beside it.
 
 **"Today" in a report is the department's date.** The certification report's
@@ -2874,7 +2877,7 @@ requirement. For that, she checks two more places:
 
 On the Annual Training Report she selects **CSV**. The download opens in Excel
 or Google Sheets with the same columns as the screen, ready to attach to the
-county's submission. **Print / PDF** gives her a copy for the board packet.
+county's submission. **PDF** gives her a copy for the board packet.
 
 ---
 

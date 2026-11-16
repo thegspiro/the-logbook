@@ -161,7 +161,9 @@ const PipelineCard: React.FC<PipelineCardProps> = ({ application, timezone, name
       )}
 
       {application.applicationDeadline && (
-        <p className={`mt-1 text-xs ${isOverdue ? 'font-semibold text-red-600' : 'text-theme-text-secondary'}`}>
+        <p
+          className={`mt-1 text-xs ${isOverdue ? 'font-semibold text-red-800 dark:text-red-400' : 'text-theme-text-secondary'}`}
+        >
           Deadline: {formatDate(application.applicationDeadline, timezone)}
         </p>
       )}

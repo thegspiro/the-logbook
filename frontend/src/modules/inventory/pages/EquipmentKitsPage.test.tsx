@@ -157,7 +157,9 @@ describe('EquipmentKitsPage', () => {
 
     await user.click(screen.getByRole('button', { name: /Add Kit/ }));
     await user.type(await screen.findByPlaceholderText('e.g. New Recruit Kit'), 'Officer Kit');
-    await user.type(screen.getByPlaceholderText('Custom item name'), 'Helmet');
+    // Named for its line, not by a placeholder that vanishes as it is typed
+    // into (forms review F-8).
+    await user.type(screen.getByRole('textbox', { name: 'Custom item name, line 1' }), 'Helmet');
     await user.click(screen.getByLabelText('Optional'));
     await user.click(screen.getByRole('button', { name: 'Create Kit' }));
 

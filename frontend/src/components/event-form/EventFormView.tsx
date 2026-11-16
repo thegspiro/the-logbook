@@ -1,16 +1,17 @@
 /**
  * EventForm's single-page markup, drawn from a model the caller owns. A host
  * that keeps its own `useEventFormModel` — so values survive swapping one form
- * for another — renders this directly; `EventForm` is the wrapper that creates
- * the model for everyone else.
+ * for another, as `EventComposer` does — renders this directly; `EventForm` is
+ * the wrapper that creates the model for everyone else.
+ *
+ * It has no training details: a Training event's are the training-event
+ * form's (`TrainingEventWizard`), which `EventComposer` hands off to.
  */
 
 import React from 'react';
-import { EventType as EventTypeEnum } from '../../constants/enums';
 import type { EventFormModel } from './useEventFormModel';
 import { NoticesSection } from './sections/NoticesSection';
 import { DetailsSection } from './sections/DetailsSection';
-import { TrainingDetailsSection } from './sections/TrainingDetailsSection';
 import { ScheduleSection } from './sections/ScheduleSection';
 import { LocationSection } from './sections/LocationSection';
 import { AttendanceSection } from './sections/AttendanceSection';
@@ -26,6 +27,9 @@ export interface EventFormViewProps {
   submitLabel: string;
   isSubmitting: boolean;
   showRecurrence: boolean;
+  /** Shown under the Event Type picker, which it describes. */
+  typeHint?: React.ReactNode;
+  typeHintId?: string | undefined;
 }
 
 export const EventFormView: React.FC<EventFormViewProps> = ({
@@ -34,6 +38,8 @@ export const EventFormView: React.FC<EventFormViewProps> = ({
   submitLabel,
   isSubmitting,
   showRecurrence,
+  typeHint,
+  typeHintId,
 }) => (
   <form
     noValidate
@@ -45,18 +51,7 @@ export const EventFormView: React.FC<EventFormViewProps> = ({
     <NoticesSection model={model} />
 
     {/* === Event Details === */}
-    <DetailsSection
-      model={model}
-      typeHint={
-        model.formData.event_type === EventTypeEnum.TRAINING &&
-        model.editingEventId && (
-          <p className="text-theme-text-muted mt-2 text-sm">
-            Training details are edited on the event page&apos;s Requirements &amp; Programs card.
-          </p>
-        )
-      }
-      afterType={<TrainingDetailsSection model={model} />}
-    />
+    <DetailsSection model={model} typeHint={typeHint} typeHintId={typeHintId} />
 
     <hr className="border-theme-surface-border" />
 

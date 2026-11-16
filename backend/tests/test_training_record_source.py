@@ -11,14 +11,21 @@ import csv
 import io
 import uuid
 from datetime import date
+from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import Response
+from fastapi import Response, UploadFile
 from pypdf import PdfReader
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.endpoints.training import MAX_TRAINING_RECORDS_PAGE, list_records
+from app.api.v1.endpoints import training as training_endpoints
+from app.api.v1.endpoints.training import (
+    MAX_TRAINING_RECORDS_PAGE,
+    confirm_historical_import,
+    import_training_csv,
+    list_records,
+)
 from app.api.v1.endpoints.training_module_config import get_my_training_records
 from app.models.historical_import import ImportedRecordKind, ImportedSourceRecord
 from app.models.training import (
@@ -29,8 +36,15 @@ from app.models.training import (
     TrainingType,
 )
 from app.models.user import Organization, User, UserStatus
+from app.schemas.training import (
+    HistoricalImportConfirmRequest,
+    HistoricalImportParsedRow,
+)
 from app.services.training_enhancement_service import ReportExportService
-from app.services.training_record_source import record_sources
+from app.services.training_record_source import (
+    CSV_IMPORT_SOURCE_SYSTEM,
+    record_sources,
+)
 
 pytestmark = [pytest.mark.integration]
 
@@ -336,3 +350,90 @@ class TestScreensAndExports:
             ("Entered class", "The Logbook"),
         ):
             assert f"{course} {label}" in text
+
+
+async def _all_records(db_session, member):
+    result = await db_session.execute(
+        select(TrainingRecord)
+        .where(TrainingRecord.user_id == member.id)
+        .order_by(TrainingRecord.course_name)
+    )
+    return list(result.scalars().all())
+
+
+async def _ledger_for(db_session, record_ids):
+    result = await db_session.execute(
+        select(ImportedSourceRecord).where(
+            ImportedSourceRecord.record_id.in_(record_ids)
+        )
+    )
+    return list(result.scalars().all())
+
+
+@pytest.fixture
+def _no_side_effects(monkeypatch):
+    """The importers' own scanning, audit and qualification sync are not
+    what these tests are about, and need services a test database lacks."""
+    monkeypatch.setattr(training_endpoints, "reject_if_malicious", AsyncMock())
+    monkeypatch.setattr(training_endpoints, "log_audit_event", AsyncMock())
+    monkeypatch.setattr(training_endpoints, "_sync_qualifications", AsyncMock())
+
+
+@pytest.mark.usefixtures("_no_side_effects")
+class TestTrainingCsvImportersAreLedgered:
+    async def test_the_import_wizard_marks_what_it_writes_as_imported(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, _admin = setup_org_and_admin
+        officer = await _member(db_session, org_id)
+        member = await _member(db_session, org_id)
+        request = HistoricalImportConfirmRequest(
+            rows=[
+                HistoricalImportParsedRow(
+                    row_number=n,
+                    user_id=member.id,
+                    member_matched=True,
+                    course_name=name,
+                    completion_date=date(2019, 5, n),
+                    hours_completed=2,
+                )
+                for n, name in ((1, "Wizard class A"), (2, "Wizard class B"))
+            ]
+        )
+
+        result = await confirm_historical_import(
+            request=request, db=db_session, current_user=officer
+        )
+        records = await _all_records(db_session, member)
+        sources = await record_sources(db_session, org_id, records)
+        ledger = await _ledger_for(db_session, [r.id for r in records])
+
+        assert result.imported == 2
+        assert [sources[r.id].label for r in records] == ["Imported", "Imported"]
+        assert sorted((e.source_system, e.source_id) for e in ledger) == sorted(
+            (CSV_IMPORT_SOURCE_SYSTEM, r.id) for r in records
+        )
+
+    async def test_the_csv_upload_marks_what_it_writes_as_imported(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, _admin = setup_org_and_admin
+        officer = await _member(db_session, org_id)
+        member = await _member(db_session, org_id)
+        content = (
+            "memberEmail,courseName,trainingType,completionDate,hoursCompleted\n"
+            f"{member.email},Upload class,continuing_education,2019-05-01,2\n"
+        ).encode()
+
+        result = await import_training_csv(
+            file=UploadFile(file=io.BytesIO(content), filename="history.csv"),
+            db=db_session,
+            current_user=officer,
+        )
+        records = await _all_records(db_session, member)
+        sources = await record_sources(db_session, org_id, records)
+
+        assert result["success"] == 1
+        assert [(r.course_name, sources[r.id].label) for r in records] == [
+            ("Upload class", "Imported")
+        ]
