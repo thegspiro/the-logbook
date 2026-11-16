@@ -283,20 +283,29 @@ class EvaluationNoticeService:
         )
 
     async def _actors(
-        self, evaluation: Evaluation, workflow_step: WorkflowStep
+        self,
+        evaluation: Evaluation,
+        workflow_step: WorkflowStep,
+        step: Optional[EvaluationStep] = None,
     ) -> List[User]:
-        """Who acts on the step, as the screens decide it."""
+        """Who acts on the step, as the screens decide it: the person a
+        manager named on it, or else the workflow's actor. The member and the
+        evaluator never approve or calibrate their own evaluation, so neither
+        is told to (owner decision 2026-11-16, ADV2-4)."""
         org_id = evaluation.organization_id
         actor = workflow_step.actor
         if actor.kind == "member":
             return await self._own(org_id, evaluation.member_id)
         if actor.kind == "evaluator":
             return await self._own(org_id, evaluation.evaluator_id)
-        if actor.kind == "view_all":
+        if step is not None and step.assignee_id:
+            people = await self._own(org_id, step.assignee_id)
+        elif actor.kind == "view_all":
             people = await self._holding(org_id, "evaluations.view_all")
         else:
             people = await self._position_holders(org_id, actor.position_id)
-        return [p for p in people if p.id != evaluation.member_id]
+        barred = {evaluation.member_id, evaluation.evaluator_id}
+        return [p for p in people if p.id not in barred]
 
     # ------------------------------------------------------------- sending
 
@@ -381,7 +390,7 @@ class EvaluationNoticeService:
         member_name = member.full_name if member else "a former member"
         period = _period_name(evaluation)
         summary = sentence.format(member=member_name, period=period)
-        actors = await self._actors(evaluation, workflow_step)
+        actors = await self._actors(evaluation, workflow_step, step)
         recipients = [
             _Recipient(
                 user=user,
