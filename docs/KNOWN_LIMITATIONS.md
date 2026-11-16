@@ -1,5 +1,46 @@
 # Known Limitations & Open Decisions
 
+## Migration Chain — Branches Need Not Be Up to Date to Merge (Owner Decision, 2026-11-16)
+
+Two pull requests that each add an Alembic migration on the same parent both
+pass CI on their own, and whichever merges second leaves `main` with two heads.
+`alembic upgrade head` then refuses to run, and every database job on every
+branch fails until a merge revision lands. It happened on 2026-11-15, when #4312
+and #4314 merged within a minute of each other; `main` stayed forked for about
+eight hours, until #4333 carried the merge revision from #4331.
+
+### Decided
+
+- **`main` requires the Migration Chain and CI Success checks to pass.** A pull
+  request whose own chain is forked cannot merge.
+- **It does not require a branch to be up to date with `main` before
+  merging.** That setting was turned on on 2026-11-15 and off on 2026-11-16.
+  It closes the race above, but with CI taking about two hours under the
+  current queue and something merging into `main` every hour or two, a pull
+  request fell behind again before its run finished: #4336 was brought up to date five
+  times overnight without merging. Every pull request paid that cost to guard
+  against one that only pull requests adding a migration can cause.
+- **The pre-push check (`scripts/check-migration-heads.sh`) stays.** It catches
+  a branch that forks the chain against the `main` it was pushed against, which
+  is most cases, though not two branches pushed before either merges.
+
+### Accepted
+
+- **`main` can still fork when two migration branches merge close together.**
+  Migration Chain fails on the push to `main` and the session-start hook
+  reports it, so it is noticed at once. The fix is one merge revision, per
+  [Parallel branches and a single head](rules/migrations.md#parallel-branches-and-a-single-head).
+
+### What would reopen this
+
+- **A merge queue** tests each pull request on top of the ones queued ahead of
+  it, which closes the race without anyone updating branches. GitHub offers it
+  only to repositories owned by an organization, so it needs the repository
+  moved into one (a free organization is enough for a public repository), and
+  `ci.yml` would need a `merge_group` trigger.
+- **CI fast enough** that a pull request usually finishes before `main` moves
+  would make the up-to-date setting workable again.
+
 ## Attendance Waiver Emails and Template Copies — Choices Made Without a Ruling (2026-11-11)
 
 The waiver emails and the template-CC fix (defect D1) follow the owner

@@ -135,6 +135,13 @@ it will actually land on: a merge queue on `main`, or "Require branches to be
 up to date before merging", with the **Migration Chain** job as a required check.
 That is a repository setting, and it is the owner's to turn on.
 
+**As of 2026-11-16 neither is on, by the owner's decision.** `main` requires
+Migration Chain and CI Success to pass, but not that a branch be up to date
+first, and a merge queue is not available to a repository owned by a personal
+account. So the race above stays open: when `main` forks, the fix is a merge
+revision on a new branch. The reasoning, and what would reopen it, are in
+[KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#migration-chain--branches-need-not-be-up-to-date-to-merge-owner-decision-2026-11-16).
+
 `scripts/test_check_migration_heads.py` covers the script and the hook,
 including the case above: a branch whose chain is valid alone and forked once
 merged.
