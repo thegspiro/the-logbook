@@ -54,12 +54,13 @@ Copy the **Webhook ID** PayPal assigns.
 
 **Settings → Integrations → PayPal → Connect**, then fill in:
 
-| Field                       | Notes                                                                            |
-| --------------------------- | -------------------------------------------------------------------------------- |
-| Environment                 | Must match which credentials you copied. Defaults to sandbox.                    |
-| Client ID / Secret          | Stored encrypted; never echoed back. Blank in **Settings** keeps what is stored. |
-| Webhook ID                  | **Required.** Without it, deliveries cannot be verified and are rejected.        |
-| Settle orders automatically | On by default. See the matching rules below.                                     |
+| Field                       | Notes                                                                                    |
+| --------------------------- | ---------------------------------------------------------------------------------------- |
+| Environment                 | Must match which credentials you copied. Defaults to sandbox.                            |
+| Client ID / Secret          | Stored encrypted; never echoed back. Blank in **Settings** keeps what is stored.         |
+| Webhook ID                  | **Required.** Without it, deliveries cannot be verified and are rejected.                |
+| Settle orders automatically | On by default. See the matching rules below.                                             |
+| PayPal.Me link / email      | Optional, public. What the store's PayPal button uses when set to the connected account. |
 
 **Test Connection** confirms the credentials work. It deliberately reports a
 warning rather than a plain success when the webhook ID is missing, because
@@ -178,3 +179,23 @@ Two behaviours worth knowing:
 Where the link cannot carry the order number, the member is shown the
 reference to type. That reference is what lets a treasurer match the payment,
 so it is never hidden.
+
+### Which PayPal account the button uses
+
+`store_settings.paypal_use_connected` (added 2026-11-14, default false) picks
+where the PayPal button sends members:
+
+- **false** — the store's own `paypal_me_url` and `paypal_email`, as before.
+- **true** — the `paypal_me_url` and `account_email` in the connected PayPal
+  integration's public config. If the integration is not connected and
+  enabled, or has neither field, the store's own fields are the fallback
+  (owner decision, 2026-11-14), so a disconnect does not take the button away
+  from members who owe.
+
+`StorefrontService.get_settings` loads the connected account once per
+request; `store_paypal_account` in `app/utils/storefront_payments.py` applies
+the rule, and every Pay button, the pre-order summary and the payment emails
+go through it. `GET /store/settings` returns the account as `connectedPaypal`
+(null when PayPal is not connected), so the settings screen states what the
+button will do. Only the connected account's payments are reconciled: a store
+sending members to a different PayPal account marks those orders paid by hand.

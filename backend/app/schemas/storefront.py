@@ -81,6 +81,7 @@ class StoreSettingsUpdate(BaseModel):
     venmo_handle: Optional[str] = Field(None, max_length=100)
     paypal_me_url: Optional[str] = Field(None, max_length=300)
     paypal_email: Optional[str] = Field(None, max_length=255)
+    paypal_use_connected: Optional[bool] = None
     cash_app_cashtag: Optional[str] = Field(None, max_length=100)
     zelle_handle: Optional[str] = Field(None, max_length=255)
     zelle_instructions: Optional[str] = None
@@ -157,6 +158,15 @@ class StoreSettingsUpdate(BaseModel):
         return normalized
 
 
+class ConnectedPayPalAccount(BaseModel):
+    """The connected PayPal integration's public payment details."""
+
+    model_config = _RESPONSE_CONFIG
+
+    paypal_me_url: Optional[str] = None
+    account_email: Optional[str] = None
+
+
 class StoreSettingsResponse(UTCResponseBase):
     """Storefront configuration as seen by administrators"""
 
@@ -176,6 +186,11 @@ class StoreSettingsResponse(UTCResponseBase):
     venmo_handle: Optional[str] = None
     paypal_me_url: Optional[str] = None
     paypal_email: Optional[str] = None
+    paypal_use_connected: bool = False
+    # The connected PayPal integration's link and email, so the settings
+    # screen can show what "use the connected account" will send members to.
+    # None when no PayPal integration is connected.
+    connected_paypal: Optional[ConnectedPayPalAccount] = None
     cash_app_cashtag: Optional[str] = None
     zelle_handle: Optional[str] = None
     zelle_instructions: Optional[str] = None
