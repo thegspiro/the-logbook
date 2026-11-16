@@ -91,6 +91,14 @@
     ],
     "{generate_registry.py,scripts/**/*.py}": [
       "bash -c 'python -m flake8 --config backend/.flake8 \"$@\"' --"
+    ],
+    "video-production/**/*.py": [
+      "bash -c 'python -m black --check --config backend/pyproject.toml \"$@\"' --",
+      "bash -c 'python -m flake8 --config backend/.flake8 \"$@\"' --",
+      "bash -c 'python -m isort --check-only --settings-path backend/pyproject.toml \"$@\"' --"
+    ],
+    "video-production/**/*.{ts,cjs}": [
+      "prettier --config frontend/.prettierrc.json --write"
     ]
   },
   "overrides": {
