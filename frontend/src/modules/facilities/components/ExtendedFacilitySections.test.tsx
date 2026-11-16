@@ -197,7 +197,7 @@ describe('extended facility sections', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Add reading' }));
-    fireEvent.change(screen.getByLabelText('Reading date'), { target: { value: '2026-08-01' } });
+    fireEvent.change(screen.getByLabelText(/^Reading date/), { target: { value: '2026-08-01' } });
     const saveButton = screen.getByRole('button', { name: 'Save reading' });
     fireEvent.click(saveButton);
     fireEvent.click(saveButton);
@@ -219,7 +219,7 @@ describe('extended facility sections', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Add reading' }));
-    fireEvent.change(screen.getByLabelText('Reading date'), { target: { value: '2026-08-01' } });
+    fireEvent.change(screen.getByLabelText(/^Reading date/), { target: { value: '2026-08-01' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save reading' }));
 
     await waitFor(() =>
