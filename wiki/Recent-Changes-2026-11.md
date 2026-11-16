@@ -5,6 +5,33 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: the month in review, October 16 – November 16, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-month-review-october-16--november-16-2026).
+
+Every guide and wiki page was checked against the last month of changes.
+What changed in the guides, in short:
+
+- **Voting** is set per member type under **Election Settings → Voter
+  Eligibility**, not on membership tiers. New elections choose a **Kind of
+  vote**, and can customize the rules with a reason. See
+  [Elections](Module-Elections).
+- **Leave of absence:** members can ask for leave, are emailed about their
+  leave and reminded before it ends. A leave that does not waive training
+  excuses nothing.
+- **Training waivers:** members can ask to be excused from a session, with a
+  supporting document; approvers decide on their own page.
+- **Outside-agency shifts:** a preceptor can fill in the evaluation from a
+  link, with no login.
+- **History:** roster import, merging people, photos, audio, video and
+  documents. See [History](Module-History).
+- **Medical screening** sends expiry reminders at 90, 60, 30 and 7 days.
+- **Finance and the store:** budget request drafts save blank; the store has
+  **Cancel order** and stricter status changes.
+- **Upgrading:** `UPGRADING.md` lists what an operator will notice, including
+  integrations (weather alerts, webhooks) that start sending at upgrade.
+
 ## Recent changes: November 15 – 16, 2026
 
 The engineering audit is

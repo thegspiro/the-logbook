@@ -5,6 +5,50 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: month review, October 16 – November 16, 2026
+
+A review of every first-parent merge from 2026-10-16 to `9b68de55`
+(2026-11-16), about 224, split into seven areas, each checked against the
+source on `main` rather than against earlier passes. It closes the gap
+recorded under the November 15 – 16 pass below: the 64 merges between the
+November 10 – 11 pass and that window are now covered. October merges, which
+earlier passes had covered, were checked by sampling labels and the larger
+batch PRs. `CHANGELOG.md` stays closed.
+
+| Area                                          | Docs that were missing or wrong                                                                                                                                                                                                                                                                                                                          | Fixed in                                                                                                           |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Training and evaluations                      | Session waiver request screens (02 said "no screen yet", #4243, #4244, #4248); preceptor links (#4264); no-show crew (#4300); linked department evaluation requirements (#4311); enrollment-date rule and reopening requirements (#4275); evaluation form figures (#4273, #4282, #4292); monthly shifts on My Training (#4287); tab names of 2026-11-08  | 02, `EVALUATIONS_MODULE`, wiki `Module-Training`, `-Developer`, `Module-Evaluations`                               |
+| Events, meetings and minutes                  | Meeting Attendance's Voting column (#4277); one attendance row per meeting (#4247); minutes emails as templates (#4294); fallback deciders (#4242); draft check-in (#4316); History system folder (#4313, 3 wrong folder slugs); recruitment-event guest answer; W51-9 still "open"; form embedding undocumented                                         | 04, 07, `MEETING_MINUTES_MODULE`, `FORMS_MODULE`, `PUBLIC_PORTAL_MODULE`, wiki `Module-Events`, `-Meeting-Minutes` |
+| Membership, scheduling, apparatus, facilities | Leave requests and reminders (#4303); leave emails; months-on-leave rule (15-day text stale since 11-02); preceptor links and no-show crew in 03; report drafts (#4296); decline-alert recipients (#4242); Add Member and import rules (#4129); unique location names and Due soon (#4082); non-existent permission names; tiers no longer decide voting | 01, 03, 06, `LABEL_PRINTING_MODULE`, wiki `Module-Scheduling`, `Administration-Pages`, `Module-Label-Printing`     |
+| Finance, grants, store, integrations          | Budget request drafts (#4250); **Approve as admin** (#4267); store Cancel order and status rules (#4288); dues troubleshooting rows contradicting #4110; grant task **Assigned To** and reminders; donor contact details; chains by type; approver preview; webhook address required; store Price required; MCP draft-event rule                         | 11, 12, 16, 18, `FINANCE_MODULE`, `STOREFRONT_MODULE`, wiki `Module-Finance`, `Integration-Claude-MCP`             |
+| Inventory, medical, History, reports          | History phases 2 – 4 had no wiki page (#4263, #4279, #4313); screening expiry reminders and 12-month default undocumented, wiki said "no expiry email" (#4121); screening type described as plaintext; **Department Messages**                                                                                                                           | 08, 13, `HISTORY_MODULE`, `MEDICAL_SCREENING_MODULE`, new wiki `Module-History` (sidebar, Home)                    |
+| Elections, communications, sign-in            | Per-type voter rules and four kinds of vote (#4265); custom rules at creation (#4270); Meeting Attendance page (#4277); roster reasons (#4274); **Results Report** / **Send Me a Copy** and ballot-link states (#4278); template CC and categories (#4248, #4294, #4295); step-up additions (#4316); convert result screen                               | 14, 15, `MFA`, wiki `Module-Elections`, `-Developer`, `Module-Communications`, `Security-Authentication`           |
+| Upgrading, configuration, scripts             | `markdown-it-py` boot entry; sixteen "changes you will notice" entries (prospect `view_all`, shift attendance de-duplication, Chief evaluation grants, Historian grants, weather alerts and webhooks starting, decline alerts, voter rules, leave, evaluations, store); S3, Redis, backup and QuickBooks settings; sign-in limit; ffmpeg                 | `UPGRADING`, wiki `Configuration-*`, `Deployment-Docker`; scripts 00, 02, 03, 04, 05, 07, 08, 11, 12, 16           |
+
+**Found in the code, not fixed here** (each needs a code change with its own
+tests):
+
+- `evaluation_data_service._waiver_attachments_on_file` still returns an empty
+  set, so the annual review's waiver history always reads "no attachment"
+  although #4243 added the attachments table.
+- `MembershipTiersSection.tsx:103` ("This ladder decides who votes") and
+  `MembershipLadderSection.tsx:95` still say the tier decides voting; wrong
+  since #4265. Guide 01 notes the wording predates 2026-11-13.
+- History's side and top navigation list only Overview, Past Members and Honor
+  Roll; `types/modules.ts` describes phase 1 only.
+- `ReportsPage.tsx:490` tooltip says "print to PDF"; #4346 made it a server
+  download.
+- `install.sh --traditional` does not install ffmpeg.
+
+**Upgrade risks worth an owner's look:** `1740b4886e52` deletes duplicate
+shift-attendance rows irreversibly and can merge separate stints on one shift
+(credited hours can fall); `c588f525fdbb` widens access on department-created
+positions; weather alerts and generic webhooks connected earlier start sending
+at upgrade. All three now have `UPGRADING.md` entries.
+
+**Screenshots:** queued in `docs/training/SCREENSHOT_CURRENCY.md` under
+"Queued by the month review". **Scripts:** `SCRIPT_CURRENCY.md`.
+
 ## Change audit: November 15 – 16, 2026
 
 Merged to `main` from `c1293346` (#4323, 2026-11-15 14:48 UTC) through

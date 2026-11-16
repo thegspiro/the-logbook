@@ -1,5 +1,31 @@
 # Screenshot currency
 
+## Queued by the month review (October 16 – November 16)
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-month-review-october-16--november-16-2026).
+Nothing was captured.
+
+| Guide | Screen                                                                                                                                         | Action                                              |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| 01    | Leave Requests page (Ask for leave, To decide, Your requests); Leave of Absence settings with requests on; profile Leave card with Ask for leave | Create                                              |
+| 01    | `01-11-create-waiver` (Waivers page now carries a Leave Requests / Members Settings line)                                                         | Check                                               |
+| 02    | Session Waivers settings; event-page "Request to be excused" card and **Ask to be excused**; waiver request queue and decision page; My Waiver Requests | Create                                              |
+| 02    | Evaluation form builder sources grouped with "(turned off)" and the scoring-gap note; a figure with its counts; requirement modal with a custom tier; monthly shifts on My Training | Create                                              |
+| 02    | Any capture of the Settings & Data tab row (now Manual Entry, Compliance, Import History)                                                      | Check                                               |
+| 03    | Preceptor link dialog with QR code; outside shift row with **Preceptor link**; close-out "A shift evaluation is still needed for:"              | Create                                              |
+| 03    | `03-108`, `03-113` (outside-shift card has a button now)                                                                                         | Check                                               |
+| 04    | Documents History folder with **Managed in History**; draft request-form warning with its button; Email Templates **Meetings & Minutes** group | Create                                              |
+| 04    | `04-14-meeting-minutes` and Meeting Attendance: Voting column, Waiver requests / Waiver settings                                               | Check                                               |
+| 06    | Facility form inline error and discard dialog; Maintenance list with **Due soon**; Card Readers                                                | Create / Check                                      |
+| 08    | History: overview with all cards, Import a Roster, Review _file_, merge, Photos and Media, media item with Photo-use consent, document with Open the PDF, album with Show to members, Titles and clearance | Create; supersedes the History overview capture queued earlier |
+| 11    | Next year's budget card reading _Not entered yet_; a draft reopened from Submit; Deny request asking Keep editing / Discard changes             | Create                                              |
+| 12    | Add Task with **Assigned To (optional)**; `12-10-donors` (a view-only capture would show Managers only)                                         | Create / Check                                      |
+| 13    | Notification Rules tab with **Medical Screening Expiry**                                                                                       | Create                                              |
+| 14    | Create dialog **Who may vote** customized; Voter Eligibility per-type rows; ballot item **Voter rules for this item**; Meeting Attendance page; ballot link **You've already voted**; Results Report with **Send Me a Copy**; template **CC positions** | Create                                              |
+| 14    | `14-31-voter-eligibility-annual`, `14-07-eligibility-roster`                                                                                   | Replace                                             |
+| 18    | `18-04-my-orders-unpaid`                                                                                                                       | Replace                                             |
+| 18    | Admin order dialog Delivery and Cancel order; **Cancel ORD-…?** confirmation; cancelled order with Refund; checkout with Shipping address flagged | Create                                              |
+
 ## Queued by the November 15 – 16 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-15--16-2026).
