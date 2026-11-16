@@ -503,10 +503,10 @@ read-only **Training details** card; **Review and approve** is still on it.]**
 > "One click and everyone's records are updated. This is the fastest way to
 > process training after a class."
 
-**[SCREEN: Training Admin → Settings & Data → Import Past Training, the preview
+**[SCREEN: Training Admin → Settings & Data → Import History, the preview
 step.]**
 
-> "Moving over from another system? **Import Past Training**, under Settings and
+> "Moving over from another system? **Import History**, under Settings and
 > Data, brings in years of records from a CSV. Match members by membership
 > number, check the preview, confirm. Every row needs a completion date. A row
 > without one is listed under Errors and isn't imported."

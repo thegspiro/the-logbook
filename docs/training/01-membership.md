@@ -2356,16 +2356,19 @@ unrecognized ranks"_. It lists each member's name and the rank they hold.
 **Who can do this:** officers who can **Manage member profiles**.
 
 Membership tiers group members by years of service. Each tier decides what its
-members get: whether they can vote, whether they can hold office, and whether
-they are graded for training.
+members get: whether they can hold office, and whether they are graded for
+training. Who may vote is set per member type under **Election Settings →
+Voter Eligibility** _(2026-11-13)_; see
+[Elections](./14-elections.md#voter-eligibility-2026-10-29).
 
 ### Configuring Tiers
 
 Open **Members Admin → Settings → Membership Tiers**. The same editor also
 appears as a step in first-time setup.
 
-A yellow box at the top reads **This ladder decides who votes**. Set the tiers
-to match your bylaws. The tiers The Logbook starts with are a common
+A yellow box at the top reads **This ladder decides who votes**. Its wording
+predates 2026-11-13: voting is now set in Election Settings, as **Show
+rights** says. Set the tiers to match your bylaws. The tiers The Logbook starts with are a common
 arrangement, not a recommendation.
 
 On this screen you can:
@@ -2386,16 +2389,20 @@ _"These tiers have not been saved yet — nothing reads them until you do."_
 
 **What each tier gives its members (Show rights):**
 
-| Setting                                              | What it does                                                                                           |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| **Can vote in elections**                            | Members at this tier can vote                                                                          |
-| **Can hold elected office**                          | When cleared, members at this tier cannot be nominated, accept a nomination or be added as a candidate |
-| **Must meet a meeting-attendance threshold to vote** | Members must have attended a set share of meetings over a set number of months before they can vote    |
-| **Exempt from training requirements**                | Members at this tier are not graded for training compliance at all                                     |
+| Setting                               | What it does                                                                                           |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Can hold elected office**           | When cleared, members at this tier cannot be nominated, accept a nomination or be added as a candidate |
+| **Exempt from training requirements** | Members at this tier are not graded for training compliance at all                                     |
+
+_(2026-11-13)_ **Can vote in elections** and **Must meet a meeting-attendance
+threshold to vote** are no longer on this screen. **Show rights** opens with
+_"Who may vote, and the meeting attendance it takes, is set for each member
+type in Election Settings"_, linking there. A tier's old voting settings only
+seeded the department's first per-type voter rules.
 
 _(2026-11-04)_ These rights follow each member's **Membership status**, whatever
-their class, on every screen that reads them: who may vote and stand for
-office, the ballot check, the turnout count, training exemption, and which
+their class, on every screen that reads them: who may stand for office,
+training exemption, and which
 members an event mandatory for a tier expects. An administrative or social
 member on a tier gets that tier's rights. Before 2026-11-04 some of these
 checks went by the older single membership type, which named such a member by

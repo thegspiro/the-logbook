@@ -637,7 +637,7 @@ thresholds]**
 
 **[SCREEN: Show the training programs configuration]**
 
-**[SCREEN: Training Admin → Settings & Data → Compliance Settings, then Compliance Reporting → Configure. Thresholds tab with the Months on leave choice; Profiles tab with "Applies to Members Holding a Position".]**
+**[SCREEN: Training Admin → Settings & Data → Compliance, then Compliance Reporting → Configure. Thresholds tab with the Months on leave choice; Profiles tab with "Applies to Members Holding a Position".]**
 
 > "How compliance is graded lives in one place, now listed under **Settings &
 > Data** as **Compliance Settings** as well as behind **Configure** in

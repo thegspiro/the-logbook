@@ -255,7 +255,7 @@ film a pre-2026-11-04 form.]**
 
 ### COMPLIANCE REQUIREMENTS CONFIGURATION (6:15 – 7:15)
 
-**[SCREEN: Training Admin → Settings & Data → Compliance Settings, then the
+**[SCREEN: Training Admin → Settings & Data → Compliance, then the
 Configure page it opens (ComplianceRequirementsConfigPage)]**
 
 > "This is where you define what 'compliance' means for your department. Which
