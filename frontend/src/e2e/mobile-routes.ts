@@ -1445,7 +1445,7 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: ['history.manage'],
-    expectText: 'County Historical Society',
+    expectText: '3 records · retired',
   },
   { path: '/medical-supplies', maxSmallTargets: 0, maxTinyText: 0, permissions: ['inventory.view_medical'] },
   { path: '/ip-security', maxSmallTargets: 0, maxTinyText: 0, permissions: ['security.manage'] },
