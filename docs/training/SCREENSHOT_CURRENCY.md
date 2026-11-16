@@ -300,6 +300,13 @@ dialog is opened and never saved.
 not a real Salesforce org. The frame is 1900px tall so the whole dialog fits.
 The dialog is opened and never saved.
 
+**`16-30-google-workspace-settings` and `16-31-microsoft-365-settings` added
+2026-11-16**, documenting the **Settings** button the two directory
+integrations already had. Same mock, with example values on
+`oakvillefd.example.org` and made-up tenant, client and SKU IDs; neither is a
+real tenant. Each captures the dialog alone. The dialogs are opened and never
+saved.
+
 ## The October 16 – November 1 queues, captured 2026-11-02
 
 Every queue from the October 16 – 18 pass to the October 31 – November 1 pass

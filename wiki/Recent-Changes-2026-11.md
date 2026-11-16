@@ -5,6 +5,18 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 16, 2026 (Google Workspace and Microsoft 365)
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-google-workspace-and-microsoft-365-settings-november-16-2026).
+
+- **Google Workspace and Microsoft 365**: the guide now explains **Settings**
+  on a connected card, which organization administrators already had. Change
+  the admin, domain, groups and other settings without disconnecting; a blank
+  key or secret keeps the saved one, and a new Microsoft secret goes in with
+  its new expiry date. See [Google Workspace Integration](Integration-Google-Workspace)
+  and [Microsoft 365 Integration](Integration-Microsoft-365).
+
 ## Recent changes: November 16, 2026 (Salesforce)
 
 The engineering audit is
