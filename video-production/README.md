@@ -41,9 +41,11 @@ Python packages are installed into `build/.venv` on first run, from
 video-production/make-short.sh 8a-rsvp
 ```
 
-Add `--check` to also transcribe the vertical render with a small speech model
-(downloaded on first use), which prints each line and when it lands. It is the
-fastest way to confirm the synthetic voice said every word, without listening.
+Every narrated line is checked as it is made: it is transcribed by a small
+speech model (downloaded on first use) and re-taken, up to six times, until
+the transcript matches the script. The run prints each line's score and what
+was heard, and warns about any line with no clear take. Add `--check` to also
+transcribe the finished vertical render, which shows when each line lands.
 
 The frontend dev server is started automatically if nothing is listening on
 port 3000. Output:
@@ -92,11 +94,27 @@ target clear of the header and tab bar first; `bottomMost` picks the phone's
 tab-bar copy of a control the layout renders twice; `centre` smooth-scrolls
 something into view.
 
+Two things that cost time on 8B:
+
+- **Scope a locator to where the viewer is looking.** The closed navigation
+  drawer keeps its items in the page, slid off-screen, and Playwright counts
+  them as visible. "Submit Training" matched the drawer's copy before the
+  page's button; `page.getByRole('main')` (or the drawer's own
+  `getByRole('navigation', { name: 'Side navigation' })`) picks the right one.
+  The drawer's items are buttons, not links.
+- **`tap` refuses a target something else would receive** (an off-screen copy,
+  an item behind an overlay) rather than pressing the wrong thing, and scrolls
+  an item below the fold of a nested scroll area such as the drawer.
+
+Write narration for the ear. The voice slurs some pairings whatever the take:
+"Tap Submit" reliably became "tax submit", so 8B says "Tap the Submit Training
+button". If a line warns, reword it.
+
 ## How it works
 
 | Stage       | File                                                 | Produces                                              |
 | ----------- | ---------------------------------------------------- | ----------------------------------------------------- |
-| Narration   | `lib/narrate.py`                                     | a WAV per shot and its length (Piper text-to-speech)  |
+| Narration   | `lib/narrate.py` with `lib/speech.py`                | a checked WAV per shot and its length (Piper)         |
 | Capture     | `shorts/<id>/capture.spec.ts` with `lib/recorder.ts` | screencast frames and each shot's start time          |
 | Overlays    | `lib/overlays.cjs`                                   | background, captions, callout and end card, from HTML |
 | Compositing | `lib/compose.py`                                     | the two MP4s (ffmpeg), audio normalized to −14 LUFS   |
@@ -133,8 +151,11 @@ linked into or shipped with the application, whose licence is unaffected.
 
 Piper randomizes every take slightly. `lib/narrate.py` runs it at half the
 default noise, because at the default the LJ Speech voice dropped the H of
-"Here's how" in about one take in eight. If `--check` shows a misheard word,
-re-run: the next take will differ.
+"Here's how" in about one take in eight, and checks every take as above. The
+check uses the same speech model as `--check`, which has limits of its own: on
+a short line with no context it hears "certs" as "search" every time, so a
+line can warn when the voice is fine. The transcript of the full render,
+which has context, is the better judge.
 
 ## Limitations
 

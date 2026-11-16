@@ -75,16 +75,26 @@ export async function settle(page: Page): Promise<void> {
 /** Tap a control the way a viewer should see it: marker, press, release. */
 export async function tap(page: Page, target: Locator): Promise<void> {
   await target.waitFor({ state: 'visible', timeout: 8000 });
-  // Keep the target clear of the sticky header and the bottom tab bar, which
-  // would otherwise take the click; a smooth scroll also reads better on
-  // video than a jump.
+  // The click goes to raw coordinates (so the marker and the press land on
+  // the same spot), which, unlike locator.click(), does not scroll anything.
+  // So scroll first when the target sits under the sticky header or bottom
+  // tab bar, or when something else would take the press: an item below the
+  // fold of a nested scroll area such as the navigation drawer, or under an
+  // overlay. A smooth scroll also reads better on video than a jump.
+  const covered = () =>
+    target.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return !hit || !(el === hit || el.contains(hit));
+    });
   let box = await target.boundingBox();
-  if (box && (box.y < 80 || box.y + box.height > SCREEN.height - 90)) {
+  if (box && (box.y < 80 || box.y + box.height > SCREEN.height - 90 || (await covered()))) {
     await target.evaluate((el) => el.scrollIntoView({ behavior: 'smooth', block: 'center' }));
     await page.waitForTimeout(750);
     box = await target.boundingBox();
   }
   if (!box) throw new Error('tap target has no bounding box');
+  if (await covered()) throw new Error('tap target is covered by another element');
   const x = box.x + box.width / 2;
   const y = box.y + box.height / 2;
   await page.evaluate(([px, py]) => (window as unknown as TapWindow).__videoTap(px ?? 0, py ?? 0), [x, y]);
@@ -146,7 +156,9 @@ export async function recordShots(page: Page, shortId: string, run: (shot: Shot)
     const file = `frames/${String(frames.length).padStart(5, '0')}.jpg`;
     writeFileSync(join(out, file), Buffer.from(f.data, 'base64'));
     frames.push({ file, t: f.metadata.timestamp ?? Date.now() / 1000 });
-    void cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId });
+    // A frame can arrive as a failed capture tears the page down; acknowledging
+    // it then rejects, and that rejection would bury the real failure.
+    cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => undefined);
   });
   await cdp.send('Page.startScreencast', {
     format: 'jpeg',
