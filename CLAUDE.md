@@ -156,7 +156,7 @@ Before committing any changes, mentally verify these items (the most frequent so
 - [ ] **Migration handles existing rows** — a tightened column, new unique or foreign key, or required column settles the rows already there, and a test proves it with rows present (see Pitfall #35)
 - [ ] **Safe to run twice** — a new webhook handler, scheduled task or retried write names the id that makes a second run a no-op, constrains it, and tests a double delivery (see Pitfall #36)
 - [ ] **The test was seen to fail** — a bug fix's test went red against the unfixed code; a test and the code it checks are not changed in one commit without a stated reason (see Pitfall #37)
-- [ ] **No clock read at import in a test** — `NOW`/`TODAY` come from a `_clock()` registered with `tests/clock_support.py`, read as each test starts (see Pitfall #39)
+- [ ] **No clock read at import in a test** — `NOW`/`TODAY` come from a `_clock()` registered with `tests/clock_support.py`, read as each test starts (see Pitfall #40)
 - [ ] **E2E passes on the first attempt** — a new or changed spec was run with `--repeat-each` on every project CI runs it on, Mobile Safari included; a pass on retry fails CI (see Pitfall #38)
 
 ## Project Overview
@@ -550,7 +550,7 @@ backend/app/
 - **Styling:** Tailwind CSS with `theme-*` CSS variable classes defined in `styles/index.css` (e.g., `bg-theme-surface`, `text-theme-text-primary`, `border-theme-surface-border`). Dark mode via `class` strategy. High-contrast mode also supported (`ThemeContext` handles `'light' | 'dark' | 'system' | 'high-contrast'`). Size variants as objects (`{ sm: 'max-w-md', md: 'max-w-lg' }`)
 - **Contrast is AAA, and the palette is one decision** _(2026-08-23)_: the primary fill is **red-800** (`#991b1b`), not red-600 — white on red-600 measures 4.83:1, which is AA for large text only, and a button label is not large text. The light text tiers are slate-700 / slate-600, and in dark mode `--text-primary`, `--text-secondary` and `--text-muted` are **all `#ffffff`**: no tint of grey clears 7:1 against a 6% surface on this gradient, so dark-mode hierarchy comes from size and weight, never colour. Do not reintroduce a grey text tier in `.dark`, and do not add a red-600 primary fill — a mixed palette is worse than either choice, which is why the uplift was applied to every call site at once rather than screen by screen.
 - **"Every call site at once" was not true, and the check is what makes it true now** _(2026-09-07)_: the 2026-08-23 sweep searched for a _red_, so it raised `btn-primary` and `nav-item-active` and never looked at the other three shared fills. `btn-success` sat at green-600 (**3.22:1**) and `btn-warning` at yellow-600 (**2.94:1**) — below the 4.5:1 AA floor for normal text, not merely short of AAA — and `btn-info` at blue-600 (5.25:1) was AA only. They are now green-800, amber-800 and blue-800 (amber, because yellow-800 is 6.84:1 and misses AAA by a hair). `primaryFillContrast.test.ts` no longer bans one shade by name: it reads every `@utility` pairing `text-white` with a fill out of `index.css` and measures it, so a new one is checked the day it is added and an unknown shade fails loudly rather than being skipped. **The shade hexes in the bullet above are Tailwind v3 values and are not what this build paints** — v4 authors the palette in OKLCH, so red-600 is `oklch(57.7% 0.245 27.325)` and measures 4.77:1, not the 4.83:1 the v3 `#dc2626` gives. Every ratio quoted here is measured from `node_modules/tailwindcss/theme.css`, which is also where the test reads the palette from, so an upgrade that moves a shade is reported rather than silently changing what these numbers mean. **Call sites are held to AA, not AAA** — `mobile-accessibility.spec.ts` asserts axe's AA contrast rule at zero and ratchets the AAA-only findings per route.
-- **Shared component/mobile utilities:** `styles/index.css` defines reusable `@utility` classes (grouped and documented in that file) — prefer these over repeating inline class strings or hand-rolling arbitrary values. Component utilities: `form-input`/`form-label`, `card`/`card-secondary`, `card-grid` (a list of record cards — columns follow the grid's own width, never the viewport, so a tablet with the sidebar open gets two roomy columns instead of three cramped ones; use it instead of `sm:grid-cols-2 lg:grid-cols-3`; a grid of compact cards with no action footer may lower its 20rem floor with `[--card-grid-min:18rem]`, and one whose title shares its row with actions or badges raises it with `[--card-grid-min:22rem]`), `btn-primary`/`btn-icon` (44px touch target on a phone or touch screen; 36px with a mouse, as is `toggle-track`'s 44px hit box), `alert-*`, `badge`, `modal-body`. Mobile utilities: `tab-scroll` (scrollable bordered tab bar) and `hscroll` (scrollable strip) for tab/pill rows that would overflow a phone; `mobile-touch-target` (44px at every width) and `touch-target-phone` (44px on a phone-width **or touch** screen, for a control whose mouse-driven desktop density must not change — a wrapped row of status pills, a dense filter strip); for a one-off size use the `touch:` variant (`touch:min-h-11`), which means `(max-width: 767px), (pointer: coarse)` — never `max-md:min-h-[44px]`, which leaves a landscape phone or an iPad with desktop-size targets (`touchTargetIntegrity.test.ts` enforces it); `pb-safe` / `action-bar-safe` for bottom bars that must clear the iPhone home indicator; `rwd-table` for tables that reflow to stacked cards under 768px. Controls revealed on hover hide with `pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100`, never `sm:opacity-0` — the focus-within half keeps a keyboard user from tabbing onto an invisible button — a width breakpoint hides them on touch tablets, which cannot hover (`hoverRevealIntegrity.test.ts` enforces it). When adding a new shared pattern, define it as an `@utility` under the matching group header rather than scattering arbitrary values
+- **Shared component/mobile utilities:** `styles/index.css` defines reusable `@utility` classes (grouped and documented in that file) — prefer these over repeating inline class strings or hand-rolling arbitrary values. Component utilities: `form-input`/`form-label`, `card`/`card-secondary`, `card-grid` (a list of record cards — columns follow the grid's own width, never the viewport, so a tablet with the sidebar open gets two roomy columns instead of three cramped ones; use it instead of `sm:grid-cols-2 lg:grid-cols-3`; a grid of compact cards with no action footer may lower its 20rem floor with `[--card-grid-min:18rem]`, and one whose title shares its row with actions or badges raises it with `[--card-grid-min:22rem]`), `btn-primary`/`btn-icon` (44px touch target on a phone or touch screen; 36px with a mouse, as is `toggle-track`'s 44px hit box), `alert-*`, `badge`, `modal-body`. Mobile utilities: `tab-scroll` (scrollable bordered tab bar) and `hscroll` (scrollable strip) for tab/pill rows that would overflow a phone; `mobile-touch-target` (44px at every width) and `touch-target-phone` (44px on a phone-width **or touch** screen, for a control whose mouse-driven desktop density must not change — a wrapped row of status pills, a dense filter strip); for a one-off size use the `touch:` variant (`touch:min-h-11`), which means `(max-width: 767px), (pointer: coarse)` — never `max-md:min-h-[44px]`, which leaves a landscape phone or an iPad with desktop-size targets (`touchTargetIntegrity.test.ts` enforces it); `pb-safe` / `action-bar-safe` for bottom bars that must clear the iPhone home indicator; `rwd-table` for tables that reflow to stacked cards under 768px, plus container tiers (`rwd-table-narrow` / `-wide` / `-xwide` / `-2xwide`) for tables that must reflow on their card's width rather than the viewport's — see Pitfall #39 for choosing one and the spec every reflow table carries. Controls revealed on hover hide with `pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100`, never `sm:opacity-0` — the focus-within half keeps a keyboard user from tabbing onto an invisible button — a width breakpoint hides them on touch tablets, which cannot hover (`hoverRevealIntegrity.test.ts` enforces it). When adding a new shared pattern, define it as an `@utility` under the matching group header rather than scattering arbitrary values
 - **UX component library:** Reusable components in `components/ux/` — use these before building custom UI: `Skeleton`/`SkeletonCard`/`SkeletonPage` (loading states), `Pagination`, `EmptyState`, `ConfirmDialog`, `PromptDialog` (single typed value), `Tooltip`, `CommandPalette`, `SortableHeader`, `Breadcrumbs`, `ProgressSteps`, `Collapsible`, `DateRangePicker`, `FileDropzone`, `InlineEdit`, `PageTransition`, `ScanSuccessFlash`/`FlashlightToggle` (barcode-scanner overlays), `ScrollCueRow` (a sideways-scrolling row that fades and puts a chevron on whichever edge has more — use it rather than a bare `hscroll` wherever a phone user could miss items past the edge), `FormField` + `ErrorSummary` with `hooks/useFieldErrors` (a labelled control with its required marker, hint and error wired by id; a 422 mapped onto its fields — use these for new form fields, and see "Forms — Save With an Error" in `docs/KNOWN_LIMITATIONS.md` for the owner rule they implement). **Confirmations go through `useConfirm()`**, whose dialog is mounted once by `ConfirmProvider` at the app root — see Pitfall #16
 - **Settings screens:** Organization and Events render through `components/settings/SettingsLayout.tsx` — section sidebar with descriptions on desktop, scrollable tab strip on phones, body in a surface card, `aria-current` on the active section. A new standalone settings screen uses this rather than another design; one drawn inside an administration hub's area header uses the header's page strip as its section nav instead, as Scheduling's has since 2026-10-25 — the shell's own section row and title beneath the header listed the same sections twice; the section list is a `SettingsSection[]` declared beside the screen (see `modules/scheduling/components/schedulingSettingsSections.ts`). Show a Save/Reset footer **only** on sections the footer actually writes
 - **How a section is addressed differs, deliberately** _(2026-09-05)_: Organization and Events mirror the selected section into `?tab=`; **Scheduling's sections are routes** (`/scheduling/admin/settings/<section>`). Scheduling moved when it moved into the Administration hub, where a section is a destination — a hub card, a link from Inventory, an officer's bookmark — and a `?tab=` that only a `useState` reads is not addressable: it cannot be linked to, refreshed into, or reached with the back button. The other two are reached one way, from their own screen, and have no such pressure. A new settings screen inside an administration hub should follow Scheduling; a standalone one should follow the other two. `/scheduling/admin/settings?tab=…` still resolves — `SchedulingSettingsRedirect` forwards it to the section's route — so links written against the older contract keep working
@@ -1908,7 +1908,68 @@ job.
 merging. `failOnFlakyTests` in `frontend/playwright.config.ts` and
 `frontend/playwright.pwa.config.ts` enforces this on CI.
 
-### 39. A Test Reads the Clock When It Runs, Not When Its File Is Imported _(2026-11-14)_
+### 39. A Wide Table Reflows on Its Card's Width, and a Spec Proves It Fits _(2026-11-16)_
+
+A table wider than its card scrolls sideways with its scrollbar at the foot of
+the list, out of sight, or is clipped by an `overflow-hidden` card with no way
+to reach the cut-off columns. The 767px `rwd-table` reflow guesses the table's
+room from the viewport, and three common layouts defeat the guess: a tablet
+with the side navigation open (a 1024px iPad Pro leaves the page body ~690px),
+the capped page column (a card is at most ~1278px on any screen), and a dialog
+(the store-window tally gets ~622px at every width).
+
+**Choosing the reflow:**
+
+- **Base `rwd-table`** (cards under a 768px viewport) only when the table fits
+  its card at every width from 768px up.
+- Otherwise put **`rwd-table-container`** on the table's direct scroll wrapper
+  (or the card that clips it) and **one tier** on the table: `-narrow` (cards
+  under 32rem), `-wide` (64rem), `-xwide` (78rem), `-2xwide` (96rem). Pick it
+  from a measurement: render with long, realistic data, read the table's
+  `width: min-content`, add ~4% for WebKit, whose text runs wider than
+  Chromium's, and take the smallest tier above that. `xwide` is 78rem, not
+  80rem, because a capped page column never gives a card 80rem; a table that
+  needs more than ~1248px shows as cards on every screen of such a page.
+- **Narrow before you tier**, without hiding anything: let free text and long
+  dates wrap (drop `whitespace-nowrap`; keep it on short fixed values such as
+  amounts, IDs and badges), `break-all` long tokens (URLs, IPs, paths, emails),
+  move a `truncate max-w-*` from a `<td>`, where it does not reliably bind, onto
+  an inner block with the full text in `title`, and wrap a value and its
+  sub-line in one `min-w-0` div (in card mode a cell is a flex row, so bare
+  siblings sit side by side and cannot wrap). Never drop a column or shorten
+  data to make it fit.
+- **Labels:** every body `<td>` gets a `data-label` naming its column; an
+  unlabelled cell is hidden in card mode, and `rwdTableLabelIntegrity.test.ts`
+  fails the build on one. A full-width row (detail, empty state, group header)
+  also gets `rwd-table-lead`. A `<tfoot>` totals row reflows under the tiers
+  too, so label its amounts as well.
+
+**The spec:** each reflow table has a describe in
+`frontend/src/e2e/table-fit-<area>.spec.ts` calling `expectTableFitsItsCard`
+from `e2e/tableFit.ts`. It loops over
+`[{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]`,
+dropping the phone width only when the table is hidden on a phone beside its
+own card list. It locates the table by a header cell with `includeHidden: true`
+(card mode hides the `<thead>`), and was seen to fail on the code before the
+change (Pitfall #37). CI's Mobile Safari job runs every spec in WebKit, and a
+Chromium pass with no room to spare is not enough: the storefront tally and
+the ID-card tap log both passed locally and failed there.
+
+**Screen readers:** in card mode the `<thead>` is `display: none` on purpose,
+because header rows hold sort buttons and select-all checkboxes that a visually
+hidden row would leave focusable but invisible. Each cell's `::before` label is
+part of its accessible name instead, and the table, row and cell roles survive.
+`table-card-a11y.spec.ts` holds this in Chromium and Mobile Safari; do not give
+the labels empty alt text (`content: attr(data-label) / ""`).
+
+**Rule:** a table that can be wider than its card reflows on that card's width,
+with a tier chosen from a measurement after narrowing, a `data-label` on every
+cell, and a table-fit spec at 390px and up that went red first.
+`rwdTableTiers.test.ts` keeps the tier blocks identical, the label test catches
+an unlabelled cell, and the specs catch a tier that is too narrow; choosing from
+a measurement is review discipline.
+
+### 40. A Test Reads the Clock When It Runs, Not When Its File Is Imported _(2026-11-14)_
 
 A module-level `NOW = datetime.now(timezone.utc)` or `TODAY = date.today()` in
 a test file is read once, while pytest collects. The tests that use it run
