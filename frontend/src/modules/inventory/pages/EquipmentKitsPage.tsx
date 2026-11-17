@@ -677,6 +677,9 @@ const EquipmentKitsPage: React.FC = () => {
                             onChange={(e) => updateLineItem(idx, 'item_name', e.target.value)}
                             maxLength={255}
                             className={inputClass + ' mt-1 text-sm'}
+                            // Named for the line it belongs to: the placeholder
+                            // vanishes once a member types (forms review F-8).
+                            aria-label={`Custom item name, line ${idx + 1}`}
                             placeholder="Custom item name"
                           />
                         )}

@@ -52,9 +52,9 @@ const TemplateCard: React.FC<{
   >
     <div className="flex items-start justify-between">
       <div className="min-w-0 flex-1">
-        <h3 className="text-theme-text-primary text-base font-semibold transition-colors group-hover:text-red-600">
+        <h2 className="text-theme-text-primary text-base font-semibold transition-colors group-hover:text-red-600">
           {template.name}
-        </h3>
+        </h2>
         {template.description && (
           <p className="text-theme-text-muted mt-1 line-clamp-2 text-sm">{template.description}</p>
         )}
@@ -205,7 +205,7 @@ export const SkillsTestingPage: React.FC = () => {
                 setActiveTab('available');
                 setSearchQuery('');
               }}
-              className={`border-b-2 pb-3 text-sm font-medium transition-colors ${
+              className={`touch:min-h-11 border-b-2 pb-3 text-sm font-medium transition-colors ${
                 activeTab === 'available'
                   ? 'border-red-600 text-red-600'
                   : 'text-theme-text-muted hover:text-theme-text-primary border-transparent'
@@ -221,7 +221,7 @@ export const SkillsTestingPage: React.FC = () => {
                 setActiveTab('history');
                 setSearchQuery('');
               }}
-              className={`border-b-2 pb-3 text-sm font-medium transition-colors ${
+              className={`touch:min-h-11 border-b-2 pb-3 text-sm font-medium transition-colors ${
                 activeTab === 'history'
                   ? 'border-red-600 text-red-600'
                   : 'text-theme-text-muted hover:text-theme-text-primary border-transparent'
@@ -242,7 +242,10 @@ export const SkillsTestingPage: React.FC = () => {
             aria-hidden="true"
           />
           <input
-            type="text"
+            type="search"
+            // The placeholder vanishes as a member types, so the box is named on
+            // its own (forms review F-8).
+            aria-label={activeTab === 'available' ? 'Search available tests' : 'Search your results'}
             placeholder={activeTab === 'available' ? 'Search available tests...' : 'Search your results...'}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
