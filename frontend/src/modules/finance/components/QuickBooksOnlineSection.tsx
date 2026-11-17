@@ -16,12 +16,15 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { AlertTriangle, Link2, RefreshCw, Unplug } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
 import { useConfirm } from '@/contexts/ConfirmContext';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useAuthStore } from '@/stores/authStore';
 import { formatCurrency, formatDateTime, localToUTC, toLocalISODate } from '@/utils/dateFormatting';
 import { getErrorMessage } from '@/utils/errorHandling';
+import type { ServerFieldSpec } from '@/utils/serverFieldErrors';
 import { quickBooksOnlineService } from '../services/api';
+import { refusalsOnFields } from '../utils/fieldRefusals';
 import { QUICKBOOKS_POSTING_STATUS_LABELS, QuickBooksConnectionStatus, QuickBooksPostingStatus } from '../types';
 import type { QuickBooksConnection, QuickBooksPosting } from '../types';
 
@@ -48,6 +51,11 @@ const CONNECT_ERRORS: Record<string, string> = {
     'QuickBooks did not complete the sign-in. Start again; if it keeps failing, check the app keys.',
 };
 
+const POST_FROM_ID = 'qbo-post-from';
+const POST_FROM_LABEL = 'Post payments made on or after';
+/** `QuickBooksPostFromUpdate` (schemas/finance.py): one required datetime. */
+const POST_FROM_FIELDS: Record<'postFrom', ServerFieldSpec> = { postFrom: { label: POST_FROM_LABEL } };
+
 const ENVIRONMENT_LABELS: Record<string, string> = {
   sandbox: 'Intuit sandbox (test company)',
   production: 'QuickBooks Online (live books)',
@@ -63,6 +71,10 @@ export const QuickBooksOnlineSection: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [postFrom, setPostFrom] = useState('');
+  const [postFromError, setPostFromError] = useState<string | null>(null);
+  // A refusal of the date that names no field (not connected, a 403) is said
+  // by the date's own Save, not in the card's banner far above it.
+  const [postFromFailure, setPostFromFailure] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -153,16 +165,31 @@ export const QuickBooksOnlineSection: React.FC = () => {
     }
   };
 
-  const savePostFrom = async () => {
-    if (!postFrom) return;
-    setBusy(true);
+  const flagPostFrom = (message: string) => {
+    setPostFromError(message);
+    document.getElementById(POST_FROM_ID)?.focus();
+  };
+
+  // Forms review F-3/F-7: a real form, so Enter saves, and a missing date is
+  // named on the field instead of the button sitting greyed out.
+  const savePostFrom = async (e: React.FormEvent) => {
+    e.preventDefault();
     setError(null);
+    setPostFromFailure(null);
+    if (!postFrom) {
+      flagPostFrom('Choose the first day payments should post to QuickBooks.');
+      return;
+    }
+    setBusy(true);
     try {
       const next = await quickBooksOnlineService.setPostFrom(localToUTC(`${postFrom}T00:00`, tz));
       setConnection(next);
       toast.success('Saved');
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Could not save the date.'));
+      const mapped = refusalsOnFields(err, POST_FROM_FIELDS);
+      if (mapped?.fieldErrors.postFrom) flagPostFrom(mapped.fieldErrors.postFrom);
+      if (mapped && mapped.unmatched.length === 0) return;
+      setPostFromFailure(mapped ? mapped.unmatched.join(' ') : getErrorMessage(err, 'Could not save the date.'));
     } finally {
       setBusy(false);
     }
@@ -305,31 +332,38 @@ export const QuickBooksOnlineSection: React.FC = () => {
           )}
 
           {canManage && status !== QuickBooksConnectionStatus.DISCONNECTED && (
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
-                <label htmlFor="qbo-post-from" className="form-label">
-                  Post payments made on or after
-                </label>
-                <input
-                  id="qbo-post-from"
-                  type="date"
-                  className="form-input"
-                  value={postFrom}
-                  onChange={(e) => setPostFrom(e.target.value)}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => void savePostFrom()}
-                disabled={busy || !postFrom}
-                className="btn-secondary"
-              >
+            <form
+              onSubmit={(e) => void savePostFrom(e)}
+              noValidate
+              aria-label="First day payments post"
+              className="flex flex-wrap items-end gap-3"
+            >
+              <FormField id={POST_FROM_ID} label={POST_FROM_LABEL} error={postFromError}>
+                {(field) => (
+                  <input
+                    {...field}
+                    type="date"
+                    className="form-input"
+                    value={postFrom}
+                    onChange={(e) => {
+                      setPostFrom(e.target.value);
+                      setPostFromError(null);
+                    }}
+                  />
+                )}
+              </FormField>
+              <button type="submit" disabled={busy} className="btn-secondary">
                 Save date
               </button>
+              {postFromFailure && (
+                <p role="alert" className={`w-full text-sm ${FIELD_ERROR_CLASS}`}>
+                  {postFromFailure}
+                </p>
+              )}
               <p className="text-theme-text-secondary w-full text-xs">
                 Earlier payments stay on the CSV export, so books that already hold them are not posted to twice.
               </p>
-            </div>
+            </form>
           )}
         </>
       )}
