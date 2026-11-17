@@ -48,6 +48,8 @@ beforeEach(() => {
   mockGetSettings.mockResolvedValue(rules('off'));
   mockUpdateSettings.mockReset();
   mockUpdateSettings.mockResolvedValue({});
+  mockToastSuccess.mockReset();
+  mockToastError.mockReset();
   signIn(['settings.manage', 'finance.view']);
 });
 
@@ -91,8 +93,77 @@ describe('SubstantiationSettingsCard', () => {
     await user.type(days, '90');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(screen.getByText('Enter a whole number of days from 1 to 60.')).toBeInTheDocument();
+    expect(days).toHaveAttribute('aria-invalid', 'true');
+    expect(days).toHaveAccessibleDescription('Enter a whole number of days from 1 to 60.');
+    await waitFor(() => expect(days).toHaveFocus());
     expect(mockUpdateSettings).not.toHaveBeenCalled();
+  });
+
+  it('names a blank day count on its field and sends neither setting', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<SubstantiationSettingsCard />);
+    const days = await screen.findByLabelText('Days allowed');
+
+    await user.click(screen.getByRole('radio', { name: 'Block' }));
+    await user.clear(days);
+    await user.type(days, '{Enter}');
+
+    expect(days).toHaveAttribute('aria-invalid', 'true');
+    expect(days).toHaveAccessibleDescription('Enter a whole number of days from 1 to 60.');
+    await waitFor(() => expect(days).toHaveFocus());
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 on the field it names', async () => {
+    mockUpdateSettings.mockRejectedValue({
+      response: {
+        status: 422,
+        data: {
+          detail: [{ field: 'finance.substantiation_days', message: 'Input should be less than or equal to 60' }],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<SubstantiationSettingsCard />);
+    const days = await screen.findByLabelText('Days allowed');
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(days).toHaveAttribute('aria-invalid', 'true'));
+    expect(days).toHaveAccessibleDescription('Days allowed must be 60 or less.');
+    await waitFor(() => expect(days).toHaveFocus());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('puts a refused mode on the choice', async () => {
+    mockUpdateSettings.mockRejectedValue({
+      response: {
+        status: 422,
+        data: {
+          detail: [{ field: 'finance.substantiation_mode', message: "Input should be 'off', 'warn' or 'block'" }],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<SubstantiationSettingsCard />);
+
+    await user.click(await screen.findByRole('button', { name: 'Save' }));
+
+    const off = screen.getByRole('radio', { name: 'Off' });
+    await waitFor(() => expect(off).toHaveAttribute('aria-invalid', 'true'));
+    expect(off).toHaveAccessibleDescription("Input should be 'off', 'warn' or 'block'");
+    await waitFor(() => expect(off).toHaveFocus());
+  });
+
+  it('says a refusal no field answers for inside the card, as well as in a toast', async () => {
+    mockUpdateSettings.mockRejectedValue(new Error('Not allowed'));
+    const user = userEvent.setup();
+    renderWithRouter(<SubstantiationSettingsCard />);
+
+    await user.click(await screen.findByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not allowed');
+    expect(mockToastError).toHaveBeenCalledWith('Not allowed');
   });
 
   it('only shows the rule to a finance officer without settings.manage', async () => {
