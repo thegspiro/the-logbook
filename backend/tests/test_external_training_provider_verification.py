@@ -48,6 +48,7 @@ async def _verified_provider(db_session) -> ExternalTrainingProvider:
         provider_type=ExternalProviderType.TARGET_SOLUTIONS,
         api_base_url=BASE_URL,
         client_id="client-1",
+        auth_type="api_key",
         auto_sync_enabled=True,
         sync_interval_hours=24,
         connection_verified=True,
@@ -93,6 +94,11 @@ class TestConnectionEditsReverify:
         saved = await _save(
             db_session, provider, api_base_url="https://other.example.test/api/"
         )
+        assert saved.connection_verified is False
+
+    async def test_a_new_auth_type(self, db_session):
+        provider = await _verified_provider(db_session)
+        saved = await _save(db_session, provider, auth_type="basic")
         assert saved.connection_verified is False
 
     async def test_a_new_client_id(self, db_session):

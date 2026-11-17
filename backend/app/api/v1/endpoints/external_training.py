@@ -391,7 +391,7 @@ async def update_provider(
     # and the stored value is ciphertext) or when a stored one is cleared.
     connection_changed = any(
         update_data.get(k) != getattr(provider, k)
-        for k in ("api_base_url", "client_id")
+        for k in ("api_base_url", "client_id", "auth_type")
         if k in update_data
     ) or any(
         update_data[k] or getattr(provider, k)
