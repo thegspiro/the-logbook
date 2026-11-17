@@ -1201,6 +1201,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Playwright ships WebKit per Ubuntu release (webkit-ubuntu-24.04.zip,
+      # webkit-ubuntu-26.04.zip) but unpacks each into the same webkit-<rev>
+      # directory, and runner.os is "Linux" on both. While ubuntu-latest moves
+      # from 24.04 to 26.04, a run could restore the other release's build, find
+      # the directory complete, skip the install and fail every test at launch:
+      # on 2026-11-17 a 26.04 runner got the 24.04 build and all 252 tests of a
+      # shard failed on "libicudata.so.74: cannot open shared object file".
+      # Chromium is one build for every Linux, so its caches need no release.
+      - name: Identify the runner's Ubuntu release
+        id: os-release
+        run: . /etc/os-release && echo "id=${ID}-${VERSION_ID}" >> "$GITHUB_OUTPUT"
+
       # A separate key from the Chromium jobs: this cache holds WebKit, and
       # sharing the key would let whichever job saved first decide whether the
       # other finds its browser.
@@ -1209,7 +1221,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-webkit-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-webkit-${{ runner.os }}-${{ steps.os-release.outputs.id }}-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright WebKit
         if: steps.playwright-cache.outputs.cache-hit != 'true'
@@ -1233,9 +1245,9 @@ jobs:
         uses: actions/cache@v6
         with:
           path: /var/cache/apt/archives
-          key: apt-webkit-deps-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: apt-webkit-deps-${{ runner.os }}-${{ steps.os-release.outputs.id }}-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            apt-webkit-deps-${{ runner.os }}-
+            apt-webkit-deps-${{ runner.os }}-${{ steps.os-release.outputs.id }}-
 
       # Not a bare `npx playwright install-deps webkit`. On 2026-11-11 the
       # Azure Ubuntu mirror stopped serving packages for three and a half
