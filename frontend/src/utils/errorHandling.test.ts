@@ -4,6 +4,7 @@ import {
   toAppError,
   getErrorDetail,
   getErrorMessage,
+  getActionFailureMessage,
   getLoadFailureMessage,
   getSaveFailureMessage,
   isNetworkError,
@@ -556,6 +557,50 @@ describe('errorHandling', () => {
       expect(isNonRetryableHttpError({ response: { status: 429 } })).toBe(false);
     });
   });
+  describe('getActionFailureMessage', () => {
+    const http = (status: number, data: Record<string, unknown> = {}) => ({ response: { status, data } });
+
+    it('blames the connection only when nothing came back', () => {
+      expect(
+        getActionFailureMessage({ request: {}, code: 'ERR_NETWORK', message: 'Network Error' }, 'delete the document')
+      ).toBe('Could not delete the document. Check your connection and try again.');
+    });
+
+    it('says the server failed, with the support code, on a 5xx', () => {
+      expect(
+        getActionFailureMessage(
+          http(500, { detail: 'Internal server error', code: 'LB-SYS-001' }),
+          'delete the document'
+        )
+      ).toBe(
+        'Could not delete the document: the server hit a problem on its end. Try again in a moment. If it keeps happening, tell IT (Error code: LB-SYS-001).'
+      );
+    });
+
+    it('says permission is missing on a 403, with the server’s reason', () => {
+      expect(
+        getActionFailureMessage(
+          http(403, { detail: 'That position carries more than you hold.' }),
+          'remove the position'
+        )
+      ).toBe(
+        'You do not have permission to remove the position. That position carries more than you hold. Ask an administrator if you need to.'
+      );
+    });
+
+    it('passes a refusal through as the server wrote it', () => {
+      expect(
+        getActionFailureMessage(http(409, { detail: 'This meeting has approved minutes.' }), 'delete the meeting')
+      ).toBe('This meeting has approved minutes.');
+    });
+
+    it('keeps a developer message off screen when the page itself failed', () => {
+      expect(getActionFailureMessage(new TypeError('blob is undefined'), 'download the document')).toBe(
+        'Could not download the document. Try again, and if it keeps happening, tell IT.'
+      );
+    });
+  });
+
   describe('getLoadFailureMessage', () => {
     const http = (status: number, data: Record<string, unknown> = {}) => ({ response: { status, data } });
 

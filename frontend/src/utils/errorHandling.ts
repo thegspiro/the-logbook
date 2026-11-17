@@ -250,6 +250,35 @@ export function getLoadFailureMessage(error: unknown, what: string): string {
 }
 
 /**
+ * A message for an action that failed (a save, delete, upload or download),
+ * that says why. The action counterpart of `getLoadFailureMessage`: `action`
+ * is what the member was doing, e.g. "delete the document".
+ *
+ * These sites said "Check your connection and try again" for every failure,
+ * so a refusal or a server fault sent the member looking for a network
+ * problem. Only a request that got no answer mentions the connection.
+ */
+export function getActionFailureMessage(error: unknown, action: string): string {
+  if (isNetworkError(error)) {
+    return `Could not ${action}. Check your connection and try again.`;
+  }
+  const appError = toAppError(error);
+  const code = appError.code ? ` (Error code: ${appError.code})` : '';
+  if (appError.status === 403) {
+    const reason = getErrorDetail(error);
+    return `You do not have permission to ${action}.${reason ? ` ${reason}` : ''} Ask an administrator if you need to${code}.`;
+  }
+  if (appError.status !== undefined && appError.status >= 500) {
+    return `Could not ${action}: the server hit a problem on its end. Try again in a moment. If it keeps happening, tell IT${code}.`;
+  }
+  if (appError.status === undefined) {
+    // The page itself failed; the exception's text is for developers.
+    return `Could not ${action}. Try again, and if it keeps happening, tell IT.`;
+  }
+  return getErrorMessage(error, `Could not ${action}`);
+}
+
+/**
  * True when a request never received an answer from the server — the device is
  * offline, DNS/TLS failed, or the client timed out waiting.
  *

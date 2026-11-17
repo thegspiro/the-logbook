@@ -47,7 +47,7 @@ import {
   isAdminOnlyRefusal,
 } from '../components/documents/folderAccess';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { getErrorDetail, getLoadFailureMessage } from '../utils/errorHandling';
+import { getActionFailureMessage, getLoadFailureMessage, toAppError } from '../utils/errorHandling';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import { fileTypeLabel } from '../utils/fileTypeLabel';
 import { StatGrid } from '@/components/ux/StatGrid';
@@ -321,9 +321,12 @@ const DocumentsPage: React.FC = () => {
       // Shown in the dialog, not behind it: the server's reason (an unknown
       // position, settings that would shut you out) is what to fix. A
       // refusal naming the folder's name or description lands on that field.
-      focusFirstCreateFolderError(
-        setCreateFolderApiError(err, 'Unable to create folder. Check your connection and try again.')
-      );
+      if (toAppError(err).status === 422) {
+        focusFirstCreateFolderError(setCreateFolderApiError(err, 'Could not create the folder.'));
+      } else {
+        clearCreateFolderErrors();
+        setCreateFolderFormError(getActionFailureMessage(err, 'create the folder'));
+      }
     } finally {
       setActionLoading(false);
     }
@@ -339,6 +342,7 @@ const DocumentsPage: React.FC = () => {
     setCreateFolderFormError,
     focusFirstCreateFolderError,
     setCreateFolderApiError,
+    clearCreateFolderErrors,
   ]);
 
   const handleUploadDocument = useCallback(async () => {
@@ -382,7 +386,7 @@ const DocumentsPage: React.FC = () => {
       if (mapped && Object.keys(mapped.fieldErrors).length > 0 && mapped.unmatched.length === 0) {
         setUploadErrors(mapped.fieldErrors);
       } else {
-        setUploadError('Unable to upload document. Check your connection and try again.');
+        setUploadError(getActionFailureMessage(err, 'upload the document'));
       }
     } finally {
       setActionLoading(false);
@@ -412,7 +416,7 @@ const DocumentsPage: React.FC = () => {
           await fetchDocuments(selectedFolder, debouncedSearch);
         }
       } catch (err: unknown) {
-        setError(getErrorDetail(err) ?? 'Unable to delete document. Check your connection and try again.');
+        setError(getActionFailureMessage(err, 'delete the document'));
       } finally {
         setActionLoading(false);
       }
@@ -441,8 +445,8 @@ const DocumentsPage: React.FC = () => {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch {
-      setError('Unable to download document. Check your connection and try again.');
+    } catch (err: unknown) {
+      setError(getActionFailureMessage(err, 'download the document'));
     }
   }, []);
 

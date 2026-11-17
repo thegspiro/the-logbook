@@ -35,7 +35,7 @@ import { AgendaEditorDialog } from '../components/AgendaEditorDialog';
 import { ArchiveSearchResults } from '../components/ArchiveSearchResults';
 import { MyActionItemsPanel } from '../components/MyActionItemsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
-import { getErrorDetail, getErrorMessage, getLoadFailureMessage } from '../../../utils/errorHandling';
+import { getActionFailureMessage, getErrorMessage, getLoadFailureMessage } from '../../../utils/errorHandling';
 import { toDisplayString } from '../../../utils/displayValue';
 import type { MeetingType, MinutesListItem, MinutesStats } from '../types/minutes';
 import { formatCalendarDate, formatTimeOfDay } from '../../../utils/dateFormatting';
@@ -346,7 +346,7 @@ const MinutesPage: React.FC = () => {
     } catch (err: unknown) {
       // The server's reason when it gave one — a refusal is not a network
       // problem, and saying "check your connection" sent the clerk the wrong way.
-      toast.error(getErrorDetail(err) ?? 'Unable to delete the meeting. Check your connection and try again.');
+      toast.error(getActionFailureMessage(err, 'delete the meeting'));
     } finally {
       setDeletingId(null);
     }

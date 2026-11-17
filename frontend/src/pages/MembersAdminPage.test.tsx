@@ -957,3 +957,35 @@ describe('MembersAdminPage — says why the roster did not load', () => {
     );
   });
 });
+
+describe('MembersAdminPage — says why a position was not removed', () => {
+  const driverRole = { ...memberRole, id: 'role-driver', name: 'Driver', slug: 'driver', is_system: false };
+
+  beforeEach(() => {
+    vi.mocked(userService.getUsersWithRoles).mockReset();
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
+      { ...member, roles: [memberRole, driverRole] },
+    ] as never);
+    vi.mocked(roleService.getRoles).mockReset();
+    vi.mocked(roleService.getRoles).mockResolvedValue([memberRole, driverRole] as never);
+    vi.mocked(locationsService.getLocations).mockReset();
+    vi.mocked(locationsService.getLocations).mockResolvedValue([] as never);
+    vi.mocked(userService.assignUserRoles).mockReset();
+  });
+
+  it('reports a server fault as one when removing a position', async () => {
+    vi.mocked(userService.assignUserRoles).mockRejectedValue({
+      response: { status: 500, data: { detail: 'Internal server error', code: 'LB-SYS-001' } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<MembersAdminPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Remove Driver position from Jordan Avery' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^Remove/ }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Could not remove the position: the server hit a problem on its end.');
+    expect(alert).not.toHaveTextContent(/connection/i);
+  });
+});

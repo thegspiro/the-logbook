@@ -37,7 +37,12 @@ import type { UserProfileUpdate } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 import toast from 'react-hot-toast';
 import { PASSWORD_CHECKLIST, validatePasswordStrength } from '../utils/passwordValidation';
-import { getErrorDetail, getErrorMessage, getLoadFailureMessage } from '../utils/errorHandling';
+import {
+  getActionFailureMessage,
+  getErrorDetail,
+  getErrorMessage,
+  getLoadFailureMessage,
+} from '../utils/errorHandling';
 import { isCommittee, mirrorsRank, withoutRankMirrors } from '../utils/positions';
 import { Modal } from '../components/Modal';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
@@ -468,7 +473,7 @@ export const MembersAdminPage: React.FC<MembersAdminPageProps> = ({ population =
       // The server refuses on purpose — the last administrator, the grant
       // ceiling — and its reason is the useful part; "check your connection"
       // sent the officer looking for a network fault.
-      setError(getErrorDetail(err) || 'Unable to remove the position. Check your connection and try again.');
+      setError(getActionFailureMessage(err, 'remove the position'));
     }
   };
 
@@ -493,9 +498,7 @@ export const MembersAdminPage: React.FC<MembersAdminPageProps> = ({ population =
       await userService.assignUserRoles(userId, newRoleIds);
       await fetchData();
     } catch (err: unknown) {
-      setError(
-        getErrorDetail(err) || 'Unable to remove the member from this position. Check your connection and try again.'
-      );
+      setError(getActionFailureMessage(err, 'remove the member from this position'));
     }
   };
 
