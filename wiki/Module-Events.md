@@ -220,6 +220,14 @@ days), so they can extend or close it. Each series is reminded once
 **Needs You** band ("Events needing your response") at the top. The band's
 overflow link narrows the grid to what needs a response.
 
+An unanswered **mandatory** event counts as needing a response only once it
+starts within `EVENT_MANDATORY_RSVP_WINDOW_DAYS` (60 days), or its RSVP
+deadline is within 48 hours _(2026-11-16)_. Before that it renders as routine
+and its RSVP buttons still work. The band, the card's "Response needed" strip
+and the needs-response filter all read `getEventUrgency`, so they agree. This
+keeps a recurring mandatory series from filling the band with a year of
+occurrences.
+
 - **Missed mandatory events** — `GET /events/missed-mandatory` supplies the
   mandatory events the caller did not attend, for the band's "missed" rows. A
   member who joined after an event ran, or who was not in its audience, is not

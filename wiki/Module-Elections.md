@@ -43,6 +43,39 @@ certified results, audit logging and ballot forensics.
 
 ---
 
+## Navigation _(2026-11-15)_
+
+- **Elections pages row.** The list (`/elections`), **Meeting Attendance**
+  (`/elections/attendance`) and **Settings** (`/elections/settings`) share a
+  row of links (`ElectionsAreaNav`) for `elections.manage` holders, replacing
+  the gear button and attendance button in the list header. On a phone the
+  labels shorten to Elections / Attendance / Settings. Members see no row.
+- **Sections by path.** `/elections/:id` is the **Overview**;
+  `/elections/:id/<section>` opens one section (`ballot`, `nominations`,
+  `candidates`, `eligibility`, `attendance`, `overrides`, `proxies`, `voting`,
+  `results`, `integrity`). Old `?tab=` links — including the nominations link
+  the backend emails — are permanently forwarded to the section path. A
+  section the viewer may not open falls back to the Overview.
+- **Election header card.** The lifecycle stepper, when voting opens or
+  closes with the time left, turnout (when the API returns it), the winner
+  rule, and — for managers — the section links. The step that moves the
+  election on (**Open Election**, **Close Nominations**, **Close Election**,
+  **Certified Results (PDF)**) sits beside the status badge; every other
+  control stays on the Overview. Forensics is now the **Integrity & Audit**
+  section, which loads its report on arrival.
+- **Members** get no section links: their Overview stacks whichever of
+  nominations, voting and results applies.
+- **Phone meeting-night dashboard** _(2026-11-16)_. Under 768px, a manager's
+  Overview is `ElectionPhoneDashboard`: the voted / eligible tally from the
+  stats endpoint (refreshed every 15s while open, never per-candidate), the
+  time left, one full-width primary action, and a **Live / Results / More**
+  switch. **Live** lists the night's actions (send or resend ballot emails,
+  remind non-voters, record paper ballots, check members in, extend voting);
+  **More** lists every section and **Details and all controls**, which
+  reveals the full Overview.
+
+---
+
 ## Workflow
 
 1. **Create Election** — Set title, type, candidates, voting period,
@@ -193,7 +226,7 @@ Beyond standing, a member may also be restricted by:
 - **Restricted voter list** — An election can be limited to a specific
   `eligible_voters` list. An empty list is stored as `NULL` (no restriction)
 - **Secretary overrides** — The secretary can grant eligibility overrides for
-  individual members, chosen by name on the **Overrides** tab, bypassing
+  individual members, chosen by name on the **Overrides** section, bypassing
   tier, attendance and role checks for both ballot items and plain positions.
   On an election restricted to an `eligible_voters` list, an override
   **extends** the list: the member votes in the app, is sent a ballot email
@@ -324,7 +357,7 @@ cannot disagree.
 
 ### Eligibility Roster
 
-The **Eligibility** tab (`EligibilityRoster`,
+The **Eligibility** section (`EligibilityRoster`,
 `GET /elections/{id}/eligibility-roster`) lists every active member with
 per-ballot-item eligibility. Rows are colour-coded: green (eligible), red
 (ineligible), blue (override), muted (voted). It has search, filter buttons
@@ -348,7 +381,7 @@ Override**) and expandable per-member detail rows (Enter/Space).
 
 ## Ballot Builder and Voting Methods
 
-The **Ballot** tab (`BallotBuilder`) is a card-based editor with `@dnd-kit`
+The **Ballot** section (`BallotBuilder`) is a card-based editor with `@dnd-kit`
 drag-and-drop reordering, expandable inline editing, colour-coded type
 badges, two-step inline delete, a template popover and summary pills.
 Position fields load the organization's operational ranks (Chief, Captain,
@@ -454,7 +487,7 @@ fresh draft from the setup with new dates. It copies ballot items
 (deep-copied), positions, position eligibility, seats and rules — never votes,
 tokens, attendees, overrides, proxy authorizations or the salt (a fresh salt
 is generated) — and optionally copies accepted candidates.
-`results_visible_immediately` is reset. The clone opens on `?tab=ballot`.
+`results_visible_immediately` is reset. The clone opens on `/elections/:id/ballot`.
 
 ---
 
@@ -586,7 +619,7 @@ with `{"receipt": …}` in the body verifies one publicly (rate-limited); the
 
 ## Nominations
 
-_(2026-11-14)_ The detail page's **Candidates** tab carries a count of
+_(2026-11-14)_ The detail page's **Candidates** section link carries a count of
 nominees for a manager, using the same `nomineesOf` filter as the list (a
 ballot item's Approve/Deny rows are options, not nominees). The minutes module
 labels `total_votes` **Votes cast**, not "Ballots cast", matching the
@@ -697,9 +730,11 @@ Results Report** / **Send Report** (only after close).
 
 ### Live Turnout Dashboard
 
-A meeting-night panel (`LiveTurnoutPanel`, fullscreen-capable) shows ballots
-received versus eligible and quorum progress, auto-refreshes, and never shows
-candidate tallies before close.
+A meeting-night panel (`LiveTurnoutPanel`, fullscreen-capable, on the
+Overview) shows ballots received versus eligible and quorum progress,
+auto-refreshes, and never shows candidate tallies before close. On a phone,
+a manager's Overview is the meeting-night dashboard described under
+[Navigation](#navigation-2026-11-15).
 
 ### Closing Edge Cases
 
@@ -710,7 +745,7 @@ candidate tallies before close.
 | Opening an election whose end date already passed   | Refused — update the dates first                                                         |
 | Reopen closed anonymous election with votes         | Refused — create a new election instead                                                  |
 | Runoff chain for standalone election                | Shows single-node chain                                                                  |
-| Results tab auto-select                             | Navigates to Results when the election is closed                                         |
+| Closed election landing                             | Opens on the Overview; managers select **Results**, members see results on the Overview  |
 
 ---
 
@@ -872,7 +907,7 @@ defaults above, and an election copies the set for its kind:
   whose type is annual selects **Annual meeting**. Calendar events carry no
   annual type. A request that omits the kind gets `annual` from a linked annual
   meeting, and `regular` otherwise.
-- **Changing an election's kind** on its Eligibility tab replaces its rules and
+- **Changing an election's kind** in its Eligibility section replaces its rules and
   `position_eligibility` with that kind's defaults, after a confirmation. This
   is allowed until voting opens. Rules sent in the same request win.
 - **Runoffs and clones** keep the kind.

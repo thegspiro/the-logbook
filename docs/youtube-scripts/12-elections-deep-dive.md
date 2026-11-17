@@ -222,7 +222,7 @@ eligible-voter-types selector and the attendance toggle.]**
 > _not_ operational — class controls the ballot, positions control system
 > permissions."
 
-**[PRODUCTION NOTE — rewritten 2026-08-26, corrected again 2026-08-31. This
+\*\*[PRODUCTION NOTE — rewritten 2026-08-26, corrected again 2026-08-31. This
 beat has now been wrong in both directions, which is worth knowing before
 touching it a third time.
 
@@ -239,7 +239,7 @@ and retired members to a restricted ballot.
 **The shipped contract is the one narrated above** — `operational` = class AND
 regular status, unchanged in effect from the legacy meaning. Verify against
 `ElectionService._user_has_role_type` before editing this beat, not against the
-changelog, which carried the reverted claim for five days.]**
+changelog, which carried the reverted claim for five days.]\*\*
 
 > "So your officer election item might be open to operational members, while
 > the bylaw amendment right below it is restricted to regular members. Same
@@ -308,13 +308,13 @@ the pending entry absent.]**
 > "This chapter is the one to re-watch before your first real election.
 > Eligibility has five layers, checked in order."
 
-**[SCREEN: Diagram callout — five stacked layers:
+\*\*[SCREEN: Diagram callout — five stacked layers:
 
 1. Election voter list (optional explicit list)
 2. Election-wide rules every voter must meet (attendance, waiting period)
 3. Membership tier rules (org settings)
 4. Per-item voter types
-5. Per-item attendance requirement]**
+5. Per-item attendance requirement]\*\*
 
 > "Layer one: an explicit voter list on the election, if you set one — only
 > those members, period. Layer two: the election's own **Rules every voter must
@@ -489,11 +489,21 @@ update the page in place.]**
 
 ### IN-APP VOTING (21:00 – 21:45)
 
-**[SCREEN: Logged-in member on the election detail page, Cast Vote tab]**
+**[SCREEN: Logged-in member on the election detail page, the ballot on its
+Overview]**
 
-> "Members can also vote logged-in, on the Cast Vote tab. Same eligibility
+> "Members can also vote logged-in, right on the election's page. Same eligibility
 > checks, same one-ballot rule — the system tracks that a member voted, by
 > either path, and blocks a second attempt."
+
+**[PRODUCTION NOTE — 2026-11-17. RE-RECORD this beat. Since 2026-11-15 a
+member's election page has no tab strip: their ballot shows on the page
+itself, and only officers see a **Cast Vote** section link. The old narration
+said "on the Cast Vote tab". Every "tab" cue in this script is now a
+**section** with its own address (`/elections/:id/<section>`), reached from
+the section links in the header card, which starts with **Overview**; re-shoot
+any cue that shows the old tab bar. On a phone, an officer's Overview is now
+the meeting-night dashboard (guide 14, "On a phone, at the meeting").]**
 
 > "The list of who may vote is fixed when you open the election. A member who
 > isn't on it is told why: if they still fail a rule — a waiting period,
@@ -654,11 +664,11 @@ show the Runoff Chain timeline.]**
 
 ### THE INTEGRITY MODEL IN 90 SECONDS (32:00 – 33:30)
 
-**[SCREEN: Diagram callout, three layers:
+\*\*[SCREEN: Diagram callout, three layers:
 
 1. Signature — every vote HMAC-signed over all its fields
 2. Chain — each vote's hash linked to the previous vote's
-3. Receipt — voter-held proof a vote exists]**
+3. Receipt — voter-held proof a vote exists]\*\*
 
 > "Three layers. Every vote is **signed** — an HMAC over the vote's fields:
 > candidate, position, rank, proxy data, timestamp. Change anything in the
@@ -682,9 +692,14 @@ verified, status PASS"]**
 
 ### THE FORENSICS REPORT (34:30 – 36:00)
 
-**[SCREEN: The Forensics tab — walk each section]**
+**[SCREEN: The Integrity & Audit section — walk each part]**
 
-> "For a dispute, pull Forensics — one report with everything: the integrity
+**[PRODUCTION NOTE — 2026-11-17. RE-RECORD the shot. The collapsible
+Forensics & Integrity block at the bottom of the page is now the **Integrity &
+Audit** section in the header's section links (open and closed elections),
+and the report loads on arrival. Narration changed from "pull Forensics".]**
+
+> "For a dispute, open Integrity & Audit — one report with everything: the integrity
 > results; every soft-deleted vote with who deleted it and why — votes are
 > never physically erased; rollback history; token issuance and usage — who
 > got ballots, which were used, access counts; anomaly detection flagging
@@ -1192,7 +1207,10 @@ narrow help popover.]**
 **Length:** 120 seconds
 **Audience:** Leadership, election admins
 
-**[SCREEN: The Forensics tab]**
+**[SCREEN: The Integrity & Audit section]**
+
+**[PRODUCTION NOTE — 2026-11-17. RE-RECORD the shot: Forensics is now the
+**Integrity & Audit** section, see chapter 13.]**
 
 > "'The count is wrong.' 'Someone voted twice.' Don't argue — investigate.
 > One report answers it."

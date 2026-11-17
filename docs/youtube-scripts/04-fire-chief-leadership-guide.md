@@ -1097,10 +1097,16 @@ table with its Days Left column.]**
 > expired and expiring ones. For whether members meet your training
 > requirements, the card beside it is **Compliance Status**."
 
-> "Print it to PDF for your officer meeting, or export it as a CSV for further
+> "Download it as a PDF for your officer meeting, or as a CSV for further
 > analysis in a spreadsheet."
 
 **[SCREEN: Show the export options]**
+
+**[PRODUCTION NOTE — 2026-11-17. RE-RECORD the export shot and the line above.
+Since 2026-11-15 the buttons read **CSV** and **PDF** (was **Print / PDF**),
+and **PDF** downloads a server-built file with page numbers and a header on
+every page instead of opening the print window. Narration changed from "Print
+it to PDF".]**
 
 ### SHIFT REPORTS (23:45 – 24:15)
 

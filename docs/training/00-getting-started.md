@@ -492,6 +492,11 @@ after does not ask again. If you sign in only through a provider such as Google
 and have no password, authenticator or passkey, the box tells you to set up
 two-step sign-in first.
 
+_(2026-11-15)_ Two of your own changes now ask too: **changing your sign-in
+email address**, and **setting up an authenticator app when you already use a
+passkey**. Someone who got hold of your signed-in browser cannot then take
+over your account with either.
+
 ![The Confirm it's you box over Settings → Authentication → MFA Policy, opened by switching Allow passkeys: This action needs a recent confirmation, the Authenticator code field, and Cancel / Confirm](./images/00-34-step-up-code.png)
 
 ![The Confirm it's you box with a Password field over the Reset MFA dialog, shown to an assistant chief who has not set up two-step sign-in yet, after selecting Reset MFA for a member](./images/00-35-step-up-password.png)
@@ -763,6 +768,15 @@ Other changes you may notice:
   times in your department's time zone. Anything that counts days, such as a
   certificate expiring or "today" on the dashboard, uses your department's
   date.
+- **Every page of a PDF says whose it is** _(2026-11-16)_. Page 1 keeps the
+  full letterhead. Every later page has a short header with the department's
+  logo and name and what the document is, such as the report and its period,
+  the election or the meeting. Long PDFs may run a page longer. Meeting
+  minutes and the inventory impact plan now show the logo on page 1 too.
+- **Reports page downloads are built by the server** _(2026-11-15)_. **Print
+  / PDF** is now **PDF**, and downloads a file instead of opening the print
+  window. See
+  [Generating a Report](./08-admin-reports.md#generating-a-report).
 - **Hours are this month only.** The training and administrative hours on the
   dashboard used to be all-time totals. All four hour cards now count this
   month only, so the numbers may look lower. Your all-time training hours are

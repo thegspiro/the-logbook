@@ -927,6 +927,21 @@ report shows **Open Work Orders**.
      cover the report on screen even if you have since changed the dates;
    - **Compare** shows the previous period of the same length beside it.
 
+**The downloads** _(2026-11-15)_. The **CSV** has the same columns as before,
+so a spreadsheet built on it keeps working. The **PDF**:
+
+- turns sideways for a wide report, and prints call volume's call types in
+  bands, each labelled, for example "Call types 1–9 of 14";
+- repeats a short header on every page after the first, with the
+  department's logo and name, the report and its period _(2026-11-16)_;
+- shows times in the department's time zone, and who made it;
+- on a report that lists members, prints _"Confidential: contains member
+  records. Do not post or forward."_
+
+The download needs the same permissions as **Generate Report**. If the
+server refuses it, a message says why. A saved report downloads exactly what
+**Run** shows.
+
 **"Today" in a report is the department's date.** The certification report's
 expiring and expired flags, apparatus inspection due dates and the call-volume
 year-to-date all follow the department's clock. A custom range is read the same
@@ -3124,6 +3139,9 @@ have moved, been renamed or work differently.
 
 ### Works differently now
 
+- **Print / PDF is now PDF** _(2026-11-15)_. It downloads a PDF built by the
+  server, with page numbers and a header on every page, instead of opening
+  the browser's print window. Both downloads are recorded in the audit log.
 - **Every email template uses the current design, including ones your
   department edited.** Earlier wording is in each template's **Previous version**
   panel. There is no **CSS Styles** box. If anyone pressed **Reset** expecting to
