@@ -110,6 +110,7 @@ from app.services.training_compliance import (
     compute_org_compliance_tally,
     count_active_requirements,
 )
+from app.services.training_course_links import TrainingCourseLinkService
 from app.services.training_module_config_service import (
     get_practical_skills_method,
 )
@@ -823,9 +824,44 @@ async def _training_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
             )
         )
 
+    items.extend(await _course_link_attention(ctx))
     items.extend(await _skill_test_attention(ctx))
     items.extend(await _shift_report_attention(ctx))
     return items
+
+
+async def _course_link_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
+    """Unlinked record names the library has a suggested course for.
+
+    Read live, so a provider sync or a CSV import that brings in a new name
+    shows here the next time the hub loads. Only names with a suggestion are
+    counted (owner decision 2026-11-17): "Link all suggested" clears every one
+    of them, while a name the library cannot match — an old one-off class from
+    an import — would hold the row open for good with nothing to click.
+    """
+    names = [
+        entry
+        for entry in await TrainingCourseLinkService(ctx.db).unlinked_names(
+            ctx.organization_id
+        )
+        if entry.suggested_course is not None
+    ]
+    if not names:
+        return []
+    records = sum(entry.records for entry in names)
+    return [
+        AdminAttentionItem(
+            key="unlinked_course_names",
+            title=(
+                f"{len(names)} training {_plural(len(names), 'name')} "
+                "can be linked to a course"
+            ),
+            detail=f"across {_fmt_int(records)} {_plural(records, 'record')}",
+            action_label="Review links",
+            href="/training/admin?page=curriculum&tab=course-links",
+            count=len(names),
+        )
+    ]
 
 
 async def _skill_test_attention(ctx: MetricContext) -> list[AdminAttentionItem]:

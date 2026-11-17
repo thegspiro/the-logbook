@@ -26,7 +26,15 @@ const SEARCH_DELAY_MS = 300;
 
 const plural = (n: number, one: string, many: string) => `${formatNumber(n)} ${n === 1 ? one : many}`;
 
-const CourseLinksPanel: React.FC = () => {
+interface CourseLinksPanelProps {
+  /**
+   * Called after a link or an undo changes which names are unlinked, so the
+   * hub can re-read its attention queue and the Course Links badge with it.
+   */
+  onLinksChanged?: (() => void) | undefined;
+}
+
+const CourseLinksPanel: React.FC<CourseLinksPanelProps> = ({ onLinksChanged }) => {
   const { confirm } = useConfirm();
   const tz = useTimezone();
   const [view, setView] = useState<CourseLinksView | null>(null);
@@ -91,6 +99,7 @@ const CourseLinksPanel: React.FC = () => {
       const result = await trainingService.linkCourseName(name.key, course.id);
       toast.success(`${plural(result.records, 'record', 'records')} linked to ${course.name}`);
       setLinkVersion((v) => v + 1);
+      onLinksChanged?.();
       await load(page, search);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not link those records'));
@@ -119,6 +128,7 @@ const CourseLinksPanel: React.FC = () => {
       toast.success(`${plural(result.names, 'name', 'names')} linked (${plural(result.records, 'record', 'records')})`);
       setPage(1);
       setLinkVersion((v) => v + 1);
+      onLinksChanged?.();
       await load(1, search);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not link the suggested courses'));
@@ -246,7 +256,13 @@ const CourseLinksPanel: React.FC = () => {
         </>
       )}
 
-      <RecentLinks version={linkVersion} onUndone={() => void load(page, search)} />
+      <RecentLinks
+        version={linkVersion}
+        onUndone={() => {
+          onLinksChanged?.();
+          void load(page, search);
+        }}
+      />
     </div>
   );
 };

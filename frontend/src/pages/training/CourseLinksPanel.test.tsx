@@ -99,15 +99,18 @@ describe('CourseLinksPanel', () => {
     await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
   });
 
-  it('links every suggested course after confirmation', async () => {
+  it('links every suggested course after confirmation, then tells the hub', async () => {
+    const onLinksChanged = vi.fn();
     const user = userEvent.setup();
-    renderWithRouter(<CourseLinksPanel />);
+    renderWithRouter(<CourseLinksPanel onLinksChanged={onLinksChanged} />);
     await user.click(await screen.findByRole('button', { name: 'Link all suggested (1)' }));
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('1 name (12 records)');
     await user.click(within(dialog).getByRole('button', { name: 'Link all suggested' }));
 
     await waitFor(() => expect(mockLinkSuggested).toHaveBeenCalled());
+    // The hub re-reads its queue, so the Course Links badge drops.
+    await waitFor(() => expect(onLinksChanged).toHaveBeenCalledTimes(1));
   });
 
   it('says there is nothing to link when every record names a course', async () => {
@@ -118,7 +121,8 @@ describe('CourseLinksPanel', () => {
     expect(screen.queryByRole('button', { name: /Link all suggested/ })).not.toBeInTheDocument();
   });
 
-  it('lists past links and undoes one after confirmation', async () => {
+  it('lists past links and undoes one after confirmation, then tells the hub', async () => {
+    const onLinksChanged = vi.fn();
     mockHistory.mockResolvedValue({
       items: [
         {
@@ -149,7 +153,7 @@ describe('CourseLinksPanel', () => {
       limit: 10,
     });
     const user = userEvent.setup();
-    renderWithRouter(<CourseLinksPanel />);
+    renderWithRouter(<CourseLinksPanel onLinksChanged={onLinksChanged} />);
 
     const recent = await screen.findByRole('region', { name: 'Recent links' });
     expect(recent).toHaveTextContent('Ladder raises → Ladder Operations');
@@ -163,5 +167,6 @@ describe('CourseLinksPanel', () => {
 
     await waitFor(() => expect(mockUndo).toHaveBeenCalledWith('link-1'));
     await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    expect(onLinksChanged).toHaveBeenCalledTimes(1);
   });
 });
