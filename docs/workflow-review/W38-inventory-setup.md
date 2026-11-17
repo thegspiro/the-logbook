@@ -88,11 +88,17 @@ opens already on a consumable category, Cancel still closes it without asking,
 since nothing was typed. Covered by `ItemFormModal.test.tsx` (the two behaviour
 cases failed before the change) and `types/index.test.ts`.
 
-### W38-4 — NIT — A room's name repeats in the storage step's room picker — OPEN
+### W38-4 — NIT — A room's name repeats in the storage step's room picker — ✅ FIXED
 
 The Storage step's Room select read "Training Room A — Review Valley Fire
 Department — Review Valley Fire Department". The department name appears twice
 where the other pickers show it once.
+**Fix:** already in place, from b2e89ebb ("Location pickers: stop repeating a
+facility room's building"). A facility room's location is named "Room — …
+— Facility" and its building is that same facility; `buildingNotInName` in
+`utils/locationLabel.ts` now drops the building when the name already ends
+with it, and the setup page's room picker uses it. Covered by
+`locationLabel.test.ts` and a case in `InventorySetupPage.test.tsx`.
 
 ## Checklist
 
@@ -105,7 +111,7 @@ where the other pickers show it once.
 | 5. Coming back to it    | ✅ everything created is listed on the items page                           |
 | 6. On a phone           | not driven (quartermaster setup)                                            |
 | 7. Everyone can use it  | ✅ wizard and item form fully labelled                                      |
-| 8. What happens around  | W38-3 fixed; W38-4 open                                                     |
+| 8. What happens around  | W38-3, W38-4 fixed                                                          |
 
 ## Completion gate
 
