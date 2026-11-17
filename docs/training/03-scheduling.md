@@ -2273,11 +2273,12 @@ Pick one section at a time from the list. There are seven:
 > **Open the shift report to fill them in**. See
 > [Training > Shift Evaluations](./02-training.md#shift-evaluations-2026-10-31--11-01).
 >
-> **No-show and pending crew are not asked** _(2026-11-14)_. Only crew who took
-> the shift (**Assigned** or **Confirmed**) need a trainee report or a shift
-> evaluation before close-out. A trainee marked **No-show**, or still
-> **Pending**, no longer blocks it. The Shift Completion Report still lists
-> pending members, so you can file for one who did work.
+> **Who counts as crew for this** _(2026-11-14)_: only members whose
+> assignment is **Assigned** or **Confirmed**. A trainee marked **No-show**,
+> or still **Pending**, no longer blocks close-out, is not written a draft
+> report, and is not owed a shift evaluation for a shift they did not work.
+> Declined and cancelled members were already left out. The Shift Completion
+> Report still lists pending members, so you can file for one who did work.
 
 The reminder goes only to shifts that have a Shift Officer. In departments
 that record a call count at close-out, it also asks the officer to record the

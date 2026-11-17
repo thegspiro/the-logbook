@@ -247,11 +247,11 @@ They are **never scored** (`DataSource.scored=False`: a count of waivers is not
 a grade), and they **never carry the member's reason, a decider's note or an
 attachment**: an evaluation is permanent, the member reads it, and any of the
 three may be medical. The rows are read column by column, so neither text is
-loaded at all. `attachment_on_file` always reads false:
-`_waiver_attachments_on_file` still returns an empty set, although the
-attachments table it was waiting for has existed since 2026-11-11. The
-evaluation screens and the PDF show the summary's `breakdown` beside the count
-_(2026-11-13)_, and the history lines say what became of each request. Adding these sources changed the stored
+loaded at all. `attachment_on_file` says whether a file is on file for the
+request, read from `attendance_waiver_attachments`; never the file, its name
+or how many. The evaluation screens and the PDF show the summary's
+`breakdown` beside the count _(2026-11-13)_, and the history lines say what
+became of each request. Adding these sources changed the stored
 shape of no existing entry, so `SNAPSHOT_VERSION` stays 2.
 
 ## Workflow

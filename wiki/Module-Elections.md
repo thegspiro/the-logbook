@@ -644,6 +644,13 @@ with `{"receipt": …}` in the body verifies one publicly (rate-limited); the
 
 ## Nominations
 
+_(2026-11-14)_ The detail page's **Candidates** tab carries a count of
+nominees for a manager, using the same `nomineesOf` filter as the list (a
+ballot item's Approve/Deny rows are options, not nominees). The minutes module
+labels `total_votes` **Votes cast**, not "Ballots cast", matching the
+certified results PDF. The nomination and proxy emails are editable templates
+(see [Communications](Module-Communications)).
+
 When the **nominations** feature is enabled, an officer opens a nomination
 phase (`POST /elections/{id}/open-nominations`). Any member can nominate a
 member or themselves; the nominee accepts or declines (a declined entry is

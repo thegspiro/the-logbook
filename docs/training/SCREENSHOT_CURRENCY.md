@@ -51,6 +51,31 @@ by #4347, is the next section down and is unchanged.
 | 12    | Deadline text in its last two weeks (now red-800, red-400 in dark mode)                                                                                                | Check `12-02`, `12-03`, `12-05`; replace only where such a deadline is in frame              |
 | 10    | Phone status bar matching the navigation bar in Light and Dark                                                                                                        | Device photo only: Playwright does not draw the status bar. Optional                         |
 
+## Queued by the November 14 – 15 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-14--15-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 08 | Email Templates sidebar with the ten categories, **Meetings & Minutes** and **Performance Evaluations** among them | Replace `08-34-email-templates` |
+| 08 | Email Templates, **Meetings & Minutes** open, **Minutes Ready for Review** in the editor | Create |
+| 14 | Election detail tab bar with the count on **Candidates** | Create; also check `14-25-candidates-as-manager` and replace it if its frame includes the tab bar |
+| 14 | Minutes filed-result panel reading **Votes cast** | Create |
+| 18 | Order dialog: **Delivery** box (Ship to the member, Ship to, Member's notes) and the Subtotal / Tax / Shipping / Discount lines | Create |
+| 18 | Order dialog **Cancel order** section; the confirmation with the "does not refund" line | Create |
+| 18 | A cancelled order: date and reason at the top, only **Refund** left | Create |
+| 18 | My Orders card showing delivery and charge lines | Replace `18-04-my-orders-unpaid` |
+| 02 | A shifts requirement with **Show monthly shifts** open, a month reading "leave, 2 shifts" | Create |
+| 02 | A shift requirement reading **Nothing owed (on leave)** | Create |
+| 02 | My Training's own leave-of-absence list under the requirements | Create |
+| 02 | Requirement **Member Categories** with a department tier (e.g. Senior) after the built-in ones | Create (`02-135` stays valid for a department with no custom tier) |
+| 02 | Evaluation builder: a data source marked **(turned off)** with its reason; the unscored-values warning under score bands | Create |
+| 04 | Events Settings → Public Requests → Request form with a draft form's **Go to Forms to edit and publish** button | Create (`19-24-outreach-form-section` shows a published form, still valid) |
+| 01 | History overview with the **Photos and media**, **Documents** and **Import a roster** cards | Create (supersedes the 2026-11-03 overview row below) |
+| 01 | History → **Documents** list; the upload page; a document page with its preview, **Open the PDF** and the catalogue | Create |
+| 01 | Leave Requests page (member's request form; an approver's **To decide** list) and Members → Settings → **Leave of Absence** | Create (queued here because #4303 added none) |
+
 ## Queued by the November 10 – 11 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-10--11-2026).

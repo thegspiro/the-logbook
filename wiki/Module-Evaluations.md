@@ -98,6 +98,20 @@ shown only to members of the ranks you list. Each item is answered one way:
 - a **checklist**;
 - **written** text, or **goals**.
 
+**Data sources** _(2026-11-14)_. Besides training hours, required training,
+meeting and session attendance and call response, an item can show three more
+figures: **events attended by type** (`events.attended_by_type`, one line per
+event type, adding up to the attended count), **certifications expiring soon**
+(`certifications.expiring_soon`, held at the period's end and expiring within
+90 days after it, the window the member's training stats use) and **field
+shift evaluation averages** (`shifts.field_evaluation_averages`, per form,
+never pooled across scales, only evaluations the member can see). All three
+are lists: shown, not scored. `GET /evaluations/data-sources` now gives each
+source an `unavailable_reason` when the Training or Scheduling module, or call
+tracking, is off; the builder labels it **(turned off)** but still offers it,
+since a published form may already use it. The builder also lists the values
+a scoring rule's bands leave unscored.
+
 For each item you can also choose whether it may be N/A, whether a comment is
 optional, required or not offered, whether certain levels need a specific
 example, whether the member answers it in their self-evaluation, and its

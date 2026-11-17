@@ -1,9 +1,14 @@
 # History Module
 
+_(Phase 1 2026-11-03; roster import and merge, photos and media 2026-11-13;
+documents 2026-11-14)_
+
 > The full engineering reference is [docs/HISTORY_MODULE.md](https://github.com/thegspiro/the-logbook/blob/main/docs/HISTORY_MODULE.md).
 > The step-by-step guide to past members, the Honor Roll, titles and clearance
 > is the History section of
 > [Membership training guide 01](https://github.com/thegspiro/the-logbook/blob/main/docs/training/01-membership.md#history-2026-11-03).
+> Decisions the owner made are in
+> [docs/KNOWN_LIMITATIONS.md](https://github.com/thegspiro/the-logbook/blob/main/docs/KNOWN_LIMITATIONS.md#history--decisions-the-module-ships-with-2026-11-03).
 
 The department archive: everyone who served, the Honor Roll, photos,
 recordings and papers, and a review list before anything goes public. **Off by
@@ -36,6 +41,18 @@ The seeded **Historian** position holds all three. Officers with
 `settings.manage` can also open **Titles and clearance** to edit the clearance
 list.
 
+Restricted fields — birth date, addresses, verification sources and research
+notes — are encrypted and never shown outside the keepers.
+
+## Past members
+
+A record for each person who served: name, badge number, an optional link to
+their member account, service periods with partial or approximate dates
+("June 1952", "c. 1960", "1998–present"), the titles they held, a Markdown
+biography, family links, and memorial and line-of-duty details, each with its
+own visibility. Titles come from one managed list, so renaming a title
+corrects every record. **Honor Roll** lists the line-of-duty deaths.
+
 ## Publication levels
 
 People, photos, recordings and documents share one model:
@@ -48,8 +65,11 @@ People, photos, recordings and documents share one model:
 
 Every save asks for **Minor** or **Substantial**. A substantial edit to a
 public item leaves the public copy as it was until it is cleared again. Only a
-draft can be deleted. The clearance list is set up under **Titles and
-clearance → Clearance list**.
+draft can be deleted. Publishing to members is direct. Publishing to the
+public needs the department's **clearance list** — an ordered set of
+positions — to clear the latest substantial change; with no list, it is
+direct. The clearance list is set up under **Titles and clearance →
+Clearance list**.
 
 ## Importing a roster _(2026-11-13)_
 
@@ -124,9 +144,12 @@ transcription. Filter by type and decade, and search the text.
   module. It can be downloaded there but not renamed, moved or deleted, and
   nothing can be uploaded into that folder from Documents.
 - **Open the PDF** (or **Open full size** for a scan) opens the members' copy
-  in a new tab, with its hidden metadata, scripts and attachments removed.
-- A scan's words are found only through its transcription. There is no text
-  recognition.
+  in a new tab. That copy is rebuilt from the pages alone, so hidden
+  metadata, scripts, attachments and photo location data never reach a
+  reader. Only `history.manage` can download the original.
+- **Search** covers the title, description, place, author, recipient,
+  accession number, transcription and the text inside a PDF. A scan's words
+  are found only through its transcription: there is no text recognition.
 
 ## Settings
 
@@ -137,8 +160,9 @@ types**.
 ## Not yet
 
 - Public records are not shown outside the app.
-- Events and timelines, articles, and the "Today in history" widget are
-  later phases.
+- Events and timelines with historical apparatus (phase 5), articles with
+  PDF and Word export (phase 6), and the public portal feed and "Today in
+  history" widget (phase 7) are later phases.
 
 ---
 

@@ -2845,10 +2845,10 @@ enough.
 
 The **Department History** page shows:
 
-- cards for **Past members**, **Photos and media**, **Documents** and
-  **Honor Roll** _(media 2026-11-13, documents 2026-11-14)_, **Import a
-  roster** if you hold `history.manage` _(2026-11-13)_, and **Titles and
-  clearance** if you can configure the module;
+- cards for **Past members**, **Photos and media** _(2026-11-13)_,
+  **Documents** _(2026-11-14)_ and **Honor Roll**, plus **Import a roster**
+  if you can edit records and **Titles and clearance** if you can configure
+  the module;
 - **Awaiting my clearance**, if a record is waiting for you to review it;
 - **Drafts**, if you can edit records; and
 - **From the archive**, the latest published records.
@@ -3028,21 +3028,65 @@ If a step names a position that has since been deleted, the review stops at
 that step with a message. Choose another position for the step, save the
 list and submit the record again.
 
+### Documents _(2026-11-14)_
+
+**Documents** keeps the department's papers: letters, minutes, newspaper
+clippings, certificates, programmes and reports. Members read the published
+ones; adding and editing needs `history.manage`.
+
+1. Open **History → Documents** and select **Upload**.
+2. Add PDFs or scanned images (JPEG, PNG or WebP), up to 50 MB each and 25 at
+   a time. A Word file is refused with a note to save it as PDF first, and so
+   is a PDF that needs a password to open.
+3. Each file becomes a draft. Open it, select **Edit**, and fill in what you
+   know: title, date (a year alone is fine), place, source or donor, a
+   **document type**, **author or sender**, **recipient**, and a
+   **transcription**. Tag the past members it names.
+4. Publish it to members, or send it for public clearance, exactly as for a
+   person's record.
+
+**Finding a document.** Search reads the title, description, place, author,
+recipient, accession number, transcription and the text inside a PDF. Words
+in a scanned image are not read, so type a transcription for any scan you want
+found.
+
+**Reading one.** The page shows the first page as a preview. **Open the
+PDF** (or **Open full size**, for a scan) shows it in a new browser tab. Members get a cleaned copy: anything
+hidden in the file (scripts, attachments, location data) is removed. Only
+editors see **Original**, which downloads the file as uploaded.
+
+**In Documents.** The originals are kept in a protected **History** folder in
+the Documents module. They can be downloaded there by anyone who can open the
+folder, but not renamed, moved or deleted, and nothing can be uploaded into
+that folder from Documents. Use **History → Documents** instead, so every
+file is catalogued and cleaned.
+
+A document can be deleted only while it is a draft. Document types are
+managed in History settings; a department starts with Letter, Minutes,
+Newspaper clipping, Certificate, Programme, Report and Other.
+
+**Also added on 2026-11-13** (not yet written up in this guide):
+**Photos and media**, with albums that hold photos and documents together;
+**Import a roster** from a CSV; and **merging** two records for one person.
+See the [History wiki page](../../wiki/Module-History.md) and
+[`HISTORY_MODULE.md`](../HISTORY_MODULE.md).
+
 ### What History Does Not Do Yet
 
 - **Public records are not shown outside the app yet.** Publishing to the
   public saves a cleared copy, but no public website reads it. The person
   page says so beside the button.
-- **Events, timelines, articles and a "Today in history" widget** are later
-  phases.
+- **No text recognition for scans.** Type a transcription to make a scan's
+  words searchable.
+- **Events, timelines, articles and a "Today in history" widget** are planned
+  and not yet built.
+- **Anonymizing a member does not change their History record.** See
+  [Anonymizing a Former Member](#anonymizing-a-former-member).
 
 > **Since 2026-11-13.** History now keeps photos, audio and video, and
 > documents (each with its own clearance), merges two records for one
 > person, and imports a roster from a spreadsheet. See the wiki's
 > [History Module](../../wiki/Module-History.md) page for how each works.
-
-- **Anonymizing a member does not change their History record.** See
-  [Anonymizing a Former Member](#anonymizing-a-former-member).
 
 ## Troubleshooting
 

@@ -653,25 +653,40 @@ Open an order to work on it:
 
 The order also shows its **Timeline**: everything that has happened to it.
 
-**Delivery details** _(2026-11-14)_. The order shows whether the member chose
-pickup or **Ship to the member**, the address for a shipped order, the
-**Member's notes** from checkout, and the subtotal, tax and shipping. The
-member sees the same on **My Orders** (**Ship to me**, **Your notes**).
+**What the member asked for** _(2026-11-14)_. The order shows a **Delivery**
+box: **Pick up** or **Ship to the member**, the **Ship to** address on a
+shipped order, and the **Member's notes** from checkout. Below the total are
+the lines behind it: **Subtotal**, then **Tax**, **Shipping** and **Discount**
+when the order has them. A pickup order never shows an address, even if one
+was typed at checkout. The member sees the same details on their order in
+**My Orders**, labelled **Ship to me** and **Your notes**.
 
-**Which status changes are allowed** _(2026-11-14)_. Moving an order forward is
-always offered. Moving it back is only for correcting fulfilment, between
-**Ordered from vendor**, **Ready for pickup** and **Fulfilled**; moving back out
-of **Fulfilled** clears its fulfilled date. An order never moves back to
-**Awaiting payment** or **Paid**: those follow the payments recorded on it. A
-refused change shows the reason, such as _"An order cannot move back from ordered
-from vendor to paid. Its payment stages follow the payments recorded against
-it."_ Picking the status the order already has does nothing and sends no email.
+**Which status moves are allowed** _(2026-11-14)_. **Change status** moves an
+order forward as before. Moving it back is only for correcting fulfilment,
+among **Ordered from vendor**, **Ready for pickup** and **Fulfilled**. Moving
+an order back from **Fulfilled** clears when it was fulfilled and the
+quantities handed over. An order never goes back to Submitted, Awaiting
+payment or Paid. Choosing the status it already has does nothing and sends no
+email. Anything else is refused with a message saying why, such as _"An order
+cannot move back from ordered from vendor to paid. Its payment stages follow
+the payments recorded against it."_ In a bulk change,
+a refused order is skipped and listed, and the rest move.
 
-**Cancelling an order** _(2026-11-14)_. **Cancel order** asks first, naming the
-order, with **Keep order** and **Cancel order**. If money has been recorded, it
-says so: cancelling does not refund it. Use **Refund** to record the money going
-back; a cancelled order still offers **Refund**. A cancelled order cannot be
-reopened or change status.
+### Cancelling an order _(2026-11-14)_
+
+Use the **Cancel order** section at the bottom of the order, for an order that
+will not be filled:
+
+1. Type a **Reason for cancelling (shown to the member)** if you want one.
+2. Select **Cancel order**, then **Cancel order** again to confirm. **Keep
+   order** backs out.
+3. The member is emailed. A cancelled order cannot be reopened.
+
+Cancelling does not refund money. When a payment is already recorded, the
+confirmation says so. After cancelling, use **Refund** to record the money
+going back. A cancelled order shows the date and reason at the top and hides
+**Mark paid**, **Record payment**, **Waive payment**, **Change status** and
+**Balance due**. **Refund** stays.
 
 To move many orders at once, select them on the **Orders** tab. Then use
 **Mark selected paid** or **New status for selected orders**. "Everything's in,
@@ -989,6 +1004,9 @@ have moved, been renamed or work differently.
 - **Embroidery and engraving are separate.** Older notes describe one
   "customization" field, and engraved items that asked for a thread colour.
 - **Mark paid is Mark paid in full ($…)** on an order.
+- **Cancel an order from its own Cancel order section**, not by choosing
+  Cancelled under Change status. The section records the reason and emails
+  the member.
 
 ### Works differently now
 
@@ -999,5 +1017,8 @@ have moved, been renamed or work differently.
 - **If turning the store on failed in an older version** — the console showed
   an error, or the setup wizard's Enable button did nothing — check
   **Organization Settings → Modules** and turn **Department Store** on.
+- **An order cannot be moved backwards freely** _(2026-11-14)_. Older notes
+  may describe setting a fulfilled order back to Awaiting payment. Only
+  fulfilment corrections (Ordered, Ready for pickup, Fulfilled) move back now.
 - **Check that positions still hold the store permissions.** An older position
   editor removed them on the first save after setup.

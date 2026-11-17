@@ -69,6 +69,48 @@ The engineering audit is
   you chose in the app.
 - **Security:** changing your own sign-in email asks you to confirm it is you.
 
+## Recent changes: November 14 – 15, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-14--15-2026).
+
+- **Leave of absence**: members can ask for leave from **Leave Requests**
+  (off until the department turns it on), and approvers decide by a rule the
+  department picks. Members are emailed before their leave ends and when an
+  officer records, changes or removes it; officers get a monthly list of
+  open-ended leaves. The Annual Training and Program Requirement reports show
+  leave. Settings are under **Members → Administration → Settings → Leave of
+  Absence**.
+- **My Training**: shift and call requirements have **Show monthly shifts**
+  (or calls), with leave months labelled. A target that leave brings to zero
+  reads **Nothing owed (on leave)**. Members see their own leave dates and the
+  department's leave rule.
+- **Training requirements**: **Member Categories** lists your department's
+  own tiers, such as Senior. Check any requirement scoped by category.
+  Evaluated-shift, transport and refusal requirements linked into a program
+  are now credited from shift evaluations.
+- **Evaluations**: three more figures for a template (events by type,
+  certifications expiring soon, field shift evaluation averages); sources
+  from a module that is off read **(turned off)**; the builder warns about
+  gaps between score bands.
+- **Shift close-out**: a trainee marked No-show or still Pending no longer
+  needs a report or an evaluation. The shift report keeps everything typed
+  when you step out to an evaluation.
+- **Department Store**: an order shows how it is delivered, the address and
+  the member's notes, and its subtotal, tax, shipping and discount. Cancel
+  from the new **Cancel order** section (it emails the member and does not
+  refund). An order moves back only among Ordered, Ready for pickup and
+  Fulfilled.
+- **Email Templates**: the election and minutes emails can be reworded,
+  previewed and switched off, in **Elections & Voting** and a new **Meetings
+  & Minutes** group.
+- **Elections**: the **Candidates** tab shows a count; minutes say **Votes
+  cast**.
+- **History**: a **Documents** section for letters, minutes and clippings.
+  See the new [History](Module-History) page.
+- **Known problem**: `main` currently has three database migration heads, so
+  a fresh install or upgrade from it will not start until PR #4323 merges.
+
 ## Recent changes: November 14, 2026 (PayPal)
 
 The engineering audit is

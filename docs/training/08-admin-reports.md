@@ -1715,10 +1715,14 @@ switch between them.
   reads "No matching templates".
 - Templates are grouped into **categories** you can open and close, each with a
   count: **Members & Accounts**, **Prospective Members**, **Events &
-  Scheduling**, **Training & Certifications**, **Elections & Voting**,
-  **Inventory & Property**, **Suggestion Boxes**, **Department Store** and
-  **Other**. Searching opens every group, and the group holding the template
-  you are editing stays open.
+  Scheduling**, **Training & Certifications**, **Meetings & Minutes**
+  _(2026-11-14; was **Business Meetings**)_, **Elections & Voting**,
+  **Inventory & Property**, **Performance Evaluations**, **Suggestion
+  Boxes**, **Department Store** and **Other**. Searching opens every group,
+  and the group holding the template you are editing stays open. Within a
+  group, templates are listed in a fixed order, then by name. _(2026-11-14)_
+  **Evaluation Amended**, **Evaluation Response** and **Evaluation Deleted**
+  now sit under **Performance Evaluations** rather than **Other**.
 - **Prospective Members** holds the emails applicants receive — **Application
   Step Completed**, **Application Status Link**, **Application Going
   Inactive**, **Application Withdrawn**, **Duplicate Application Notice**,
@@ -1740,6 +1744,25 @@ switch between them.
 ![Email template categories in the editor sidebar](./images/08-34-email-templates.png)
 
 ![Email template sidebar filtered to templates matching welcome](./images/08-36-template-search.png)
+
+**Election and minutes emails are templates** _(2026-11-14)_. Ten emails that
+used to be fixed in the code can now be reworded, previewed, test-sent and
+switched off like any other:
+
+| Category               | Templates                                                                                                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Elections & Voting** | **Nominations Open**, **You've Been Nominated**, **Nomination Accepted for You**, **Proxy Authorized**, **Pre-Meeting Package**                                |
+| **Meetings & Minutes** | **Minutes Ready for Review**, **Action Items Assigned**, **Action Item Reminder (Minutes)**, **Open Action Items Digest**, **Action Item Reminder (Meetings)** |
+
+- Switching **Pre-Meeting Package** off stops the hand send: the election
+  says why rather than building the package.
+- A switched-off **Nominations Open** is reported as switched off, not as a
+  failed send.
+- The minutes emails now use your department's mail settings, logo and
+  footer, as every other email does.
+- The three warnings that tell election managers mail did not go out
+  (ballots, the announcement, an automatic reminder) stay built in and cannot
+  be switched off, because they report mail failing.
 
 **Off means off** _(2026-10-27)_. Switching a template **Off** stops that email
 from being sent at all; before this release it only fell back to the built-in

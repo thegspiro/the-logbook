@@ -205,6 +205,12 @@ name; they used to follow the `template_type` ENUM's declaration order. A
 drift guard in `TemplateList.test.tsx` fails when any type but `custom` lands
 in **Other**.
 
+Ten notices that were built in code became templates (migration
+`c4e81b7a2d95`); see
+[Election and minutes notices are templates](#election-and-minutes-notices-are-templates-2026-11-14)
+below, and
+[guide 08, Email Templates](https://github.com/thegspiro/the-logbook/blob/main/docs/training/08-admin-reports.md#email-templates).
+
 Two behaviours that keep the grouping from getting in the way:
 
 - An active **search expands every group**, so a hit is never hidden behind a
