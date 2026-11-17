@@ -210,9 +210,6 @@ Fixed 2026-11-16:
 
 Open:
 
-- W67b-18 (LOW): a shipped order's progress steps end at "Ready for
-  pickup".
-
 Read from code, not driven: W67b-11 to W67b-17 (window lifecycle, vendor
 order, payment reports and notification gaps). Details in
 [`W67b-department-store-follow-up.md`](./W67b-department-store-follow-up.md).
@@ -236,6 +233,15 @@ Fixed 2026-11-17:
   to the store, because the page decided the cart was empty before the saved
   cart was restored. It now waits for the store to load, and shows a load
   failure with a retry.
+
+- W67b-18 (LOW): a shipped order read "Ready for pickup". Owner decision:
+  relabel everywhere. A shipped order now reads "Ready to ship" and
+  "Shipped" in its progress steps, badges, status picker, timeline and
+  status email. Same statuses, no migration.
+
+Gate for the W67b-18 fix: typecheck, lint, flake8, black, isort and the mypy
+ratchet clean; 347 frontend storefront and integrity tests and 695 backend
+storefront, payment, PayPal, Zeffy, locking and SoD tests pass.
 
 Gate for the W67b-10 fix: typecheck and lint clean; 341 frontend storefront and
 integrity tests pass.

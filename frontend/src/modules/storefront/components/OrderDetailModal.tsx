@@ -7,6 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { orderStatusLabel } from '../utils/orderStatus';
 import { Ban, CircleDollarSign, MessageSquare, Undo2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
@@ -23,7 +24,6 @@ import { ThreadSwatch } from './ThreadSwatch';
 import { methodLabel } from '../utils/personalization';
 import {
   ORDER_STATUS_BADGES,
-  ORDER_STATUS_LABELS,
   PAYMENT_METHOD_LABELS,
   PAYMENT_STATUS_BADGES,
   PAYMENT_STATUS_LABELS,
@@ -490,7 +490,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
               </div>
               <div className="flex gap-2">
                 <span className={`badge ${ORDER_STATUS_BADGES[order.status] ?? ''}`}>
-                  {ORDER_STATUS_LABELS[order.status] ?? order.status}
+                  {orderStatusLabel(order.status, order.fulfillmentMethod)}
                 </span>
                 <span className={`badge ${PAYMENT_STATUS_BADGES[order.paymentStatus] ?? ''}`}>
                   {PAYMENT_STATUS_LABELS[order.paymentStatus] ?? order.paymentStatus}
@@ -875,7 +875,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                       >
                         {ADVANCEABLE_STATUSES.map((value) => (
                           <option key={value} value={value}>
-                            {ORDER_STATUS_LABELS[value] ?? value}
+                            {orderStatusLabel(value, order.fulfillmentMethod)}
                           </option>
                         ))}
                       </select>

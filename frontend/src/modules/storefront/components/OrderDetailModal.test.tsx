@@ -498,3 +498,31 @@ describe('OrderDetailModal refunds', () => {
     expect(mockRefundOrder).not.toHaveBeenCalled();
   });
 });
+
+describe('OrderDetailModal shipped-order wording', () => {
+  beforeEach(() => {
+    mockGetOrder.mockReset();
+    mockGetOrder.mockResolvedValue({
+      ...structuredClone(shippedOrder),
+      status: 'ready_for_pickup',
+      paymentStatus: 'paid',
+      amountPaid: '68.15',
+      balanceDue: '0.00',
+    });
+  });
+
+  it('calls a shipped order ready to ship, and offers Shipped rather than Fulfilled', async () => {
+    renderModal();
+    const dialog = await findOrderDialog();
+    await within(dialog).findByText('Ship to the member');
+
+    expect(within(dialog).getAllByText('Ready to ship').length).toBeGreaterThanOrEqual(1);
+    const options = within(dialog)
+      .getAllByRole('option')
+      .map((option) => option.textContent);
+    expect(options).toContain('Ready to ship');
+    expect(options).toContain('Shipped');
+    expect(options).not.toContain('Ready for pickup');
+    expect(options).not.toContain('Fulfilled');
+  });
+});

@@ -625,7 +625,7 @@ reload, and after loading `/store/checkout` directly, the page stayed on
 "Review your order" with "Ball Cap × 1". No console errors and no failed
 requests.
 
-### W67b-18 — LOW — The progress steps on a shipped order end at "Ready for pickup" — OPEN
+### W67b-18 — LOW — The progress steps on a shipped order end at "Ready for pickup" — ✅ FIXED (2026-11-17)
 
 **Saw:** while re-driving W67b-3, the step list on My Orders for the shipped
 ORD-2026-0007 read Submitted, Payment due, Ordered, Ready for pickup.
@@ -634,6 +634,50 @@ ORD-2026-0007 read Submitted, Payment due, Ordered, Ready for pickup.
 `fulfillmentMethod`. The order statuses have no shipped state either, so a
 fix needs a decision on what a shipped order's last step is called and when it
 is reached.
+
+**Owner decision (2026-11-17):** relabel everywhere. A shipped order keeps
+the same statuses, but "Ready for pickup" reads "Ready to ship" and
+"Fulfilled" reads "Shipped". The alternatives were the progress steps only,
+or a new Shipped status with its own transitions and migration.
+
+**Fix:** no new status, no migration, no change to stored data.
+
+- **Backend:** `_status_label` in `storefront_service.py` gives the shipping
+  wording to the status-change email (its subject and body), the order
+  timeline entry, the payment-gate refusal and the status-transition refusal.
+- **Frontend:** `utils/orderStatus.ts` `orderStatusLabel` mirrors it. The
+  wording follows each order's delivery method in:
+  - the member's progress steps and badge (My Orders);
+  - the staff order dialog's badge and status picker;
+  - the orders list row;
+  - the admin overview's recent orders.
+- **Left general:** lists that mix pickup and shipped orders keep the general
+  wording. That covers the status filters, the overview counts, and the
+  activity feed built from events alone.
+
+**Tests:**
+
+- `TestShippedOrderWording` in `tests/test_storefront_service.py`: a shipped
+  order's email and timeline read "Ready to ship" and then "Shipped"; a
+  pickup order keeps "Ready for pickup".
+- `utils/orderStatus.test.ts` covers the label helper.
+- `MyOrdersPage.test.tsx` and `OrderDetailModal.test.tsx` cover the progress
+  steps, badges and status picker for a shipped order.
+
+The shipped-order cases failed against the old code; the pickup cases passed
+before and after, as guards.
+
+**Re-driven:**
+
+1. As `member2`, placed a shipped order (ORD-2026-0011); as `quartermaster`,
+   marked it paid.
+2. In Manage, the status picker offered "Ready to ship". After choosing it,
+   the badge read "Ready to ship" and the timeline "Status changed to Ready
+   to ship".
+3. As `member2`, My Orders showed "Ready to ship" in the badge and as the
+   last progress step.
+
+No console errors and no failed requests.
 
 ### Read from code, not driven
 

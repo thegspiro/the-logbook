@@ -2750,3 +2750,67 @@ class TestPickupKeepsNoAddress:
         )
 
         assert order.shipping_address == "12 Elm St, Springfield"
+
+
+class TestShippedOrderWording:
+    """W67b-18, owner decision 2026-11-17: a shipped order uses the same
+    statuses, but reads "Ready to ship" and "Shipped" where a pickup order
+    reads "Ready for pickup" and "Fulfilled"."""
+
+    async def _order(self, db_session, fulfillment):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(
+            service,
+            org,
+            allow_shipping=True,
+            payment_policy=StorePaymentPolicy.NONE,
+        )
+        member = await _make_member(db_session, org)
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+        payload = {**_cart(product.id), "fulfillment_method": fulfillment}
+        if fulfillment == StoreFulfillmentMethod.SHIP:
+            payload["shipping_address"] = "12 Elm St"
+        order = await service.create_order(org.id, member, payload)
+        service.notifications.send_order_update = AsyncMock()
+        return service, org, order
+
+    async def _latest_message(self, db_session, order_id):
+        rows = await db_session.execute(
+            select(StoreOrderEvent.message)
+            .where(StoreOrderEvent.order_id == order_id)
+            .where(StoreOrderEvent.event_type == StoreOrderEventType.STATUS_CHANGED)
+            .order_by(StoreOrderEvent.created_at.desc())
+        )
+        return rows.scalars().first()
+
+    async def test_a_shipped_order_is_ready_to_ship_then_shipped(self, db_session):
+        service, org, order = await self._order(db_session, StoreFulfillmentMethod.SHIP)
+
+        await service.update_order_status(
+            order.id, org.id, StoreOrderStatus.READY_FOR_PICKUP, None
+        )
+        sent = service.notifications.send_order_update.await_args
+        assert sent.kwargs["status_label"] == "Ready to ship"
+        assert await self._latest_message(db_session, order.id) == (
+            "Status changed to Ready to ship"
+        )
+
+        await service.update_order_status(
+            order.id, org.id, StoreOrderStatus.FULFILLED, None
+        )
+        sent = service.notifications.send_order_update.await_args
+        assert sent.kwargs["status_label"] == "Shipped"
+
+    async def test_a_pickup_order_keeps_its_wording(self, db_session):
+        service, org, order = await self._order(
+            db_session, StoreFulfillmentMethod.PICKUP
+        )
+
+        await service.update_order_status(
+            order.id, org.id, StoreOrderStatus.READY_FOR_PICKUP, None
+        )
+
+        sent = service.notifications.send_order_update.await_args
+        assert sent.kwargs["status_label"] == "Ready for pickup"

@@ -146,6 +146,11 @@ and silently under-reported any window larger than that.
 `awaiting_payment`, `paid`, `ordered`, `ready_for_pickup`, `fulfilled`,
 `cancelled`.
 
+A **shipped order** goes through the same statuses, with shipping wording
+wherever one order is shown or emailed (W67b-18): `ready_for_pickup` reads
+"Ready to ship" and `fulfilled` reads "Shipped". Lists that mix pickup and
+shipped orders keep the general labels.
+
 **Payment status** (`store_orders.payment_status`): `unpaid`,
 `pending_verification`, `partial`, `paid`, `refunded`, `waived`.
 

@@ -167,6 +167,27 @@ _STATUS_LABELS = {
     StoreOrderStatus.CANCELLED: "Cancelled",
 }
 
+# Owner decision (W67b-18, 2026-11-17): a shipped order goes through the same
+# statuses as one collected at the station, but "Ready for pickup" tells a
+# member who chose shipping to come in. Only the wording changes; the status
+# values, transitions and stored data are the same for both.
+_SHIPPED_STATUS_LABELS = {
+    StoreOrderStatus.READY_FOR_PICKUP: "Ready to ship",
+    StoreOrderStatus.FULFILLED: "Shipped",
+}
+
+
+def _status_label(status: StoreOrderStatus, order: Optional["StoreOrder"]) -> str:
+    """What ``status`` is called for this order: shipping wording when it ships.
+
+    The frontend's ``orderStatusLabel`` mirrors this for the screens.
+    """
+    if order is not None and order.fulfillment_method == StoreFulfillmentMethod.SHIP:
+        shipped = _SHIPPED_STATUS_LABELS.get(status)
+        if shipped:
+            return shipped
+    return _STATUS_LABELS.get(status, status.value)
+
 
 def _status_transition_error(
     order: "StoreOrder", current: StoreOrderStatus, target: StoreOrderStatus
@@ -176,7 +197,7 @@ def _status_transition_error(
     Cancelled and an unchanged status are settled by the caller before this
     is asked.
     """
-    target_label = _STATUS_LABELS[target]
+    target_label = _status_label(target, order)
     if target in (
         StoreOrderStatus.SUBMITTED,
         StoreOrderStatus.AWAITING_PAYMENT,
@@ -190,7 +211,7 @@ def _status_transition_error(
         current in _FULFILMENT_STAGES and target in _FULFILMENT_STAGES
     ):
         return (
-            f"An order cannot move back from {_STATUS_LABELS[current].lower()} "
+            f"An order cannot move back from {_status_label(current, order).lower()} "
             f"to {target_label.lower()}. Its payment stages follow the payments "
             "recorded against it."
         )
@@ -259,7 +280,7 @@ def _payment_gate_error(
         claim = (
             "marked ordered"
             if status == StoreOrderStatus.ORDERED
-            else "marked ready for pickup"
+            else f"marked {_status_label(status, order).lower()}"
         )
         return (
             f"{owed} This store holds unpaid orders out of the vendor order, "
@@ -2192,7 +2213,7 @@ class StorefrontService:
             order.amount_paid = _money(order.total)
             order.paid_at = _utcnow()
 
-        label = _STATUS_LABELS.get(status, status.value)
+        label = _status_label(status, order)
         self.db.add(
             StoreOrderEvent(
                 id=generate_uuid(),

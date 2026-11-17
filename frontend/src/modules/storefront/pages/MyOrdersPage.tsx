@@ -11,6 +11,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { orderStatusLabel } from '../utils/orderStatus';
 import { Link, useSearchParams } from 'react-router';
 import { ArrowLeft, ChevronDown, Clock, Loader2, ShoppingBag, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -27,7 +28,6 @@ import { storefrontService } from '../services/api';
 import { useStorefrontStore } from '../store/storefrontStore';
 import {
   ORDER_STATUS_BADGES,
-  ORDER_STATUS_LABELS,
   PAYMENT_STATUS_BADGES,
   PAYMENT_STATUS_LABELS,
   StoreOrderStatus,
@@ -169,7 +169,7 @@ const MyOrdersPage: React.FC = () => {
           </div>
           <div className="flex flex-wrap gap-2">
             <span className={`badge ${ORDER_STATUS_BADGES[order.status] ?? ''}`}>
-              {ORDER_STATUS_LABELS[order.status] ?? order.status}
+              {orderStatusLabel(order.status, order.fulfillmentMethod)}
             </span>
             <span className={`badge ${PAYMENT_STATUS_BADGES[order.paymentStatus] ?? ''}`}>
               {PAYMENT_STATUS_LABELS[order.paymentStatus] ?? order.paymentStatus}
@@ -375,7 +375,7 @@ const MyOrdersPage: React.FC = () => {
                       </div>
                       <div className="flex shrink-0 items-center gap-2.5">
                         <span className={`badge ${ORDER_STATUS_BADGES[order.status] ?? ''}`}>
-                          {ORDER_STATUS_LABELS[order.status] ?? order.status}
+                          {orderStatusLabel(order.status, order.fulfillmentMethod)}
                         </span>
                         <span className="text-theme-text-primary font-mono text-[15px] font-semibold">
                           {formatCurrency(Number(order.total))}
