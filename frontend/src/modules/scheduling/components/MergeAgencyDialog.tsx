@@ -52,6 +52,13 @@ export const MergeAgencyDialog: React.FC<MergeAgencyDialogProps> = ({ source, ag
   // picker, so a merge can hide units members could pick, or offer ones they
   // could not.
   const visibilityDiffers = target !== null && target.is_active !== source.is_active;
+  // A combined unit is the kept department's own, so its on/off switch is the
+  // one that survives: a unit members could pick can come out hidden, or the
+  // reverse, even when both departments are on.
+  const sharedTargetUnit = (name: string) => target?.apparatus.find((t) => nameKey(t.name) === nameKey(name));
+  const combinedHidden = shared.filter((u) => u.is_active && sharedTargetUnit(u.name)?.is_active === false);
+  const combinedOffered = shared.filter((u) => !u.is_active && sharedTargetUnit(u.name)?.is_active === true);
+  const unitList = (units: typeof shared) => units.map((u) => u.name).join(', ');
 
   return (
     <Modal
@@ -124,6 +131,16 @@ export const MergeAgencyDialog: React.FC<MergeAgencyDialogProps> = ({ source, ag
                     {target.is_active
                       ? `${target.name} is offered to members, so ${source.name}'s apparatus that are switched on become available to them.`
                       : `${target.name} is hidden from members, so ${source.name}'s apparatus will be hidden from them too.`}
+                  </li>
+                )}
+                {target && combinedHidden.length > 0 && (
+                  <li>
+                    {`${unitList(combinedHidden)} ${combinedHidden.length === 1 ? 'is' : 'are'} switched off under ${target.name}, so once combined ${combinedHidden.length === 1 ? 'it is' : 'they are'} hidden from members.`}
+                  </li>
+                )}
+                {target && combinedOffered.length > 0 && (
+                  <li>
+                    {`${unitList(combinedOffered)} ${combinedOffered.length === 1 ? 'is' : 'are'} switched on under ${target.name}, so once combined ${combinedOffered.length === 1 ? 'it is' : 'they are'} available to members.`}
                   </li>
                 )}
                 {evaluationDiffers && (

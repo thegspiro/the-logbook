@@ -275,6 +275,46 @@ describe('OutsideApparatusSettings: merging two spellings of one department', ()
     );
   });
 
+  it("says when a combined unit takes the kept department's switched-off setting", async () => {
+    mockList.mockResolvedValue({
+      agencies: [
+        county,
+        {
+          ...countyFd,
+          apparatus: [{ id: 'u-a106', agency_id: 'a-county-fd', name: 'A106', apparatus_type: null, is_active: false }],
+        },
+      ],
+    });
+    const { user, dialog } = await openMerge();
+
+    await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+
+    expect(dialog).toHaveTextContent(
+      'a106 is switched off under Arlington County Fire Department, so once combined it is hidden from members.'
+    );
+  });
+
+  it("says when a combined unit takes the kept department's switched-on setting", async () => {
+    mockList.mockResolvedValue({
+      agencies: [
+        {
+          ...county,
+          apparatus: [
+            { id: 'u-a106-dup', agency_id: 'a-county', name: 'a106', apparatus_type: null, is_active: false },
+          ],
+        },
+        countyFd,
+      ],
+    });
+    const { user, dialog } = await openMerge();
+
+    await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+
+    expect(dialog).toHaveTextContent(
+      'a106 is switched on under Arlington County Fire Department, so once combined it is available to members.'
+    );
+  });
+
   it('says nothing about visibility when both departments match', async () => {
     const { user, dialog } = await openMerge();
 
