@@ -2086,6 +2086,12 @@ If your department requires review, reports wait for a reviewer before the
 member can see them. Reviewers are officers who can manage training records.
 Training credit is given only when a report is approved.
 
+A reviewer who holds the review role but cannot manage training records does
+not see reports they filed themselves, in the queue or anywhere else, and
+cannot review them _(2026-11-15)_. Someone else reviews those. Only reports
+that are pending review or flagged can be reviewed; a draft or an approved
+report is refused.
+
 #### Reviewing one report
 
 Open a report and select review to open the review window. It shows the whole

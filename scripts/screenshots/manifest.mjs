@@ -2166,17 +2166,15 @@ export const isClosedElection = (election) =>
 export const isOpenElection = (election) => (election.status ?? "") === "open";
 
 export function openElectionTab(tabId, match) {
-  return async (page) => {
-    await openFirstFromApi(
-      "/elections?limit=20",
-      (id) => `/elections/${id}`,
-      "elections",
-      match,
-    )(page);
-    const tab = page.locator(`#tab-${tabId}`);
-    await tab.waitFor({ timeout: 10_000 });
-    await tab.click({ timeout: 10_000 });
-  };
+  // Since #4297 an election's sections are routes (/elections/:id/<section>)
+  // rather than tabs with #tab-<id> buttons, so the shot navigates straight
+  // to the section's path. The section ids are the old tab ids unchanged.
+  return openFirstFromApi(
+    "/elections?limit=20",
+    (id) => `/elections/${id}/${tabId}`,
+    "elections",
+    match,
+  );
 }
 
 /**
@@ -16355,25 +16353,19 @@ export const SHOTS = [
     line: 639,
     anchor:
       "Screenshot of the Forensics & Integrity panel showing the integrity check verdict",
-    alt: "The Forensics & Integrity panel — the signature check verdict over the ballot box, with the deleted-vote and anomaly sections beneath",
+    alt: "The Integrity & Audit section — the signature check verdict over the ballot box, with the deleted-vote and anomaly sections beneath",
     route: "/elections",
     prepare: async (page) => {
-      await openFirstFromApi(
-        "/elections?limit=20",
-        (id) => `/elections/${id}`,
-        "elections",
-        isClosedElection,
-      )(page);
-      // The panel is a collapsed accordion and fetches its report on first
-      // open, so it has to be expanded before there is anything to shoot.
-      await clickByName("Forensics & Integrity")(page);
+      // Integrity & Audit is its own section since #4297, and loads its
+      // report on arrival rather than on expanding an accordion.
+      await openElectionTab("integrity", isClosedElection)(page);
       // The integrity check is a separate, deliberate action — the section
       // renders its verdict only once somebody has asked for one.
       await clickByName("Run Check")(page);
       await page.waitForSelector("text=valid signatures", { timeout: 20_000 });
       await page.waitForTimeout(500);
     },
-    selector: 'div.mt-6:has(> button span:text-is("Forensics & Integrity"))',
+    selector: 'div.mb-6:has(> h2:text-is("Integrity & Audit"))',
     viewport: { width: 1440, height: 1400 },
     // "No votes have been voided." is the *point* — a clean election is what
     // this panel should say, and the placeholder asks for the soft-deleted

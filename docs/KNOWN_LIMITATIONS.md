@@ -41,6 +41,22 @@ eight hours, until #4333 carried the merge revision from #4331.
 - **CI fast enough** that a pull request usually finishes before `main` moves
   would make the up-to-date setting workable again.
 
+## Sign-In Email — An SSO-Only Member Cannot Change Their Own (ADV2-2, 2026-11-17)
+
+Since #4316 (2026-11-15), changing your **own** login email asks you to
+confirm your identity (step-up), because with only a stolen session an
+attacker could repoint the address and then use forgot-password. Step-up
+accepts a passkey, an authenticator code, or the account password
+(`step_up` in `backend/app/api/v1/endpoints/auth.py`). A member who signs in
+only through Google or Microsoft and has set up neither a password nor a
+second factor has nothing to prove with, so the change is refused until they
+set up two-step sign-in. An officer with the right to edit members can still
+change it for them, under the reset ceiling.
+
+Found by the 2026-11-17 documentation pass from the code; not reproduced in a
+browser. **For the owner:** accept this (an SSO account's address is normally
+managed by the directory anyway), or let a fresh SSO sign-in count as step-up.
+
 ## Attendance Waiver Emails and Template Copies — Choices Made Without a Ruling (2026-11-11)
 
 The waiver emails and the template-CC fix (defect D1) follow the owner

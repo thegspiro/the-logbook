@@ -147,15 +147,21 @@ event participation, member activity]**
 > set the start and end time. Remember, the system handles timezone conversion
 > automatically, so enter times in your local timezone."
 
-**[SCREEN: With Training chosen, expand **Training details (optional)** — course,
-category, requirement.]**
+**[SCREEN: With Training chosen, the form switches to the step-by-step
+training-event form; open the **Training Info** step — course, category,
+requirement.]**
 
-> "Choosing Training opens an optional **Training details** section — the
-> course, category and requirement this drill counts toward. When the organizer
-> finalizes attendance, every member who checked in is credited on their
-> training record. Leave the details blank and it's filed under the event name
-> as Continuing Education. And training events don't count toward admin hours
-> — they count toward training."
+> "Choosing Training switches to the step-by-step training form. Its **Training
+> Info** step holds the course, category and requirement this drill counts
+> toward. When the organizer finalizes attendance, every member who checked in
+> is credited on their training record. Pick **No course yet** and it's filed
+> under the event name as Continuing Education. And training events don't
+> count toward admin hours — they count toward training."
+
+**[EDITOR — 2026-11-17. Re-record this beat. Since 2026-11-11 (#4347) choosing
+Training opens the step-by-step training-event form; the inline "Training
+details (optional)" section the old footage shows is gone. Narration updated;
+length roughly unchanged.]**
 
 **[SCREEN: Set date and time fields]**
 
@@ -317,17 +323,23 @@ open **Check-ins → Card Check-ins**.]**
 
 ### DRILL ATTENDANCE THAT COUNTS, AND THE CHIEF'S OVERRIDE (added 2026-11-05)
 
-**[SCREEN: A Training event's form, **Connect to Requirements & Programs** with a
-tick box for a session attendance requirement; then the event list card with
-the **Counts toward attendance** badge beside **Mandatory**.]**
+**[SCREEN: The training-event form's **Training Info** step, **Counts toward
+attendance** with a tick box for a session attendance requirement; then the
+event list card with the **Counts toward attendance** badge beside
+**Mandatory**.]**
 
 > "Some drills are about turning up, not hours logged — 'attend sixty percent of
 > the company drills this year.' That's a **Session Attendance** requirement. You
-> tick it when you create the drill, under **Connect to Requirements &
-> Programs**, and a **Counts toward attendance** badge appears on the event so
-> members can see this one is graded. A drill linked to nothing is optional and
-> charges nobody. You can still change the links from the event page's
-> **Counts toward attendance** editor, even after attendance is finalized."
+> tick it when you create the drill, under **Counts toward attendance** on the
+> **Training Info** step, and a **Counts toward attendance** badge appears on
+> the event so members can see this one is graded. A drill linked to nothing is
+> optional and charges nobody. You can still change the links with **Edit
+> training details** on the event page, even after attendance is finalized."
+
+**[EDITOR — 2026-11-17. Re-record this beat. The "Connect to Requirements &
+Programs" section and the event page's attendance editor were replaced by the
+training-event form's **Training Info** step and the event's **Training
+details** card (#4347, 2026-11-11). Narration updated.]**
 
 **[SCREEN: Compliance Matrix → a member's cell reading "2 of 3 sessions"; the
 **Chief override** control with dates and a required reason; the cell now

@@ -1457,6 +1457,11 @@ however short their attendance, with a reason on record.
    count is still shown, and a member who met the requirement on their own is
    never labelled overridden. An override excuses no month and no other drill.
 
+The Chief cannot override their own requirement _(2026-11-15)_: the grant is
+refused with "You cannot grant an override on your own requirement". The
+Chief's own absence goes through a [training waiver](#waivers) instead, which
+someone else decides.
+
 Overrides are revoked, never deleted; grant and revoke are audited with ids and
 dates only, and the reason is stored encrypted.
 

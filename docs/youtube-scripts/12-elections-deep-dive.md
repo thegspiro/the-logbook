@@ -582,14 +582,19 @@ climbing. Then the Non-Voters list.]**
 > downstream works: the tally runs, runoff conditions are evaluated, pipeline
 > results flow, and the anonymity salt is destroyed."
 
-> "One thing to know about early closes: the results _API_ stays gated until
-> the originally scheduled end time passes — a safeguard against premature
-> disclosure. If you want the room to see results now, press **Publish
-> Results** on the closed election. It's one button on the **Results &
-> Publishing** panel, and it's the single most common 'where are my results?'
-> question. Short 12c covers just this."
+> "One thing to know about early closes: closing the election is what releases
+> the results, whether you close it early at the meeting or it reaches its
+> scheduled end. The **Results & Publishing** panel says so — 'Results are
+> visible to members.' There is no separate publish step to forget. Short 12c
+> covers just this."
 
-**[CALLOUT: "Closed early? Press Publish Results to show them now"]**
+**[CALLOUT: "Closed early? Closing releases the results"]**
+
+**[EDITOR — 2026-11-17. Re-record this beat. Since 2026-11-05 closing an
+election releases its results and the **Publish Results** / **Hide Results**
+button is gone; the panel reads "Results are visible to members" and "Closing
+the election released them, early or at the scheduled end alike." The
+2026-10-04 note below is superseded.]**
 
 **[PRODUCTION NOTE — 2026-10-04. The control is the **Publish Results** button
 (it becomes **Hide Results** once pressed) on a panel titled **Results &
@@ -614,15 +619,19 @@ turnout bar, quorum banner]**
 
 ### PUBLISH & REPORT (29:00 – 30:00)
 
-**[SCREEN: Results & Publishing panel — Publish Results, then Send Report
-under Email Results Report]**
+**[SCREEN: Results & Publishing panel — "Results are visible to members", then
+**Send Me a Copy** under **Results Report**]**
 
-> "The **Results & Publishing** panel is your one-stop close-out: **Publish
-> Results** shows them to the membership, and under **Email Results Report**,
-> **Send Report** emails a formatted results report to the election's
-> secretary. Both appear once the election is closed. Then record the outcome
-> in your meeting minutes — if the election is linked to the meeting, it's
-> displayed right on the minutes page."
+> "The **Results & Publishing** panel is your close-out view. Closing the
+> election released the results to the membership and emailed the results
+> report to the election's creator and leadership. Under **Results Report**,
+> **Send Me a Copy** sends you another. Then record the outcome in your
+> meeting minutes — if the election is linked to the meeting, it's displayed
+> right on the minutes page."
+
+**[EDITOR — 2026-11-17. Re-record this beat: **Publish Results**, **Email
+Results Report** and **Send Report** no longer exist (2026-11-05 and the
+2026-11-13 owner decision W50-82).]**
 
 ---
 
@@ -1029,26 +1038,27 @@ typed as a user ID. Re-record this cue.]**
 **Length:** 75 seconds
 **Audience:** Election admins
 
-**[SCREEN: A closed election, Results tab showing "Results not available yet"]**
+**[EDITOR — 2026-11-17. This short's premise no longer holds and it needs a
+rewrite or retirement: closing an election now releases its results, early
+or not, and there is no **Publish Results** button. The draft below is the
+replacement; the title should become "Closed Early? Your Results Are Live".]**
 
-> "You closed the vote at the meeting, the election says CLOSED — and results
-> are… hidden? Not a bug. A safeguard."
+**[SCREEN: A closed election's **Results** section, tallies showing]**
 
-**[SCREEN: Highlight the election's scheduled end date, still hours away]**
+> "You closed the vote at the meeting, the election says CLOSED — and the
+> results are already there. No waiting for the scheduled end."
 
-> "Results stay gated until the election's _scheduled_ end time passes, so
-> nobody can peek by closing early. But when the room is waiting:"
+**[SCREEN: Results & Publishing panel — "Closing the election released them,
+early or at the scheduled end alike."]**
 
-**[SCREEN: Results & Publishing panel — press "Publish Results"]**
-
-> "Open the **Results & Publishing** panel and press **Publish Results**.
-> Done — results are live for the membership, and you can email the report
-> right from the same panel."
+> "Closing is what releases them. The **Results & Publishing** panel says so,
+> and the results report has already gone to the election's creator and
+> leadership — **Send Me a Copy** if you want your own."
 
 > "Runoffs, by the way, don't wait for the gate — if one's needed, it was
 > already created the moment you closed."
 
-**[CALLOUT: "Early close + one button = instant results"]**
+**[CALLOUT: "Early close = instant results"]**
 
 ---
 

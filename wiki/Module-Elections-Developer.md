@@ -18,28 +18,35 @@ Attention** (drafts and overdue elections), **Completed** and **Total Votes
 Cast** — above the election cards. A card for an election closed early shows
 the real close time (`closed_at`), not the scheduled end.
 
-### Election Detail Tabs
+### Election Detail Sections
 
-`/elections/:electionId?tab=<id>` addresses each workflow tab. The active tab
-is derived from the URL (tab changes use `replace`, so Back leaves the page
-rather than stepping through tabs); an unknown or currently hidden value falls
-back to the first tab the viewer may see.
+Since #4297 each workflow section is a route,
+`/elections/:electionId/<section>`, built by `electionSectionPath()` in
+`modules/elections/electionSections.ts`. The bare `/elections/:electionId` is
+the **Overview**. A link written against the older `?tab=<id>` contract is
+forwarded to the section's path, so existing bookmarks keep working. An
+unknown section, or one the viewer may not see, falls back to the Overview.
+`visibleElectionSections()` decides the list.
 
-| `?tab=`       | Label        | Visible to                                         |
-| ------------- | ------------ | -------------------------------------------------- |
-| `ballot`      | Ballot       | Managers, unless cancelled                         |
-| `nominations` | Nominations  | Everyone during nominations; managers in draft     |
-| `candidates`  | Candidates   | Managers                                           |
-| `eligibility` | Eligibility  | Managers, unless cancelled                         |
-| `attendance`  | Attendance   | Managers, in draft, nominations or open            |
-| `overrides`   | Overrides    | Managers, unless cancelled                         |
-| `proxies`     | Proxy Voting | Managers, unless cancelled                         |
-| `voting`      | Cast Vote    | Everyone, while open                               |
-| `results`     | Results      | Closed elections, or `results_visible_immediately` |
+| Section       | Label             | Visible to                                         |
+| ------------- | ----------------- | -------------------------------------------------- |
+| `ballot`      | Ballot            | Managers, unless cancelled                         |
+| `nominations` | Nominations       | Everyone during nominations; managers in draft     |
+| `candidates`  | Candidates        | Managers                                           |
+| `eligibility` | Eligibility       | Managers, unless cancelled                         |
+| `attendance`  | Attendance        | Managers, in draft, nominations or open            |
+| `overrides`   | Overrides         | Managers, unless cancelled                         |
+| `proxies`     | Proxy Voting      | Managers, unless cancelled                         |
+| `voting`      | Cast Vote         | Everyone, while open                               |
+| `results`     | Results           | Closed elections, or `results_visible_immediately` |
+| `integrity`   | Integrity & Audit | Managers, once open or closed (was Forensics)      |
 
-The tabs follow the WAI-ARIA Tabs pattern: arrow keys, Home and End move
-between tabs, and each `tabpanel` is labelled by its tab. The lifecycle
-stepper is a named list with `aria-current="step"` on the current stage.
+The section row is a list of plain links with `aria-current="page"` on the
+open one. It is no longer a WAI-ARIA tab list, so arrow keys do not move
+between sections; Tab does. The lifecycle stepper in the header card is a
+named list with `aria-current="step"` on the current stage. On a phone an
+officer's Overview is the meeting-night dashboard (`ElectionPhoneDashboard`,
+#4330); **Details and all controls** opens the full page.
 
 ### Ballot Voting Page (`/ballot`)
 
