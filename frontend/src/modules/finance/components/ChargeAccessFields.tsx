@@ -8,6 +8,7 @@
  */
 
 import React from 'react';
+import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
 import { ChargeAccess, isChargeAccess, type FinanceNamedOption } from '../types';
 import type { ChargeAccessValue } from '../utils/chargeAccess';
 
@@ -20,6 +21,18 @@ interface ChargeAccessFieldsProps {
   isTopLevel: boolean;
   /** The parent's name and rule, to say what "inherit" resolves to. */
   inheritedHint?: string | undefined;
+  /**
+   * A refusal to show on each part (forms review F-3), keyed as the request
+   * body is (`chargeAccess`, `chargePositionIds`). Optional, so a screen that
+   * reports refusals its own way passes nothing. A caller moving focus to a
+   * refusal targets `${idPrefix}-access` or `${idPrefix}-positions`.
+   */
+  errors?: ChargeAccessFieldErrors | undefined;
+}
+
+export interface ChargeAccessFieldErrors {
+  chargeAccess?: string | undefined;
+  chargePositionIds?: string | undefined;
 }
 
 export const ChargeAccessFields: React.FC<ChargeAccessFieldsProps> = ({
@@ -29,7 +42,9 @@ export const ChargeAccessFields: React.FC<ChargeAccessFieldsProps> = ({
   positions,
   isTopLevel,
   inheritedHint,
+  errors,
 }) => {
+  const positionsErrorId = `${idPrefix}-positions-error`;
   const togglePosition = (id: string, checked: boolean) => {
     const positionIds = checked
       ? [...value.positionIds.filter((p) => p !== id), id]
@@ -39,34 +54,41 @@ export const ChargeAccessFields: React.FC<ChargeAccessFieldsProps> = ({
 
   return (
     <div className="space-y-3">
-      <div>
-        <label htmlFor={`${idPrefix}-access`} className="form-label">
-          Who can charge these lines
-        </label>
-        <select
-          id={`${idPrefix}-access`}
-          className="form-input"
-          value={value.access}
-          onChange={(e) => {
-            const next = e.target.value;
-            onChange({ ...value, access: isChargeAccess(next) ? next : '' });
-          }}
-          aria-describedby={`${idPrefix}-access-hint`}
-        >
-          <option value="">
-            {isTopLevel ? 'Anyone who submits requests (default)' : 'Same as the parent category'}
-          </option>
-          <option value={ChargeAccess.OPEN}>Anyone who submits requests</option>
-          <option value={ChargeAccess.RESTRICTED}>Only the owner and the positions chosen below</option>
-        </select>
-        <p id={`${idPrefix}-access-hint`} className="text-theme-text-secondary mt-1 text-xs">
-          {value.access === '' && inheritedHint
+      <FormField
+        id={`${idPrefix}-access`}
+        label="Who can charge these lines"
+        error={errors?.chargeAccess}
+        hint={
+          value.access === '' && inheritedHint
             ? inheritedHint
-            : 'Restricted lines are hidden from everyone else on purchase, check and expense requests. The owner of this category, or of one above it, can always charge them.'}
-        </p>
-      </div>
+            : 'Restricted lines are hidden from everyone else on purchase, check and expense requests. The owner of this category, or of one above it, can always charge them.'
+        }
+      >
+        {(field) => (
+          <select
+            {...field}
+            className="form-input"
+            value={value.access}
+            onChange={(e) => {
+              const next = e.target.value;
+              onChange({ ...value, access: isChargeAccess(next) ? next : '' });
+            }}
+          >
+            <option value="">
+              {isTopLevel ? 'Anyone who submits requests (default)' : 'Same as the parent category'}
+            </option>
+            <option value={ChargeAccess.OPEN}>Anyone who submits requests</option>
+            <option value={ChargeAccess.RESTRICTED}>Only the owner and the positions chosen below</option>
+          </select>
+        )}
+      </FormField>
       {value.access === ChargeAccess.RESTRICTED && (
-        <fieldset>
+        <fieldset
+          // Focusable so a refusal of the position list can move focus here.
+          id={`${idPrefix}-positions`}
+          tabIndex={-1}
+          aria-describedby={errors?.chargePositionIds ? positionsErrorId : undefined}
+        >
           <legend className="form-label">Also allow these positions</legend>
           {positions.length === 0 ? (
             <p className="text-theme-text-secondary text-xs">No positions to choose from.</p>
@@ -88,6 +110,11 @@ export const ChargeAccessFields: React.FC<ChargeAccessFieldsProps> = ({
                 );
               })}
             </div>
+          )}
+          {errors?.chargePositionIds && (
+            <p id={positionsErrorId} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+              {errors.chargePositionIds}
+            </p>
           )}
         </fieldset>
       )}
