@@ -128,6 +128,22 @@ def base_styles(prefix: str) -> Dict[str, ParagraphStyle]:
     }
 
 
+def flattened_logo(stored: Optional[str]) -> Optional[Image.Image]:
+    """The stored logo as an opaque RGB image, or ``None``.
+
+    ``decode_logo`` reads only ``data:`` URIs (never fetches a URL) and
+    returns ``None`` for anything it cannot render. Transparent pixels are
+    composited onto white: left transparent they print black on some PDF
+    viewers and drivers, and an archival (PDF/A) file may not carry them.
+    """
+    logo = decode_logo(stored)
+    if logo is None:
+        return None
+    flat = Image.new("RGB", logo.size, (255, 255, 255))
+    flat.paste(logo, mask=logo.split()[-1])
+    return flat
+
+
 def logo_flowable(stored: Optional[str]) -> Optional[PdfImage]:
     """The department logo sized for the letterhead, or ``None``.
 
@@ -135,13 +151,9 @@ def logo_flowable(stored: Optional[str]) -> Optional[PdfImage]:
     returns ``None`` for anything it cannot render, so a missing or broken
     logo leaves a text-only letterhead rather than failing the print.
     """
-    logo = decode_logo(stored)
-    if logo is None:
+    flat = flattened_logo(stored)
+    if flat is None:
         return None
-    # Transparent pixels are composited onto white: left transparent they
-    # print black on some PDF viewers and drivers.
-    flat = Image.new("RGB", logo.size, (255, 255, 255))
-    flat.paste(logo, mask=logo.split()[-1])
     scale = LOGO_BOX / max(flat.width, flat.height)
     png = BytesIO()
     flat.save(png, format="PNG")
@@ -151,6 +163,38 @@ def logo_flowable(stored: Optional[str]) -> Optional[PdfImage]:
         width=flat.width * scale,
         height=flat.height * scale,
     )
+
+
+def beside_logo(lines: List[Any], logo: Optional[str], width: float) -> List[Any]:
+    """*lines* with the department logo to their left, as one letterhead.
+
+    For documents that set their own page-1 heading. With no usable logo
+    the lines are returned unchanged, so the heading reads as it did.
+    """
+    image = logo_flowable(logo)
+    if image is None:
+        return lines
+    # A heading centred on the page reads as adrift once a logo sits to its
+    # left; set beside the logo, every line starts at the same edge.
+    for line in lines:
+        if isinstance(line, Paragraph) and line.style.alignment != 0:
+            line.style = ParagraphStyle(
+                f"{line.style.name}BesideLogo", parent=line.style, alignment=0
+            )
+    gap = 0.2 * inch
+    return [
+        Table(
+            [[image, lines]],
+            colWidths=[LOGO_BOX + gap, width - LOGO_BOX - gap],
+            style=body_table_style(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            ),
+        )
+    ]
 
 
 def letterhead(

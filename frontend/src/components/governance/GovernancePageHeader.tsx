@@ -1,6 +1,7 @@
 import React from 'react';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { governanceNavItems } from '../layout/governanceNavigation';
+import { useWaiverAttentionAnswer, WaiverAttentionKey } from '../../hooks/useWaiverAttention';
 import { SectionPageHeader } from '../layout/SectionPageHeader';
 import type { PageHeaderProps } from '../layout/SectionPageHeader';
 
@@ -12,7 +13,15 @@ import type { PageHeaderProps } from '../layout/SectionPageHeader';
  */
 export const GovernancePageHeader: React.FC<PageHeaderProps> = (props) => {
   const { isModuleOn } = useEnabledModules();
-  return <SectionPageHeader {...props} sections={governanceNavItems(isModuleOn)} stripLabel="Governance sections" />;
+  // Asked for by the side or top navigation, which every page mounts.
+  const waivers = { meetings: useWaiverAttentionAnswer(WaiverAttentionKey.BUSINESS_MEETING) };
+  return (
+    <SectionPageHeader
+      {...props}
+      sections={governanceNavItems(isModuleOn, waivers.meetings)}
+      stripLabel="Governance sections"
+    />
+  );
 };
 
 export default GovernancePageHeader;
