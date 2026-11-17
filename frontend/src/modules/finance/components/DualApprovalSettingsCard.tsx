@@ -22,8 +22,10 @@ import toast from 'react-hot-toast';
 import { organizationService } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useConfirm } from '@/contexts/ConfirmContext';
+import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { mapServerFieldErrors, type ServerFieldSpec } from '@/utils/serverFieldErrors';
 import { financeSettingsService } from '../services/api';
 import type { ApproverOption } from '../hooks/useApproverOptions';
 import { ApprovalEntityType } from '../types';
@@ -31,6 +33,8 @@ import type { DualApprovalTypeThreshold, FinanceSettings } from '../types';
 
 /** Whole dollars, as the settings schema accepts. */
 const MAX_THRESHOLD = 9_999_999_999;
+/** `FinanceSettingsUpdate.second_approver_position` in schemas/organization.py. */
+const MAX_OFFICE = 100;
 
 /** In the order the server reports them. */
 const TYPE_LABELS: ReadonlyArray<[ApprovalEntityType, string]> = [
@@ -45,6 +49,46 @@ interface TypeDraft {
   amount: string;
 }
 type TypeDrafts = Record<ApprovalEntityType, TypeDraft>;
+
+/** The three forms on this card; each reports a refusal inside itself. */
+type DualForm = 'threshold' | 'types' | 'office';
+
+/** A request type's key stands for its own threshold amount. */
+type DualField = 'threshold' | ApprovalEntityType | 'office';
+
+/**
+ * The organization settings endpoint names a refusal by its path under
+ * `finance` (`FinanceSettingsUpdate`, snake_case keys), so each field lists
+ * the path it answers for.
+ */
+const DUAL_FIELDS: Record<DualField, ServerFieldSpec> = {
+  threshold: { label: 'Threshold', api: 'finance.dual_approval_threshold' },
+  [ApprovalEntityType.PURCHASE_REQUEST]: {
+    label: 'Purchase requests threshold',
+    api: `finance.dual_approval_thresholds.${ApprovalEntityType.PURCHASE_REQUEST}`,
+  },
+  [ApprovalEntityType.CHECK_REQUEST]: {
+    label: 'Check requests threshold',
+    api: `finance.dual_approval_thresholds.${ApprovalEntityType.CHECK_REQUEST}`,
+  },
+  [ApprovalEntityType.EXPENSE_REPORT]: {
+    label: 'Expense reports threshold',
+    api: `finance.dual_approval_thresholds.${ApprovalEntityType.EXPENSE_REPORT}`,
+  },
+  office: { label: 'Second approval from', maxLength: MAX_OFFICE, api: 'finance.second_approver_position' },
+};
+
+const fieldId = (field: DualField): string =>
+  field === 'threshold'
+    ? 'dual-approval-threshold'
+    : field === 'office'
+      ? 'dual-approval-office'
+      : `dual-approval-amount-${field}`;
+
+/** In the order the card shows them, for moving focus to the first refusal. */
+const FIELD_ORDER: readonly DualField[] = ['threshold', ...TYPE_LABELS.map(([type]) => type), 'office'];
+
+const WHOLE_DOLLARS_MESSAGE = 'Enter a whole-dollar amount of $1 or more.';
 
 const isWholeDollars = (value: string): boolean => {
   const n = Number(value);
@@ -92,11 +136,13 @@ export const DualApprovalSettingsCard: React.FC<DualApprovalSettingsCardProps> =
   const [settings, setSettings] = useState<FinanceSettings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
-  const [draftError, setDraftError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [typeDrafts, setTypeDrafts] = useState<TypeDrafts>(() => typeDraftsFrom(undefined));
-  const [typeError, setTypeError] = useState<string | null>(null);
   const [officeDraft, setOfficeDraft] = useState('');
+  const [errors, setErrors] = useState<Partial<Record<DualField, string>>>({});
+  // A refusal no field answers for (a 403, a lost connection) is said inside
+  // the form that sent it, not only in a toast that fades (forms review F-5).
+  const [formError, setFormError] = useState<{ form: DualForm; message: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -115,8 +161,28 @@ export const DualApprovalSettingsCard: React.FC<DualApprovalSettingsCardProps> =
     void load();
   }, [load]);
 
-  const write = async (finance: Record<string, unknown>, done: string) => {
+  /** Names each refusal under its field and moves focus to the first (forms review F-3). */
+  const flag = (next: Partial<Record<DualField, string>>) => {
+    setErrors(next);
+    const first = FIELD_ORDER.find((field) => next[field]);
+    if (first) window.setTimeout(() => document.getElementById(fieldId(first))?.focus(), 0);
+  };
+
+  const clearError = (field: DualField) =>
+    setErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+
+  // Each form sends its one setting whole, and the server validates the
+  // request before storing any of it, so a refusal saves nothing and nothing
+  // here is sent without it: this is a control on approvals, and only its
+  // presentation and error handling are this form's to change.
+  const write = async (form: DualForm, finance: Record<string, unknown>, done: string) => {
     setSaving(true);
+    setFormError(null);
     try {
       await organizationService.updateSettings({ finance });
       // Re-read rather than trusting the value sent, so the screen shows what
@@ -124,7 +190,16 @@ export const DualApprovalSettingsCard: React.FC<DualApprovalSettingsCardProps> =
       await load();
       toast.success(done);
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not save the dual-approval rule'));
+      const mapped = mapServerFieldErrors(err, DUAL_FIELDS);
+      const placed = mapped ? Object.keys(mapped.fieldErrors).length > 0 : false;
+      if (mapped && placed) flag(mapped.fieldErrors);
+      const rest = mapped && placed ? mapped.unmatched : [];
+      if (!placed || rest.length > 0) {
+        const message =
+          rest.length > 0 ? rest.join(' ') : getErrorMessage(err, 'Could not save the dual-approval rule');
+        setFormError({ form, message });
+        toast.error(message);
+      }
     } finally {
       setSaving(false);
     }
@@ -132,6 +207,7 @@ export const DualApprovalSettingsCard: React.FC<DualApprovalSettingsCardProps> =
 
   const save = (threshold: number | null) =>
     write(
+      'threshold',
       { dual_approval_threshold: threshold },
       threshold === null ? 'Dual approval turned off' : 'Dual-approval threshold saved'
     );
@@ -142,43 +218,52 @@ export const DualApprovalSettingsCard: React.FC<DualApprovalSettingsCardProps> =
     // type is sent on every save, so a type switched back to "same as above"
     // actually clears its own figure (Pitfall #1, update payloads).
     const body: Record<string, number | null> = {};
+    const refused: Partial<Record<DualField, string>> = {};
     for (const [type] of TYPE_LABELS) {
       const { mode, amount } = typeDrafts[type];
       if (mode === 'own') {
-        if (!isWholeDollars(amount)) {
-          setTypeError('Enter a whole-dollar amount of $1 or more for each type with its own threshold.');
-          return;
-        }
+        if (!isWholeDollars(amount)) refused[type] = WHOLE_DOLLARS_MESSAGE;
         body[type] = Number(amount);
       } else {
         body[type] = mode === 'off' ? 0 : null;
       }
     }
-    setTypeError(null);
-    void write({ dual_approval_thresholds: body }, 'Request-type thresholds saved');
+    if (Object.keys(refused).length > 0) {
+      flag(refused);
+      return;
+    }
+    setErrors({});
+    void write('types', { dual_approval_thresholds: body }, 'Request-type thresholds saved');
   };
 
   const submitOffice = (e: React.FormEvent) => {
     e.preventDefault();
     const slug = officeDraft.trim() || null;
+    if (slug !== null && slug.length > MAX_OFFICE) {
+      flag({ office: `Keep the position slug to ${String(MAX_OFFICE)} characters.` });
+      return;
+    }
+    clearError('office');
     void write(
+      'office',
       { second_approver_position: slug },
       slug === null ? 'Any finance approver may give the second approval' : 'Second approver saved'
     );
   };
 
-  const setTypeDraft = (type: ApprovalEntityType, next: Partial<TypeDraft>) =>
+  const setTypeDraft = (type: ApprovalEntityType, next: Partial<TypeDraft>) => {
     setTypeDrafts((prev) => ({ ...prev, [type]: { ...prev[type], ...next } }));
+    clearError(type);
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const value = Number(draft);
-    if (draft.trim() === '' || !Number.isInteger(value) || value < 1 || value > MAX_THRESHOLD) {
-      setDraftError('Enter a whole-dollar amount of $1 or more.');
+    if (!isWholeDollars(draft)) {
+      flag({ threshold: WHOLE_DOLLARS_MESSAGE });
       return;
     }
-    setDraftError(null);
-    void save(value);
+    clearError('threshold');
+    void save(Number(draft));
   };
 
   const turnOff = async () => {
@@ -192,6 +277,13 @@ export const DualApprovalSettingsCard: React.FC<DualApprovalSettingsCardProps> =
     if (ok) void save(null);
   };
 
+  const formAlert = (form: DualForm) =>
+    formError?.form === form ? (
+      <p role="alert" className={`w-full text-sm ${FIELD_ERROR_CLASS}`}>
+        {formError.message}
+      </p>
+    ) : null;
+
   const threshold = settings?.dualApprovalThreshold ?? null;
 
   return (
@@ -200,7 +292,9 @@ export const DualApprovalSettingsCard: React.FC<DualApprovalSettingsCardProps> =
         Second approver for large requests
       </h2>
       {loadError ? (
-        <p className="mt-2 text-sm text-red-700 dark:text-red-400">{loadError}</p>
+        <p role="alert" className={`mt-2 text-sm ${FIELD_ERROR_CLASS}`}>
+          {loadError}
+        </p>
       ) : settings === null ? (
         <p className="text-theme-text-secondary mt-2 text-sm">Loading…</p>
       ) : (
@@ -219,23 +313,23 @@ export const DualApprovalSettingsCard: React.FC<DualApprovalSettingsCardProps> =
       {canEdit ? (
         settings !== null && (
           <form onSubmit={submit} className="mt-4 flex flex-wrap items-end gap-3" noValidate>
-            <div>
-              <label htmlFor="dual-approval-threshold" className="form-label">
-                Threshold (whole dollars)
-              </label>
-              <input
-                id="dual-approval-threshold"
-                type="number"
-                inputMode="numeric"
-                min="1"
-                step="1"
-                className="form-input w-40"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                aria-invalid={Boolean(draftError)}
-                aria-describedby={draftError ? 'dual-approval-error' : undefined}
-              />
-            </div>
+            <FormField id={fieldId('threshold')} label="Threshold (whole dollars)" error={errors.threshold}>
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  step="1"
+                  className="form-input w-40"
+                  value={draft}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    clearError('threshold');
+                  }}
+                />
+              )}
+            </FormField>
             <button type="submit" className="btn-primary" disabled={saving}>
               Save
             </button>
@@ -244,11 +338,7 @@ export const DualApprovalSettingsCard: React.FC<DualApprovalSettingsCardProps> =
                 Turn off
               </button>
             )}
-            {draftError && (
-              <p id="dual-approval-error" className="w-full text-xs text-red-700 dark:text-red-400">
-                {draftError}
-              </p>
-            )}
+            {formAlert('threshold')}
           </form>
         )
       ) : (
@@ -272,38 +362,36 @@ export const DualApprovalSettingsCard: React.FC<DualApprovalSettingsCardProps> =
               {TYPE_LABELS.map(([type, label]) => {
                 const typeDraft = typeDrafts[type];
                 return (
-                  <div key={type} className="flex flex-wrap items-end gap-3">
-                    <div>
-                      <label htmlFor={`dual-approval-mode-${type}`} className="form-label">
-                        {label}
-                      </label>
-                      <select
-                        id={`dual-approval-mode-${type}`}
-                        className="form-input w-56"
-                        value={typeDraft.mode}
-                        onChange={(e) => setTypeDraft(type, { mode: e.target.value as TypeMode })}
-                      >
-                        <option value="default">Same as above</option>
-                        <option value="own">Its own threshold</option>
-                        <option value="off">Off for this type</option>
-                      </select>
-                    </div>
+                  <div key={type} className="flex flex-wrap items-start gap-3">
+                    <FormField id={`dual-approval-mode-${type}`} label={label}>
+                      {(field) => (
+                        <select
+                          {...field}
+                          className="form-input w-56"
+                          value={typeDraft.mode}
+                          onChange={(e) => setTypeDraft(type, { mode: e.target.value as TypeMode })}
+                        >
+                          <option value="default">Same as above</option>
+                          <option value="own">Its own threshold</option>
+                          <option value="off">Off for this type</option>
+                        </select>
+                      )}
+                    </FormField>
                     {typeDraft.mode === 'own' && (
-                      <div>
-                        <label htmlFor={`dual-approval-amount-${type}`} className="form-label">
-                          {label} threshold (whole dollars)
-                        </label>
-                        <input
-                          id={`dual-approval-amount-${type}`}
-                          type="number"
-                          inputMode="numeric"
-                          min="1"
-                          step="1"
-                          className="form-input w-40"
-                          value={typeDraft.amount}
-                          onChange={(e) => setTypeDraft(type, { amount: e.target.value })}
-                        />
-                      </div>
+                      <FormField id={fieldId(type)} label={`${label} threshold (whole dollars)`} error={errors[type]}>
+                        {(field) => (
+                          <input
+                            {...field}
+                            type="number"
+                            inputMode="numeric"
+                            min="1"
+                            step="1"
+                            className="form-input w-40"
+                            value={typeDraft.amount}
+                            onChange={(e) => setTypeDraft(type, { amount: e.target.value })}
+                          />
+                        )}
+                      </FormField>
                     )}
                   </div>
                 );
@@ -311,7 +399,7 @@ export const DualApprovalSettingsCard: React.FC<DualApprovalSettingsCardProps> =
               <button type="submit" className="btn-primary" disabled={saving}>
                 Save request types
               </button>
-              {typeError && <p className="text-xs text-red-700 dark:text-red-400">{typeError}</p>}
+              {formAlert('types')}
             </form>
           )}
 
@@ -323,41 +411,56 @@ export const DualApprovalSettingsCard: React.FC<DualApprovalSettingsCardProps> =
           </p>
           {canEdit && (
             <form onSubmit={submitOffice} className="mt-3 flex flex-wrap items-end gap-3" noValidate>
-              <div>
-                <label htmlFor="dual-approval-office" className="form-label">
-                  Second approval from
-                </label>
-                {positions === null ? (
-                  <input
-                    id="dual-approval-office"
-                    type="text"
-                    className="form-input w-56"
-                    placeholder="Position slug, or blank for anyone"
-                    value={officeDraft}
-                    onChange={(e) => setOfficeDraft(e.target.value)}
-                  />
-                ) : (
-                  <select
-                    id="dual-approval-office"
-                    className="form-input w-56"
-                    value={officeDraft}
-                    onChange={(e) => setOfficeDraft(e.target.value)}
-                  >
-                    <option value="">Any finance approver</option>
-                    {officeDraft !== '' && !positions.some((p) => p.value === officeDraft) && (
-                      <option value={officeDraft}>{officeDraft} (no longer exists)</option>
-                    )}
-                    {positions.map((p) => (
-                      <option key={p.value} value={p.value}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
+              <FormField
+                id={fieldId('office')}
+                label="Second approval from"
+                error={errors.office}
+                // The slug is typed only when positions could not be listed; a
+                // select needs no limit.
+                maxLength={positions === null ? MAX_OFFICE : undefined}
+                count={positions === null ? officeDraft.length : undefined}
+              >
+                {(field) =>
+                  positions === null ? (
+                    <input
+                      {...field}
+                      type="text"
+                      autoComplete="off"
+                      className="form-input w-56"
+                      placeholder="Position slug, or blank for anyone"
+                      value={officeDraft}
+                      onChange={(e) => {
+                        setOfficeDraft(e.target.value);
+                        clearError('office');
+                      }}
+                    />
+                  ) : (
+                    <select
+                      {...field}
+                      className="form-input w-56"
+                      value={officeDraft}
+                      onChange={(e) => {
+                        setOfficeDraft(e.target.value);
+                        clearError('office');
+                      }}
+                    >
+                      <option value="">Any finance approver</option>
+                      {officeDraft !== '' && !positions.some((p) => p.value === officeDraft) && (
+                        <option value={officeDraft}>{officeDraft} (no longer exists)</option>
+                      )}
+                      {positions.map((p) => (
+                        <option key={p.value} value={p.value}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                  )
+                }
+              </FormField>
               <button type="submit" className="btn-primary" disabled={saving}>
                 Save second approver
               </button>
+              {formAlert('office')}
             </form>
           )}
         </>
