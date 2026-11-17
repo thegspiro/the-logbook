@@ -199,6 +199,22 @@ flat scroll. Templates are now grouped into collapsible categories with
 per-category counts: **Members & Accounts, Events & Scheduling, Training,
 Elections, Inventory, Department Store, Other**.
 
+_(2026-11-14)_ The categories are now **Members & Accounts, Prospective
+Members, Events & Scheduling, Training & Certifications, Meetings & Minutes,
+Elections & Voting, Inventory & Property, Performance Evaluations, Suggestion
+Boxes, Department Store, Other**, and within a category templates follow the
+order the category lists them, then name (they used to follow the database
+ENUM's declaration order). Ten notices that were built in code became
+templates (migration `c4e81b7a2d95`): **Nominations Open**, **You've Been
+Nominated**, **Nomination Accepted for You**, **Proxy Authorized**,
+**Pre-Meeting Package**, **Minutes Ready for Review**, **Action Items
+Assigned**, **Action Item Reminder (Minutes)**, **Open Action Items Digest**
+and **Action Item Reminder (Meetings)**. The minutes and pre-meeting types
+reuse the `template_type` they already logged under, so the send log is
+continuous. The three election-manager delivery alarms stay in code because
+they report mail failing. See
+[guide 08, Email Templates](https://github.com/thegspiro/the-logbook/blob/main/docs/training/08-admin-reports.md#email-templates).
+
 Two behaviours that keep the grouping from getting in the way:
 
 - An active **search expands every group**, so a hit is never hidden behind a
