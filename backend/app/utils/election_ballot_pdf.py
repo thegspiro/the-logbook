@@ -28,7 +28,6 @@ from reportlab.platypus import (
     HRFlowable,
     KeepTogether,
     Paragraph,
-    SimpleDocTemplate,
     Spacer,
     Table,
 )
@@ -48,6 +47,7 @@ from app.utils.election_pdf_style import (
     panel,
 )
 from app.utils.pdf_fonts import BODY_FONT, BOLD_FONT, body_table_style
+from app.utils.pdf_running_header import HeadedDocTemplate, RunningHeader
 
 _MARK_COL = 0.6 * inch
 # A ranked race prints one mark column per rank. Below this name width a
@@ -215,8 +215,14 @@ def render_printable_ballot_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> B
 
     def build(onpage: Any) -> BytesIO:
         buf = BytesIO()
-        doc = SimpleDocTemplate(
+        doc = HeadedDocTemplate(
             buf,
+            running_header=RunningHeader(
+                meta.get("org_name"),
+                "Official Ballot",
+                election.get("title"),
+                meta.get("logo"),
+            ),
             # The canvas otherwise declares Helvetica, never embedded, on every page.
             initialFontName=BODY_FONT,
             pagesize=letter,

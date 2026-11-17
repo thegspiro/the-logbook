@@ -26,7 +26,6 @@ from reportlab.lib.units import inch
 from reportlab.platypus import (
     HRFlowable,
     Paragraph,
-    SimpleDocTemplate,
     Spacer,
     Table,
 )
@@ -49,6 +48,7 @@ from app.utils.election_pdf_style import (
     section,
 )
 from app.utils.pdf_fonts import BODY_FONT, BOLD_FONT, body_table_style
+from app.utils.pdf_running_header import HeadedDocTemplate, RunningHeader
 from app.utils.pdfa import to_pdfa
 
 _TIE_POLICY_LABELS = {
@@ -94,8 +94,14 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
     integrity = data.get("integrity", {})
 
     buf = BytesIO()
-    doc = SimpleDocTemplate(
+    doc = HeadedDocTemplate(
         buf,
+        running_header=RunningHeader(
+            meta.get("org_name"),
+            "Certified Election Results",
+            election.get("title"),
+            meta.get("logo"),
+        ),
         # The canvas otherwise declares Helvetica, never embedded, on every page.
         initialFontName=BODY_FONT,
         pagesize=letter,
