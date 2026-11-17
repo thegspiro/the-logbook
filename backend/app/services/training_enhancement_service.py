@@ -1567,7 +1567,7 @@ class ReportExportService:
         from app.utils.pdf_report_kit import cell as pdf_cell
         from app.utils.pdf_report_kit import column_bands, data_table, kpi_strip
         from app.utils.pdf_report_kit import num as pdf_num
-        from app.utils.pdf_report_kit import render_report, section_heading
+        from app.utils.pdf_report_kit import render_report
 
         if not end_date:
             end_date = await resolve_org_today(self.db, organization_id)
@@ -1707,14 +1707,18 @@ class ReportExportService:
                 return story
             for start, stop in bands:
                 names = requirement_names[start:stop]
-                if len(bands) > 1:
-                    story.append(
-                        section_heading(
-                            f"Requirements {start + 1}–{stop} of "
-                            f"{len(requirement_names)}",
-                            styles,
-                        )
-                    )
+                caption = (
+                    f"Requirements {start + 1}–{stop} of {len(requirement_names)}"
+                    if len(bands) > 1
+                    else None
+                )
+                # One band stretches the member column to the page; several
+                # keep it the same width in each, so the bands line up.
+                member_w = (
+                    width - hours_w - count_w - req_w * len(names)
+                    if len(bands) == 1
+                    else name_w
+                )
                 rows = []
                 emphasis = []
                 for index, row in enumerate(member_rows):
@@ -1725,7 +1729,11 @@ class ReportExportService:
                         [
                             [
                                 pdf_cell(row.name, styles["cell_bold"]),
-                                pdf_cell(row.email, styles["cell_muted"]),
+                                pdf_cell(
+                                    row.email,
+                                    styles["cell_muted"],
+                                    fit_width=member_w - 12,
+                                ),
                             ],
                             pdf_num(f"{row.hours:.1f}"),
                             pdf_num(row.records),
@@ -1738,13 +1746,6 @@ class ReportExportService:
                             ],
                         ]
                     )
-                # One band stretches the member column to the page; several
-                # keep it the same width in each, so the bands line up.
-                member_w = (
-                    width - hours_w - count_w - req_w * len(names)
-                    if len(bands) == 1
-                    else name_w
-                )
                 story.append(
                     data_table(
                         ["Member", "Hours", "Records", *names],
@@ -1752,6 +1753,7 @@ class ReportExportService:
                         [member_w, hours_w, count_w, *([req_w] * len(names))],
                         numeric_cols=(1, 2),
                         emphasis_rows=emphasis,
+                        caption=caption,
                     )
                 )
                 story.append(Spacer(1, 12))
