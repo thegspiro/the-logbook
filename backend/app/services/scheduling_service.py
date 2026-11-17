@@ -10014,7 +10014,8 @@ class SchedulingService:
         ).one_or_none()
         if row is None:
             return None
-        return row.short_name or row.name
+        short_name, name = row
+        return short_name or name
 
     async def get_member_shift_history(
         self,
