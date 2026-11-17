@@ -87,7 +87,8 @@ def test_letterhead_names_the_department_and_document():
 
 
 def test_logo_is_drawn_in_the_letterhead():
-    assert _image_count(_reader(logo=_logo_uri())) == 1
+    # Page 1 only: later pages repeat the logo in their running header.
+    assert len(_reader(logo=_logo_uri()).pages[0].images) == 1
 
 
 @pytest.mark.parametrize(
