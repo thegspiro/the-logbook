@@ -62,11 +62,14 @@ app/api/v1/endpoints/apparatus.py::list_driver_exception_approvers
 # Questions (2026-11-13): asking needs may_decide, as approve does (never the
 # requester); answering is the member's alone, on their own pending request
 # (403 for a decider, 404 for anyone else).
+# Attention (2026-11-14): answers only about the caller (whether they decide
+# any request, and how many wait on them), for the navigation's link.
 app/api/v1/endpoints/attendance_waiver_requests.py::add_attendance_waiver_attachments
 app/api/v1/endpoints/attendance_waiver_requests.py::approve_attendance_waiver_request
 app/api/v1/endpoints/attendance_waiver_requests.py::confirm_attendance_waiver_request
 app/api/v1/endpoints/attendance_waiver_requests.py::deny_attendance_waiver_request
 app/api/v1/endpoints/attendance_waiver_requests.py::download_attendance_waiver_attachment
+app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_attention
 app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_eligibility
 app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_policy
 app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_request
@@ -328,10 +331,11 @@ app/api/v1/endpoints/medical_screening.py::get_my_compliance
 # current_user; the queue and a request by id follow may_decide or ownership,
 # 404 otherwise; withdraw is the member's alone; override needs a Chief.
 # Asking the member a question needs may_decide; answering it is the
-# member's alone, as for training.
+# member's alone, as for training. Attention answers only about the caller.
 app/api/v1/endpoints/meeting_waiver_requests.py::approve_meeting_waiver_request
 app/api/v1/endpoints/meeting_waiver_requests.py::confirm_meeting_waiver_request
 app/api/v1/endpoints/meeting_waiver_requests.py::deny_meeting_waiver_request
+app/api/v1/endpoints/meeting_waiver_requests.py::get_meeting_waiver_attention
 app/api/v1/endpoints/meeting_waiver_requests.py::get_meeting_waiver_eligibility
 app/api/v1/endpoints/meeting_waiver_requests.py::get_meeting_waiver_policy
 app/api/v1/endpoints/meeting_waiver_requests.py::get_meeting_waiver_request

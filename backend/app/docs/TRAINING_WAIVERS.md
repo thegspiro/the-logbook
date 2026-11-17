@@ -578,7 +578,9 @@ a denial. What differs:
   record created by hand, with no event, cannot be requested; the Secretary's
   grant still works on it.
 - Cancelling or deleting the event voids pending requests (training ones too);
-  decided ones are kept.
+  decided ones are kept. The member is told in the app and, once the
+  cancellation or deletion commits, by email (`void_pending_for_events`
+  returns the notices; `EventService` sends them with `send_member_notices`).
 
 The routes mirror the training ones under `/api/v1/meetings/waiver-requests`
 (`policy`, `eligibility`, submit, `mine`, the decider queue, one request,
