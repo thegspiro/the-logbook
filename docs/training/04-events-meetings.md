@@ -1659,7 +1659,7 @@ about the old date, and may not need to be excused from the new one.
 - **A denied request stays denied.** The first decision is final.
 - Changing only the title, location, description or end time does nothing to
   the requests. Cancelling or deleting the event closes pending requests, as
-  before.
+  before, and each member is told in the app and by email.
 
 **What if Confirm is refused?** The message says why: the member already
 checked in to the event, or (for a business meeting) a leave of absence now
@@ -2051,6 +2051,14 @@ image attachments and appends PDF attachments, within size and page limits.
 schedule as the bell reminder. The department can opt out of this email under
 the minutes notification settings.
 
+**Rewording the minutes emails** _(2026-11-14)_. **Minutes Ready for Review**,
+**Action Items Assigned**, **Action Item Reminder (Minutes)**, **Open Action
+Items Digest** and **Action Item Reminder (Meetings)** are templates under
+**Communications → Email Templates → Meetings & Minutes**: reword, preview,
+test-send or switch each off there. They now carry your department's logo,
+footer and mail settings. See
+[Email Templates](./08-admin-reports.md#email-templates).
+
 ### Who is listed on the roll (department default and per minutes)
 
 _(2026-10-18)_ The roll is always recorded in full; quorum and the attendance
@@ -2325,9 +2333,12 @@ answered on that card, and a moved meeting is confirmed or withdrawn there
 too, since meetings have no list like My Training's.
 
 **Deciding.** Everyone who decides is emailed a link to the request. The list
-of requests waiting for you is at **Waiver requests** on Meeting Attendance (or
-the link in the email), and each request opens the same decision page as a
-training request. An approved request is written onto the meeting's minutes
+of requests waiting for you is **Governance → Waiver Requests**, which appears
+for everyone who decides meeting requests (by a chosen position, as Chief,
+President or Secretary, as the alternate, or by managing meetings), with the
+number waiting on you badged on it at the top of every Governance page. It is
+also on Meeting Attendance as **Waiver requests**. Each request opens the same
+decision page as a training request. An approved request is written onto the meeting's minutes
 roll call as an excused absence.
 
 ### Business-meeting waiver requests: asking for more information _(2026-11-13)_
@@ -2653,6 +2664,10 @@ given an **Event Request** integration. Your other published forms (a
 near-miss report, a gear-sizing survey) never appear there. Answers to a form
 without that integration are kept as form submissions; they do not open
 requests.
+
+A form still in draft carries a **Go to Forms to edit and publish** button, named
+for that form, which opens Forms to edit and publish it _(2026-11-14; was
+plain text)_.
 
 Officers who can manage events see this page without needing any Forms
 permission.
