@@ -2051,6 +2051,14 @@ image attachments and appends PDF attachments, within size and page limits.
 schedule as the bell reminder. The department can opt out of this email under
 the minutes notification settings.
 
+**Rewording the minutes emails** _(2026-11-14)_. **Minutes Ready for Review**,
+**Action Items Assigned**, **Action Item Reminder (Minutes)**, **Open Action
+Items Digest** and **Action Item Reminder (Meetings)** are templates under
+**Communications → Email Templates → Meetings & Minutes**: reword, preview,
+test-send or switch each off there. They now carry your department's logo,
+footer and mail settings. See
+[Email Templates](./08-admin-reports.md#email-templates).
+
 ### Who is listed on the roll (department default and per minutes)
 
 _(2026-10-18)_ The roll is always recorded in full; quorum and the attendance
@@ -2656,6 +2664,10 @@ given an **Event Request** integration. Your other published forms (a
 near-miss report, a gear-sizing survey) never appear there. Answers to a form
 without that integration are kept as form submissions; they do not open
 requests.
+
+A form still in draft carries a **Go to Forms to edit and publish** button, named
+for that form, which opens Forms to edit and publish it _(2026-11-14; was
+plain text)_.
 
 Officers who can manage events see this page without needing any Forms
 permission.
