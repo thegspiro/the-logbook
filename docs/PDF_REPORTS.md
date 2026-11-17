@@ -88,6 +88,16 @@ Letter only, no duplex hint).
 - **A table is never wider than its frame.** The impact plan's member table
   was 7.5" wide with every column shown, in a 7.33" frame. Its columns now
   shrink together to fit.
+- **Every page after the first carries a running header** (owner decision,
+  2026-11-16): a 0.3" band with the department logo and name, what the
+  document is and which one (the election, the meeting, the member, the
+  period), over a hairline rule. Page 1 keeps its full letterhead. A page
+  separated from the rest still says whose it is. Every document generator
+  builds on `pdf_running_header.HeadedDocTemplate`, a drop-in for
+  `SimpleDocTemplate` that shortens the frame of pages 2 onward by
+  `HEADER_BAND` and draws the band in the space freed, inside the document's
+  own top margin. Label sheets and ID cards are stock-sized and have none.
+  `tests/test_pdf_running_header.py` checks every document for it.
 - **Documents leave scaling to the viewer.** A page shrunk to 97% by "Fit"
   is still readable.
 - **Label sheets and ID cards ask to print at actual size**
@@ -203,7 +213,8 @@ and the browser's time zone, and neither left an audit row.
 `pdf_report_kit.render_report(meta, body)` gives every tabular report the same
 frame. Laid out top to bottom:
 
-1. **Letterhead**: department logo and name, report title.
+1. **Letterhead**: department logo and name, report title. Pages 2 onward
+   get the compact running header described under "Printing".
 2. **Parameter strip**: period, filters and scope, so a page read weeks later
    still says what it covers.
 3. **Summary strip** (`kpi_strip`): three to five headline figures. Take these
@@ -215,7 +226,13 @@ frame. Laid out top to bottom:
    black-and-white copier.
 5. **Detail tables** (`data_table`): the header row repeats on every page,
    figures are right-aligned, and only light horizontal rules are drawn. Use
-   `zebra=True` for long lists, where it helps a reader track a row.
+   `zebra=True` for long lists, where it helps a reader track a row. A column
+   band takes its label as `caption=`, which repeats with the header row, so
+   a band that runs onto the next page still says which one it is. Pass a
+   cell its column's room as `cell(..., fit_width=...)` when it can hold an
+   email or a web address: ReportLab wraps only at spaces and otherwise cuts
+   a long word where the column ends, and `fit_token` breaks it after an
+   `@`, `.`, `/`, `_` or `-` instead.
 6. **Footer on every page**: department and report, "Page X of Y",
    "Generated: <time and zone> by <member>", and a confidentiality notice. The
    document is laid out twice so the total is known.
@@ -240,8 +257,9 @@ Recorded in `docs/KNOWN_LIMITATIONS.md` under "PDF Reports".
 - **Minutes that append attachment PDFs are not PDF/A.** Pages from outside
   cannot be vouched for, so that file makes no claim.
 - **Older layouts.** Minutes, the impact plan and the election documents keep
-  their own layouts, and their page numbers are "Page N" rather than "of Y"
-  (the ballot excepted).
+  their own layouts. Minutes, the evaluation and the election documents number
+  their pages "Page N" rather than "of Y" (the ballot excepted), and the impact
+  plan has no footer or page numbers at all.
 
 ## Roadmap (owner decisions of 2026-11-09)
 
