@@ -22,7 +22,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { ROUTES, signInForRoute } from './mobile-routes';
 
 // The not-found screen renders inside the shell and is a few lines long, so it
@@ -78,11 +78,35 @@ const LOADS: { path: string; viewport: { width: number; height: number } }[] = [
   { path: '/training/compliance-config', viewport: PHONE },
 ];
 
-const layoutShiftOf = async (page: Page, path: string, viewport: { width: number; height: number }) => {
+// A response held back until the placeholder drawn for it is on screen, so the
+// page is measured as it is when that answer is the last to arrive. On the dev
+// server it usually lands before the frame's first-load hold lets the body be
+// seen, so without holding it the case passes or fails on timing.
+interface LateResponse {
+  url: string;
+  placeholder: (page: Page) => Locator;
+}
+
+const layoutShiftOf = async (
+  page: Page,
+  path: string,
+  viewport: { width: number; height: number },
+  late?: LateResponse
+) => {
   const route = ROUTES.find((r) => r.path === path);
   if (!route) throw new Error(`${path} is not in the mobile route list`);
   await page.setViewportSize(viewport);
   await signInForRoute(page, route, null);
+  let release: () => void = () => undefined;
+  if (late) {
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(late.url, async (handler) => {
+      await held;
+      await handler.fallback();
+    });
+  }
   await page.addInitScript(() => {
     const w = window as unknown as { __layoutShift: number };
     w.__layoutShift = 0;
@@ -93,6 +117,10 @@ const layoutShiftOf = async (page: Page, path: string, viewport: { width: number
     }).observe({ type: 'layout-shift', buffered: true });
   });
   await page.goto(path);
+  if (late) {
+    await expect(late.placeholder(page)).toBeVisible();
+    release();
+  }
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   await page.waitForTimeout(1_000);
   return page.evaluate(() => (window as unknown as { __layoutShift: number }).__layoutShift);
@@ -112,6 +140,44 @@ test.describe('A page does not jump while it loads on a desktop', () => {
   for (const { path, viewport } of LOADS.filter((load) => load.viewport === DESKTOP)) {
     test(path, async ({ page }) => {
       expect(await layoutShiftOf(page, path, viewport)).toBeLessThan(0.1);
+    });
+  }
+});
+
+// The settings screen in a hub's body loads its own data after the hub has
+// shown it. Its placeholder used to be reconciled into the loaded screen, so
+// the placeholder's second bar became the preview column and leapt from the
+// fold to 1,400px below it: 0.35 on a phone and 0.28 on a desktop, on the runs
+// where the answer came after the hub's hold let go.
+const LATE: (LateResponse & { path: string; viewport: { width: number; height: number } })[] = [
+  {
+    path: '/training/admin?page=setup&tab=metrics',
+    viewport: PHONE,
+    url: '**/api/v1/admin-hub/training/metrics',
+    placeholder: (page) => page.getByTestId('admin-hub-body').locator('[aria-busy="true"]'),
+  },
+  {
+    path: '/training/admin?page=setup&tab=metrics',
+    viewport: DESKTOP,
+    url: '**/api/v1/admin-hub/training/metrics',
+    placeholder: (page) => page.getByTestId('admin-hub-body').locator('[aria-busy="true"]'),
+  },
+];
+
+test.describe('A page does not jump when its own data arrives after it is shown on a phone', () => {
+  test.use({ hasTouch: true });
+
+  for (const { path, viewport, ...late } of LATE.filter((load) => load.viewport === PHONE)) {
+    test(path, async ({ page }) => {
+      expect(await layoutShiftOf(page, path, viewport, late)).toBeLessThan(0.1);
+    });
+  }
+});
+
+test.describe('A page does not jump when its own data arrives after it is shown on a desktop', () => {
+  for (const { path, viewport, ...late } of LATE.filter((load) => load.viewport === DESKTOP)) {
+    test(path, async ({ page }) => {
+      expect(await layoutShiftOf(page, path, viewport, late)).toBeLessThan(0.1);
     });
   }
 });
