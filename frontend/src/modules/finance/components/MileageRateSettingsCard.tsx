@@ -17,13 +17,22 @@ import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { organizationService } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
+import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { mapServerFieldErrors, type ServerFieldSpec } from '@/utils/serverFieldErrors';
 import { financeSettingsService } from '../services/api';
 
 /** The server's bounds: up to three decimal places, 0.001 to 5 dollars a mile. */
 const RATE_PATTERN = /^\d(\.\d{1,3})?$/;
 const MAX_RATE = 5;
+/** `FinanceSettingsUpdate.mileage_rate`'s `max_length` (schemas/organization.py). */
+const MAX_RATE_LENGTH = 10;
+const RATE_ID = 'mileage-rate';
+
+const FIELDS: Record<'mileageRate', ServerFieldSpec> = {
+  mileageRate: { label: 'Dollars a mile', maxLength: MAX_RATE_LENGTH, api: 'finance.mileage_rate' },
+};
 
 export const MileageRateSettingsCard: React.FC = () => {
   const canEdit = useAuthStore(
@@ -35,6 +44,9 @@ export const MileageRateSettingsCard: React.FC = () => {
   const [value, setValue] = useState('');
   const [valueError, setValueError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // A refusal no field answers for is said inside the card, not only in a
+  // toast that fades (forms review F-5).
+  const [formError, setFormError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -53,6 +65,7 @@ export const MileageRateSettingsCard: React.FC = () => {
   }, [load]);
 
   const save = async (next: string | null) => {
+    setFormError(null);
     setSaving(true);
     try {
       await organizationService.updateSettings({ finance: { mileage_rate: next } });
@@ -60,7 +73,20 @@ export const MileageRateSettingsCard: React.FC = () => {
       await load();
       toast.success(next === null ? 'Mileage rate cleared' : 'Mileage rate saved');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not save the mileage rate'));
+      // The rate is the only key sent, so a refusal stores nothing; the rate
+      // in force is the one stated above until a save succeeds.
+      const mapped = mapServerFieldErrors(err, FIELDS);
+      const onField = mapped?.fieldErrors.mileageRate;
+      if (onField) {
+        setValueError(onField);
+        document.getElementById(RATE_ID)?.focus();
+      }
+      const rest = onField ? (mapped?.unmatched ?? []) : [];
+      if (!onField || rest.length > 0) {
+        const message = rest.length > 0 ? rest.join(' ') : getErrorMessage(err, 'Could not save the mileage rate');
+        setFormError(message);
+        toast.error(message);
+      }
     } finally {
       setSaving(false);
     }
@@ -72,6 +98,8 @@ export const MileageRateSettingsCard: React.FC = () => {
     const amount = Number(typed);
     if (!RATE_PATTERN.test(typed) || amount <= 0 || amount > MAX_RATE) {
       setValueError(`Enter dollars a mile, up to three decimal places, more than 0 and at most ${MAX_RATE}.`);
+      setFormError(null);
+      document.getElementById(RATE_ID)?.focus();
       return;
     }
     setValueError(null);
@@ -84,7 +112,9 @@ export const MileageRateSettingsCard: React.FC = () => {
         Mileage rate
       </h2>
       {loadError ? (
-        <p className="mt-2 text-sm text-red-700 dark:text-red-400">{loadError}</p>
+        <p role="alert" className={`mt-2 text-sm ${FIELD_ERROR_CLASS}`}>
+          {loadError}
+        </p>
       ) : !loaded ? (
         <p className="text-theme-text-secondary mt-2 text-sm">Loading…</p>
       ) : (
@@ -102,22 +132,29 @@ export const MileageRateSettingsCard: React.FC = () => {
       {canEdit ? (
         loaded && (
           <form onSubmit={submit} className="mt-4 flex flex-wrap items-end gap-3" noValidate>
-            <div>
-              <label htmlFor="mileage-rate" className="form-label">
-                Dollars a mile
-              </label>
-              <input
-                id="mileage-rate"
-                type="text"
-                inputMode="decimal"
-                className="form-input w-32"
-                placeholder="0.700"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                aria-invalid={valueError ? true : undefined}
-                aria-describedby={valueError ? 'mileage-rate-error' : undefined}
-              />
-            </div>
+            <FormField
+              id={RATE_ID}
+              label="Dollars a mile"
+              error={valueError}
+              maxLength={MAX_RATE_LENGTH}
+              count={value.length}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  className="form-input w-32"
+                  placeholder="0.700"
+                  value={value}
+                  onChange={(e) => {
+                    setValue(e.target.value);
+                    setValueError(null);
+                  }}
+                />
+              )}
+            </FormField>
             <button type="submit" className="btn-primary" disabled={saving}>
               Save rate
             </button>
@@ -126,9 +163,9 @@ export const MileageRateSettingsCard: React.FC = () => {
                 Clear rate
               </button>
             )}
-            {valueError && (
-              <p id="mileage-rate-error" role="alert" className="w-full text-sm text-red-700 dark:text-red-400">
-                {valueError}
+            {formError && (
+              <p role="alert" className={`w-full text-sm ${FIELD_ERROR_CLASS}`}>
+                {formError}
               </p>
             )}
           </form>

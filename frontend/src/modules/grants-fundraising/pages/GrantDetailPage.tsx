@@ -4,15 +4,25 @@
  * Detailed view of a single grant application with tabbed sections:
  * Overview, Budget, Expenditures, Compliance & Follow-Up, and Activity Log.
  * Includes modals for adding budget items, recording expenditures, and
- * creating compliance tasks.
+ * creating compliance tasks, and the Activity Log's note card.
+ *
+ * Each of those is a `<form noValidate>` (forms review F-7: Enter submits)
+ * whose checks run on submit and name a missing value under its field
+ * (F-3/F-4); a 422 lands on the field it names, and anything no field answers
+ * for is said inside the dialog or card rather than only in a toast (F-2).
+ * The dialogs ask before Escape, the X or Cancel throws typed values away
+ * (F-6). Payloads, amounts and permissions are unchanged by any of this.
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { isSafeExternalUrl } from '../../../utils/safeUrl';
 import { useNavigate, useParams } from 'react-router';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { DialogPanel } from '@/components/ux/DialogPanel';
+import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { mapServerFieldErrors, type ServerFieldSpec } from '@/utils/serverFieldErrors';
 import {
   ArrowLeft,
   Edit,
@@ -138,12 +148,15 @@ const COMPLIANCE_TASK_TYPE_ICONS: Record<string, React.ReactNode> = {
 
 interface ModalProps {
   open: boolean;
+  /** The discard-guarded close: Escape and the X ask first on a changed form. */
   onClose: () => void;
   title: string;
+  /** Every dialog here is a form, so Enter submits it (forms review F-7). */
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   children: React.ReactNode;
 }
 
-const Modal: React.FC<ModalProps> = ({ open, onClose, title, children }) => {
+const Modal: React.FC<ModalProps> = ({ open, onClose, title, onSubmit, children }) => {
   if (!open) return null;
 
   return (
@@ -170,7 +183,11 @@ const Modal: React.FC<ModalProps> = ({ open, onClose, title, children }) => {
             <X className="h-5 w-5" />
           </button>
         </div>
-        {children}
+        {/* noValidate: the checks are the form's own, named under each field;
+            a browser bubble would refuse the submit before they could run. */}
+        <form onSubmit={onSubmit} noValidate>
+          {children}
+        </form>
       </DialogPanel>
     </div>
   );
@@ -184,8 +201,6 @@ const inputClass =
   'form-input px-3 text-sm placeholder:text-theme-text-secondary focus:border-red-500 focus:ring-red-500';
 
 const selectClass = 'form-input px-3 text-sm focus:border-red-500 focus:ring-red-500';
-
-const labelClass = 'form-label';
 
 // =============================================================================
 // Due date urgency helper
@@ -201,6 +216,143 @@ const getDueDateClasses = (dueDate: string): string => {
   if (diffDays <= 30) return 'text-amber-800 dark:text-yellow-600';
   return 'text-theme-text-secondary';
 };
+
+// =============================================================================
+// Field checks and refusals
+// =============================================================================
+
+/**
+ * `le=MAX_AMOUNT` on GrantBudgetItemCreate/Update and GrantExpenditureCreate/
+ * Update (schemas/grant.py). Checked here only to name the limit under the
+ * field; the backend refuses the same values.
+ */
+const MAX_GRANT_AMOUNT = 100_000_000;
+
+/** `ge=0`: zero is a valid amount (a line kept for the record), a negative is not. */
+const amountError = (value: string, blankMessage: string): string | null => {
+  if (value.trim() === '') return blankMessage;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return 'Enter an amount of zero or more.';
+  if (parsed > MAX_GRANT_AMOUNT) return 'Keep the amount to $100,000,000 or less.';
+  return null;
+};
+
+/**
+ * The fields of each form, keyed by the payload key the request sends, so a
+ * 422 entry (the grants schemas report the camelCase alias; the mapper reads
+ * both spellings) finds its field. `maxLength` is the schema's `max_length`.
+ */
+type BudgetField = 'category' | 'description' | 'amountBudgeted';
+const BUDGET_FIELDS: Record<BudgetField, ServerFieldSpec & { id: string }> = {
+  category: { id: 'budget-category', label: 'Category' },
+  description: { id: 'budget-description', label: 'Description', maxLength: 500 },
+  amountBudgeted: { id: 'budget-amount', label: 'Amount' },
+};
+const BUDGET_ORDER: readonly BudgetField[] = ['category', 'description', 'amountBudgeted'];
+
+type ExpenditureField = 'description' | 'amount' | 'expenditureDate' | 'vendor' | 'invoiceNumber' | 'budgetItemId';
+const EXPENDITURE_FIELDS: Record<ExpenditureField, ServerFieldSpec & { id: string }> = {
+  description: { id: 'exp-description', label: 'Description', maxLength: 500 },
+  amount: { id: 'exp-amount', label: 'Amount' },
+  expenditureDate: { id: 'exp-date', label: 'Date' },
+  vendor: { id: 'exp-vendor', label: 'Vendor', maxLength: 255 },
+  invoiceNumber: { id: 'exp-invoice', label: 'Invoice / PO number', maxLength: 100 },
+  budgetItemId: { id: 'exp-budget-item', label: 'Budget item' },
+};
+const EXPENDITURE_ORDER: readonly ExpenditureField[] = [
+  'description',
+  'amount',
+  'expenditureDate',
+  'vendor',
+  'invoiceNumber',
+  'budgetItemId',
+];
+
+type ComplianceField = 'taskType' | 'title' | 'description' | 'dueDate' | 'priority' | 'reportTemplate' | 'assignedTo';
+// description and report_template carry no max_length in the schema.
+const COMPLIANCE_FIELDS: Record<ComplianceField, ServerFieldSpec & { id: string }> = {
+  taskType: { id: 'comp-type', label: 'Task type' },
+  title: { id: 'comp-title', label: 'Title', maxLength: 255 },
+  description: { id: 'comp-description', label: 'Description' },
+  dueDate: { id: 'comp-due-date', label: 'Due date' },
+  priority: { id: 'comp-priority', label: 'Priority' },
+  reportTemplate: { id: 'comp-template', label: 'Report template' },
+  assignedTo: { id: 'comp-assignee', label: 'Assigned to' },
+};
+const COMPLIANCE_ORDER: readonly ComplianceField[] = [
+  'taskType',
+  'title',
+  'description',
+  'dueDate',
+  'priority',
+  'reportTemplate',
+  'assignedTo',
+];
+
+type NoteField = 'content';
+const NOTE_FIELDS: Record<NoteField, ServerFieldSpec & { id: string }> = {
+  content: { id: 'new-note', label: 'Note' },
+};
+const NOTE_ORDER: readonly NoteField[] = ['content'];
+
+/**
+ * One form's field errors and its surface-level message. A page with four
+ * forms would otherwise carry four copies of the same three steps: flag the
+ * fields and focus the first, clear a field as it is edited, and report a
+ * failed save on its fields or, when no field answers for it, in the surface.
+ */
+function useSurfaceErrors<K extends string>(fields: Record<K, ServerFieldSpec & { id: string }>, order: readonly K[]) {
+  const [errors, setErrors] = useState<Partial<Record<K, string>>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+
+  /** Flags `next` and focuses its first field; true when there is nothing to flag. */
+  const show = useCallback(
+    (next: Partial<Record<K, string>>): boolean => {
+      setErrors(next);
+      const first = order.find((key) => next[key]);
+      if (first) document.getElementById(fields[first].id)?.focus();
+      return first === undefined;
+    },
+    [fields, order]
+  );
+
+  const clear = useCallback(
+    (key: K) =>
+      setErrors((prev) => {
+        if (!prev[key]) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }),
+    []
+  );
+
+  const reset = useCallback(() => {
+    setErrors({});
+    setFormError(null);
+  }, []);
+
+  /** A 422 goes on its fields; anything else is said inside the form, which stays open. */
+  const report = useCallback(
+    (err: unknown, fallback: string) => {
+      const mapped = mapServerFieldErrors(err, fields);
+      const placed = mapped !== null && Object.keys(mapped.fieldErrors).length > 0;
+      if (mapped && placed) show(mapped.fieldErrors);
+      setFormError(mapped?.unmatched.join(' ') || (placed ? null : getErrorMessage(err, fallback)));
+    },
+    [fields, show]
+  );
+
+  return { errors, formError, setFormError, show, clear, reset, report };
+}
+
+/** A failure no field answers for, said inside the form it belongs to. */
+const SurfaceError: React.FC<{ message: string | null }> = ({ message }) =>
+  message ? (
+    <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+      {message}
+    </p>
+  ) : null;
 
 // =============================================================================
 // Main Page Component
@@ -281,6 +433,33 @@ export const GrantDetailPage: React.FC = () => {
   const [newNoteContent, setNewNoteContent] = useState('');
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
 
+  const budgetErrors = useSurfaceErrors(BUDGET_FIELDS, BUDGET_ORDER);
+  const expenditureErrors = useSurfaceErrors(EXPENDITURE_FIELDS, EXPENDITURE_ORDER);
+  const complianceErrors = useSurfaceErrors(COMPLIANCE_FIELDS, COMPLIANCE_ORDER);
+  const noteErrors = useSurfaceErrors(NOTE_FIELDS, NOTE_ORDER);
+
+  // What each dialog held when it opened: empty for an add, the stored record
+  // for an edit, so reopening an edit and closing it untouched does not ask.
+  const [budgetBaseline, setBudgetBaseline] = useState(() => JSON.stringify(['', '', '']));
+  const [expenditureBaseline, setExpenditureBaseline] = useState(() => JSON.stringify(['', '', '', '', '', '']));
+  const budgetSnapshot = JSON.stringify([budgetCategory, budgetDescription, budgetAmount]);
+  const expenditureSnapshot = JSON.stringify([
+    expenditureDescription,
+    expenditureAmount,
+    expenditureDate,
+    expenditureVendor,
+    expenditureInvoice,
+    expenditureBudgetItemId,
+  ]);
+  const complianceDirty =
+    complianceType !== ComplianceTaskTypeEnum.PERFORMANCE_REPORT ||
+    complianceTitle !== '' ||
+    complianceDescription !== '' ||
+    complianceDueDate !== '' ||
+    compliancePriority !== GrantPriorityEnum.MEDIUM ||
+    complianceReportTemplate !== '' ||
+    complianceAssignee !== '';
+
   // ---------------------------------------------------------------------------
   // Data loading
   // ---------------------------------------------------------------------------
@@ -320,6 +499,8 @@ export const GrantDetailPage: React.FC = () => {
     setBudgetCategory('');
     setBudgetDescription('');
     setBudgetAmount('');
+    setBudgetBaseline(JSON.stringify(['', '', '']));
+    budgetErrors.reset();
   };
 
   const resetExpenditureForm = () => {
@@ -330,6 +511,8 @@ export const GrantDetailPage: React.FC = () => {
     setExpenditureVendor('');
     setExpenditureInvoice('');
     setExpenditureBudgetItemId('');
+    setExpenditureBaseline(JSON.stringify(['', '', '', '', '', '']));
+    expenditureErrors.reset();
   };
 
   const resetComplianceForm = () => {
@@ -340,24 +523,63 @@ export const GrantDetailPage: React.FC = () => {
     setCompliancePriority(GrantPriorityEnum.MEDIUM);
     setComplianceReportTemplate('');
     setComplianceAssignee('');
+    complianceErrors.reset();
   };
 
+  // Escape, the X and Cancel all ask before throwing typed values away (forms
+  // review F-6); the shells are not given isDirty, so the question is asked
+  // once. A closed dialog has nothing to ask about, so its guard is unarmed.
+  const requestCloseBudget = useDiscardGuard({
+    isDirty: showBudgetModal ? budgetSnapshot !== budgetBaseline : undefined,
+    onClose: () => {
+      setShowBudgetModal(false);
+      resetBudgetForm();
+    },
+  });
+  const requestCloseExpenditure = useDiscardGuard({
+    isDirty: showExpenditureModal ? expenditureSnapshot !== expenditureBaseline : undefined,
+    onClose: () => {
+      setShowExpenditureModal(false);
+      resetExpenditureForm();
+    },
+  });
+  const requestCloseCompliance = useDiscardGuard({
+    isDirty: showComplianceModal ? complianceDirty : undefined,
+    onClose: () => {
+      setShowComplianceModal(false);
+      resetComplianceForm();
+    },
+  });
+
   const openEditBudgetItem = (item: (typeof budgetItems)[number]) => {
+    const seeded = [item.category, item.description ?? '', String(Number(item.amountBudgeted))] as const;
     setEditingBudgetItemId(item.id);
-    setBudgetCategory(item.category);
-    setBudgetDescription(item.description ?? '');
-    setBudgetAmount(String(Number(item.amountBudgeted)));
+    setBudgetCategory(seeded[0]);
+    setBudgetDescription(seeded[1]);
+    setBudgetAmount(seeded[2]);
+    setBudgetBaseline(JSON.stringify(seeded));
+    budgetErrors.reset();
     setShowBudgetModal(true);
   };
 
   const openEditExpenditure = (exp: (typeof expenditures)[number]) => {
+    const seeded = [
+      exp.description,
+      String(Number(exp.amount)),
+      (exp.expenditureDate ?? '').slice(0, 10),
+      exp.vendor ?? '',
+      exp.invoiceNumber ?? '',
+      exp.budgetItemId ?? '',
+    ] as const;
     setEditingExpenditureId(exp.id);
-    setExpenditureDescription(exp.description);
-    setExpenditureAmount(String(Number(exp.amount)));
-    setExpenditureDate((exp.expenditureDate ?? '').slice(0, 10));
-    setExpenditureVendor(exp.vendor ?? '');
-    setExpenditureInvoice(exp.invoiceNumber ?? '');
-    setExpenditureBudgetItemId(exp.budgetItemId ?? '');
+    setExpenditureDescription(seeded[0]);
+    setExpenditureAmount(seeded[1]);
+    setExpenditureDate(seeded[2]);
+    setExpenditureVendor(seeded[3]);
+    setExpenditureInvoice(seeded[4]);
+    setExpenditureBudgetItemId(seeded[5]);
+    setExpenditureBaseline(JSON.stringify(seeded));
+    expenditureErrors.reset();
     setShowExpenditureModal(true);
   };
 
@@ -401,43 +623,55 @@ export const GrantDetailPage: React.FC = () => {
     }
   };
 
-  const handleAddBudgetItem = () =>
-    runBudget(async () => {
-      if (!id || !budgetCategory || !budgetDescription || !budgetAmount) return;
-      if (editingBudgetItemId) {
-        try {
-          await updateBudgetItem(id, editingBudgetItemId, {
-            category: budgetCategory,
-            description: budgetDescription,
-            amountBudgeted: parseFloat(budgetAmount),
-          });
-          toast.success('Budget item updated');
-          resetBudgetForm();
-          setShowBudgetModal(false);
-        } catch (err: unknown) {
-          toast.error(getErrorMessage(err, 'Failed to update budget item'));
-        }
-        return;
-      }
+  const handleSubmitBudgetItem = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const next: Partial<Record<BudgetField, string>> = {};
+    if (!budgetCategory) next.category = 'Choose a category.';
+    if (!budgetDescription.trim()) next.description = 'Describe what this line pays for.';
+    const amount = amountError(budgetAmount, 'Enter the amount budgeted.');
+    if (amount) next.amountBudgeted = amount;
+    budgetErrors.setFormError(null);
+    // An edit refuses as a whole here rather than saving around a refused
+    // field (the single-save rule): this is a grant's money, and the brief for
+    // finance forms keeps what is sent exactly as it was.
+    if (!budgetErrors.show(next)) return;
+    void runBudget(async () => {
+      if (!id) return;
+      const payload = {
+        category: budgetCategory,
+        description: budgetDescription,
+        amountBudgeted: parseFloat(budgetAmount),
+      };
       try {
-        await addBudgetItem(id, {
-          category: budgetCategory,
-          description: budgetDescription,
-          amountBudgeted: parseFloat(budgetAmount),
-        });
-        toast.success('Budget item added');
+        if (editingBudgetItemId) {
+          await updateBudgetItem(id, editingBudgetItemId, payload);
+          toast.success('Budget item updated');
+        } else {
+          await addBudgetItem(id, payload);
+          toast.success('Budget item added');
+        }
         resetBudgetForm();
         setShowBudgetModal(false);
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Failed to add budget item'));
+        budgetErrors.report(err, editingBudgetItemId ? 'Failed to update budget item' : 'Failed to add budget item');
       }
     });
+  };
 
-  const handleAddExpenditure = () =>
-    runExpenditure(async () => {
-      if (!id || !expenditureDescription || !expenditureAmount || !expenditureDate) return;
-      if (editingExpenditureId) {
-        try {
+  const handleSubmitExpenditure = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const next: Partial<Record<ExpenditureField, string>> = {};
+    if (!expenditureDescription.trim()) next.description = 'Describe the expenditure.';
+    const amount = amountError(expenditureAmount, 'Enter the amount spent.');
+    if (amount) next.amount = amount;
+    if (!expenditureDate) next.expenditureDate = 'Enter the date of the expenditure.';
+    expenditureErrors.setFormError(null);
+    // Refused as a whole on an edit too, for the reason given on the budget line.
+    if (!expenditureErrors.show(next)) return;
+    void runExpenditure(async () => {
+      if (!id) return;
+      try {
+        if (editingExpenditureId) {
           // An update leaves an omitted key alone, so the optional fields go
           // as null when emptied, to clear them (pitfall 1).
           const saved = await updateExpenditure(id, editingExpenditureId, {
@@ -452,37 +686,41 @@ export const GrantDetailPage: React.FC = () => {
           for (const warning of saved.warnings ?? []) {
             toast(warning, { icon: '⚠️', duration: 8000 });
           }
-          resetExpenditureForm();
-          setShowExpenditureModal(false);
-        } catch (err: unknown) {
-          toast.error(getErrorMessage(err, 'Failed to update expenditure'));
-        }
-        return;
-      }
-      try {
-        const recorded = await addExpenditure(id, {
-          description: expenditureDescription,
-          amount: parseFloat(expenditureAmount),
-          expenditureDate,
-          vendor: expenditureVendor || null,
-          invoiceNumber: expenditureInvoice || null,
-          budgetItemId: expenditureBudgetItemId || null,
-        });
-        toast.success('Expenditure recorded');
-        // GF-7: an overspend is recorded anyway and reported, not refused.
-        for (const warning of recorded.warnings ?? []) {
-          toast(warning, { icon: '⚠️', duration: 8000 });
+        } else {
+          const recorded = await addExpenditure(id, {
+            description: expenditureDescription,
+            amount: parseFloat(expenditureAmount),
+            expenditureDate,
+            vendor: expenditureVendor || null,
+            invoiceNumber: expenditureInvoice || null,
+            budgetItemId: expenditureBudgetItemId || null,
+          });
+          toast.success('Expenditure recorded');
+          // GF-7: an overspend is recorded anyway and reported, not refused.
+          for (const warning of recorded.warnings ?? []) {
+            toast(warning, { icon: '⚠️', duration: 8000 });
+          }
         }
         resetExpenditureForm();
         setShowExpenditureModal(false);
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Failed to record expenditure'));
+        expenditureErrors.report(
+          err,
+          editingExpenditureId ? 'Failed to update expenditure' : 'Failed to record expenditure'
+        );
       }
     });
+  };
 
-  const handleAddComplianceTask = () =>
-    runCompliance(async () => {
-      if (!id || !complianceTitle || !complianceDueDate) return;
+  const handleSubmitComplianceTask = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const next: Partial<Record<ComplianceField, string>> = {};
+    if (!complianceTitle.trim()) next.title = 'Give the task a title.';
+    if (!complianceDueDate) next.dueDate = 'Enter the date the task is due.';
+    complianceErrors.setFormError(null);
+    if (!complianceErrors.show(next)) return;
+    void runCompliance(async () => {
+      if (!id) return;
       try {
         await addComplianceTask(id, {
           taskType: complianceType,
@@ -497,9 +735,10 @@ export const GrantDetailPage: React.FC = () => {
         resetComplianceForm();
         setShowComplianceModal(false);
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Failed to add compliance task'));
+        complianceErrors.report(err, 'Failed to add compliance task');
       }
     });
+  };
 
   const handleMarkTaskComplete = async (taskId: string) => {
     if (!id) return;
@@ -529,8 +768,11 @@ export const GrantDetailPage: React.FC = () => {
     }
   };
 
-  const handleAddNote = async () => {
-    if (!id || !newNoteContent.trim()) return;
+  const handleSubmitNote = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!id || isSubmittingNote) return;
+    noteErrors.setFormError(null);
+    if (!noteErrors.show(newNoteContent.trim() ? {} : { content: 'Write the note before adding it.' })) return;
     setIsSubmittingNote(true);
     try {
       await addGrantNote(id, {
@@ -539,8 +781,9 @@ export const GrantDetailPage: React.FC = () => {
       });
       toast.success('Note added');
       setNewNoteContent('');
+      noteErrors.reset();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to add note'));
+      noteErrors.report(err, 'Failed to add note');
     } finally {
       setIsSubmittingNote(false);
     }
@@ -1404,30 +1647,35 @@ export const GrantDetailPage: React.FC = () => {
 
             {/* Add note (manage only — create_note requires fundraising.manage) */}
             {canManage && (
-              <div className="card p-4">
-                <label htmlFor="new-note" className={labelClass}>
-                  Add Note
-                </label>
-                <textarea
-                  id="new-note"
-                  rows={3}
-                  value={newNoteContent}
-                  onChange={(e) => setNewNoteContent(e.target.value)}
-                  placeholder="Add an update or a call summary..."
-                  className={`${inputClass} resize-none`}
-                />
-                <div className="mt-3 flex justify-end">
+              <form onSubmit={(e) => void handleSubmitNote(e)} noValidate className="card space-y-3 p-4">
+                <SurfaceError message={noteErrors.formError} />
+                <FormField id={NOTE_FIELDS.content.id} label="Add Note" required error={noteErrors.errors.content}>
+                  {(field) => (
+                    <textarea
+                      {...field}
+                      rows={3}
+                      value={newNoteContent}
+                      onChange={(e) => {
+                        setNewNoteContent(e.target.value);
+                        noteErrors.clear('content');
+                      }}
+                      placeholder="Add an update or a call summary..."
+                      className={`${inputClass} resize-none`}
+                    />
+                  )}
+                </FormField>
+                <div className="flex justify-end">
+                  {/* Disabled only while sending; a blank note is named on the field. */}
                   <button
-                    type="button"
-                    disabled={!newNoteContent.trim() || isSubmittingNote}
-                    onClick={() => void handleAddNote()}
+                    type="submit"
+                    disabled={isSubmittingNote}
                     className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isSubmittingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                     Add Note
                   </button>
                 </div>
-              </div>
+              </form>
             )}
           </div>
         )}
@@ -1440,75 +1688,90 @@ export const GrantDetailPage: React.FC = () => {
       {/* Add Budget Item Modal */}
       <Modal
         open={showBudgetModal}
-        onClose={() => {
-          setShowBudgetModal(false);
-          resetBudgetForm();
-        }}
+        onClose={requestCloseBudget}
         title={editingBudgetItemId ? 'Edit Budget Item' : 'Add Budget Item'}
+        onSubmit={handleSubmitBudgetItem}
       >
         <div className="space-y-4">
-          <div>
-            <label htmlFor="budget-category" className={labelClass}>
-              Category
-            </label>
-            <select
-              id="budget-category"
-              value={budgetCategory}
-              onChange={(e) => setBudgetCategory(e.target.value)}
-              className={selectClass}
-            >
-              <option value="">Select category...</option>
-              {/* The values are the backend's category codes; it refuses the labels. */}
-              {BUDGET_CATEGORY_ORDER.map((category) => (
-                <option key={category} value={category}>
-                  {BUDGET_ITEM_CATEGORY_LABELS[category]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="budget-description" className={labelClass}>
-              Description
-            </label>
-            <input
-              id="budget-description"
-              type="text"
-              value={budgetDescription}
-              onChange={(e) => setBudgetDescription(e.target.value)}
-              placeholder="e.g., 10 sets of turnout gear"
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="budget-amount" className={labelClass}>
-              Amount
-            </label>
-            <input
-              id="budget-amount"
-              type="number"
-              min="0"
-              step="0.01"
-              value={budgetAmount}
-              onChange={(e) => setBudgetAmount(e.target.value)}
-              placeholder="0.00"
-              className={inputClass}
-            />
-          </div>
+          <SurfaceError message={budgetErrors.formError} />
+          <FormField id={BUDGET_FIELDS.category.id} label="Category" required error={budgetErrors.errors.category}>
+            {(field) => (
+              <select
+                {...field}
+                value={budgetCategory}
+                onChange={(e) => {
+                  setBudgetCategory(e.target.value);
+                  budgetErrors.clear('category');
+                }}
+                className={selectClass}
+              >
+                <option value="">Select category...</option>
+                {/* The values are the backend's category codes; it refuses the labels. */}
+                {BUDGET_CATEGORY_ORDER.map((category) => (
+                  <option key={category} value={category}>
+                    {BUDGET_ITEM_CATEGORY_LABELS[category]}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+          <FormField
+            id={BUDGET_FIELDS.description.id}
+            label="Description"
+            required
+            error={budgetErrors.errors.description}
+            maxLength={BUDGET_FIELDS.description.maxLength}
+            count={budgetDescription.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                autoComplete="off"
+                value={budgetDescription}
+                onChange={(e) => {
+                  setBudgetDescription(e.target.value);
+                  budgetErrors.clear('description');
+                }}
+                placeholder="e.g., 10 sets of turnout gear"
+                className={inputClass}
+              />
+            )}
+          </FormField>
+          <FormField
+            id={BUDGET_FIELDS.amountBudgeted.id}
+            label="Amount"
+            required
+            error={budgetErrors.errors.amountBudgeted}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                value={budgetAmount}
+                onChange={(e) => {
+                  setBudgetAmount(e.target.value);
+                  budgetErrors.clear('amountBudgeted');
+                }}
+                placeholder="0.00"
+                className={inputClass}
+              />
+            )}
+          </FormField>
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
-              onClick={() => {
-                setShowBudgetModal(false);
-                resetBudgetForm();
-              }}
+              onClick={requestCloseBudget}
               className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
             >
               Cancel
             </button>
             <button
-              type="button"
-              disabled={budgetBusy || !budgetCategory || !budgetDescription || !budgetAmount}
-              onClick={() => void handleAddBudgetItem()}
+              type="submit"
+              disabled={budgetBusy}
               className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {editingBudgetItemId ? 'Save Changes' : 'Add Budget Item'}
@@ -1520,114 +1783,161 @@ export const GrantDetailPage: React.FC = () => {
       {/* Record Expenditure Modal */}
       <Modal
         open={showExpenditureModal}
-        onClose={() => {
-          setShowExpenditureModal(false);
-          resetExpenditureForm();
-        }}
+        onClose={requestCloseExpenditure}
         title={editingExpenditureId ? 'Edit Expenditure' : 'Record Expenditure'}
+        onSubmit={handleSubmitExpenditure}
       >
         <div className="space-y-4">
-          <div>
-            <label htmlFor="exp-description" className={labelClass}>
-              Description
-            </label>
-            <input
-              id="exp-description"
-              type="text"
-              value={expenditureDescription}
-              onChange={(e) => setExpenditureDescription(e.target.value)}
-              placeholder="e.g., Purchase of SCBA units"
-              className={inputClass}
-            />
-          </div>
+          <SurfaceError message={expenditureErrors.formError} />
+          <FormField
+            id={EXPENDITURE_FIELDS.description.id}
+            label="Description"
+            required
+            error={expenditureErrors.errors.description}
+            maxLength={EXPENDITURE_FIELDS.description.maxLength}
+            count={expenditureDescription.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                autoComplete="off"
+                value={expenditureDescription}
+                onChange={(e) => {
+                  setExpenditureDescription(e.target.value);
+                  expenditureErrors.clear('description');
+                }}
+                placeholder="e.g., Purchase of SCBA units"
+                className={inputClass}
+              />
+            )}
+          </FormField>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="exp-amount" className={labelClass}>
-                Amount
-              </label>
-              <input
-                id="exp-amount"
-                type="number"
-                min="0"
-                step="0.01"
-                value={expenditureAmount}
-                onChange={(e) => setExpenditureAmount(e.target.value)}
-                placeholder="0.00"
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label htmlFor="exp-date" className={labelClass}>
-                Date
-              </label>
-              <input
-                id="exp-date"
-                type="date"
-                value={expenditureDate}
-                onChange={(e) => setExpenditureDate(e.target.value)}
-                className={inputClass}
-              />
-            </div>
-          </div>
-          <div>
-            <label htmlFor="exp-vendor" className={labelClass}>
-              Vendor (optional)
-            </label>
-            <input
-              id="exp-vendor"
-              type="text"
-              value={expenditureVendor}
-              onChange={(e) => setExpenditureVendor(e.target.value)}
-              placeholder="e.g., Acme Fire Equipment"
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="exp-invoice" className={labelClass}>
-              Invoice / PO Number (optional)
-            </label>
-            <input
-              id="exp-invoice"
-              type="text"
-              value={expenditureInvoice}
-              onChange={(e) => setExpenditureInvoice(e.target.value)}
-              placeholder="e.g., INV-1042"
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="exp-budget-item" className={labelClass}>
-              Budget Item (optional)
-            </label>
-            <select
-              id="exp-budget-item"
-              value={expenditureBudgetItemId}
-              onChange={(e) => setExpenditureBudgetItemId(e.target.value)}
-              className={selectClass}
+            <FormField
+              id={EXPENDITURE_FIELDS.amount.id}
+              label="Amount"
+              required
+              error={expenditureErrors.errors.amount}
             >
-              <option value="">None</option>
-              {budgetItems.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {budgetCategoryLabel(item.category)} - {item.description}
-                </option>
-              ))}
-            </select>
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={expenditureAmount}
+                  onChange={(e) => {
+                    setExpenditureAmount(e.target.value);
+                    expenditureErrors.clear('amount');
+                  }}
+                  placeholder="0.00"
+                  className={inputClass}
+                />
+              )}
+            </FormField>
+            <FormField
+              id={EXPENDITURE_FIELDS.expenditureDate.id}
+              label="Date"
+              required
+              error={expenditureErrors.errors.expenditureDate}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="date"
+                  value={expenditureDate}
+                  onChange={(e) => {
+                    setExpenditureDate(e.target.value);
+                    expenditureErrors.clear('expenditureDate');
+                  }}
+                  className={inputClass}
+                />
+              )}
+            </FormField>
           </div>
+          <FormField
+            id={EXPENDITURE_FIELDS.vendor.id}
+            label="Vendor"
+            optional
+            error={expenditureErrors.errors.vendor}
+            maxLength={EXPENDITURE_FIELDS.vendor.maxLength}
+            count={expenditureVendor.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                autoComplete="off"
+                value={expenditureVendor}
+                onChange={(e) => {
+                  setExpenditureVendor(e.target.value);
+                  expenditureErrors.clear('vendor');
+                }}
+                placeholder="e.g., Acme Fire Equipment"
+                className={inputClass}
+              />
+            )}
+          </FormField>
+          <FormField
+            id={EXPENDITURE_FIELDS.invoiceNumber.id}
+            label="Invoice / PO Number"
+            optional
+            error={expenditureErrors.errors.invoiceNumber}
+            maxLength={EXPENDITURE_FIELDS.invoiceNumber.maxLength}
+            count={expenditureInvoice.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                autoComplete="off"
+                value={expenditureInvoice}
+                onChange={(e) => {
+                  setExpenditureInvoice(e.target.value);
+                  expenditureErrors.clear('invoiceNumber');
+                }}
+                placeholder="e.g., INV-1042"
+                className={inputClass}
+              />
+            )}
+          </FormField>
+          <FormField
+            id={EXPENDITURE_FIELDS.budgetItemId.id}
+            label="Budget Item"
+            optional
+            error={expenditureErrors.errors.budgetItemId}
+          >
+            {(field) => (
+              <select
+                {...field}
+                value={expenditureBudgetItemId}
+                onChange={(e) => {
+                  setExpenditureBudgetItemId(e.target.value);
+                  expenditureErrors.clear('budgetItemId');
+                }}
+                className={selectClass}
+              >
+                <option value="">None</option>
+                {budgetItems.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {budgetCategoryLabel(item.category)} - {item.description}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
-              onClick={() => {
-                setShowExpenditureModal(false);
-                resetExpenditureForm();
-              }}
+              onClick={requestCloseExpenditure}
               className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
             >
               Cancel
             </button>
             <button
-              type="button"
-              disabled={expenditureBusy || !expenditureDescription || !expenditureAmount || !expenditureDate}
-              onClick={() => void handleAddExpenditure()}
+              type="submit"
+              disabled={expenditureBusy}
               className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {editingExpenditureId ? 'Save Changes' : 'Record Expenditure'}
@@ -1639,138 +1949,176 @@ export const GrantDetailPage: React.FC = () => {
       {/* Add Compliance Task Modal */}
       <Modal
         open={showComplianceModal}
-        onClose={() => {
-          setShowComplianceModal(false);
-          resetComplianceForm();
-        }}
+        onClose={requestCloseCompliance}
         title="Add Compliance Task"
+        onSubmit={handleSubmitComplianceTask}
       >
         <div className="space-y-4">
-          <div>
-            <label htmlFor="comp-type" className={labelClass}>
-              Task Type
-            </label>
-            <select
-              id="comp-type"
-              value={complianceType}
-              onChange={(e) => setComplianceType(e.target.value as ComplianceTaskType)}
-              className={selectClass}
-            >
-              {Object.entries(COMPLIANCE_TASK_TYPE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="comp-title" className={labelClass}>
-              Title
-            </label>
-            <input
-              id="comp-title"
-              type="text"
-              value={complianceTitle}
-              onChange={(e) => setComplianceTitle(e.target.value)}
-              placeholder="e.g., Q1 Performance Report"
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="comp-description" className={labelClass}>
-              Description (optional)
-            </label>
-            <textarea
-              id="comp-description"
-              rows={2}
-              value={complianceDescription}
-              onChange={(e) => setComplianceDescription(e.target.value)}
-              placeholder="Additional details..."
-              className={`${inputClass} resize-none`}
-            />
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="comp-due-date" className={labelClass}>
-                Due Date
-              </label>
-              <input
-                id="comp-due-date"
-                type="date"
-                value={complianceDueDate}
-                onChange={(e) => setComplianceDueDate(e.target.value)}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label htmlFor="comp-priority" className={labelClass}>
-                Priority
-              </label>
+          <SurfaceError message={complianceErrors.formError} />
+          <FormField id={COMPLIANCE_FIELDS.taskType.id} label="Task Type" error={complianceErrors.errors.taskType}>
+            {(field) => (
               <select
-                id="comp-priority"
-                value={compliancePriority}
-                onChange={(e) => setCompliancePriority(e.target.value as GrantPriority)}
+                {...field}
+                value={complianceType}
+                onChange={(e) => {
+                  setComplianceType(e.target.value as ComplianceTaskType);
+                  complianceErrors.clear('taskType');
+                }}
                 className={selectClass}
               >
-                {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
+                {Object.entries(COMPLIANCE_TASK_TYPE_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
                   </option>
                 ))}
               </select>
-            </div>
+            )}
+          </FormField>
+          <FormField
+            id={COMPLIANCE_FIELDS.title.id}
+            label="Title"
+            required
+            error={complianceErrors.errors.title}
+            maxLength={COMPLIANCE_FIELDS.title.maxLength}
+            count={complianceTitle.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                autoComplete="off"
+                value={complianceTitle}
+                onChange={(e) => {
+                  setComplianceTitle(e.target.value);
+                  complianceErrors.clear('title');
+                }}
+                placeholder="e.g., Q1 Performance Report"
+                className={inputClass}
+              />
+            )}
+          </FormField>
+          <FormField
+            id={COMPLIANCE_FIELDS.description.id}
+            label="Description"
+            optional
+            error={complianceErrors.errors.description}
+          >
+            {(field) => (
+              <textarea
+                {...field}
+                rows={2}
+                value={complianceDescription}
+                onChange={(e) => {
+                  setComplianceDescription(e.target.value);
+                  complianceErrors.clear('description');
+                }}
+                placeholder="Additional details..."
+                className={`${inputClass} resize-none`}
+              />
+            )}
+          </FormField>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField
+              id={COMPLIANCE_FIELDS.dueDate.id}
+              label="Due Date"
+              required
+              error={complianceErrors.errors.dueDate}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="date"
+                  value={complianceDueDate}
+                  onChange={(e) => {
+                    setComplianceDueDate(e.target.value);
+                    complianceErrors.clear('dueDate');
+                  }}
+                  className={inputClass}
+                />
+              )}
+            </FormField>
+            <FormField id={COMPLIANCE_FIELDS.priority.id} label="Priority" error={complianceErrors.errors.priority}>
+              {(field) => (
+                <select
+                  {...field}
+                  value={compliancePriority}
+                  onChange={(e) => {
+                    setCompliancePriority(e.target.value as GrantPriority);
+                    complianceErrors.clear('priority');
+                  }}
+                  className={selectClass}
+                >
+                  {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
           </div>
-          <div>
-            <label htmlFor="comp-template" className={labelClass}>
-              Report Template (optional)
-            </label>
-            <input
-              id="comp-template"
-              type="text"
-              value={complianceReportTemplate}
-              onChange={(e) => setComplianceReportTemplate(e.target.value)}
-              placeholder="Template name or URL"
-              className={inputClass}
-            />
-          </div>
+          <FormField
+            id={COMPLIANCE_FIELDS.reportTemplate.id}
+            label="Report Template"
+            optional
+            error={complianceErrors.errors.reportTemplate}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                autoComplete="off"
+                value={complianceReportTemplate}
+                onChange={(e) => {
+                  setComplianceReportTemplate(e.target.value);
+                  complianceErrors.clear('reportTemplate');
+                }}
+                placeholder="Template name or URL"
+                className={inputClass}
+              />
+            )}
+          </FormField>
           {/* The member directory needs members.view or users.view, which
               fundraising.manage does not imply: without it there is no list
               to pick from, and the task is created unassigned as before. */}
           {members && (
-            <div>
-              <label htmlFor="comp-assignee" className={labelClass}>
-                Assigned To (optional)
-              </label>
-              <select
-                id="comp-assignee"
-                value={complianceAssignee}
-                onChange={(e) => setComplianceAssignee(e.target.value)}
-                className={selectClass}
-              >
-                <option value="">Unassigned</option>
-                {members.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {memberLabel(member)}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <FormField
+              id={COMPLIANCE_FIELDS.assignedTo.id}
+              label="Assigned To"
+              optional
+              error={complianceErrors.errors.assignedTo}
+            >
+              {(field) => (
+                <select
+                  {...field}
+                  value={complianceAssignee}
+                  onChange={(e) => {
+                    setComplianceAssignee(e.target.value);
+                    complianceErrors.clear('assignedTo');
+                  }}
+                  className={selectClass}
+                >
+                  <option value="">Unassigned</option>
+                  {members.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {memberLabel(member)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
           )}
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
-              onClick={() => {
-                setShowComplianceModal(false);
-                resetComplianceForm();
-              }}
+              onClick={requestCloseCompliance}
               className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
             >
               Cancel
             </button>
             <button
-              type="button"
-              disabled={complianceBusy || !complianceTitle || !complianceDueDate}
-              onClick={() => void handleAddComplianceTask()}
+              type="submit"
+              disabled={complianceBusy}
               className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Add Task

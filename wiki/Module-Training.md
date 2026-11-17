@@ -152,6 +152,19 @@ holds rank slugs) and positions (`required_positions` holds position slugs).
 default (`compliance_configs.include_current_month`) for whether the
 in-progress month counts; `NULL` inherits.
 
+_(2026-11-14)_ The editor's membership-type list appends the department's
+own tiers (from `GET /events/visible-event-types`) to the built-in types, so a
+custom tier such as `senior` can be ticked; a type the requirement already
+carries is always shown. Shift and call requirements return `monthly_counts`
+from `evaluate_requirement_detail` (null for other types), the counterpart of
+`monthly_hours`, with the same leave fields; a target that leave reduces to
+zero reads "Nothing owed (on leave)". Evaluated shifts, transports and
+refusals requirements linked into a program with **Link existing** are graded
+from shift evaluations (`load_evaluation_credits`, rules in
+`shift_evaluation_rules.py`), not from training records. `PUT
+/compliance/config` writes a `compliance_config_updated` audit entry naming
+each changed setting.
+
 ### Create/edit form
 
 - **Per-type quantity fields** — the form collects `required_hours`,
