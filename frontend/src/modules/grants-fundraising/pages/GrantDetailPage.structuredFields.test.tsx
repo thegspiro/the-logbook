@@ -103,7 +103,7 @@ describe('GrantDetailPage — budget summary and key contacts', () => {
 
     await user.click(screen.getByRole('button', { name: /^Budget$/ }));
     await user.click(screen.getByRole('button', { name: /Add Budget Item/ }));
-    await user.selectOptions(screen.getByLabelText('Category'), 'Indirect Costs');
+    await user.selectOptions(screen.getByLabelText(/^Category/), 'Indirect Costs');
     await user.type(screen.getByLabelText(/^Description/), 'Admin overhead');
     await user.type(screen.getByLabelText(/^Amount/), '500');
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Add Budget Item/ }));
