@@ -28,6 +28,7 @@ escaped ``Paragraph``, and the table helpers here only take those, so a
 caller never has to decide.
 """
 
+import re
 from functools import lru_cache
 from io import BytesIO
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
@@ -36,11 +37,11 @@ from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import landscape, letter
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import (
     Flowable,
     KeepTogether,
     Paragraph,
-    SimpleDocTemplate,
     Spacer,
     Table,
 )
@@ -57,6 +58,7 @@ from app.utils.election_pdf_style import (
     logo_flowable,
 )
 from app.utils.pdf_fonts import BODY_FONT, BOLD_FONT, body_table_style
+from app.utils.pdf_running_header import HeadedDocTemplate, RunningHeader
 from app.utils.print_geometry import BINDING_EDGE, SAFE_EDGE
 
 CONFIDENTIAL_MEMBER_RECORDS = (
@@ -153,10 +155,59 @@ def report_styles() -> Dict[str, ParagraphStyle]:
     return styles
 
 
-def cell(value: Any, style: Optional[ParagraphStyle] = None) -> Paragraph:
-    """User or record text for a table cell: escaped, wrapped, never cut."""
-    text = esc(value).replace("\r\n", "\n").replace("\n", "<br/>")
-    return Paragraph(text, style or report_styles()["cell"])
+# Where a long unbroken value (an email, a web address, a file name) may be
+# split across lines, after the character.
+_BREAK_AFTER = re.compile(r"(?<=[@./_-])")
+
+
+def fit_token(text: str, width: float, font: str, size: float) -> str:
+    """*text* as escaped markup, with any word too wide for *width* broken
+    after an ``@``, ``.``, ``/``, ``_`` or ``-`` rather than mid-word.
+
+    Reportlab wraps only at spaces and otherwise cuts a long word wherever
+    the column ends ("example-departme / nt.org"); a zero-width space is not
+    a break point to it. The column's width is known when the table is
+    built, so the break is chosen here. A piece that still does not fit is
+    left for reportlab to cut, as before.
+    """
+    words = []
+    for word in text.split(" "):
+        if stringWidth(word, font, size) <= width:
+            words.append(esc(word))
+            continue
+        lines: List[str] = []
+        line = ""
+        for piece in _BREAK_AFTER.split(word):
+            if line and stringWidth(line + piece, font, size) > width:
+                lines.append(line)
+                line = piece
+            else:
+                line += piece
+        lines.append(line)
+        words.append("<br/>".join(esc(part) for part in lines))
+    return " ".join(words)
+
+
+def cell(
+    value: Any,
+    style: Optional[ParagraphStyle] = None,
+    fit_width: Optional[float] = None,
+) -> Paragraph:
+    """User or record text for a table cell: escaped, wrapped, never cut.
+
+    *fit_width*, the room inside the cell, lets a long address break at its
+    punctuation instead of mid-word (:func:`fit_token`).
+    """
+    style = style or report_styles()["cell"]
+    raw = "" if value is None else str(value)
+    lines = raw.replace("\r\n", "\n").split("\n")
+    if fit_width is None:
+        text = "<br/>".join(esc(line) for line in lines)
+    else:
+        text = "<br/>".join(
+            fit_token(line, fit_width, style.fontName, style.fontSize) for line in lines
+        )
+    return Paragraph(text, style)
 
 
 def num(value: Any, style: Optional[ParagraphStyle] = None) -> Paragraph:
@@ -197,8 +248,12 @@ def data_table(
     numeric_cols: Sequence[int] = (),
     emphasis_rows: Sequence[int] = (),
     zebra: bool = False,
+    caption: Optional[str] = None,
 ) -> Table:
     """A ruled table whose header row repeats on every page.
+
+    *caption*, when given, is a heading spanning the table that repeats with
+    the header row.
 
     *widths* are absolute points. *numeric_cols* right-align their header to
     sit over the figures. *emphasis_rows* (data indexes, first data row is 0)
@@ -211,24 +266,38 @@ def data_table(
         Paragraph(esc(h), styles["head_num"] if i in numeric_cols else styles["head"])
         for i, h in enumerate(header)
     ]
+    # A caption rides above the header row and repeats with it, so a band of
+    # a wide matrix that runs onto the next page still says which band it is.
+    top: List[List[Any]] = []
+    if caption:
+        top.append(
+            [Paragraph(esc(caption), styles["section"])] + [""] * (len(header) - 1)
+        )
+    h = len(top)
     commands: List[Any] = [
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LINEBELOW", (0, 0), (-1, 0), 1, INK),
-        ("LINEBELOW", (0, 1), (-1, -2), 0.4, GRID),
+        ("LINEBELOW", (0, h), (-1, h), 1, INK),
+        ("LINEBELOW", (0, h + 1), (-1, -2), 0.4, GRID),
         ("LINEBELOW", (0, -1), (-1, -1), 1, INK),
         ("TOPPADDING", (0, 0), (-1, -1), 3.5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3.5),
         ("LEFTPADDING", (0, 0), (-1, -1), _CELL_PAD),
         ("RIGHTPADDING", (0, 0), (-1, -1), _CELL_PAD),
     ]
+    if caption:
+        commands += [
+            ("SPAN", (0, 0), (-1, 0)),
+            ("LEFTPADDING", (0, 0), (-1, 0), 0),
+            ("TOPPADDING", (0, 0), (-1, 0), 6),
+        ]
     if zebra and len(rows) > 1:
-        commands.append(("ROWBACKGROUNDS", (0, 1), (-1, -1), [None, PANEL]))
+        commands.append(("ROWBACKGROUNDS", (0, h + 1), (-1, -1), [None, PANEL]))
     for index in emphasis_rows:
-        commands.append(("BACKGROUND", (0, index + 1), (-1, index + 1), BAND))
+        commands.append(("BACKGROUND", (0, index + h + 1), (-1, index + h + 1), BAND))
     return Table(
-        [head, *[list(r) for r in rows]],
+        [*top, head, *[list(r) for r in rows]],
         colWidths=list(widths),
-        repeatRows=1,
+        repeatRows=h + 1,
         hAlign="LEFT",
         style=body_table_style(commands),
     )
@@ -379,6 +448,10 @@ def _letterhead(meta: ReportMeta, styles: Dict[str, ParagraphStyle]) -> List[Any
     return flowables
 
 
+def _header_detail(meta: ReportMeta) -> str:
+    return ", ".join(f"{label}: {value}" for label, value in meta.parameters)
+
+
 def _clip(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
@@ -432,8 +505,11 @@ def render_report(
     def build(on_page: Callable[[Any, Any], None]) -> bytes:
         styles = report_styles()
         buf = BytesIO()
-        doc = SimpleDocTemplate(
+        doc = HeadedDocTemplate(
             buf,
+            running_header=RunningHeader(
+                meta.org_name, meta.title, _header_detail(meta), meta.logo
+            ),
             # The canvas otherwise declares Helvetica, never embedded, on every page.
             initialFontName=BODY_FONT,
             pagesize=meta.pagesize,
