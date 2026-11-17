@@ -271,3 +271,64 @@ async def test_a_rename_committed_after_the_merges_snapshot_is_seen():
     assert result is not None
     assert result["combined_apparatus"] == 1
     assert [(u[0], u[1]) for u in units] == [(target_unit, ids["target"])]
+
+
+@pytest.mark.usefixtures("_initialize_database")
+async def test_a_merge_whose_audit_record_fails_is_not_committed():
+    """The relabel overwrites the merged-away name on every shift, so the audit
+    event is the only record of it. If the request fails after the merge, the
+    request's session rolls back, and the merge must go with it rather than
+    survive without its record."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, patch
+
+    from app.api.v1.endpoints import external_shift_hours as endpoint
+    from app.schemas.external_shift_hours import ExternalAgencyMerge
+
+    ids = await _seed()
+    officer = SimpleNamespace(
+        id=ids["user"], organization_id=ids["org"], username="merge-officer"
+    )
+    try:
+        async with database_manager.engine.connect() as conn:
+            session = AsyncSession(bind=conn, expire_on_commit=False)
+            with patch.object(
+                endpoint,
+                "log_audit_event",
+                new=AsyncMock(side_effect=RuntimeError("audit store down")),
+            ):
+                with pytest.raises(RuntimeError, match="audit store down"):
+                    await endpoint.merge_agency(
+                        uuid.UUID(ids["source"]),
+                        ExternalAgencyMerge(into_agency_id=uuid.UUID(ids["target"])),
+                        session,
+                        officer,
+                    )
+            # What the request's session does when the handler raises.
+            await session.rollback()
+            await session.close()
+        async with database_manager.engine.connect() as conn:
+            agencies = (
+                (
+                    await conn.execute(
+                        text(
+                            "SELECT name FROM external_agencies WHERE organization_id = :o "
+                            "ORDER BY name"
+                        ),
+                        {"o": ids["org"]},
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            unit_agency = (
+                await conn.execute(
+                    text("SELECT agency_id FROM external_apparatus WHERE id = :u"),
+                    {"u": ids["unit"]},
+                )
+            ).scalar_one()
+    finally:
+        await _cleanup(ids["org"])
+
+    assert agencies == [COUNTY, COUNTY_FD]
+    assert unit_agency == ids["source"]

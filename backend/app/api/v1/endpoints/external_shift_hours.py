@@ -228,10 +228,14 @@ async def merge_agency(
     """
     service = ExternalApparatusService(db)
     try:
+        # Not committed here: the request's session commits once, after the
+        # audit record below is added, so the merge and the only record of
+        # the merged-away name are saved together or not at all.
         result = await service.merge_agency(
             str(current_user.organization_id),
             str(agency_id),
             str(payload.into_agency_id),
+            commit=False,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

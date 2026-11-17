@@ -343,6 +343,37 @@ describe('OutsideApparatusSettings: merging two spellings of one department', ()
     expect(dialog).not.toHaveTextContent('from members');
   });
 
+  it('previews "Engine I" and "Engine i" as one unit whatever the browser locale', async () => {
+    // A Turkish locale folds "I" to a dotless "ı"; the server's collation does not.
+    const original = String.prototype.toLocaleLowerCase;
+    String.prototype.toLocaleLowerCase = function (this: string) {
+      return original.call(this, 'tr');
+    };
+    try {
+      mockList.mockResolvedValue({
+        agencies: [
+          {
+            ...county,
+            apparatus: [{ id: 'u-i', agency_id: 'a-county', name: 'Engine I', apparatus_type: null, is_active: true }],
+          },
+          {
+            ...countyFd,
+            apparatus: [
+              { id: 'u-i-fd', agency_id: 'a-county-fd', name: 'Engine i', apparatus_type: null, is_active: true },
+            ],
+          },
+        ],
+      });
+      const { user, dialog } = await openMerge();
+
+      await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+
+      expect(dialog).toHaveTextContent('Engine I is already listed there, so it is combined into one.');
+    } finally {
+      String.prototype.toLocaleLowerCase = original;
+    }
+  });
+
   it('merges into the chosen department and reports what moved', async () => {
     const { user, dialog } = await openMerge();
 

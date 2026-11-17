@@ -226,7 +226,12 @@ class ExternalApparatusService:
         return agency
 
     async def merge_agency(
-        self, organization_id: str, source_id: str, target_id: str
+        self,
+        organization_id: str,
+        source_id: str,
+        target_id: str,
+        *,
+        commit: bool = True,
     ) -> Optional[Dict[str, Any]]:
         """Fold ``source`` into ``target``: one department under one name.
 
@@ -249,6 +254,11 @@ class ExternalApparatusService:
           moved unit's shifts follow the target's evaluation setting.
         * A shift's review status is untouched: an officer combining two
           spellings has not changed what the member claimed.
+
+        ``commit=False`` leaves the transaction open, so the endpoint can add
+        the audit record and have both commit together: the relabel
+        overwrites the old name on every shift, so the audit event is the only
+        place it survives, and a merge committed without it would lose it.
 
         Both agency rows are locked for the transaction, so two officers
         merging at once cannot each move half the units. Returns None when
@@ -331,7 +341,10 @@ class ExternalApparatusService:
         await self.db.flush()
         source_name = source.name
         await self.db.delete(source)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
         return {
             "agency_id": target.id,
             "source_name": source_name,

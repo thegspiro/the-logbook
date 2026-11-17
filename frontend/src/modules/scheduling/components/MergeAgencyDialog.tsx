@@ -26,8 +26,10 @@ interface MergeAgencyDialogProps {
  * asks the database, whose collation (utf8mb4_unicode_ci) is case- and
  * accent-blind and ignores trailing but not leading spaces; this mirrors that
  * closely enough for "A106" / "a106" and "Cafe" / "Café" to read the same.
+ * `toLowerCase`, not `toLocaleLowerCase`: under a Turkish locale the latter
+ * folds "I" to a dotless "ı", which the collation still treats as "i".
  */
-const nameKey = (name: string): string => name.normalize('NFD').replace(/\p{M}/gu, '').trimEnd().toLocaleLowerCase();
+const nameKey = (name: string): string => name.normalize('NFD').replace(/\p{M}/gu, '').trimEnd().toLowerCase();
 
 export const MergeAgencyDialog: React.FC<MergeAgencyDialogProps> = ({ source, agencies, busy, onClose, onMerge }) => {
   const selectId = useId();
