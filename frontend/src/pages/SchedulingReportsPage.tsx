@@ -658,8 +658,10 @@ export const SchedulingReportsPage: React.FC = () => {
               </div>
 
               {/* Table */}
-              {/* Cells are px-3 so the five columns stay inside the narrow tier's 32rem with
-                  WebKit's wider text; at px-4 they needed 33-34rem and overflowed a tablet. */}
+              {/* Cells are px-2 so the five columns stay inside the narrow tier's 32rem with
+                  WebKit's wider text. Every header is one unbreakable word, so padding is the
+                  only give: at px-3 CI's WebKit measured the table at 527px in a 516px card on
+                  an 820px tablet, 15px wider than a local WebKit build did. */}
               <div
                 className="rwd-table-container overflow-x-auto"
                 tabIndex={0}
@@ -669,19 +671,19 @@ export const SchedulingReportsPage: React.FC = () => {
                 <table className="rwd-table rwd-table-narrow w-full text-sm">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
-                      <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
+                      <th scope="col" className="text-theme-text-secondary px-2 py-3 text-left font-medium">
                         Date
                       </th>
-                      <th scope="col" className="text-theme-text-secondary px-3 py-3 text-right font-medium">
+                      <th scope="col" className="text-theme-text-secondary px-2 py-3 text-right font-medium">
                         Total Shifts
                       </th>
-                      <th scope="col" className="text-theme-text-secondary px-3 py-3 text-right font-medium">
+                      <th scope="col" className="text-theme-text-secondary px-2 py-3 text-right font-medium">
                         Assigned
                       </th>
-                      <th scope="col" className="text-theme-text-secondary px-3 py-3 text-right font-medium">
+                      <th scope="col" className="text-theme-text-secondary px-2 py-3 text-right font-medium">
                         Confirmed
                       </th>
-                      <th scope="col" className="text-theme-text-secondary px-3 py-3 text-right font-medium">
+                      <th scope="col" className="text-theme-text-secondary px-2 py-3 text-right font-medium">
                         Understaffed
                       </th>
                     </tr>
@@ -689,21 +691,21 @@ export const SchedulingReportsPage: React.FC = () => {
                   <tbody>
                     {coverageData.map((row, idx) => (
                       <tr key={idx} className="border-theme-surface-border hover:bg-theme-surface-hover border-b">
-                        <td data-label="Date" className="rwd-table-lead text-theme-text-primary px-3 py-3 font-medium">
+                        <td data-label="Date" className="rwd-table-lead text-theme-text-primary px-2 py-3 font-medium">
                           {formatDate(row.date, tz)}
                         </td>
-                        <td data-label="Total Shifts" className="text-theme-text-primary px-3 py-3 text-right">
+                        <td data-label="Total Shifts" className="text-theme-text-primary px-2 py-3 text-right">
                           {row.total_shifts}
                         </td>
-                        <td data-label="Assigned" className="text-theme-text-secondary px-3 py-3 text-right">
+                        <td data-label="Assigned" className="text-theme-text-secondary px-2 py-3 text-right">
                           {row.total_assigned}
                         </td>
-                        <td data-label="Confirmed" className="px-3 py-3 text-right">
+                        <td data-label="Confirmed" className="px-2 py-3 text-right">
                           <span className="inline-flex items-center rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
                             {row.total_confirmed}
                           </span>
                         </td>
-                        <td data-label="Understaffed" className="px-3 py-3 text-right">
+                        <td data-label="Understaffed" className="px-2 py-3 text-right">
                           {row.understaffed_shifts > 0 ? (
                             <span className="inline-flex items-center rounded-sm bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-400">
                               {row.understaffed_shifts}
