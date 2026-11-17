@@ -29,6 +29,58 @@ Cal.com counterpart of Zeffy's and PayPal's. `CHANGELOG.md` stays closed.
 
 **Screenshots:** none queued.
 
+## Change audit: November 14 – 15, 2026
+
+Merged to `main` after `b44b32ea` (2026-11-14 04:56 UTC) through `79ab1c88`
+(2026-11-15 10:49 UTC), 24 first-parent merges. PayPal Settings (#4289) has
+its own section below. `CHANGELOG.md` stays closed.
+
+**Not covered:** the 40 merges between the November 10 – 11 pass
+(`dcc32fe2`) and `b44b32ea`, which the November 13 and 14 targeted passes
+left for a full pass. They include session waiver requests' screens
+(#4241–#4244, #4248), History phases 2 and 3 (#4263, #4279) and the shift
+evaluation review (#4264, #4275, #4276). A catch-up pass should take them;
+this pass only corrected guide 01's History "does not do yet" list, which
+they had made wrong.
+
+| Change                                                                                                                                                                                                    | Guide      | Disposition                                                                                                                                                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Leave reminders, open-ended leave digest, member **Leave Requests** with approver positions and a decision rule; leave on the Annual Training and Program Requirement reports; leave notice email (#4303) | 01, 02, 08 | Already written by the PR. Migrations `b4e7c2a91f06`, `c8d2f61a7e34` in `UPGRADING.md`. Screenshots queued here (the PR added none)                                                  |
+| Shift and call requirements broken down by month (**Show monthly shifts**); **Nothing owed (on leave)**; My Training lists the member's own leave; compliance setting changes audited (#4287)             | 02         | Written; wiki `Module-Training` updated                                                                                                                                              |
+| Linked evaluated-shift / transport / refusal requirements credited from shift evaluations (#4311); credit row locked (#4298)                                                                              | 02         | Paragraph written under Shift Evaluations; wiki `Module-Training`                                                                                                                    |
+| Requirement **Member Categories** lists the department's own tiers (#4309)                                                                                                                                | 02         | Written; wiki `Module-Training`                                                                                                                                                      |
+| Evaluations: three new data sources, **(turned off)** sources, unscored-band warning, PDF dates (#4292)                                                                                                   | 02         | Written; wiki `Module-Evaluations`. `EVALUATIONS_MODULE.md` already updated by the PR                                                                                                |
+| No-show and pending crew no longer owe trainee reports or evaluations at close-out (#4300)                                                                                                                | 03         | Note written under the close-out settings                                                                                                                                            |
+| Shift report keeps every trainee's evaluation fields and per-member calls across a trip to an evaluation (#4296)                                                                                          | 03         | Written under Working Offline                                                                                                                                                        |
+| Store orders: **Delivery** box and charge lines, **Cancel order** section, status transition rules (W67b-3/4/5, #4288)                                                                                    | 18         | New "Cancelling an order" section and two paragraphs; "If You Learned an Older Version" updated. `STOREFRONT_MODULE.md` already updated by the PR                                    |
+| Ten election and minutes notices became editable templates; **Meetings & Minutes** category; evaluation templates filed under **Performance Evaluations** (#4294)                                         | 08, 04, 14 | Written; wiki `Module-Communications`. Migration `c4e81b7a2d95`. Guide 08's category list had already been missing **Business Meetings** and **Performance Evaluations**; corrected  |
+| **Candidates** tab count; minutes say **Votes cast** (#4285)                                                                                                                                              | 14         | Written; wiki `Module-Elections`                                                                                                                                                     |
+| Draft request form's **Go to Forms to edit and publish** button (W22-5, #4310)                                                                                                                            | 04         | Sentence added                                                                                                                                                                       |
+| History phase 4: documents (#4313)                                                                                                                                                                        | 01         | New Documents section; "does not do yet" list corrected; new wiki page `Module-History` (the module had none) linked from the sidebar. `HISTORY_MODULE.md` already updated by the PR |
+| Outside-shift restore only for rejected entries; duplicate evaluation-form name is a 400 (#4307); skills save false conflict (#4291); iPad date fields (#4309)                                            | none       | Bug fixes with no change to the steps                                                                                                                                                |
+| Mobile sweeps for scheduling and communications screens, AAA contrast raises, touch-target floors (#4280, #4306, #4317)                                                                                   | none       | Visual only. Patterns' **Generate** wraps under the toggle on a phone; no guide step names its position                                                                              |
+| CI: first-load budget, frozen test clocks, session-start migration hint (#4283, #4286, #4304, #4318, #4319)                                                                                               | none       | Internal                                                                                                                                                                             |
+
+**Alembic heads.** `main` at `79ab1c88` has three heads (`c8d2f61a7e34`,
+`e2b7d94c1a63`, `169a11ebf589`): three merge revisions of the same pair of
+parents landed from three branches. `alembic upgrade head` refuses to run, so
+a fresh install or an upgrade will not boot. Open PR #4323 joins them; not
+fixed here to avoid a fourth join.
+
+**Screenshots to create:** see the table in
+`docs/training/SCREENSHOT_CURRENCY.md` ("Queued by the November 14 – 15
+documentation pass"): the store's order dialog (delivery, Cancel order, a
+cancelled order), Email Templates' Meetings & Minutes group, the Candidates
+count, monthly shifts and Nothing owed, My Training's leave list, the
+evaluation builder's turned-off source, History documents, Leave Requests and
+its settings. **Replace:** `08-34-email-templates` (old category list),
+`18-04-my-orders-unpaid` (card now shows delivery and charges); check
+`14-25-candidates-as-manager`.
+
+**YouTube scripts:** 07 Secretary edited (its Email Templates chapter quoted
+the old category list; re-record note added). Others flagged in
+`docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
 ## Change audit: PayPal Settings, November 14, 2026
 
 A targeted pass for the PayPal changes of November 14: a **Settings** button on

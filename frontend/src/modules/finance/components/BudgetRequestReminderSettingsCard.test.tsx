@@ -106,8 +106,42 @@ describe('BudgetRequestReminderSettingsCard', () => {
     await user.type(days, '90');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(screen.getByText(/whole number of days from 0 to 60/)).toBeInTheDocument();
+    expect(days).toHaveAttribute('aria-invalid', 'true');
+    expect(days).toHaveAccessibleDescription(expect.stringContaining('whole number of days from 0 to 60'));
+    expect(days).toHaveFocus();
     expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("puts the server's refusal of a day on the field", async () => {
+    mockUpdate.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'offsets_days', message: 'Reminder days must be between 0 and 60' }] },
+      },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<BudgetRequestReminderSettingsCard />);
+
+    const days = await screen.findByLabelText('Days before the request deadline');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(days).toHaveAttribute('aria-invalid', 'true'));
+    expect(days).toHaveAccessibleDescription(expect.stringContaining('Reminder days must be between 0 and 60'));
+    expect(days).toHaveFocus();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('says a refusal no field answers for inside the card', async () => {
+    mockUpdate.mockRejectedValue(new Error('Not allowed'));
+    const user = userEvent.setup();
+    renderWithRouter(<BudgetRequestReminderSettingsCard />);
+
+    await user.click(await screen.findByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not allowed');
+    expect(mockToastError).toHaveBeenCalledWith('Not allowed');
+    expect(screen.getByLabelText('Days before the request deadline')).not.toHaveAttribute('aria-invalid');
   });
 
   it('a member without finance.manage reads it but cannot change it', async () => {

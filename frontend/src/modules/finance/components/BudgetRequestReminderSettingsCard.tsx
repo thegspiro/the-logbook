@@ -18,7 +18,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/stores/authStore';
+import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { mapServerFieldErrors, type ServerFieldSpec } from '@/utils/serverFieldErrors';
 import { budgetRequestReminderService } from '../services/api';
 import type { BudgetRequestReminderSettings } from '../types';
 import { MAX_REMINDERS, parseReminderDays } from '../utils/reminderDays';
@@ -32,6 +34,20 @@ function describe(settings: BudgetRequestReminderSettings): string {
   return `Owners who still owe a request are reminded ${days.join(', ')}${bell}.`;
 }
 
+const DAYS_ID = 'budget-request-reminder-days';
+
+/**
+ * `BudgetRequestReminderSettingsUpdate` (schemas/finance.py) reports a field
+ * by its snake_case name (`loc_by_alias=False`), and a bad entry in the list
+ * by its place in it (`offsets_days.2`).
+ */
+const FIELDS: Record<'offsetsDays', ServerFieldSpec> = {
+  offsetsDays: {
+    label: 'Days before the request deadline',
+    api: ['offsets_days', 'offsetsDays', ...Array.from({ length: MAX_REMINDERS }, (_, i) => `offsets_days.${i}`)],
+  },
+};
+
 export const BudgetRequestReminderSettingsCard: React.FC = () => {
   const canEdit = useAuthStore((s) => s.checkPermission('finance.manage'));
   const [current, setCurrent] = useState<BudgetRequestReminderSettings | null>(null);
@@ -40,6 +56,9 @@ export const BudgetRequestReminderSettingsCard: React.FC = () => {
   const [bell, setBell] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // A refusal no field answers for is said inside the card, not only in a
+  // toast that fades (forms review F-5).
+  const [formError, setFormError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -59,9 +78,11 @@ export const BudgetRequestReminderSettingsCard: React.FC = () => {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     const parsed = parseReminderDays(daysText);
     if (typeof parsed === 'string') {
       setFieldError(parsed);
+      document.getElementById(DAYS_ID)?.focus();
       return;
     }
     setFieldError(null);
@@ -73,7 +94,20 @@ export const BudgetRequestReminderSettingsCard: React.FC = () => {
       setBell(saved.bellNotices);
       toast.success('Reminder schedule saved');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not save the reminder schedule'));
+      // The schedule is replaced whole (both fields are required), so a
+      // refusal saves none of it and the typed days stay to be corrected.
+      const mapped = mapServerFieldErrors(err, FIELDS);
+      const onField = mapped?.fieldErrors.offsetsDays;
+      if (onField) {
+        setFieldError(onField);
+        document.getElementById(DAYS_ID)?.focus();
+      }
+      const rest = onField ? (mapped?.unmatched ?? []) : [];
+      if (!onField || rest.length > 0) {
+        const message = rest.length > 0 ? rest.join(' ') : getErrorMessage(err, 'Could not save the reminder schedule');
+        setFormError(message);
+        toast.error(message);
+      }
     } finally {
       setSaving(false);
     }
@@ -85,7 +119,9 @@ export const BudgetRequestReminderSettingsCard: React.FC = () => {
         Budget request reminders
       </h2>
       {loadError ? (
-        <p className="mt-2 text-sm text-red-700 dark:text-red-400">{loadError}</p>
+        <p role="alert" className={`mt-2 text-sm ${FIELD_ERROR_CLASS}`}>
+          {loadError}
+        </p>
       ) : current === null ? (
         <p className="text-theme-text-secondary mt-2 text-sm">Loading…</p>
       ) : (
@@ -94,30 +130,27 @@ export const BudgetRequestReminderSettingsCard: React.FC = () => {
 
       {canEdit && current !== null && (
         <form onSubmit={(e) => void submit(e)} className="mt-4 space-y-3" noValidate>
-          <div>
-            <label htmlFor="budget-request-reminder-days" className="form-label">
-              Days before the request deadline
-            </label>
-            <input
-              id="budget-request-reminder-days"
-              type="text"
-              inputMode="numeric"
-              className="form-input max-w-xs"
-              value={daysText}
-              onChange={(e) => setDaysText(e.target.value)}
-              aria-invalid={Boolean(fieldError)}
-              aria-describedby={fieldError ? 'budget-request-reminder-days-error' : 'budget-request-reminder-days-hint'}
-            />
-            {fieldError ? (
-              <p id="budget-request-reminder-days-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-                {fieldError}
-              </p>
-            ) : (
-              <p id="budget-request-reminder-days-hint" className="text-theme-text-secondary mt-1 text-xs">
-                Separate with commas, up to {MAX_REMINDERS}; 0 is the deadline day. Leave blank to send none.
-              </p>
+          <FormField
+            id={DAYS_ID}
+            label="Days before the request deadline"
+            error={fieldError}
+            hint={`Separate with commas, up to ${MAX_REMINDERS}; 0 is the deadline day. Leave blank to send none.`}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                className="form-input max-w-xs"
+                value={daysText}
+                onChange={(e) => {
+                  setDaysText(e.target.value);
+                  setFieldError(null);
+                }}
+              />
             )}
-          </div>
+          </FormField>
           <label className="touch:min-h-11 flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -132,6 +165,11 @@ export const BudgetRequestReminderSettingsCard: React.FC = () => {
           <button type="submit" className="btn-primary" disabled={saving}>
             Save
           </button>
+          {formError && (
+            <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+              {formError}
+            </p>
+          )}
         </form>
       )}
     </section>

@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -35,6 +35,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
+    AttendanceWaiverAttachment,
     AttendanceWaiverRequest,
     AttendanceWaiverRequestAction,
     AttendanceWaiverStatus,
@@ -1239,16 +1240,25 @@ class EvaluationDataService:
 
     async def _waiver_attachments_on_file(
         self, org_id: str, request_ids: Sequence[str]
-    ) -> set:
+    ) -> Set[str]:
         """The requests with at least one attachment on file.
 
-        Attachments are being added by a separate change and have no table on
-        this branch, so nothing is on file yet and every line reads no. When
-        that table lands, return the ids of ``request_ids`` with a row in it
-        for ``org_id``. Only the fact is reported, never the file or its
-        name: an attachment is the member's evidence, often medical.
+        A row in ``attendance_waiver_attachments`` is a file on file: the
+        retention task and anonymisation delete the file and then the row.
+        Only the fact is reported, never the file, its name or how many: an
+        attachment is the member's evidence, often medical.
         """
-        return set()
+        if not request_ids:
+            return set()
+        result = await self.db.execute(
+            select(AttendanceWaiverAttachment.request_id)
+            .where(
+                AttendanceWaiverAttachment.organization_id == org_id,
+                AttendanceWaiverAttachment.request_id.in_(list(request_ids)),
+            )
+            .distinct()
+        )
+        return {str(row[0]) for row in result.all()}
 
 
 def _as_utc(value: datetime) -> datetime:
