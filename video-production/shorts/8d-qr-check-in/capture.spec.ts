@@ -22,18 +22,21 @@ import {
  *
  * An officer creates a meeting through the real form; the create endpoint
  * returns what was sent, so the event page, the QR page and the member's
- * check-in page all show the event as it was entered. The meeting starts on
- * the next full hour, so the default Flexible window (open an hour before the
- * start) is genuinely open when the member checks in.
+ * check-in page all show the event as it was entered. The default Flexible
+ * window opens an hour before the start, so it is genuinely open when the
+ * member checks in (see NOW).
  */
 
 const EVENT_ID = 'evt-new';
 const MINUTES_BEFORE = 60;
 
-// The next full hour in ZONE, or 6 PM tomorrow if that would run past 10 PM.
-const hourNow = Number(new Date().toLocaleString('en-US', { timeZone: ZONE, hour: 'numeric', hour12: false }));
-const DAY = hourNow < 21 ? zoneDay(0) : zoneDay(1);
-const HOUR = hourNow < 21 ? hourNow + 1 : 18;
+// The browser's clock is fixed at 6:20 PM on the render day, so the story
+// holds whenever it is rendered: a 7 PM meeting whose Flexible window opened
+// at 6, and a member checking in at 6:20. Basing it on the real time put the
+// meeting on the next day for a late render, before its window opened.
+const DAY = zoneDay(0);
+const HOUR = 19;
+const NOW = zoned(DAY, 18, 20);
 
 let created: Record<string, unknown> | null = null;
 
@@ -79,8 +82,8 @@ const eventRecord = (): Record<string, unknown> => {
     check_in_closes_at: end,
     created_by_name: 'Alex Tester',
     organizer_name: 'Alex Tester',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    created_at: NOW.toISOString(),
+    updated_at: NOW.toISOString(),
   };
 };
 
@@ -117,7 +120,7 @@ async function mockEvents(page: Page) {
       if (path === `/api/v1/events/${EVENT_ID}`) return json(route, eventRecord());
       if (path === `/api/v1/events/${EVENT_ID}/qr-check-in-data`) return json(route, qrData());
       if (path === `/api/v1/events/${EVENT_ID}/self-check-in` && req.method() === 'POST') {
-        const now = new Date().toISOString();
+        const now = NOW.toISOString();
         return json(route, {
           id: 'rsvp-1',
           event_id: EVENT_ID,
@@ -139,6 +142,7 @@ test.use({ viewport: SCREEN, deviceScaleFactor: SCALE, timezoneId: ZONE });
 
 test('capture 8d-qr-check-in', async ({ page }) => {
   await prepare(page);
+  await page.clock.setFixedTime(NOW);
   await signIn(page, { permissions: ['events.view', 'events.manage'] });
   await mockEvents(page);
   await page.goto('/events');
