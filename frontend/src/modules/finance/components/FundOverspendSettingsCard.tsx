@@ -16,7 +16,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { organizationService } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
+import { FIELD_ERROR_CLASS } from '@/components/ux/FormField';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { mapServerFieldErrors, type ServerFieldSpec } from '@/utils/serverFieldErrors';
 import { financeSettingsService } from '../services/api';
 import { FundOverspendMode } from '../types';
 
@@ -37,6 +39,11 @@ const MODE_DESCRIPTIONS: Record<FundOverspendMode, string> = {
 const isMode = (value: string): value is FundOverspendMode =>
   (Object.values(FundOverspendMode) as string[]).includes(value);
 
+/** `FinanceSettingsUpdate.fund_overspend_mode`, refused by its path under `finance`. */
+const FIELDS: Record<'fundOverspendMode', ServerFieldSpec> = {
+  fundOverspendMode: { label: 'When a payment is more than its fund has left', api: 'finance.fund_overspend_mode' },
+};
+
 export const FundOverspendSettingsCard: React.FC = () => {
   const canEdit = useAuthStore(
     (s) => s.checkPermission('settings.manage') || s.checkPermission('organization.update_settings')
@@ -45,6 +52,10 @@ export const FundOverspendSettingsCard: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<FundOverspendMode>(FundOverspendMode.WARN);
   const [saving, setSaving] = useState(false);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  // A refusal no field answers for is said inside the card, not only in a
+  // toast that fades (forms review F-5).
+  const [formError, setFormError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -63,6 +74,8 @@ export const FundOverspendSettingsCard: React.FC = () => {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFieldError(null);
+    setFormError(null);
     setSaving(true);
     try {
       await organizationService.updateSettings({ finance: { fund_overspend_mode: mode } });
@@ -70,7 +83,21 @@ export const FundOverspendSettingsCard: React.FC = () => {
       await load();
       toast.success('Restricted fund rule saved');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not save the restricted fund rule'));
+      // The one setting is sent whole; a refusal stores nothing, so the
+      // choice stays on screen to be saved again.
+      const mapped = mapServerFieldErrors(err, FIELDS);
+      const onField = mapped?.fieldErrors.fundOverspendMode;
+      if (onField) {
+        setFieldError(onField);
+        window.setTimeout(() => document.getElementById(`fund-overspend-mode-${mode}`)?.focus(), 0);
+      }
+      const rest = onField ? (mapped?.unmatched ?? []) : [];
+      if (!onField || rest.length > 0) {
+        const message =
+          rest.length > 0 ? rest.join(' ') : getErrorMessage(err, 'Could not save the restricted fund rule');
+        setFormError(message);
+        toast.error(message);
+      }
     } finally {
       setSaving(false);
     }
@@ -82,7 +109,9 @@ export const FundOverspendSettingsCard: React.FC = () => {
         Overspending a restricted fund
       </h2>
       {loadError ? (
-        <p className="mt-2 text-sm text-red-700 dark:text-red-400">{loadError}</p>
+        <p role="alert" className={`mt-2 text-sm ${FIELD_ERROR_CLASS}`}>
+          {loadError}
+        </p>
       ) : current === null ? (
         <p className="text-theme-text-secondary mt-2 text-sm">Loading…</p>
       ) : (
@@ -103,13 +132,17 @@ export const FundOverspendSettingsCard: React.FC = () => {
                 {Object.values(FundOverspendMode).map((value) => (
                   <label key={value} className="text-theme-text-primary flex items-center gap-2 text-sm">
                     <input
+                      id={`fund-overspend-mode-${value}`}
                       type="radio"
                       name="fund-overspend-mode"
                       className="form-checkbox rounded-full"
                       value={value}
                       checked={mode === value}
+                      aria-invalid={fieldError ? true : undefined}
+                      aria-describedby={fieldError ? 'fund-overspend-mode-error' : undefined}
                       onChange={(e) => {
                         if (isMode(e.target.value)) setMode(e.target.value);
+                        setFieldError(null);
                       }}
                     />
                     {MODE_LABELS[value]}
@@ -117,10 +150,20 @@ export const FundOverspendSettingsCard: React.FC = () => {
                 ))}
               </div>
               <p className="text-theme-text-secondary mt-1 text-xs">{MODE_DESCRIPTIONS[mode]}</p>
+              {fieldError && (
+                <p id="fund-overspend-mode-error" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+                  {fieldError}
+                </p>
+              )}
             </fieldset>
             <button type="submit" className="btn-primary" disabled={saving}>
               Save
             </button>
+            {formError && (
+              <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                {formError}
+              </p>
+            )}
           </form>
         )
       ) : (
