@@ -1166,9 +1166,25 @@ jobs:
   # with 29 minutes of tests behind it, every test so far passing; on #4202
   # (89811d54) the same leg passed at 43 minutes. A third leg brings the tests
   # to about 23 minutes, so the slowest install observed still finishes near 40.
+  #
+  # ubuntu-24.04, not ubuntu-latest, since 2026-11-17. `ubuntu-latest` moved to
+  # Ubuntu 26.04 (image ubuntu-26.04 20261111.196.1), and every test in every
+  # leg then failed at browser launch, before any test code ran:
+  #
+  #     MiniBrowser: error while loading shared libraries: libicudata.so.74
+  #
+  # The WebKit build this Playwright version installs links against 24.04's
+  # libicu74, which 26.04 does not ship, and the cache restored that build
+  # whichever release the runner was, since its key named only `Linux`.
+  # `install-deps` then succeeded with 26.04's own libraries, so nothing failed
+  # until the browser started. The release is pinned here and named in both
+  # cache keys below, so lifting the pin (when a Playwright bump supports 26.04)
+  # misses the old caches instead of restoring a build for the wrong release.
+  # The Chromium jobs are unaffected: their headless shell carries its own
+  # libraries.
   frontend-e2e-safari:
     name: Frontend E2E (Mobile Safari ${{ matrix.shard }}/3)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       # One leg failing must not cancel the other, for the reason given on the
@@ -1199,7 +1215,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-webkit-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-webkit-ubuntu-24.04-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright WebKit
         if: steps.playwright-cache.outputs.cache-hit != 'true'
@@ -1223,9 +1239,9 @@ jobs:
         uses: actions/cache@v6
         with:
           path: /var/cache/apt/archives
-          key: apt-webkit-deps-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: apt-webkit-deps-ubuntu-24.04-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            apt-webkit-deps-${{ runner.os }}-
+            apt-webkit-deps-ubuntu-24.04-
 
       # Not a bare `npx playwright install-deps webkit`. On 2026-11-11 the
       # Azure Ubuntu mirror stopped serving packages for three and a half
