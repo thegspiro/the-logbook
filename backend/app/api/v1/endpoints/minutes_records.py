@@ -1231,6 +1231,7 @@ async def download_minutes_pdf(
         data,
         {
             "org_name": org.name if org else None,
+            "logo": org.logo if org else None,
             "generated_at": local(datetime.now(timezone.utc), "%B %d, %Y %I:%M %p %Z"),
         },
         contents,
