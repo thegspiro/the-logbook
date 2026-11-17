@@ -45,18 +45,19 @@ _RSVP_, _check-in window_ and _finalize_.
 5. [Creating Events (Officers)](#creating-events-officers)
 6. [Ending and Finalizing an Event](#ending-and-finalizing-an-event)
 7. [Event Templates and Recurring Events](#event-templates-and-recurring-events)
-8. [Calendar View and Attendance Trends](#calendar-view-and-attendance-trends)
-9. [Event Notifications](#event-notifications)
-10. [Managing Many Events at Once](#managing-many-events-at-once)
-11. [Event Settings](#event-settings)
-12. [Meeting Minutes](#meeting-minutes)
-13. [Action Items](#action-items)
-14. [Elections and Voting](#elections-and-voting)
-15. [Public Outreach Request Pipeline](#public-outreach-request-pipeline)
-16. [Realistic Example: Outreach Request from Submission to Completion](#realistic-example-outreach-request-from-submission-to-completion)
-17. [Event, Check-In & RSVP Edge Cases](#event-check-in--rsvp-edge-cases)
-18. [Troubleshooting](#troubleshooting)
-19. [If You Learned an Older Version](#if-you-learned-an-older-version)
+8. [Apparatus Events: Crews Without Shifts](#apparatus-events-crews-without-shifts)
+9. [Calendar View and Attendance Trends](#calendar-view-and-attendance-trends)
+10. [Event Notifications](#event-notifications)
+11. [Managing Many Events at Once](#managing-many-events-at-once)
+12. [Event Settings](#event-settings)
+13. [Meeting Minutes](#meeting-minutes)
+14. [Action Items](#action-items)
+15. [Elections and Voting](#elections-and-voting)
+16. [Public Outreach Request Pipeline](#public-outreach-request-pipeline)
+17. [Realistic Example: Outreach Request from Submission to Completion](#realistic-example-outreach-request-from-submission-to-completion)
+18. [Event, Check-In & RSVP Edge Cases](#event-check-in--rsvp-edge-cases)
+19. [Troubleshooting](#troubleshooting)
+20. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
@@ -1440,6 +1441,112 @@ the events list. On any occurrence's page:
 
 ---
 
+## Apparatus Events: Crews Without Shifts
+
+_(2026-11-16)_ Some outreach puts an apparatus on the road with a named crew
+but is **not a shift**: a Santamobile run (Driver, Navigator, Santa, Elves), a
+holiday parade, or a touch-a-truck. Apparatus events cover these. Each night
+is an ordinary event, so members check in the usual way and the crew's hours go
+to **Admin Hours**. Nothing about it counts toward shift hours, shift coverage
+or shift reports.
+
+**Where:** **Events → Events Administration → Community Outreach → Apparatus
+Events**. Building templates and scheduling nights need the **Manage apparatus
+event templates** permission (`apparatus_events.manage`). Taking a seat needs
+**Sign up for crew seats** (`apparatus_events.signup`), which every position
+that can see events has by default.
+
+### Building a template
+
+A template is the plan you reuse: which apparatus goes out, which seats it
+needs, and how many of each.
+
+1. Select **New template**.
+2. Name it (for example _Santamobile — Full_), pick the **Event type** and
+   the **Admin Hours category** the crew's time should go to.
+3. Choose an apparatus, then list its seats. Seat names are free text. Mark
+   the seat that drives as **Driver · EVOC**; every other seat is **General**.
+   Set a **Count** for seats you need more than one of (Elf × 4).
+4. Choose the **Driver EVOC rule**:
+   - **Enforce** — only members at the apparatus's required EVOC level, or
+     with an approved driver exception, can take the Driver seat. The same
+     rule shifts use.
+   - **Warn only** — anyone can take it; a member below the level is flagged.
+   - **Don't check** — for a static display where nobody drives.
+5. Leave **Members can take open seats themselves** on unless a coordinator
+   should fill every seat. Select **Save template**.
+
+> **A smaller or larger version.** Select **Duplicate** on a template's card.
+> Give the copy a name, change the apparatus if you like, and set a count for
+> each seat — **0** leaves a seat off. The original is not changed.
+
+### Scheduling one night or many
+
+1. On the template's card, select **Schedule nights**.
+2. Give the run a title (for example _Santamobile 2026_) and add each night:
+   date, start time, length, and the route or place. **Repeat weekly** adds
+   the same night a week apart.
+3. If the apparatus is already committed at that time — another apparatus
+   night, or a status that is out of service — the night is flagged with the
+   reason. You can still go ahead by ticking **Schedule anyway** once you have
+   confirmed the apparatus can cover both.
+4. Select **Create** _n_ **nights**. Each night is its own event with its own
+   crew, so a member can sign up for Monday and not Wednesday.
+
+Each night can be changed on its own afterwards. On the night's event page,
+**Edit this night** adds or removes seats, changes the EVOC rule or the hours
+category, and **Remove crew** takes the apparatus off an event while nobody
+holds a seat. The template and the other nights are not touched.
+
+### Taking a seat (members)
+
+Open the night's event. The **Apparatus & Crew** card lists every seat. Select
+**Sign me up** on an open seat; you are added as going to the event. Select
+**Leave seat** to give it back before the night (once you have checked in,
+the coordinator corrects attendance instead). You can hold one seat per night.
+
+A Driver seat under **Enforce** is offered only to members who meet the
+apparatus's EVOC level or hold an approved exception. If you are not eligible,
+the seat says so.
+
+Coordinators see **Assign…** and **Change…** on every seat. For a Driver seat,
+the list starts with the members who qualify, each judged by the same EVOC
+rule the seat uses.
+
+### On the schedule
+
+Apparatus nights appear on **Shift Scheduling** as dashed
+**Outreach · not a shift** chips beside the day's shifts, with a card in the
+day panel that links to the night. They are there so officers see the engine
+is committed; they never count toward a shift's staffing.
+
+### Confirming the crew and posting hours
+
+After the night, it appears under **Needs confirmation**. Open it and finish
+the way you finish any event: correct any times, add anyone who helped
+without signing up, then **Finalize Attendance**. The crew's hours post to the
+template's **Admin Hours** category **instead of** the category the event type
+normally maps to — never both. Whether an entry is approved straight away or
+waits for review follows that category's own approval setting.
+
+### Staffing a public request with an apparatus
+
+A scheduled [public outreach request](#public-outreach-request-pipeline) can
+use a template too. Open the request, scroll to **Apparatus Crew**, choose a
+template and select **Add apparatus crew**. The crew goes on the request's own
+calendar event — there is still one event for the visit — so moving the
+request to a new date moves the crew with it, and cancelling it stands the crew
+down. Manage the crew on that event's page.
+
+> **Postponed to a date TBD?** That cancels the request's calendar event, and
+> rescheduling the request later opens a new one. The crew stayed on the
+> cancelled event, so add it again from the request once it is rescheduled.
+> A moved date is not re-checked for apparatus conflicts; look at **Shift
+> Scheduling** for that day if the engine might be committed elsewhere. **Volunteer signups** for the same request stay
+available; a visit can have an engine crew and extra educators.
+
+---
+
 ## Calendar View and Attendance Trends
 
 ### Calendar View
@@ -2574,7 +2681,9 @@ In the panel you can also:
    department calendar. A room that is already booked at that time is
    refused.
 4. **Open volunteer signups** and **Email the Membership**, on a scheduled
-   request.
+   request. Bringing an apparatus? Add a crew from a template under
+   **Apparatus Crew** as well, or instead — see
+   [Staffing a public request with an apparatus](#staffing-a-public-request-with-an-apparatus).
 5. **Add comments** for internal notes. The requester never sees them.
 6. **Copy status link**, under **Contact**, to send to the requester.
 

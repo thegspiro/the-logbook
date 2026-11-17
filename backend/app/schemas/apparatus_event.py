@@ -449,3 +449,12 @@ class EditorCategoryOption(BaseModel):
 class EditorOptionsResponse(BaseModel):
     apparatus: List[EditorApparatusOption]
     categories: List[EditorCategoryOption]
+
+
+class AttachCrewRequest(BaseModel):
+    template_id: str = Field(..., min_length=1, max_length=36)
+    acknowledge_conflicts: bool = False
+
+
+class AttachConflictRequest(BaseModel):
+    template_id: str = Field(..., min_length=1, max_length=36)

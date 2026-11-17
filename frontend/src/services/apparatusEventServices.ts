@@ -109,6 +109,30 @@ export const apparatusEventService = {
     return response.data;
   },
 
+  async checkAttachConflicts(eventId: string, templateId: string): Promise<ApparatusConflict[]> {
+    const response = await api.post<{ conflicts: ApparatusConflict[] }>(`${BASE}/events/${eventId}/plan/conflicts`, {
+      template_id: templateId,
+    });
+    return response.data.conflicts;
+  },
+
+  /** Put a template's crew on a scheduled public request's own calendar event. */
+  async attachToRequest(
+    requestId: string,
+    templateId: string,
+    acknowledgeConflicts: boolean
+  ): Promise<{ event_id: string; plan_id: string }> {
+    const response = await api.post<{ event_id: string; plan_id: string }>(
+      `/event-requests/${requestId}/apparatus-crew`,
+      { template_id: templateId, acknowledge_conflicts: acknowledgeConflicts }
+    );
+    return response.data;
+  },
+
+  async removePlan(eventId: string): Promise<void> {
+    await api.delete(`${BASE}/events/${eventId}/plan`);
+  },
+
   async updateNightPlan(eventId: string, payload: NightPlanPayload): Promise<CrewBoard> {
     const response = await api.put<CrewBoard>(`${BASE}/events/${eventId}/plan`, payload);
     return response.data;

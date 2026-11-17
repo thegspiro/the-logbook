@@ -9,6 +9,7 @@ import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Plus, X } from 'lucide-react';
 import { Modal } from '../../Modal';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 import { apparatusEventService } from '../../../services/api';
 import {
   ApparatusEventEvocMode,
@@ -41,6 +42,8 @@ interface EditNightDialogProps {
   board: CrewBoard | null;
   onClose: () => void;
   onSaved: (board: CrewBoard) => void;
+  /** The crew was taken off the event entirely; the event itself stays. */
+  onRemoved: () => void;
 }
 
 const rowsFrom = (board: CrewBoard): UnitRow[] =>
@@ -59,7 +62,7 @@ const rowsFrom = (board: CrewBoard): UnitRow[] =>
     })),
   }));
 
-export const EditNightDialog: React.FC<EditNightDialogProps> = ({ board, onClose, onSaved }) => {
+export const EditNightDialog: React.FC<EditNightDialogProps> = ({ board, onClose, onSaved, onRemoved }) => {
   const [units, setUnits] = useState<UnitRow[]>([]);
   const [evocMode, setEvocMode] = useState<ApparatusEventEvocMode>(ApparatusEventEvocMode.ENFORCE);
   const [selfSignup, setSelfSignup] = useState(true);
@@ -67,6 +70,7 @@ export const EditNightDialog: React.FC<EditNightDialogProps> = ({ board, onClose
   const [categoryId, setCategoryId] = useState('');
   const [options, setOptions] = useState<EditorOptions | null>(null);
   const [saving, setSaving] = useState(false);
+  const { confirm } = useConfirm();
 
   useEffect(() => {
     if (!board) return;
@@ -91,6 +95,29 @@ export const EditNightDialog: React.FC<EditNightDialogProps> = ({ board, onClose
     );
 
   const invalid = units.some((u) => u.seats.length === 0 || u.seats.some((s) => !s.name.trim()));
+  const anyoneSeated = units.some((u) => u.seats.some((s) => s.occupant));
+
+  const removeCrew = async () => {
+    const ok = await confirm({
+      title: 'Remove the apparatus crew?',
+      message:
+        'The apparatus and every seat come off this event. The event itself stays on the calendar, and its hours go back to the event type’s usual category.',
+      confirmLabel: 'Remove crew',
+      cancelLabel: 'Keep it',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    setSaving(true);
+    try {
+      await apparatusEventService.removePlan(board.event_id);
+      toast.success('Apparatus crew removed');
+      onRemoved();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not remove the crew.'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const save = async () => {
     const payload: NightPlanPayload = {
@@ -138,6 +165,15 @@ export const EditNightDialog: React.FC<EditNightDialogProps> = ({ board, onClose
           </button>
           <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>
             Cancel
+          </button>
+          <button
+            type="button"
+            className="btn-secondary sm:mr-auto"
+            onClick={() => void removeCrew()}
+            disabled={saving || anyoneSeated}
+            title={anyoneSeated ? 'Clear every seat before removing the crew' : undefined}
+          >
+            Remove crew
           </button>
         </>
       }

@@ -24,6 +24,7 @@ from app.schemas.apparatus_event import (
     ApparatusEventTemplateCreate,
     ApparatusEventTemplateResponse,
     ApparatusEventTemplateUpdate,
+    AttachConflictRequest,
     CalendarOutreachItem,
     ConflictCheckRequest,
     ConflictCheckResponse,
@@ -743,3 +744,59 @@ async def update_night_plan(
         for c in conflicts
     ]
     return await _board(service, event_id, viewer, warnings)
+
+
+@router.post("/events/{event_id}/plan/conflicts", response_model=ConflictCheckResponse)
+async def check_attach_conflicts(
+    event_id: str,
+    data: AttachConflictRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus_events.manage")),
+):
+    """
+    Preview what stands in the way of a template's apparatus at an existing
+    event's time, before attaching its crew.
+
+    **Requires permission: apparatus_events.manage**
+    """
+    try:
+        conflicts = await ApparatusEventService(db).check_attach_conflicts(
+            event_id, data.template_id, str(current_user.organization_id)
+        )
+    except ValueError as exc:
+        raise _bad_request(exc)
+    if conflicts is None:
+        raise HTTPException(status_code=404, detail="Event or template not found")
+    return ConflictCheckResponse(conflicts=conflicts)
+
+
+@router.delete("/events/{event_id}/plan", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_night_plan(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus_events.manage")),
+):
+    """
+    Take the apparatus crew off an event while no seat is filled. The event
+    itself stays.
+
+    **Requires permission: apparatus_events.manage**
+    """
+    viewer = _viewer(current_user)
+    try:
+        removed = await ApparatusEventService(db).remove_plan(
+            event_id, viewer.organization_id
+        )
+    except ValueError as exc:
+        raise _bad_request(exc)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Apparatus event not found")
+    await log_audit_event(
+        db=db,
+        event_type="apparatus_event_crew_removed",
+        event_category="events",
+        severity="info",
+        event_data={"event_id": event_id},
+        user_id=viewer.id,
+        username=viewer.username,
+    )
