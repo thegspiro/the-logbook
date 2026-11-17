@@ -156,7 +156,7 @@ describe('GrantDetailPage create forms', () => {
     renderPage();
     await openTab(user, /Activity Log/);
 
-    await user.type(screen.getByLabelText('Add Note'), '  Spoke with the program officer.  ');
+    await user.type(screen.getByLabelText(/^Add Note/), '  Spoke with the program officer.  ');
     await user.click(screen.getByRole('button', { name: /^Add Note$/ }));
 
     await waitFor(() => expect(mockCreateNote).toHaveBeenCalledTimes(1));

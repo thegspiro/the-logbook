@@ -1,5 +1,5 @@
 /**
- * Store settings as a form (forms review batch 21): a value outside what the
+ * Store settings as a form (forms review batch 22): a value outside what the
  * server accepts is named on its field before anything is sent, a refusal
  * lands on the field it names, and either holds the whole save back — these
  * settings carry the payment configuration, so half of them is not saved.
