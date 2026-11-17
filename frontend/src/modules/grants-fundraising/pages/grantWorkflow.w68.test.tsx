@@ -164,9 +164,9 @@ describe('Grant detail page (W68)', () => {
     await user.click(screen.getByRole('button', { name: 'Budget' }));
     await user.click(screen.getByRole('button', { name: 'Add Budget Item' }));
     const dialog = screen.getByRole('dialog');
-    await user.selectOptions(within(dialog).getByLabelText('Category'), 'Indirect Costs');
-    await user.type(within(dialog).getByLabelText('Description'), 'Administration');
-    await user.type(within(dialog).getByLabelText('Amount'), '500');
+    await user.selectOptions(within(dialog).getByLabelText(/^Category/), 'Indirect Costs');
+    await user.type(within(dialog).getByLabelText(/^Description/), 'Administration');
+    await user.type(within(dialog).getByLabelText(/^Amount/), '500');
     await user.click(within(dialog).getByRole('button', { name: 'Add Budget Item' }));
 
     await waitFor(() =>
@@ -186,12 +186,14 @@ describe('Grant detail page (W68)', () => {
     await user.click(screen.getByRole('button', { name: 'Budget' }));
     await user.click(screen.getByRole('button', { name: 'Add Budget Item' }));
     const dialog = screen.getByRole('dialog');
-    await user.selectOptions(within(dialog).getByLabelText('Category'), 'Equipment');
-    await user.type(within(dialog).getByLabelText('Description'), 'Cameras');
-    await user.type(within(dialog).getByLabelText('Amount'), '16000');
+    await user.selectOptions(within(dialog).getByLabelText(/^Category/), 'Equipment');
+    await user.type(within(dialog).getByLabelText(/^Description/), 'Cameras');
+    await user.type(within(dialog).getByLabelText(/^Amount/), '16000');
     await user.click(within(dialog).getByRole('button', { name: 'Add Budget Item' }));
 
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Application not found'));
+    // Said inside the dialog, which stays open, rather than only in a toast
+    // behind it (forms review F-2).
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Application not found');
   });
 
   it('adds up budget lines served as Decimal strings', async () => {
