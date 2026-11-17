@@ -208,3 +208,66 @@ async def test_a_merge_started_while_a_shift_is_logged_relabels_it(monkeypatch):
         f"a shift being logged as the merge began was stored as {logged}: the "
         "merge relabelled before the shift was written."
     )
+
+
+@pytest.mark.usefixtures("_initialize_database")
+async def test_a_rename_committed_after_the_merges_snapshot_is_seen():
+    """The merge's transaction has already read something (as an endpoint does
+    when it loads the signed-in user), so a plain read inside it answers from
+    that older snapshot. A target unit renamed to match the source unit after
+    that point must still be found and combined, not missed and moved onto the
+    unique index."""
+    ids = await _seed()
+    target_unit = str(uuid.uuid4())
+    async with database_manager.engine.connect() as conn:
+        async with conn.begin():
+            await conn.execute(
+                text(
+                    "INSERT INTO external_apparatus (id, organization_id, agency_id, "
+                    "name, is_active) VALUES (:id, :org, :agency, 'Medic 1', 1)"
+                ),
+                {"id": target_unit, "org": ids["org"], "agency": ids["target"]},
+            )
+    try:
+        async with database_manager.engine.connect() as merge_conn:
+            session = AsyncSession(bind=merge_conn, expire_on_commit=False)
+            # The read that fixes the merge transaction's snapshot.
+            await session.execute(
+                text("SELECT name FROM organizations WHERE id = :o"),
+                {"o": ids["org"]},
+            )
+            async with database_manager.engine.connect() as other:
+                async with other.begin():
+                    await other.execute(
+                        text(
+                            "UPDATE external_apparatus SET name = 'FAS' WHERE id = :u"
+                        ),
+                        {"u": target_unit},
+                    )
+            try:
+                result = await ExternalApparatusService(session).merge_agency(
+                    ids["org"], ids["source"], ids["target"]
+                )
+                outcome = "ok"
+            except DBAPIError as exc:
+                await session.rollback()
+                result, outcome = None, f"error:{exc.orig}"
+            finally:
+                await session.close()
+        async with database_manager.engine.connect() as conn:
+            units = (
+                await conn.execute(
+                    text(
+                        "SELECT id, agency_id FROM external_apparatus "
+                        "WHERE organization_id = :o"
+                    ),
+                    {"o": ids["org"]},
+                )
+            ).all()
+    finally:
+        await _cleanup(ids["org"])
+
+    assert outcome == "ok", outcome
+    assert result is not None
+    assert result["combined_apparatus"] == 1
+    assert [(u[0], u[1]) for u in units] == [(target_unit, ids["target"])]

@@ -360,6 +360,13 @@ class ExternalApparatusService:
                     ExternalApparatus.agency_id == str(agency_id),
                     ExternalApparatus.name == name,
                 )
+                # A locking read, so it sees the latest committed names rather
+                # than the snapshot the request's first plain read (loading
+                # the signed-in user) fixed. A unit renamed after that point
+                # would otherwise be missed, or matched by its old name. The
+                # merge already holds these rows' locks, so this waits on
+                # nothing new.
+                .with_for_update()
             )
         ).scalar_one_or_none()
 
