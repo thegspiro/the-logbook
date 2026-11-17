@@ -485,9 +485,15 @@ class StorefrontService:
         return list(result.scalars().all())
 
     async def get_product(
-        self, product_id: str, organization_id: str
+        self, product_id: str, organization_id: str, reload: bool = False
     ) -> Optional[StoreProduct]:
-        result = await self.db.execute(
+        """Fetch one product with its variants.
+
+        ``reload`` is for the re-read after a write: without it a product the
+        session already holds keeps the variants it was loaded with, so a
+        variant the write just added would be missing from the response.
+        """
+        query = (
             select(StoreProduct)
             .options(selectinload(StoreProduct.variants))
             .where(
@@ -495,6 +501,9 @@ class StorefrontService:
                 StoreProduct.organization_id == str(organization_id),
             )
         )
+        if reload:
+            query = query.execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         store_product: Optional[StoreProduct] = result.scalar_one_or_none()
         return store_product
 
@@ -529,7 +538,7 @@ class StorefrontService:
         except IntegrityError as exc:
             await self.db.rollback()
             raise ValueError(self._integrity_message(exc)) from exc
-        refreshed = await self.get_product(product.id, organization_id)
+        refreshed = await self.get_product(product.id, organization_id, reload=True)
         return refreshed or product
 
     async def update_product(
@@ -559,7 +568,7 @@ class StorefrontService:
         except IntegrityError as exc:
             await self.db.rollback()
             raise ValueError(self._integrity_message(exc)) from exc
-        refreshed = await self.get_product(product_id, organization_id)
+        refreshed = await self.get_product(product_id, organization_id, reload=True)
         return refreshed or product
 
     async def archive_product(self, product_id: str, organization_id: str) -> None:
@@ -778,9 +787,15 @@ class StorefrontService:
         return list(result.scalars().all())
 
     async def get_window(
-        self, window_id: str, organization_id: str
+        self, window_id: str, organization_id: str, reload: bool = False
     ) -> Optional[StoreOrderWindow]:
-        result = await self.db.execute(
+        """Fetch one window with its offerings and their products.
+
+        ``reload`` is for the re-read after a write: ``_replace_offerings``
+        deletes and inserts by query, so without it a window the session
+        already holds would return the offerings it had just replaced.
+        """
+        query = (
             select(StoreOrderWindow)
             .options(
                 selectinload(StoreOrderWindow.offerings).selectinload(
@@ -792,6 +807,9 @@ class StorefrontService:
                 StoreOrderWindow.organization_id == str(organization_id),
             )
         )
+        if reload:
+            query = query.execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         store_order_window: Optional[StoreOrderWindow] = result.scalar_one_or_none()
         return store_order_window
 
@@ -818,7 +836,7 @@ class StorefrontService:
         except IntegrityError as exc:
             await self.db.rollback()
             raise ValueError(self._integrity_message(exc)) from exc
-        refreshed = await self.get_window(window.id, organization_id)
+        refreshed = await self.get_window(window.id, organization_id, reload=True)
         return refreshed or window
 
     async def update_window(
@@ -844,7 +862,7 @@ class StorefrontService:
         except IntegrityError as exc:
             await self.db.rollback()
             raise ValueError(self._integrity_message(exc)) from exc
-        refreshed = await self.get_window(window_id, organization_id)
+        refreshed = await self.get_window(window_id, organization_id, reload=True)
         return refreshed or window
 
     async def _replace_offerings(
@@ -1564,7 +1582,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        full_order = await self.get_order(order.id, organization_id)
+        full_order = await self.get_order(order.id, organization_id, reload=True)
         if full_order is None:
             return order
 
@@ -1896,11 +1914,17 @@ class StorefrontService:
         organization_id: str,
         user_id: Optional[str] = None,
         for_update: bool = False,
+        reload: bool = False,
     ) -> Optional[StoreOrder]:
         """Fetch one order, always org-scoped; ``user_id`` narrows to the owner.
 
         ``for_update`` locks the order row and re-reads it past the session's
         identity map, for a read-modify-write on its money columns (SF-9).
+
+        ``reload`` re-reads past the identity map without the lock, for the
+        read after a write: a write adds its timeline event by ``order_id``,
+        so an order the session already holds would otherwise come back
+        without the event just written.
         """
         query = (
             select(StoreOrder)
@@ -1918,6 +1942,8 @@ class StorefrontService:
             query = query.where(StoreOrder.user_id == str(user_id))
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
+        elif reload:
+            query = query.execution_options(populate_existing=True)
         result = await self.db.execute(query)
         store_order: Optional[StoreOrder] = result.scalar_one_or_none()
         return store_order
@@ -2113,7 +2139,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
             if settings.send_status_updates:
@@ -2208,7 +2234,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
             if settings.send_payment_receipts:
@@ -2320,7 +2346,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
             if settings.send_payment_receipts:
@@ -2430,7 +2456,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         if refreshed and settings.notify_admins_on_order:
             await self.notifications.send_admin_new_order(refreshed, settings)
         return refreshed or order
@@ -2470,7 +2496,9 @@ class StorefrontService:
 
         order.payment_method = method
         await self.db.commit()
-        refreshed = await self.get_order(order_id, organization_id, user_id=user_id)
+        refreshed = await self.get_order(
+            order_id, organization_id, user_id=user_id, reload=True
+        )
         return refreshed or order
 
     async def refund_order(
@@ -2524,7 +2552,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
             if settings.send_payment_receipts:
@@ -2574,7 +2602,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
             # A cancellation is a status change, and rides the same switch.
@@ -2616,7 +2644,7 @@ class StorefrontService:
         )
         await self.db.commit()
 
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         if refreshed and is_member_visible and notify_member:
             # Deliberately not behind a notification switch: this is a message
             # a quartermaster typed to one member and asked to send. The
@@ -2658,7 +2686,7 @@ class StorefrontService:
             raise ValueError("Order not found")
         order.admin_notes = notes
         await self.db.commit()
-        refreshed = await self.get_order(order_id, organization_id)
+        refreshed = await self.get_order(order_id, organization_id, reload=True)
         return refreshed or order
 
     async def bulk_update_status(
