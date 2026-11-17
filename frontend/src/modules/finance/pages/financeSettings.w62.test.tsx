@@ -104,9 +104,9 @@ describe('Finance Settings and Approval Chains (W62)', () => {
 
     await user.click(screen.getByRole('button', { name: 'New Fiscal Year' }));
     const dialog = screen.getByRole('dialog', { name: 'Create Fiscal Year' });
-    expect(dialog).toContainElement(screen.getByLabelText('Name'));
-    expect(screen.getByLabelText('Start Date')).toHaveAttribute('type', 'date');
-    expect(screen.getByLabelText('End Date')).toHaveAttribute('type', 'date');
+    expect(dialog).toContainElement(screen.getByLabelText(/^Name/));
+    expect(screen.getByLabelText(/^Start Date/)).toHaveAttribute('type', 'date');
+    expect(screen.getByLabelText(/^End Date/)).toHaveAttribute('type', 'date');
 
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());

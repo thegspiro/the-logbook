@@ -1808,7 +1808,9 @@ class EventService:
         pending_reversals = await self._revoke_event_attendance_credit(
             event_id, organization_id, event=event
         )
-        await self._void_waiver_requests([event], organization_id, "cancelled")
+        waiver_notices = await self._void_waiver_requests(
+            [event], organization_id, "cancelled"
+        )
 
         event.is_cancelled = True
         event.cancellation_reason = reason
@@ -1821,11 +1823,13 @@ class EventService:
         if defer_commit:
             await self.db.flush()
             self._deferred_reversals.extend(pending_reversals)
+            self._deferred_waiver_notices.extend(waiver_notices)
             return event
 
         await self.db.commit()
         await self.db.refresh(event)
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
+        await self._send_waiver_notices(waiver_notices, organization_id)
 
         # Send cancellation notifications if requested
         if send_notifications and rsvps_to_notify:
@@ -2319,7 +2323,9 @@ class EventService:
         pending_reversals = await self._void_training_credit_before_removal(
             list(events), organization_id
         )
-        await self._void_waiver_requests(list(events), organization_id, "cancelled")
+        waiver_notices = await self._void_waiver_requests(
+            list(events), organization_id, "cancelled"
+        )
 
         now = datetime.now(dt_timezone.utc)
         cancelled_count = 0
@@ -2335,6 +2341,7 @@ class EventService:
             await self._reverse_pipeline_after_commit(
                 pending_reversals, organization_id
             )
+            await self._send_waiver_notices(waiver_notices, organization_id)
 
         return cancelled_count
 
@@ -2554,7 +2561,9 @@ class EventService:
         pending_reversals = await self._revoke_event_attendance_credit(
             event_id, organization_id, event=event
         )
-        await self._void_waiver_requests([event], organization_id, "deleted")
+        waiver_notices = await self._void_waiver_requests(
+            [event], organization_id, "deleted"
+        )
 
         await self.db.delete(event)
         try:
@@ -2573,6 +2582,7 @@ class EventService:
             )
 
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
+        await self._send_waiver_notices(waiver_notices, organization_id)
         return True
 
     async def delete_event_series(
@@ -2657,7 +2667,9 @@ class EventService:
         pending_reversals = await self._void_training_credit_before_removal(
             list(events), organization_id
         )
-        await self._void_waiver_requests(list(events), organization_id, "deleted")
+        waiver_notices = await self._void_waiver_requests(
+            list(events), organization_id, "deleted"
+        )
 
         for event in events:
             await self.db.delete(event)
@@ -2678,6 +2690,7 @@ class EventService:
             )
 
         await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
+        await self._send_waiver_notices(waiver_notices, organization_id)
         return len(events)
 
     # RSVP Methods
@@ -3830,19 +3843,23 @@ class EventService:
 
     async def _void_waiver_requests(
         self, events: List[Event], organization_id: UUID | str, cause: str
-    ) -> None:
+    ) -> List[Any]:
         """Void the pending waiver requests of events being cancelled or deleted.
 
         Inside the caller's transaction, while it holds the events: a pending
         request is about a session that will no longer be held. Approved and
-        denied requests are kept (attendance_waiver_service).
+        denied requests are kept (attendance_waiver_service). Returns the
+        emails owed to the members once the caller commits
+        (``_send_waiver_notices``).
         """
         # Local import: the waiver engine imports this module's models and
         # services through the training compliance chain.
         from app.services.attendance_waiver_service import void_pending_for_events
 
-        await void_pending_for_events(
-            self.db, str(organization_id), [str(e.id) for e in events], cause
+        return list(
+            await void_pending_for_events(
+                self.db, str(organization_id), [str(e.id) for e in events], cause
+            )
         )
 
     async def _reconfirm_waiver_requests_if_moved(
@@ -3878,13 +3895,14 @@ class EventService:
     async def _send_waiver_notices(
         self, notices: List[Any], organization_id: UUID | str
     ) -> None:
-        """The emails ``_reconfirm_waiver_requests_if_moved`` owes, after the
-        commit; a failure is logged there and never fails the move."""
+        """The emails ``_reconfirm_waiver_requests_if_moved`` and
+        ``_void_waiver_requests`` owe, after the commit; a failure is logged
+        there and never fails the move, cancellation or deletion."""
         if not notices:
             return
-        from app.services.attendance_waiver_service import send_reschedule_notices
+        from app.services.attendance_waiver_service import send_member_notices
 
-        await send_reschedule_notices(self.db, str(organization_id), notices)
+        await send_member_notices(self.db, str(organization_id), notices)
 
     @staticmethod
     async def _reverse_pipeline_after_commit(
