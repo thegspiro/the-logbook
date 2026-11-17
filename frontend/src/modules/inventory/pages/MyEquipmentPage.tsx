@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ChevronUp,
   Ruler,
+  CheckCircle2,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type {
@@ -129,6 +130,18 @@ const Section: React.FC<{
   );
 };
 
+/**
+ * Stands in for "Notify quartermaster of return" once a notice is open: a
+ * second press is refused by the server, and the member is better served by
+ * knowing the quartermaster already has it than by a button that fails.
+ */
+const NotifiedNote: React.FC<{ at: string; tz: string }> = ({ at, tz }) => (
+  <span className="text-theme-text-muted inline-flex items-center gap-1 text-xs whitespace-nowrap">
+    <CheckCircle2 className="h-3 w-3 text-green-700 dark:text-green-400" aria-hidden="true" />
+    Quartermaster notified{at ? ` ${formatDate(at, tz)}` : ''}
+  </span>
+);
+
 const MyEquipmentPage: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const tz = useTimezone();
@@ -212,6 +225,13 @@ const MyEquipmentPage: React.FC = () => {
     equipRequests.filter((r) => r.status === 'pending').length +
     returnRequests.filter((r) => r.status === 'requested').length;
   const totalItems = myGear.length + checkouts.length;
+  // Items the member has already told the quartermaster about, keyed the way
+  // the server refuses a second notice (create_return_request: one open
+  // `requested` notice per item), so a row offers the button exactly when a
+  // press would be accepted.
+  const notifiedAt = new Map(
+    returnRequests.filter((r) => r.status === 'requested').map((r) => [r.item_id, r.created_at] as const)
+  );
 
   /* ---------- Extend checkout ---------- */
   const handleExtend = async () => {
@@ -474,27 +494,31 @@ const MyEquipmentPage: React.FC = () => {
                   )}
                 </div>
               </div>
-              <button
-                type="button"
-                // One list now carries rows whose return actions hit different
-                // endpoints; naming the item keeps the buttons distinguishable
-                // to a screen reader instead of repeating one label per row.
-                aria-label={`Notify quartermaster of return: ${g.itemName}`}
-                onClick={() => {
-                  setRetQty(1);
-                  setReturnModal({
-                    open: true,
-                    returnType: g.kind,
-                    itemId: g.itemId,
-                    refId: g.refId,
-                    maxQty: g.maxQty,
-                  });
-                }}
-                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary touch:min-h-[44px] touch:min-w-[44px] rounded border px-3 py-1.5 text-xs whitespace-nowrap transition-colors"
-              >
-                <CornerDownLeft className="mr-1 inline h-3 w-3" />
-                Notify quartermaster of return
-              </button>
+              {notifiedAt.has(g.itemId) ? (
+                <NotifiedNote at={notifiedAt.get(g.itemId) ?? ''} tz={tz} />
+              ) : (
+                <button
+                  type="button"
+                  // One list now carries rows whose return actions hit different
+                  // endpoints; naming the item keeps the buttons distinguishable
+                  // to a screen reader instead of repeating one label per row.
+                  aria-label={`Notify quartermaster of return: ${g.itemName}`}
+                  onClick={() => {
+                    setRetQty(1);
+                    setReturnModal({
+                      open: true,
+                      returnType: g.kind,
+                      itemId: g.itemId,
+                      refId: g.refId,
+                      maxQty: g.maxQty,
+                    });
+                  }}
+                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary touch:min-h-[44px] touch:min-w-[44px] rounded border px-3 py-1.5 text-xs whitespace-nowrap transition-colors"
+                >
+                  <CornerDownLeft className="mr-1 inline h-3 w-3" />
+                  Notify quartermaster of return
+                </button>
+              )}
             </div>
           ))}
         </Section>
@@ -547,22 +571,26 @@ const MyEquipmentPage: React.FC = () => {
                   <CalendarClock className="mr-1 inline h-3 w-3" />
                   Extend
                 </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setReturnModal({
-                      open: true,
-                      returnType: 'checkout',
-                      itemId: c.item_id,
-                      refId: c.checkout_id,
-                      maxQty: 1,
-                    })
-                  }
-                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary active:bg-theme-surface-secondary touch:min-h-[44px] touch:min-w-[44px] rounded border px-3 py-2 text-xs whitespace-nowrap transition-colors sm:py-1.5"
-                >
-                  <CornerDownLeft className="mr-1 inline h-3 w-3" />
-                  Notify quartermaster of return
-                </button>
+                {notifiedAt.has(c.item_id) ? (
+                  <NotifiedNote at={notifiedAt.get(c.item_id) ?? ''} tz={tz} />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReturnModal({
+                        open: true,
+                        returnType: 'checkout',
+                        itemId: c.item_id,
+                        refId: c.checkout_id,
+                        maxQty: 1,
+                      })
+                    }
+                    className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary active:bg-theme-surface-secondary touch:min-h-[44px] touch:min-w-[44px] rounded border px-3 py-2 text-xs whitespace-nowrap transition-colors sm:py-1.5"
+                  >
+                    <CornerDownLeft className="mr-1 inline h-3 w-3" />
+                    Notify quartermaster of return
+                  </button>
+                )}
               </div>
             </div>
           ))}
