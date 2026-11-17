@@ -18,7 +18,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { organizationService } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
+import { FIELD_ERROR_CLASS } from '@/components/ux/FormField';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { mapServerFieldErrors, type ServerFieldSpec } from '@/utils/serverFieldErrors';
 import { financeSettingsService } from '../services/api';
 import { ADVANCE_RETURN_DAYS, AdvanceReturnMethod } from '../types';
 
@@ -35,6 +37,11 @@ const METHOD_DESCRIPTIONS: Record<AdvanceReturnMethod, string> = {
 const isMethod = (value: string): value is AdvanceReturnMethod =>
   (Object.values(AdvanceReturnMethod) as string[]).includes(value);
 
+/** `FinanceSettingsUpdate.advance_return_method`, refused by its path under `finance`. */
+const FIELDS: Record<'advanceReturnMethod', ServerFieldSpec> = {
+  advanceReturnMethod: { label: 'Deadline for returning an advance', api: 'finance.advance_return_method' },
+};
+
 export const AdvanceReturnMethodSettingsCard: React.FC = () => {
   const canEdit = useAuthStore(
     (s) => s.checkPermission('settings.manage') || s.checkPermission('organization.update_settings')
@@ -43,6 +50,10 @@ export const AdvanceReturnMethodSettingsCard: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [method, setMethod] = useState<AdvanceReturnMethod>(AdvanceReturnMethod.FIXED_DATE);
   const [saving, setSaving] = useState(false);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  // A refusal no field answers for is said inside the card, not only in a
+  // toast that fades (forms review F-5).
+  const [formError, setFormError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -61,6 +72,8 @@ export const AdvanceReturnMethodSettingsCard: React.FC = () => {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFieldError(null);
+    setFormError(null);
     setSaving(true);
     try {
       await organizationService.updateSettings({ finance: { advance_return_method: method } });
@@ -68,7 +81,21 @@ export const AdvanceReturnMethodSettingsCard: React.FC = () => {
       await load();
       toast.success('Cash advance deadline saved');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not save the cash advance deadline'));
+      // The one setting is sent whole; a refusal stores nothing, so the
+      // choice stays on screen to be saved again.
+      const mapped = mapServerFieldErrors(err, FIELDS);
+      const onField = mapped?.fieldErrors.advanceReturnMethod;
+      if (onField) {
+        setFieldError(onField);
+        window.setTimeout(() => document.getElementById(`advance-return-method-${method}`)?.focus(), 0);
+      }
+      const rest = onField ? (mapped?.unmatched ?? []) : [];
+      if (!onField || rest.length > 0) {
+        const message =
+          rest.length > 0 ? rest.join(' ') : getErrorMessage(err, 'Could not save the cash advance deadline');
+        setFormError(message);
+        toast.error(message);
+      }
     } finally {
       setSaving(false);
     }
@@ -80,7 +107,9 @@ export const AdvanceReturnMethodSettingsCard: React.FC = () => {
         Cash advance deadline
       </h2>
       {loadError ? (
-        <p className="mt-2 text-sm text-red-700 dark:text-red-400">{loadError}</p>
+        <p role="alert" className={`mt-2 text-sm ${FIELD_ERROR_CLASS}`}>
+          {loadError}
+        </p>
       ) : current === null ? (
         <p className="text-theme-text-secondary mt-2 text-sm">Loading…</p>
       ) : (
@@ -101,13 +130,17 @@ export const AdvanceReturnMethodSettingsCard: React.FC = () => {
                 {Object.values(AdvanceReturnMethod).map((value) => (
                   <label key={value} className="text-theme-text-primary flex items-center gap-2 text-sm">
                     <input
+                      id={`advance-return-method-${value}`}
                       type="radio"
                       name="advance-return-method"
                       className="form-checkbox rounded-full"
                       value={value}
                       checked={method === value}
+                      aria-invalid={fieldError ? true : undefined}
+                      aria-describedby={fieldError ? 'advance-return-method-error' : undefined}
                       onChange={(e) => {
                         if (isMethod(e.target.value)) setMethod(e.target.value);
+                        setFieldError(null);
                       }}
                     />
                     {METHOD_LABELS[value]}
@@ -115,10 +148,20 @@ export const AdvanceReturnMethodSettingsCard: React.FC = () => {
                 ))}
               </div>
               <p className="text-theme-text-secondary mt-1 text-xs">{METHOD_DESCRIPTIONS[method]}</p>
+              {fieldError && (
+                <p id="advance-return-method-error" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+                  {fieldError}
+                </p>
+              )}
             </fieldset>
             <button type="submit" className="btn-primary" disabled={saving}>
               Save
             </button>
+            {formError && (
+              <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                {formError}
+              </p>
+            )}
           </form>
         )
       ) : (
