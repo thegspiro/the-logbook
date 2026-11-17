@@ -12,10 +12,28 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
+import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
 import { getErrorMessage } from '@/utils/errorHandling';
+import type { ServerFieldSpec } from '@/utils/serverFieldErrors';
 import { exportMappingService } from '../services/api';
 import { DuesExportStatus, type DuesExportReadiness, type DuesScheduleExport } from '../types';
+import { firstErrorField, refusalsOnFields, useDialogFieldErrors, type FieldErrors } from '../utils/fieldRefusals';
 import { notInChartHint, UNSAFE_ACCOUNT_NAME_HINT } from '../utils/qbAccountIssues';
+
+/** `DuesDefaultAccountsUpdate` (schemas/finance.py): both `max_length=200`. */
+const MAX_ACCOUNT = 200;
+
+type DuesField = 'incomeAccount' | 'depositAccount';
+
+const SERVER_FIELDS: Record<DuesField, ServerFieldSpec> = {
+  incomeAccount: { label: 'Default income account', maxLength: MAX_ACCOUNT },
+  depositAccount: { label: 'Default deposited to', maxLength: MAX_ACCOUNT },
+};
+const FIELD_ORDER = Object.keys(SERVER_FIELDS) as DuesField[];
+const FIELD_IDS: Record<DuesField, string> = {
+  incomeAccount: 'dues-default-income',
+  depositAccount: 'dues-default-deposit',
+};
 
 const STATUS_LABELS: Record<DuesExportStatus, string> = {
   [DuesExportStatus.READY]: 'Ready',
@@ -71,19 +89,48 @@ export const DuesExportSection: React.FC<DuesExportSectionProps> = ({ dues, onSa
   const [deposit, setDeposit] = useState(dues.defaultDepositAccount ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { errors, setErrors, clearError } = useDialogFieldErrors<DuesField>();
+
+  const flag = (next: FieldErrors<DuesField>) => {
+    setErrors(next);
+    const first = firstErrorField(next, FIELD_ORDER);
+    if (first) document.getElementById(FIELD_IDS[first])?.focus();
+    return first === undefined;
+  };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
     setError(null);
+    const values: Record<DuesField, string> = { incomeAccount: income.trim(), depositAccount: deposit.trim() };
+    const tooLong: FieldErrors<DuesField> = {};
+    for (const field of FIELD_ORDER) {
+      if (values[field].length > MAX_ACCOUNT) {
+        tooLong[field] = `Keep the account name to ${String(MAX_ACCOUNT)} characters.`;
+      }
+    }
+    if (!flag(tooLong)) return;
+    setSaving(true);
     try {
+      // Both keys are required on the PUT (blank clears one), so this is a
+      // whole replace: a refused field keeps the pair unsaved rather than
+      // saving around it (forms review F-6 single-save rule, replace case).
       const next = await exportMappingService.setDuesDefaults({
-        incomeAccount: income.trim() || null,
-        depositAccount: deposit.trim() || null,
+        incomeAccount: values.incomeAccount || null,
+        depositAccount: values.depositAccount || null,
       });
       onSaved(next);
       toast.success('Dues accounts saved');
     } catch (err: unknown) {
+      const mapped = refusalsOnFields(err, SERVER_FIELDS);
+      if (mapped) {
+        flag(mapped.fieldErrors);
+        setError(
+          mapped.unmatched.length > 0 ? mapped.unmatched.join(' ') : 'Nothing was saved. Fix the flagged account.'
+        );
+        return;
+      }
+      // A payable or receivable account is a 400 that names no field; it is
+      // said here, beside the fields, not only in a toast (forms review F-3).
       setError(getErrorMessage(err, 'Could not save the dues accounts.'));
     } finally {
       setSaving(false);
@@ -132,39 +179,53 @@ export const DuesExportSection: React.FC<DuesExportSectionProps> = ({ dues, onSa
         </p>
       )}
       <form onSubmit={(e) => void save(e)} className="card flex flex-wrap items-end gap-3 p-4" noValidate>
-        <div>
-          <label htmlFor="dues-default-income" className="form-label">
-            Default income account
-          </label>
-          <input
-            id="dues-default-income"
-            type="text"
-            maxLength={200}
-            className="form-input"
-            placeholder="Dues Income"
-            value={income}
-            onChange={(e) => setIncome(e.target.value)}
-          />
-        </div>
-        <div>
-          <label htmlFor="dues-default-deposit" className="form-label">
-            Default deposited to
-          </label>
-          <input
-            id="dues-default-deposit"
-            type="text"
-            maxLength={200}
-            className="form-input"
-            placeholder="Operating Checking"
-            value={deposit}
-            onChange={(e) => setDeposit(e.target.value)}
-          />
-        </div>
+        <FormField
+          id={FIELD_IDS.incomeAccount}
+          label="Default income account"
+          error={errors.incomeAccount}
+          maxLength={MAX_ACCOUNT}
+          count={income.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              className="form-input"
+              placeholder="Dues Income"
+              value={income}
+              onChange={(e) => {
+                setIncome(e.target.value);
+                clearError('incomeAccount');
+              }}
+            />
+          )}
+        </FormField>
+        <FormField
+          id={FIELD_IDS.depositAccount}
+          label="Default deposited to"
+          error={errors.depositAccount}
+          maxLength={MAX_ACCOUNT}
+          count={deposit.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              className="form-input"
+              placeholder="Operating Checking"
+              value={deposit}
+              onChange={(e) => {
+                setDeposit(e.target.value);
+                clearError('depositAccount');
+              }}
+            />
+          )}
+        </FormField>
         <button type="submit" className="btn-primary" disabled={saving}>
           Save
         </button>
         {error && (
-          <p role="alert" className="alert-danger w-full text-sm">
+          <p role="alert" className={`w-full text-sm ${FIELD_ERROR_CLASS}`}>
             {error}
           </p>
         )}

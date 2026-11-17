@@ -192,8 +192,7 @@ DATA_SOURCES: tuple[DataSource, ...] = (
         "One line per request to be excused from a training session held in "
         "the period: the session, what happened to the request and who "
         "decided it, and its category. The member's reason and any "
-        "attachment are never shown; whether an attachment is on file is "
-        "not yet recorded and always reads no.",
+        "attachment are never shown, only whether one is on file.",
     ),
     DataSource(
         "meetings.waivers_summary",
@@ -214,8 +213,7 @@ DATA_SOURCES: tuple[DataSource, ...] = (
         "One line per request to be excused from a business meeting held in "
         "the period: the meeting, what happened to the request and who "
         "decided it, and its category. The member's reason and any "
-        "attachment are never shown; whether an attachment is on file is "
-        "not yet recorded and always reads no.",
+        "attachment are never shown, only whether one is on file.",
     ),
 )
 

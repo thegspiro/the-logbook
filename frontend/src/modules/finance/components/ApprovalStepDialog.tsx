@@ -9,12 +9,49 @@
  * is Email, and notification steps send no email yet.
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { ApprovalStepType, ApproverType } from '../types';
 import { EMPTY_STEP_FORM, validateStepForm } from '../utils/approvalStepForm';
 import type { StepFormErrors, StepFormValues } from '../utils/approvalStepForm';
+import { firstErrorField, refusalsOnFields } from '../utils/fieldRefusals';
 import type { ApproverOption, ApproverOptions } from '../hooks/useApproverOptions';
+
+/** `ApprovalChainStepCreate` / `ApprovalChainStepUpdate` (schemas/finance.py): `name` max_length=200. */
+const MAX_NAME = 200;
+/**
+ * The schema puts no `max_length` on `approver_value`; the column is
+ * `String(500)` (models/finance.py), so the field stops there rather than at a
+ * database error.
+ */
+const MAX_APPROVER_VALUE = 500;
+
+type StepField = keyof StepFormValues;
+
+/** The step payload is snake_case (`buildStep*Payload`); the default lookup covers it. */
+const SERVER_FIELDS: Record<StepField, ServerFieldSpec> = {
+  name: { label: 'Step name', maxLength: MAX_NAME },
+  stepType: { label: 'Step type' },
+  approverType: { label: 'Approver type' },
+  approverValue: { label: 'Approver' },
+  allowSelfApproval: { label: 'Allow self-approval by email' },
+  autoApproveUnder: { label: 'Auto-approve under' },
+};
+const FIELD_ORDER = Object.keys(SERVER_FIELDS) as StepField[];
+const FIELD_IDS: Record<StepField, string> = {
+  name: 'step-name',
+  stepType: 'step-type',
+  approverType: 'step-approver-type',
+  approverValue: 'step-approver-value',
+  allowSelfApproval: 'step-allow-self-approval',
+  autoApproveUnder: 'step-auto-approve',
+};
+
+const sameValues = (a: StepFormValues, b: StepFormValues) => FIELD_ORDER.every((key) => a[key] === b[key]);
 
 interface ApprovalStepDialogProps {
   /** Title and submit label switch on this. */
@@ -23,6 +60,11 @@ interface ApprovalStepDialogProps {
   approverOptions: ApproverOptions;
   saving: boolean;
   onClose: () => void;
+  /**
+   * Saves the step. A rejection is shown in the dialog: a 422 on the field it
+   * names, anything else beside the buttons. A caller that reports its own
+   * failures and resolves leaves the dialog as it is.
+   */
   onSubmit: (values: StepFormValues) => Promise<void>;
 }
 
@@ -55,11 +97,33 @@ export const ApprovalStepDialog: React.FC<ApprovalStepDialogProps> = ({
   onClose,
   onSubmit,
 }) => {
-  const [values, setValues] = useState<StepFormValues>(initialValues ?? EMPTY_STEP_FORM);
+  const initial = useRef(initialValues ?? EMPTY_STEP_FORM);
+  const [values, setValues] = useState<StepFormValues>(initial.current);
   const [errors, setErrors] = useState<StepFormErrors>({});
+  const [failure, setFailure] = useState<string | null>(null);
+  // Escape, the X and Cancel all ask before throwing away a changed step
+  // (forms review F-6).
+  const requestClose = useDiscardGuard({ isDirty: !sameValues(values, initial.current), onClose });
 
-  const update = <K extends keyof StepFormValues>(key: K, value: StepFormValues[K]) =>
+  const clearError = (key: StepField) =>
+    setErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+
+  const update = <K extends StepField>(key: K, value: StepFormValues[K]) => {
     setValues((prev) => ({ ...prev, [key]: value }));
+    clearError(key);
+  };
+
+  const flag = (next: StepFormErrors) => {
+    setErrors(next);
+    const first = firstErrorField(next, FIELD_ORDER);
+    if (first) document.getElementById(FIELD_IDS[first])?.focus();
+    return first === undefined;
+  };
 
   const isApproval = values.stepType === ApprovalStepType.APPROVAL;
   // Former members are not offered; one this step already names stays, marked.
@@ -74,164 +138,180 @@ export const ApprovalStepDialog: React.FC<ApprovalStepDialogProps> = ({
       ? [...pickerOptions, { value: values.approverValue, label: `${values.approverValue} (not found)` }]
       : pickerOptions;
 
+  const save = async () => {
+    try {
+      await onSubmit(values);
+    } catch (err: unknown) {
+      // Presentation only: what is sent, and who may approve, stay the
+      // caller's and the backend's (forms review, approvals rule).
+      const mapped = refusalsOnFields(err, SERVER_FIELDS);
+      if (mapped) {
+        flag(mapped.fieldErrors);
+        if (mapped.unmatched.length > 0) setFailure(mapped.unmatched.join(' '));
+        return;
+      }
+      setFailure(getErrorMessage(err, 'Could not save the step.'));
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const found = validateStepForm(values);
-    setErrors(found);
-    if (Object.keys(found).length > 0) return;
-    void onSubmit(values);
+    setFailure(null);
+    if (!flag(validateStepForm(values))) return;
+    void save();
   };
+
+  const approverValueLabel =
+    values.approverType === ApproverType.EMAIL
+      ? 'Approver email'
+      : values.approverType && pickerItems
+        ? APPROVER_TYPE_CHOICES.find((c) => c.value === values.approverType)?.label
+        : values.approverType
+          ? TEXT_FALLBACK_LABEL[values.approverType]
+          : undefined;
 
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title={mode === 'add' ? 'Add step' : 'Edit step'}
       size="lg"
       onSubmit={handleSubmit}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary">
             {mode === 'add' ? 'Add step' : 'Save step'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={requestClose} className="btn-secondary">
             Cancel
           </button>
         </>
       }
     >
       <div className="space-y-4">
-        <div>
-          <label htmlFor="step-name" className="form-label">
-            Step name
-          </label>
-          <input
-            id="step-name"
-            className="form-input"
-            value={values.name}
-            maxLength={200}
-            placeholder="e.g., Treasurer review"
-            onChange={(e) => update('name', e.target.value)}
-            aria-invalid={Boolean(errors.name)}
-            aria-describedby={errors.name ? 'step-name-error' : undefined}
-          />
-          {errors.name && (
-            <p id="step-name-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-              {errors.name}
-            </p>
+        <FormField
+          id={FIELD_IDS.name}
+          label="Step name"
+          error={errors.name}
+          maxLength={MAX_NAME}
+          count={values.name.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              className="form-input"
+              value={values.name}
+              placeholder="e.g., Treasurer review"
+              onChange={(e) => update('name', e.target.value)}
+            />
           )}
-        </div>
+        </FormField>
 
-        <div>
-          <label htmlFor="step-type" className="form-label">
-            Step type
-          </label>
-          <select
-            id="step-type"
-            className="form-input"
-            value={values.stepType}
-            onChange={(e) => update('stepType', e.target.value as ApprovalStepType)}
-          >
-            <option value={ApprovalStepType.APPROVAL}>Approval</option>
-            <option value={ApprovalStepType.NOTIFICATION}>Notification</option>
-          </select>
-          <p className="text-theme-text-secondary mt-1 text-xs">
-            {isApproval
+        <FormField
+          id={FIELD_IDS.stepType}
+          label="Step type"
+          error={errors.stepType}
+          hint={
+            isApproval
               ? 'The request waits here until someone approves or denies it.'
-              : 'Marked as sent on the request’s approval timeline when the request reaches it, and does not hold the request up. It does not send an email.'}
-          </p>
-        </div>
+              : 'Marked as sent on the request’s approval timeline when the request reaches it, and does not hold the request up. It does not send an email.'
+          }
+        >
+          {(field) => (
+            <select
+              {...field}
+              className="form-input"
+              value={values.stepType}
+              onChange={(e) => update('stepType', e.target.value as ApprovalStepType)}
+            >
+              <option value={ApprovalStepType.APPROVAL}>Approval</option>
+              <option value={ApprovalStepType.NOTIFICATION}>Notification</option>
+            </select>
+          )}
+        </FormField>
 
         {isApproval && (
           <>
-            <div>
-              <label htmlFor="step-approver-type" className="form-label">
-                Approver type
-              </label>
-              <select
-                id="step-approver-type"
-                className="form-input"
-                value={values.approverType}
-                onChange={(e) => {
-                  const next = e.target.value as ApproverType | '';
-                  setValues((prev) => ({
-                    ...prev,
-                    approverType: next,
-                    approverValue: '',
-                    allowSelfApproval: next === ApproverType.EMAIL ? prev.allowSelfApproval : false,
-                  }));
-                }}
-              >
-                {APPROVER_TYPE_CHOICES.map((choice) => (
-                  <option key={choice.value || 'none'} value={choice.value}>
-                    {choice.label}
-                  </option>
-                ))}
-              </select>
-              <p className="text-theme-text-secondary mt-1 text-xs">
-                Only the approver chosen here can approve or deny this step in The Logbook. A position or member chosen
-                here can do so without the finance.approve permission, on this step only. With None, anyone with the
-                finance.approve permission can. An approvals administrator can also act on it by giving a reason, which
-                is recorded in the audit log. The Email type also sends that address a link to approve or deny the
-                request when it reaches this step (if email sending is set up).
-              </p>
-            </div>
+            <FormField
+              id={FIELD_IDS.approverType}
+              label="Approver type"
+              error={errors.approverType}
+              hint="Only the approver chosen here can approve or deny this step in The Logbook. A position or member chosen here can do so without the finance.approve permission, on this step only. With None, anyone with the finance.approve permission can. An approvals administrator can also act on it by giving a reason, which is recorded in the audit log. The Email type also sends that address a link to approve or deny the request when it reaches this step (if email sending is set up)."
+            >
+              {(field) => (
+                <select
+                  {...field}
+                  className="form-input"
+                  value={values.approverType}
+                  onChange={(e) => {
+                    const next = e.target.value as ApproverType | '';
+                    setValues((prev) => ({
+                      ...prev,
+                      approverType: next,
+                      approverValue: '',
+                      allowSelfApproval: next === ApproverType.EMAIL ? prev.allowSelfApproval : false,
+                    }));
+                    clearError('approverType');
+                    clearError('approverValue');
+                  }}
+                >
+                  {APPROVER_TYPE_CHOICES.map((choice) => (
+                    <option key={choice.value || 'none'} value={choice.value}>
+                      {choice.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
 
             {values.approverType && (
-              <div>
-                <label htmlFor="step-approver-value" className="form-label">
-                  {values.approverType === ApproverType.EMAIL
-                    ? 'Approver email'
-                    : pickerItems
-                      ? APPROVER_TYPE_CHOICES.find((c) => c.value === values.approverType)?.label
-                      : TEXT_FALLBACK_LABEL[values.approverType]}
-                </label>
-                {pickerItems ? (
-                  <select
-                    id="step-approver-value"
-                    className="form-input"
-                    value={values.approverValue}
-                    onChange={(e) => update('approverValue', e.target.value)}
-                    aria-invalid={Boolean(errors.approverValue)}
-                    aria-describedby={errors.approverValue ? 'step-approver-value-error' : undefined}
-                  >
-                    <option value="">Choose…</option>
-                    {pickerItems.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    id="step-approver-value"
-                    // Validated by validateStepForm, not the browser, so the
-                    // message is the same one every other field shows.
-                    type="text"
-                    inputMode={values.approverType === ApproverType.EMAIL ? 'email' : 'text'}
-                    className="form-input"
-                    value={values.approverValue}
-                    maxLength={500}
-                    placeholder={values.approverType === ApproverType.EMAIL ? 'trustee@example.org' : undefined}
-                    onChange={(e) => update('approverValue', e.target.value)}
-                    aria-invalid={Boolean(errors.approverValue)}
-                    aria-describedby={errors.approverValue ? 'step-approver-value-error' : undefined}
-                  />
-                )}
-                {errors.approverValue && (
-                  <p id="step-approver-value-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-                    {errors.approverValue}
-                  </p>
-                )}
-              </div>
+              <FormField
+                id={FIELD_IDS.approverValue}
+                label={approverValueLabel}
+                error={errors.approverValue}
+                {...(pickerItems ? {} : { maxLength: MAX_APPROVER_VALUE, count: values.approverValue.length })}
+              >
+                {(field) =>
+                  pickerItems ? (
+                    <select
+                      {...field}
+                      className="form-input"
+                      value={values.approverValue}
+                      onChange={(e) => update('approverValue', e.target.value)}
+                    >
+                      <option value="">Choose…</option>
+                      {pickerItems.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      {...field}
+                      // Validated by validateStepForm, not the browser, so the
+                      // message is the same one every other field shows.
+                      type="text"
+                      inputMode={values.approverType === ApproverType.EMAIL ? 'email' : 'text'}
+                      className="form-input"
+                      value={values.approverValue}
+                      placeholder={values.approverType === ApproverType.EMAIL ? 'trustee@example.org' : undefined}
+                      onChange={(e) => update('approverValue', e.target.value)}
+                    />
+                  )
+                }
+              </FormField>
             )}
 
             {values.approverType === ApproverType.EMAIL && (
               <label className="text-theme-text-primary touch:min-h-[44px] flex items-start gap-2 text-sm">
                 <input
+                  id={FIELD_IDS.allowSelfApproval}
                   type="checkbox"
                   className="form-checkbox mt-0.5"
                   checked={values.allowSelfApproval}
+                  aria-invalid={errors.allowSelfApproval ? true : undefined}
                   onChange={(e) => update('allowSelfApproval', e.target.checked)}
                 />
                 <span>
@@ -240,36 +320,38 @@ export const ApprovalStepDialog: React.FC<ApprovalStepDialogProps> = ({
                     Lets this address approve through the emailed link even when it is the requester’s own email.
                     Members approving in The Logbook can never approve their own request.
                   </span>
+                  {errors.allowSelfApproval && (
+                    <span className={`mt-1 block text-sm ${FIELD_ERROR_CLASS}`}>{errors.allowSelfApproval}</span>
+                  )}
                 </span>
               </label>
             )}
 
-            <div>
-              <label htmlFor="step-auto-approve" className="form-label">
-                Auto-approve under ($)
-              </label>
-              <input
-                id="step-auto-approve"
-                type="text"
-                inputMode="decimal"
-                className="form-input"
-                value={values.autoApproveUnder}
-                placeholder="Leave blank to always require approval"
-                onChange={(e) => update('autoApproveUnder', e.target.value)}
-                aria-invalid={Boolean(errors.autoApproveUnder)}
-                aria-describedby={errors.autoApproveUnder ? 'step-auto-approve-error' : 'step-auto-approve-help'}
-              />
-              {errors.autoApproveUnder ? (
-                <p id="step-auto-approve-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-                  {errors.autoApproveUnder}
-                </p>
-              ) : (
-                <p id="step-auto-approve-help" className="text-theme-text-secondary mt-1 text-xs">
-                  A request for less than this amount is approved at this step automatically when it is submitted.
-                </p>
+            <FormField
+              id={FIELD_IDS.autoApproveUnder}
+              label="Auto-approve under ($)"
+              error={errors.autoApproveUnder}
+              hint="A request for less than this amount is approved at this step automatically when it is submitted."
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  inputMode="decimal"
+                  className="form-input"
+                  value={values.autoApproveUnder}
+                  placeholder="Leave blank to always require approval"
+                  onChange={(e) => update('autoApproveUnder', e.target.value)}
+                />
               )}
-            </div>
+            </FormField>
           </>
+        )}
+
+        {failure && (
+          <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+            {failure}
+          </p>
         )}
       </div>
     </Modal>

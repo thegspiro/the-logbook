@@ -511,13 +511,14 @@ const ApprovalChainsSettingsPage: React.FC = () => {
           toast.success('Step added');
         }
         setStepDialog(null);
-      } catch (err: unknown) {
-        // A refused approver value ("Approver value …") is the API's own
-        // message, shown as is; the dialog stays open to correct it.
-        toast.error(getErrorMessage(err, 'Could not save the step.'));
       } finally {
         void refreshCoverage();
       }
+      // No catch: a failed save rejects into ApprovalStepDialog, which puts a
+      // 422 on the field it names and shows anything else (a refused approver
+      // value, in the API's own words) inside the dialog, still open to
+      // correct it (forms review F-3). A toast here swallowed it behind the
+      // dialog.
     });
 
   const handleDeleteStep = async (chain: ApprovalChain, step: ApprovalChainStep) => {
