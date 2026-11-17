@@ -1,5 +1,31 @@
 # Script currency
 
+## 2026-11-17 pass
+
+**Edited** (each beat has an `EDITOR — 2026-11-17` re-record note):
+
+- **04 Chief**: the event-creation and drill-attendance beats narrated the
+  removed **Training details (optional)** section and **Connect to
+  Requirements & Programs** (#4347); the reports beat said "Print it to PDF"
+  (#4346, now **PDF**).
+- **05 Training Officer**: finalizing a session now says **Training Info** →
+  **Require sign-off**; the import beat says **Import History**.
+- **12 Elections**: voting is "right on the election's page", Forensics is
+  **Integrity & Audit** (#4297). The **Publish Results** beats and Short 12c
+  were wrong since 2026-11-05 (closing an election releases its results;
+  the panel now offers only **Send Me a Copy**); rewritten, and Short 12c
+  needs a new title.
+- **16 Training Officer Part 2**: three Training Events beats rewritten for
+  the step-by-step form and the **Training details** card; **Compliance**
+  for "Compliance Settings".
+
+**Flagged, not edited:** 12 still names "tabs" in many screen cues (Ballot,
+Candidates, Eligibility, Overrides, Proxies, Results); every shot of the old
+tab bar needs re-shooting. 07 Secretary says "Eligibility tab" once. 04 Chief
+and 06 Member could mention the phone meeting-night dashboard and that a
+mandatory event joins **Needs You** only within two months. See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-15--17-2026).
+
 ## 2026-11-15 pass
 
 **Edited:** 07 Secretary. Its Email Templates chapter quoted the old category

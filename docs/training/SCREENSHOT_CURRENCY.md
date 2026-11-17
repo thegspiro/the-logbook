@@ -1,5 +1,37 @@
 # Screenshot currency
 
+## Queued by the November 15 – 17 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-15--17-2026).
+Nothing was captured by this pass. The screenshot manifest's election shots
+were fixed to open sections by path (#4297 removed the `#tab-…` buttons they
+clicked), so the guide 14 rows below can be captured by `capture.mjs` again.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 14 | Elections list with the **Elections pages** row (All Elections / Meeting Attendance / Settings), no gear button | Replace `14-01-elections-list` |
+| 14 | Election Settings and annual voter eligibility under the Elections pages row | Replace `14-16-election-settings`, `14-31-voter-eligibility-annual` |
+| 14 | Section pages that showed the old tab bar, stepper or controls | Replace `14-04-ballot-configuration`, `14-05-nominations-tab`, `14-07-eligibility-roster`, `14-17-election-results`, `14-20-runoff-chain`, `14-21-save-ballot-template`, `14-22-ballot-template-picker`, `14-25-candidates-as-manager`, `14-26-candidates-as-member` (members no longer see section links) |
+| 14 | **Integrity & Audit** section | Replace `14-19-forensics-report` (manifest entry fixed this pass) |
+| 14 | Vote receipt; paper batches panel, now on the Overview | Check `14-27-vote-receipt`, `14-18-paper-batches` |
+| 14 | Desktop Overview of an open election: header card (stepper, Voting closes, Turnout, Winner, section links), **Close Election** beside the status badge | Create |
+| 14 | Phone (390px) officer Overview: "48 / 62 members have voted", time left, **Close Election**, the Live rows; and with **More** open, showing **Details and all controls** | Create (two images) |
+| 19 | Ballot items and the details card in one frame — no longer possible; the ballot is its own section and the winner row is in the header | Replace `19-25`, `19-26` or retire them |
+| 08 | A generated report with its **CSV** and **PDF** buttons | Create |
+| 02 | **Course Links** panel: Suggested, Also spelled, the course picker, **Link all suggested** | Create (next free number `02-144`) |
+| 02 | Requirement form with type **Evaluated Calls** and its "Counted from submitted shift evaluations" hint | Create |
+| 02 | Training section navigation with **Waiver Requests** and its waiting count; Training Admin → Settings & Data → **Session Waivers** | Create (optional) |
+| 02 | Images showing the Records, Curriculum or Settings & Data tab strip (now with Waiver Requests, Course Links and the shortened labels) | Check `02-04-course-library`, `02-126-shift-evaluation-settings` |
+| 11 | Create Fiscal Year with the end-date error under **End Date** | Create (optional) |
+| 18 | Checkout error under **Shipping address**; order dialog **Send an update** with "Write the update to send." | Create (optional) |
+| 05 | Medical supplies Import / export with "Choose a CSV file to import." | Create (optional) |
+| 12 | Grant deadlines in their last two weeks (red-800 now, was red-600) | Check `12-02-grants-dashboard`, `12-03-opportunities` (low priority) |
+
+The #4347 training-event form rows (`02-80`, `02-83`, `02-91`, `04-02`,
+`04-61`) are in "Made stale by the one training-event form" below; this pass
+rewrote the `04-02` and `04-61` alt texts to describe the new screens, so the
+images and their alts now disagree until they are re-shot.
+
 ## Queued by the November 14 – 15 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-14--15-2026).

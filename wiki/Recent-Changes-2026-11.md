@@ -5,6 +5,56 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 15 – 17, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-15--17-2026).
+
+- **Training events**: Create Event with type Training, and Training Admin's
+  **Create Session**, now open the same step-by-step form. Course, credit
+  hours, requirements, **Counts toward attendance** and sign-off are on its
+  **Training Info** step. Change them later with **Edit training details** on
+  the event's **Training details** card.
+- **Course Links** (Training Admin → Curriculum): records imported or entered
+  without a course can be linked to a library course by name, one spelling at
+  a time or with **Link all suggested**. Records from either CSV importer now
+  say **Imported**.
+- **Evaluated Calls**: a new requirement type, counted from submitted shift
+  evaluations. A shift's required evaluations are now fixed when it ends, and
+  credit is worked out again when a requirement's type or a member's seat
+  changes. An evaluation form in use cannot be deactivated.
+- **Waiver Requests** appears in the Training navigation (and under
+  Governance for meetings) for whoever decides them, with a count waiting.
+  A member is emailed when a cancelled session closes their request.
+- **Elections**: each election has a header card with its stage, turnout and
+  winner, and its sections (Ballot, Candidates, Eligibility, Results,
+  **Integrity & Audit**, …) are links with their own addresses; old links
+  still work. **Close Election** and the other stage buttons sit beside the
+  status badge. On a phone, officers get a meeting-night dashboard with the
+  vote count and one big button.
+- **PDFs**: every page after the first carries a running header with the
+  department's logo, name and document title. The Reports page's **CSV** and
+  **PDF** (was **Print / PDF**) are built by the server and recorded in the
+  audit log.
+- **Needs You**: an unanswered mandatory event is listed only within two
+  months of it, or when its RSVP deadline is under two days away.
+- **Security**: changing your own sign-in email, or adding an authenticator
+  app when you already have a passkey, asks you to confirm who you are.
+  Draft events cannot be checked into. A shift-report reviewer cannot review
+  their own report, and the Chief cannot override their own requirement.
+- **Finance, grants and the store**: a save that is refused now says why on
+  the field or inside the dialog, and keeps what you typed. A fiscal year's
+  end date cannot be before its start. Size preferences save the rest when
+  one size is refused.
+- **Apparatus**: only current members can be added as operators.
+- **Phones**: the status bar matches the app's theme instead of always
+  being red.
+
+**For whoever takes screenshots:** most of the Elections guide's images show
+the old tab bar and need re-shooting; the list is in
+[`docs/training/SCREENSHOT_CURRENCY.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/training/SCREENSHOT_CURRENCY.md).
+YouTube scripts 04, 05, 12 and 16 have beats marked for re-recording.
+
 ## Recent changes: November 14 – 15, 2026
 
 The engineering audit is

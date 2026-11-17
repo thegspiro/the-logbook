@@ -5,6 +5,56 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 15 – 17, 2026
+
+Merged to `main` after `79ab1c88` (2026-11-15 10:49 UTC) through `4f5a1d3f`
+(2026-11-17 13:38 UTC), 37 first-parent merges, not counting the November
+14 – 15 pass itself (#4329). PayPal's store account (#4301) was already
+covered by the PayPal Settings pass below. `CHANGELOG.md` stays closed.
+
+**Still not covered:** the 40 merges between `dcc32fe2` and `b44b32ea` named
+in the November 14 – 15 section below. A catch-up pass should take them.
+
+| Change | Guide | Disposition |
+| --- | --- | --- |
+| One step-by-step form for creating and editing Training events (#4347) | 02, 04 | Written by the PR. This pass fixed the wiki's session-form helpers, two stale alt texts in 04 (`04-02`, `04-61`), and scripts 04, 05 and 16, which narrated the removed **Training details (optional)** section, **Connect to Requirements & Programs** and **Require instructor confirmation** |
+| **Course Links**: link training records that name no course to a library course (#4345) | 02 | New subsection under Course Library; wiki `Module-Training` |
+| CSV importers mark what they write **Imported** (#4344) | 02 | History-tab note rewritten (it had been pasted into a numbered step) |
+| **Evaluated Calls** requirement type (#4314) | 02 | Requirement Types table now lists Evaluated Shifts, Transports, Refusals (all missing) and Evaluated Calls; `TRAINING_PROGRAMS.md` section 9 |
+| A department shift's required evaluations are fixed when it ends (#4312); credit re-counted when a requirement or a seat changes (#4305); a form in use cannot be deactivated (#4302) | 02, 03 | Written, including the two cases still not re-counted |
+| **Training → Waiver Requests** in the navigation for deciders; email when a cancelled session closes a request (#4299) | 02, 04 | Written by the PR; this pass added the Training Admin route, the cancellation paragraph, "(with the Minutes module on)", and replaced a stale "no screen yet" callout |
+| Waiver request's attachment on file reported to evaluations (#4326) | none | `EVALUATIONS_MODULE.md` already updated by the PR |
+| Elections: header card, **Elections pages** row, sections at their own paths, **Integrity & Audit** (was Forensics), closed election opens on Overview (#4297) | 14 | "Tabs on an election's page" rewritten as header and sections; about 35 "tab" references changed; wiki `Module-Elections` and `Module-Elections-Developer` (which still described `?tab=` and arrow-key tabs). The screenshot manifest's election shots clicked `#tab-…` buttons that no longer exist; `openElectionTab` now navigates to the section path and `14-19` targets Integrity & Audit |
+| Meeting-night dashboard on a phone (#4330) | 14 | New subsection "On a phone, at the meeting" |
+| Running header on every PDF page after the first; letterhead logo on page 1 only; three table fixes (#4357) | 00, 04, 08, 14 | Written; `PDF_REPORTS.md` gained the minutes and impact-plan logo |
+| Reports page builds its **CSV** and **PDF** on the server and audits them; **Print / PDF** is now **PDF** (#4346) | 08, 00 | PR's 08 text verified; "The downloads" paragraph added; wiki `Security-Audit-Logging` gains `report_exported` |
+| A mandatory event joins **Needs You** only within 60 days, or 48 hours before its RSVP deadline (#4338) | 04 | Written; wiki `Module-Events` |
+| ADV-02: step-up to change your own login email and to add an authenticator app beside a passkey; draft events refuse check-in and QR; a role reviewer cannot review their own shift report; the Chief cannot override their own requirement (#4316) | 00, 02, 03, 04 | Written; wiki `Security-Authentication`. New `KNOWN_LIMITATIONS.md` entry: an SSO-only member with no password or second factor cannot change their own email |
+| Forms batch 21, finance and grants: refusals on their fields, all-or-nothing saves, fiscal-year end-date check (#4354) | 11, 12 | Written; two older errors in 12's task form corrected (**Assigned To (optional)**, reminders on unassigned tasks); wiki `Module-Finance` |
+| Forms batch 20: store checkout and order dialog, medical lots and import, size preferences (#4333); sizes answer null (#4293) | 05, 18 | Written; wiki `Module-Inventory` no longer says unset sizes return 404 |
+| Only current members can be apparatus operators (#4340) | 06 | Written; wiki `Module-Apparatus` |
+| Phone system bars follow the theme (#4325) | 10 | Guide said the status bar is dark red; corrected |
+| Training Admin tab names (renamed 2026-11-08 by `5195ccb0`): **Import History**, **Compliance**, **Manual Entry** | 02 | Found stale in 02, the wiki and script 16; corrected |
+| Unlabelled controls named, org chart phone keyboard (#4342); grant deadline colours (#4339); evaluation comment reset (#4335); mobile sweeps of seven training screens (#4341); evaluation list queries (#4308) | none | No change to any step |
+| Security review passes (#4328, #4332, #4348, #4349); migration-chain check before push (#4336); Alembic joins (#4323, #4331); table-reflow rule (#4351); CI and dependency bumps (#4327, #4364, #4396) | none | Internal. #4328's one fix stores a sanitized error for a failed compliance report |
+
+**Alembic.** `main` has a single head (`053d3e96b4fa`); #4323 joined the three
+heads the previous section reported. The new migrations add a nullable column
+(`611204dcf8d1`) and widen an ENUM (`9d044fc1d81b`); neither can stop an
+upgrade, so `UPGRADING.md` is unchanged. Rolling back past `9d044fc1d81b`
+after an **Evaluated Calls** requirement exists is covered by that file's
+"do not downgrade" rule.
+
+**Screenshots to create and replace:** the table in
+`docs/training/SCREENSHOT_CURRENCY.md` ("Queued by the November 15 – 17
+documentation pass"). The elections section is the largest: most of guide 14's
+images show the old tab bar.
+
+**YouTube scripts:** 04, 05, 12 and 16 edited, each with an
+`EDITOR — 2026-11-17` re-record note. Script 12's **Publish Results** beats and
+Short 12c had been wrong since 2026-11-05. See
+`docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
 ## Change audit: November 14 – 15, 2026
 
 Merged to `main` after `b44b32ea` (2026-11-14 04:56 UTC) through `79ab1c88`
