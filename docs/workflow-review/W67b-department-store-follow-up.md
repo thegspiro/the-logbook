@@ -587,7 +587,7 @@ would mean a data migration that deletes member data, which needs the
 owner's go-ahead. Until then they stay in the database, though no screen
 shows them.
 
-### W67b-10 — LOW — Loading the checkout page directly sends the member back to the store — OPEN
+### W67b-10 — LOW — Loading the checkout page directly sends the member back to the store — ✅ FIXED (2026-11-17)
 
 **Did:** as `member2`, with an item in the cart, loaded `/store/checkout`
 directly, then reloaded it.
@@ -599,6 +599,31 @@ saved cart, and bounces. Its own comment still says the cart is "deliberately
 unpersisted", which W67-6's fix of 2026-10-27 made untrue.
 
 **Where:** `pages/CheckoutPage.tsx`.
+
+**Fix:** `CheckoutPage.tsx` makes no decision about the cart until the store
+has loaded, since loading it is what restores the cart saved in this browser.
+Frontend only.
+
+- **While loading:** the page shows its loading skeleton.
+- **If the load fails:** it shows the error with "Try again", where it used
+  to drop the member on the store.
+- **Once loaded:** an empty cart still goes back to the store, as before.
+- **Stale comment corrected:** the page no longer says the cart is "deliberately
+  unpersisted".
+
+**Tests:** three new cases in `pages/CheckoutPage.test.tsx`:
+
+- a reload with a saved cart comes back to the review;
+- a failed load shows the error and a retry;
+- an empty cart is still sent to the store once the store has loaded.
+
+The first two failed against the old page; the third passed before and after,
+as a guard.
+
+**Re-driven:** as `member2`, added a Ball Cap and opened checkout. After a
+reload, and after loading `/store/checkout` directly, the page stayed on
+"Review your order" with "Ball Cap × 1". No console errors and no failed
+requests.
 
 ### W67b-18 — LOW — The progress steps on a shipped order end at "Ready for pickup" — OPEN
 

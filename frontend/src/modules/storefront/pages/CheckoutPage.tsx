@@ -53,7 +53,7 @@ const CHECKOUT_FORM_ID = 'checkout-form';
 
 const CheckoutPage: React.FC = () => {
   const navigate = useNavigate();
-  const { storefront, cart, isLoading, isSubmitting, loadStorefront, placeOrder } = useStorefrontStore();
+  const { storefront, cart, error, isSubmitting, loadStorefront, placeOrder } = useStorefrontStore();
 
   const [paymentMethod, setPaymentMethod] = useState('');
   const [fulfillmentMethod, setFulfillmentMethod] = useState<string>(StoreFulfillmentMethod.PICKUP);
@@ -67,8 +67,9 @@ const CheckoutPage: React.FC = () => {
   useUnsavedChanges({ hasChanges: !isSubmitting && (shippingAddress.trim() !== '' || memberNotes.trim() !== '') });
 
   // A member who reloads on this URL, or lands on it from a bookmark, has no
-  // storefront in memory — the cart is deliberately unpersisted, but the tax
-  // rate and accepted methods have to come back before the summary is honest.
+  // storefront in memory. Loading it brings back the tax rate and accepted
+  // methods, and it is also what restores the cart saved in this browser
+  // (W67-6), so nothing below may decide the cart is empty before it ends.
   useEffect(() => {
     if (!storefront) void loadStorefront();
   }, [loadStorefront, storefront]);
@@ -136,7 +137,22 @@ const CheckoutPage: React.FC = () => {
     }
   }, [checkoutErrors, fulfillmentMethod, memberNotes, navigate, paymentMethod, placeOrder, shippingAddress]);
 
-  if (isLoading && !storefront) {
+  // Until the store has loaded, an empty cart means "not restored yet", not
+  // "nothing to review". Deciding sooner bounced every reload of this page to
+  // the store, cart and all (W67b-10).
+  if (!storefront) {
+    if (error) {
+      return (
+        <div className="mx-auto max-w-3xl space-y-3 px-4 py-10 sm:px-6">
+          <p className="alert-danger" role="alert">
+            {error}
+          </p>
+          <button type="button" onClick={() => void loadStorefront()} className="btn-secondary btn-md">
+            Try again
+          </button>
+        </div>
+      );
+    }
     return <SkeletonPage />;
   }
 

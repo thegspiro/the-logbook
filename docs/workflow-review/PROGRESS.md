@@ -210,7 +210,6 @@ Fixed 2026-11-16:
 
 Open:
 
-- W67b-10 (LOW): loading checkout directly bounces to the store;
 - W67b-18 (LOW): a shipped order's progress steps end at "Ready for
   pickup".
 
@@ -230,6 +229,16 @@ Fixed 2026-11-16, later the same day:
 - W67b-9 (LOW): a pickup order stored the address typed for shipping.
   Checkout no longer sends it and the server no longer stores it. Addresses
   already stored on pickup orders are left for the owner to decide on.
+
+Fixed 2026-11-17:
+
+- W67b-10 (LOW): reloading or bookmarking the checkout page bounced the member
+  to the store, because the page decided the cart was empty before the saved
+  cart was restored. It now waits for the store to load, and shows a load
+  failure with a retry.
+
+Gate for the W67b-10 fix: typecheck and lint clean; 341 frontend storefront and
+integrity tests pass.
 
 Gate for the W67b-8 and -9 fixes: typecheck, lint, flake8, black, isort and the
 mypy ratchet clean; 338 frontend storefront and integrity tests and 693 backend
