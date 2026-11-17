@@ -36,6 +36,7 @@ from app.services.admin_hub_service import (
     AdminHubService,
 )
 from app.services.medical_screening_service import MedicalScreeningService
+from app.services.training_course_links import TrainingCourseLinkService
 
 pytestmark = [pytest.mark.integration]
 
@@ -764,6 +765,25 @@ class TestUnlinkedCourseNames:
         queue = await _queue(db_session, org, member, "training")
 
         assert "unlinked_course_names" not in queue
+
+    async def test_a_failing_lookup_leaves_the_rest_of_the_queue(
+        self, db_session, monkeypatch
+    ):
+        org = await _org(db_session)
+        member = await _member(db_session, org)
+        expired = await _named_record(db_session, org, member, "EMT-B")
+        expired.training_type = TrainingType.CERTIFICATION
+        expired.expiration_date = TODAY - timedelta(days=5)
+        await db_session.flush()
+
+        async def broken(self, organization_id):
+            raise RuntimeError("lookup failed")
+
+        monkeypatch.setattr(TrainingCourseLinkService, "unlinked_names", broken)
+        queue = await _queue(db_session, org, member, "training")
+
+        assert "unlinked_course_names" not in queue
+        assert queue["expired_certifications"].count == 1
 
 
 class TestQueueAgreesWithItsMetrics:

@@ -824,7 +824,17 @@ async def _training_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
             )
         )
 
-    items.extend(await _course_link_attention(ctx))
+    # get_summary isolates a failing queue only as a whole, so a failure in
+    # this row would also drop the submissions and certification rows above
+    # it. It is contained here instead; the rows that did resolve still show.
+    try:
+        items.extend(await _course_link_attention(ctx))
+    except Exception as exc:
+        logger.warning(
+            "admin-hub training: course link row failed for org {}: {}",
+            ctx.organization_id,
+            exc,
+        )
     items.extend(await _skill_test_attention(ctx))
     items.extend(await _shift_report_attention(ctx))
     return items
