@@ -188,12 +188,11 @@ sessions and business meetings (`training.session_waivers_summary`,
 `meetings.waiver_history`; see `docs/EVALUATIONS_MODULE.md`). Gaps the owner's
 decisions did not settle, each answered conservatively:
 
-- **"Attachment on file" always reads no.** Attachments are being added by a
-  parallel change and have no table on `main` yet. The flag is wired through
-  `EvaluationDataService._waiver_attachments_on_file`, which returns nothing
-  until that table lands; switching it on is a query in that one method. An
-  evaluation drafted before then records "no" permanently, as every snapshot
-  records what was true when it was taken.
+- ~~**"Attachment on file" always reads no.**~~ **Resolved 2026-11-15:** the
+  flag reads `attendance_waiver_attachments` now that attachments are on
+  `main` (#4243). An evaluation drafted between 2026-11-11 and then recorded
+  "no" in its snapshot and keeps it, as every snapshot keeps what was true
+  when it was taken.
 - **A voided request is listed, and counted only as voided.** Nothing voids a
   request yet. When something does, the history shows the request and that it
   was voided, and the summary counts it under `voided` rather than as approved
@@ -286,9 +285,13 @@ now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
   5160 alignment were fixed on 2026-11-09; see "Printing" in
   `docs/PDF_REPORTS.md`.)
 - **Minutes, the inventory impact plan and the election documents keep their
-  own layouts**, numbered "Page N" rather than "Page X of Y" (except the
-  ballot). They escape correctly and are audited; moving them onto the kit is
-  a layout change, not a fix.
+  own layouts.** Minutes, the evaluation and the election documents are
+  numbered "Page N" rather than "Page X of Y" (except the ballot), and the
+  impact plan carries no footer or page numbers at all. Since 2026-11-16 every
+  one of them repeats the department's logo, name and the document's title at
+  the top of each later page, so a loose page is still identifiable. They
+  escape correctly and are audited; moving them onto the kit's footer is a
+  layout change, not a fix.
 
 ## Medical Screening — What Is Still Plaintext at Rest (MS-18, 2026-11-05)
 

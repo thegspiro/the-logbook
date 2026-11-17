@@ -416,7 +416,7 @@ describe('FiscalYearSettingsPage category owner', () => {
 
     expect(screen.getByText('Owner: Training Officer')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /new category/i }));
-    await user.type(screen.getByLabelText('Name'), 'Fuel');
+    await user.type(screen.getByLabelText(/^Name/), 'Fuel');
     await screen.findByRole('option', { name: 'Chief' });
     await user.selectOptions(screen.getByLabelText('Owner position (optional)'), 'pos-chief');
     await user.click(screen.getByRole('button', { name: 'Create' }));
@@ -458,7 +458,7 @@ describe('FiscalYearSettingsPage category QuickBooks account', () => {
     renderAt('/finance/settings', '/finance/settings', FiscalYearSettingsPage);
 
     await user.click(screen.getByRole('button', { name: /new category/i }));
-    await user.type(screen.getByLabelText('Name'), 'Fuel');
+    await user.type(screen.getByLabelText(/^Name/), 'Fuel');
     await user.type(screen.getByLabelText('QuickBooks account (optional)'), '  Vehicle Expense:Fuel ');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
@@ -498,7 +498,7 @@ describe('FiscalYearSettingsPage category expense classification', () => {
     renderAt('/finance/settings', '/finance/settings', FiscalYearSettingsPage);
 
     await user.click(screen.getByRole('button', { name: /new category/i }));
-    await user.type(screen.getByLabelText('Name'), 'Raffle');
+    await user.type(screen.getByLabelText(/^Name/), 'Raffle');
     await user.selectOptions(screen.getByLabelText('Expense classification'), 'fundraising');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
@@ -576,7 +576,7 @@ describe('FiscalYearSettingsPage sub-categories and charge access', () => {
     renderAt('/finance/settings', '/finance/settings', FiscalYearSettingsPage);
 
     await user.click(screen.getByRole('button', { name: /new category/i }));
-    await user.type(screen.getByLabelText('Name'), 'Dress uniforms');
+    await user.type(screen.getByLabelText(/^Name/), 'Dress uniforms');
     await screen.findByRole('option', { name: 'Chief' });
     await user.selectOptions(screen.getByLabelText('Parent category (optional)'), 'cat-qm');
     expect(screen.getByLabelText('Owner position (optional)')).toHaveValue('pos-chief');
