@@ -33,7 +33,6 @@ from reportlab.platypus import (
     HRFlowable,
     KeepTogether,
     Paragraph,
-    SimpleDocTemplate,
     Spacer,
 )
 
@@ -54,6 +53,7 @@ from app.utils.election_pdf_style import (
     section,
 )
 from app.utils.pdf_fonts import BODY_FONT, BOLD_FONT
+from app.utils.pdf_running_header import HeadedDocTemplate, RunningHeader
 
 _VOTING_METHOD_LABELS = {
     "simple_majority": "Simple majority (one choice per position)",
@@ -200,8 +200,14 @@ def render_pre_meeting_package_pdf(
     optional ``logo`` — the organization's stored logo data URI.
     """
     buf = BytesIO()
-    doc = SimpleDocTemplate(
+    doc = HeadedDocTemplate(
         buf,
+        running_header=RunningHeader(
+            meta.get("org_name"),
+            "Pre-Meeting Package",
+            (data.get("election") or {}).get("title"),
+            meta.get("logo"),
+        ),
         # The canvas otherwise declares Helvetica, never embedded, on every page.
         initialFontName=BODY_FONT,
         pagesize=letter,
