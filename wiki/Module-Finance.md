@@ -77,7 +77,9 @@ Request numbers are per fiscal year: `PR-2026-0001` (purchase), `ER-2026-0001`
 ## Setting up the year
 
 1. **Finance Settings → New Fiscal Year.** A year is a **draft**, **active** or
-   **closed**; only one may be active at a time.
+   **closed**; only one may be active at a time. The Create Fiscal Year dialog
+   refuses an end date before the start date on the field _(2026-11-16)_. The
+   backend does not check that order, so the form is the only guard.
 2. **Finance Settings → New Category.** Categories are the department's own
    (none are seeded) and may be nested. Each can name an owner position, a
    QuickBooks account, a functional class (below) and who may charge it.

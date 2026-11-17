@@ -167,6 +167,11 @@ training program. They are managed through `/api/v1/apparatus/evoc-levels`.
   `evoc_levels` (`ON DELETE SET NULL`): the minimum level needed to drive that
   vehicle.
 - **`apparatus_operators.evoc_level_id`** records the level an operator holds.
+- **Only a current member can be added as an operator** _(2026-11-16)_.
+  Creating an operator row refuses (400, "Only current members can be added as
+  operators") a user who is deleted or not active (`User.is_active`, so active
+  or probationary). The Add Operator picker lists only current members. Rows
+  already held by members who have since left are untouched and stay editable.
 - `GET /apparatus/evoc-check/{apparatus_id}/{user_id}` answers whether a member
   meets a vehicle's requirement (`apparatus.view` or `scheduling.view`).
 - **Driver exceptions** — a member can request an exception to the EVOC

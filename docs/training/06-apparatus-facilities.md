@@ -370,6 +370,12 @@ their **EVOC Certification Level**, certification and expiry dates, license
 details, any restrictions and notes. Adding, editing or removing operators
 needs full apparatus management.
 
+The **Member** list offers current members only, active or probationary.
+Former members, including those brought in by a roster import, are left out,
+and the app refuses to add one as an operator with "Only current members can
+be added as operators". An operator record made before a member left stays on
+the tab and can still be edited or removed. _(2026-11-16)_
+
 ![The Add Operator form: a member picker, not the free-text UUID box it replaced](./images/06-23-add-operator-member-picker.png)
 
 ### EVOC Levels

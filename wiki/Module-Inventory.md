@@ -124,9 +124,13 @@ batch scanner is titled **Distribute Items**.
   their own sizes (`/inventory/my/size-preferences`) and quartermasters edit
   any member's (`/inventory/members/{user_id}/size-preferences`). Nine fields
   (shirt size, garment fit, pant waist/inseam, jacket, boot size/width, glove,
-  hat) plus a `custom_sizes` JSON column. Unset sizes return 404 and open the
-  form blank. Used for auto-selection during kit issuance, the request form
-  and the impact planner
+  hat) plus a `custom_sizes` JSON column. Unset sizes return 200 with a `null`
+  body and open the form blank _(2026-11-15; until then a 404, which the
+  frontend service still reads as "none saved" during a rolling upgrade)_. A
+  refused size is left out and the rest save ("Sizes saved, except …"); a
+  failed load keeps **Save Sizes** off so a blank form cannot clear stored
+  sizes. Used for auto-selection during kit issuance, the request form and the
+  impact planner
 - **Departure Clearance** — full lifecycle (initiate → resolve line items →
   complete) for tracking property return when members depart; each clearance
   has its own page at `/inventory/admin/clearances/:clearanceId`
