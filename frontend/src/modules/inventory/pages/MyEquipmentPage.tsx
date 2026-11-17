@@ -192,16 +192,17 @@ const MyEquipmentPage: React.FC = () => {
   }, [user?.id]);
 
   const loadRequests = useCallback(async () => {
-    try {
-      const [eqData, retData] = await Promise.all([
-        inventoryService.getEquipmentRequests({ mine_only: true }),
-        inventoryService.getReturnRequests({ mine_only: true }),
-      ]);
-      setEquipRequests(eqData.requests ?? []);
-      setReturnRequests(retData ?? []);
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to load requests'));
-    }
+    // Settled independently: the return notices decide whether a row offers
+    // "Notify quartermaster of return", and a failed gear-request fetch must
+    // not leave them stale and the row offering a press the server refuses.
+    const [eqResult, retResult] = await Promise.allSettled([
+      inventoryService.getEquipmentRequests({ mine_only: true }),
+      inventoryService.getReturnRequests({ mine_only: true }),
+    ]);
+    if (eqResult.status === 'fulfilled') setEquipRequests(eqResult.value.requests ?? []);
+    if (retResult.status === 'fulfilled') setReturnRequests(retResult.value ?? []);
+    const failure = [eqResult, retResult].find((r) => r.status === 'rejected');
+    if (failure) toast.error(getErrorMessage(failure.reason, 'Failed to load requests'));
   }, []);
 
   useEffect(() => {

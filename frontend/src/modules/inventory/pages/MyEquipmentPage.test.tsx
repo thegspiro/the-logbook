@@ -448,6 +448,7 @@ describe('MyEquipmentPage — a return notice already sent', () => {
     mockGetReturnRequests.mockResolvedValue([]);
     mockCreateReturnRequest.mockReset();
     mockCreateReturnRequest.mockResolvedValue({});
+    mockToastError.mockReset();
   });
 
   it('says the quartermaster was notified instead of offering the button again', async () => {
@@ -471,6 +472,18 @@ describe('MyEquipmentPage — a return notice already sent', () => {
     expect(screen.getAllByRole('button', { name: /Notify quartermaster of return/ })).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Notify quartermaster of return: Work Gloves' })).toBeInTheDocument();
     expect(screen.getAllByText(/Quartermaster notified/)[0]).toHaveTextContent(/Quartermaster notified \S.*2026/);
+  });
+
+  it('still shows the note when the gear-request list fails to load', async () => {
+    mockGetEquipmentRequests.mockRejectedValue(new Error('boom'));
+    mockGetReturnRequests.mockResolvedValue([openNotice({})]);
+    renderWithRouter(<MyEquipmentPage />);
+
+    expect(await screen.findByText(/Quartermaster notified/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Notify quartermaster of return: Turnout Coat' })
+    ).not.toBeInTheDocument();
+    expect(mockToastError).toHaveBeenCalledTimes(1);
   });
 
   it('offers the button again once the notice is no longer open', async () => {
