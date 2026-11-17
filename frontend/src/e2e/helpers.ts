@@ -15,6 +15,7 @@ import type {
   TrainingSummaryReport,
 } from '../modules/reports/types';
 import type { KnowledgeTest } from '../types/knowledgeTest';
+import type { CrewMember } from '../types/user';
 import type { Facility, Inspection, MaintenanceRecord } from '../modules/facilities/types/facilities';
 import type {
   AlbumSummary,
@@ -1341,6 +1342,14 @@ export interface MockOptions {
    * without them.
    */
   prospectiveMembers?: boolean;
+  /**
+   * Serve the caller three members who report to them (`/users/me/crew`).
+   *
+   * Opt-in because every page reads that endpoint to decide whether the
+   * navigation shows crew links (useHasCrew); a crew on every route would
+   * change what each other ratcheted page measures.
+   */
+  crew?: boolean;
   /**
    * Lengthen every display string the fixtures serve: names, titles, labels,
    * descriptions, messages.
@@ -4074,6 +4083,7 @@ const routes = ({
   platoonsEnabled = false,
   memberRecord = false,
   prospectiveMembers = false,
+  crew = false,
 }: MockOptions): [string, (request: Request) => unknown][] => [
   // Catch-all. Anything not listed below answers with an empty object rather
   // than reaching the dev-server proxy, which has no backend behind it.
@@ -5169,6 +5179,7 @@ const routes = ({
   ['**/api/v1/messages/roles', () => MESSAGE_ROLES],
   ...(memberRecord ? memberRecordRoutes() : []),
   ...(prospectiveMembers ? prospectiveMemberRoutes() : []),
+  ...(crew ? [['**/api/v1/users/me/crew', () => ({ members: MY_CREW })] as [string, () => unknown]] : []),
 ];
 
 const PROSPECT_PIPELINES: BackendPipelineListResponse[] = [
@@ -5275,6 +5286,33 @@ const PENDING_SIGN_OFFS: PendingSignOff[] = [
     step_description: null,
     roles_to_sign: [{ role: 'case_manager', label: 'Case manager' }],
     required_roles: [{ role: 'case_manager', label: 'Case manager', signed: false }],
+  },
+];
+
+const MY_CREW: CrewMember[] = [
+  {
+    id: 'crew-2',
+    name: 'Alex Johnson',
+    rank: 'Firefighter',
+    station: 'Station 1',
+    membership_number: '1042',
+    supervised_since: '2026-01-05T00:00:00Z',
+  },
+  {
+    id: 'crew-3',
+    name: 'Maria Rodriguez-Castellanos',
+    rank: 'Probationary Firefighter',
+    station: 'Station 2 (Northfield Substation)',
+    membership_number: '1107',
+    supervised_since: '2026-06-15T00:00:00Z',
+  },
+  {
+    id: 'crew-4',
+    name: 'Sam Lee',
+    rank: null,
+    station: null,
+    membership_number: null,
+    supervised_since: '2026-10-01T00:00:00Z',
   },
 ];
 
