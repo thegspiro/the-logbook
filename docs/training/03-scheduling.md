@@ -2040,9 +2040,17 @@ Drafts are also made automatically when a shift is closed out. See
 Shift reports are built to survive a poor signal.
 
 **Your work is saved on the device as you type.** This covers the shift you
-picked, all the fields, who is ticked, each trainee's evaluation and the
-remarks. If the connection drops, the tab closes or the browser crashes, open
-the same shift again and your work comes back.
+picked, all the fields, who is ticked, each trainee's evaluation, the calls
+typed for each member, and the remarks. If the connection drops, the tab
+closes or the browser crashes, open the same shift again and your work comes
+back.
+
+_(2026-11-14)_ The same is true when you leave the report to fill in a
+trainee's shift evaluation and come back. Each trainee's ratings, strengths,
+skills and tasks, and the per-member calls, are restored, not only the crew
+ticks and remarks. The form is saved the moment you leave it, so following an
+evaluation link straight after typing loses nothing. Restored entries are kept
+only for crew still on the shift.
 
 - The device keeps up to 20 saved forms. When there are more, the oldest is
   removed.
@@ -2263,6 +2271,12 @@ Pick one section at a time from the list. There are seven:
 > file the reports first; an officer with **Manage schedules** can tick **Close
 > out anyway** and give a reason, which goes on the record. The box only
 > applies while **Enable post-shift validation** is on.
+>
+> **Who counts as crew for this** _(2026-11-14)_: only members whose
+> assignment is **Assigned** or **Confirmed**. A trainee marked **No-show**,
+> or still **Pending**, no longer blocks close-out, is not written a draft
+> report, and is not owed a shift evaluation for a shift they did not work.
+> Declined and cancelled members were already left out.
 
 The reminder goes only to shifts that have a Shift Officer. In departments
 that record a call count at close-out, it also asks the officer to record the

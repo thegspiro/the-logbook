@@ -1,5 +1,23 @@
 # Script currency
 
+## 2026-11-15 pass
+
+**Edited:** 07 Secretary. Its Email Templates chapter quoted the old category
+list, which the 2026-11-14 change made wrong; the list is rewritten and a beat
+added for the minutes and election emails that are now templates. Re-record
+note and `EDITOR — 2026-11-15 PASS` log in the script.
+
+**Flagged, not edited** (no script quotes these labels, so nothing on screen is
+wrong yet): 04 Chief and 06 Member (leave requests, leave reminders, and the
+member's own leave on My Training); 05, 09 and 16 (linked evaluated-shift
+requirements credited from shift evaluations; no-show trainees no longer owe a
+report; the shift report keeps its draft across an evaluation); 13 Department
+Store (**Cancel order** section, delivery details, backward status moves only
+among Ordered / Ready for pickup / Fulfilled); 12 Elections (count on the
+**Candidates** tab; minutes say **Votes cast**); 04 Chief and 07 Secretary
+(History documents). See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-14--15-2026).
+
 ## Flagged 2026-11-11 (not edited)
 
 Worth a beat or a re-record note when next touched: 03 IT and 04 Chief
