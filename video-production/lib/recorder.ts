@@ -87,9 +87,20 @@ interface TapWindow {
   __videoRelease: () => void;
 }
 
-/** Install the tap marker. Call before the first navigation. */
+/** Install the tap marker and the QR guard. Call before the first navigation. */
 export async function prepare(page: Page): Promise<void> {
   await page.addInitScript(TAP_SCRIPT);
+  // A real QR code is never painted, even for the frames before decoyQr()
+  // swaps it: the app's codes encode live links a viewer could scan.
+  await page.addInitScript(() => {
+    const hide = () => {
+      const style = document.createElement('style');
+      style.textContent = '.qr-container svg:not([data-decoy-qr]) { visibility: hidden !important; }';
+      document.head.appendChild(style);
+    };
+    if (document.head) hide();
+    else document.addEventListener('DOMContentLoaded', hide);
+  });
 }
 
 /** Wait for network, fonts and entry animations so nothing is caught mid-fade. */
@@ -128,6 +139,80 @@ export async function tap(page: Page, target: Locator): Promise<void> {
   await page.waitForTimeout(380);
   await page.mouse.click(x, y);
   await page.evaluate(() => (window as unknown as TapWindow).__videoRelease());
+}
+
+/**
+ * Choose an option in a native <select>. A click would open the browser's own
+ * popup, which the screencast never shows and which swallows the next tap, so
+ * this shows the marker on the control and sets the value directly.
+ */
+export async function choose(page: Page, select: Locator, value: string): Promise<void> {
+  await select.waitFor({ state: 'visible', timeout: 8000 });
+  let box = await select.boundingBox();
+  if (box && (box.y < 80 || box.y + box.height > SCREEN.height - 90)) {
+    await select.evaluate((el) => el.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+    await page.waitForTimeout(750);
+    box = await select.boundingBox();
+  }
+  if (!box) throw new Error('select has no bounding box');
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.evaluate(([px, py]) => (window as unknown as TapWindow).__videoTap(px ?? 0, py ?? 0), [x, y]);
+  await page.waitForTimeout(380);
+  await select.selectOption(value);
+  await page.evaluate(() => (window as unknown as TapWindow).__videoRelease());
+}
+
+/**
+ * Swap the QR code inside `container` for a decoy that looks like one and
+ * decodes to nothing, so a viewer cannot scan a link off the video.
+ *
+ * The decoy keeps the three corner finder squares, so it reads as a QR code,
+ * and fills the rest from a fixed pseudo-random sequence: the format and
+ * error-correction bits are noise, which no reader can decode. The sequence is
+ * seeded, so every render shows the same pattern.
+ */
+export async function decoyQr(container: Locator): Promise<void> {
+  // 'attached', not 'visible': prepare() keeps the real code hidden until it is swapped.
+  await container.locator('svg').first().waitFor({ state: 'attached', timeout: 8000 });
+  await container.evaluate((root) => {
+    const svg = root.querySelector('svg');
+    if (!svg) throw new Error('no QR code to replace');
+    const size = svg.getAttribute('width') ?? '300';
+    const modules = 33;
+    const margin = 4;
+    const total = modules + margin * 2;
+    let seed = 0x5eed1234;
+    const next = () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed / 0x100000000;
+    };
+    const inFinder = (x: number, y: number) =>
+      (x < 8 && y < 8) || (x >= modules - 8 && y < 8) || (x < 8 && y >= modules - 8);
+    const cells: string[] = [];
+    const cell = (x: number, y: number) => cells.push(`M${x + margin} ${y + margin}h1v1h-1z`);
+    for (const [ox, oy] of [
+      [0, 0],
+      [modules - 7, 0],
+      [0, modules - 7],
+    ] as const) {
+      for (let y = 0; y < 7; y += 1) {
+        for (let x = 0; x < 7; x += 1) {
+          const ring = x === 0 || y === 0 || x === 6 || y === 6;
+          const core = x >= 2 && x <= 4 && y >= 2 && y <= 4;
+          if (ring || core) cell(ox + x, oy + y);
+        }
+      }
+    }
+    for (let y = 0; y < modules; y += 1) {
+      for (let x = 0; x < modules; x += 1) {
+        if (!inFinder(x, y) && next() < 0.5) cell(x, y);
+      }
+    }
+    svg.outerHTML =
+      `<svg width="${size}" height="${size}" viewBox="0 0 ${total} ${total}" shape-rendering="crispEdges" data-decoy-qr="1">` +
+      `<rect width="${total}" height="${total}" fill="#ffffff"/><path fill="#000000" d="${cells.join('')}"/></svg>`;
+  });
 }
 
 /**

@@ -28,7 +28,7 @@ gitignored and created only on a machine that runs the tool.
   backend or database is needed.
 - A Chromium that the root Playwright can drive: either `npx playwright install
 chromium`, or point `PLAYWRIGHT_CHROMIUM_PATH` at an existing one.
-- Python 3.10 or newer, `ffmpeg` built with `libx264`, `curl`, and `sha256sum`
+- Python 3.12 or newer (the pinned numpy needs it), `ffmpeg` built with `libx264`, `curl`, and `sha256sum`
   or `shasum`.
 - The Inter font installed for the overlays (falls back to DejaVu Sans).
 
@@ -92,7 +92,15 @@ Each `shot` id must match `shots.json`. A shot is held until its narration has
 finished, so actions can be quick. `tap` shows a touch marker and scrolls its
 target clear of the header and tab bar first; `bottomMost` picks the phone's
 tab-bar copy of a control the layout renders twice; `centre` smooth-scrolls
-something into view.
+something into view; `choose` picks an option in a native dropdown, whose own
+popup a recording never shows.
+
+**Never show a scannable QR code.** The app's codes encode live links, and a
+viewer can scan one straight off the video. `prepare()` hides every QR code
+from its first paint, and a shot that shows one calls `decoyQr` to swap in a
+pattern that looks like a code and decodes to nothing, as 8D does. For 8D,
+two decoders (OpenCV and zbar) read a real code of the same size and found
+nothing in any of the capture's frames.
 
 Two things that cost time on 8B:
 
