@@ -90,6 +90,31 @@ describe('AdvanceReturnMethodSettingsCard', () => {
     await user.click(await screen.findByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Not allowed'));
+    // Said inside the card too, where it stays after the toast fades.
+    expect(screen.getByRole('alert')).toHaveTextContent('Not allowed');
+  });
+
+  it('puts a 422 on the choice it refused', async () => {
+    mockUpdateSettings.mockRejectedValue({
+      response: {
+        status: 422,
+        data: {
+          detail: [
+            { field: 'finance.advance_return_method', message: "Input should be 'fixed_date' or 'periodic_statement'" },
+          ],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<AdvanceReturnMethodSettingsCard />);
+    await user.click(await screen.findByRole('button', { name: 'Save' }));
+
+    const radio = screen.getByRole('radio', { name: 'Fixed date' });
+    await waitFor(() => expect(radio).toHaveAttribute('aria-invalid', 'true'));
+    expect(radio).toHaveAccessibleDescription("Input should be 'fixed_date' or 'periodic_statement'");
+    await waitFor(() => expect(radio).toHaveFocus());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(mockToastError).not.toHaveBeenCalled();
   });
 
   it('only describes the method to someone who cannot change it', async () => {

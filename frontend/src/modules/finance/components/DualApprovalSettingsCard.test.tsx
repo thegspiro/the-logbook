@@ -33,6 +33,11 @@ import { renderWithRouter } from '@/test/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { DualApprovalSettingsCard } from './DualApprovalSettingsCard';
 
+/** The API's 422 shape (`main.py`'s validation handler). */
+const validationError = (field: string, message: string) => ({
+  response: { status: 422, data: { detail: [{ field, message }] } },
+});
+
 const signIn = (permissions: string[]) => {
   useAuthStore.setState({ user: { id: 'u-1', permissions } as never });
 };
@@ -43,6 +48,8 @@ beforeEach(() => {
   mockGetSettings.mockResolvedValue({ dualApprovalThreshold: '1000.00' });
   mockUpdateSettings.mockReset();
   mockUpdateSettings.mockResolvedValue({});
+  mockToastSuccess.mockReset();
+  mockToastError.mockReset();
   signIn(['settings.manage', 'finance.view']);
 });
 
@@ -85,8 +92,56 @@ describe('DualApprovalSettingsCard', () => {
     await user.type(input, '99.5');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(screen.getByText('Enter a whole-dollar amount of $1 or more.')).toBeInTheDocument();
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAccessibleDescription('Enter a whole-dollar amount of $1 or more.');
+    await waitFor(() => expect(input).toHaveFocus());
     expect(mockUpdateSettings).not.toHaveBeenCalled();
+  });
+
+  it('names a blank threshold on its field and sends nothing (forms review F-3)', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DualApprovalSettingsCard />);
+    const input = await screen.findByLabelText('Threshold (whole dollars)');
+
+    await user.clear(input);
+    await user.type(input, '{Enter}');
+
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAccessibleDescription('Enter a whole-dollar amount of $1 or more.');
+    await waitFor(() => expect(input).toHaveFocus());
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
+
+    await user.type(input, '5');
+    expect(input).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('puts a 422 on the threshold field', async () => {
+    mockUpdateSettings.mockRejectedValue(
+      validationError('finance.dual_approval_threshold', 'Input should be less than or equal to 9999999999')
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<DualApprovalSettingsCard />);
+    const input = await screen.findByLabelText('Threshold (whole dollars)');
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(input).toHaveAttribute('aria-invalid', 'true'));
+    expect(input).toHaveAccessibleDescription('Threshold must be 9999999999 or less.');
+    await waitFor(() => expect(input).toHaveFocus());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('says a refusal no field answers for inside the card, as well as in a toast', async () => {
+    mockUpdateSettings.mockRejectedValue(new Error('Not allowed'));
+    const user = userEvent.setup();
+    renderWithRouter(<DualApprovalSettingsCard />);
+
+    await user.click(await screen.findByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not allowed');
+    expect(mockToastError).toHaveBeenCalledWith('Not allowed');
+    expect(screen.getByLabelText('Threshold (whole dollars)')).not.toHaveAttribute('aria-invalid');
   });
 
   it('turns it off only after saying what that means', async () => {
@@ -172,10 +227,42 @@ describe('DualApprovalSettingsCard', () => {
       await user.selectOptions(within(form).getByLabelText('Purchase requests'), 'own');
       await user.click(within(form).getByRole('button', { name: 'Save request types' }));
 
-      expect(
-        screen.getByText('Enter a whole-dollar amount of $1 or more for each type with its own threshold.')
-      ).toBeInTheDocument();
+      // Named under the type's own amount, not in one message for the form.
+      const amount = within(form).getByLabelText('Purchase requests threshold (whole dollars)');
+      expect(amount).toHaveAttribute('aria-invalid', 'true');
+      expect(amount).toHaveAccessibleDescription('Enter a whole-dollar amount of $1 or more.');
+      await waitFor(() => expect(amount).toHaveFocus());
+      expect(within(form).getByLabelText('Check requests threshold (whole dollars)')).not.toHaveAttribute(
+        'aria-invalid'
+      );
       expect(mockUpdateSettings).not.toHaveBeenCalled();
+    });
+
+    it("puts a 422 on the refused type's amount", async () => {
+      mockUpdateSettings.mockRejectedValue(
+        validationError('finance.dual_approval_thresholds.check_request', 'Input should be greater than or equal to 0')
+      );
+      const user = userEvent.setup();
+      renderWithRouter(<DualApprovalSettingsCard />);
+      const form = await screen.findByRole('form', { name: 'Thresholds by request type' });
+
+      await user.click(within(form).getByRole('button', { name: 'Save request types' }));
+
+      const amount = within(form).getByLabelText('Check requests threshold (whole dollars)');
+      await waitFor(() => expect(amount).toHaveAttribute('aria-invalid', 'true'));
+      expect(amount).toHaveAccessibleDescription('Check requests threshold must be 0 or more.');
+      await waitFor(() => expect(amount).toHaveFocus());
+    });
+
+    it('says a refusal no field answers for inside the request-type form', async () => {
+      mockUpdateSettings.mockRejectedValue(new Error('Settings are locked'));
+      const user = userEvent.setup();
+      renderWithRouter(<DualApprovalSettingsCard />);
+      const form = await screen.findByRole('form', { name: 'Thresholds by request type' });
+
+      await user.click(within(form).getByRole('button', { name: 'Save request types' }));
+
+      expect(await within(form).findByRole('alert')).toHaveTextContent('Settings are locked');
     });
 
     it('is not editable without settings.manage', async () => {
@@ -237,6 +324,22 @@ describe('DualApprovalSettingsCard', () => {
       await waitFor(() =>
         expect(mockUpdateSettings).toHaveBeenCalledWith({ finance: { second_approver_position: null } })
       );
+    });
+
+    it('puts a 422 on the office field', async () => {
+      mockUpdateSettings.mockRejectedValue(
+        validationError('finance.second_approver_position', 'String should have at most 100 characters')
+      );
+      const user = userEvent.setup();
+      renderWithRouter(<DualApprovalSettingsCard positions={positions} />);
+      const office = await screen.findByLabelText('Second approval from');
+
+      await user.selectOptions(office, 'treasurer');
+      await user.click(screen.getByRole('button', { name: 'Save second approver' }));
+
+      await waitFor(() => expect(office).toHaveAttribute('aria-invalid', 'true'));
+      expect(office).toHaveAccessibleDescription('Second approval from is too long — keep it to 100 characters.');
+      await waitFor(() => expect(office).toHaveFocus());
     });
 
     it('warns when the named office no longer exists', async () => {
