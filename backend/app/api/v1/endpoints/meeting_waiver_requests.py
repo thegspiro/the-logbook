@@ -25,6 +25,7 @@ GET    /meetings/waiver-requests/policy/positions   - The positions to choose
                                                       from (meetings.manage)
 GET    /meetings/waiver-requests/eligibility        - May I ask about this meeting?
 POST   /meetings/waiver-requests                    - Ask to be excused
+GET    /meetings/waiver-requests/attention          - Do I decide any? How many wait?
 GET    /meetings/waiver-requests/mine               - My requests
 GET    /meetings/waiver-requests                    - Requests I decide or decided
 GET    /meetings/waiver-requests/{id}               - One request
@@ -58,6 +59,7 @@ from app.models.attendance_waiver import (
 from app.models.user import User
 from app.schemas.attendance_waiver import (
     AttendanceWaiverAlternateOptions,
+    AttendanceWaiverAttention,
     AttendanceWaiverDecision,
     AttendanceWaiverEligibilityResponse,
     AttendanceWaiverMessage,
@@ -189,6 +191,21 @@ async def submit_meeting_waiver_request(
             body.reason,
         )
     return await _one(service, current_user, request)
+
+
+@router.get("/attention", response_model=AttendanceWaiverAttention)
+async def get_meeting_waiver_attention(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    For the navigation: whether the caller decides business-meeting requests, and how
+    many pending ones they may decide now. Answers only about the caller, so
+    every member may ask; the queue itself lists only what they may decide.
+
+    **Authentication required**
+    """
+    return await _service(db).attention(str(current_user.organization_id), current_user)
 
 
 @router.get("/mine", response_model=List[AttendanceWaiverRequestResponse])

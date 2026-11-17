@@ -1201,17 +1201,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Playwright ships WebKit per Ubuntu release (webkit-ubuntu-24.04.zip,
-      # webkit-ubuntu-26.04.zip) but unpacks each into the same webkit-<rev>
-      # directory, and runner.os is "Linux" on both. While ubuntu-latest moves
-      # from 24.04 to 26.04, a run could restore the other release's build, find
-      # the directory complete, skip the install and fail every test at launch:
-      # on 2026-11-17 a 26.04 runner got the 24.04 build and all 252 tests of a
-      # shard failed on "libicudata.so.74: cannot open shared object file".
-      # Chromium is one build for every Linux, so its caches need no release.
-      - name: Identify the runner's Ubuntu release
-        id: os-release
-        run: . /etc/os-release && echo "id=${ID}-${VERSION_ID}" >> "$GITHUB_OUTPUT"
+      # The runner's Ubuntu release, for the two cache keys below. Playwright
+      # ships a different WebKit build per release (webkit-ubuntu-24.04,
+      # webkit-ubuntu-26.04) and both unpack to the same webkit-<revision>
+      # directory, linked against that release's ICU. `runner.os` is "Linux"
+      # on either, so on 2026-11-16, when `ubuntu-latest` moved to 26.04, a
+      # 24.04 build saved earlier was restored, the install was skipped as a
+      # cache hit, and every test failed to launch WebKit:
+      # "libicudata.so.74: cannot open shared object file". Read from
+      # /etc/os-release rather than the image's ImageOS variable, which is the
+      # runner image's own convention and not part of the Actions contract.
+      - name: Identify the Ubuntu release
+        id: distro
+        run: echo "release=$(. /etc/os-release && echo "${ID}-${VERSION_ID}")" >> "$GITHUB_OUTPUT"
 
       # A separate key from the Chromium jobs: this cache holds WebKit, and
       # sharing the key would let whichever job saved first decide whether the
@@ -1221,7 +1223,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-webkit-${{ runner.os }}-${{ steps.os-release.outputs.id }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-webkit-${{ runner.os }}-${{ steps.distro.outputs.release }}-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright WebKit
         if: steps.playwright-cache.outputs.cache-hit != 'true'
@@ -1245,9 +1247,11 @@ jobs:
         uses: actions/cache@v6
         with:
           path: /var/cache/apt/archives
-          key: apt-webkit-deps-${{ runner.os }}-${{ steps.os-release.outputs.id }}-${{ hashFiles('package-lock.json') }}
+          # Per release too: one release's .debs are not another's, and
+          # restoring them only fills the disk before apt fetches its own.
+          key: apt-webkit-deps-${{ runner.os }}-${{ steps.distro.outputs.release }}-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            apt-webkit-deps-${{ runner.os }}-${{ steps.os-release.outputs.id }}-
+            apt-webkit-deps-${{ runner.os }}-${{ steps.distro.outputs.release }}-
 
       # Not a bare `npx playwright install-deps webkit`. On 2026-11-11 the
       # Azure Ubuntu mirror stopped serving packages for three and a half
