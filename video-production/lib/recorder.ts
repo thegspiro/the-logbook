@@ -23,6 +23,33 @@ export const SCREEN = { width: 390, height: 640 };
  */
 export const SCALE = 900 / 390;
 
+/**
+ * The zone every short renders in. Captures set it as the browser's zone, so a
+ * time mocked as 6:00 PM here reads as 6:00 PM on screen.
+ */
+export const ZONE = 'America/Chicago';
+
+/** The UTC instant of a wall-clock time in ZONE on the given calendar day. */
+export function zoned(day: Date, hour: number, minute: number): Date {
+  const wall = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), hour, minute);
+  // Read the zone's offset at that moment, then shift by it. Correct across
+  // daylight saving, since the offset is taken for the day itself.
+  const asZone = new Date(new Date(wall).toLocaleString('en-US', { timeZone: ZONE }));
+  const asUtc = new Date(new Date(wall).toLocaleString('en-US', { timeZone: 'UTC' }));
+  return new Date(wall + (asUtc.getTime() - asZone.getTime()));
+}
+
+/** The calendar day `offset` days from today in ZONE, as a UTC-midnight Date. */
+export function zoneDay(offset = 0): Date {
+  const key = new Date().toLocaleDateString('en-CA', { timeZone: ZONE });
+  const day = new Date(`${key}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + offset);
+  return day;
+}
+
+/** YYYY-MM-DD of a Date built by zoneDay(). */
+export const dayKey = (day: Date): string => day.toISOString().slice(0, 10);
+
 /** Pause after each narrated line before the next shot starts, in seconds. */
 const GAP = 0.45;
 

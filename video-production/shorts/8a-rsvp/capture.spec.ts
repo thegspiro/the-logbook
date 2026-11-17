@@ -1,7 +1,7 @@
 import { test, type Page, type Route } from '@playwright/test';
 
 import { signIn } from '../../../frontend/src/e2e/helpers';
-import { SCALE, SCREEN, bottomMost, centre, prepare, recordShots, settle, tap } from '../../lib/recorder';
+import { SCALE, SCREEN, ZONE, bottomMost, centre, prepare, recordShots, settle, tap, zoned } from '../../lib/recorder';
 
 /**
  * Short 8A — "How to RSVP for an Event in 30 Seconds".
@@ -12,18 +12,6 @@ import { SCALE, SCREEN, bottomMost, centre, prepare, recordShots, settle, tap } 
  */
 
 const EVENT_ID = 'evt-awards';
-const ZONE = 'America/Chicago'; // the browser's zone below, so times read as written
-
-/** The UTC instant of a wall-clock time in ZONE on the given calendar day. */
-function zoned(day: Date, hour: number, minute: number): Date {
-  const wall = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), hour, minute);
-  // Read the zone's offset at that moment, then shift by it. Correct across
-  // daylight saving, since the offset is taken for the day itself.
-  const asZone = new Date(new Date(wall).toLocaleString('en-US', { timeZone: ZONE }));
-  const asUtc = new Date(new Date(wall).toLocaleString('en-US', { timeZone: 'UTC' }));
-  return new Date(wall + (asUtc.getTime() - asZone.getTime()));
-}
-
 // Dated from the render, not fixed: the event page offers RSVP only before the
 // deadline, and the dashboard's opening shot lists only the next 30 days. So
 // the banquet is the first Saturday at least two weeks out, 6-10 PM, with RSVP
