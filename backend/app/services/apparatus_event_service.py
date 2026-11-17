@@ -460,7 +460,6 @@ class ApparatusEventService:
             raise ConflictsNotAcknowledged(conflicts)
 
         series_id = str(uuid.uuid4())
-        expanded = _expand_seats(template.units)
         event_ids: List[str] = []
         for night in request.nights:
             event = Event(
@@ -476,40 +475,7 @@ class ApparatusEventService:
             )
             self.db.add(event)
             await self.db.flush()
-            plan = EventApparatusPlan(
-                organization_id=str(organization_id),
-                event_id=event.id,
-                template_id=template.id,
-                series_id=series_id,
-                admin_hours_category_id=template.admin_hours_category_id,
-                evoc_mode=template.evoc_mode,
-                allow_self_signup=template.allow_self_signup,
-                show_on_schedule=template.show_on_schedule,
-            )
-            self.db.add(plan)
-            await self.db.flush()
-            for unit_index, (apparatus_id, seats) in enumerate(expanded):
-                unit = EventApparatusUnit(
-                    organization_id=str(organization_id),
-                    plan_id=plan.id,
-                    event_id=event.id,
-                    apparatus_id=apparatus_id,
-                    sort_order=unit_index,
-                )
-                self.db.add(unit)
-                await self.db.flush()
-                for seat_index, (name, seat_type, note) in enumerate(seats):
-                    self.db.add(
-                        EventApparatusSeat(
-                            organization_id=str(organization_id),
-                            event_id=event.id,
-                            unit_id=unit.id,
-                            name=name,
-                            seat_type=seat_type,
-                            note=note,
-                            sort_order=seat_index,
-                        )
-                    )
+            await self._build_plan(event, template, series_id, organization_id)
             event_ids.append(str(event.id))
 
         await self.db.commit()
@@ -520,6 +486,159 @@ class ApparatusEventService:
             organization_id,
         )
         return series_id, event_ids
+
+    async def _build_plan(
+        self,
+        event: Event,
+        template: ApparatusEventTemplate,
+        series_id: str,
+        organization_id: str,
+    ) -> EventApparatusPlan:
+        """Copy a template's apparatus and seats onto one event. Shared by
+        scheduling new nights and by attaching a crew to an event that
+        already exists, so the two cannot build a plan differently."""
+        plan = EventApparatusPlan(
+            organization_id=str(organization_id),
+            event_id=event.id,
+            template_id=template.id,
+            series_id=series_id,
+            admin_hours_category_id=template.admin_hours_category_id,
+            evoc_mode=template.evoc_mode,
+            allow_self_signup=template.allow_self_signup,
+            show_on_schedule=template.show_on_schedule,
+        )
+        self.db.add(plan)
+        await self.db.flush()
+        for unit_index, (apparatus_id, seats) in enumerate(
+            _expand_seats(template.units)
+        ):
+            unit = EventApparatusUnit(
+                organization_id=str(organization_id),
+                plan_id=plan.id,
+                event_id=event.id,
+                apparatus_id=apparatus_id,
+                sort_order=unit_index,
+            )
+            self.db.add(unit)
+            await self.db.flush()
+            for seat_index, (name, seat_type, note) in enumerate(seats):
+                self.db.add(
+                    EventApparatusSeat(
+                        organization_id=str(organization_id),
+                        event_id=event.id,
+                        unit_id=unit.id,
+                        name=name,
+                        seat_type=seat_type,
+                        note=note,
+                        sort_order=seat_index,
+                    )
+                )
+        await self.db.flush()
+        return plan
+
+    # ------------------------------------------------------------------
+    # Attaching a crew to an event that already exists
+    # ------------------------------------------------------------------
+
+    async def _event_for_crew(
+        self, event_id: str, organization_id: str, *, lock: bool = False
+    ) -> Optional[Event]:
+        """The event a crew is being attached to, refused when a crew cannot
+        sensibly ride on it."""
+        event = await self._get_event(event_id, organization_id, lock=lock)
+        if event is None:
+            return None
+        self._assert_night_open(event)
+        if _value(event.event_type) == EventType.TRAINING.value:
+            raise ValueError(
+                "A Training event cannot carry an apparatus crew: its hours go "
+                "to training records, not Admin Hours"
+            )
+        return event
+
+    async def check_attach_conflicts(
+        self, event_id: str, template_id: str, organization_id: str
+    ) -> Optional[List[ApparatusConflict]]:
+        event = await self._event_for_crew(event_id, organization_id)
+        template = await self.get_template(template_id, organization_id)
+        if event is None or template is None:
+            return None
+        apparatus = await self._assert_apparatus(
+            [unit.apparatus_id for unit in template.units], organization_id
+        )
+        night = NightSpec(
+            start_datetime=_utc(event.start_datetime),
+            end_datetime=_utc(event.end_datetime),
+        )
+        return await self.find_conflicts(
+            organization_id, apparatus, [night], exclude_event_ids=[str(event.id)]
+        )
+
+    async def attach_template(
+        self,
+        event_id: str,
+        template_id: str,
+        organization_id: str,
+        *,
+        acknowledge_conflicts: bool,
+    ) -> Optional[EventApparatusPlan]:
+        """Give an existing event — a public request's calendar entry, say —
+        the apparatus and seats of a template.
+
+        The event keeps its own title, type, time and place; only the crew
+        comes from the template. Rescheduling or cancelling the event then
+        carries the crew with it, because the crew rides on the event.
+
+        Does not commit: a caller recording the attachment elsewhere (the
+        request's activity log) does so in the same transaction.
+        """
+        event = await self._event_for_crew(event_id, organization_id, lock=True)
+        template = await self.get_template(template_id, organization_id)
+        if event is None or template is None:
+            return None
+        if await self._plan_row(event_id, organization_id) is not None:
+            raise ValueError(
+                "This event already has an apparatus crew. Edit it from the "
+                "event's crew card."
+            )
+        conflicts = await self.check_attach_conflicts(
+            event_id, template_id, organization_id
+        )
+        if conflicts and not acknowledge_conflicts:
+            raise ConflictsNotAcknowledged(conflicts or [])
+        plan = await self._build_plan(
+            event, template, str(uuid.uuid4()), organization_id
+        )
+        logger.info(
+            "Attached apparatus template {} to event {} in org {}",
+            template.id,
+            event.id,
+            organization_id,
+        )
+        return plan
+
+    async def remove_plan(self, event_id: str, organization_id: str) -> bool:
+        """Take an apparatus crew off an event, while nobody holds a seat.
+
+        A filled seat is a member who was told they are on the crew; removing
+        it from under them is refused, as dropping a filled seat is when a
+        night is edited.
+        """
+        event = await self._get_event(event_id, organization_id, lock=True)
+        if event is None:
+            return False
+        plan = await self.get_plan(event_id, organization_id)
+        if plan is None:
+            return False
+        self._assert_night_open(event)
+        if any(seat.user_id for unit in plan.units for seat in unit.seats):
+            raise ValueError(
+                "Someone already has a seat on this crew. Clear the seats "
+                "before removing the crew."
+            )
+        await self.db.delete(plan)
+        await self.db.commit()
+        return True
 
     # ------------------------------------------------------------------
     # A night's plan and crew board

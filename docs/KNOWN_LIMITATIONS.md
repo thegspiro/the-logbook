@@ -83,6 +83,20 @@ for it.
   `events.manage`. A position a department created itself is left alone, per
   the seeded-grant rule; grant them on the positions screen if wanted.
 
+### Public requests (2026-11-17)
+
+The owner ruled that a request's crew rides on the request's existing
+calendar event, that volunteer signups and a crew may both be used, and that
+the coordinator picks the template each time (no default per outreach type).
+
+- **A moved date is not re-checked for apparatus conflicts.** Postponing a
+  request to a new date moves its event and the crew with it; the conflict
+  check ran only when the crew was added.
+- **A postponement to a date TBD leaves the crew on the cancelled event.**
+  Rescheduling opens a new calendar event without a crew, and the
+  coordinator adds it again. Carrying it over automatically would seat members
+  on a date they never agreed to.
+
 ## Attendance Waiver Emails and Template Copies — Choices Made Without a Ruling (2026-11-11)
 
 The waiver emails and the template-CC fix (defect D1) follow the owner

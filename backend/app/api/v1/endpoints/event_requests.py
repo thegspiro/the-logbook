@@ -24,6 +24,7 @@ from app.api.attendance_lock import attendance_lock_http_error
 from app.api.dependencies import (
     PaginationParams,
     get_current_user,
+    require_all_permissions,
     require_permission,
 )
 from app.core.captcha import require_captcha
@@ -39,6 +40,7 @@ from app.models.event_request import (
 )
 from app.models.location import Location
 from app.models.user import Organization, User
+from app.schemas.apparatus_event import AttachCrewRequest
 from app.schemas.event_request import (
     EmailTemplateCreate,
     EmailTemplateResponse,
@@ -61,6 +63,10 @@ from app.schemas.event_request import (
     TaskCompletionUpdate,
 )
 from app.schemas.forms import FormResponse, FormsListResponse
+from app.services.apparatus_event_service import (
+    ApparatusEventService,
+    ConflictsNotAcknowledged,
+)
 from app.services.event_request_service import (
     apply_default_assignee,
     configured_task_ids,
@@ -1699,6 +1705,93 @@ async def open_request_staffing(
     return EventRequestStaffingResponse(
         **await get_staffing_state(db, event_request, org)
     )
+
+
+@router.post("/{request_id}/apparatus-crew", status_code=status.HTTP_201_CREATED)
+async def attach_request_apparatus_crew(
+    request_id: str,
+    data: AttachCrewRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_all_permissions("events.manage", "apparatus_events.manage")
+    ),
+):
+    """
+    Staff a scheduled request with an apparatus template's crew.
+
+    The crew goes on the request's own calendar event — no second entry — so
+    a reschedule moves it and a cancellation stands it down with the event.
+    Volunteer signups, if open, are unaffected: a request can have both.
+    Unacknowledged apparatus conflicts answer 409 with the conflicts listed.
+
+    **Requires permission: events.manage, apparatus_events.manage**
+    """
+    event_request = await _load_request_for_staffing(
+        db, request_id, current_user.organization_id, for_update=True
+    )
+    if event_request.status != EventRequestStatus.SCHEDULED:
+        raise HTTPException(
+            status_code=400,
+            detail=safe_error_detail(
+                ValueError(
+                    "Confirm a date for this request before adding an apparatus "
+                    "crew."
+                )
+            ),
+        )
+    event = await get_linked_calendar_event(db, event_request)
+    if event is None or event.is_cancelled:
+        raise HTTPException(
+            status_code=400,
+            detail=safe_error_detail(
+                ValueError(
+                    "This request has no calendar event to put a crew on. "
+                    "Schedule it with a calendar entry first."
+                )
+            ),
+        )
+
+    service = ApparatusEventService(db)
+    try:
+        plan = await service.attach_template(
+            str(event.id),
+            data.template_id,
+            str(current_user.organization_id),
+            acknowledge_conflicts=data.acknowledge_conflicts,
+        )
+    except ConflictsNotAcknowledged as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": str(exc),
+                "conflicts": [c.model_dump() for c in exc.conflicts],
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    template_name = (
+        await service.template_names(
+            str(current_user.organization_id), [data.template_id]
+        )
+    ).get(data.template_id, "a template")
+    db.add(
+        EventRequestActivity(
+            request_id=event_request.id,
+            action="apparatus_crew_attached",
+            notes=f"Added an apparatus crew from {template_name}",
+            details={
+                "event_id": str(event.id),
+                "template_id": data.template_id,
+                "conflicts_acknowledged": data.acknowledge_conflicts,
+            },
+            performed_by=current_user.id,
+        )
+    )
+    await db.commit()
+    return {"event_id": str(event.id), "plan_id": str(plan.id)}
 
 
 @router.post(

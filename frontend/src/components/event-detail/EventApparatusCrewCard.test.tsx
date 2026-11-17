@@ -2,6 +2,7 @@ const mockGetBoard = vi.fn();
 const mockClaim = vi.fn();
 const mockRelease = vi.fn();
 const mockAssign = vi.fn();
+const mockRemovePlan = vi.fn();
 
 vi.mock('../../services/api', () => ({
   apparatusEventService: {
@@ -9,6 +10,7 @@ vi.mock('../../services/api', () => ({
     claimSeat: (...args: unknown[]) => mockClaim(...args) as unknown,
     releaseSeat: (...args: unknown[]) => mockRelease(...args) as unknown,
     assignSeat: (...args: unknown[]) => mockAssign(...args) as unknown,
+    removePlan: (...args: unknown[]) => mockRemovePlan(...args) as unknown,
     getAssignableMembers: () => Promise.resolve([]),
     getDriverCandidates: () => Promise.resolve(null),
     getEditorOptions: () => Promise.resolve({ apparatus: [], categories: [] }),
@@ -120,6 +122,7 @@ describe('EventApparatusCrewCard', () => {
     mockClaim.mockReset();
     mockRelease.mockReset();
     mockAssign.mockReset();
+    mockRemovePlan.mockReset();
   });
 
   it('renders nothing on an event that is not an apparatus night', async () => {
@@ -187,5 +190,36 @@ describe('EventApparatusCrewCard', () => {
     const nav = await screen.findByRole('navigation', { name: 'Other nights in this run' });
     const links = within(nav).getAllByRole('link');
     expect(links.map((link) => link.getAttribute('href'))).toEqual(['/events/night-2']);
+  });
+
+  it('will not remove the crew while someone holds a seat', async () => {
+    mockGetBoard.mockResolvedValue(board({ can_manage: true }));
+    const user = userEvent.setup();
+    renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+    await user.click(await screen.findByRole('button', { name: /Edit this night/ }));
+
+    expect(await screen.findByRole('button', { name: 'Remove crew' })).toBeDisabled();
+  });
+
+  it('removes an empty crew and leaves the event page without the card', async () => {
+    const empty = board({ can_manage: true });
+    empty.units = empty.units.map((unit) => ({
+      ...unit,
+      seats: unit.seats.map((seat) => ({ ...seat, user_id: null, user_name: null })),
+    }));
+    mockGetBoard.mockResolvedValue(empty);
+    mockRemovePlan.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderWithRouter(<EventApparatusCrewCard eventId="night-1" timezone="America/New_York" />);
+
+    await user.click(await screen.findByRole('button', { name: /Edit this night/ }));
+    await user.click(await screen.findByRole('button', { name: 'Remove crew' }));
+    const confirm = await screen.findByRole('dialog', { name: 'Remove the apparatus crew?' });
+    await user.click(within(confirm).getByRole('button', { name: 'Remove crew' }));
+
+    await waitFor(() => expect(mockRemovePlan).toHaveBeenCalledWith('night-1'));
+    await waitFor(() => expect(screen.queryByText('Outreach · not a shift')).not.toBeInTheDocument());
+    expect(screen.queryByRole('region', { name: 'Apparatus & Crew' })).not.toBeInTheDocument();
   });
 });

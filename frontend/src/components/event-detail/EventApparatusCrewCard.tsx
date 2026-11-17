@@ -301,6 +301,11 @@ export const EventApparatusCrewCard: React.FC<EventApparatusCrewCardProps> = ({ 
           setEditing(false);
           setBoard(updated);
         }}
+        onRemoved={() => {
+          setEditing(false);
+          setBoard(null);
+          setAbsent(true);
+        }}
       />
     </section>
   );
