@@ -314,6 +314,16 @@ class AttendanceWaiverAlternateStored(BaseModel):
     current: bool
 
 
+class AttendanceWaiverAttention(BaseModel):
+    """For the navigation: whether the caller decides requests in this
+    workflow, and how many pending ones they may decide now. Members who
+    decide only by holding a chosen position, an office or the alternate hold
+    no permission the menu could check, so the server answers instead."""
+
+    decides: bool
+    pending: int
+
+
 class AttendanceWaiverPositionOption(BaseModel):
     id: str
     name: str

@@ -1,6 +1,7 @@
 import React from 'react';
 import { offersSkillsTesting, usePracticalSkillsMethod } from '../../stores/practicalSkillsStore';
 import { trainingNavItems } from '../layout/trainingNavigation';
+import { useWaiverAttentionAnswer, WaiverAttentionKey } from '../../hooks/useWaiverAttention';
 import { SectionPageHeader } from '../layout/SectionPageHeader';
 import type { PageHeaderProps } from '../layout/SectionPageHeader';
 
@@ -12,10 +13,12 @@ import type { PageHeaderProps } from '../layout/SectionPageHeader';
  */
 export const TrainingPageHeader: React.FC<PageHeaderProps> = (props) => {
   const practicalSkillsMethod = usePracticalSkillsMethod();
+  // Asked for by the side or top navigation, which every page mounts.
+  const waivers = { training: useWaiverAttentionAnswer(WaiverAttentionKey.TRAINING_SESSION) };
   return (
     <SectionPageHeader
       {...props}
-      sections={trainingNavItems(offersSkillsTesting(practicalSkillsMethod))}
+      sections={trainingNavItems(offersSkillsTesting(practicalSkillsMethod), waivers.training)}
       stripLabel="Training sections"
     />
   );
