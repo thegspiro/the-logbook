@@ -17,7 +17,7 @@ from typing import Any, Dict, List
 
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import Paragraph, Spacer
 
 from app.utils.election_pdf_style import (
     BOTTOM_MARGIN,
@@ -34,6 +34,7 @@ from app.utils.election_pdf_style import (
     section,
 )
 from app.utils.pdf_fonts import BODY_FONT, BOLD_FONT
+from app.utils.pdf_running_header import HeadedDocTemplate, RunningHeader
 from app.utils.pdfa import to_pdfa
 
 
@@ -61,8 +62,14 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
     else None), ``content_hash``, ``generated_at``.
     """
     buf = BytesIO()
-    doc = SimpleDocTemplate(
+    doc = HeadedDocTemplate(
         buf,
+        running_header=RunningHeader(
+            record.get("org_name"),
+            "Member Performance Evaluation",
+            record.get("member_name"),
+            record.get("logo"),
+        ),
         # The canvas otherwise declares Helvetica, never embedded, on every page.
         initialFontName=BODY_FONT,
         pagesize=letter,
