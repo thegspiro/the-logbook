@@ -394,7 +394,9 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   // A new item starts with the tracking its category implies, until the
   // officer picks one. Effect-driven rather than in the Category onChange
   // because the categories can arrive after the form opens on a preset one.
-  const derivedTracking = cat ? defaultTrackingTypeFor(cat) : null;
+  // No category is a choice too (Individual). A chosen one whose record has
+  // not loaded yet derives nothing, so a preset category cannot flicker.
+  const derivedTracking = !f.category_id ? defaultTrackingTypeFor(null) : cat ? defaultTrackingTypeFor(cat) : null;
   useEffect(() => {
     if (!isOpen || editItem || trackingChosen.current || !derivedTracking) return;
     setF((prev) => (prev.tracking_type === derivedTracking ? prev : { ...prev, tracking_type: derivedTracking }));
@@ -403,7 +405,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
     setBaseline((prev) => {
       if (!prev) return prev;
       const [stored, ...rest] = JSON.parse(prev) as [FD, ...unknown[]];
-      if (stored.category_id !== cat?.id || stored.tracking_type === derivedTracking) return prev;
+      if (stored.category_id !== (cat?.id ?? '') || stored.tracking_type === derivedTracking) return prev;
       return JSON.stringify([{ ...stored, tracking_type: derivedTracking }, ...rest]);
     });
   }, [isOpen, editItem, derivedTracking, cat?.id]);

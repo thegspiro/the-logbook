@@ -1167,6 +1167,18 @@ describe("ItemFormModal tracking type follows a new item's category", () => {
     expect(tracking()).toHaveValue('pool');
   });
 
+  // Codex review on #4399: with no category the default was skipped, so an
+  // item moved back to "-- Select --" kept the consumable category's Pool.
+  it('goes back to Individual when the category is cleared', async () => {
+    const user = userEvent.setup();
+    render(<ItemFormModal {...props} isOpen />);
+
+    await user.selectOptions(category(), 'cat-ems');
+    expect(tracking()).toHaveValue('pool');
+    await user.selectOptions(category(), '');
+    expect(tracking()).toHaveValue('individual');
+  });
+
   it('leaves a tracking type the officer chose alone', async () => {
     const user = userEvent.setup();
     render(<ItemFormModal {...props} isOpen />);
