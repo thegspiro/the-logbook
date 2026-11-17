@@ -255,7 +255,7 @@ film a pre-2026-11-04 form.]**
 
 ### COMPLIANCE REQUIREMENTS CONFIGURATION (6:15 – 7:15)
 
-**[SCREEN: Training Admin → Settings & Data → Compliance Settings, then the
+**[SCREEN: Training Admin → Settings & Data → Compliance, then the
 Configure page it opens (ComplianceRequirementsConfigPage)]**
 
 > "This is where you define what 'compliance' means for your department. Which
@@ -282,10 +282,13 @@ Configure page it opens (ComplianceRequirementsConfigPage)]**
 **[SCREENSHOT NEEDED]:** _The Compliance Requirements Thresholds tab with the "Evaluation Period" checkbox and its helper text._
 
 > "You'll find all of this in two places: **Compliance Reporting, Configure**, or
-> **Settings and Data, Compliance Settings**. The second is the same page —
+> **Settings and Data, Compliance**. The second is the same page —
 > it's there so you can find it with the rest of your settings. You need the
 > manage-settings or manage-compliance permission to save; manage-training alone
 > opens the hub but doesn't show Configure."
+
+**[EDITOR — 2026-11-17. Re-record this line: the Settings & Data tab reads
+**Compliance** since 2026-11-08 (it was "Compliance Settings").]**
 
 **[SCREEN: Thresholds tab, the Months on leave choice: Full month (default),
 15-day rule: proportional, 15-day rule: half.]**
@@ -385,12 +388,21 @@ the CSV and PDF buttons]**
 ### TRAINING EVENTS (8:15 – 9:15)
 
 > "Training and Events are connected. When you create an event with the type
-> 'Training,' fill in the **Training details** section that appears on the form:
-> the course, category and requirement it counts toward. Once the event exists,
-> you change those on its **Requirements & Programs** card."
+> 'Training,' you get the same step-by-step form as **Create Session**: on
+> **Training Info**, pick the course — or none — and the category and
+> requirement it counts toward. Once the event exists, its **Training details**
+> card sums that up, and **Edit training details** takes you back to the form."
 
-**[SCREEN: Events → Create Event, type "Training", the "Training details
-(optional)" section with a course and a requirement picked.]**
+**[SCREEN: Events → Create Event, type "Training", the training-event form's
+Training Info step with a course and a requirement picked. Then the event
+page's Training details card.]**
+
+**[EDITOR — 2026-11-17. Re-record this beat and the two below. Since
+2026-11-11 (#4347) a Training event is created and edited in the step-by-step
+training-event form, and the event page's "Requirements & Programs" card is
+now **Training details**, a read-only summary with **Edit training details**.
+The old footage shows the inline "Training details (optional)" section and the
+old card. Narration is updated; length roughly unchanged.]**
 
 > "After the event, **Finalize Attendance** — or **End Event** — writes a
 > training record for every member who checked in, for the time they actually
@@ -399,11 +411,11 @@ the CSV and PDF buttons]**
 > reopened, set their times with **Edit Times**, and finalize again."
 
 **[SCREEN: The event page after Finalize Attendance on a Training event — the
-toast naming the records written, and the Requirements & Programs card.]**
+toast naming the records written, and the Training details card.]**
 
 > "If the session was set to need an officer's confirmation, the attendance comes
-> to you instead: **Review and approve** on the event's Requirements & Programs
-> card opens the approval page, where you can adjust anyone's minutes before you
+> to you instead: **Review and approve** on the event's Training details card
+> opens the approval page, where you can adjust anyone's minutes before you
 > record it. Until then members see the class as **In Progress**."
 
 > "One more change: Training events no longer add **admin hours**. The same
@@ -411,15 +423,16 @@ toast naming the records written, and the Requirements & Programs card.]**
 
 **[CALLOUT: "Event attendance → automatic training credit"]**
 
-**[SCREEN: Create Training Session → Connect to Requirements & Programs, a
-Session Attendance requirement ticked. Then the event card with the "Counts
+**[SCREEN: The training-event form → Training Info → Connect to Requirements &
+Programs, a Session Attendance requirement ticked under Counts toward
+attendance. Then the event card with the "Counts
 toward attendance" badge.]**
 
 > "If you run a Session Attendance requirement — 'attend sixty percent of the
 > drills' — a drill only counts if it's linked. So when you create the session,
-> tick the requirement under **Connect to Requirements and Programs**, for a single
-> session or a recurring series. Forgot? Change it from the **Counts toward
-> attendance** editor on the event page, even after attendance is finalized.
+> tick the requirement under **Counts toward attendance**, for a single
+> session or a recurring series. Forgot? **Edit training details** on the event
+> page changes it, even after attendance is finalized.
 > Members see a **Counts toward attendance** badge on the event."
 
 **[PRODUCTION NOTE — 2026-11-05. New beat, about 25 seconds; re-time Chapter 4.

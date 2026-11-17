@@ -69,7 +69,19 @@ program enrollments, external training integrations, and compliance reporting.
 - **External Integrations** — Vector Solutions, Target Solutions, Lexipol,
   iAmResponding and Custom API providers with category and user mapping. See
   [External Training Integration](Module-Training-Developer#external-training-integration)
-- **Historical Import** — CSV import with preview and per-row validation
+- **Historical Import** — CSV import with preview and per-row validation.
+  _(2026-11-15)_ Both Training CSV importers (`POST /training/import/confirm`
+  and `POST /training/records/import-csv`) enter each record they write in the
+  `imported_source_records` ledger (`ledger_csv_imports`, source system
+  `logbook.training-csv-import`), so `record_sources` labels it "Imported".
+  Records they wrote before then still read "The Logbook"
+- **Course Links** _(2026-11-15)_ — Training Admin → Curriculum → Course Links
+  (`training.manage`) lists the names that records with no `course_id` carry,
+  grouped by `training_course_links.name_key`, each with a suggested library
+  course. `GET /training/course-links`, then a link per name or for every
+  suggestion, sets `course_id`, category and training type on the unlinked
+  records with that name only. See
+  [Course-library links](#course-library-links)
 - **Registry Integration** — NFPA Standards, NREMT Certifications and Pro Board
   one-click import with source URL citations and last-updated timestamps
 - **National Registry Standard Linkage** — Training categories link to NREMT
@@ -108,7 +120,7 @@ program enrollments, external training integrations, and compliance reporting.
 - **Manual Shift Report Page** — `/training/log-shift`, for departments without
   the Scheduling module
 - **Manual Entry Admin Config** — `ManualEntrySettingsPanel` (Training Admin →
-  Settings & Data → Manual Entry Rules) controls manual entry availability,
+  Settings & Data → Manual Entry) controls manual entry availability,
   allowed apparatus types, default start times, and default shift duration
 
 ---
@@ -139,7 +151,8 @@ fall short. Certification-style requirements now match records by the stored
 ### Types, frequency and targeting
 
 A requirement has a `requirement_type` (hours, courses, certification, shifts,
-calls, skills_evaluation, checklist, knowledge_test, session_attendance), a `frequency` (annual,
+calls, skills_evaluation, checklist, knowledge_test, evaluated_shifts,
+transports, refusals, evaluated_calls, session_attendance), a `frequency` (annual,
 biannual, quarterly, monthly, one_time) and a `due_date_type`
 (calendar_period, rolling, certification_period, fixed_date). `due_date` only
 means anything for `fixed_date`: create and update clear it for every other
@@ -158,8 +171,9 @@ custom tier such as `senior` can be ticked; a type the requirement already
 carries is always shown. Shift and call requirements return `monthly_counts`
 from `evaluate_requirement_detail` (null for other types), the counterpart of
 `monthly_hours`, with the same leave fields; a target that leave reduces to
-zero reads "Nothing owed (on leave)". Evaluated shifts, transports and
-refusals requirements linked into a program with **Link existing** are graded
+zero reads "Nothing owed (on leave)". Evaluated shifts, transports,
+refusals and _(2026-11-14)_ evaluated calls requirements linked into a program
+with **Link existing** are graded
 from shift evaluations (`load_evaluation_credits`, rules in
 `shift_evaluation_rules.py`), not from training records. `PUT
 /compliance/config` writes a `compliance_config_updated` audit entry naming
@@ -218,6 +232,13 @@ registry-code heuristics. Every write path validates the ids against the
 caller's organization via `assert_all_in_org`, reporting only "invalid" so it
 cannot be used to probe another tenant. Changing a requirement's type away from
 courses/certification clears the links.
+
+**Records with no `course_id`** _(2026-11-15)_ are linked from Training Admin
+→ Curriculum → **Course Links** (`training_course_links.py`). Names are grouped
+by `name_key` (provider-course normalizer, then `training_match_key`), and a
+suggestion comes from the provider-course mapping matcher. Nothing is linked
+until an officer confirms; a link touches only records that still have no
+course, so a repeat is a no-op and a hand-linked record keeps its course.
 
 **Name matching** (certifications, and since 2026-11-04 skills evaluation,
 checklist and knowledge test) is limited to legacy records
@@ -327,16 +348,24 @@ would not accept do not inflate a member's certificate.
 the recurring events via `EventService` and links a `TrainingSession` to each
 occurrence.
 
+**One form creates and edits a Training event** _(2026-11-11)_. Training
+Admin's **Create Session**, Events → **Create Event** with the type
+**Training**, and **Edit** on a Training event open the same four-step
+training-event form (`TrainingEventWizard`). The course is optional; with none,
+records are filed under the event's title. Developer detail is in
+[Module-Training-Developer](Module-Training-Developer).
+
 **Session form helpers:**
 
-- **Course auto-populate** — selecting a course fills training type, credit
-  hours, instructor, expiration months, and max participants, with a details
-  preview card.
+- **Course auto-populate** — choosing **From the Course Library** and a course
+  fills training type, credit hours, instructor, expiry, category, program and
+  maximum attendees, with a details card.
 - **Quarter-hour time picker** — the `DateTimeQuarterHour` UX component splits
   date/time into a native date picker and a select restricted to `:00`, `:15`,
   `:30`, `:45` (browser `datetime-local` inputs ignore `step="900"`).
 - **Quick duration buttons** — 1, 2, 4 and 8 hours, matching EventForm. They
-  appear once a start date is set and fill the end date/time.
+  fill the end date/time; with no start date a button reads "Set a start date
+  first".
 
 ---
 
@@ -990,7 +1019,7 @@ A descriptive scale with no labels falls back to numeric display (1–5).
 Scheduling module. Officers enter shift date, start/end times, apparatus, crew
 members, and trainee evaluations, with apparatus-specific skill/task
 auto-population. Availability, allowed apparatus types, default start times and
-default duration come from **Manual Entry Rules** in the admin hub.
+default duration come from **Manual Entry** in the admin hub.
 
 ---
 

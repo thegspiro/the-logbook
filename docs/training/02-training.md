@@ -230,16 +230,20 @@ record for you.
    for the rest.
 3. **Search courses** filters by course name. **Type** filters by training
    type. Both narrow the years and the lists together.
+4. A record **with no completion date** is grouped under **No completion date**,
+   above the years, whatever you filter by. This includes a record still waiting
+   for approval and a completed record imported without a date; each row shows
+   its own status. (The group was headed "Awaiting approval" before 2026-10-21.)
 
 _Added 2026-11-10._ **Where a record came from.** Training lists, the print page
 and the individual CSV and PDF exports say whether a record was **synced from a
-training provider** (for example "Target Solutions"), written by the **Historical
-Data Import** ("Imported"), or entered in The Logbook. The CSV adds a **Source**
-column at the end; the PDF prints it under the course name. Records added by the
-older CSV importers leave no mark and read "The Logbook". 4. A record **with no completion date** is grouped under **No completion date**,
-above the years, whatever you filter by. This includes a record still waiting
-for approval and a completed record imported without a date; each row shows
-its own status. (The group was headed "Awaiting approval" before 2026-10-21.)
+training provider** (for example "Target Solutions"), **imported** from a file
+("Imported"), or entered in The Logbook. The CSV adds a **Source** column at the
+end; the PDF prints it under the course name. "Imported" covers the
+**Historical Data Import** and, _from 2026-11-15_, the training-record CSV
+importers (**Training Admin → Settings & Data → Import History**, and the
+API's CSV upload). Records those CSV importers wrote before 2026-11-15 left no mark, so
+they still read "The Logbook".
 
 The top of the tab shows your **all-time** courses and hours and how many years
 are on record. The History tab reads your whole record, however long it is.
@@ -442,6 +446,35 @@ the course.
 Courses made up of several classes — a recruit school, a five-night EMT
 refresher — show a class count and a **Manage classes** action. See
 [Multi-Class Courses & Cohorts](#multi-class-courses--cohorts).
+
+### Linking Records That Name No Course _(2026-11-15)_
+
+**Who can do this:** training officers (`training.manage`).
+
+A course or certification requirement counts a training record only when the
+record is linked to a library course. A record entered with a typed course
+name, or imported from a file whose name matched no course, has no link and
+counts toward none of them, however close its name is.
+
+Open **Training Admin → Curriculum → Course Links** to fix that:
+
+1. Each row is one course name your unlinked records carry, with how many
+   records and members, and the dates they span. Spellings that differ only in
+   capitals, punctuation, a trailing provider number or a "CAPCE" prefix are
+   one row, listed under **Also spelled**. The names with the most records come
+   first; **Search names** narrows the list.
+2. Where a library course looks like a match, the row reads **Suggested:**
+   _course_ and the course is already chosen in its list. Otherwise choose one.
+3. Select **Link**, check the message, and select **Link records**. Every
+   unlinked record with that name takes the course, its category and its
+   training type, and counts toward the requirements that name the course from
+   then on. Each record keeps its own name, date and hours.
+
+**Link all suggested** links every row that has a suggestion in one go. Check
+the suggestions first: a link is not undone from this screen. Nothing is linked
+until you select one of these buttons, and a record already linked to a course
+— by you or anyone else — is never changed. When every record names a course,
+the screen reads **Every training record names a library course**.
 
 ---
 
@@ -1280,20 +1313,31 @@ dialog checks what uses the requirement first.
 
 ### Requirement Types
 
-| Type                                  | What the member must do                                           | What you enter                                                              |
-| ------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| **Hours**                             | Build up a number of training hours                               | Required hours                                                              |
-| **Courses**                           | Complete a specific list of courses                               | Courses picked from the course library                                      |
-| **Certification**                     | Get or keep a specific certification                              | Courses that earn it, from the course library (**Certification earned by**) |
-| **Shifts**                            | Complete a number of qualifying shifts                            | Required shifts                                                             |
-| **Calls**                             | Respond to a number of qualifying calls                           | Required calls                                                              |
-| **Skills Evaluation**                 | Pass a hands-on skills evaluation                                 | —                                                                           |
-| **Checklist**                         | Complete a set of check-off items                                 | Checklist items                                                             |
-| **Knowledge Test**                    | Pass a written test                                               | Passing score (%), optional max attempts                                    |
-| **Session Attendance** _(2026-11-04)_ | Attend a share of the training sessions linked to the requirement | **Sessions to Attend (%)**                                                  |
+| Type                                  | What the member must do                                                       | What you enter                                                              |
+| ------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Hours**                             | Build up a number of training hours                                           | Required hours                                                              |
+| **Courses**                           | Complete a specific list of courses                                           | Courses picked from the course library                                      |
+| **Certification**                     | Get or keep a specific certification                                          | Courses that earn it, from the course library (**Certification earned by**) |
+| **Shifts**                            | Complete a number of qualifying shifts                                        | Required shifts                                                             |
+| **Calls**                             | Respond to a number of qualifying calls, counted from shift reports           | Required calls                                                              |
+| **Skills Evaluation**                 | Pass a hands-on skills evaluation                                             | —                                                                           |
+| **Checklist**                         | Complete a set of check-off items                                             | Checklist items                                                             |
+| **Knowledge Test**                    | Pass a written test                                                           | Passing score (%), optional max attempts                                    |
+| **Evaluated Shifts**                  | Be evaluated on a number of shifts, counted from submitted shift evaluations  | Required evaluated shifts                                                   |
+| **Transports**                        | Make a number of patient transports, counted from submitted shift evaluations | Required transports                                                         |
+| **Refusals**                          | Handle a number of patient refusals, counted from submitted shift evaluations | Required refusals                                                           |
+| **Evaluated Calls** _(2026-11-14)_    | Run a number of calls, counted from submitted shift evaluations               | Required evaluated calls                                                    |
+| **Session Attendance** _(2026-11-04)_ | Attend a share of the training sessions linked to the requirement             | **Sessions to Attend (%)**                                                  |
 
 The form shows the right value box for the type you choose, and checks it
 before saving.
+
+**Calls and Evaluated Calls are counted apart** _(2026-11-14)_. **Calls** takes
+the calls on shift reports. **Evaluated Calls** takes the calls recorded in the
+statistics of each submitted shift evaluation, once the member can see it, the
+way **Transports** takes the evaluation's transports. No call is counted by
+both. The four evaluation types are credited only by shift evaluations, never by
+a training record; see [Shift Evaluations](#shift-evaluations-2026-10-31--11-01).
 
 ### Session Attendance — Attend a Share of the Linked Drills _(2026-11-04)_
 
@@ -1809,21 +1853,21 @@ opens **Records → Sessions**.
 
 The areas are:
 
-| Area                     | What is in it                                                                                                                      |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **Overview**             | Dashboard, Compliance Matrix, Expiring Certs, Training Waivers                                                                     |
-| **Records**              | Submissions to Review, Sessions, Course Cohorts, Shift Reports, Monthly Status                                                     |
-| **Curriculum**           | Requirements, Course Library, Programs                                                                                             |
-| **Evaluations**          | Practical-skills tools, Knowledge Tests                                                                                            |
-| **Program Management**   | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                                     |
-| **Compliance Reporting** | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast, and **Configure**                                            |
-| **Settings & Data**      | Manual Entry Rules, Practical Skills, Shift Evaluations, Compliance Settings, Integrations, Import Past Training, Headline Metrics |
+| Area                     | What is in it                                                                                                                                |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Overview**             | Dashboard, Compliance Matrix, Expiring Certs, Training Waivers                                                                               |
+| **Records**              | Submissions to Review, Waiver Requests, Sessions, Course Cohorts, Shift Reports, Monthly Status                                              |
+| **Curriculum**           | Requirements, Course Library, Course Links, Programs                                                                                         |
+| **Evaluations**          | Practical-skills tools, Knowledge Tests                                                                                                      |
+| **Program Management**   | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                                               |
+| **Compliance Reporting** | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast, and **Configure**                                                      |
+| **Settings & Data**      | Manual Entry, Practical Skills, Session Waivers, Shift Evaluations, Requirements, Compliance, Integrations, Import History, Headline Metrics |
 
 **Evaluations** shows **Skill Evaluations** or **Skills Test Templates** and
 **Skills Test Records**, depending on which practical-skills system your
 department runs (see [Skills Testing](#skills-testing)).
 
-**Compliance Settings** _(2026-11-04)_ is listed under **Settings & Data** only
+**Compliance** _(2026-11-04; the tab read Compliance Settings until 2026-11-08)_ is listed under **Settings & Data** only
 for an officer who can also change the department's settings or holds
 "Manage compliance records", because only they can save it. It lists what the
 compliance settings hold — the department-wide threshold, compliance profiles
@@ -2307,7 +2351,7 @@ position, not only to membership types. Use it when two groups share a class
 and status but owe different training — for example, life members who still
 ride and life members who have stopped.
 
-1. Open **Training Admin → Settings & Data → Compliance Settings** and select
+1. Open **Training Admin → Settings & Data → Compliance** and select
    **Open compliance settings** _(2026-11-04)_. (**Configure** under
    **Compliance Reporting** opens the same page.)
 2. Open the **Profiles** tab and select **Add Profile** (or **Edit** on an
@@ -2432,7 +2476,7 @@ like any other training, and the monthly hours show it under the month's
 **Who can do this:** compliance officers (`compliance.manage`) or
 administrators (`settings.manage`).
 
-1. Open **Training Admin → Settings & Data → Compliance Settings** and select
+1. Open **Training Admin → Settings & Data → Compliance** and select
    **Open compliance settings** _(2026-11-04)_. (**Configure** under
    **Compliance Reporting** opens the same page.)
 2. On the **Thresholds** tab, find **Months on leave**.
@@ -2483,7 +2527,7 @@ month or stops at the end of last month.
 
 ### Setting the Department Default
 
-1. Open **Training Admin → Settings & Data → Compliance Settings** and select
+1. Open **Training Admin → Settings & Data → Compliance** and select
    **Open compliance settings** _(2026-11-04)_. This opens **Compliance
    Requirements Configuration**. (**Configure** under **Compliance Reporting**
    opens the same page.)
@@ -2631,16 +2675,18 @@ This one page covers:
 - **Meeting and shift waivers** — leave meetings out of attendance figures,
   and keep members off the schedule, during leave.
 
-> **Coming next: members asking to be excused** _(2026-11-10)_. The Logbook
-> can now take a member's request to be excused from one training session that
-> counts toward a session-attendance requirement, and route it to the positions
-> your department chooses (falling back to the Chief). An approved request
-> takes that one session out of the member's held and attended counts. **There
-> is no screen for it yet**, and it is off until a training officer saves a
-> request policy (deadline, yearly cap, categories, whether a reason is
-> required, who decides). Until the screens ship, nothing changes for members.
-> The rules are in `backend/app/docs/TRAINING_WAIVERS.md`, under "Session
-> Waiver Requests".
+**Members asking to be excused** _(2026-11-10; screens since 2026-11-13)_. A
+member can ask to be excused from one training session that counts toward a
+session-attendance requirement, with **Request to be excused** on the
+session's event page. The request goes to the positions your department
+chooses (falling back to the Chief). An approved request takes that one session
+out of the member's held and attended counts. It is off until a training
+officer ticks **Members may ask to be excused** in **Training Admin → Settings
+& Data → Session Waivers** and saves the deadline, yearly cap, categories,
+whether a reason is required and **Who decides**. Members follow their requests
+under **My Waiver Requests** on **My Training**; deciders work from **Training
+→ Waiver Requests** (below). The rules are in
+`backend/app/docs/TRAINING_WAIVERS.md`, under "Session Waiver Requests".
 
 ### Requests nobody decides close after seven days _(2026-11-13)_
 
@@ -2671,7 +2717,8 @@ or a training manager when the chain reaches them.
 **Training → Waiver Requests** lists the requests waiting on you and the ones
 you have decided. It appears only for members who decide requests; at the top
 of every Training page it carries the number waiting on you. The email about
-each new request links to it too.
+each new request links to it too. Training officers also reach the same list
+from **Training Admin → Records → Waiver Requests**.
 
 ### Asking a member for more information _(2026-11-13)_
 
@@ -2718,6 +2765,11 @@ it is waiting for you. A request that was **denied** is not reopened. Confirm
 is refused if you have already checked in to the session: withdraw it instead.
 See [Moving an event that members asked to be excused from](./04-events-meetings.md#moving-an-event-that-members-asked-to-be-excused-from-2026-11-13)
 for the officers' side.
+
+**When the session is cancelled** _(2026-11-14)_. Cancelling or deleting the
+session closes every request still pending for it; there is nothing left to be
+excused from. The member is told in the app and, from 2026-11-14, by email. A
+request already decided is kept as it was.
 
 ### Requests from the Chief or the President _(2026-11-13)_
 
@@ -3343,19 +3395,52 @@ no such program, in a seat the general form covers, gets the general form.
 ![The printable shift evaluation: the shift details and statistics, the rating key, Clinical Performance and Professionalism & Affect as tables of ratings and comments, and the closing comments](./images/02-132-shift-evaluation-print.png)
 
 **What a submitted evaluation credits.** It counts toward the member's program
-requirements of three types: an **Evaluated shifts** requirement counts it as
+requirements of four types: an **Evaluated shifts** requirement counts it as
 one shift (or none, where the requirement leaves out an evaluation with any
-item at the form's lowest rating), and **Transports** and **Refusals**
-requirements take the counts on the form's statistics.
+item at the form's lowest rating), and **Transports**, **Refusals** and
+_(2026-11-14)_ **Evaluated Calls** requirements take the counts on the form's
+statistics. **Calls** requirements are still counted from shift reports, not
+evaluations.
 
 **Linked department requirements count too** _(2026-11-14)_. A department
-requirement of one of those three types, added to a program with **Link
+requirement of one of those types, added to a program with **Link
 existing**, is now credited by the member's shift evaluations in the same way
 as the program's own. Before, evaluations never moved a linked row, and a
 training record of a matching type could mark it complete. The compliance
 matrix, dashboards, reports and My Training all count it this way, within the
 requirement's own window and with leave taken off in whole units. A flagged
 evaluation's credit is taken back from the linked row at once.
+
+**When credit is worked out again** _(2026-11-14)_. Credit follows changes
+made after the evaluation was submitted, without anyone saving it again:
+
+- **Editing the requirement.** Changing its type, or ticking or unticking
+  **Only count evaluations with no item at the lowest rating**, re-counts every
+  evaluation against it. A requirement changed to a type evaluations do not
+  count loses their credit.
+- **The member leaves the shift.** Taking a member off the shift, or marking
+  them **No-show**, takes back that shift's evaluation credit.
+
+Two cases still keep earlier credit until the evaluation is saved again: an
+outside shift moved to an agency that does not evaluate shifts, and a program
+dropped from a combined evaluation (its form cleared while the member stays
+enrolled).
+
+**Which evaluations a shift needs is fixed when it ends** _(2026-11-14)_.
+Until a department shift's end time, who needs which evaluation follows the
+current settings and enrollments. From the end time on, the list is fixed:
+changing **One evaluation counts for every program**, a program's form, or a
+member's enrollments afterwards does not add evaluations to a finished shift
+or drop ones already submitted, and does not hold up its close-out. The crew
+still counts as it is: a member taken off the shift is no longer asked for,
+and a member added after it ended is worked out by that day's settings.
+Outside shifts are always worked out live.
+
+**A form in use cannot be deactivated** _(2026-11-14)_. Unticking **Active** on
+a form a program or the general-form setting uses is refused, with a message
+naming them: choose another form there first. An inactive form cannot be
+chosen for a program or as the general form. A program that already has an
+inactive form keeps it until you change it.
 
 ### Shifts on an outside agency's unit _(2026-11-02)_
 
@@ -3461,7 +3546,7 @@ instead of picking a scheduled shift.
 ### Admin Configuration
 
 Administrators set up manual shift entry under **Training Admin → Settings &
-Data → Manual Entry Rules**:
+Data → Manual Entry**:
 
 | Setting                 | What it does                                                                             |
 | ----------------------- | ---------------------------------------------------------------------------------------- |
@@ -3740,7 +3825,7 @@ deleting the program afterwards leaves them in your requirement list.
 
 **Who can do this:** training officers.
 
-Open **Training Admin → Settings & Data → Import Past Training** to bring in past
+Open **Training Admin → Settings & Data → Import History** to bring in past
 training records from a CSV file.
 Training hours that sit in a previous records system's all-hours export,
 alongside shifts and administrative time, come in through **Integrations →
@@ -3779,7 +3864,9 @@ keeps the file's own spelling on the record, but the member's **My Training**
 pages and their own training records show the library course's name instead,
 and their history search finds it by either name. Officers still see the
 record's stored name, which is what the record editor saves. A row left
-unmatched shows the name from the file.
+unmatched shows the name from the file, and counts toward no course or
+certification requirement until you link it under **Course Links** (see
+[Linking Records That Name No Course](#linking-records-that-name-no-course-2026-11-15)).
 
 ![The historical-import wizard on its Preview step: parsed rows, matched members, and the confirm button](./images/02-02-historical-import-preview.png)
 
@@ -3811,7 +3898,8 @@ for uploading it and marking its columns). Once a column is marked as
    **Import as written**. A mapped subject takes the course's name, code,
    training type and category, so its records count toward requirements that
    name the course. An unmapped subject is imported under its own name, as
-   continuing education. Where a subject's name closely matches a course,
+   continuing education; you can link it to a course later under **Course
+   Links**. Where a subject's name closely matches a course,
    **Use** _course_ offers it; **Accept all suggestions** maps every such
    subject at once. **Find a subject** searches the list.
 4. **Decide the training provider rows.** A row whose instructor names Target
@@ -5191,13 +5279,14 @@ have moved, been renamed or work differently.
   Curriculum, Evaluations, Program Management, Compliance Reporting, and
   Settings & Data. There is no **Setup** or **Advanced** area. Requirements,
   the Course Library and Programs are under **Curriculum**; Knowledge Tests and
-  Skill Evaluations under **Evaluations**; Integrations, Import Past Training, Manual
-  Entry Rules, Practical Skills, Shift Evaluations and Compliance Settings under
+  Skill Evaluations under **Evaluations**; Integrations, Import History, Manual
+  Entry, Practical Skills, Session Waivers, Shift Evaluations and Compliance under
   **Settings & Data**; Recertification,
   Competency, Instructors, Effectiveness, Multi-Agency and Reports under
   **Program Management**. Old links still open the right page.
 - **Compliance settings** are reached from **Settings & Data → Compliance
-  Settings → Open compliance settings** _(2026-11-04)_, or from **Compliance
+  → Open compliance settings** _(2026-11-04; the tab read Compliance Settings
+  until 2026-11-08)_, or from **Compliance
   Reporting → Configure**, not a "Compliance Requirements" tab.
 - **Import from Registry** sits **below** the requirements list on **Curriculum
   → Requirements**, not above it _(2026-11-04)_.
@@ -5247,6 +5336,15 @@ have moved, been renamed or work differently.
 - **Course and Certification requirements pick courses from the library.** A
   Courses requirement made long ago with typed course names showed everyone as
   incomplete. Reopen it and pick the courses.
+- **Records with a typed course name are linked from Course Links**
+  _(2026-11-15)_. Rather than editing such records one at a time, link each
+  name to a library course under **Curriculum → Course Links**; see
+  [Linking Records That Name No Course](#linking-records-that-name-no-course-2026-11-15).
+- **Records from Import History now read "Imported"** _(2026-11-15)_, not "The
+  Logbook". Older ones are unchanged.
+- **A shift's evaluations are fixed when it ends** _(2026-11-14)_, and a
+  requirement or crew change re-counts evaluation credit without the
+  evaluation being saved again. A form a program uses cannot be deactivated.
 - **A Certification requirement no longer credits a course just because its
   name contains the requirement's name** — not even for older records, since
   2026-11-04. An older record on an older requirement counts by name only when

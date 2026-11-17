@@ -449,11 +449,11 @@ record to open the Attachments panel]**
 
 ### FINALIZING A TRAINING SESSION (9:00 – 9:30)
 
-**[SCREEN: Show the Create Training Session form, Step 3, highlighting the
-"Require instructor confirmation" checkbox]**
+**[SCREEN: Show the training-event form, Step 2 (Training Info), highlighting
+the "Require sign-off" checkbox under Training completion]**
 
-> "When you create a training session, Step 3 has a **Require instructor
-> confirmation** box. This controls what happens when the class is over and
+> "When you create a training session, the second step, **Training Info**, has a
+> **Require sign-off** box under _Training completion_. This controls what happens when the class is over and
 > someone presses **Finalize Attendance** on the event page. Leave it unchecked
 > — the default — and finalizing completes every checked-in attendee's training
 > record, with the minutes they were actually there. Check it, and those
@@ -472,7 +472,13 @@ no record for most events, and the emailed link opened nothing. A Training
 event can be finalized only after it ends. Approving needs `training.manage`,
 not `events.manage`. New footage needed; re-time Chapter 4.]**
 
-**[SCREENSHOT NEEDED]:** _The Create Training Session form Step 3 with the "Require instructor confirmation" checkbox and its 'records marked pending until instructor confirms' helper text._
+**[EDITOR — 2026-11-17. Re-record this beat. Since 2026-11-11 (#4347) Create
+Session opens the step-by-step training-event form, and the box is **Require
+sign-off** on step 2, **Training Info**, under _Training completion_ — it was
+"Require instructor confirmation" on step 3. Narration above is updated; the
+old footage shows the wrong step and label. Length unchanged.]**
+
+**[SCREENSHOT NEEDED]:** _The training-event form's Training Info step, Training completion section, with the "Require sign-off" checkbox and its helper text._
 
 > "Use the default for routine drills you want closed out the moment you
 > finalize. Turn it on only when a second officer must sign off."
@@ -496,13 +502,19 @@ not `events.manage`. New footage needed; re-time Chapter 4.]**
 > "One click and everyone's records are updated. This is the fastest way to
 > process training after a class."
 
-**[SCREEN: Training Admin → Settings & Data → Import Past Training, the preview
+**[SCREEN: Training Admin → Settings & Data → Import History, the preview
 step.]**
 
-> "Moving over from another system? **Import Past Training**, under Settings and
+> "Moving over from another system? **Import History**, under Settings and
 > Data, brings in years of records from a CSV. Match members by membership
 > number, check the preview, confirm. Every row needs a completion date. A row
 > without one is listed under Errors and isn't imported."
+
+**[EDITOR — 2026-11-17. Re-record the first line: the tab reads **Import
+History** since 2026-11-08 (it was "Import Past Training"). Records it imports
+since 2026-11-15 show the source "Imported". A name that matches no course can
+be linked later under Curriculum → **Course Links** — a candidate one-line add
+here, about 8 seconds.]**
 
 **[PRODUCTION NOTE — 2026-11-05. New beat, about 20 seconds; re-time Chapter 4.
 The department's historical data import also turns training rows into completed

@@ -2268,6 +2268,13 @@ Pick one section at a time from the list. There are seven:
 > or still **Pending**, no longer blocks close-out, is not written a draft
 > report, and is not owed a shift evaluation for a shift they did not work.
 > Declined and cancelled members were already left out.
+>
+> **Evaluations already submitted** _(2026-11-14)_: taking a member off the
+> shift, or marking them **No-show**, takes back the program credit that
+> shift's evaluation gave them. Once the shift's end time passes, which
+> evaluations it needs is fixed, so changing evaluation settings or a member's
+> program afterwards does not hold up its close-out. See
+> [Shift Evaluations](./02-training.md#shift-evaluations-2026-10-31--11-01).
 
 The reminder goes only to shifts that have a Shift Officer. In departments
 that record a call count at close-out, it also asks the officer to record the
