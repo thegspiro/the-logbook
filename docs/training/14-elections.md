@@ -383,6 +383,11 @@ Candidates tab; the ballot _is_ their view of who is standing.
 
 **Who can do this:** roles that can manage elections.
 
+The **Candidates** tab shows a count beside its name _(2026-11-14)_, as the
+**Ballot** tab does, so an empty slate shows from the tab bar. It counts
+nominees only, not a ballot item's Approve/Deny options, and changes as you
+add or remove one.
+
 1. Open the election and the **Candidates** tab.
 2. Select **+ Add Candidate**.
 3. Fill in:
@@ -1699,6 +1704,16 @@ differently.
   election again.
 - **On older anonymous elections**, the audit log may still name in-app voters
   beside their vote.
+- **Minutes say "Votes cast", not "Ballots cast"** _(2026-11-14)_. The figure
+  counts one vote per race a ballot marked, so in a multi-race election it was
+  never the number of ballots. The minutes PDF, the generated minutes document
+  and the filed-result panel now say **Votes cast**, as the certified results
+  PDF already did. Older minutes still read "Ballots cast".
+- **The election emails can be reworded** _(2026-11-14)_. **Nominations
+  Open**, **You've Been Nominated**, **Nomination Accepted for You**, **Proxy
+  Authorized** and **Pre-Meeting Package** are templates under
+  **Communications → Email Templates → Elections & Voting**. See
+  [Email Templates](./08-admin-reports.md#email-templates).
 
 ---
 

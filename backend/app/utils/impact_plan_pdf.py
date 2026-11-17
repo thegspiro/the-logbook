@@ -18,17 +18,19 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import (
     Paragraph,
-    SimpleDocTemplate,
     Spacer,
     Table,
 )
 
+from app.utils.election_pdf_style import beside_logo
 from app.utils.pdf_fonts import (
     BODY_FONT,
     BOLD_FONT,
     body_table_style,
     document_stylesheet,
 )
+from app.utils.pdf_report_kit import fit_token
+from app.utils.pdf_running_header import HeadedDocTemplate, RunningHeader
 
 _HEADER_BG = colors.HexColor("#1f2937")
 _ROW_ALT = colors.HexColor("#f3f4f6")
@@ -75,8 +77,14 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
     ``show_contact`` column toggles.
     """
     buf = BytesIO()
-    doc = SimpleDocTemplate(
+    doc = HeadedDocTemplate(
         buf,
+        running_header=RunningHeader(
+            meta.get("org_name"),
+            "Inventory Impact Plan",
+            next(iter(meta.get("parameters") or []), None),
+            meta.get("logo"),
+        ),
         # The canvas otherwise declares Helvetica, never embedded, on every page.
         initialFontName=BODY_FONT,
         pagesize=letter,
@@ -113,18 +121,17 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
     show_existing = bool(meta.get("show_existing"))
     show_contact = bool(meta.get("show_contact"))
 
-    story: List[Any] = []
-    story.append(Paragraph("Inventory Impact Plan", title_style))
-
     generated_at: datetime = meta.get("generated_at") or datetime.now(timezone.utc)
     org_name = meta.get("org_name") or ""
-    story.append(
+    heading: List[Any] = [
+        Paragraph("Inventory Impact Plan", title_style),
         Paragraph(
             f"{escape(str(org_name))} &middot; Generated "
             f"{generated_at.strftime('%Y-%m-%d %H:%M %Z').rstrip()}",
             sub_style,
-        )
-    )
+        ),
+    ]
+    story: List[Any] = beside_logo(heading, meta.get("logo"), doc.width)
     parameters: List[str] = meta.get("parameters") or []
     if parameters:
         story.append(Spacer(1, 4))
@@ -190,22 +197,6 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
         header.append("Existing")
     if show_contact:
         header.append("Contact")
-    rows = [header]
-    for m in members:
-        row = [
-            Paragraph(escape(str(m.get("full_name") or "Unknown")), cell_style),
-            m.get("membership_number") or "",
-            m.get("rank") or "",
-            m.get("station") or "",
-        ]
-        if show_size:
-            row.append(m.get("needed_size") or "—")
-        if show_existing:
-            row.append(_existing_status(m))
-        if show_contact:
-            contact = m.get("email") or m.get("phone") or ""
-            row.append(Paragraph(escape(str(contact)), cell_style))
-        rows.append(row)
 
     # Distribute width across the visible columns.
     base_widths = {
@@ -223,7 +214,38 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
     # the margins into the punch holes and the printer's border.
     # doc.width is the frame's; its 6pt padding each side is not table room.
     scale = min(1.0, (doc.width - 12) / sum(widths))
-    story.append(_styled_table(rows, [w * scale for w in widths]))
+    widths = [w * scale for w in widths]
+    # An email breaks at its punctuation, not mid-word; the cell's 4pt
+    # padding each side is not text room.
+    contact_room = widths[-1] - 8 if show_contact else 0.0
+    rows = [header]
+    for m in members:
+        row = [
+            Paragraph(escape(str(m.get("full_name") or "Unknown")), cell_style),
+            m.get("membership_number") or "",
+            m.get("rank") or "",
+            m.get("station") or "",
+        ]
+        if show_size:
+            row.append(m.get("needed_size") or "—")
+        if show_existing:
+            row.append(_existing_status(m))
+        if show_contact:
+            contact = m.get("email") or m.get("phone") or ""
+            row.append(
+                Paragraph(
+                    fit_token(
+                        str(contact),
+                        contact_room,
+                        cell_style.fontName,
+                        cell_style.fontSize,
+                    ),
+                    cell_style,
+                )
+            )
+        rows.append(row)
+
+    story.append(_styled_table(rows, widths))
 
     doc.build(story)
     buf.seek(0)
