@@ -36,7 +36,6 @@ from app.utils.pdf_report_kit import (
     kpi_strip,
     num,
     render_report,
-    section_heading,
 )
 
 # Above this many columns a portrait page cannot hold the table legibly.
@@ -84,11 +83,22 @@ _MAX_WIDTH = 2.4 * inch
 _SAMPLE_ROWS = 200
 
 
+# A header this short ("Member #", "Total Calls") is kept on one line; a
+# longer one may wrap between its words.
+_ONE_LINE_HEADER = 12
+
+
 def _natural_width(column: ExportColumn, sample: Sequence[Dict[str, Any]]) -> float:
-    header = max(
-        (stringWidth(word, BOLD_FONT, _FONT_SIZE) for word in column.header.split()),
-        default=0.0,
-    )
+    if len(column.header) <= _ONE_LINE_HEADER:
+        header = stringWidth(column.header, BOLD_FONT, _FONT_SIZE)
+    else:
+        header = max(
+            (
+                stringWidth(word, BOLD_FONT, _FONT_SIZE)
+                for word in column.header.split()
+            ),
+            default=0.0,
+        )
     widths = sorted(
         stringWidth(display_value(row.get(column.key)), BODY_FONT, _FONT_SIZE)
         for row in sample
@@ -125,25 +135,28 @@ def _table_flowable(
     rows: Sequence[Dict[str, Any]],
     width: float,
     widths: Optional[Sequence[float]] = None,
+    caption: Optional[str] = None,
 ) -> Any:
     numeric = [is_numeric_column(rows, c.key) for c in columns]
+    sized = list(widths) if widths else _widths(columns, rows, width)
     body = [
         [
             (
                 num(display_value(row.get(c.key)))
                 if is_num
-                else cell(display_value(row.get(c.key)))
+                else cell(display_value(row.get(c.key)), fit_width=w - _CELL_PADDING)
             )
-            for c, is_num in zip(columns, numeric)
+            for c, is_num, w in zip(columns, numeric, sized)
         ]
         for row in rows
     ]
     return data_table(
         [c.header for c in columns],
         body,
-        list(widths) if widths else _widths(columns, rows, width),
+        sized,
         numeric_cols=tuple(i for i, is_num in enumerate(numeric) if is_num),
         zebra=True,
+        caption=caption,
     )
 
 
@@ -191,15 +204,18 @@ def render_report_pdf(
         bands = column_bands(len(types), width, fixed_width, _TYPE_COLUMN_WIDTH)
         for start, stop in bands:
             band = fixed + types[start:stop]
-            story.append(
-                section_heading(
-                    f"Call types {start + 1}–{stop} of {len(types)}", styles
-                )
-            )
             widths = [fixed_width / 2, fixed_width / 2] + [_TYPE_COLUMN_WIDTH] * (
                 stop - start
             )
-            story.append(_table_flowable(band, table.rows, width, widths))
+            story.append(
+                _table_flowable(
+                    band,
+                    table.rows,
+                    width,
+                    widths,
+                    caption=f"Call types {start + 1}–{stop} of {len(types)}",
+                )
+            )
             story.append(Spacer(1, 12))
         return story
 

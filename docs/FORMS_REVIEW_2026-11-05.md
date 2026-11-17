@@ -559,6 +559,36 @@ the full apparatus form and documents; the facility overview, files and
 settings sections and list; store settings. The other rows of the batch 18
 list are unchanged.
 
+## Rollout status, 2026-11-16 (batch 21)
+
+The same steps, on these:
+
+| Area               | Converted                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Finance and grants | the approval step dialog (and its page, which no longer toasts a failed save behind it); the dual approval, fund overspend, advance return, reminder, mileage and substantiation cards; charge access; dues and advance exports; fiscal-year settings (create, category dialog, request deadline); the QuickBooks post-from date; the grant detail page's budget item, expenditure, compliance task and note forms |
+
+Money and approvals changed in presentation and error handling only: every
+payload, amount, status and permission is sent as before. A refusal lands on
+its field and anything else is said inside the surface; a create sends nothing
+until every field is accepted.
+
+Where an edit replaces a whole record or a linked decision, it refuses as a
+whole rather than saving the rest, because a partial save would leave a
+half-changed rule in force: grant budget items and expenditures, the
+substantiation rule, dual approval, and charge access. The fiscal-year category
+dialog follows the single-save rule, except that the charge rule and its
+position list are one decision: a refusal of either leaves both as stored.
+
+New check: Create Fiscal Year names an end date before its start date on the
+field. The server does not refuse that order today; the form now does, before
+anything is sent.
+
+Known gap: a grant dialog's failure is now said inside the dialog, but the
+grants store still also sets the page's own error banner behind it.
+
+**Still not converted**, from the finance-and-grants row of the batch 18 list:
+the Approvals approve / deny prompt. The other rows are as batch 20 left them.
+
 ## Suggested order
 
 1. **F-1** — small, backend-led, stops a data-integrity hole.

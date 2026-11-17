@@ -361,7 +361,8 @@ describe('ApprovalChainsSettingsPage', () => {
     await user.type(within(dialog).getByLabelText('Step name'), 'Board review');
     await user.click(within(dialog).getByRole('button', { name: 'Add step' }));
 
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Approval chain not found'));
+    // In the dialog, which stays open, rather than a toast behind it.
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Approval chain not found');
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(mockToastSuccess).not.toHaveBeenCalled();
   });
@@ -513,12 +514,27 @@ describe('ApprovalChainsSettingsPage', () => {
       await user.click(screen.getByRole('button', { name: 'Edit Treasurer review' }));
       await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save step' }));
 
-      await waitFor(() =>
-        expect(mockToastError).toHaveBeenCalledWith(
-          'Approver value "treasurer" is not a position in this organization.'
-        )
+      // Said inside the dialog, which stays open to correct it, rather than in
+      // a toast behind it (forms review F-3).
+      const dialog = screen.getByRole('dialog');
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+        'Approver value "treasurer" is not a position in this organization.'
       );
-      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(mockToastError).not.toHaveBeenCalled();
+    });
+
+    it('puts a refused step field from the server on that field', async () => {
+      mockUpdateStep.mockRejectedValue({
+        response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
+      });
+      const user = await openChainSteps();
+      await user.click(screen.getByRole('button', { name: 'Edit Treasurer review' }));
+      const dialog = screen.getByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: 'Save step' }));
+
+      expect(
+        await within(dialog).findByRole('textbox', { name: /^Step name/, description: /Value is too long|too long/ })
+      ).toHaveAttribute('aria-invalid', 'true');
     });
 
     it('says when coverage could not be checked rather than implying all is well', async () => {
