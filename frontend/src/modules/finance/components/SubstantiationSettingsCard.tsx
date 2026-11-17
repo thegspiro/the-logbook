@@ -16,7 +16,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { organizationService } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
+import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { mapServerFieldErrors, type ServerFieldSpec } from '@/utils/serverFieldErrors';
 import { financeSettingsService } from '../services/api';
 import { SubstantiationMode, type FinanceSettings } from '../types';
 
@@ -39,6 +41,16 @@ const MODE_DESCRIPTIONS: Record<SubstantiationMode, string> = {
 const isMode = (value: string): value is SubstantiationMode =>
   (Object.values(SubstantiationMode) as string[]).includes(value);
 
+type SubstantiationField = 'mode' | 'days';
+
+/** `FinanceSettingsUpdate` (schemas/organization.py), refused by its path under `finance`. */
+const FIELDS: Record<SubstantiationField, ServerFieldSpec> = {
+  mode: { label: 'When an expense is late', api: 'finance.substantiation_mode' },
+  days: { label: 'Days allowed', api: 'finance.substantiation_days' },
+};
+const DAYS_ID = 'substantiation-days';
+const MODE_ERROR_ID = 'substantiation-mode-error';
+
 export const SubstantiationSettingsCard: React.FC = () => {
   const canEdit = useAuthStore(
     (s) => s.checkPermission('settings.manage') || s.checkPermission('organization.update_settings')
@@ -47,8 +59,11 @@ export const SubstantiationSettingsCard: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<SubstantiationMode>(SubstantiationMode.OFF);
   const [days, setDays] = useState('');
-  const [daysError, setDaysError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Partial<Record<SubstantiationField, string | undefined>>>({});
   const [saving, setSaving] = useState(false);
+  // A refusal no field answers for is said inside the card, not only in a
+  // toast that fades (forms review F-5).
+  const [formError, setFormError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -66,14 +81,26 @@ export const SubstantiationSettingsCard: React.FC = () => {
     void load();
   }, [load]);
 
+  const focusFirst = (next: Partial<Record<SubstantiationField, string>>) => {
+    const id = next.mode ? `substantiation-mode-${mode}` : next.days ? DAYS_ID : undefined;
+    if (id) window.setTimeout(() => document.getElementById(id)?.focus(), 0);
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     const value = Number(days);
     if (days.trim() === '' || !Number.isInteger(value) || value < 1 || value > MAX_DAYS) {
-      setDaysError(`Enter a whole number of days from 1 to ${MAX_DAYS}.`);
+      const next = { days: `Enter a whole number of days from 1 to ${MAX_DAYS}.` };
+      setErrors(next);
+      focusFirst(next);
       return;
     }
-    setDaysError(null);
+    // The mode and the days are one rule: a late line is judged by both, so a
+    // refused day count sends neither rather than switching the mode on over
+    // a window nobody chose. This rule binds reimbursement approvals, and this
+    // form changes only how a refusal is shown, not what is sent.
+    setErrors({});
     setSaving(true);
     try {
       await organizationService.updateSettings({
@@ -84,7 +111,18 @@ export const SubstantiationSettingsCard: React.FC = () => {
       await load();
       toast.success('Expense deadline saved');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not save the expense deadline'));
+      const mapped = mapServerFieldErrors(err, FIELDS);
+      const placed = mapped && Object.keys(mapped.fieldErrors).length > 0 ? mapped : null;
+      if (placed) {
+        setErrors(placed.fieldErrors);
+        focusFirst(placed.fieldErrors);
+      }
+      const rest = placed ? placed.unmatched : [];
+      if (!placed || rest.length > 0) {
+        const message = rest.length > 0 ? rest.join(' ') : getErrorMessage(err, 'Could not save the expense deadline');
+        setFormError(message);
+        toast.error(message);
+      }
     } finally {
       setSaving(false);
     }
@@ -96,7 +134,9 @@ export const SubstantiationSettingsCard: React.FC = () => {
         Deadline for claiming expenses
       </h2>
       {loadError ? (
-        <p className="mt-2 text-sm text-red-700 dark:text-red-400">{loadError}</p>
+        <p role="alert" className={`mt-2 text-sm ${FIELD_ERROR_CLASS}`}>
+          {loadError}
+        </p>
       ) : settings === null ? (
         <p className="text-theme-text-secondary mt-2 text-sm">Loading…</p>
       ) : (
@@ -121,13 +161,17 @@ export const SubstantiationSettingsCard: React.FC = () => {
                 {Object.values(SubstantiationMode).map((value) => (
                   <label key={value} className="text-theme-text-primary flex items-center gap-2 text-sm">
                     <input
+                      id={`substantiation-mode-${value}`}
                       type="radio"
                       name="substantiation-mode"
                       className="form-checkbox rounded-full"
                       value={value}
                       checked={mode === value}
+                      aria-invalid={errors.mode ? true : undefined}
+                      aria-describedby={errors.mode ? MODE_ERROR_ID : undefined}
                       onChange={(e) => {
                         if (isMode(e.target.value)) setMode(e.target.value);
+                        setErrors((prev) => ({ ...prev, mode: undefined }));
                       }}
                     />
                     {MODE_LABELS[value]}
@@ -135,14 +179,16 @@ export const SubstantiationSettingsCard: React.FC = () => {
                 ))}
               </div>
               <p className="text-theme-text-secondary mt-1 text-xs">{MODE_DESCRIPTIONS[mode]}</p>
+              {errors.mode && (
+                <p id={MODE_ERROR_ID} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+                  {errors.mode}
+                </p>
+              )}
             </fieldset>
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
-                <label htmlFor="substantiation-days" className="form-label">
-                  Days allowed
-                </label>
+            <FormField id={DAYS_ID} label="Days allowed" error={errors.days}>
+              {(field) => (
                 <input
-                  id="substantiation-days"
+                  {...field}
                   type="number"
                   inputMode="numeric"
                   min="1"
@@ -150,18 +196,19 @@ export const SubstantiationSettingsCard: React.FC = () => {
                   step="1"
                   className="form-input w-28"
                   value={days}
-                  onChange={(e) => setDays(e.target.value)}
-                  aria-invalid={Boolean(daysError)}
-                  aria-describedby={daysError ? 'substantiation-days-error' : undefined}
+                  onChange={(e) => {
+                    setDays(e.target.value);
+                    setErrors((prev) => ({ ...prev, days: undefined }));
+                  }}
                 />
-              </div>
-              <button type="submit" className="btn-primary" disabled={saving}>
-                Save
-              </button>
-            </div>
-            {daysError && (
-              <p id="substantiation-days-error" className="text-xs text-red-700 dark:text-red-400">
-                {daysError}
+              )}
+            </FormField>
+            <button type="submit" className="btn-primary" disabled={saving}>
+              Save
+            </button>
+            {formError && (
+              <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                {formError}
               </p>
             )}
           </form>

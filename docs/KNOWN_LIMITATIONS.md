@@ -188,12 +188,15 @@ sessions and business meetings (`training.session_waivers_summary`,
 `meetings.waiver_history`; see `docs/EVALUATIONS_MODULE.md`). Gaps the owner's
 decisions did not settle, each answered conservatively:
 
+- ~~**"Attachment on file" always reads no.**~~ **Resolved 2026-11-15:** the
+  flag reads `attendance_waiver_attachments` now that attachments are on
+  `main` (#4243). An evaluation drafted between 2026-11-11 and then recorded
+  "no" in its snapshot and keeps it, as every snapshot keeps what was true
+  when it was taken.
 - **"Attachment on file" is what was on file when the figures were taken.**
   Attachments are deleted `attachment_retention_days` after a request closes
   (a year by default), so an evaluation drafted after that reads no for a
-  request that once had one. Evaluations drafted before attachments existed
-  recorded no and keep it, as every snapshot records what was true when it
-  was taken.
+  request that once had one.
 - **A voided request is listed, and counted only as voided.** Nothing voids a
   request yet. When something does, the history shows the request and that it
   was voided, and the summary counts it under `voided` rather than as approved

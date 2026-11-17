@@ -219,13 +219,14 @@ a grade), and they **never carry the member's reason, a decider's note or an
 attachment**: an evaluation is permanent, the member reads it, and any of the
 three may be medical. The rows are read column by column, so neither text is
 loaded at all. `attachment_on_file` says whether at least one document is
-on file for the request (`_waiver_attachments_on_file`) and nothing else about
-it: not its name, type or size. Attachments are deleted
-`attachment_retention_days` after a request closes, so the flag reports what
-was on file when the snapshot was taken. The evaluation screens and PDF show
-the summary's `breakdown` beside its count, and the history lines say what
-became of each request. Adding these sources changed the stored shape of no
-existing entry, so `SNAPSHOT_VERSION` stays 2.
+on file for the request, read from `attendance_waiver_attachments`
+(`_waiver_attachments_on_file`), and nothing else about it: not its name,
+type, size or how many. Attachments are deleted `attachment_retention_days`
+after a request closes, so the flag reports what was on file when the snapshot
+was taken. The evaluation screens and PDF show the summary's `breakdown`
+beside its count, and the history lines say what became of each request.
+Adding these sources changed the stored shape of no existing entry, so
+`SNAPSHOT_VERSION` stays 2.
 
 ## Workflow
 

@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -1240,16 +1240,17 @@ class EvaluationDataService:
 
     async def _waiver_attachments_on_file(
         self, org_id: str, request_ids: Sequence[str]
-    ) -> set:
+    ) -> Set[str]:
         """The requests with at least one attachment on file now.
 
-        Only the fact is reported, never the file, its type or its name: an
+        A row in ``attendance_waiver_attachments`` is a file on file: the
+        retention task and anonymisation delete the file and then the row.
+        Attachments are deleted ``attachment_retention_days`` after a request
+        closes, so a request whose files have gone reads no; a snapshot keeps
+        what was true when it was taken, as every figure does. Only the fact
+        is reported, never the file, its type, its name or how many: an
         attachment is the member's evidence, often medical, and only the
-        member and the request's deciders may open one
-        (``attendance_waiver_attachments``). Attachments are deleted
-        ``attachment_retention_days`` after a request closes, so a request
-        whose files have gone reads no; a snapshot keeps what was true when
-        it was taken, as every figure does.
+        member and the request's deciders may open one.
         """
         if not request_ids:
             return set()
