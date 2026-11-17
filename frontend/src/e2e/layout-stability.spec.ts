@@ -1,7 +1,7 @@
 /**
  * Pages do not jump while they load.
  *
- * Two kinds of check. The first, below, is the shell's footer.
+ * Three kinds of check. The first, below, is the shell's footer.
  *
  * Every page is short while its code or data loads, and the shell is a
  * full-height flex column, so the footer used to sit at the bottom of the
@@ -19,6 +19,17 @@
  * once its figures arrive, now drawn from the start with placeholders; and a
  * full-screen spinner replaced wholesale, now the page's own header with the
  * spinner where the content goes.
+ *
+ * The third holds a page's own data back until its placeholder is on screen,
+ * the order a slow CI runner produced: the hub had shown its body before the
+ * metrics settings answered. React reused the placeholder's nodes for the
+ * loaded tree, so the placeholder's second bar moved over 1,400px down the
+ * page (0.35 on a phone). Keying each state's root replaces the placeholder
+ * instead; see the LATE table.
+ *
+ * WebKit does not report layout-shift entries, so on the Mobile Safari project
+ * the measured value is always 0 and the second and third checks measure
+ * nothing there. Chromium is where they hold.
  */
 
 import { test, expect } from '@playwright/test';
