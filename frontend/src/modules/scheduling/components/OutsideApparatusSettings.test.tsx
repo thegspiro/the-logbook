@@ -315,6 +315,26 @@ describe('OutsideApparatusSettings: merging two spellings of one department', ()
     );
   });
 
+  it('does not promise a combined unit to members when the kept department is hidden', async () => {
+    mockList.mockResolvedValue({
+      agencies: [
+        {
+          ...county,
+          apparatus: [
+            { id: 'u-a106-dup', agency_id: 'a-county', name: 'a106', apparatus_type: null, is_active: false },
+          ],
+        },
+        { ...countyFd, is_active: false },
+      ],
+    });
+    const { user, dialog } = await openMerge();
+
+    await user.selectOptions(within(dialog).getByLabelText('Merge into'), 'a-county-fd');
+
+    expect(dialog).toHaveTextContent('Arlington County Fire Department is hidden from members');
+    expect(dialog).not.toHaveTextContent('available to members');
+  });
+
   it('says nothing about visibility when both departments match', async () => {
     const { user, dialog } = await openMerge();
 

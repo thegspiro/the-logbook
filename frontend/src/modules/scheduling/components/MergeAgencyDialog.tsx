@@ -57,7 +57,13 @@ export const MergeAgencyDialog: React.FC<MergeAgencyDialogProps> = ({ source, ag
   // reverse, even when both departments are on.
   const sharedTargetUnit = (name: string) => target?.apparatus.find((t) => nameKey(t.name) === nameKey(name));
   const combinedHidden = shared.filter((u) => u.is_active && sharedTargetUnit(u.name)?.is_active === false);
-  const combinedOffered = shared.filter((u) => !u.is_active && sharedTargetUnit(u.name)?.is_active === true);
+  // Only a switched-on department offers its units at all, so a combined unit
+  // becomes available only when the kept department is on; when it is off, the
+  // department-level line already says its units are hidden.
+  const combinedOffered =
+    target?.is_active === true
+      ? shared.filter((u) => !u.is_active && sharedTargetUnit(u.name)?.is_active === true)
+      : [];
   const unitList = (units: typeof shared) => units.map((u) => u.name).join(', ');
 
   return (
