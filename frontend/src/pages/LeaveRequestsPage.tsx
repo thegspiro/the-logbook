@@ -16,6 +16,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { CalendarOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { leaveRequestService } from '../services/leaveRequestService';
+import { memberStatusService, type LeaveOfAbsenceResponse } from '../services/api';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { useAuthStore } from '../stores/authStore';
@@ -28,6 +29,7 @@ import {
   LeaveRequestDetails,
 } from '../components/members/LeaveRequestConversation';
 import { useLeaveRequestNavStore } from '../hooks/useLeaveRequestNav';
+import EndLeaveEarly from '../components/members/EndLeaveEarly';
 
 // The kinds a member asks for. Administrative and new-member leave are an
 // officer's to record, not a member's to request.
@@ -99,6 +101,7 @@ const LeaveRequestsPage: React.FC = () => {
 
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [mine, setMine] = useState<LeaveRequest[]>([]);
+  const [myLeaves, setMyLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
   const [toDecide, setToDecide] = useState<LeaveRequest[]>([]);
   const [showDecided, setShowDecided] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -112,13 +115,16 @@ const LeaveRequestsPage: React.FC = () => {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const [config, own, decide] = await Promise.all([
+      const [config, own, decide, leaves] = await Promise.all([
         leaveRequestService.getConfig(),
         leaveRequestService.listMine(),
         leaveRequestService.listToDecide(showDecided),
+        // Only offers "I'm back early"; without it the rest still stands.
+        memberStatusService.getMyLeaves().catch(() => [] as LeaveOfAbsenceResponse[]),
       ]);
       setEnabled(config.requests_enabled);
       setMine(own);
+      setMyLeaves(leaves);
       setToDecide(decide);
       // The menu's count follows what was just answered or decided.
       if (userId) void refreshNav(userId, true);
@@ -368,6 +374,8 @@ const LeaveRequestsPage: React.FC = () => {
           manages leave.
         </div>
       )}
+
+      {enabled && <EndLeaveEarly leaves={myLeaves} today={today} onEnded={load} />}
 
       {enabled && (
         <section className="card mb-6 p-4" aria-labelledby="ask-heading">

@@ -503,6 +503,8 @@ def _bell(
     subject: str,
     message: str,
     request_id: str,
+    action_path: str = REQUESTS_PATH,
+    metadata_key: str = "leave_request_id",
 ) -> None:
     """Queue an in-app notice; committed with the caller's next commit."""
     from app.models.notification import NotificationChannel, NotificationLog
@@ -515,8 +517,8 @@ def _bell(
             category=BELL_CATEGORY,
             subject=subject,
             message=message,
-            action_url=REQUESTS_PATH,
-            notification_metadata={"leave_request_id": request_id},
+            action_url=action_path,
+            notification_metadata={metadata_key: request_id},
             delivered=True,
         )
     )
@@ -757,6 +759,120 @@ async def send_request_reminders(db: AsyncSession, org: Organization) -> int:
     return sent
 
 
+KIND_REQUEST_ESCALATION = "request_escalation"
+
+
+def _names(users: Sequence[User]) -> str:
+    """'A', 'A and B', 'A, B and C'."""
+    names = [_name(u, "an approver") for u in users]
+    if len(names) <= 1:
+        return "".join(names)
+    return f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+def waiting_on_sentence(
+    request: LeaveRequest, member_name: str, undecided: Sequence[User]
+) -> str:
+    """Who a waiting request is waiting on, for the escalation."""
+    if request.info_requested_at is not None:
+        return f"It is waiting on {member_name} to answer an approver's question."
+    if request.proposed_at is not None:
+        return (
+            f"It is waiting on {member_name} to accept or decline changed dates "
+            "an approver proposed."
+        )
+    if undecided:
+        return f"It is waiting on {_names(undecided)} to decide."
+    return "It is waiting on the department's approvers to decide."
+
+
+async def send_request_escalations(db: AsyncSession, org: Organization) -> int:
+    """Tell the Chief, once, about each request undecided past the limit.
+
+    Reminders go to the approvers; this goes over their heads, so it is sent
+    once per request rather than weekly. Measured from the day the request
+    was made, whatever it is waiting on. Claimed before it is sent, and the
+    claim kept once a bell notice went out (pitfall #36).
+    """
+    org_id = str(org.id)
+    service = LeaveRequestService(db)
+    limit = (await service.get_settings(org_id)).request_escalation_days
+    if limit <= 0:
+        return 0
+    today = await resolve_org_today(db, org_id)
+    waiting = (
+        (
+            await db.execute(
+                select(LeaveRequest)
+                .where(
+                    LeaveRequest.organization_id == org_id,
+                    LeaveRequest.status == LeaveRequestStatus.PENDING,
+                )
+                .order_by(LeaveRequest.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    sent = 0
+    for request in waiting:
+        waited = (today - request.created_at.date()).days
+        if waited < limit:
+            continue
+        recipients = await service.escalation_recipients(org_id, request)
+        if not recipients:
+            continue
+        claim = await _claim(db, org_id, KIND_REQUEST_ESCALATION, str(request.id))
+        if claim is None:
+            continue
+        votes = await service._votes([str(request.id)])
+        voted = {
+            str(v.voter_id)
+            for v in service._current_votes(request, votes.get(str(request.id), []))
+        }
+        member, approvers, _ = await service.requester_and_approvers(org_id, request)
+        member_name = _name(member, "A member")
+        undecided = sorted(
+            (a for a in approvers if str(a.id) not in voted),
+            key=lambda u: _name(u).lower(),
+        )
+        waiting_on = waiting_on_sentence(request, member_name, undecided)
+        for recipient in recipients:
+            _bell(
+                db,
+                org_id,
+                recipient,
+                f"Undecided for {waited} days: {member_name}",
+                f"{member_name}'s request for leave has waited {waited} days. "
+                f"{waiting_on}",
+                str(request.id),
+            )
+        await _commit_bells(db)
+        delivered = False
+        for recipient in recipients:
+            delivered = (
+                await _send(
+                    db,
+                    org,
+                    recipient,
+                    EmailKind.MEMBERSHIP_ADMIN,
+                    EmailTemplateType.LEAVE_REQUEST_ESCALATION,
+                    {
+                        "recipient_name": _name(recipient),
+                        "member_name": member_name,
+                        "waiting_days": str(waited),
+                        "start_date": _date(request.start_date),
+                        "end_date": _date(request.end_date),
+                        "waiting_on": waiting_on,
+                        "request_url": _url(REQUESTS_PATH),
+                    },
+                )
+                or delivered
+            )
+        sent += 1 if delivered else 0
+    return sent
+
+
 async def run_request_upkeep(db: AsyncSession, org: Organization) -> int:
     """The daily pass: settle what the rule already decides, then remind.
 
@@ -790,4 +906,94 @@ async def run_request_upkeep(db: AsyncSession, org: Organization) -> int:
             )
         elif request.status == LeaveRequestStatus.DENIED:
             await notify_request_denied(db, org_id, str(request.id), None)
-    return done + await send_request_reminders(db, org)
+    reminded = await send_request_reminders(db, org)
+    return done + reminded + await send_request_escalations(db, org)
+
+
+# ----------------------------------------------------------------------
+# A member ending their own leave early (2026-11-17)
+# ----------------------------------------------------------------------
+
+
+async def notify_leave_ended_early(
+    db: AsyncSession,
+    organization_id: str,
+    leave_id: str,
+    previous_end: Optional[date],
+) -> int:
+    """Tell the officers who manage leave that a member ended theirs early.
+
+    An email and a bell notice to each, never the member themself (they made
+    the change). Neither carries the leave's reason or type. Returns how many
+    were emailed.
+    """
+    org_id = str(organization_id)
+    leave = (
+        await db.execute(
+            select(MemberLeaveOfAbsence).where(
+                MemberLeaveOfAbsence.id == str(leave_id),
+                MemberLeaveOfAbsence.organization_id == org_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if leave is None or leave.end_date is None:
+        return 0
+    member = (
+        await db.execute(
+            select(User).where(
+                User.id == str(leave.user_id), User.organization_id == org_id
+            )
+        )
+    ).scalar_one_or_none()
+    member_name = _name(member, "A member")
+    first_day_back = leave.end_date + timedelta(days=1)
+    officers = await _officers(db, org_id, exclude=[str(leave.user_id)])
+    for officer in officers:
+        _bell(
+            db,
+            org_id,
+            officer,
+            f"{member_name} ended their leave early",
+            f"{member_name} set the end of their own leave. Their first day "
+            f"back is {_date(first_day_back)}.",
+            str(leave.id),
+            action_path=LEAVES_PATH,
+            metadata_key="leave_id",
+        )
+    await _commit_bells(db)
+    org = await db.get(Organization, org_id)
+    sent = 0
+    for officer in officers:
+        if await _send(
+            db,
+            org,
+            officer,
+            EmailKind.MEMBERSHIP_ADMIN,
+            EmailTemplateType.LEAVE_ENDED_EARLY,
+            {
+                "recipient_name": _name(officer),
+                "member_name": member_name,
+                "start_date": _date(leave.start_date),
+                "previous_end_date": _date(previous_end),
+                "end_date": _date(leave.end_date),
+                "first_day_back": _date(first_day_back),
+                "leaves_url": _url(LEAVES_PATH),
+            },
+        ):
+            sent += 1
+    return sent
+
+
+async def send_leave_ended_early(
+    organization_id: str, leave_id: str, previous_end: Optional[date]
+) -> None:
+    """Background task: ``notify_leave_ended_early`` on its own session."""
+    from app.core.database import database_manager
+
+    try:
+        async for session in database_manager.get_session():
+            await notify_leave_ended_early(
+                session, organization_id, leave_id, previous_end
+            )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Leave ended early notice failed: {}", exc)

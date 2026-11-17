@@ -6,6 +6,7 @@
 import api from './apiClient';
 import { expectArray } from '../utils/asArray';
 import type {
+  LeaveEndedEarly,
   LeaveRequest,
   LeaveRequestCreate,
   LeaveRequestSummary,
@@ -50,6 +51,14 @@ export const leaveRequestService = {
 
   async withdraw(id: string): Promise<LeaveRequest> {
     const response = await api.post<LeaveRequest>(`/users/leave-requests/${id}/withdraw`);
+    return response.data;
+  },
+
+  /** End the caller's own leave in progress; the day before `firstDayBack` is its last. */
+  async endLeaveEarly(leaveId: string, firstDayBack: string): Promise<LeaveEndedEarly> {
+    const response = await api.post<LeaveEndedEarly>(`/users/leave-requests/my-leaves/${leaveId}/end-early`, {
+      first_day_back: firstDayBack,
+    });
     return response.data;
   },
 

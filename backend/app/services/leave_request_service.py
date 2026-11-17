@@ -66,6 +66,7 @@ from app.schemas.leave_of_absence import (
 )
 from app.services.member_leave_service import MemberLeaveService
 from app.utils.org_scoping import assert_all_in_org
+from app.utils.org_timezone import resolve_org_today
 
 SETTINGS_KEY = "leave_of_absence"
 MANAGE_PERMISSION = "members.manage"
@@ -1295,6 +1296,128 @@ class LeaveRequestService:
             requests_enabled=settings.requests_enabled,
             to_decide=to_decide,
             waiting_on_me=waiting_on_me,
+        )
+
+    async def end_own_leave_early(
+        self, organization_id: str, member: User, leave_id: str, first_day_back: date
+    ) -> tuple:
+        """The member sets the last day of their own leave in progress.
+
+        Shortening a leave needs no vote: the member is back, and the officers
+        who manage leave are told so they can correct a wrong date. Only a
+        department that takes requests offers it, and only for a leave that
+        has begun and not yet ended. Returns ``(leave, previous end date)``.
+        """
+        org_id = str(organization_id)
+        settings = await self.get_settings(org_id)
+        if not settings.requests_enabled:
+            raise LeaveRequestForbidden(
+                "Your department does not take leave changes from members. "
+                "Ask an officer to end your leave."
+            )
+        # Locked so two submissions, or one racing an officer's edit, settle
+        # one at a time against the same end date.
+        leave = (
+            await self.db.execute(
+                select(MemberLeaveOfAbsence)
+                .where(
+                    MemberLeaveOfAbsence.id == str(leave_id),
+                    MemberLeaveOfAbsence.organization_id == org_id,
+                    MemberLeaveOfAbsence.user_id == str(member.id),
+                    MemberLeaveOfAbsence.active.is_(True),
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if leave is None:
+            raise LeaveRequestNotFound("Leave of absence not found")
+        today = await resolve_org_today(self.db, org_id)
+        if leave.start_date > today:
+            raise LeaveRequestForbidden(
+                "This leave has not begun yet. Ask an officer to change it."
+            )
+        if leave.end_date is not None and leave.end_date < today:
+            raise LeaveRequestForbidden("This leave has already ended.")
+        if first_day_back <= leave.start_date:
+            raise ValueError("Your first day back must be after your leave began.")
+        new_end = first_day_back - timedelta(days=1)
+        if leave.end_date is not None and new_end >= leave.end_date:
+            raise ValueError(
+                "That is not earlier than your leave already ends. To stay away "
+                "longer, ask for an extension instead."
+            )
+        extending = (
+            await self.db.execute(
+                select(LeaveRequest.id).where(
+                    LeaveRequest.organization_id == org_id,
+                    LeaveRequest.extends_leave_id == str(leave.id),
+                    LeaveRequest.status == LeaveRequestStatus.PENDING,
+                )
+            )
+        ).first()
+        if extending is not None:
+            raise LeaveRequestForbidden(
+                "You have asked to extend this leave. Withdraw that request "
+                "before ending the leave early."
+            )
+        previous_end = leave.end_date
+        await log_audit_event(
+            db=self.db,
+            event_type="leave_of_absence_ended_early",
+            event_category="user_management",
+            severity="info",
+            event_data={
+                "leave_id": str(leave.id),
+                "previous_end_date": (
+                    previous_end.isoformat() if previous_end else None
+                ),
+                "end_date": new_end.isoformat(),
+            },
+            user_id=str(member.id),
+            username=member.username,
+        )
+        # The officer's own edit path, so the linked training waiver follows
+        # the new end date; it commits.
+        updated = await MemberLeaveService(self.db).update_leave(
+            organization_id=org_id, leave_id=str(leave.id), end_date=new_end
+        )
+        if updated is None:
+            raise LeaveRequestNotFound("Leave of absence not found")
+        return updated, previous_end
+
+    async def escalation_recipients(
+        self, organization_id: str, request: LeaveRequest
+    ) -> List[User]:
+        """Who is told that ``request`` has waited too long.
+
+        The Chief, but only one who can open the request (a manager of leave
+        or one of its approvers): a notice they cannot act on helps nobody.
+        Otherwise everyone who manages leave. Never the requester.
+        """
+        org_id = str(organization_id)
+        pool = await self._pool(org_id, await self.get_settings(org_id))
+        requester = str(request.user_id)
+        approvers = pool.approvers_for(requester)
+        ids = (pool.chiefs & (pool.managers | approvers)) - {requester}
+        if not ids:
+            ids = pool.managers - {requester}
+        if not ids:
+            return []
+        return list(
+            (
+                await self.db.execute(
+                    select(User)
+                    .where(
+                        User.id.in_(list(ids)),
+                        User.organization_id == org_id,
+                        User.is_active,
+                    )
+                    .order_by(User.id)
+                )
+            )
+            .scalars()
+            .all()
         )
 
     async def requester_and_approvers(

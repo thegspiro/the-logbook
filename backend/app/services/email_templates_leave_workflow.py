@@ -692,3 +692,216 @@ DEFAULT_TEMPLATE_DEFS.extend(
         },
     ]
 )
+
+
+# ----------------------------------------------------------------------
+# A request left waiting, and a member ending their own leave (2026-11-17)
+#
+# Neither carries a leave's reason or type, nor any question or answer.
+# ----------------------------------------------------------------------
+
+ESCALATION_SUBJECT = (
+    "Leave request undecided after {{waiting_days}} days: {{member_name}}"
+)
+
+ESCALATION_HTML = build_shell(
+    "A Leave Request Has Not Been Decided",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{member_name}}'s request for a leave of absence has waited
+        {{waiting_days}} days without a decision.</p>
+"""
+    + facts(
+        [[fact("From", "{{start_date}}"), fact("To", "{{end_date}}")]],
+        panel=True,
+    )
+    + """        <p>{{waiting_on}}</p>
+        <p>You are told once, because the department asks that a request
+        waiting this long reach you.</p>
+"""
+    + action("{{request_url}}", "Open the request"),
+    accent=ACCENT_AMBER,
+    chip=_CHIP,
+)
+
+ESCALATION_TEXT = """A Leave Request Has Not Been Decided
+
+Hello {{recipient_name}},
+
+{{member_name}}'s request for a leave of absence has waited {{waiting_days}}
+days without a decision.
+
+From: {{start_date}}
+To: {{end_date}}
+
+{{waiting_on}}
+
+You are told once, because the department asks that a request waiting this
+long reach you.
+
+Open the request: {{request_url}}
+
+{{footer_text}}"""
+
+ENDED_EARLY_SUBJECT = "{{member_name}} ended their leave early"
+
+ENDED_EARLY_HTML = build_shell(
+    "A Member Ended Their Leave Early",
+    """        <p>Hello {{recipient_name}},</p>
+        <p>{{member_name}} set the end of their own leave of absence. Their
+        first day back is {{first_day_back}}.</p>
+"""
+    + facts(
+        [
+            [fact("Leave began", "{{start_date}}")],
+            [
+                fact("Was to end", "{{previous_end_date}}"),
+                fact("Now ends", "{{end_date}}"),
+            ],
+        ],
+        panel=True,
+    )
+    + """        <p>Their training requirements follow the new date. If it is
+        wrong, change the leave in Members.</p>
+"""
+    + action("{{leaves_url}}", "Open leaves of absence"),
+    accent=ACCENT_BLUE,
+    chip=_CHIP,
+)
+
+ENDED_EARLY_TEXT = """A Member Ended Their Leave Early
+
+Hello {{recipient_name}},
+
+{{member_name}} set the end of their own leave of absence. Their first day
+back is {{first_day_back}}.
+
+Leave began: {{start_date}}
+Was to end: {{previous_end_date}}
+Now ends: {{end_date}}
+
+Their training requirements follow the new date. If it is wrong, change the
+leave in Members.
+
+Open leaves of absence: {{leaves_url}}
+
+{{footer_text}}"""
+
+TEMPLATE_VARIABLES.update(
+    {
+        _T.LEAVE_REQUEST_ESCALATION.value: [
+            {"name": "recipient_name", "description": "The officer it is sent to"},
+            {"name": "member_name", "description": "The member who asked"},
+            {"name": "waiting_days", "description": "Days since the request was made"},
+            {"name": "start_date", "description": "The first day asked for"},
+            {"name": "end_date", "description": 'The last day, or "No end date"'},
+            {
+                "name": "waiting_on",
+                "description": (
+                    "Who the request waits on: the approvers yet to decide, or "
+                    "the member owing an answer"
+                ),
+            },
+            {"name": "request_url", "description": "Link to the request"},
+        ],
+        _T.LEAVE_ENDED_EARLY.value: [
+            {"name": "recipient_name", "description": "The officer it is sent to"},
+            {"name": "member_name", "description": "The member on leave"},
+            {"name": "start_date", "description": "The leave's first day"},
+            {
+                "name": "previous_end_date",
+                "description": 'The last day before the change, or "No end date"',
+            },
+            {"name": "end_date", "description": "The leave's last day now"},
+            {"name": "first_day_back", "description": "The member's first day back"},
+            {"name": "leaves_url", "description": "Link to leaves of absence"},
+        ],
+    }
+)
+
+SAMPLE_CONTEXT.update(
+    {
+        _T.LEAVE_REQUEST_ESCALATION.value: {
+            "recipient_name": "Chief Dana Reyes",
+            "member_name": "Alex Johnson",
+            "waiting_days": "21",
+            "start_date": "December 01, 2026",
+            "end_date": "February 28, 2027",
+            "waiting_on": (
+                "It is waiting on Captain Maria Lopez and Lieutenant Sam Park "
+                "to decide."
+            ),
+            "request_url": "https://example.org/members/leave-requests",
+        },
+        _T.LEAVE_ENDED_EARLY.value: {
+            "recipient_name": "Captain Maria Lopez",
+            "member_name": "Alex Johnson",
+            "start_date": "December 01, 2026",
+            "previous_end_date": "February 28, 2027",
+            "end_date": "January 17, 2027",
+            "first_day_back": "January 18, 2027",
+            "leaves_url": "https://example.org/members/admin/waivers",
+        },
+    }
+)
+
+TEST_RECIPIENT_FIELDS.update(
+    {
+        _T.LEAVE_REQUEST_ESCALATION.value: {"recipient_name": "full"},
+        _T.LEAVE_ENDED_EARLY.value: {"recipient_name": "full"},
+    }
+)
+
+SAMPLE_DAYS.update(
+    {
+        _T.LEAVE_REQUEST_ESCALATION.value: {"start_date": 14, "end_date": 90},
+        _T.LEAVE_ENDED_EARLY.value: {
+            "start_date": -30,
+            "previous_end_date": 60,
+            "end_date": 10,
+            "first_day_back": 11,
+        },
+    }
+)
+
+DEFAULTS.update(
+    {
+        _T.LEAVE_REQUEST_ESCALATION.value: (
+            ESCALATION_SUBJECT,
+            ESCALATION_HTML,
+            ESCALATION_TEXT,
+        ),
+        _T.LEAVE_ENDED_EARLY.value: (
+            ENDED_EARLY_SUBJECT,
+            ENDED_EARLY_HTML,
+            ENDED_EARLY_TEXT,
+        ),
+    }
+)
+
+DEFAULT_TEMPLATE_DEFS.extend(
+    [
+        {
+            "type": _T.LEAVE_REQUEST_ESCALATION,
+            "name": "Leave Request Escalation",
+            "subject": ESCALATION_SUBJECT,
+            "html": ESCALATION_HTML,
+            "text": ESCALATION_TEXT,
+            "description": (
+                "Sent once to the Chief, or else to the officers who manage "
+                "leave, when a leave request is still undecided after the "
+                "department's chosen number of days."
+            ),
+        },
+        {
+            "type": _T.LEAVE_ENDED_EARLY,
+            "name": "Leave Ended Early",
+            "subject": ENDED_EARLY_SUBJECT,
+            "html": ENDED_EARLY_HTML,
+            "text": ENDED_EARLY_TEXT,
+            "description": (
+                "Sent to the officers who manage leave when a member sets the "
+                "end of their own leave of absence from Leave Requests."
+            ),
+        },
+    ]
+)

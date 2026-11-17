@@ -41,6 +41,10 @@ class LeaveOfAbsenceSettings(BaseModel):
         default_factory=list, max_length=MAX_APPROVER_POSITIONS
     )
     request_decision_rule: LeaveDecisionRule = LeaveDecisionRule.ANY
+    # A request still undecided this many days after it was made is sent,
+    # once, to the Chief (or, when no Chief can open it, the officers who
+    # manage leave). 0 sends none.
+    request_escalation_days: int = Field(default=21, ge=0, le=180)
 
     @field_validator("request_approver_position_ids")
     @classmethod
@@ -223,3 +227,18 @@ class LeaveRequestResponse(BaseModel):
     can_answer: bool = False
     can_respond_to_changes: bool = False
     my_vote: Optional[LeaveVote] = None
+
+
+class LeaveEndEarlyCreate(BaseModel):
+    """A member's first day back from their own leave in progress."""
+
+    first_day_back: date
+
+
+class LeaveEndedEarlyResponse(BaseModel):
+    leave_id: str
+    start_date: date
+    # The leave's last day now: the day before the first day back.
+    end_date: date
+    previous_end_date: Optional[date] = None
+    first_day_back: date

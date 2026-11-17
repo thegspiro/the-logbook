@@ -721,9 +721,13 @@ app/api/v1/endpoints/scheduling.py::review_time_off_request
 # and changes act only for the request's approvers, on the same terms as a
 # vote; answer and changes/respond only for the request's own member (404 for
 # anyone else); summary returns counts for the caller alone and no request.
+# Added 2026-11-17: end-early acts only on a leave whose user_id is the
+# caller's, in the caller's organization (404 for any other), and only where
+# the department takes leave requests.
 app/api/v1/endpoints/leave_requests.py::answer_leave_request_question
 app/api/v1/endpoints/leave_requests.py::ask_leave_request_question
 app/api/v1/endpoints/leave_requests.py::create_leave_request
+app/api/v1/endpoints/leave_requests.py::end_own_leave_early
 app/api/v1/endpoints/leave_requests.py::get_leave_request
 app/api/v1/endpoints/leave_requests.py::get_leave_request_config
 app/api/v1/endpoints/leave_requests.py::get_leave_request_summary

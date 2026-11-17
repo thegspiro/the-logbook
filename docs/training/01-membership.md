@@ -2258,6 +2258,25 @@ today. If an approver steps down after enough others have approved (under
 **A majority** or **Every approver**), the request is settled the next
 morning as if the last vote had settled it.
 
+**A request left waiting reaches the Chief** _(2026-11-17)_. A request still
+undecided after the department's chosen number of days (**Tell the Chief
+about a request still undecided after this many days**, 21 unless changed) is
+sent once to the Chief, by email and in the app, naming who it is waiting on.
+If the Chief cannot open requests (they neither decide them nor manage
+leave), everyone who can record leave is told instead. A member who is the
+Chief is never told about their own request. **0** turns this off; the
+approvers' own reminders continue either way.
+
+**Ending your leave early.** While your department takes leave requests and
+you are on leave, **Leave Requests** shows **Your leave** with **I&rsquo;m back
+early**. Give your first day back and confirm: your leave now ends the day
+before, and your training requirements follow the new date. No vote is
+needed. The officers who manage leave are told by email and in the app, so
+they can correct a wrong date; after this only an officer can change it. You
+cannot end a leave that has not begun or has already ended, set a date that
+does not shorten it (to stay away longer, ask for leave instead), or end it
+while a request to extend it is still waiting.
+
 The reason is shown to the member and their approvers only. No email, from
 any of these, carries a leave's reason or its type. The wording of each is a
 template under **Communications → Email Templates → Training &

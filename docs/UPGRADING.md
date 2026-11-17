@@ -802,6 +802,22 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Leave requests: escalation, and members ending their own leave early (2026-11-17)
+
+Nothing blocks a restart. Migration `7b4e2d9c1a63` adds two email template
+types and changes no other table.
+
+- **The Chief starts hearing about stalled requests.** A request undecided 21
+  days after it was made is sent once to the Chief (or, when no Chief can
+  open requests, everyone who can record leave), by email and in the app. The
+  first daily run after the upgrade sends this for every waiting request
+  already 21 or more days old. Set **Members → Administration → Settings →
+  Leave of Absence → Tell the Chief about a request still undecided after
+  this many days** to **0** to turn it off.
+- **Members can shorten their own leave** where the department takes leave
+  requests. The officers who manage leave are emailed each time.
+- **Downgrading** deletes any customised copies of the two new templates.
+
 ### Leave requests: extensions, questions, changed dates and reminders (2026-11-16)
 
 Nothing blocks a restart. Migration `e5a9c3d71b28` adds columns to

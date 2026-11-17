@@ -29,6 +29,17 @@ export interface LeaveSettings {
   requests_enabled: boolean;
   request_approver_position_ids: string[];
   request_decision_rule: LeaveDecisionRule;
+  /** Days a request may wait before the Chief is told, once; 0 never. */
+  request_escalation_days: number;
+}
+
+/** A member ended their own leave: it now ends the day before they are back. */
+export interface LeaveEndedEarly {
+  leave_id: string;
+  start_date: string;
+  end_date: string;
+  previous_end_date: string | null;
+  first_day_back: string;
 }
 
 export interface LeaveApproverPosition {

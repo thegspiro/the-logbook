@@ -17,6 +17,8 @@ POST /users/leave-requests/{id}/answer      - The member answers
 POST /users/leave-requests/{id}/changes     - An approver proposes other dates
 POST /users/leave-requests/{id}/changes/respond - The member accepts or declines
 GET  /users/leave-requests/summary          - Counts for the navigation
+POST /users/leave-requests/my-leaves/{leave_id}/end-early - A member ends
+     their own leave in progress
 
 Who may decide is not a permission: it is the department's chosen approver
 positions, with the Chief and then everyone who can record leave as the
@@ -39,6 +41,8 @@ from app.models.user import User
 from app.schemas.leave_of_absence import (
     LeaveChangesCreate,
     LeaveChangesResponse,
+    LeaveEndEarlyCreate,
+    LeaveEndedEarlyResponse,
     LeaveOfAbsenceSettings,
     LeaveQuestionCreate,
     LeaveRequestCreate,
@@ -63,6 +67,7 @@ from app.services.leave_workflow_notices import (
     CHANGES_DECLINED,
     CHANGES_PROPOSED,
     QUESTION_ASKED,
+    send_leave_ended_early,
     send_request_denied,
     send_request_event,
     send_request_submitted,
@@ -489,3 +494,46 @@ async def respond_to_leave_request_changes(
         _queue_outcome(background_tasks, current_user, request, None)
     [response] = await service.to_responses(_org(current_user), [request], current_user)
     return response
+
+
+@router.post(
+    "/leave-requests/my-leaves/{leave_id}/end-early",
+    response_model=LeaveEndedEarlyResponse,
+)
+async def end_own_leave_early(
+    leave_id: str,
+    data: LeaveEndEarlyCreate,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    End the caller's own leave in progress: the leave now ends the day before
+    ``first_day_back``. Offered only where the department takes leave
+    requests; the officers who manage leave are notified. Refused (409) for a
+    leave not yet begun or already over, or one with a request to extend it
+    still waiting; 400 for a date not earlier than the leave's end.
+
+    **Authentication required**
+    """
+    service = LeaveRequestService(db)
+    try:
+        leave, previous_end = await service.end_own_leave_early(
+            _org(current_user), current_user, leave_id, data.first_day_back
+        )
+    except LeaveRequestNotFound:
+        raise HTTPException(status_code=404, detail="Leave of absence not found")
+    except LeaveRequestForbidden as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    background_tasks.add_task(
+        send_leave_ended_early, _org(current_user), str(leave.id), previous_end
+    )
+    return LeaveEndedEarlyResponse(
+        leave_id=str(leave.id),
+        start_date=leave.start_date,
+        end_date=leave.end_date,
+        previous_end_date=previous_end,
+        first_day_back=data.first_day_back,
+    )
