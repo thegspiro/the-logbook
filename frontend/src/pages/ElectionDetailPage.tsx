@@ -343,9 +343,12 @@ export const ElectionDetailPage: React.FC = () => {
   const fetchUpcomingEvents = async () => {
     try {
       const today = getTodayLocalDate(tz);
+      // 100, the create dialog's window. The events come back soonest first
+      // and of every type, so ten was often all trainings, and a business
+      // meeting a few weeks out never reached the picker.
       const events = await eventService.getEvents({
         start_after: today,
-        limit: 10,
+        limit: 100,
       });
       setUpcomingEvents(events);
     } catch {
