@@ -616,17 +616,35 @@ tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
 ### EMAIL TEMPLATES — FINDING THINGS, SIGNING THEM, AND CLOSING THEM (15:20 – 17:20)
 
 **[SCREEN: Communications → Email Templates. The sidebar shows the collapsible
-categories with counts — seven, plus Other only when a template fits none.]**
+categories with counts — ten, plus Other only when a template fits none.]**
+
+_Production note (2026-11-15): the category list below was rewritten for the
+2026-11-14 change (Meetings & Minutes, Performance Evaluations, and the ten
+election and minutes notices that became templates). Re-record this beat and
+re-shoot the sidebar._
 
 > "Email Templates is where the wording of every automated notice lives — welcome
 > emails, event reminders, dues notices, store confirmations. There are well over
 > three dozen of them, and they used to be one long flat scroll."
 
-> "They're grouped now — Members & Accounts, Events & Scheduling, Training &
-> Certifications, Elections & Voting, Inventory & Property, Suggestion Boxes and
+> "They're grouped now — Members & Accounts, Prospective Members, Events &
+> Scheduling, Training & Certifications, Meetings & Minutes, Elections &
+> Voting, Inventory & Property, Performance Evaluations, Suggestion Boxes and
 > Department Store, with Other for anything that fits none. Search still works
 > across all of them, and searching expands every group so a match can't hide
 > behind a collapsed header."
+
+**[SCREEN: Meetings & Minutes opened: Minutes Ready for Review, Action Items
+Assigned and the reminders. Then Elections & Voting with Nominations Open and
+Pre-Meeting Package.]**
+
+> "As secretary, two groups are yours. The minutes emails — minutes ready for
+> review, action items assigned, the reminders and the open-items digest —
+> and the election notices — nominations open, you've been nominated, proxy
+> authorized, the pre-meeting package — used to be fixed. Now you can reword
+> them, preview them, test-send them, or switch them off. Switch off the
+> pre-meeting package and the send button tells you why instead of going
+> out."
 
 **[SCREEN: A template switched **Off**; the Off filter showing it; then the
 Password Reset template with the dimmed switch and the **Always sent** header.]**
@@ -1136,3 +1154,11 @@ Roll; **Sensitive** form fields and the embed code; Voter Eligibility; and
 email templates that stop when switched Off. Adds about 4 minutes if every
 beat is filmed; the beats are separable. Re-time Chapters 2–6 from the
 recorded take.
+
+## EDITOR — 2026-11-15 PASS
+
+Email Templates: the category list now names all ten groups, including
+**Meetings & Minutes** and **Performance Evaluations**, and a new beat covers
+the minutes and election notices that became editable templates on
+2026-11-14. Adds about 30 seconds. Re-shoot the template sidebar; re-time the
+Email Templates chapter from the recorded take.
