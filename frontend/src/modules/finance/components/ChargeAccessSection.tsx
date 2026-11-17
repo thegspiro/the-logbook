@@ -13,7 +13,10 @@ import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Pencil, ShieldCheck } from 'lucide-react';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { budgetCategoryService } from '../services/api';
 import type { BudgetCategory, ChargeAccessSettings } from '../types';
 import { categoryPathLabel } from '../utils/budgetCategoryTree';
@@ -24,7 +27,27 @@ import {
   inheritedChargeHint,
   type ChargeAccessValue,
 } from '../utils/chargeAccess';
-import { ChargeAccessFields } from './ChargeAccessFields';
+import { refusalsOnFields } from '../utils/fieldRefusals';
+import { ChargeAccessFields, type ChargeAccessFieldErrors } from './ChargeAccessFields';
+
+type ChargeField = keyof ChargeAccessFieldErrors;
+
+/**
+ * `BudgetCategoryChargeAccessUpdate` (schemas/finance.py) names a refusal by
+ * its snake_case field (`loc_by_alias=False`); the defaults read both
+ * spellings. The position list is capped at 200 ids there.
+ */
+const SERVER_FIELDS: Record<ChargeField, ServerFieldSpec> = {
+  chargeAccess: { label: 'Who can charge these lines' },
+  chargePositionIds: { label: 'Also allow these positions' },
+};
+const FIELD_ORDER: readonly ChargeField[] = ['chargeAccess', 'chargePositionIds'];
+const ID_PREFIX = 'owner-charge';
+/** The ids ChargeAccessFields gives each part under ID_PREFIX. */
+const FIELD_IDS: Record<ChargeField, string> = {
+  chargeAccess: `${ID_PREFIX}-access`,
+  chargePositionIds: `${ID_PREFIX}-positions`,
+};
 
 interface ChargeAccessDialogProps {
   category: BudgetCategory;
@@ -35,12 +58,27 @@ interface ChargeAccessDialogProps {
 }
 
 const ChargeAccessDialog: React.FC<ChargeAccessDialogProps> = ({ category, parent, positions, onClose, onSaved }) => {
-  const [value, setValue] = useState<ChargeAccessValue>(chargeAccessValueOf(category));
+  const [initial] = useState<ChargeAccessValue>(() => chargeAccessValueOf(category));
+  const [value, setValue] = useState<ChargeAccessValue>(initial);
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<ChargeAccessFieldErrors>({});
+  // A refusal no field answers for (a position that no longer exists, a lost
+  // connection) is said in the dialog, not only in a toast (forms review F-5).
+  const [formError, setFormError] = useState<string | null>(null);
+  // Escape, the X and Cancel ask before throwing a changed choice away (F-6).
+  const isDirty =
+    value.access !== initial.access ||
+    value.positionIds.length !== initial.positionIds.length ||
+    value.positionIds.some((id) => !initial.positionIds.includes(id));
+  const requestClose = useDiscardGuard({ isDirty, onClose });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setErrors({});
+    setFormError(null);
+    // The whole setting is replaced at once, so a refusal saves none of it
+    // and the dialog stays open on the choice that was refused.
     budgetCategoryService
       .setChargeAccess(category.id, chargeAccessPayloadOf(value))
       .then(() => {
@@ -48,37 +86,61 @@ const ChargeAccessDialog: React.FC<ChargeAccessDialogProps> = ({ category, paren
         onSaved();
       })
       .catch((err: unknown) => {
-        toast.error(getErrorMessage(err, 'Could not save who can charge these lines'));
+        const mapped = refusalsOnFields(err, SERVER_FIELDS);
+        if (mapped) {
+          setErrors(mapped.fieldErrors);
+          const first = FIELD_ORDER.find((field) => mapped.fieldErrors[field]);
+          if (first) document.getElementById(FIELD_IDS[first])?.focus();
+          if (mapped.unmatched.length > 0) setFormError(mapped.unmatched.join(' '));
+          return;
+        }
+        const message = getErrorMessage(err, 'Could not save who can charge these lines');
+        setFormError(message);
+        toast.error(message);
       })
       .finally(() => setSaving(false));
+  };
+
+  const change = (next: ChargeAccessValue) => {
+    setValue(next);
+    setErrors({});
   };
 
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title={`Who can charge ${categoryPathLabel(category)}`}
       titleId="charge-access-title"
       onSubmit={handleSubmit}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary">
             {saving ? 'Saving...' : 'Save'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={requestClose} className="btn-secondary">
             Cancel
           </button>
         </>
       }
     >
-      <ChargeAccessFields
-        idPrefix="owner-charge"
-        value={value}
-        onChange={setValue}
-        positions={positions}
-        isTopLevel={!category.parentCategoryId}
-        inheritedHint={inheritedChargeHint(parent?.name, parent?.effectiveChargeAccess)}
-      />
+      <div className="space-y-3">
+        <ChargeAccessFields
+          idPrefix={ID_PREFIX}
+          value={value}
+          onChange={change}
+          positions={positions}
+          isTopLevel={!category.parentCategoryId}
+          inheritedHint={inheritedChargeHint(parent?.name, parent?.effectiveChargeAccess)}
+          errors={errors}
+        />
+        {formError && (
+          <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+            {formError}
+          </p>
+        )}
+      </div>
     </Modal>
   );
 };

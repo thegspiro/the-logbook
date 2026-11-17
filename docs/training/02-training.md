@@ -297,6 +297,24 @@ These are the same months the card's "Adjusted for …" note counts when it
 reduces your target. The note names the reason: "3 months on leave", "1 waived
 month", or both.
 
+**Shift and call requirements month by month** _(2026-11-14)_. A shifts or
+calls requirement has the same control, reading **Show monthly shifts** (or
+calls). Each month shows the count and its leave label, for example "Dec 2025:
+leave, 2 shifts", and the summary reads "3 shifts over 12 months (2 on
+leave)". The months are counted from the same dates as the card's total, so
+they add up to it.
+
+**Nothing owed** _(2026-11-14)_. When leave reduces a shift or call target to
+zero, the card reads **Nothing owed (on leave)** and its note ends "so nothing
+is owed for this period", instead of "0/0 shifts".
+
+**Your leave on My Training** _(2026-11-14)_. Under the requirement details,
+My Training lists your own leaves of absence (dates and type, never the
+reason) and the department's **Months on leave** rule, so you can see which
+leave reduced a target. A leave that does not excuse training is listed as
+keeping the requirements in force. It shows only where your department shows
+the requirement breakdown.
+
 ---
 
 ## Submitting Training Records
@@ -1362,6 +1380,14 @@ held against members who have stepped back; tick it yourself if the
 requirement covers them. When all three are ticked, the button shows a check
 mark; selecting it again unticks those three. **Retired**, **Administrative**
 and **Honorary** are left as you set them either way.
+
+**Your department's own membership tiers are listed too** _(2026-11-14)_.
+**Member Categories** lists the built-in categories followed by any tiers
+your department has added (for example **Senior**). Before, only the built-in
+ones were listed, so a requirement scoped to Active and Probationary quietly
+left out every Senior member with no box to bring them back. Open a scoped
+requirement and check the new boxes. A category a requirement already carries
+is always shown, so it can be unticked even if the tier list fails to load.
 
 Requirements saved before 2026-11-06 with **Retired** ticked keep it. Open one
 and untick **Retired** if retired members should no longer be graded on it.
@@ -2636,6 +2662,17 @@ denial.
 - **In the annual review** the waiver summary counts them as **expired**, on
   their own, not as denials.
 
+### Finding the requests you decide _(2026-11-14)_
+
+**Who sees it:** anyone who decides session waiver requests: a holder of a
+position chosen under **Who decides**, the Chief or President, the alternate,
+or a training manager when the chain reaches them.
+
+**Training → Waiver Requests** lists the requests waiting on you and the ones
+you have decided. It appears only for members who decide requests; at the top
+of every Training page it carries the number waiting on you. The email about
+each new request links to it too.
+
 ### Asking a member for more information _(2026-11-13)_
 
 **Who can do this:** anyone who decides a member's request to be excused.
@@ -3310,6 +3347,15 @@ requirements of three types: an **Evaluated shifts** requirement counts it as
 one shift (or none, where the requirement leaves out an evaluation with any
 item at the form's lowest rating), and **Transports** and **Refusals**
 requirements take the counts on the form's statistics.
+
+**Linked department requirements count too** _(2026-11-14)_. A department
+requirement of one of those three types, added to a program with **Link
+existing**, is now credited by the member's shift evaluations in the same way
+as the program's own. Before, evaluations never moved a linked row, and a
+training record of a matching type could mark it complete. The compliance
+matrix, dashboards, reports and My Training all count it this way, within the
+requirement's own window and with leave taken off in whole units. A flagged
+evaluation's credit is taken back from the linked row at once.
 
 ### Shifts on an outside agency's unit _(2026-11-02)_
 
@@ -5044,9 +5090,24 @@ neither includes an officer-only section, since that needs your own ranks.
    waiver or leave excuses (a member who came anyway is credited). It is a
    percentage for the review period, no longer a met / not met verdict, and
    reads "unavailable" when no single requirement applies to the member. Evaluations opened before the change keep
-   the old figure until someone selects **Update figures**. At calibration the reviewer may **tick the evaluator's items to
+   the old figure until someone selects **Update figures**.
+   At calibration the reviewer may **tick the evaluator's items to
    revisit** (ticks only, no notes). The evaluator is told items are flagged;
    the member sees the ticks once the evaluation is released to them.
+   _(2026-11-14)_ Three more figures can be added to a template's items:
+   **events attended by type** ("Training: 12 events"; a count, since not
+   every event is one a member is expected at), **certifications expiring
+   soon** (held at the end of the period and expiring within 90 days after
+   it) and **field shift evaluation averages** (the average on each shift
+   evaluation form, with how many, e.g. "EMT Shift Evaluation: 3.4 / 4 (12
+   evaluations)"). These three are lists, so they are shown but not scored.
+   In the builder, a figure from a module or setting your department has
+   turned off (Training, Scheduling or call tracking) reads **(turned off)**
+   and says why once chosen. If a scoring rule's bands leave a gap, the
+   builder lists the values that would get no suggested rating, including
+   exactly 100% when a percentage band stops at 100. The PDF's list of
+   left-out dates (leave and gaps in membership) now prints dates like the
+   rest of the page (Aug 10, 2026); PDFs already frozen are unchanged.
 3. **Approvals and signing.** The approving position signs; the member
    acknowledges receipt or refuses with a reason. Signing asks you to re-verify
    your session and type your own name. The last signature finalizes the
