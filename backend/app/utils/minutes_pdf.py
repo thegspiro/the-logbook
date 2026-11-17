@@ -27,11 +27,11 @@ from reportlab.platypus import (
     KeepTogether,
     PageBreak,
     Paragraph,
-    SimpleDocTemplate,
     Spacer,
     Table,
 )
 
+from app.utils.election_pdf_style import beside_logo
 from app.utils.minutes_pdf_attachments import (
     IMAGE,
     PDF,
@@ -47,6 +47,7 @@ from app.utils.pdf_fonts import (
     body_table_style,
     document_stylesheet,
 )
+from app.utils.pdf_running_header import HeadedDocTemplate, RunningHeader
 from app.utils.pdfa import to_pdfa
 from app.utils.print_geometry import BINDING_EDGE, SAFE_EDGE
 from app.utils.rich_text import (
@@ -277,8 +278,14 @@ def render_minutes_pdf(
     approval: Optional[Dict[str, Any]] = data.get("approval")
 
     buf = BytesIO()
-    doc = SimpleDocTemplate(
+    doc = HeadedDocTemplate(
         buf,
+        running_header=RunningHeader(
+            header.get("org_name") or meta.get("org_name"),
+            "Meeting Minutes",
+            data.get("title"),
+            meta.get("logo"),
+        ),
         # The canvas otherwise declares Helvetica, never embedded, on every page.
         initialFontName=BODY_FONT,
         pagesize=letter,
@@ -339,12 +346,13 @@ def render_minutes_pdf(
     }
 
     org_name = header.get("org_name") or meta.get("org_name")
-    story: List[Any] = []
+    heading: List[Any] = []
     if org_name:
-        story.append(Paragraph(_esc(org_name), title_style))
-    story.append(
+        heading.append(Paragraph(_esc(org_name), title_style))
+    heading.append(
         Paragraph(_esc(header.get("subtitle") or "Official Meeting Minutes"), sub_style)
     )
+    story: List[Any] = beside_logo(heading, meta.get("logo"), doc.width)
     story.append(Spacer(1, 6))
     story.append(Paragraph(f"<b>{_esc(data.get('title'))}</b>", styles["Heading2"]))
 
