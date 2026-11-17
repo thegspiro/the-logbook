@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockConnection = vi.fn();
@@ -15,6 +15,7 @@ const mockStartConnect = vi.fn();
 const mockDisconnect = vi.fn();
 const mockSyncNow = vi.fn();
 const mockRetry = vi.fn();
+const mockSetPostFrom = vi.fn();
 vi.mock('../services/api', () => ({
   quickBooksOnlineService: {
     connection: (...args: unknown[]) => mockConnection(...args) as unknown,
@@ -23,6 +24,7 @@ vi.mock('../services/api', () => ({
     disconnect: (...args: unknown[]) => mockDisconnect(...args) as unknown,
     syncNow: (...args: unknown[]) => mockSyncNow(...args) as unknown,
     retry: (...args: unknown[]) => mockRetry(...args) as unknown,
+    setPostFrom: (...args: unknown[]) => mockSetPostFrom(...args) as unknown,
   },
 }));
 
@@ -84,6 +86,7 @@ beforeEach(() => {
     mockDisconnect,
     mockSyncNow,
     mockRetry,
+    mockSetPostFrom,
     mockToastSuccess,
     mockToastError,
   ]) {
@@ -92,6 +95,7 @@ beforeEach(() => {
   mockConnection.mockResolvedValue(connection());
   mockPostings.mockResolvedValue([]);
   mockRetry.mockResolvedValue(undefined);
+  mockSetPostFrom.mockResolvedValue(connection());
   signIn(['finance.view', 'finance.manage']);
   window.history.pushState({}, '', '/finance/settings/quickbooks');
 });
@@ -189,6 +193,54 @@ describe('QuickBooksOnlineSection', () => {
     renderWithRouter(<QuickBooksOnlineSection />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not be verified/);
+  });
+});
+
+describe('QuickBooksOnlineSection post-from date', () => {
+  const dateField = () => screen.findByLabelText('Post payments made on or after');
+
+  it('saves the date on Enter, as the start of that day in the department timezone', async () => {
+    renderWithRouter(<QuickBooksOnlineSection />);
+    const field = await dateField();
+    fireEvent.change(field, { target: { value: '2026-11-10' } });
+    fireEvent.submit(field);
+
+    await waitFor(() => expect(mockSetPostFrom).toHaveBeenCalledWith('2026-11-10T00:00:00.000Z'));
+    expect(mockToastSuccess).toHaveBeenCalledWith('Saved');
+  });
+
+  it('names a missing date on the field and sends nothing', async () => {
+    renderWithRouter(<QuickBooksOnlineSection />);
+    const field = await dateField();
+    fireEvent.change(field, { target: { value: '' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Save date' }));
+
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription('Choose the first day payments should post to QuickBooks.');
+    expect(field).toHaveFocus();
+    expect(mockSetPostFrom).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 on the date', async () => {
+    mockSetPostFrom.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'post_from', message: 'Invalid date format' }] } },
+    });
+    renderWithRouter(<QuickBooksOnlineSection />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Save date' }));
+
+    const field = await dateField();
+    await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
+    expect(field).toHaveAccessibleDescription('Post payments made on or after needs a valid date.');
+    expect(field).toHaveFocus();
+  });
+
+  it('says a refusal no field answers for beside the date', async () => {
+    mockSetPostFrom.mockRejectedValue(new Error('Connect to QuickBooks first'));
+    renderWithRouter(<QuickBooksOnlineSection />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Save date' }));
+
+    const form = screen.getByRole('form', { name: 'First day payments post' });
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Connect to QuickBooks first');
   });
 });
 

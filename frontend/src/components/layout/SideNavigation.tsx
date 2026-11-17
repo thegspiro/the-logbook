@@ -73,6 +73,7 @@ import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/us
 import { useHasAssignedApplicants } from '../../modules/prospective-members/hooks/useHasAssignedApplicants';
 import { useHasCrew } from '../../hooks/useHasCrew';
 import { leaveRequestNavLabel, useLeaveRequestNav } from '../../hooks/useLeaveRequestNav';
+import { useWaiverAttention } from '../../hooks/useWaiverAttention';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -172,6 +173,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   );
   const hasCrew = useHasCrew(currentUser?.id);
   const leaveRequestNav = useLeaveRequestNav(currentUser?.id);
+  const waivers = useWaiverAttention(currentUser?.id, {
+    training: !modulesLoading && isModuleOn('training'),
+    meetings: !modulesLoading && isModuleOn('minutes'),
+  });
 
   // The mobile bottom bar's "More" button asks us to open the drawer.
   useEffect(() => {
@@ -278,7 +283,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             icon: GraduationCap,
             // One list with TopNavigation and the section strip on every
             // Training page; see trainingNavigation.ts.
-            subItems: trainingNavItems(offersSkillsTesting(practicalSkillsMethod)),
+            subItems: trainingNavItems(offersSkillsTesting(practicalSkillsMethod), waivers.training),
           } as NavItem,
         ]
       : []),
@@ -316,7 +321,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       icon: Vote,
       // One list with TopNavigation and the section strip on every Governance
       // page; see governanceNavigation.ts.
-      subItems: governanceNavItems(isModuleOn),
+      subItems: governanceNavItems(isModuleOn, waivers.meetings),
     },
     // Every member holds finance.request, so the group is how they reach their
     // own purchase requests, expense reports and check requests.
