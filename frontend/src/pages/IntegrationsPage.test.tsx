@@ -508,6 +508,56 @@ describe('IntegrationsPage', () => {
       expect(screen.getByRole('checkbox', { name: /Sync automatically/ })).toBeChecked();
     });
 
+    it('asks for the Client Secret when Settings replaces the Client ID', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([salesforceConfigured]);
+      mockUpdateIntegration.mockReset();
+      mockUpdateIntegration.mockResolvedValue(salesforceConfigured);
+      vi.mocked(toast.error).mockClear();
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-salesforce');
+      await user.click(within(card).getByRole('button', { name: 'Salesforce settings' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Salesforce settings' });
+      const mismatch = 'Enter the Client Secret of the new Connected App. The saved secret belongs to the current one.';
+
+      await user.type(within(dialog).getByLabelText('Connected App Client ID'), '3MVG9newapp');
+      await user.click(screen.getByTestId('settings-submit'));
+      expect(toast.error).toHaveBeenCalledWith(mismatch);
+
+      vi.mocked(toast.error).mockClear();
+      await user.click(within(dialog).getByRole('button', { name: 'Re-authorize with Salesforce' }));
+      expect(toast.error).toHaveBeenCalledWith(mismatch);
+      expect(mockUpdateIntegration).not.toHaveBeenCalled();
+
+      await user.type(within(dialog).getByLabelText('Client Secret'), 'newapp-secret');
+      await user.click(screen.getByTestId('settings-submit'));
+      expect(mockUpdateIntegration).toHaveBeenCalledWith(
+        'sf-1',
+        expect.objectContaining({ client_id: '3MVG9newapp', client_secret: 'newapp-secret' })
+      );
+    });
+
+    it('lets Settings replace the Client Secret on its own', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([salesforceConfigured]);
+      mockUpdateIntegration.mockReset();
+      mockUpdateIntegration.mockResolvedValue(salesforceConfigured);
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-salesforce');
+      await user.click(within(card).getByRole('button', { name: 'Salesforce settings' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Salesforce settings' });
+
+      await user.type(within(dialog).getByLabelText('Client Secret'), 'rotated-secret');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith(
+        'sf-1',
+        expect.objectContaining({ client_id: undefined, client_secret: 'rotated-secret' })
+      );
+    });
+
     it('re-authorizes from Settings without moving the org', async () => {
       const user = userEvent.setup();
       mockGetIntegrations.mockResolvedValue([salesforceConfigured]);

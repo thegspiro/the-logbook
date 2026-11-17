@@ -876,6 +876,20 @@ const IntegrationsPage: React.FC = () => {
     }
   };
 
+  // A Client ID and Client Secret belong to one Connected App, and the stored
+  // pair is never sent back. A new ID with a blank secret box would keep the
+  // old secret beside it, and Salesforce rejects that pair at the next sign-in
+  // or token refresh, so Settings asks for both. A secret alone stays allowed:
+  // that is rotating the same app's secret.
+  const salesforceCredentialsMismatched = (integrationType: string): boolean => {
+    if (!editingSettings || integrationType !== 'salesforce') return false;
+    if (sfClientId.trim() && !sfClientSecret.trim()) {
+      toast.error('Enter the Client Secret of the new Connected App. The saved secret belongs to the current one.');
+      return true;
+    }
+    return false;
+  };
+
   const handleSaveSettings = async (integrationId: string) => {
     const integration = integrations.find((i) => i.id === integrationId);
     if (!integration) return;
@@ -890,6 +904,7 @@ const IntegrationsPage: React.FC = () => {
         : integration.integration_type === 'documenso'
           ? { baseUrl: documensoBaseUrl, credential: documensoApiToken, noun: 'token' }
           : null;
+    if (salesforceCredentialsMismatched(integration.integration_type)) return;
     if (baseUrlCredential) {
       const storedBaseUrl = integration.config?.['api_base_url'];
       const newBaseUrl = baseUrlCredential.baseUrl.trim();
@@ -1125,6 +1140,7 @@ const IntegrationsPage: React.FC = () => {
       toast.error('Enter your Salesforce instance URL before connecting');
       return;
     }
+    if (salesforceCredentialsMismatched('salesforce')) return;
     setConnecting(true);
     try {
       // Persist the entered config (instance URL, environment, match strategy,

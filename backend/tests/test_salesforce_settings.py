@@ -181,3 +181,66 @@ class TestSalesforceSettings:
             assert value not in str(response)
         for key in ("client_id", "client_secret", "refresh_token"):
             assert key not in (row.config or {})
+
+
+class TestSalesforceCachedAccessToken:
+    """A cached access token belongs to the grant that issued it.
+
+    Sync uses the cached token until Salesforce answers 401, so a save that
+    stores a new refresh token or Connected App credential must discard it, or
+    the next sync keeps running as the previous grant until it expires.
+    """
+
+    async def _with_cached_token(self, db: AsyncSession) -> tuple:
+        org_id = await _org(db)
+        admin = await _admin(db, org_id)
+        row = await _connected_salesforce(db, org_id, admin)
+        row.set_secret("access_token", "cached_old_grant")
+        await db.flush()
+        return row, admin
+
+    @pytest.mark.parametrize(
+        "credential",
+        [
+            {"refresh_token": "refresh_new"},
+            {"client_id": "3MVG9newapp", "client_secret": "newapp-secret"},
+            {"client_secret": "rotated-secret"},
+        ],
+    )
+    async def test_a_new_credential_discards_the_cached_token(
+        self, db_session: AsyncSession, credential: dict
+    ):
+        row, admin = await self._with_cached_token(db_session)
+
+        await _save_settings(db_session, row, admin, credential)
+
+        assert not row.get_secret("access_token")
+
+    async def test_a_reconnect_with_a_new_token_discards_the_cached_token(
+        self, db_session: AsyncSession
+    ):
+        row, admin = await self._with_cached_token(db_session)
+
+        with patch.object(int_ep, "log_audit_event", new=AsyncMock()), _no_dns():
+            await int_ep.connect_integration(
+                row.id,
+                _request(),
+                body=IntegrationConnectRequest(
+                    config={"instance_url": INSTANCE, "refresh_token": "refresh_new"}
+                ),
+                db=db_session,
+                current_user=admin,
+            )
+        await db_session.refresh(row)
+
+        assert not row.get_secret("access_token")
+        assert row.get_secret("refresh_token") == "refresh_new"
+
+    async def test_a_sync_settings_save_keeps_the_cached_token(
+        self, db_session: AsyncSession
+    ):
+        row, admin = await self._with_cached_token(db_session)
+
+        await _save_settings(db_session, row, admin, {"sync_direction": "pull"})
+
+        assert row.get_secret("access_token") == "cached_old_grant"
