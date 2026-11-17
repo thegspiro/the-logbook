@@ -104,3 +104,16 @@ class TestConnectionEditsReverify:
         provider = await _verified_provider(db_session)
         saved = await _save(db_session, provider, api_key="new-token")
         assert saved.connection_verified is False
+
+    async def test_a_cleared_key(self, db_session):
+        provider = await _verified_provider(db_session)
+        provider.api_key = "stored-ciphertext"
+        await db_session.flush()
+        saved = await _save(db_session, provider, api_key=None)
+        assert saved.api_key is None
+        assert saved.connection_verified is False
+
+    async def test_clearing_a_key_that_was_never_set(self, db_session):
+        provider = await _verified_provider(db_session)
+        saved = await _save(db_session, provider, api_secret=None)
+        assert saved.connection_verified is True

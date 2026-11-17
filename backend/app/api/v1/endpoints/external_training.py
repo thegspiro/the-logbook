@@ -386,14 +386,18 @@ async def update_provider(
     # form sends api_base_url on every save, so resetting on the key's mere
     # presence un-verified the provider whenever an officer changed its
     # schedule, and the auto-sync task (which requires connection_verified)
-    # then skipped it with nothing on screen to say why. A secret arriving at
-    # all counts as a change: the form sends one only when it was typed, and
-    # the stored value is ciphertext.
+    # then skipped it with nothing on screen to say why. A secret counts as a
+    # change when one is supplied (the form sends one only when it was typed,
+    # and the stored value is ciphertext) or when a stored one is cleared.
     connection_changed = any(
         update_data.get(k) != getattr(provider, k)
         for k in ("api_base_url", "client_id")
         if k in update_data
-    ) or any(update_data.get(k) for k in ("api_key", "api_secret", "client_secret"))
+    ) or any(
+        update_data[k] or getattr(provider, k)
+        for k in ("api_key", "api_secret", "client_secret")
+        if k in update_data
+    )
 
     # Encrypt sensitive credential fields before storing
     _secret_fields = ("api_key", "api_secret", "client_secret")
