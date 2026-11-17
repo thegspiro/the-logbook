@@ -286,12 +286,66 @@ describe('the mileage rate setting', () => {
     const user = userEvent.setup();
     render(<MileageRateSettingsCard />);
 
-    await user.clear(await screen.findByLabelText('Dollars a mile'));
-    await user.type(screen.getByLabelText('Dollars a mile'), '7');
+    const field = await screen.findByLabelText('Dollars a mile');
+    await user.clear(field);
+    await user.type(field, '7');
     await user.click(screen.getByRole('button', { name: 'Save rate' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('at most 5');
+    // Named under the field (forms review F-3), not in a separate alert.
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription(expect.stringContaining('at most 5'));
+    expect(field).toHaveFocus();
     expect(mockUpdateSettings).not.toHaveBeenCalled();
+  });
+
+  it('names a blank rate on the field instead of sending it', async () => {
+    const user = userEvent.setup();
+    render(<MileageRateSettingsCard />);
+
+    const field = await screen.findByLabelText('Dollars a mile');
+    await user.clear(field);
+    await user.click(screen.getByRole('button', { name: 'Save rate' }));
+
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    // Focus moves from the button back to the field it names.
+    expect(field).toHaveFocus();
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
+  });
+
+  it("puts the server's refusal of the rate on the field", async () => {
+    mockUpdateSettings.mockRejectedValue({
+      response: {
+        status: 422,
+        data: {
+          detail: [
+            {
+              field: 'finance.mileage_rate',
+              message: 'The mileage rate must be between 0.001 and 5 dollars a mile, with at most three decimal places',
+            },
+          ],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    render(<MileageRateSettingsCard />);
+
+    const field = await screen.findByLabelText('Dollars a mile');
+    await user.click(screen.getByRole('button', { name: 'Save rate' }));
+
+    await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
+    expect(field).toHaveAccessibleDescription(expect.stringContaining('between 0.001 and 5 dollars a mile'));
+    expect(field).toHaveFocus();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('says a refusal no field answers for inside the card', async () => {
+    mockUpdateSettings.mockRejectedValue(new Error('Not allowed'));
+    const user = userEvent.setup();
+    render(<MileageRateSettingsCard />);
+
+    await user.click(await screen.findByRole('button', { name: 'Clear rate' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not allowed');
   });
 
   it('clears the rate with an explicit null', async () => {
