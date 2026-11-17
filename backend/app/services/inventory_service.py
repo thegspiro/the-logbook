@@ -14099,6 +14099,7 @@ class InventoryService:
 
         meta = {
             "org_name": org_name,
+            "logo": org.logo if org else None,
             # Printed on the plan, so it reads in the department's zone.
             "generated_at": datetime.now(timezone.utc).astimezone(
                 scheduling_timezone(org)
