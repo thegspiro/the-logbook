@@ -69,7 +69,8 @@ interface PatternFormModalProps {
   onSubmit: (data: Record<string, unknown>, options?: { keepOpen?: boolean }) => Promise<void>;
   initialData?: PatternFormData | undefined;
   title: string;
-  templates: ShiftTemplate[];
+  /** Only what the template picker shows, so either template list fits. */
+  templates: Pick<ShiftTemplate, 'id' | 'name' | 'start_time_of_day' | 'end_time_of_day' | 'is_active'>[];
 }
 
 const PatternFormModal: React.FC<PatternFormModalProps> = ({

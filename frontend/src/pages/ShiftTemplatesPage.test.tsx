@@ -9,7 +9,6 @@ const mockGetTemplates = vi.fn();
 const mockDeleteTemplate = vi.fn();
 const mockGetPatterns = vi.fn();
 const mockUpdateTemplate = vi.fn();
-const mockUpdatePattern = vi.fn();
 
 vi.mock('../modules/scheduling/services/api', async () => {
   const actual = await vi.importActual<typeof import('../modules/scheduling/services/api')>(
@@ -22,7 +21,6 @@ vi.mock('../modules/scheduling/services/api', async () => {
       deleteTemplate: (...args: unknown[]) => mockDeleteTemplate(...args) as unknown,
       getPatterns: (...args: unknown[]) => mockGetPatterns(...args) as unknown,
       updateTemplate: (...args: unknown[]) => mockUpdateTemplate(...args) as unknown,
-      updatePattern: (...args: unknown[]) => mockUpdatePattern(...args) as unknown,
       getApparatusOptions: vi.fn().mockResolvedValue({ options: [], source: 'default' }),
     },
   };
@@ -57,8 +55,8 @@ const buildTemplate = (positions: ShiftTemplateRecord['positions']): Record<stri
   updated_at: '2026-08-01T00:00:00Z',
 });
 
-// Every block starts from no patterns; a block that needs some sets its own
-// after this runs (CLAUDE.md pitfall #28).
+// The page must not load patterns at all (W32-6); every block starts from a
+// reset mock so the "not called" check below means this render.
 beforeEach(() => {
   mockGetPatterns.mockReset();
   mockGetPatterns.mockResolvedValue([]);
@@ -190,69 +188,45 @@ describe('ShiftTemplatesPage template delete', () => {
   });
 });
 
-describe('ShiftTemplatesPage pattern held by an inactive template', () => {
-  const pattern = (overrides: Record<string, unknown>): Record<string, unknown> => ({
-    id: 'pat-1',
-    organization_id: 'org-1',
-    name: 'A-Shift',
-    pattern_type: 'daily',
-    template_id: 'tmpl-1',
-    start_date: '2026-10-01',
-    is_active: true,
-    created_at: '2026-08-01T00:00:00Z',
-    updated_at: '2026-08-01T00:00:00Z',
-    ...overrides,
-  });
-
+describe('ShiftTemplatesPage reactivating a template', () => {
   beforeEach(() => {
     mockGetTemplates.mockReset();
     mockGetTemplates.mockResolvedValue([{ ...buildTemplate(['officer']), is_active: false }]);
-    mockGetPatterns.mockReset();
-    mockGetPatterns.mockResolvedValue([
-      pattern({ inactive_templates: ['Day Shift'] }),
-      pattern({ id: 'pat-2', name: 'B-Shift', inactive_templates: [] }),
-    ]);
-  });
-
-  it('warns on that pattern only, and in its edit form', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<ShiftTemplatesPage />);
-
-    await user.click(await screen.findByRole('tab', { name: /Patterns/ }));
-    const notices = await screen.findAllByText(/Template inactive — this pattern is not generating shifts/);
-    expect(notices).toHaveLength(1);
-
-    await user.click(screen.getByRole('button', { name: 'Edit A-Shift' }));
-    const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent('Template inactive — this pattern is not generating shifts');
-  });
-
-  it('reactivates the inactive template, and does not offer Generate on the held pattern', async () => {
-    const user = userEvent.setup();
     mockUpdateTemplate.mockReset();
     mockUpdateTemplate.mockResolvedValue(buildTemplate(['officer']));
+    toastSuccess.mockReset();
+  });
+
+  it('reactivates the template and reloads the list', async () => {
+    const user = userEvent.setup();
     renderWithRouter(<ShiftTemplatesPage />);
 
     await user.click(await screen.findByRole('button', { name: 'Reactivate Day Shift' }));
-    expect(mockUpdateTemplate).toHaveBeenCalledWith('tmpl-1', { is_active: true });
-    // Templates and patterns both reload: the pattern's held flag comes from the server.
-    await waitFor(() => {
-      expect(mockGetPatterns).toHaveBeenCalledTimes(2);
-    });
 
-    await user.click(screen.getByRole('tab', { name: /Patterns/ }));
-    expect(screen.getByRole('button', { name: 'Generate shifts from A-Shift' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Generate shifts from B-Shift' })).toBeEnabled();
+    expect(mockUpdateTemplate).toHaveBeenCalledWith('tmpl-1', { is_active: true });
+    await waitFor(() => expect(mockGetTemplates).toHaveBeenCalledTimes(2));
+    expect(toastSuccess).toHaveBeenCalledWith('"Day Shift" is active again. Patterns using it generate shifts again.');
+  });
+});
+
+// W32-6: this page carried a second pattern list and form beside Planning ›
+// Patterns, and only this one could edit. Patterns now live in one place.
+describe('ShiftTemplatesPage and patterns', () => {
+  beforeEach(() => {
+    mockGetTemplates.mockReset();
+    mockGetTemplates.mockResolvedValue([buildTemplate(['officer'])]);
   });
 
-  it('pauses a pattern', async () => {
-    const user = userEvent.setup();
-    mockUpdatePattern.mockReset();
-    mockUpdatePattern.mockResolvedValue(pattern({ id: 'pat-2', is_active: false }));
+  it('offers no pattern tab or form, and points to Shift patterns', async () => {
     renderWithRouter(<ShiftTemplatesPage />);
 
-    await user.click(await screen.findByRole('tab', { name: /Patterns/ }));
-    await user.click(screen.getByRole('button', { name: 'Pause B-Shift' }));
-    expect(mockUpdatePattern).toHaveBeenCalledWith('pat-2', { is_active: false });
+    expect(await screen.findByRole('heading', { level: 2, name: 'Shift Templates' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /New Pattern/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Shift patterns' })).toHaveAttribute(
+      'href',
+      '/scheduling/admin/planning/patterns'
+    );
+    expect(mockGetPatterns).not.toHaveBeenCalled();
   });
 });

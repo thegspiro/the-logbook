@@ -47,6 +47,15 @@ const MEMBERSHIP_TYPES = [
  */
 const OPERATIONAL_MEMBERSHIP_TYPES: readonly string[] = ['active', 'probationary', 'life'];
 
+/**
+ * Department tiers the shortcut also selects, when the department has them.
+ * `senior` is a shipped default rung for long-serving members who still ride
+ * (owner request 2026-11-16), but tiers are configurable per department, so it
+ * is added only once the department's own tier list names it — otherwise the
+ * shortcut would save a type no member can hold.
+ */
+const OPERATIONAL_TIER_IDS: readonly string[] = ['senior'];
+
 interface MembershipTypeOption {
   value: string;
   label: string;
@@ -194,22 +203,31 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
     formData.required_membership_types.map((value) => ({ value, label: value }))
   );
 
-  const allOperationalSelected = OPERATIONAL_MEMBERSHIP_TYPES.every((t) =>
-    formData.required_membership_types.includes(t)
+  const operationalTypes = [
+    ...OPERATIONAL_MEMBERSHIP_TYPES,
+    ...OPERATIONAL_TIER_IDS.filter((id) => membershipTypeOptions.some((option) => option.value === id)),
+  ];
+  const operationalLabels = operationalTypes.map(
+    (type) => membershipTypeOptions.find((option) => option.value === type)?.label ?? type
   );
-  // Adds whichever operational types are missing, or clears all three when
+  const operationalSummary =
+    operationalLabels.length > 1
+      ? `${operationalLabels.slice(0, -1).join(', ')} and ${operationalLabels[operationalLabels.length - 1] ?? ''}`
+      : (operationalLabels[0] ?? '');
+  const allOperationalSelected = operationalTypes.every((t) => formData.required_membership_types.includes(t));
+  // Adds whichever operational types are missing, or clears them all when
   // they are already ticked; any other category (Retired, Administrative,
   // Honorary) is left as the officer set it.
   const toggleOperational = () => {
     setFormData((prev) => {
-      const hasAll = OPERATIONAL_MEMBERSHIP_TYPES.every((t) => prev.required_membership_types.includes(t));
+      const hasAll = operationalTypes.every((t) => prev.required_membership_types.includes(t));
       return {
         ...prev,
         required_membership_types: hasAll
-          ? prev.required_membership_types.filter((t) => !OPERATIONAL_MEMBERSHIP_TYPES.includes(t))
+          ? prev.required_membership_types.filter((t) => !operationalTypes.includes(t))
           : [
               ...prev.required_membership_types,
-              ...OPERATIONAL_MEMBERSHIP_TYPES.filter((t) => !prev.required_membership_types.includes(t)),
+              ...operationalTypes.filter((t) => !prev.required_membership_types.includes(t)),
             ],
       };
     });
@@ -1252,8 +1270,8 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                       Operational members
                     </button>
                     <span className="text-theme-text-muted text-xs">
-                      Active, Probationary and Life — the operational members still serving. Tick Retired yourself to
-                      include them.
+                      {operationalSummary} — the operational members still serving. Tick Retired yourself to include
+                      them.
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 md:grid-cols-3" role="group" aria-label="Member categories">
