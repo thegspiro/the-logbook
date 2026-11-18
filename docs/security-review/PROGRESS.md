@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD](https://github.com/thegspiro/the-logbook/pull/TBD)** (branch
+**PR [#4430](https://github.com/thegspiro/the-logbook/pull/4430)** (branch
 `claude/security-review-finance-approvals`): Feature 05 (Finance &
 approvals), pass 16 — watchdog pickup. PR #4359 (Feature 04, Storefront &
 payments, pass 16) had merged before this iteration started. A fresh
