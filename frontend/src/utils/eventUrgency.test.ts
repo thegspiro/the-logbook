@@ -127,6 +127,24 @@ describe('getEventUrgency', () => {
     expect(getEventUrgency(event, NOW)).toBe('routine');
   });
 
+  it("uses the organization's window when one is given", () => {
+    const tenDaysOut = makeEvent({
+      is_mandatory: true,
+      start_datetime: hoursFromNow(10 * 24),
+      end_datetime: hoursFromNow(10 * 24 + 2),
+    });
+    expect(getEventUrgency(tenDaysOut, NOW, 7)).toBe('routine');
+    expect(getEventUrgency(tenDaysOut, NOW, 14)).toBe('action');
+
+    const ninetyDaysOut = makeEvent({
+      is_mandatory: true,
+      start_datetime: hoursFromNow(90 * 24),
+      end_datetime: hoursFromNow(90 * 24 + 2),
+    });
+    expect(getEventUrgency(ninetyDaysOut, NOW)).toBe('routine');
+    expect(getEventUrgency(ninetyDaysOut, NOW, 120)).toBe('action');
+  });
+
   it('still asks for a response beyond the window when the RSVP deadline is within 48 hours', () => {
     const event = makeEvent({
       is_mandatory: true,
