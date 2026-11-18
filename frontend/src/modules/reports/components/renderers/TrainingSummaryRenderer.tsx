@@ -91,6 +91,7 @@ export const TrainingSummaryRenderer: React.FC<Props> = ({ data }) => {
 
       {tab === 'members' && (
         <ReportTable
+          reflow="phone"
           rows={data.entries as unknown as Array<Record<string, unknown>>}
           columns={memberColumns}
           emptyMessage="No training entries found."
@@ -98,6 +99,7 @@ export const TrainingSummaryRenderer: React.FC<Props> = ({ data }) => {
       )}
       {tab === 'courses' && (
         <ReportTable
+          reflow="phone"
           rows={(data.course_breakdown ?? []) as unknown as Array<Record<string, unknown>>}
           columns={courseColumns}
           emptyMessage="No course data found."
@@ -111,6 +113,7 @@ export const TrainingSummaryRenderer: React.FC<Props> = ({ data }) => {
             compliance, see the Training dashboard.
           </p>
           <ReportTable
+            reflow="phone"
             rows={(data.requirement_breakdown ?? []) as unknown as Array<Record<string, unknown>>}
             columns={reqColumns}
             emptyMessage="No requirement data found."

@@ -306,7 +306,11 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
+      # mypy never runs ffmpeg, so this job does not install it: on an image
+      # without it (ubuntu-26.04) that was a ~66 MB download it had no use for.
       - name: Install system dependencies
+        env:
+          INSTALL_MEDIA_TOOLS: "false"
         run: |
           "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
 
@@ -346,7 +350,10 @@ jobs:
         # Not a bare `apt-get update`: that is unbounded, and on 2026-08-19
         # it stalled long enough to consume a whole job budget. The script
         # skips apt when the library is already there and bounds it when it
-        # is not — see its header for the incident.
+        # is not — see its header for the incident. Bandit and pip-audit never
+        # run ffmpeg, so this job does not install it.
+        env:
+          INSTALL_MEDIA_TOOLS: "false"
         run: |
           "$GITHUB_WORKSPACE/.github/scripts/install-system-deps.sh"
 
