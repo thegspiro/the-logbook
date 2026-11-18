@@ -174,6 +174,7 @@ class TestEventSettingsDefaults:
             "qr_code",
             "cancellation",
             "attendance_request_fallback_positions",
+            "mandatory_rsvp_window_days",
         }
         assert set(EVENT_SETTINGS_DEFAULTS.keys()) == expected_keys
 
@@ -216,3 +217,71 @@ class TestVisibleEventTypes:
             {"value": "cadet", "label": "Cadet"},
             {"value": "active", "label": "Active Member"},
         ]
+
+
+class TestMandatoryRsvpWindow:
+    """The org setting for how far ahead mandatory events ask for an RSVP."""
+
+    @pytest.mark.asyncio
+    async def test_members_get_the_default_when_unset(self):
+        from app.api.v1.endpoints.events import get_visible_event_types
+
+        org = _make_org(initial_settings={})
+        result = await get_visible_event_types(
+            db=_make_db(org), current_user=_make_user()
+        )
+
+        assert result["mandatory_rsvp_window_days"] == 60
+
+    @pytest.mark.asyncio
+    async def test_members_get_the_configured_window(self):
+        from app.api.v1.endpoints.events import get_visible_event_types
+
+        org = _make_org(initial_settings={"events": {"mandatory_rsvp_window_days": 30}})
+        result = await get_visible_event_types(
+            db=_make_db(org), current_user=_make_user()
+        )
+
+        assert result["mandatory_rsvp_window_days"] == 30
+
+    @pytest.mark.parametrize("stored", [0, 366, -5, "30", None, True, 12.5])
+    def test_a_stored_value_outside_the_range_reads_as_the_default(self, stored):
+        from app.api.v1.endpoints.events import mandatory_rsvp_window_days
+
+        settings = {"events": {"mandatory_rsvp_window_days": stored}}
+        assert mandatory_rsvp_window_days(settings) == 60
+
+    @pytest.mark.parametrize("value", [0, 366, None])
+    def test_update_rejects_values_outside_the_range(self, value):
+        from pydantic import ValidationError
+
+        from app.schemas.event import EventSettingsUpdate
+
+        with pytest.raises(ValidationError):
+            EventSettingsUpdate(mandatory_rsvp_window_days=value)
+
+    @pytest.mark.asyncio
+    async def test_update_stores_the_window_and_settings_serve_it(self):
+        from app.api.v1.endpoints.events import (
+            get_event_settings,
+            update_event_settings,
+        )
+        from app.schemas.event import EventSettingsUpdate
+
+        org = _make_org(
+            initial_settings={"events": {"visible_event_types": ["training"]}}
+        )
+        db = _make_db(org)
+        user = _make_user()
+
+        with patch("app.api.v1.endpoints.events.log_audit_event", new=AsyncMock()):
+            await update_event_settings(
+                updates=EventSettingsUpdate(mandatory_rsvp_window_days=90),
+                db=db,
+                current_user=user,
+            )
+
+        assert org.settings["events"]["mandatory_rsvp_window_days"] == 90
+        assert org.settings["events"]["visible_event_types"] == ["training"]
+        served = await get_event_settings(db=db, current_user=user)
+        assert served["mandatory_rsvp_window_days"] == 90
