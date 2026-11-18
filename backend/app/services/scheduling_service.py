@@ -9968,6 +9968,7 @@ class SchedulingService:
             "all_time": _fold(list(months_by_key.values())),
             "current_month": _bucket(current_key),
             "previous_month": _bucket(previous_key),
+            "history": [months_by_key[key] for key in sorted(months_by_key)],
         }
 
     async def get_shift_coverage_report(
