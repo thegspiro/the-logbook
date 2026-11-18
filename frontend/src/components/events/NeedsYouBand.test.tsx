@@ -60,6 +60,7 @@ const renderBand = (props: Partial<React.ComponentProps<typeof NeedsYouBand>> = 
       pastMandatoryEvents={[]}
       timezone="UTC"
       now={NOW}
+      mandatoryRsvpWindowDays={60}
       rsvpLoading={{}}
       onQuickRSVP={onQuickRSVP}
       onShowAll={onShowAll}
@@ -96,6 +97,23 @@ describe('NeedsYouBand', () => {
   it('leaves routine events out of the band', () => {
     renderBand({ events: [actionEvent, routineEvent] });
     expect(screen.queryByText(/Pancake Breakfast/)).not.toBeInTheDocument();
+  });
+
+  it("leaves out a mandatory event beyond the organization's response window", () => {
+    const tenDaysOut = makeEvent({
+      id: 'later-1',
+      title: 'Hose Testing',
+      is_mandatory: true,
+      start_datetime: hoursFromNow(10 * 24),
+      end_datetime: hoursFromNow(10 * 24 + 2),
+    });
+
+    const { unmount } = renderBand({ events: [tenDaysOut], mandatoryRsvpWindowDays: 7 });
+    expect(screen.queryByTestId('needs-you-band')).not.toBeInTheDocument();
+    unmount();
+
+    renderBand({ events: [tenDaysOut], mandatoryRsvpWindowDays: 14 });
+    expect(screen.getByTestId('needs-you-band')).toHaveTextContent('Hose Testing');
   });
 
   it('orders live before action before missed', () => {

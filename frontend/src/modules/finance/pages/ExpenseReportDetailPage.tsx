@@ -517,8 +517,11 @@ const ExpenseReportDetailPage: React.FC = () => {
             </p>
           )}
           {er.lineItems.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            // The receipt and functional-class controls and two 44px actions hold
+            // the table at ~33rem even with every text cell wrapped, past the
+            // narrow tier's 32rem, so it reflows to cards under the wide tier.
+            <div className="rwd-table-container overflow-x-auto">
+              <table className="rwd-table rwd-table-wide w-full">
                 <thead className="border-theme-surface-border border-b">
                   <tr>
                     <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
@@ -543,7 +546,7 @@ const ExpenseReportDetailPage: React.FC = () => {
                 <tbody className="divide-theme-surface-border divide-y">
                   {er.lineItems.map((item) => (
                     <tr key={item.id}>
-                      <td className="text-theme-text-primary px-4 py-3 text-sm">
+                      <td data-label="Description" className="rwd-table-lead text-theme-text-primary px-4 py-3 text-sm">
                         {item.description}
                         {item.substantiatedLate && (
                           <div className="mt-1">
@@ -567,30 +570,32 @@ const ExpenseReportDetailPage: React.FC = () => {
                           </ul>
                         )}
                       </td>
-                      <td className="text-theme-text-secondary px-4 py-3 text-sm">
-                        <span className="capitalize">
-                          {item.expenseType ? (EXPENSE_TYPE_LABELS[item.expenseType] ?? item.expenseType) : '--'}
-                        </span>
-                        <div className="mt-1">
-                          <FunctionalClassControl
-                            compact
-                            value={item.functionalClass}
-                            effective={item.effectiveFunctionalClass}
-                            subject={item.description}
-                            onChange={async (next) => {
-                              await functionalClassService.setExpenseLine(er.id, item.id, next);
-                              await fetchExpenseReport(er.id);
-                            }}
-                          />
+                      <td data-label="Type" className="text-theme-text-secondary px-4 py-3 text-sm">
+                        <div className="min-w-0">
+                          <span className="capitalize">
+                            {item.expenseType ? (EXPENSE_TYPE_LABELS[item.expenseType] ?? item.expenseType) : '--'}
+                          </span>
+                          <div className="mt-1">
+                            <FunctionalClassControl
+                              compact
+                              value={item.functionalClass}
+                              effective={item.effectiveFunctionalClass}
+                              subject={item.description}
+                              onChange={async (next) => {
+                                await functionalClassService.setExpenseLine(er.id, item.id, next);
+                                await fetchExpenseReport(er.id);
+                              }}
+                            />
+                          </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm">
+                      <td data-label="Receipt" className="px-4 py-3 text-sm">
                         {hasTripLog(item) ? (
                           <span className="text-theme-text-secondary text-xs">
                             Trip log: {item.totalMiles ?? ''} mi at {formatCurrency(item.mileageRate ?? null)}/mi
                           </span>
                         ) : canAttachReceipt || item.receiptFileUrl || item.receiptUrl ? (
-                          <>
+                          <div className="min-w-0">
                             <ReceiptControl
                               subject={item.description}
                               receiptFileUrl={item.receiptFileUrl}
@@ -616,16 +621,19 @@ const ExpenseReportDetailPage: React.FC = () => {
                                 await fetchExpenseReport(er.id);
                               }}
                             />
-                          </>
+                          </div>
                         ) : (
                           <span className="text-theme-text-muted">--</span>
                         )}
                       </td>
-                      <td className="text-theme-text-primary px-4 py-3 text-right text-sm">
+                      <td
+                        data-label="Amount"
+                        className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap"
+                      >
                         {formatCurrency(item.amount)}
                       </td>
                       {canEditLines && (
-                        <td className="px-2 py-3 text-right whitespace-nowrap">
+                        <td data-label="Actions" className="px-2 py-3 text-right whitespace-nowrap">
                           <button
                             type="button"
                             className="btn-icon text-theme-text-secondary hover:text-theme-text-primary"
@@ -653,7 +661,10 @@ const ExpenseReportDetailPage: React.FC = () => {
                     <td colSpan={3} className="text-theme-text-primary px-4 py-3 text-sm font-semibold">
                       Total
                     </td>
-                    <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold">
+                    <td
+                      data-label="Total"
+                      className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold"
+                    >
                       {formatCurrency(er.totalAmount)}
                     </td>
                     {canEditLines && <td />}

@@ -35,6 +35,8 @@ import { RunoffChain } from '../modules/elections/components/RunoffChain';
 import { PublishResultsPanel } from '../modules/elections/components/PublishResultsPanel';
 import { NominationsAnnouncementStatus } from '../modules/elections/components/NominationsAnnouncementStatus';
 import { ElectionHeaderCard } from '../modules/elections/components/ElectionHeaderCard';
+import { ElectionPhoneDashboard, type DashboardAction } from '../modules/elections/components/ElectionPhoneDashboard';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import {
   electionSectionPath,
   isElectionSection,
@@ -47,7 +49,7 @@ import { ElectionStatus, MeetingKind, VotingMethod } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { Breadcrumbs, PromptDialog } from '../components/ux';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
-import { Vote } from 'lucide-react';
+import { BellRing, ClipboardCheck, Clock, FileText, Mail, Megaphone, Vote } from 'lucide-react';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
@@ -225,6 +227,9 @@ export const ElectionDetailPage: React.FC = () => {
   const { checkPermission, user: currentUser } = useAuthStore();
   const canManage = checkPermission('elections.manage');
   const tz = useTimezone();
+  // Below the md breakpoint, where the bottom navigation shows: a phone.
+  const isPhone = useMediaQuery('(max-width: 767px)');
+  const [showPhoneDetails, setShowPhoneDetails] = useState(false);
 
   useEffect(() => {
     // Settings require elections.manage; members keep the all-on defaults
@@ -1160,6 +1165,83 @@ export const ElectionDetailPage: React.FC = () => {
   const showsSection = (id: ElectionSection) =>
     visibleSectionIds.has(id) && (activeSection === id || (!canManage && activeSection === null));
 
+  // The step that moves this election on, wherever the page offers it.
+  const primaryAction: { label: string; onClick: () => void } | null = !canManage
+    ? null
+    : election.status === ElectionStatus.DRAFT
+      ? { label: 'Open Election', onClick: () => void handleOpenElection() }
+      : election.status === ElectionStatus.NOMINATIONS
+        ? { label: 'Close Nominations', onClick: () => void handleCloseNominations() }
+        : election.status === ElectionStatus.OPEN
+          ? { label: 'Close Election', onClick: () => void handleCloseElection() }
+          : election.status === ElectionStatus.CLOSED
+            ? { label: 'Certified Results (PDF)', onClick: () => void handleDownloadCertifiedResults() }
+            : null;
+
+  // A phone's Overview, for whoever runs the election, is the meeting-night
+  // dashboard; the full Overview is under its More list.
+  const phoneDashboard = canManage && isPhone && activeSection === null;
+  const showOverview = activeSection === null && (!phoneDashboard || showPhoneDetails);
+
+  // What gets done on the night, as the dashboard's rows. Each is a control the
+  // Overview already offers, under the same conditions.
+  const dashboardActions: DashboardAction[] = [];
+  if (election.status === ElectionStatus.OPEN) {
+    if (canEmailBallots) {
+      dashboardActions.push({
+        key: 'send',
+        label: election.email_sent ? 'Resend ballot emails' : 'Send ballot emails',
+        icon: Mail,
+        onClick: () => setShowSendEmailModal(true),
+      });
+    }
+    if (featureFlags.reminders_enabled && election.email_sent) {
+      dashboardActions.push({
+        key: 'remind',
+        label: isLoadingNonVoters ? 'Loading non-voters…' : 'Remind non-voters',
+        icon: BellRing,
+        onClick: () => void handleOpenRemindModal(),
+        disabled: isLoadingNonVoters,
+      });
+    }
+    if (featureFlags.paper_ballots_enabled) {
+      dashboardActions.push({
+        key: 'paper',
+        label: 'Record paper ballots',
+        icon: FileText,
+        onClick: () => void handleShowPaperBallots(),
+      });
+    }
+    if (electionId) {
+      dashboardActions.push({
+        key: 'checkin',
+        label: 'Check members in',
+        icon: ClipboardCheck,
+        to: electionSectionPath(electionId, 'attendance'),
+      });
+    }
+    dashboardActions.push({
+      key: 'extend',
+      label: 'Extend voting',
+      icon: Clock,
+      onClick: () => setShowExtendModal(true),
+    });
+  } else if (election.status === ElectionStatus.NOMINATIONS && electionId) {
+    dashboardActions.push({
+      key: 'nominations',
+      label: 'Review nominations',
+      icon: Megaphone,
+      to: electionSectionPath(electionId, 'nominations'),
+    });
+  } else if (election.status === ElectionStatus.CLOSED && electionId) {
+    dashboardActions.push({
+      key: 'attendance',
+      label: 'Who attended',
+      icon: ClipboardCheck,
+      to: electionSectionPath(electionId, 'attendance'),
+    });
+  }
+
   return (
     <div className="mx-auto max-w-7xl">
       <div>
@@ -1202,52 +1284,30 @@ export const ElectionDetailPage: React.FC = () => {
               </span>
               {/* The one step that moves this election forward, kept in the
                   header so it is in reach from every section. The rest of the
-                  controls stay on the Overview with their explanations. */}
-              {canManage && election.status === ElectionStatus.DRAFT && (
-                <button
-                  onClick={() => {
-                    void handleOpenElection();
-                  }}
-                  className="btn-primary text-sm"
-                >
-                  Open Election
-                </button>
-              )}
-              {canManage && election.status === ElectionStatus.NOMINATIONS && (
-                <button
-                  onClick={() => {
-                    void handleCloseNominations();
-                  }}
-                  className="btn-primary text-sm"
-                >
-                  Close Nominations
-                </button>
-              )}
-              {canManage && election.status === ElectionStatus.OPEN && (
-                <button
-                  onClick={() => {
-                    void handleCloseElection();
-                  }}
-                  className="btn-primary text-sm"
-                >
-                  Close Election
-                </button>
-              )}
-              {canManage && election.status === ElectionStatus.CLOSED && (
-                <button
-                  onClick={() => {
-                    void handleDownloadCertifiedResults();
-                  }}
-                  className="btn-primary text-sm"
-                >
-                  Certified Results (PDF)
+                  controls stay on the Overview with their explanations. On a
+                  phone's Overview the dashboard carries it instead. */}
+              {primaryAction && !phoneDashboard && (
+                <button onClick={primaryAction.onClick} className="btn-primary text-sm">
+                  {primaryAction.label}
                 </button>
               )}
             </>
           }
         />
 
-        {electionId && (
+        {electionId && phoneDashboard && (
+          <ElectionPhoneDashboard
+            electionId={electionId}
+            election={election}
+            tz={tz}
+            primaryAction={primaryAction}
+            actions={dashboardActions}
+            candidateCount={candidateCount}
+            showDetails={showPhoneDetails}
+            onToggleDetails={() => setShowPhoneDetails((shown) => !shown)}
+          />
+        )}
+        {electionId && !phoneDashboard && (
           <ElectionHeaderCard
             electionId={electionId}
             election={election}
@@ -1376,7 +1436,7 @@ export const ElectionDetailPage: React.FC = () => {
           </div>
         )}
 
-        {activeSection === null && (
+        {showOverview && (
           <>
             {/* Election Info */}
             <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-sm backdrop-blur-xs">
@@ -2219,7 +2279,7 @@ export const ElectionDetailPage: React.FC = () => {
                       <p className="text-theme-text-muted text-sm">No votes have been voided.</p>
                     ) : (
                       <div className="overflow-x-auto">
-                        <table className="min-w-full text-sm" aria-label="Voided votes">
+                        <table className="rwd-table min-w-full text-sm" aria-label="Voided votes">
                           <thead className="bg-theme-surface-secondary">
                             <tr>
                               <th scope="col" className="text-theme-text-muted px-3 py-2 text-left text-xs font-medium">
@@ -2239,14 +2299,20 @@ export const ElectionDetailPage: React.FC = () => {
                           <tbody className="divide-theme-surface-border divide-y">
                             {groupVoidedVotes(forensicsReport.deleted_votes.records).map((v) => (
                               <tr key={v.key}>
-                                <td className="px-3 py-2 font-mono text-xs">
+                                <td data-label="Vote ID" className="px-3 py-2 font-mono text-xs">
                                   {v.batch_size !== null
                                     ? `paper batch voided (${v.batch_size} ballot${v.batch_size === 1 ? '' : 's'})`
                                     : `${v.vote_id.slice(0, 8)}...`}
                                 </td>
-                                <td className="px-3 py-2">{v.position || '—'}</td>
-                                <td className="px-3 py-2">{v.deletion_reason || '—'}</td>
-                                <td className="px-3 py-2">{v.deleted_at ? formatDateTime(v.deleted_at, tz) : '—'}</td>
+                                <td data-label="Position" className="px-3 py-2">
+                                  {v.position || '—'}
+                                </td>
+                                <td data-label="Reason" className="px-3 py-2">
+                                  {v.deletion_reason || '—'}
+                                </td>
+                                <td data-label="Voided At" className="px-3 py-2">
+                                  {v.deleted_at ? formatDateTime(v.deleted_at, tz) : '—'}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -2365,7 +2431,7 @@ export const ElectionDetailPage: React.FC = () => {
                         <p className="text-theme-text-muted text-sm">No audit entries.</p>
                       ) : (
                         <div className="max-h-64 overflow-x-auto overflow-y-auto">
-                          <table className="min-w-full text-sm" aria-label="Audit log entries">
+                          <table className="rwd-table min-w-full text-sm" aria-label="Audit log entries">
                             <thead className="surface-secondary-opaque sticky top-0">
                               <tr>
                                 <th
@@ -2391,11 +2457,13 @@ export const ElectionDetailPage: React.FC = () => {
                             <tbody className="divide-theme-surface-border divide-y">
                               {(forensicsReport.audit_log.entries || []).slice(0, 50).map((entry, i) => (
                                 <tr key={entry.id || i}>
-                                  <td className="text-theme-text-muted px-3 py-2 text-xs whitespace-nowrap">
+                                  <td data-label="Time" className="text-theme-text-muted px-3 py-2 text-xs">
                                     {entry.timestamp ? formatDateTime(entry.timestamp, tz) : '—'}
                                   </td>
-                                  <td className="px-3 py-2 text-xs">{entry.event_type}</td>
-                                  <td className="px-3 py-2">
+                                  <td data-label="Event" className="px-3 py-2 text-xs">
+                                    <div className="min-w-0 break-all">{entry.event_type}</div>
+                                  </td>
+                                  <td data-label="Severity" className="px-3 py-2">
                                     <span
                                       className={`rounded px-2 py-0.5 text-xs ${
                                         entry.severity === 'critical'
