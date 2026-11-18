@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**390 tables · 6204 columns · 1300 foreign keys**
+**390 tables · 6205 columns · 1300 foreign keys**
 
 ---
 
@@ -796,7 +796,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`course_cohorts`](#course_cohorts) | `CourseCohort` | 24 | Course Cohort model — one scheduled run of a multi-class course. |
 | [`external_category_mappings`](#external_category_mappings) | `ExternalCategoryMapping` | 12 | External Category Mapping model |
 | [`external_course_mappings`](#external_course_mappings) | `ExternalCourseMapping` | 11 | Maps a provider's course id to a course in the department's library. |
-| [`external_training_imports`](#external_training_imports) | `ExternalTrainingImport` | 25 | External Training Import model |
+| [`external_training_imports`](#external_training_imports) | `ExternalTrainingImport` | 26 | External Training Import model |
 | [`external_training_providers`](#external_training_providers) | `ExternalTrainingProvider` | 24 | External Training Provider model |
 | [`external_training_sync_logs`](#external_training_sync_logs) | `ExternalTrainingSyncLog` | 18 | External Training Sync Log model |
 | [`external_user_mappings`](#external_user_mappings) | `ExternalUserMapping` | 13 | External User Mapping model |
@@ -11177,6 +11177,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `description` | TEXT | yes |  |  |  |
 | `duration_minutes` | INTEGER | yes |  |  |  |
 | `credit_hours` | FLOAT | yes |  |  |  |
+| `course_hours_credited` | FLOAT | yes |  |  |  |
 | `completion_date` | DATETIME | yes |  |  |  |
 | `score` | FLOAT | yes |  |  |  |
 | `passed` | BOOL | yes |  |  |  |

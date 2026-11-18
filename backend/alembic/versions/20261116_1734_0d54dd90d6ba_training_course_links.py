@@ -22,7 +22,7 @@ The downgrade drops both tables, losing the link history; the records keep
 their courses either way.
 
 Revision ID: 0d54dd90d6ba
-Revises: 053d3e96b4fa
+Revises: bbeb4867d393
 Create Date: 2026-11-16 17:34:05.459519
 
 """
@@ -34,7 +34,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "0d54dd90d6ba"
-down_revision: Union[str, None] = "053d3e96b4fa"
+down_revision: Union[str, None] = "bbeb4867d393"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -331,57 +331,65 @@ async def apply_course_mapping(
     # Hours follow the course onto records whose completion the provider
     # reported with no hours (Target Solutions sends 0 for a policy
     # acknowledgment). Run before the course link moves, so it reaches the
-    # same records the link does. A record keeps its hours when the provider
-    # reported some, or when they are not a pair a mapping wrote: zero hours
-    # and no credit, or the previous course's hours in both fields. The
-    # record screen edits credit hours apart from hours completed, so both
-    # fields are checked; matching one alone would replace an officer's
-    # credit. Unmapping, or mapping to a course with no hours, takes a credit
-    # the previous course gave back to zero, as a fresh import would have it.
-    #
-    # It runs even when both courses credit the same: a record imported while
-    # its course credited nothing is still at zero, and the new course's
-    # hours are what it should now carry.
-    previous_hours = await mapped_course_hours(db, previous, mapping.organization_id)
+    # same records the link does. A record changes only while it holds a pair
+    # a mapping wrote: zero hours and no credit, or in both fields the hours
+    # its import recorded taking from the course (course_hours_credited).
+    # That recorded value, not the previous course's settings, is the
+    # comparison: a course's hours can be edited after crediting, and
+    # against the new figure the hour it gave would read as an officer's.
+    # The record screen edits credit apart from hours, so both are checked.
+    # Unmapping, or mapping to a course with no hours, takes a course's
+    # credit back to zero, as a fresh import would have it; it runs even
+    # when both courses credit the same, so a record imported while its
+    # course credited nothing still catches up.
     new_hours = await mapped_course_hours(
         db, internal_course_id, mapping.organization_id
     )
-    if previous_hours is not None or new_hours is not None:
-        hourless_import = (
-            select(ExternalTrainingImport.training_record_id)
+    record_credit = func.coalesce(TrainingRecord.credit_hours, 0)
+    awarded = ExternalTrainingImport.course_hours_credited
+    written_by_mapping: ColumnElement[bool] = (
+        (TrainingRecord.hours_completed <= 0) & (record_credit <= 0)
+    ) | (
+        awarded.isnot(None)
+        & (func.abs(TrainingRecord.hours_completed - awarded) < _HOURS_TOLERANCE)
+        & (func.abs(record_credit - awarded) < _HOURS_TOLERANCE)
+    )
+    credited = (
+        await db.execute(
+            select(ExternalTrainingImport.id, TrainingRecord.id)
+            .join(
+                TrainingRecord,
+                TrainingRecord.id == ExternalTrainingImport.training_record_id,
+            )
             .where(ExternalTrainingImport.provider_id == mapping.provider_id)
             .where(ExternalTrainingImport.organization_id == mapping.organization_id)
             .where(
                 ExternalTrainingImport.external_course_id == mapping.external_course_id
             )
-            .where(ExternalTrainingImport.training_record_id.isnot(None))
             .where(
                 func.coalesce(ExternalTrainingImport.credit_hours, 0) <= 0,
                 func.coalesce(ExternalTrainingImport.duration_minutes, 0) <= 0,
             )
+            .where(TrainingRecord.organization_id == mapping.organization_id)
+            .where(unchanged_link)
+            .where(written_by_mapping)
         )
-        record_credit = func.coalesce(TrainingRecord.credit_hours, 0)
-        credited_by_mapping: ColumnElement[bool] = (
-            TrainingRecord.hours_completed <= 0
-        ) & (record_credit <= 0)
-        if previous_hours is not None:
-            credited_by_mapping = credited_by_mapping | (
-                (
-                    func.abs(TrainingRecord.hours_completed - previous_hours)
-                    < _HOURS_TOLERANCE
-                )
-                & (func.abs(record_credit - previous_hours) < _HOURS_TOLERANCE)
-            )
+    ).all()
+    if credited:
         await db.execute(
             update(TrainingRecord)
             .where(TrainingRecord.organization_id == mapping.organization_id)
-            .where(TrainingRecord.id.in_(hourless_import))
-            .where(unchanged_link)
-            .where(credited_by_mapping)
-            .values(
-                hours_completed=new_hours or 0.0,
-                credit_hours=new_hours,
+            .where(TrainingRecord.id.in_([record_id for _, record_id in credited]))
+            .values(hours_completed=new_hours or 0.0, credit_hours=new_hours)
+            .execution_options(synchronize_session=False)
+        )
+        await db.execute(
+            update(ExternalTrainingImport)
+            .where(ExternalTrainingImport.organization_id == mapping.organization_id)
+            .where(
+                ExternalTrainingImport.id.in_([import_id for import_id, _ in credited])
             )
+            .values(course_hours_credited=new_hours)
             .execution_options(synchronize_session=False)
         )
 
