@@ -147,25 +147,39 @@ staff a 24/48 as two 12-hour halves.
 the pattern form warns under the template picker when the chosen template's
 `duration_hours` differs. A warning, not a block, for the halves case above.
 
-### W32-6 — NIT — Patterns can be made from two places — OPEN
+### W32-6 — NIT — Patterns can be made from two places — ✅ FIXED
 
-The Templates section carries its own "Templates / Patterns" tabs, with a
+The Templates section carried its own "Templates / Patterns" tabs, with a
 second pattern form (`PatternFormModal`) and generate modal beside the
-Patterns section's. Both now report generation the same way (W32-1). Merging
-them is a restructure, not a repair.
+Patterns section's. Only that second form could edit a pattern, so it could
+not simply be removed. Owner decision (2026-11-16): one place for patterns.
+
+- Planning › Patterns (`PatternsTab`) has an **Edit** action on each pattern,
+  opening `PatternFormModal` in edit mode, so editing behaves as before:
+  blanks clear, a refused field is flagged while the rest saves, and an
+  inactive template is warned about.
+- Planning › Templates (`ShiftTemplatesPage`) is templates only. Its tabs,
+  pattern list, pattern forms and generate modal are gone; the header points
+  to Shift patterns. `GenerateShiftsModal`, used nowhere else, is deleted.
+
+Covered by `PatternsTab.test.tsx` (edit, partial save, inactive-template
+warning; the edit cases failed before the change) and
+`ShiftTemplatesPage.test.tsx` (no pattern tab or form, the link, no pattern
+fetch; failed against the old page). The phone presentation and accessibility
+sweeps pass on both routes, with the templates route's AAA count unchanged.
 
 ## Checklist
 
-| Section                 | Result                                                                    |
-| ----------------------- | ------------------------------------------------------------------------- |
-| 1. The job gets done    | ✅ template → pattern → a month of shifts members can sign up for         |
-| 2. The right people     | ✅ member 403 on writes, Access Denied on the pages                       |
-| 3. Wrong input, failure | ✅ three double-clicks acted once; fixed W32-2 (an unexplained zero)      |
-| 4. Browser signals      | ✅ clean `events`                                                         |
-| 5. Coming back to it    | ✅ template, pattern and shifts persist; a re-run adds no duplicates      |
-| 6. On a phone           | ✅ both screens at 390×844; fixed W32-3's duplicate "Generate"            |
-| 7. Everyone can use it  | Fixed W32-3, W32-4                                                        |
-| 8. What happens around  | Fixed W32-1 (driver warnings dropped); W32-5 fixed 2026-10-20; W32-6 open |
+| Section                 | Result                                                                     |
+| ----------------------- | -------------------------------------------------------------------------- |
+| 1. The job gets done    | ✅ template → pattern → a month of shifts members can sign up for          |
+| 2. The right people     | ✅ member 403 on writes, Access Denied on the pages                        |
+| 3. Wrong input, failure | ✅ three double-clicks acted once; fixed W32-2 (an unexplained zero)       |
+| 4. Browser signals      | ✅ clean `events`                                                          |
+| 5. Coming back to it    | ✅ template, pattern and shifts persist; a re-run adds no duplicates       |
+| 6. On a phone           | ✅ both screens at 390×844; fixed W32-3's duplicate "Generate"             |
+| 7. Everyone can use it  | Fixed W32-3, W32-4                                                         |
+| 8. What happens around  | Fixed W32-1 (driver warnings dropped); W32-5 fixed 2026-10-20; W32-6 fixed |
 
 ## Completion gate
 

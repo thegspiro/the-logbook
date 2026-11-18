@@ -5,6 +5,15 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  # A merge queue tests each pull request on top of the ones queued ahead of
+  # it, and waits for the required checks on that combined commit. Without
+  # this trigger nothing starts them, and every queued pull request sits until
+  # the queue times it out. GitHub offers a merge queue only to repositories
+  # owned by an organization, so nothing sends this event while this one is
+  # owned by a personal account; see "Migration Chain — Branches Need Not Be
+  # Up to Date to Merge" in docs/KNOWN_LIMITATIONS.md.
+  merge_group:
+    types: [checks_requested]
 
 # No job here needs to write to the repository, so drop the token to
 # read-only at the workflow level (matching secret-scan, supply-chain and
@@ -13,32 +22,41 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  # PR pushes share a group per ref, so a superseded push is cancelled. Every
-  # commit on main gets a group of its own, so every main commit ends up with
-  # a CI record. Matches secret-scan and supply-chain.
-  #
-  # `cancel-in-progress: false` is NOT enough on its own, which is what this
-  # used to rely on. GitHub keeps at most one running and one *pending* run
-  # per group, so when three or more main runs overlap each new arrival evicts
-  # the pending one and that commit is never built. That is not theoretical:
-  # on 2026-08-23, 8c61c948 (#1709) merged to main and its run was evicted by
-  # the next merge 17 seconds later, leaving that commit with no CI record at
-  # all. Keying on the SHA gives each commit its own group, where there is
-  # nothing to evict it from.
-  #
-  # The cost is real and was accepted deliberately: a merge train of N commits
-  # now runs N full 13-job matrices concurrently instead of collapsing to two.
-  # That competes with PR runs for the same runner pool, so PR latency is the
-  # thing to watch. If it degrades, the fix is to make main's run cheaper (a
-  # reduced job set whose only purpose is the record) rather than to go back
-  # to a shared group — a gap in the record is not recoverable after the fact,
-  # and the 2026-08-23 incident is what it costs.
-  #
-  # `cancel-in-progress` still governs PR refs; for main it is now moot, since
-  # a per-commit group only ever holds one run.
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+# Concurrency is set per job, not here. Every job below carries the same
+# `concurrency:` block, differing only in its own id; scripts/check_ci_gate.py
+# asserts that it does and that no workflow-level block comes back.
+#
+# A workflow-level group held a pull request's new run until EVERY job of the
+# run it replaced had finished, and one never finishes quickly: `ci-success`
+# runs `if: always()`, so it survives the cancellation, then queues for a
+# runner like any other job. While runners were backlogged in November 2026
+# that one queued job held new runs at "pending" for hours: #4375's run waited
+# five and a half hours on 2026-11-17 behind its own replaced run's gate. Per
+# job, each job of the new run cancels only its own counterpart in the old
+# one, so the new run starts at once. The gate stays `always()`: a gate that
+# a cancel could skip would report "skipped", which branch protection counts
+# as a pass.
+#
+# Within a job's group, PR pushes share it per ref, so a superseded push is
+# cancelled. Every commit on main gets a group of its own, so every main
+# commit ends up with a CI record. `cancel-in-progress: false` was not enough
+# on its own: GitHub keeps at most one running and one *pending* entry per
+# group, so when three or more main runs overlapped each new arrival evicted
+# the pending one and that commit was never built. On 2026-08-23, 8c61c948
+# (#1709) merged to main and its run was evicted by the next merge 17 seconds
+# later, leaving that commit with no CI record at all. Keying on the SHA gives
+# each commit its own group, where there is nothing to evict it from.
+#
+# The cost was accepted deliberately: a merge train of N commits runs N full
+# job sets concurrently, competing with PR runs for the same runner pool. If
+# PR latency degrades, the fix is to make main's run cheaper (a reduced job
+# set whose only purpose is the record) rather than to go back to a shared
+# group — a gap in the record is not recoverable after the fact.
+#
+# `strategy.job-index` keeps the legs of a matrix job apart (0 for a job with
+# no matrix); without it the three Safari shards would cancel one another.
+# The job id is written out because `github.job` is not available to a job's
+# `concurrency:` key.
 
 # Every job below sets timeout-minutes. GitHub's default is 360 minutes, which
 # is not a safety net — on 2026-08-17 the MariaDB contract job hung in
@@ -67,10 +85,14 @@ jobs:
   # NOTE this cannot *prevent* the fork. A pull request is checked against the
   # main that existed when its run started, and GitHub does not re-run it when
   # main moves, so a PR validated yesterday can still fork main when merged
-  # today. Only branch protection's "Require branches to be up to date before
-  # merging" closes that gap; this job is what catches it the moment it happens.
+  # today. Only a merge queue, or branch protection's "Require branches to be up
+  # to date before merging", closes that gap; this job is what catches it the
+  # moment it happens.
   migration-chain:
     name: Migration Chain
+    concurrency:
+      group: ${{ github.workflow }}-migration-chain-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     defaults:
@@ -93,6 +115,9 @@ jobs:
 
   backend-lint:
     name: Backend Lint
+    concurrency:
+      group: ${{ github.workflow }}-backend-lint-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -264,6 +289,9 @@ jobs:
 
   backend-typecheck:
     name: Backend Type Check
+    concurrency:
+      group: ${{ github.workflow }}-backend-typecheck-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -297,6 +325,9 @@ jobs:
 
   backend-security:
     name: Backend Security Scan
+    concurrency:
+      group: ${{ github.workflow }}-backend-security-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -361,6 +392,9 @@ jobs:
 
   backend-test:
     name: Backend Unit Tests
+    concurrency:
+      group: ${{ github.workflow }}-backend-test-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     # The suite itself now runs ~17-18 minutes (18,776 tests), and checkout +
     # dependency install + the post-test coverage/schema-doc steps eat the
@@ -478,6 +512,9 @@ jobs:
 
   backend-test-integration:
     name: Backend Integration Tests (${{ matrix.db.name }})
+    concurrency:
+      group: ${{ github.workflow }}-backend-test-integration-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     # 30 left no headroom: on 2026-10-27 the MySQL leg took 23, 25, 28 and 30
     # minutes on healthy runs and was killed at 30m30s on #3743 with pytest
@@ -662,6 +699,9 @@ jobs:
 
   backend-test-contract:
     name: Backend API Contract Tests (${{ matrix.db.name }})
+    concurrency:
+      group: ${{ github.workflow }}-backend-test-contract-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # No `needs:` — see the note on backend-test-integration. This was behind
@@ -786,6 +826,9 @@ jobs:
   # ──────────────────────────────────────────────
   docker-build:
     name: Docker Image Build & Container Tests
+    concurrency:
+      group: ${{ github.workflow }}-docker-build-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     # 45, not 30: TestCombinedImage builds the backend and frontend a second
     # time on a fresh docker-container builder (the driver the release
@@ -881,6 +924,9 @@ jobs:
   # report "Frontend Checks failed" having never built the app at all.
   frontend-checks:
     name: Frontend Lint, Typecheck & Build
+    concurrency:
+      group: ${{ github.workflow }}-frontend-checks-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -934,6 +980,9 @@ jobs:
 
   frontend-test:
     name: Frontend Tests
+    concurrency:
+      group: ${{ github.workflow }}-frontend-test-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     # Coverage instruments the entire 414-file source denominator and the
     # current 5,447-test suite can take just over 25 minutes on a two-core
@@ -989,6 +1038,9 @@ jobs:
 
   frontend-e2e:
     name: Frontend E2E (${{ matrix.leg.name }})
+    concurrency:
+      group: ${{ github.workflow }}-frontend-e2e-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     # Derived, not chosen: the cap must exceed the largest per-test budget in any
     # leg plus that leg's setup, or it cancels the job before the test can time
@@ -1179,6 +1231,9 @@ jobs:
   # the other.
   frontend-e2e-safari:
     name: Frontend E2E (Mobile Safari ${{ matrix.shard }}/3)
+    concurrency:
+      group: ${{ github.workflow }}-frontend-e2e-safari-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -1297,6 +1352,9 @@ jobs:
   # one leg the odd one out.
   frontend-pwa:
     name: Frontend PWA Smoke Test
+    concurrency:
+      group: ${{ github.workflow }}-frontend-pwa-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -1340,6 +1398,9 @@ jobs:
   # ──────────────────────────────────────────────
   docs-links:
     name: Docs Link Check
+    concurrency:
+      group: ${{ github.workflow }}-docs-links-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -1424,6 +1485,9 @@ jobs:
   # give the skipped job an `if:` that this step tolerates explicitly.
   ci-success:
     name: CI Success
+    concurrency:
+      group: ${{ github.workflow }}-ci-success-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     # always() so the gate still reports when an upstream job failed; without
     # it this job would itself be skipped and the branch protection check would
     # sit pending forever.
