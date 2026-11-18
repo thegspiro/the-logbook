@@ -2037,6 +2037,7 @@ class ExternalTrainingSyncService:
 
         computed_hours = credited_hours(import_record)
         record_credit_hours = import_record.credit_hours
+        course_hours_credited: Optional[float] = None
         if computed_hours <= 0:
             # The provider reported no hours (Target Solutions sends 0 for a
             # policy acknowledgment), so the mapped library course says what
@@ -2048,6 +2049,7 @@ class ExternalTrainingSyncService:
             if course_hours_credit is not None:
                 computed_hours = course_hours_credit
                 record_credit_hours = course_hours_credit
+                course_hours_credited = course_hours_credit
 
         # Determine training type from external data when available
         training_type = self._map_training_type(import_record.raw_data)
@@ -2111,6 +2113,7 @@ class ExternalTrainingSyncService:
         import_record.import_status = "imported"
         import_record.import_error = None
         import_record.imported_at = datetime.now(timezone.utc)
+        import_record.course_hours_credited = course_hours_credited
 
         return training_record
 
