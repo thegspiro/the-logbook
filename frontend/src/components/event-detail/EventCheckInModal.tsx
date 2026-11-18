@@ -80,7 +80,8 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
     >
       <div className="mb-4">
         <p id="checkin-modal-description" className="text-theme-text-secondary text-sm">
-          Check in members as they arrive at the event. Their attendance will be recorded with a timestamp.
+          Check in members who are at the event. Anyone you check in after it starts is credited from the scheduled
+          start; use Edit Times for someone who arrived late.
         </p>
         {/* This dialog covers the page that names the organizer, and it is the
             screen where attendance is actually changed. */}
