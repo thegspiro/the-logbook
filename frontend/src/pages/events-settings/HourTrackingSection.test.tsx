@@ -66,6 +66,7 @@ const settings: EventModuleSettings = {
     email_triggers: {},
   },
   attendance_request_fallback_positions: {},
+  mandatory_rsvp_window_days: 60,
 };
 
 const category: AdminHoursCategory = {
