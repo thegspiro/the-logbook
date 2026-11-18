@@ -396,37 +396,39 @@ const RecentDonationsTable: React.FC<RecentDonationsProps> = ({ donations, timez
         <p className="text-theme-text-secondary text-sm">No recent donations</p>
       </div>
     ) : (
-      <div className="overflow-x-auto">
-        <table className="w-full">
+      // px-3 rather than px-4 keeps the five columns, every text cell wrapped,
+      // inside the narrow tier's 32rem with WebKit's wider text (~33rem at px-4).
+      <div className="rwd-table-container overflow-x-auto">
+        <table className="rwd-table rwd-table-narrow w-full">
           <thead>
             <tr className="border-theme-surface-border bg-theme-surface border-b">
               <th
                 scope="col"
-                className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                className="text-theme-text-secondary px-3 py-3 text-left text-xs font-medium tracking-wider uppercase"
               >
                 Date
               </th>
               <th
                 scope="col"
-                className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                className="text-theme-text-secondary px-3 py-3 text-left text-xs font-medium tracking-wider uppercase"
               >
                 Donor
               </th>
               <th
                 scope="col"
-                className="text-theme-text-secondary px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                className="text-theme-text-secondary px-3 py-3 text-right text-xs font-medium tracking-wider uppercase"
               >
                 Amount
               </th>
               <th
                 scope="col"
-                className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                className="text-theme-text-secondary px-3 py-3 text-left text-xs font-medium tracking-wider uppercase"
               >
                 Campaign
               </th>
               <th
                 scope="col"
-                className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                className="text-theme-text-secondary px-3 py-3 text-left text-xs font-medium tracking-wider uppercase"
               >
                 Method
               </th>
@@ -435,16 +437,19 @@ const RecentDonationsTable: React.FC<RecentDonationsProps> = ({ donations, timez
           <tbody className="divide-theme-surface-border divide-y">
             {donations.map((donation) => (
               <tr key={donation.id} className="hover:bg-theme-surface-hover transition-colors">
-                <td className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap">
+                <td data-label="Date" className="text-theme-text-primary px-3 py-3 text-sm">
                   {formatDate(donation.donationDate, timezone)}
                 </td>
-                <td className="text-theme-text-primary px-4 py-3 text-sm font-medium">
+                <td data-label="Donor" className="text-theme-text-primary px-3 py-3 text-sm font-medium">
                   {donation.isAnonymous ? 'Anonymous' : (donation.donorName ?? 'Unknown')}
                 </td>
-                <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
+                <td
+                  data-label="Amount"
+                  className="text-theme-text-primary px-3 py-3 text-right text-sm font-semibold whitespace-nowrap"
+                >
                   {formatCurrencyWhole(Number(donation.amount))}
                 </td>
-                <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                <td data-label="Campaign" className="text-theme-text-secondary px-3 py-3 text-sm">
                   {donation.campaignId ? (
                     // No per-campaign detail route exists in this module
                     // (`routes.tsx` registers only the `/grants/campaigns`
@@ -461,7 +466,7 @@ const RecentDonationsTable: React.FC<RecentDonationsProps> = ({ donations, timez
                     <span className="text-theme-text-secondary">--</span>
                   )}
                 </td>
-                <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                <td data-label="Method" className="text-theme-text-secondary px-3 py-3 text-sm">
                   {PAYMENT_METHOD_LABELS[donation.paymentMethod] ?? donation.paymentMethod}
                 </td>
               </tr>
