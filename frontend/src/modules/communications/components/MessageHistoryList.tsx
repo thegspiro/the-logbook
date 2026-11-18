@@ -237,8 +237,8 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
           </p>
         </div>
       ) : (
-        <div className="border-theme-surface-border overflow-x-auto rounded-xl border">
-          <table className="w-full text-sm">
+        <div className="border-theme-surface-border rwd-table-container overflow-x-auto rounded-xl border">
+          <table className="rwd-table rwd-table-narrow w-full text-sm">
             <thead>
               <tr className="bg-theme-surface-secondary text-left">
                 <th scope="col" className="text-theme-text-secondary px-4 py-3 font-medium">
@@ -261,7 +261,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
             <tbody className="divide-theme-surface-border divide-y">
               {items.map((item) => (
                 <tr key={item.id} className="bg-theme-surface hover:bg-theme-surface-hover transition-colors">
-                  <td className="px-4 py-3">
+                  <td data-label="Status" className="px-4 py-3">
                     {item.status === 'sent' ? (
                       <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400">
                         <CheckCircle2 className="h-4 w-4" />
@@ -277,14 +277,18 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
                       </span>
                     )}
                   </td>
-                  <td className="text-theme-text-primary max-w-[200px] truncate px-4 py-3">
-                    {item.to_email}
-                    {item.recipient_count > 1 && (
-                      <span className="text-theme-text-muted ml-1 text-xs">(+{item.recipient_count - 1})</span>
-                    )}
+                  <td data-label="Recipient" className="text-theme-text-primary px-4 py-3">
+                    <div className="min-w-0 break-all">
+                      {item.to_email}
+                      {item.recipient_count > 1 && (
+                        <span className="text-theme-text-muted ml-1 text-xs">(+{item.recipient_count - 1})</span>
+                      )}
+                    </div>
                   </td>
-                  <td className="text-theme-text-primary max-w-[300px] truncate px-4 py-3">{item.subject}</td>
-                  <td className="text-theme-text-muted hidden px-4 py-3 lg:table-cell">
+                  <td data-label="Subject" className="text-theme-text-primary px-4 py-3">
+                    <div className="min-w-0 break-words">{item.subject}</div>
+                  </td>
+                  <td data-label="Type" className="text-theme-text-muted hidden px-4 py-3 lg:table-cell">
                     {item.template_type ? (
                       <span className="bg-theme-surface-secondary inline-flex items-center rounded-full px-2 py-0.5 text-xs">
                         {templateLabel(item.template_type)}
@@ -293,7 +297,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
                       <span className="text-theme-text-muted text-xs">-</span>
                     )}
                   </td>
-                  <td className="text-theme-text-muted px-4 py-3 whitespace-nowrap">
+                  <td data-label="Sent At" className="text-theme-text-muted px-4 py-3">
                     {formatShortDateTime(item.sent_at, tz)}
                   </td>
                 </tr>
