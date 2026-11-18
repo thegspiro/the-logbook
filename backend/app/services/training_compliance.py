@@ -666,6 +666,32 @@ def evaluation_credits_in_window(
     ]
 
 
+def latest_evaluation_credit(
+    req, evaluation_credits: Optional[EvaluationCredits], as_of: date
+) -> Optional[date]:
+    """The date of the member's latest evaluation counted toward ``req``.
+
+    What a rolling evaluation-credited requirement falls due from (owner
+    decision, 2026-11-16), as a rolling shifts-worked one falls due from the
+    latest shift: the evidence the count reads, never a training record. Not
+    bounded by the window, so an evaluation older than it still dates the
+    requirement overdue, but bounded by any freshness cutoff. Shared by
+    ``TrainingService.evaluate_requirement_detail`` and
+    ``check_requirement_progress`` so the two due dates agree.
+    """
+    cutoff = recency_cutoff(req, as_of)
+    return max(
+        (
+            d
+            for d, units in _require_evaluation_credits(req, evaluation_credits).get(
+                str(req.id), []
+            )
+            if units > 0 and (cutoff is None or d >= cutoff)
+        ),
+        default=None,
+    )
+
+
 def is_session_attendance(req) -> bool:
     """Whether ``req`` is graded on attendance at its linked sessions."""
     req_type = getattr(req, "requirement_type", None)
@@ -1858,6 +1884,8 @@ async def load_evaluation_credits(
     requirements: Iterable[TrainingRequirement],
     today: date,
     org_include_current_month: bool,
+    *,
+    full_history: bool = False,
 ) -> Dict[str, Dict[str, List[Tuple[date, float]]]]:
     """Each member's shift-evaluation credit, by requirement id.
 
@@ -1876,6 +1904,10 @@ async def load_evaluation_credits(
     worked. Loaded only when one of ``requirements`` is evaluation-credited;
     otherwise ``{}``, and callers pass ``.get(member_id, {})``. Bounded by the
     earliest start of those requirements' :func:`completion_window`.
+    ``full_history`` lifts the bound when one of them is rolling: a caller
+    deriving a rolling due date from the latest evaluation
+    (:func:`latest_evaluation_credit`) needs the evaluations older than the
+    window, as :func:`load_credited_shift_dates` does for shifts.
     """
     from app.models.external_shift_hours import ExternalShiftHours
     from app.models.shift_evaluation import EXTERNAL_OCCASION, ShiftEvaluation
@@ -1898,6 +1930,8 @@ async def load_evaluation_credits(
     # One unbounded requirement (ONE_TIME without a cutoff) reads them all.
     bounded = [s for s in starts if s is not None]
     earliest = min(bounded) if len(bounded) == len(starts) else None
+    if full_history and any(get_rolling_period_months(r) for r in credited):
+        earliest = None
 
     org = str(org_id)
     ids = [str(m) for m in member_ids]

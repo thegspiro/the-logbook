@@ -237,8 +237,8 @@ const ImportInventory: React.FC = () => {
               Showing first {previewData.length} of {totalRows} item{totalRows === 1 ? '' : 's'} from the file
             </p>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="rwd-table-container overflow-x-auto">
+              <table className="rwd-table rwd-table-wide w-full text-sm">
                 <thead className="bg-theme-input-bg border-theme-surface-border border-b">
                   <tr>
                     <th scope="col" className="text-theme-text-secondary px-4 py-2 text-left">
@@ -267,13 +267,27 @@ const ImportInventory: React.FC = () => {
                 <tbody className="divide-theme-surface-border divide-y">
                   {previewData.map((row, index) => (
                     <tr key={index} className="hover:bg-theme-surface-secondary">
-                      <td className="text-theme-text-primary px-4 py-2 font-medium">{row.name}</td>
-                      <td className="text-theme-text-secondary px-4 py-2">{row.category || '—'}</td>
-                      <td className="text-theme-text-secondary px-4 py-2">{row.itemType || '—'}</td>
-                      <td className="text-theme-text-secondary px-4 py-2 font-mono">{row.serialNumber || '—'}</td>
-                      <td className="text-theme-text-secondary px-4 py-2">{row.status || 'available'}</td>
-                      <td className="text-theme-text-secondary px-4 py-2">{row.quantity || '1'}</td>
-                      <td className="text-theme-text-secondary px-4 py-2">{row.trackingType || 'individual'}</td>
+                      <td data-label="Name" className="rwd-table-lead text-theme-text-primary px-4 py-2 font-medium">
+                        {row.name}
+                      </td>
+                      <td data-label="Category" className="text-theme-text-secondary px-4 py-2">
+                        {row.category || '—'}
+                      </td>
+                      <td data-label="Type" className="text-theme-text-secondary px-4 py-2">
+                        {row.itemType || '—'}
+                      </td>
+                      <td data-label="Serial #" className="text-theme-text-secondary px-4 py-2 font-mono break-all">
+                        {row.serialNumber || '—'}
+                      </td>
+                      <td data-label="Status" className="text-theme-text-secondary px-4 py-2">
+                        {row.status || 'available'}
+                      </td>
+                      <td data-label="Qty" className="text-theme-text-secondary px-4 py-2">
+                        {row.quantity || '1'}
+                      </td>
+                      <td data-label="Tracking" className="text-theme-text-secondary px-4 py-2">
+                        {row.trackingType || 'individual'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

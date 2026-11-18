@@ -339,8 +339,9 @@ async def _evaluate_member_requirements(
     )
     member_records = list(all_records_result.scalars().all())
     org_include_current = await get_org_include_current_month(db, str(org_id))
-    # Shifts worked, for a requirement counted from attendance; full history,
-    # as a rolling one anchors its due date on the latest shift.
+    # Shifts worked, for a requirement counted from attendance, and
+    # evaluation credit; full history, as a rolling one anchors its due date
+    # on the latest shift or evaluation.
     shift_dates = (
         await load_credited_shift_dates(
             db,
@@ -354,7 +355,13 @@ async def _evaluate_member_requirements(
     ).get(user_id, [])
     evaluation_credits = (
         await load_evaluation_credits(
-            db, str(org_id), [user_id], applicable, today, org_include_current
+            db,
+            str(org_id),
+            [user_id],
+            applicable,
+            today,
+            org_include_current,
+            full_history=True,
         )
     ).get(user_id, {})
     held_sessions = await load_held_sessions(db, str(org_id), applicable)
