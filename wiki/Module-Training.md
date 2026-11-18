@@ -15,7 +15,10 @@ program enrollments, external training integrations, and compliance reporting.
   quarterly, monthly or one-time frequencies (plus rolling, certification-period
   and fixed-date due dates). Requirements target member categories (Active,
   Administrative, Probationary, Life, Retired, Honorary), ranks or positions, or
-  apply to all members. See [Training Requirements](#training-requirements)
+  apply to all members. See [Training Requirements](#training-requirements).
+  The editor's **Operational members** shortcut ticks Active, Probationary and
+  Life, plus **Senior** where the department's tier list has a `senior` tier
+  _(2026-11-17, #4370; Retired stays out per the 2026-11-06 owner decision)_
 - **Requirement Templates** — Ten built-in templates for common standards that
   pre-fill the create form for review
 - **Course-Library Requirement Links** — Course and certification requirements
@@ -239,6 +242,19 @@ bypasses `allows_external_credit` by design, but not this). A record with no
 completion date fails closed there with "That training has no completion date,
 so it can't be credited toward this requirement's N-day window", matching the
 read-path evaluator. `recency_days` is in the update path's clearable set.
+
+### Rolling evaluation-credited requirements fall due from the latest evaluation _(2026-11-17, #4379)_
+
+A rolling **Evaluated shifts**, **Evaluated calls**, **Transports** or
+**Refusals** requirement takes its My Training due date from the latest counted
+shift evaluation plus `rolling_period_months`
+(`training_compliance.latest_evaluation_credit`, which respects
+`recency_days` but not the rolling window, so an old evaluation reads as
+overdue). Training records never count toward these types, so the old
+record-based date was blank or unrelated. `load_evaluation_credits(...,
+full_history=True)` supplies the history; the four callers that already load
+full shift history load evaluation credit the same way. Owner decision recorded
+in `docs/KNOWN_LIMITATIONS.md`.
 
 ### Existing-member exemption and catch-up
 
@@ -614,6 +630,10 @@ one inline.
 
 **Training → Records → Course Cohorts → New cohort.** The wizard runs Course →
 Schedule → **Preview** → Roster → Generate.
+
+The Course step lists only courses with at least one syllabus class
+(`GET /training/courses?with_classes=true`, an org-scoped `EXISTS`; without the
+parameter the endpoint is unchanged) _(2026-11-17, W27-4, #4385)_.
 
 Preview is the point of the wizard. Generating drops N events onto the
 department calendar and RSVPs the roster to each, so the officer first sees
@@ -998,7 +1018,11 @@ default duration come from **Manual Entry Rules** in the admin hub.
 
 Providers: Vector Solutions, Target Solutions, Lexipol, iAmResponding and
 Custom API, each with category, course and user mappings. Imports preserve CE
-credit hours (`external_training_imports.credit_hours`); the provider's
+credit hours (`external_training_imports.credit_hours`), and
+`external_training_imports.course_hours_credited` records the hours a record
+took from its mapped course, so a re-map or unmap compares against what the
+import actually gave rather than the course's current settings _(2026-11-18,
+#4423, migration `bbeb4867d393`)_; the provider's
 category catalog can be fetched up front (`sync-categories`). Imports feed
 pipeline progress only where a requirement allows external credit (see
 [What updates pipeline progress automatically](#what-updates-pipeline-progress-automatically)).

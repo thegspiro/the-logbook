@@ -457,6 +457,13 @@ scheduled start it was.
   (`GET /events/{id}/eligible-members`) and checks them in
   (`POST /events/{id}/check-in`); its buttons are named "Check in {name}", and
   it offers bulk add.
+- **An officer check-in after the scheduled start is stored at the scheduled
+  start** _(2026-11-17, #4395)_: the officer is vouching for attendance, so a
+  member is not docked the minutes it took to reach their name. It is written
+  as `checked_in_at`, not `override_check_in_at`, so the row is not marked
+  "(times edited)". Self check-ins (QR, ID card, the member's own button) still
+  count from the tap; a genuinely late arrival is corrected with **Edit Times**,
+  and the click time stays in the `event_checkin` audit entry.
 - `/events/:id/monitoring` (`GET /events/{id}/check-in-monitoring`) shows live
   check-in status using the same window logic as self check-in.
 - **End Event** (`POST /events/{id}/end-event`) ends an in-progress event:

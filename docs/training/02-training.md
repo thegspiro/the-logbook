@@ -512,7 +512,11 @@ later"** — the way most officers describe a schedule out loud.
 
 1. Open **Training Admin → Records → Course Cohorts**.
 2. Select **New cohort**. The wizard has five steps.
-3. **Course** — pick the course and name the cohort, such as "Recruit School —
+3. **Course** — pick the course and name the cohort. _(2026-11-17)_ Only
+   courses with at least one class on their syllabus are offered; a
+   single-session course with an empty syllabus used to be listed and then
+   failed at the preview step. If the course you want is missing, add its
+   classes in the Course Library first. Name the cohort, such as "Recruit School —
    Fall 2026". _(2026-11-04)_ You may also add a **Description**, which
    everyone on the cohort sees on its page, and **Notes**, which only training
    officers see.
@@ -1373,12 +1377,20 @@ sessions", and counts a member's progress in sessions.
 **Applying a requirement to every operational member** _(2026-10-27)_. Under
 **Member Categories**, the **Operational members** button ticks **Active**,
 **Probationary** and **Life** in one go — the operational members still
-serving. **Retired** is an operational rung too (see
+serving — and **Senior** too, if your department has a **Senior** membership
+tier _(2026-11-17)_. The hint beside the button names what it ticks ("Active,
+Probationary, Life and Senior Member" where the tier exists). A department
+without that tier sees no change. **Retired** is an operational rung too (see
 [Member Class and Member Status](./01-membership.md#member-class-and-member-status)),
 but the button leaves it out _(2026-11-06)_ so a riding requirement is not
 held against members who have stepped back; tick it yourself if the
-requirement covers them. When all three are ticked, the button shows a check
-mark; selecting it again unticks those three. **Retired**, **Administrative**
+requirement covers them. When all of them are ticked (Senior included, where
+it exists), the button shows a check mark; selecting it again unticks them.
+Requirements scoped with the button before 2026-11-17 do not have Senior
+ticked: open each one and select the button again, or tick **Senior** by hand.
+_Screenshot: `02-135-requirement-operational-members` is still right for a
+department with no Senior tier; create a second one showing Senior ticked and
+the longer hint._ **Retired**, **Administrative**
 and **Honorary** are left as you set them either way.
 
 **Your department's own membership tiers are listed too** _(2026-11-14)_.
@@ -1769,6 +1781,16 @@ months" is a running count, met or short on any day. The member's card shows
 hours still to go. A rolling requirement of **any other type** — a
 certification, a course, a checklist — keeps its due date: the member's last
 completion plus the interval.
+
+**A rolling requirement credited by shift evaluations falls due from the
+latest evaluation** _(2026-11-17)_. For a rolling **Evaluated shifts**,
+**Evaluated calls**, **Transports** or **Refusals** requirement, My Training's
+due date is the latest evaluation that counts toward it plus the rolling
+period. Before, the date was taken from training records, which never count
+toward these types, so the member saw no due date or a date from an unrelated
+record. An evaluation older than the window still sets the date, so the
+requirement shows as overdue rather than with no date. A rolling **Shifts
+worked** requirement already worked this way, from the latest shift.
 
 If a member has an active **Leave of Absence** during part of the window, the
 months on leave are excused and the requirement is reduced to match. How much
@@ -3611,7 +3633,12 @@ hours, the import now credits the course's **Credit Hours**, or its duration whe
 Credit Hours is blank. Hours the provider did report still win. Mapping,
 re-mapping or unmapping a course applies the same rule to the records already
 imported from it, except a record whose hours an officer changed or that is
-linked to another course by hand. An upgrade backfills records imported before
+linked to another course by hand. _(2026-11-18)_ Each import now remembers the
+hours it took from its course, so editing a course's hours later no longer
+confuses a re-map: the course's original figure is moved or removed as it
+should be, and an officer's value that happens to equal the new figure is left
+alone. Records whose course was edited before this upgrade are treated as an
+officer's, as before. An upgrade backfills records imported before
 this change. The Course Library's **Credit Hours** help text now says imports
 read the field as well as sessions.
 
