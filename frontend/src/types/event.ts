@@ -956,6 +956,8 @@ export interface EventModuleSettings {
    * Secretary, then to every events manager.
    */
   attendance_request_fallback_positions: Partial<Record<EventType, string | null>>;
+  /** Days before an unanswered mandatory event starts that members are asked to respond. */
+  mandatory_rsvp_window_days: number;
 }
 
 /** A transfer of an event to a new organizer and alternate. */
