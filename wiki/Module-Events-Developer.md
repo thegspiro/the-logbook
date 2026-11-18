@@ -51,7 +51,7 @@ POST   /events                                   # Create event (manage)
 POST   /events/recurring                         # Create recurring series (manage)
 POST   /events/import-csv                        # Bulk create from CSV (manage)
 GET    /events/missed-mandatory                  # Caller's missed mandatory events
-GET    /events/visible-event-types               # Visible types + custom categories
+GET    /events/visible-event-types               # Visible types, custom categories, mandatory RSVP window
 GET    /events/public-calendar                   # Public calendar feed (no auth)
 GET    /events/analytics/summary                 # analytics.view or manage
 GET    /events/settings                          # Event settings (manage)

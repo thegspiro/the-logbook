@@ -647,6 +647,7 @@ class TrainingService:
             fallback_record_matches,
             hours_record_counts,
             is_evaluation_credited,
+            latest_evaluation_credit,
             monthly_counts,
             monthly_hours,
             next_window_opens,
@@ -993,6 +994,12 @@ class TrainingService:
                             ),
                             default=None,
                         )
+                    elif is_evaluation_credited(req):
+                        # Anchored on the latest evaluation counted, for the
+                        # same reason: a record never counts toward it.
+                        latest_completion = latest_evaluation_credit(
+                            req, evaluation_credits, today
+                        )
                     effective_due_date = (
                         latest_completion + relativedelta(months=rolling_months)
                         if latest_completion
@@ -1156,6 +1163,7 @@ class TrainingService:
             hours_record_counts,
             is_evaluation_credited,
             is_session_attendance,
+            latest_evaluation_credit,
             load_credited_shift_dates,
             load_evaluation_credits,
             recency_cutoff,
@@ -1210,6 +1218,7 @@ class TrainingService:
                     [requirement],
                     today,
                     True,
+                    full_history=True,
                 )
             ).get(str(user_id), {})
         start_date, end_date = self._get_date_window(requirement, today)
@@ -1246,6 +1255,19 @@ class TrainingService:
             effective_due_date = (
                 latest_shift + relativedelta(months=rolling_months)
                 if latest_shift
+                else None
+            )
+        elif rolling_months and is_evaluation_credited(requirement):
+            # Anchored on the latest evaluation counted, as a shifts-worked
+            # one is on the latest shift (latest_evaluation_credit).
+            from dateutil.relativedelta import relativedelta
+
+            latest_evaluation = latest_evaluation_credit(
+                requirement, evaluation_credits, today
+            )
+            effective_due_date = (
+                latest_evaluation + relativedelta(months=rolling_months)
+                if latest_evaluation
                 else None
             )
         elif rolling_months:
@@ -1830,6 +1852,7 @@ class TrainingService:
                 requirements,
                 today,
                 True,
+                full_history=True,
             )
         ).get(str(user_id), {})
         held_sessions = await load_held_sessions(

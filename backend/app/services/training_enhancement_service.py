@@ -1422,7 +1422,8 @@ class ReportExportService:
         )
         all_requirements = req_result.scalars().all()
         # Full history: a rolling requirement's due date, which the at-risk
-        # list below reads, anchors on the latest shift however old.
+        # list below reads, anchors on the latest shift or evaluation however
+        # old.
         shifts_by_user = await load_credited_shift_dates(
             self.db,
             organization_id,
@@ -1439,6 +1440,7 @@ class ReportExportService:
             all_requirements,
             today,
             True,
+            full_history=True,
         )
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), all_requirements

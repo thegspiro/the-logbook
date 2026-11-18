@@ -25,6 +25,11 @@ intended outcome at delete time instead, driven by ``Base.metadata``:
 
 Deriving both lists from metadata rather than a hand-maintained constant means
 tables added later are covered without editing this file.
+
+A permanent delete also removes the stored files named by the rows it
+cascades away (training submissions, training records, attendance waiver
+documents), after the commit and keeping any file another row still
+references: see ``member_files.remove_files_after_hard_delete``.
 """
 
 import importlib
