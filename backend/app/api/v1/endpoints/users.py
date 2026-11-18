@@ -103,6 +103,10 @@ from app.services.email_policy import (
     member_choice,
 )
 from app.services.email_service import welcome_email_can_send
+from app.services.member_files import (
+    collect_member_files,
+    remove_files_after_hard_delete,
+)
 from app.services.member_position_term_service import past_positions_for
 from app.services.member_service_history_service import MemberServiceHistoryService
 from app.services.member_shift_release_service import (
@@ -2554,6 +2558,10 @@ async def delete_user(
     """
     Delete a member. By default this is a soft-delete (sets deleted_at).
     Pass `hard=true` to permanently delete the member and all associated records.
+    A permanent delete also removes the stored files named by the rows it
+    cascades away (self-report certificates, training-record uploads,
+    attendance waiver documents), after the commit, keeping any file another
+    row still references; a refused delete touches no file.
 
     **Authentication required**
 
@@ -2642,6 +2650,13 @@ async def delete_user(
 
         await release_user_references(db, str(user_id))
 
+        # Read before the delete: the rows naming these files CASCADE away
+        # with the member. Removed only after the commit below succeeds, so
+        # a refused delete touches no file.
+        owned_files = await collect_member_files(
+            db, str(user_id), str(current_user.organization_id)
+        )
+
         # Deleting the User is also what removes its user_positions rows.
         # Deleting them separately first would leave the User.positions
         # collection — eagerly loaded by the administrator guard above —
@@ -2666,6 +2681,11 @@ async def delete_user(
                 ),
             )
 
+        # Never raises, so the audit row below is always written.
+        removal = await remove_files_after_hard_delete(
+            db, str(user_id), str(current_user.organization_id), owned_files
+        )
+
         await log_audit_event(
             db=db,
             event_type="user_hard_deleted",
@@ -2681,6 +2701,9 @@ async def delete_user(
                     "pool_returns": returned.pool_returns,
                     "checked_in": returned.checked_in,
                 },
+                "files_deleted": removal.deleted,
+                "files_not_deleted": removal.not_deleted,
+                "files_shared_kept": removal.shared_kept,
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -3739,7 +3762,13 @@ async def anonymize_member(
         severity="warning",
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
-        event_data={"anonymized_user_id": str(user_id)},
+        event_data={
+            "anonymized_user_id": str(user_id),
+            # Counts only: a path or filename here would outlive the erasure.
+            "self_report_files_deleted": summary["self_report_files_deleted"],
+            "self_report_files_not_deleted": summary["self_report_files_not_deleted"],
+            "self_report_files_shared_kept": summary["self_report_files_shared_kept"],
+        },
         **_request_origin(request),
     )
     await db.commit()

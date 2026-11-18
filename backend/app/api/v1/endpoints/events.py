@@ -54,6 +54,9 @@ from app.models.user import (
 )
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
+    MANDATORY_RSVP_WINDOW_DAYS_DEFAULT,
+    MANDATORY_RSVP_WINDOW_DAYS_MAX,
+    MANDATORY_RSVP_WINDOW_DAYS_MIN,
     AnalyticsSummary,
     AttachmentUploadResponse,
     BulkAddAttendees,
@@ -1132,7 +1135,29 @@ EVENT_SETTINGS_DEFAULTS = {
     # request the event's organizer and alternate cannot take; an unset type
     # goes to the Secretary (event_organizer_service).
     FALLBACK_POSITIONS_SETTING: {},
+    # Days before an unanswered mandatory event starts that members are asked
+    # to respond. Served to every member through /visible-event-types, since
+    # the events page needs it and /settings is gated on events.manage.
+    "mandatory_rsvp_window_days": MANDATORY_RSVP_WINDOW_DAYS_DEFAULT,
 }
+
+
+def mandatory_rsvp_window_days(org_settings: Any) -> int:
+    """The organization's mandatory-RSVP window, or the default.
+
+    The PATCH validates the value, but organization settings are free-form
+    JSON that other paths can write, so a stored value outside the accepted
+    range falls back to the default rather than reaching every member's page.
+    """
+    events_settings = (org_settings or {}).get("events") or {}
+    value = events_settings.get("mandatory_rsvp_window_days")
+    if (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and MANDATORY_RSVP_WINDOW_DAYS_MIN <= value <= MANDATORY_RSVP_WINDOW_DAYS_MAX
+    ):
+        return value
+    return MANDATORY_RSVP_WINDOW_DAYS_DEFAULT
 
 
 @router.get("/analytics/summary", response_model=AnalyticsSummary)
@@ -1359,6 +1384,7 @@ async def get_visible_event_types(
             {"value": tier.id, "label": tier.name}
             for tier in mandatory_for_tiers(org.settings)
         ],
+        "mandatory_rsvp_window_days": mandatory_rsvp_window_days(org.settings),
     }
 
 

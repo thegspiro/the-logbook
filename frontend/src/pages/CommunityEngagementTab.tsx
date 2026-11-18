@@ -262,7 +262,7 @@ const CommunityEngagementTab: React.FC = () => {
         </section>
       </div>
 
-      <section className="card overflow-hidden p-0" aria-labelledby="ce-events-heading">
+      <section className="card rwd-table-container overflow-hidden p-0" aria-labelledby="ce-events-heading">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <h3 id="ce-events-heading" className="text-theme-text-primary text-sm font-semibold">
             Recent outreach events
@@ -311,7 +311,7 @@ const CommunityEngagementTab: React.FC = () => {
             })}
           </ul>
         ) : (
-          <table className="w-full text-sm" aria-labelledby="ce-events-heading">
+          <table className="rwd-table rwd-table-wide w-full text-sm" aria-labelledby="ce-events-heading">
             <thead className="bg-theme-surface-secondary text-theme-text-muted text-left text-xs uppercase">
               <tr>
                 <th scope="col" className="px-4 py-2">
@@ -339,28 +339,38 @@ const CommunityEngagementTab: React.FC = () => {
                 const expected = expectedText(r);
                 return (
                   <tr key={r.event_id}>
-                    <td className="text-theme-text-muted px-4 py-2 whitespace-nowrap">{eventDate(r, tz)}</td>
-                    <td className="px-4 py-2">
-                      <Link
-                        to={`/events/${r.event_id}`}
-                        className="text-theme-text-primary font-medium hover:underline"
-                      >
-                        {r.organization_name || r.title}
-                      </Link>
-                      {r.organization_name && (
-                        <div className="text-theme-text-muted text-xs">
-                          {r.title}
-                          {r.request_id && ' · from a public request'}
-                        </div>
-                      )}
+                    <td data-label="Date" className="text-theme-text-muted px-4 py-2 whitespace-nowrap">
+                      {eventDate(r, tz)}
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-2">{r.type_label}</td>
-                    <td className="text-theme-text-primary px-4 py-2 text-right tabular-nums">
-                      {reachText(r)}
-                      {expected && <div className="text-theme-text-muted text-xs">{expected}</div>}
+                    <td data-label="Event" className="px-4 py-2">
+                      <div className="min-w-0">
+                        <Link
+                          to={`/events/${r.event_id}`}
+                          className="text-theme-text-primary font-medium hover:underline"
+                        >
+                          {r.organization_name || r.title}
+                        </Link>
+                        {r.organization_name && (
+                          <div className="text-theme-text-muted text-xs">
+                            {r.title}
+                            {r.request_id && ' · from a public request'}
+                          </div>
+                        )}
+                      </div>
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-2 text-right tabular-nums">{r.crew}</td>
-                    <td className="text-theme-text-secondary px-4 py-2 text-right tabular-nums">
+                    <td data-label="Type" className="text-theme-text-secondary px-4 py-2">
+                      {r.type_label}
+                    </td>
+                    <td data-label="Reached" className="text-theme-text-primary px-4 py-2 text-right tabular-nums">
+                      <div className="min-w-0">
+                        {reachText(r)}
+                        {expected && <div className="text-theme-text-muted text-xs">{expected}</div>}
+                      </div>
+                    </td>
+                    <td data-label="Crew" className="text-theme-text-secondary px-4 py-2 text-right tabular-nums">
+                      {r.crew}
+                    </td>
+                    <td data-label="Hours" className="text-theme-text-secondary px-4 py-2 text-right tabular-nums">
                       {formatHours(r.member_hours)}
                     </td>
                   </tr>
