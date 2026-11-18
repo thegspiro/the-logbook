@@ -1,11 +1,15 @@
 """Tests for the member anonymization workflow (right to erasure)."""
 
+import copy
 import uuid
 from datetime import UTC, date, datetime
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select
 
+from app.api.v1.endpoints import users as users_endpoint
 from app.models.forms import Form, FormSubmission
 from app.models.inventory import MemberSizePreferences
 from app.models.medical_screening import ScreeningRecord, ScreeningType
@@ -20,6 +24,12 @@ from app.models.membership_pipeline import (
     ProspectStepProgress,
     StepProgressStatus,
 )
+from app.models.training import (
+    SubmissionStatus,
+    TrainingRecord,
+    TrainingStatus,
+    TrainingSubmission,
+)
 from app.models.user import (
     LeaveType,
     MemberLeaveOfAbsence,
@@ -29,6 +39,7 @@ from app.models.user import (
 )
 from app.services import file_storage_service
 from app.services.member_anonymization_service import MemberAnonymizationService
+from tests.fake_request import fake_request
 
 pytestmark = pytest.mark.integration
 
@@ -502,3 +513,301 @@ class TestAnonymizeMember:
         assert (
             await service.get_user_for_anonymization(user_b.id, org_b.id)
         ) is not None
+
+
+class TestSelfReportCertificates:
+    """D11: the certificates a member uploaded with self-reported training,
+    and the copies approval put on their training records, go with the
+    member's identity. The submission and record rows stay."""
+
+    @pytest.fixture
+    def root(self, tmp_path, monkeypatch):
+        uploads = tmp_path / "uploads"
+        uploads.mkdir()
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(uploads))
+        return uploads
+
+    @staticmethod
+    def _certificate(root, org_id, *, legacy=False, area="self-reports", name=None):
+        if legacy:
+            directory = root / "training_attachments" / "self_reported_submissions"
+            directory = directory / str(org_id)
+        else:
+            directory = root / str(org_id) / area / uuid.uuid4().hex
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{uuid.uuid4().hex}.pdf"
+        path.write_bytes(b"%PDF-1.4 certificate")
+        return path
+
+    @staticmethod
+    def _entry(path, name="Pat Firefighter CPR card.pdf"):
+        return {"file_name": name, "file_path": str(path), "file_type": "x"}
+
+    @staticmethod
+    async def _submission(db, org_id, user_id, attachments, **overrides):
+        fields = dict(
+            organization_id=str(org_id),
+            submitted_by=str(user_id),
+            course_name="CPR",
+            training_type="certification",
+            completion_date=date(2024, 1, 1),
+            hours_completed=4.0,
+            status=SubmissionStatus.APPROVED,
+            attachments=attachments,
+        )
+        fields.update(overrides)
+        submission = TrainingSubmission(**fields)
+        db.add(submission)
+        await db.flush()
+        return submission
+
+    @staticmethod
+    async def _record(db, org_id, user_id, attachments, **overrides):
+        fields = dict(
+            organization_id=str(org_id),
+            user_id=str(user_id),
+            course_name="CPR",
+            training_type="certification",
+            completion_date=date(2024, 1, 1),
+            hours_completed=4.0,
+            status=TrainingStatus.COMPLETED,
+            attachments=attachments,
+        )
+        fields.update(overrides)
+        record = TrainingRecord(**fields)
+        db.add(record)
+        await db.flush()
+        return record
+
+    @staticmethod
+    async def _fresh(db, model, row_id):
+        return (
+            await db.execute(
+                select(model)
+                .where(model.id == row_id)
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+
+    async def test_removes_the_members_certificates_and_record_copies(
+        self, db_session, root
+    ):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        current = self._certificate(root, org.id)
+        legacy = self._certificate(root, org.id, legacy=True)
+        entries = [self._entry(current), self._entry(legacy)]
+        submission = await self._submission(db_session, org.id, user.id, entries)
+        record = await self._record(db_session, org.id, user.id, copy.deepcopy(entries))
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert not current.exists()
+        assert not legacy.exists()
+        submission = await self._fresh(db_session, TrainingSubmission, submission.id)
+        record = await self._fresh(db_session, TrainingRecord, record.id)
+        assert submission is not None
+        assert submission.attachments == []
+        assert record is not None
+        assert record.attachments == []
+        # One file each, though both rows named both.
+        assert summary["self_report_files_deleted"] == 2
+        assert summary["self_report_files_not_deleted"] == 0
+        assert summary["self_report_files_shared_kept"] == 0
+
+    async def test_removes_a_certificate_only_a_voided_record_names(
+        self, db_session, root
+    ):
+        """Approval, reversal (voiding the record), then the member removed the
+        attachment from the submission: only the voided record still names
+        the certificate."""
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        certificate = self._certificate(root, org.id)
+        await self._submission(
+            db_session,
+            org.id,
+            user.id,
+            [],
+            status=SubmissionStatus.PENDING_REVIEW,
+        )
+        record = await self._record(
+            db_session,
+            org.id,
+            user.id,
+            [self._entry(certificate)],
+            status=TrainingStatus.CANCELLED,
+            voided_at=datetime.now(UTC),
+        )
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert not certificate.exists()
+        record = await self._fresh(db_session, TrainingRecord, record.id)
+        assert record.attachments == []
+        assert summary["self_report_files_deleted"] == 1
+
+    async def test_removes_only_the_members_own_files_in_their_org(
+        self, db_session, root, tmp_path
+    ):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        colleague = await _make_departed_member(db_session, org, deleted_at=None)
+        own = self._certificate(root, org.id)
+        theirs = self._certificate(root, org.id)
+        other_org = self._certificate(root, uuid.uuid4())
+        outside = tmp_path / "outside.pdf"
+        outside.write_bytes(b"not in the uploads volume")
+        await self._submission(db_session, org.id, colleague.id, [self._entry(theirs)])
+        submission = await self._submission(
+            db_session,
+            org.id,
+            user.id,
+            [
+                self._entry(own),
+                self._entry(other_org, name="tampered"),
+                self._entry(outside, name="outside"),
+                "a legacy bare-string entry",
+            ],
+        )
+
+        await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert not own.exists()
+        assert theirs.exists()
+        assert other_org.exists()
+        assert outside.exists()
+        submission = await self._fresh(db_session, TrainingSubmission, submission.id)
+        assert [
+            a if isinstance(a, str) else a["file_name"] for a in submission.attachments
+        ] == [
+            "tampered",
+            "outside",
+            "a legacy bare-string entry",
+        ]
+
+    async def test_keeps_a_file_another_row_still_names(self, db_session, root):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        colleague = await _make_departed_member(db_session, org, deleted_at=None)
+        shared = self._certificate(root, org.id)
+        own = self._certificate(root, org.id)
+        submission = await self._submission(
+            db_session, org.id, user.id, [self._entry(shared), self._entry(own)]
+        )
+        theirs = await self._record(
+            db_session, org.id, colleague.id, [self._entry(shared, name="crew.pdf")]
+        )
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert shared.exists()
+        assert not own.exists()
+        theirs = await self._fresh(db_session, TrainingRecord, theirs.id)
+        assert theirs.attachments == [self._entry(shared, name="crew.pdf")]
+        submission = await self._fresh(db_session, TrainingSubmission, submission.id)
+        assert submission.attachments == []
+        assert summary["self_report_files_shared_kept"] == 1
+        assert summary["self_report_files_deleted"] == 1
+
+    async def test_a_failed_delete_keeps_the_reference_and_is_counted(
+        self, db_session, root, monkeypatch
+    ):
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        certificate = self._certificate(root, org.id)
+        submission = await self._submission(
+            db_session, org.id, user.id, [self._entry(certificate)]
+        )
+        monkeypatch.setattr(
+            file_storage_service, "delete", AsyncMock(return_value=False)
+        )
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert summary["self_report_files_not_deleted"] == 1
+        assert summary["self_report_files_deleted"] == 0
+        submission = await self._fresh(db_session, TrainingSubmission, submission.id)
+        [entry] = submission.attachments
+        assert entry["file_path"] == str(certificate)
+        assert entry["file_name"] == "certificate.pdf"
+
+    async def test_training_record_uploads_are_kept(self, db_session, root):
+        """Department training evidence uploaded to the record itself is not
+        a self-report certificate, and stays with the completion."""
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        evidence = self._certificate(root, org.id, area="training-records")
+        record = await self._record(
+            db_session, org.id, user.id, [self._entry(evidence, name="roster.pdf")]
+        )
+
+        summary = await MemberAnonymizationService(db_session).anonymize_member(user)
+
+        assert evidence.exists()
+        record = await self._fresh(db_session, TrainingRecord, record.id)
+        assert record.attachments == [self._entry(evidence, name="roster.pdf")]
+        assert summary["self_report_files_deleted"] == 0
+
+    async def test_a_rerun_after_a_rollback_completes(self, db_session, root):
+        """The files go before the commit. If it fails, the rows still name
+        files that are gone, and running anonymisation again finishes."""
+        org = await _make_org(db_session)
+        user = await _make_departed_member(db_session, org)
+        certificate = self._certificate(root, org.id)
+        submission = await self._submission(
+            db_session, org.id, user.id, [self._entry(certificate)]
+        )
+        user_id, org_id, submission_id = user.id, org.id, submission.id
+        await db_session.commit()
+
+        service = MemberAnonymizationService(db_session)
+        await service.anonymize_member(user)
+        await db_session.rollback()
+
+        assert not certificate.exists()
+        submission = await self._fresh(db_session, TrainingSubmission, submission_id)
+        assert submission.attachments == [self._entry(certificate)]
+        user = await service.get_user_for_anonymization(user_id, org_id)
+        assert user.anonymized_at is None
+
+        summary = await service.anonymize_member(user)
+
+        assert user.anonymized_at is not None
+        submission = await self._fresh(db_session, TrainingSubmission, submission_id)
+        assert submission.attachments == []
+        assert summary["self_report_files_deleted"] == 1
+
+    async def test_the_audit_event_carries_counts_and_no_identity(
+        self, db_session, root, monkeypatch
+    ):
+        org = await _make_org(db_session)
+        admin = await _make_departed_member(db_session, org, deleted_at=None)
+        user = await _make_departed_member(db_session, org)
+        certificate = self._certificate(root, org.id)
+        await self._submission(db_session, org.id, user.id, [self._entry(certificate)])
+        audit = AsyncMock()
+        monkeypatch.setattr(users_endpoint, "log_audit_event", audit)
+
+        await users_endpoint.anonymize_member(
+            user_id=str(user.id),
+            request=fake_request(),
+            current_user=SimpleNamespace(id=admin.id, organization_id=org.id),
+            db=db_session,
+            _stepup=None,
+        )
+
+        event_data = audit.await_args.kwargs["event_data"]
+        assert event_data["self_report_files_deleted"] == 1
+        assert event_data["self_report_files_not_deleted"] == 0
+        assert event_data["self_report_files_shared_kept"] == 0
+        for key in (
+            "self_report_files_deleted",
+            "self_report_files_not_deleted",
+            "self_report_files_shared_kept",
+        ):
+            assert type(event_data[key]) is int
+        for value in event_data.values():
+            assert "/" not in str(value)
+            assert "Firefighter" not in str(value)
+            assert "Pat" not in str(value)

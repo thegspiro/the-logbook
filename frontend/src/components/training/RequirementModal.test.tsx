@@ -100,6 +100,85 @@ describe('RequirementModal', () => {
       ]);
     });
 
+    describe('in a department with a Senior tier', () => {
+      beforeEach(() => {
+        getVisibleEventTypesWithCategories.mockReset();
+        getVisibleEventTypesWithCategories.mockResolvedValue({
+          membership_types: [
+            { value: 'probationary', label: 'Probationary' },
+            { value: 'active', label: 'Active Member' },
+            { value: 'senior', label: 'Senior Member' },
+            { value: 'life', label: 'Life Member' },
+          ],
+        });
+      });
+
+      it('ticks Senior along with the built-in operational types, and says so', async () => {
+        const user = userEvent.setup();
+        render(
+          <RequirementModal
+            requirement={scoped(['administrative'])}
+            categories={[]}
+            onClose={vi.fn()}
+            onSave={onSave}
+          />
+        );
+
+        expect(
+          await screen.findByText(
+            /^Active, Probationary, Life and Senior Member — the operational members still serving/
+          )
+        ).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Operational members' }));
+        expect(screen.getByRole('checkbox', { name: 'Senior Member' })).toBeChecked();
+
+        await saveAsEveryone(user);
+        const [payload] = onSave.mock.calls[0] as [{ required_membership_types: string[] }];
+        expect([...payload.required_membership_types].sort()).toEqual([
+          'active',
+          'administrative',
+          'life',
+          'probationary',
+          'senior',
+        ]);
+      });
+
+      it('reads as selected only once Senior is ticked too', async () => {
+        render(
+          <RequirementModal
+            requirement={scoped(['active', 'probationary', 'life'])}
+            categories={[]}
+            onClose={vi.fn()}
+            onSave={onSave}
+          />
+        );
+
+        await screen.findByRole('checkbox', { name: 'Senior Member' });
+        expect(screen.getByRole('button', { name: 'Operational members' })).toHaveAttribute('aria-pressed', 'false');
+      });
+
+      it('clears Senior with the rest when every operational type is ticked', async () => {
+        const user = userEvent.setup();
+        render(
+          <RequirementModal
+            requirement={scoped(['active', 'probationary', 'life', 'senior', 'honorary'])}
+            categories={[]}
+            onClose={vi.fn()}
+            onSave={onSave}
+          />
+        );
+
+        const shortcut = screen.getByRole('button', { name: 'Operational members' });
+        await screen.findByRole('checkbox', { name: 'Senior Member' });
+        expect(shortcut).toHaveAttribute('aria-pressed', 'true');
+        await user.click(shortcut);
+
+        await saveAsEveryone(user);
+        const [payload] = onSave.mock.calls[0] as [{ required_membership_types: string[] }];
+        expect(payload.required_membership_types).toEqual(['honorary']);
+      });
+    });
+
     it('fills in the missing types when only some are ticked', async () => {
       const user = userEvent.setup();
       render(
