@@ -205,11 +205,15 @@ export const trainingService = {
     return response.data;
   },
   /**
-   * Get all training courses
+   * Get all training courses. `withClasses` keeps only courses with at least
+   * one class on their syllabus: the ones a cohort can be generated from.
    */
-  async getCourses(activeOnly: boolean = true): Promise<TrainingCourse[]> {
+  async getCourses(
+    activeOnly: boolean = true,
+    options: { withClasses?: boolean | undefined } = {}
+  ): Promise<TrainingCourse[]> {
     const response = await api.get<TrainingCourse[]>('/training/courses', {
-      params: { active_only: activeOnly },
+      params: { active_only: activeOnly, ...(options.withClasses ? { with_classes: true } : {}) },
     });
     return asArray(response.data);
   },

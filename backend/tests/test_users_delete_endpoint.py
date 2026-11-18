@@ -19,6 +19,7 @@ from fastapi import HTTPException
 
 from app.api.v1.endpoints import users as users_endpoint
 from app.models.user import UserStatus
+from app.services.member_files import FileRemoval, MemberFiles
 from tests.fake_request import fake_request
 
 
@@ -83,6 +84,19 @@ class TestDeleteUserHard:
         )
         monkeypatch.setattr(
             users_endpoint, "release_user_references", AsyncMock(return_value=0)
+        )
+        # The member's stored files have their own database-backed tests in
+        # test_member_hard_delete_integrity.py; here they would only add
+        # statements to the mocked session these tests count.
+        monkeypatch.setattr(
+            users_endpoint,
+            "collect_member_files",
+            AsyncMock(return_value=MemberFiles()),
+        )
+        monkeypatch.setattr(
+            users_endpoint,
+            "remove_files_after_hard_delete",
+            AsyncMock(return_value=FileRemoval()),
         )
 
     async def test_leaves_user_positions_to_the_orm(self):
