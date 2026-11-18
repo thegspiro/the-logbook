@@ -1,6 +1,204 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14), 2026-11-04 (pass 15) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14), 2026-11-04 (pass 15), 2026-11-16 (pass 16) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 16 (2026-11-16) — watchdog pickup: real delta (status-transition rules, connected-PayPal account, forms-rollout UX), 0 fixed, 0 new findings
+
+Watchdog-delegated iteration (the dedicated `/loop 30m /security-review`
+session remains unreachable; a separate watchdog session delegated this
+pass). Step 0 (`list_pull_requests`, state `open`) found no
+`claude/security-review-*` head. PR #4349 (Feature 03, Public surface &
+webhooks, pass 16) had already merged (`15d61fa5d`). Row 04 (Storefront &
+payments) was the next `⬜` row in `PROGRESS.md`'s rotation table, confirmed
+on a freshly fetched, pulled `main`.
+
+**Scope.** Diffed pass 15's own merge (`9a365b9f3`, PR #4040) against
+current `main` across the full established domain: `storefront.py`,
+`storefront_service.py`, `storefront_notification_service.py`,
+`storefront_preview_service.py`, `email_templates_storefront.py`,
+`storefront_payments.py`, `paypal_webhook.py`, `models/storefront.py`,
+`schemas/storefront.py`, `utils/size_order.py`, `utils/embroidery.py`, and
+the entire `frontend/src/modules/storefront/` tree.
+
+**Real delta this time — 26 files, +2589/-721, from a cluster of 8
+non-merge commits (two `fix(storefront)` commits, one PayPal-integration
+feature, and several shared forms/CSS rollouts touching this module's
+files incidentally). Every backend file's diff read in full; every
+frontend diff read in full or (for pure CSS/reflow hunks) confirmed by its
+diff content to carry no logic change:**
+
+1. **`9a0fccfa4` — "enforce order status transition rules" (W67b-4,
+   owner decision 2026-11-14).** `update_order_status`
+   (`storefront_service.py:2001`) previously accepted any target status,
+   including backwards into a payment state (e.g. Fulfilled → Awaiting
+   payment left an order stamped fulfilled while "awaiting payment", and a
+   settled order could be set back to Submitted). Now: forward moves are
+   unchanged (payment gate included); backward moves are refused except
+   among the three fulfilment-only stages (Ordered / Ready for pickup /
+   Fulfilled), and leaving Fulfilled this way clears `fulfilled_at`,
+   `fulfilled_by` and every item's `fulfilled_quantity` so nothing keeps
+   saying the order was handed over; a settled order can never be set to
+   Submitted or Awaiting payment; setting the same status again is a
+   no-op (no event row, no duplicate email — correctly closes a
+   Pitfall #36-shaped "retry re-sends" gap for this one path); Cancelled
+   through this route is now routed to `cancel_order` so it gets a real
+   cancellation date/reason/notice instead of a bare status flip. Verified
+   the lock-then-check ordering is preserved: `get_order(...,
+for_update=status == StoreOrderStatus.PAID)` still locks only the one
+   transition that writes the ledger (SF8-04-2's fix, unchanged), and the
+   new `_status_transition_error` check runs after that lock is taken, so
+   a concurrent request cannot race the refusal. The bulk endpoint's
+   rollback-on-refusal (`bulk_mark_paid`-style) was extended correctly: it
+   rolls back only when the refused target was PAID (the only one that
+   locks), never on every refusal — rolling back unconditionally would
+   expire every loaded object and break `record_vendor_order`'s own use of
+   the window object right after calling this with ORDERED, per the
+   commit's own comment, which I verified by reading the caller. Shipped
+   with its own guard tests
+   (`tests/test_storefront_service.py::TestOrderStatusTransitions`, 5
+   cases: same-status no-op, cancel-through-status-route is a real
+   cancellation, backward-into-payment-state refused for all three
+   payment statuses, a settled order refused back to Awaiting payment,
+   and — read separately — the PAID-lock rollback on a bulk refusal). Not
+   a security defect in the shipped state; it is reviewed here because it
+   changes what the money-handling status machine will accept, which is
+   exactly this feature's weighted dimension.
+2. **`0ed80886b` — "let an admin cancel an order from the order dialog"
+   (W67b-5).** Frontend-only: `OrderDetailModal.tsx` gained a cancel
+   section using `useConfirm()` (Pitfall #16-compliant — no
+   `window.confirm`) and a reason textarea, calling
+   `storefrontService.cancelOrder()`, which was already the existing,
+   correctly-gated `POST /orders/{order_id}/cancel` route
+   (`storefront.py:1464`, `require_permission("storefront.manage")`,
+   org-scoped via `current_user.organization_id`, unchanged). No new
+   route, no new permission surface — confirmed the 48-route AST count
+   below is unchanged by this commit.
+3. **`23b297ce1` — "let the store's PayPal button use the connected PayPal
+   account."** A real feature addition, reviewed as money-adjacent
+   surface even though it adds no new route:
+   - New column `store_settings.paypal_use_connected` (migration
+     `053d3e96b4fa`): `NOT NULL`, `server_default="0"`, guarded by
+     `_has_table() and not _has_column()` so it tolerates a
+     `create_all`-built table (Pitfall #26) and is safe to run twice;
+     downgrade drops the column; no existing row is rewritten (every
+     store keeps its current PayPal link/email) — Pitfall #35 compliant.
+   - `load_connected_paypal_account(db, organization_id)`
+     (`storefront_service.py:314`) reads the org's connected PayPal
+     `Integration` row filtered on `organization_id ==
+str(organization_id)` (the caller's own, server-resolved id —
+     never client-supplied) plus `integration_type == "paypal"`,
+     `status == "connected"`, `enabled.is_(True)` — correctly org-scoped
+     (XC-3), no cross-tenant read possible.
+   - Threaded through `StorefrontService.get_settings` into a
+     `connected_paypal: Dict[org_id, PayPalAccount]` map shared with
+     `StorefrontNotificationService` and the preview service, rather than
+     adding an argument to two dozen call sites. Traced every call site
+     that can reach `build_payment_option(s)` or
+     `send_payment_reminder`/`send_order_confirmation`/etc.
+     (`create_order`, `update_order_status`, `record_payment`,
+     `mark_order_paid`, `waive_order_payment`, `refund_order`,
+     `cancel_order`, `run_payment_reminders`, the window-lifecycle
+     notifiers) and confirmed every one of them calls
+     `self.get_settings(organization_id)` before touching
+     `self.notifications` or building payment options, so
+     `connected_paypal` is always populated for the org in play before
+     it is read — no path reads a stale or empty map for a different
+     org.
+   - `store_paypal_account()` (`storefront_payments.py`) applies the
+     owner-decided fallback rule (use the connected account only if it has
+     a non-empty link or email; otherwise fall back to the store's own
+     fields) — a pure function, no new trust boundary.
+   - `GET`/`PUT /store/settings` now also return `connectedPaypal`
+     (`ConnectedPayPalAccount` — a PayPal.Me link and an account email),
+     but only from the admin-only `/settings` routes
+     (`require_permission("storefront.manage")`, unchanged); the public
+     `GET /storefront` endpoint only ever derives a `handle` string from
+     the same account via `build_payment_method_summaries`, which is the
+     same shape of value (a payment handle) the pre-order screen already
+     exposed to any member before this change — not a new exposure.
+   - Frontend: `StoreSettingsTab.tsx` adds a read-only display of the
+     connected account (edited only on the Integrations screen) and a
+     radio choice between it and the store's own fields; uses
+     `blankToNull` on the existing text fields (Pitfall #1 update-path
+     convention, unchanged) and sends `paypalUseConnected` as a plain
+     boolean.
+4. **`c0c17b42e` — "show delivery details and charge lines on order
+   screens" (W67b-3).** New shared components
+   `OrderDeliveryDetails`/`OrderChargeRows` render `shippingAddress`,
+   `memberNotes` and the subtotal/tax/shipping/discount lines as plain
+   JSX text (no `dangerouslySetInnerHTML`) on both the admin
+   `OrderDetailModal` and the member's `MyOrdersPage` — read-only,
+   display-only, no new data fetch or mutation.
+5. **Forms-rollout commits (`c85acb168`, `4b5321efe`, `0f11afce6`) and
+   CSS/reflow commits (`821adc330`, `6dc2a319a`)** — adopt the shared
+   `FormField`/`useFieldErrors`/`useDiscardGuard`/`useUnsavedChanges`
+   infrastructure in `CheckoutPage.tsx`, `ProductFormModal.tsx` and
+   `WindowFormModal.tsx`, and reflow two tables to `rwd-table`/their own
+   card width. Grepped the full diff for
+   `window\.(confirm|alert|prompt)`, `dangerouslySetInnerHTML` and
+   `localStorage` — zero matches. `WindowFormModal.tsx`'s new
+   partial-save path (`send(refused)`, omitting a server-refused field's
+   key from the update payload and retrying) is the correct
+   "omit = leave alone" shape (Pitfall #1's update-path corollary), and it
+   calls the same, already-org-scoped `updateWindow` endpoint — no new
+   backend surface. `940cca9b5` ("email training waiver requests…") does
+   not touch any file in this feature's scope — training module only,
+   confirmed by its own diff stat.
+
+**Route inventory re-enumerated by AST, independently of the file
+diff.** `ast.walk` over every `@router.{get,post,put,patch,delete}`
+decorator in `storefront.py` finds **48** routes — unchanged from pass 15.
+No route added or removed by any commit in this window's delta.
+
+**Re-verified unchanged, by direct read:** all five self-settlement
+separation-of-duties guards still call `assert_different_person` before
+any ledger mutation (`storefront_service.py:2071` `record_payment`,
+`:2164` `mark_order_paid`, `:2244`/`:2288` `waive_order_payment`, `:2496`
+`refund_order`); price/amount integrity (`StoreOrderItemInput` still
+carries no price field; `_price_lines` still recomputes every line from
+the org-scoped catalog); capacity locking (organisation → window →
+product → tally lock order, `with_for_update()` throughout); the PayPal
+webhook signature verification and replay/idempotency guard
+(`UniqueConstraint(organization_id, provider, external_id)`,
+`paypal_webhook.py` not in this window's delta); `get_admin_recipients`'s
+account-status filter (SF14-04-1's fix, `storefront_notification_service.py`
+line unchanged in this diff's hunks).
+
+**0 fixed, 0 new findings. 0 findings remain OPEN or FLAGGED for this
+feature going into pass 17** — SF-1 through SF-11, SF8-04-1/2/3 and
+SF14-04-1 all re-verified FIXED and unchanged; the real delta reviewed
+above (W67b-3/4/5, the connected-PayPal feature, and the forms rollout)
+introduced nothing new to flag — every new code path is either org-scoped,
+permission-gated the same as its unchanged siblings, or read-only/display
+logic with no new trust boundary. The two `fix(storefront)` commits
+(W67b-4, W67b-5) are themselves security-relevant hardening that landed
+outside this rotation (an owner-directed workflow-review fix), re-verified
+correct here rather than re-applied.
+
+## Completion gate (pass 16)
+
+| Check                                                                                                                                                                                        | Result                                                       |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (7.5.0 locally; CI pins 7.4.1 — clean either way)                                                                                                              | ✅ 0 violations                                              |
+| `black --check app/ tests/ alembic/` (26.10.1, CI's pin)                                                                                                                                     | ✅ 3255 files unchanged                                      |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, CI's pin)                                                                                                                                  | ✅ clean                                                     |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                            | ✅ 784 revisions, single head (`053d3e96b4fa`)               |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                            | ✅ 327 routes, 0 errors, 0 warnings                          |
+| `docs/DATABASE_SCHEMA.md` vs `generate_schema_docs.py`                                                                                                                                       | ✅ already current (`paypal_use_connected` present, no diff) |
+| backend tests (scoped: `-k "storefront or stripe or payment or refund or checkout or paypal"`)                                                                                               | ✅ 1050 passed, 1 skipped (environment-only: `pywebpush`)    |
+| standing guard suites (org-scoping ratchet, capacity locking, CSV sweep, LIKE escaping, `create_all`-table tolerance, baseline member grants, account-status gates, log-call-shape, logging) | ✅ 196 passed                                                |
+| `cd frontend && npm run typecheck`                                                                                                                                                           | ✅ 0 errors                                                  |
+| `npm run lint` (`eslint --max-warnings 10`)                                                                                                                                                  | ✅ 0 errors, 0 warnings                                      |
+
+Note on tooling: `/usr/bin/python3` (3.13) is the interpreter with
+`sqlalchemy`/`fastapi`/`flake8`/`black`/`isort`/`pytest` installed at
+versions matching (or within the documented drift of) CI's pins; a bare
+`python3`/`pytest` on this sandbox resolves to an isolated interpreter
+lacking the app's own dependencies.
+
+Next in the rotation: Feature 05 (Finance & approvals).
 
 ---
 
