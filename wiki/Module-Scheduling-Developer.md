@@ -116,7 +116,7 @@ GET    /shifts/{id}/unavailable-members # User ids on leave/time off/already ass
 GET    /availability                    # Member availability (scheduling.assign)
 GET    /my-shifts                       # Caller's shifts
 GET    /my-assignments                  # Caller's assignments, with embedded shift data
-GET    /my-hours-history                # Caller's hours
+GET    /my-hours-history                # Caller's hours (year's months, totals, all time, and `history`: every month on record)
 GET    /standing-shifts/preview         # Preview a standing series
 GET    /standing-shifts                 # Caller's standing claims
 POST   /standing-shifts                 # Create a standing claim
@@ -180,7 +180,7 @@ DELETE /attendance/{id}                 # Remove attendance (scheduling.manage)
 POST   /shifts/{id}/check-in            # Member check-in
 POST   /shifts/{id}/check-out           # Member check-out
 GET    /shifts/{id}/my-attendance       # Caller's attendance on a shift, or null
-GET    /my-attendance-history           # Caller's attendance (optional start_date/end_date; embeds shift date/times)
+GET    /my-attendance-history           # Caller's attendance (limit/offset paging, optional start_date/end_date; embeds shift date/times and shift_is_finalized)
 GET    /pre-shift-work/eligible-shifts  # Upcoming shifts the caller may log prep work against
 GET    /pre-shift-work/active           # Caller's running session, or null
 POST   /pre-shift-work                  # Start a session
