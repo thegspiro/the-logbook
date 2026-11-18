@@ -24,10 +24,18 @@ from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.endpoints import users as users_endpoint
 from app.core.database import Base
+from app.models.attendance_waiver import (
+    AttendanceWaiverAttachment,
+    AttendanceWaiverRequest,
+    AttendanceWaiverStatus,
+    AttendanceWaiverWorkflow,
+)
 from app.models.inventory import (
     InventoryItem,
     ItemCondition,
@@ -40,8 +48,13 @@ from app.models.training import (
     ShiftAssignment,
     ShiftCompletionReport,
     StandingShiftClaim,
+    SubmissionStatus,
+    TrainingRecord,
+    TrainingStatus,
+    TrainingSubmission,
 )
 from app.schemas.shift_completion import ShiftCompletionReportResponse
+from app.services import file_storage_service, member_files
 from app.services.inventory_service import InventoryService
 from app.services.user_deletion_service import _cascading_references
 from tests.fake_request import fake_request
@@ -414,3 +427,263 @@ class TestInventoryReturnedToStock:
         assert radio.status == ItemStatus.AVAILABLE
         assert gloves.quantity_issued == 0
         assert gloves.quantity == 10
+
+
+class TestStoredFilesGoWithTheMember:
+    """D11: the rows a permanent delete cascades away named stored files. The
+    files go too, after the commit, and only the ones no other row names."""
+
+    @pytest.fixture
+    def root(self, tmp_path, monkeypatch):
+        uploads = tmp_path / "uploads"
+        uploads.mkdir()
+        monkeypatch.setattr(file_storage_service, "UPLOADS_ROOT", str(uploads))
+        return uploads
+
+    @staticmethod
+    def _file(root, org_id: str, area: str):
+        directory = root / org_id / area / uuid.uuid4().hex
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{uuid.uuid4().hex}.pdf"
+        path.write_bytes(b"%PDF-1.4")
+        return path
+
+    @staticmethod
+    def _entry(path, name="cert.pdf") -> dict:
+        return {"file_name": name, "file_path": str(path), "file_type": "x"}
+
+    @staticmethod
+    async def _submission(db, dept, member: str, attachments) -> TrainingSubmission:
+        submission = TrainingSubmission(
+            organization_id=dept.org,
+            submitted_by=member,
+            course_name="CPR",
+            training_type="certification",
+            completion_date=date(2024, 1, 1),
+            hours_completed=4.0,
+            status=SubmissionStatus.APPROVED,
+            attachments=attachments,
+        )
+        db.add(submission)
+        await db.flush()
+        return submission
+
+    @staticmethod
+    async def _record(db, dept, member: str, attachments) -> TrainingRecord:
+        record = TrainingRecord(
+            organization_id=dept.org,
+            user_id=member,
+            course_name="CPR",
+            training_type="certification",
+            completion_date=date(2024, 1, 1),
+            hours_completed=4.0,
+            status=TrainingStatus.COMPLETED,
+            attachments=attachments,
+        )
+        db.add(record)
+        await db.flush()
+        return record
+
+    @staticmethod
+    async def _waiver_document(db, dept, member: str, root):
+        request = AttendanceWaiverRequest(
+            organization_id=dept.org,
+            workflow=AttendanceWaiverWorkflow.TRAINING_SESSION,
+            user_id=member,
+            event_title_snapshot="Company Drill",
+            event_start_snapshot=datetime(2026, 3, 4, 23, tzinfo=timezone.utc),
+            session_date=date(2026, 3, 4),
+            status=AttendanceWaiverStatus.DENIED,
+            category="Medical",
+            submitted_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+        )
+        db.add(request)
+        await db.flush()
+        directory = root / dept.org / "attendance-waivers" / str(request.id)
+        directory.mkdir(parents=True)
+        path = directory / f"{uuid.uuid4().hex}.pdf"
+        path.write_bytes(b"%PDF-1.4 doctor's note")
+        db.add(
+            AttendanceWaiverAttachment(
+                organization_id=dept.org,
+                request_id=request.id,
+                ordinal=1,
+                file_path=str(path),
+                mime_type="application/pdf",
+                file_size=10,
+                sha256="0" * 64,
+            )
+        )
+        await db.flush()
+        return path
+
+    @staticmethod
+    def _audit_counts() -> dict:
+        event = users_endpoint.log_audit_event.await_args.kwargs
+        assert event["event_type"] == "user_hard_deleted"
+        data = event["event_data"]
+        return {
+            key: data[key]
+            for key in ("files_deleted", "files_not_deleted", "files_shared_kept")
+        }
+
+    async def test_removes_the_files_of_every_cascaded_row(
+        self, db_session, department, root
+    ):
+        certificate = self._file(root, department.org, "self-reports")
+        evidence = self._file(root, department.org, "training-records")
+        await self._submission(
+            db_session, department, department.trainee, [self._entry(certificate)]
+        )
+        await self._record(
+            db_session, department, department.trainee, [self._entry(evidence)]
+        )
+        note = await self._waiver_document(
+            db_session, department, department.trainee, root
+        )
+
+        await _hard_delete(db_session, department, department.trainee)
+
+        assert not certificate.exists()
+        assert not evidence.exists()
+        assert not note.exists()
+        assert self._audit_counts() == {
+            "files_deleted": 3,
+            "files_not_deleted": 0,
+            "files_shared_kept": 0,
+        }
+
+    async def test_keeps_a_file_another_row_still_names(
+        self, db_session, department, root
+    ):
+        shared = self._file(root, department.org, "self-reports")
+        own = self._file(root, department.org, "self-reports")
+        await self._submission(
+            db_session,
+            department,
+            department.trainee,
+            [self._entry(shared), self._entry(own)],
+        )
+        await self._record(
+            db_session, department, department.examiner, [self._entry(shared)]
+        )
+
+        await _hard_delete(db_session, department, department.trainee)
+
+        assert shared.exists()
+        assert not own.exists()
+        assert self._audit_counts() == {
+            "files_deleted": 1,
+            "files_not_deleted": 0,
+            "files_shared_kept": 1,
+        }
+
+    async def test_never_deletes_outside_the_organizations_storage(
+        self, db_session, department, root, tmp_path
+    ):
+        own = self._file(root, department.org, "self-reports")
+        foreign = self._file(root, str(uuid.uuid4()), "self-reports")
+        foreign_record = self._file(root, str(uuid.uuid4()), "training-records")
+        outside = tmp_path / "outside.pdf"
+        outside.write_bytes(b"not in the uploads volume")
+        await self._submission(
+            db_session,
+            department,
+            department.trainee,
+            [self._entry(own), self._entry(foreign), self._entry(outside)],
+        )
+        await self._record(
+            db_session,
+            department,
+            department.trainee,
+            [self._entry(foreign_record), self._entry(outside), "bare string"],
+        )
+
+        await _hard_delete(db_session, department, department.trainee)
+
+        assert not own.exists()
+        assert foreign.exists()
+        assert foreign_record.exists()
+        assert outside.exists()
+        assert self._audit_counts()["files_deleted"] == 1
+
+    async def test_an_approved_certificate_is_deleted_once(
+        self, db_session, department, root
+    ):
+        certificate = self._file(root, department.org, "self-reports")
+        await self._submission(
+            db_session, department, department.trainee, [self._entry(certificate)]
+        )
+        await self._record(
+            db_session, department, department.trainee, [self._entry(certificate)]
+        )
+
+        await _hard_delete(db_session, department, department.trainee)
+
+        assert not certificate.exists()
+        assert self._audit_counts() == {
+            "files_deleted": 1,
+            "files_not_deleted": 0,
+            "files_shared_kept": 0,
+        }
+
+    async def test_a_refused_delete_touches_no_file(
+        self, db_session, department, root, monkeypatch
+    ):
+        certificate = self._file(root, department.org, "self-reports")
+        evidence = self._file(root, department.org, "training-records")
+        await self._submission(
+            db_session, department, department.trainee, [self._entry(certificate)]
+        )
+        await self._record(
+            db_session, department, department.trainee, [self._entry(evidence)]
+        )
+        note = await self._waiver_document(
+            db_session, department, department.trainee, root
+        )
+        commit = db_session.commit
+        refused = AsyncMock(
+            side_effect=[IntegrityError("DELETE FROM users", {}, Exception("1451"))]
+        )
+        monkeypatch.setattr(db_session, "commit", refused)
+
+        with pytest.raises(HTTPException) as exc:
+            await _hard_delete(db_session, department, department.trainee)
+
+        monkeypatch.setattr(db_session, "commit", commit)
+        assert exc.value.status_code == 409
+        assert certificate.exists()
+        assert evidence.exists()
+        assert note.exists()
+
+    async def test_an_unanswerable_reference_check_keeps_every_file(
+        self, db_session, department, root, monkeypatch
+    ):
+        certificate = self._file(root, department.org, "self-reports")
+        evidence = self._file(root, department.org, "training-records")
+        await self._submission(
+            db_session, department, department.trainee, [self._entry(certificate)]
+        )
+        await self._record(
+            db_session, department, department.trainee, [self._entry(evidence)]
+        )
+        monkeypatch.setattr(
+            member_files,
+            "referenced_elsewhere",
+            AsyncMock(side_effect=RuntimeError("database went away")),
+        )
+
+        await _hard_delete(db_session, department, department.trainee)
+
+        gone = await db_session.scalar(
+            text("SELECT COUNT(*) FROM users WHERE id = :id"),
+            {"id": department.trainee},
+        )
+        assert gone == 0
+        assert certificate.exists()
+        assert evidence.exists()
+        assert self._audit_counts() == {
+            "files_deleted": 0,
+            "files_not_deleted": 2,
+            "files_shared_kept": 0,
+        }
