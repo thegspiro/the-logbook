@@ -16,9 +16,9 @@ import uuid
 from pathlib import Path
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
 
-from app.models.training import TrainingCourse, TrainingType
+from app.models.training import ExternalTrainingImport, TrainingCourse, TrainingType
 from app.services.external_course_mapping import course_hours
 from tests.test_external_training_course_mapping import (
     _map,
@@ -322,3 +322,140 @@ class TestMigrationCorrectsRecordsAlreadyImported:
 
         await db_session.execute(text(migration.DOWNGRADE_SQL))
         assert await _hours(db_session, ctx, "T-2") == (1.0, 3.0)
+
+
+async def _staged(db_session, ctx, transcript):
+    return (
+        await db_session.execute(
+            select(ExternalTrainingImport).where(
+                ExternalTrainingImport.provider_id == ctx.provider.id,
+                ExternalTrainingImport.external_record_id == transcript,
+            )
+        )
+    ).scalar_one()
+
+
+@pytest.mark.integration
+class TestACourseEditedAfterCreditingStillMovesItsHours:
+    """The hours an import took from its course are what a re-map compares.
+
+    A course's hours can be edited after its imports were credited. Compared
+    against the course's settings as they are now, the hour it gave read as
+    an officer's correction and was left behind by a re-map or an unmap.
+    """
+
+    async def test_the_import_records_the_hours_it_took(self, db_session):
+        ctx = await _setup(db_session)
+        conduct = await _course(db_session, ctx, "Conduct", 1.0)
+        await _upload_report(db_session, ctx, _row(*CONDUCT, "T-0", email="x@y.test"))
+        await _map(
+            db_session, ctx, await _mapping(db_session, ctx, CONDUCT[1]), conduct.id
+        )
+
+        await _upload_report(db_session, ctx, _row(*CONDUCT, "T-1"))
+        await _upload_report(db_session, ctx, _row(*CONDUCT, "T-2", hours="0.5", day=5))
+
+        assert (await _staged(db_session, ctx, "T-1")).course_hours_credited == 1.0
+        assert (await _staged(db_session, ctx, "T-2")).course_hours_credited is None
+
+    async def test_remapping_after_the_course_was_edited_moves_the_hours(
+        self, db_session
+    ):
+        ctx = await _setup(db_session)
+        conduct = await _course(db_session, ctx, "Conduct", 1.0)
+        longer = await _course(db_session, ctx, "Conduct (long)", 3.0)
+        await _upload_report(db_session, ctx, _row(*CONDUCT, "T-1"))
+        mapping = await _mapping(db_session, ctx, CONDUCT[1])
+        await _map(db_session, ctx, mapping, conduct.id)
+        assert await _hours(db_session, ctx, "T-1") == (1.0, 1.0)
+        conduct.credit_hours = 2.0
+        await db_session.flush()
+
+        await _map(db_session, ctx, mapping, longer.id)
+
+        assert await _hours(db_session, ctx, "T-1") == (3.0, 3.0)
+        staged = await _staged(db_session, ctx, "T-1")
+        await db_session.refresh(staged)
+        assert staged.course_hours_credited == 3.0
+
+    async def test_unmapping_after_the_course_was_edited_takes_the_hours_back(
+        self, db_session
+    ):
+        ctx = await _setup(db_session)
+        conduct = await _course(db_session, ctx, "Conduct", 1.0)
+        await _upload_report(db_session, ctx, _row(*CONDUCT, "T-1"))
+        mapping = await _mapping(db_session, ctx, CONDUCT[1])
+        await _map(db_session, ctx, mapping, conduct.id)
+        conduct.credit_hours = 2.0
+        await db_session.flush()
+
+        await _map(db_session, ctx, mapping, None)
+
+        assert await _hours(db_session, ctx, "T-1") == (0.0, None)
+        staged = await _staged(db_session, ctx, "T-1")
+        await db_session.refresh(staged)
+        assert staged.course_hours_credited is None
+
+    async def test_an_officers_hours_survive_a_course_edit_and_remap(self, db_session):
+        ctx = await _setup(db_session)
+        conduct = await _course(db_session, ctx, "Conduct", 1.0)
+        other = await _course(db_session, ctx, "Other", 3.0)
+        await _upload_report(db_session, ctx, _row(*CONDUCT, "T-1"))
+        mapping = await _mapping(db_session, ctx, CONDUCT[1])
+        await _map(db_session, ctx, mapping, conduct.id)
+        record = await _record(db_session, ctx, "T-1")
+        record.hours_completed = 2.0
+        record.credit_hours = 2.0
+        conduct.credit_hours = 2.0
+        await db_session.flush()
+
+        await _map(db_session, ctx, mapping, other.id)
+
+        # Two hours now matches the edited course, but the import was given
+        # one: the two is the officer's, and stays.
+        assert await _hours(db_session, ctx, "T-1") == (2.0, 2.0)
+
+
+def _load_backfill():
+    versions = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+    matches = sorted(versions.glob("*_bbeb4867d393_*.py"))
+    assert len(matches) == 1, matches
+    spec = importlib.util.spec_from_file_location("course_hours_backfill", matches[0])
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.integration
+class TestBackfillRecordsWhatEarlierImportsTook:
+    async def test_course_credited_records_are_recorded_and_others_are_not(
+        self, db_session
+    ):
+        migration = _load_backfill()
+        ctx = await _setup(db_session)
+        conduct = await _course(db_session, ctx, "Conduct", 1.0)
+        await _upload_report(db_session, ctx, _row(*CONDUCT, "T-0", email="x@y.test"))
+        await _map(
+            db_session, ctx, await _mapping(db_session, ctx, CONDUCT[1]), conduct.id
+        )
+        for transcript, day in (("T-1", 6), ("T-2", 5), ("T-3", 4)):
+            await _upload_report(db_session, ctx, _row(*CONDUCT, transcript, day=day))
+        # What the code before this revision left: the course's hours on the
+        # record and nothing on the import.
+        for transcript in ("T-1", "T-2", "T-3"):
+            (await _staged(db_session, ctx, transcript)).course_hours_credited = None
+        typed = await _record(db_session, ctx, "T-2")
+        typed.hours_completed = 4.0
+        typed.credit_hours = 4.0
+        zero = await _record(db_session, ctx, "T-3")
+        zero.hours_completed = 0.0
+        zero.credit_hours = 0.0
+        await db_session.flush()
+
+        await db_session.execute(text(migration.BACKFILL_SQL))
+        await db_session.execute(text(migration.BACKFILL_SQL))
+
+        for transcript, expected in (("T-1", 1.0), ("T-2", None), ("T-3", None)):
+            staged = await _staged(db_session, ctx, transcript)
+            await db_session.refresh(staged)
+            assert staged.course_hours_credited == expected, transcript
