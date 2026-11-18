@@ -99,12 +99,22 @@ receives is a product decision: sign-ups for past classes, pipeline
 enrollment, credit for classes already held. Mirrored into
 `docs/KNOWN_LIMITATIONS.md`.
 
-### W27-4 — NIT — The cohort's course list offers courses with no classes — OPEN
+### W27-4 — NIT — The cohort's course list offers courses with no classes — ✅ FIXED
 
 `Pump Operations` and `Vehicle Familiarization`, component courses with empty
-syllabi, are offered beside "Driver Operator Course", while the hint says "The
-course must already have classes on its syllabus". Left: choosing one fails
-at the preview with a message rather than silently.
+syllabi, were offered beside "Driver Operator Course", while the hint says
+"The course must already have classes on its syllabus". Choosing one failed
+only at the preview.
+
+`GET /training/courses` takes an optional `with_classes=true`, which keeps
+courses with at least one class on their syllabus. The filter is correlated
+on the already org-scoped course, so another department's class rows cannot
+qualify one. Without the parameter the list is unchanged. The cohort wizard
+asks for it, so only courses a cohort can be generated from are offered.
+Covered by `test_training_courses_with_classes.py` (three of its four cases
+failed before the change; the fourth checks the list without the parameter
+is unchanged), and by a `trainingServices` case and a `CohortWizard` case,
+both of which failed before the change.
 
 ## Checklist
 

@@ -6,6 +6,7 @@ import { STANDARD_SIZES, styleAttributesLabel } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
+import { ScrollCueRow } from '../../../components/ux/ScrollCueRow';
 import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import { VariantCapsules } from '../components/VariantCapsules';
@@ -84,6 +85,10 @@ const compareSizes = (a: string, b: string): number => {
 };
 
 /** Stock matrix — shows on-hand quantities by size × color (or style) */
+// Opaque in the dialog's own colour, so counts scrolling under the pinned
+// column are hidden rather than showing through it.
+const PINNED_SIZE_CELL = 'bg-theme-surface-modal sticky left-0 z-10 shadow-[1px_0_0_var(--surface-border)]';
+
 const StockMatrix: React.FC<{ items: InventoryItem[] }> = ({ items }) => {
   const matrix = useMemo(() => {
     const sizes = new Set<string>();
@@ -155,12 +160,19 @@ const StockMatrix: React.FC<{ items: InventoryItem[] }> = ({ items }) => {
   const { sizeList, colList, grid } = matrix;
   const hasColumns = colList.length > 1 || colList[0] !== '';
 
+  // A size x colour grid is read across and down, so it keeps its columns on a
+  // phone: it scrolls sideways inside the dialog, the cue says there is more,
+  // and the Size column stays pinned so every count still has its row label.
   return (
-    <div className="overflow-x-auto">
+    <ScrollCueRow role="group" aria-label="Stock by size and colour">
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr>
-            <th className="text-theme-text-muted border-theme-surface-border border-b p-2 text-left text-xs font-medium">
+            <th
+              scope="col"
+              data-scroll-pin
+              className={`${PINNED_SIZE_CELL} text-theme-text-muted border-theme-surface-border border-b p-2 text-left text-xs font-medium`}
+            >
               Size
             </th>
             {hasColumns ? (
@@ -182,7 +194,12 @@ const StockMatrix: React.FC<{ items: InventoryItem[] }> = ({ items }) => {
         <tbody>
           {sizeList.map((sz) => (
             <tr key={sz} className="border-theme-surface-border border-b last:border-b-0">
-              <td className="text-theme-text-primary p-2 text-xs font-medium uppercase">{sz}</td>
+              <th
+                scope="row"
+                className={`${PINNED_SIZE_CELL} text-theme-text-primary p-2 text-left text-xs font-medium uppercase`}
+              >
+                {sz}
+              </th>
               {colList.map((col) => {
                 const cell = grid[sz]?.[col];
                 const onHand = cell?.onHand ?? 0;
@@ -205,7 +222,7 @@ const StockMatrix: React.FC<{ items: InventoryItem[] }> = ({ items }) => {
           ))}
         </tbody>
       </table>
-    </div>
+    </ScrollCueRow>
   );
 };
 

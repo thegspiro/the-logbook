@@ -262,7 +262,13 @@ const LocationKioskPage: React.FC = () => {
               <div className="mb-8 flex flex-col items-center justify-center gap-6 sm:flex-row sm:items-start sm:gap-10">
                 <div className="flex flex-col items-center">
                   <div className="rounded-2xl bg-white p-6 shadow-2xl shadow-black/50">
-                    <QRCodeSVG value={getCheckInUrl(currentEvent.event_id)} size={200} level="H" includeMargin={true} />
+                    <QRCodeSVG
+                      value={getCheckInUrl(currentEvent.event_id)}
+                      size={200}
+                      level="H"
+                      includeMargin={true}
+                      title={`Member check-in QR code for ${currentEvent.event_name}`}
+                    />
                   </div>
                   <p className="text-theme-text-primary mt-4 text-lg font-semibold">Department member</p>
                   <p className="text-theme-text-muted mt-1 max-w-[16rem] text-sm">
@@ -277,6 +283,7 @@ const LocationKioskPage: React.FC = () => {
                       size={200}
                       level="H"
                       includeMargin={true}
+                      title={`Guest sign-in QR code for ${currentEvent.event_name}`}
                     />
                   </div>
                   <p className="text-theme-text-primary mt-4 text-lg font-semibold">Visiting us today?</p>
@@ -289,7 +296,13 @@ const LocationKioskPage: React.FC = () => {
               <>
                 <div className="mb-8 flex justify-center">
                   <div className="rounded-2xl bg-white p-8 shadow-2xl shadow-black/50">
-                    <QRCodeSVG value={getCheckInUrl(currentEvent.event_id)} size={280} level="H" includeMargin={true} />
+                    <QRCodeSVG
+                      value={getCheckInUrl(currentEvent.event_id)}
+                      size={280}
+                      level="H"
+                      includeMargin={true}
+                      title={`Check-in QR code for ${currentEvent.event_name}`}
+                    />
                   </div>
                 </div>
 
