@@ -3920,6 +3920,13 @@ class ExternalTrainingImport(Base):
     credit_hours: Mapped[Optional[float]] = mapped_column(
         Float
     )  # Credit hours (from providers that report hours directly)
+    # The hours this completion's training record took from its mapped
+    # library course because the provider reported none; null when it took
+    # none. A course's hours can be edited after crediting, so re-mapping
+    # compares a record against this rather than the course's current
+    # settings to tell a credit it gave from one an officer entered
+    # (app.services.external_course_mapping.apply_course_mapping).
+    course_hours_credited: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     completion_date: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True)
     )  # When completed
