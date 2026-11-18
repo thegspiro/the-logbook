@@ -72,18 +72,33 @@ interval must be at least 1. Covered by two cases in `ItemFormModal.test.tsx`;
 the first fails against the old form. Re-driven: both labels read "_", and the
 coat saved on the first Create.
 
-### W38-3 — NIT — A consumable category's item defaults to Individual tracking — OPEN
+### W38-3 — NIT — A consumable category's item defaults to Individual tracking — ✅ FIXED
 
 EMS Supplies is described as "Consumables restocked by quantity and
-expiration", but Add an item under it opens with Tracking Type "Individual". The
-quartermaster has to switch it to Pool by hand. Left: a default derived from the
-category's type is a small design choice.
+expiration", but Add an item under it opened with Tracking Type "Individual".
+The quartermaster had to switch it to Pool by hand.
 
-### W38-4 — NIT — A room's name repeats in the storage step's room picker — OPEN
+A new item's tracking type now follows its category until the officer picks
+one: Pool for a `consumable` or `medical` category (medical supplies carry
+lots, which exist only on pool items), Individual otherwise
+(`defaultTrackingTypeFor` in `modules/inventory/types`). It is a starting value,
+never a lock. A tracking type the officer chose, or one the opening page
+asked for, is kept, and an existing item's is never changed. When the form
+opens already on a consumable category, Cancel still closes it without asking,
+since nothing was typed. Covered by `ItemFormModal.test.tsx` (the two behaviour
+cases failed before the change) and `types/index.test.ts`.
+
+### W38-4 — NIT — A room's name repeats in the storage step's room picker — ✅ FIXED
 
 The Storage step's Room select read "Training Room A — Review Valley Fire
 Department — Review Valley Fire Department". The department name appears twice
 where the other pickers show it once.
+**Fix:** already in place, from b2e89ebb ("Location pickers: stop repeating a
+facility room's building"). A facility room's location is named "Room — …
+— Facility" and its building is that same facility; `buildingNotInName` in
+`utils/locationLabel.ts` now drops the building when the name already ends
+with it, and the setup page's room picker uses it. Covered by
+`locationLabel.test.ts` and a case in `InventorySetupPage.test.tsx`.
 
 ## Checklist
 
@@ -96,7 +111,7 @@ where the other pickers show it once.
 | 5. Coming back to it    | ✅ everything created is listed on the items page                           |
 | 6. On a phone           | not driven (quartermaster setup)                                            |
 | 7. Everyone can use it  | ✅ wizard and item form fully labelled                                      |
-| 8. What happens around  | W38-3, W38-4 open                                                           |
+| 8. What happens around  | W38-3, W38-4 fixed                                                          |
 
 ## Completion gate
 

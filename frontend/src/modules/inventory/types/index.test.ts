@@ -8,6 +8,7 @@ import {
   getStatusLabel,
   getConditionColor,
   getItemTypeFromCategory,
+  defaultTrackingTypeFor,
   sizeLabel,
   standardSizeCode,
   SIZE_PICKER_GROUPS,
@@ -135,6 +136,22 @@ describe('getItemTypeFromCategory', () => {
 
   it('returns "equipment" for undefined category', () => {
     expect(getItemTypeFromCategory(undefined)).toBe('equipment');
+  });
+});
+
+describe('defaultTrackingTypeFor', () => {
+  const of = (item_type: string) => ({ item_type }) as Parameters<typeof defaultTrackingTypeFor>[0];
+
+  it('counts used-up stock by quantity', () => {
+    expect(defaultTrackingTypeFor(of('consumable'))).toBe('pool');
+    expect(defaultTrackingTypeFor(of('medical'))).toBe('pool');
+  });
+
+  it('tracks everything else one record per item, including no category', () => {
+    for (const type of ['uniform', 'ppe', 'tool', 'equipment', 'vehicle', 'electronics', 'other']) {
+      expect(defaultTrackingTypeFor(of(type))).toBe('individual');
+    }
+    expect(defaultTrackingTypeFor(null)).toBe('individual');
   });
 });
 

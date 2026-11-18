@@ -108,12 +108,17 @@ endpoint, and `frontend/src/modules/scheduling/services/myAttendance.test.ts`.
 W31-4 (My Sizes), the same pattern on a different endpoint, was fixed the same
 way on 2026-11-14.
 
-### W34-5 — NIT — A member not on the shift can check in to it — OPEN (setting)
+### W34-5 — NIT — A member not on the shift can check in to it — ✅ BY DESIGN (setting)
 
 `member2`, not assigned, checked in to the E-1 shift from its QR. That is the
 department setting `restrict_checkin_to_assigned`, off by default, and it is
-deliberate for volunteer departments where whoever turns up rides. Noted, not
-changed.
+deliberate for volunteer departments where whoever turns up rides.
+
+Confirmed on 2026-11-16 that nothing is missing around it: Scheduling settings
+› General has the "Restrict check-in to assigned members" switch, and with it
+on `member_check_in` refuses an unrostered member with "You are not assigned
+to this shift." (open shifts exempt). `test_restrict_checkin_to_assigned`
+covers the refusal and the check-in once assigned. No change.
 
 ## Checklist
 
