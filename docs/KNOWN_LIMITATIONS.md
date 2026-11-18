@@ -36,8 +36,10 @@ eight hours, until #4333 carried the merge revision from #4331.
 - **A merge queue** tests each pull request on top of the ones queued ahead of
   it, which closes the race without anyone updating branches. GitHub offers it
   only to repositories owned by an organization, so it needs the repository
-  moved into one (a free organization is enough for a public repository), and
-  `ci.yml` would need a `merge_group` trigger.
+  moved into one (a free organization is enough for a public repository).
+  `ci.yml` already runs on `merge_group` (2026-11-16), so turning the queue on
+  is a settings change: a ruleset on `main` with **Require merge queue** and
+  **CI Success** as a required check.
 - **CI fast enough** that a pull request usually finishes before `main` moves
   would make the up-to-date setting workable again.
 
