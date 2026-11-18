@@ -42,11 +42,14 @@ def _number_words(n: int) -> list[str]:
     return [str(n)]
 
 
-def words(text: str) -> list[str]:
+def words(text: str, join_hyphens: bool = False) -> list[str]:
     """Lowercase words with punctuation dropped and small numbers spelled out,
-    so a script's "thirty" matches a transcript's "30"."""
+    so a script's "thirty" matches a transcript's "30". A hyphen splits a word
+    by default; with join_hyphens it is dropped, so "run-offs" reads as
+    "runoffs"."""
     out: list[str] = []
-    for token in re.findall(r"[a-z0-9']+", text.lower().replace("-", " ")):
+    hyphen = "" if join_hyphens else " "
+    for token in re.findall(r"[a-z0-9']+", text.lower().replace("-", hyphen)):
         token = token.strip("'")
         if token.isdigit():
             out.extend(_number_words(int(token)))
@@ -56,5 +59,13 @@ def words(text: str) -> list[str]:
 
 
 def match(expected: str, heard: str) -> float:
-    """How closely a transcript follows the script, 0 to 1, word by word."""
-    return SequenceMatcher(None, words(expected), words(heard)).ratio()
+    """How closely a transcript follows the script, 0 to 1, word by word.
+
+    Scored with hyphens both splitting and joining words, keeping the better:
+    the transcriber writes "runoffs" as "run-offs" and "Check-In" as "check
+    in", and neither is a mistake by the voice.
+    """
+    return max(
+        SequenceMatcher(None, words(expected, j), words(heard, j)).ratio()
+        for j in (False, True)
+    )

@@ -23,9 +23,31 @@ const RED = '#991b1b';
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 // The screen keeps the recording's 390:640 aspect (900x1476 at 9:16).
+// Where the recording sits in each frame. The phone boxes (the default 390x640
+// screen) are fixed; a short that records another screen size names it under
+// "screen" in shots.json and gets a box of that shape fitted to the same space.
+const PHONE = { width: 390, height: 640 };
+const REGIONS = {
+  v: { x: 90, y: 214, w: 900, h: 1476, r: 40 },
+  h: { x: 1100, y: 60, w: 780, h: 960, r: 30 },
+};
+// Down to an even number: ffmpeg's yuv420p needs even sizes, and rounding up
+// could overflow the region by a pixel.
+const even = (n) => 2 * Math.floor(n / 2);
+function screenBox(fmt, screen) {
+  if (screen.width === PHONE.width && screen.height === PHONE.height) {
+    return fmt === 'v' ? { x: 90, y: 214, w: 900, h: 1476, r: 40 } : { x: 1214, y: 60, w: 586, h: 960, r: 30 };
+  }
+  const R = REGIONS[fmt];
+  const ratio = screen.width / screen.height;
+  const w = even(Math.min(R.w, R.h * ratio));
+  const h = even(w / ratio);
+  return { x: R.x + Math.round((R.w - w) / 2), y: R.y + Math.round((R.h - h) / 2), w, h, r: R.r };
+}
+const SCREEN_SIZE = spec.screen ?? PHONE;
 const LAYOUTS = {
-  v: { W: 1080, H: 1920, screen: { x: 90, y: 214, w: 900, h: 1476, r: 40 }, caption: { x: 60, y: 1700, w: 960, h: 200 } },
-  h: { W: 1920, H: 1080, screen: { x: 1214, y: 60, w: 586, h: 960, r: 30 }, caption: { x: 120, y: 420, w: 960, h: 400 } },
+  v: { W: 1080, H: 1920, screen: screenBox('v', SCREEN_SIZE), caption: { x: 60, y: 1700, w: 960, h: 200 } },
+  h: { W: 1920, H: 1080, screen: screenBox('h', SCREEN_SIZE), caption: { x: 120, y: 420, w: 960, h: 400 } },
 };
 
 const page = (W, H, body, css = '') => `<!doctype html><html><head><meta charset="utf-8"><style>

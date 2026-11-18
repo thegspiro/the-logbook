@@ -68,6 +68,14 @@ per shot with what the voice says and the caption shown while it does. Copy
 describe what is on screen, using the app's own labels. Where the script's
 wording no longer matches the UI, follow the UI and update the script.
 
+**Phone for shorts, tablet for the full videos.** A short is recorded on a
+390×640 phone screen, the default. The full-length videos, and a short whose
+screen the app does not offer on a phone, are recorded on a portrait tablet:
+name the size in `shots.json` (`"screen": { "width": 820, "height": 1180 }`)
+and set the same viewport in the capture's `test.use`. The frame around the
+recording is sized to fit. 8E is the one tablet short so far, because the
+election page sends setup to "a tablet or computer".
+
 **`capture.spec.ts`**: signs in with the E2E fixtures, mocks whatever data the
 short needs that the fixtures do not serve, and performs the shots:
 
@@ -117,6 +125,9 @@ Two things that cost time on 8B:
 Write narration for the ear. The voice slurs some pairings whatever the take:
 "Tap Submit" reliably became "tax submit", so 8B says "Tap the Submit Training
 button". If a line warns, reword it.
+
+To see what a capture sends while it runs, set `VIDEO_DEBUG=1`: the 8E
+capture logs each request that changes something and each console error.
 
 ## How it works
 

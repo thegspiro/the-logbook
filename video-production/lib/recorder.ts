@@ -12,7 +12,11 @@ import type { Locator, Page } from '@playwright/test';
  * reads the frames and the shot start times this writes.
  */
 
-/** CSS viewport of the recorded phone screen. */
+/**
+ * CSS viewport of the recorded phone screen, the default. A short that needs a
+ * bigger screen sets its own viewport and names it under "screen" in its
+ * shots.json, which the overlays read to size the frame around it.
+ */
 export const SCREEN = { width: 390, height: 640 };
 
 /**
@@ -126,10 +130,21 @@ export async function tap(page: Page, target: Locator): Promise<void> {
       return !hit || !(el === hit || el.contains(hit));
     });
   let box = await target.boundingBox();
-  if (box && (box.y < 80 || box.y + box.height > SCREEN.height - 90 || (await covered()))) {
+  const viewHeight = page.viewportSize()?.height ?? SCREEN.height;
+  if (box && (box.y < 80 || box.y + box.height > viewHeight - 90 || (await covered()))) {
     await target.evaluate((el) => el.scrollIntoView({ behavior: 'smooth', block: 'center' }));
     await page.waitForTimeout(750);
     box = await target.boundingBox();
+  }
+  // Wait for the target to stop moving: a smooth scroll started by focusing a
+  // field or by centre() can still be running, and a press at the position
+  // measured mid-scroll lands beside the control. 8E's Add Candidate missed
+  // this way on one run in two.
+  for (let i = 0; i < 20 && box; i += 1) {
+    await page.waitForTimeout(60);
+    const again = await target.boundingBox();
+    if (again && Math.abs(again.x - box.x) < 0.5 && Math.abs(again.y - box.y) < 0.5) break;
+    box = again;
   }
   if (!box) throw new Error('tap target has no bounding box');
   if (await covered()) throw new Error('tap target is covered by another element');
@@ -149,7 +164,8 @@ export async function tap(page: Page, target: Locator): Promise<void> {
 export async function choose(page: Page, select: Locator, value: string): Promise<void> {
   await select.waitFor({ state: 'visible', timeout: 8000 });
   let box = await select.boundingBox();
-  if (box && (box.y < 80 || box.y + box.height > SCREEN.height - 90)) {
+  const viewHeight = page.viewportSize()?.height ?? SCREEN.height;
+  if (box && (box.y < 80 || box.y + box.height > viewHeight - 90)) {
     await select.evaluate((el) => el.scrollIntoView({ behavior: 'smooth', block: 'center' }));
     await page.waitForTimeout(750);
     box = await select.boundingBox();
@@ -262,6 +278,7 @@ export async function recordShots(page: Page, shortId: string, run: (shot: Shot)
 
   // Frames arrive only when the screen changes; each carries its own
   // timestamp, which the compositor turns into frame durations.
+  const view = page.viewportSize() ?? SCREEN;
   const cdp = await page.context().newCDPSession(page);
   const frames: { file: string; t: number }[] = [];
   cdp.on('Page.screencastFrame', (f) => {
@@ -275,8 +292,8 @@ export async function recordShots(page: Page, shortId: string, run: (shot: Shot)
   await cdp.send('Page.startScreencast', {
     format: 'jpeg',
     quality: 95,
-    maxWidth: Math.round(SCREEN.width * SCALE),
-    maxHeight: Math.round(SCREEN.height * SCALE),
+    maxWidth: Math.round(view.width * SCALE),
+    maxHeight: Math.round(view.height * SCALE),
     everyNthFrame: 1,
   });
   await page.waitForTimeout(300);
@@ -298,5 +315,5 @@ export async function recordShots(page: Page, shortId: string, run: (shot: Shot)
   await run(shot);
   marks.end = Date.now() / 1000;
   await cdp.send('Page.stopScreencast');
-  writeFileSync(join(out, 'frames.json'), JSON.stringify({ frames, marks }, null, 2));
+  writeFileSync(join(out, 'frames.json'), JSON.stringify({ screen: view, frames, marks }, null, 2));
 }
