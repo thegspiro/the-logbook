@@ -30,7 +30,13 @@ export const PipelineOverviewRenderer: React.FC<Props> = ({ data }) => {
 
   const prospectColumns = [
     { key: 'name', header: 'Name' },
-    { key: 'email', header: 'Email' },
+    {
+      key: 'email',
+      header: 'Email',
+      // An address has no break opportunity, so without break-all it sets the
+      // column's width on its own and pushes the card past a phone screen.
+      render: (v: unknown) => <span className="min-w-0 break-all">{v != null ? toDisplayString(v) : '—'}</span>,
+    },
     {
       key: 'status',
       header: 'Status',

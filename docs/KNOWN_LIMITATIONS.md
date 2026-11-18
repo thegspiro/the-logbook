@@ -36,8 +36,10 @@ eight hours, until #4333 carried the merge revision from #4331.
 - **A merge queue** tests each pull request on top of the ones queued ahead of
   it, which closes the race without anyone updating branches. GitHub offers it
   only to repositories owned by an organization, so it needs the repository
-  moved into one (a free organization is enough for a public repository), and
-  `ci.yml` would need a `merge_group` trigger.
+  moved into one (a free organization is enough for a public repository).
+  `ci.yml` already runs on `merge_group` (2026-11-16), so turning the queue on
+  is a settings change: a ruleset on `main` with **Require merge queue** and
+  **CI Success** as a required check.
 - **CI fast enough** that a pull request usually finishes before `main` moves
   would make the up-to-date setting workable again.
 
@@ -10548,6 +10550,15 @@ beyond the feature.
   member's linked rows. An evaluation scoped to several programs counts once
   toward a department requirement, and a general-form evaluation counts too:
   the requirement is the member's, not one enrollment's.
+- ~~**My Training's due date for a rolling evaluation-credited requirement
+  came from training records**, which never count toward these types, so
+  the member saw no due date, or one from an unrelated record.~~ Resolved
+  2026-11-16 (owner decision: show it). It is now the latest counted
+  evaluation plus the rolling period, as a rolling shifts-worked requirement
+  falls due from the latest shift (`latest_evaluation_credit`). My Training,
+  the at-risk list and the single-requirement progress check load evaluation
+  credit with full history, so an evaluation older than the window dates it
+  overdue. `tests/test_evaluation_rolling_due_date.py`.
 
 **Accepted for now**
 
@@ -10589,3 +10600,62 @@ beyond the feature.
   2026-11-14: restore now applies only to a rejected entry and answers 400
   otherwise, as approve does for one that is not pending; restore, approve and
   reject all read the entry under a row lock.
+
+## D11 — Erasing a Member's Uploaded Files: What Remains (2026-11-16)
+
+Anonymising a member now deletes the certificates they uploaded with
+self-reported training, and the entries naming them on their submissions and
+on the training records approval copied them to. Permanently deleting a member
+now removes, after the delete commits, the files named by the training
+submissions, training records and attendance waiver documents the delete
+cascades away. Both keep any file another row still names. What this leaves:
+
+**Choices made without a further owner ruling** (the conservative option in
+each case):
+
+- **Files uploaded to a training record itself survive anonymisation.** They
+  are department training evidence, and anonymisation keeps training
+  completions and certifications. A permanent delete removes them, because
+  their rows go. If the owner wants them erased on anonymisation too, it is a
+  one-line widening of the candidate set in
+  `MemberAnonymizationService._remove_self_report_certificates`.
+- **A certificate that cannot be deleted during anonymisation keeps its
+  entry**, with the uploader's filename replaced by a neutral label, and is
+  counted (`self_report_files_not_deleted` in the response and the
+  `user_anonymized` audit event). `remove_member_attachments` and the
+  applicant-document step drop the row whatever happens to the file; this
+  step does not, because anonymisation refuses to run twice and a dropped
+  reference would leave a file nothing could find again. Nothing retries
+  these: retention (`attachment_retention_days`) is opt-in, so a department
+  that has not set it keeps the file until someone removes it by hand.
+
+**Accepted residuals:**
+
+- **A permanent delete's files go after its commit.** A process killed, or a
+  remote store unreachable, between the commit and the deletes leaves files no
+  later run can find. A failed delete is logged and counted
+  (`files_not_deleted` in the `user_hard_deleted` audit event); closing the
+  crash window would need a durable pending-deletion table and a migration.
+- **An upload racing a permanent delete** (a certificate stored for the member
+  after the files were collected) is orphaned.
+- **A relocation or remote migration running at the same moment** can rewrite
+  a reference between collection and deletion. Neither path locks against the
+  other.
+- **Files orphaned by permanent deletes before this fix** are not found or
+  cleaned up; there is no sweep for them.
+- **Bare-string attachment entries** (the column's pre-upload-endpoint shape)
+  are invisible to `upload_relocation.collect_references`, so the shared-file
+  check cannot see them. They carry no path, so nothing deletes them either.
+- **The `TrainingRecordUpdate` path sets `attachments` blindly**, and can
+  replace dict entries with strings, which then name no file for either
+  erasure path to find.
+- **`delete_submission_attachment` does not check voided records** before
+  unlinking: a certificate a voided record still names can be deleted by the
+  member while the record's entry remains.
+- The shared-file check (`member_files.referenced_elsewhere`) covers every
+  writer of the self-report, training-record and waiver-document storage
+  areas, not every file column in the schema; there is no ratchet tying
+  `collect_references` to every file column.
+
+Related, still open: **LIFE-11** (the separation letter in Documents), and the
+Member Files personal-folder documents, which neither path touches.
