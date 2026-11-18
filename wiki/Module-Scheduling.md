@@ -581,7 +581,9 @@ shift**:
 - **Department** and **Apparatus** from a list scheduling officers keep under
   **Settings → Outside Apparatus** (`/scheduling/admin/settings/outside-apparatus`).
   A unit with shifts logged on it cannot be deleted, only turned off; each entry
-  keeps the names it was logged under.
+  keeps the names it was logged under, except that **merging** one department
+  into another (two spellings of the same department) moves its units across,
+  combines a unit both list, and relabels every shift logged with it.
 - **Counts as soon as it is saved**, unless the department has switched on
   **Settings → Require approval for outside-department shifts**: then it is
   **Awaiting approval** and counts toward nothing until a scheduling officer
