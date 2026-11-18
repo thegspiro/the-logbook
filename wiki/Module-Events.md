@@ -220,6 +220,12 @@ days), so they can extend or close it. Each series is reminded once
 **Needs You** band ("Events needing your response") at the top. The band's
 overflow link narrows the grid to what needs a response.
 
+- **Mandatory events awaiting a response** — an unanswered mandatory event is
+  in the band only once it starts within the department's response window
+  (**Events settings → Attendance → Mandatory event responses**, 1–365 days,
+  default 60), so a recurring mandatory series does not ask about every
+  future occurrence at once. One whose RSVP deadline is under 48 hours away is
+  in the band regardless.
 - **Missed mandatory events** — `GET /events/missed-mandatory` supplies the
   mandatory events the caller did not attend, for the band's "missed" rows. A
   member who joined after an event ran, or who was not in its audience, is not

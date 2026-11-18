@@ -46,6 +46,13 @@ _RECURRENCE_PATTERNS = {e.value for e in RecurrencePattern}
 _RSVP_STATUSES = {e.value for e in RSVPStatus}
 _ATTENDEE_VISIBILITIES = {e.value for e in AttendeeVisibility}
 
+# How far ahead an unanswered mandatory event asks a member for a response.
+# Without a window, one recurring mandatory series asked about every future
+# occurrence at once. 60 days is what shipped before this became a setting.
+MANDATORY_RSVP_WINDOW_DAYS_DEFAULT = 60
+MANDATORY_RSVP_WINDOW_DAYS_MIN = 1
+MANDATORY_RSVP_WINDOW_DAYS_MAX = 365
+
 
 def _enum_check(valid: set, field: str):
     def _check(value):
@@ -202,6 +209,20 @@ class EventSettingsUpdate(BaseModel):
     # type back to the default (the Secretary). Merged key by key, like the
     # other mappings here.
     attendance_request_fallback_positions: Optional[Dict[str, Optional[str]]] = None
+    mandatory_rsvp_window_days: Optional[int] = Field(
+        None,
+        ge=MANDATORY_RSVP_WINDOW_DAYS_MIN,
+        le=MANDATORY_RSVP_WINDOW_DAYS_MAX,
+    )
+
+    @field_validator("mandatory_rsvp_window_days")
+    @classmethod
+    def _window_not_null(cls, value):
+        # The field is optional so a partial update can leave it out, but an
+        # explicit null would be stored and served to members as "no window".
+        if value is None:
+            raise ValueError("mandatory_rsvp_window_days cannot be null")
+        return value
 
     @field_validator("attendance_request_fallback_positions")
     @classmethod
@@ -1672,6 +1693,7 @@ class VisibleEventTypesResponse(BaseModel):
     custom_event_categories: List[EventCategoryConfig]
     visible_custom_categories: List[str]
     membership_types: List[OutreachEventType]
+    mandatory_rsvp_window_days: int
 
 
 class AttachmentUploadResponse(BaseModel):

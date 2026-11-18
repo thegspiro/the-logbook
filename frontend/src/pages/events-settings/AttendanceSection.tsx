@@ -13,14 +13,23 @@
  * organizer and alternate cannot — both left, or the only one set is the member
  * asking. Chosen per event type; an unset type goes to the Secretary, and only
  * failing that to every event manager.
+ *
+ * And how far ahead a mandatory event asks members to respond. Without a
+ * window, one recurring mandatory series asked about every future occurrence
+ * at once.
  */
 
 import React from 'react';
-import { Inbox, Users } from 'lucide-react';
+import { CalendarClock, Inbox, Users } from 'lucide-react';
 import type { SettingsSectionProps } from './types';
 import type { EventPositionOption, EventType } from '../../types/event';
 import { getEventTypeLabel } from '../../utils/eventHelpers';
 import { EventType as EventTypeEnum } from '../../constants/enums';
+import {
+  EVENT_MANDATORY_RSVP_WINDOW_DAYS,
+  EVENT_MANDATORY_RSVP_WINDOW_MAX_DAYS,
+  EVENT_MANDATORY_RSVP_WINDOW_MIN_DAYS,
+} from '../../constants/config';
 
 // Every type the API accepts a fallback for. Not enabled_event_types: nothing
 // enforces that list, so an event of a type missing from it still exists and
@@ -32,6 +41,7 @@ export interface AttendanceSectionProps extends SettingsSectionProps {
   /** null while the positions could not be loaded. */
   positionOptions: EventPositionOption[] | null;
   onChangeFallbackPosition: (eventType: EventType, positionId: string | null) => void;
+  onChangeMandatoryRsvpWindow: (days: number) => void;
 }
 
 const AttendanceSection: React.FC<AttendanceSectionProps> = ({
@@ -40,9 +50,29 @@ const AttendanceSection: React.FC<AttendanceSectionProps> = ({
   onChangeAttendeeVisibility,
   positionOptions,
   onChangeFallbackPosition,
+  onChangeMandatoryRsvpWindow,
 }) => {
   const current = settings.defaults?.attendee_visibility ?? 'managers';
   const fallbacks = settings.attendance_request_fallback_positions ?? {};
+  const savedWindow = settings.mandatory_rsvp_window_days ?? EVENT_MANDATORY_RSVP_WINDOW_DAYS;
+
+  // Held locally and saved on blur or Enter, because every save on this screen
+  // writes immediately: saving per keystroke would store "9" on the way to "90".
+  const [windowDraft, setWindowDraft] = React.useState(String(savedWindow));
+  React.useEffect(() => {
+    setWindowDraft(String(savedWindow));
+  }, [savedWindow]);
+
+  const parsedWindow = Number(windowDraft);
+  const windowIsValid =
+    Number.isInteger(parsedWindow) &&
+    parsedWindow >= EVENT_MANDATORY_RSVP_WINDOW_MIN_DAYS &&
+    parsedWindow <= EVENT_MANDATORY_RSVP_WINDOW_MAX_DAYS;
+
+  const commitWindow = () => {
+    if (!windowIsValid) return;
+    if (parsedWindow !== savedWindow) onChangeMandatoryRsvpWindow(parsedWindow);
+  };
 
   return (
     <div className="space-y-6">
@@ -137,6 +167,53 @@ const AttendanceSection: React.FC<AttendanceSectionProps> = ({
             ))}
           </div>
         )}
+      </div>
+
+      <div className="border-theme-surface-border border-t pt-6">
+        <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
+          <CalendarClock className="h-5 w-5" aria-hidden="true" />
+          Mandatory event responses
+        </h3>
+        <p className="text-theme-text-secondary mt-1 text-sm">
+          Members are asked to respond to a mandatory event once it is this close. Later events in a recurring series
+          appear as they come within range. An event whose RSVP deadline is under two days away is always asked about.
+        </p>
+
+        <div className="mt-4">
+          <label htmlFor="mandatory-rsvp-window" className="text-theme-text-primary mb-1 block text-sm font-medium">
+            Ask for a response
+          </label>
+          <div className="flex items-center gap-3">
+            <input
+              id="mandatory-rsvp-window"
+              type="number"
+              inputMode="numeric"
+              min={EVENT_MANDATORY_RSVP_WINDOW_MIN_DAYS}
+              max={EVENT_MANDATORY_RSVP_WINDOW_MAX_DAYS}
+              step={1}
+              value={windowDraft}
+              onChange={(e) => setWindowDraft(e.target.value)}
+              onBlur={commitWindow}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitWindow();
+              }}
+              disabled={saving}
+              aria-invalid={!windowIsValid}
+              aria-describedby="mandatory-rsvp-window-hint"
+              className="form-input w-24"
+            />
+            <span className="text-theme-text-muted text-sm">days before the event</span>
+          </div>
+          <p
+            id="mandatory-rsvp-window-hint"
+            className={`mt-1 text-xs ${windowIsValid ? 'text-theme-text-muted' : 'text-red-700 dark:text-red-400'}`}
+            role={windowIsValid ? undefined : 'alert'}
+          >
+            {windowIsValid
+              ? `Default ${EVENT_MANDATORY_RSVP_WINDOW_DAYS} days.`
+              : `Enter a whole number from ${EVENT_MANDATORY_RSVP_WINDOW_MIN_DAYS} to ${EVENT_MANDATORY_RSVP_WINDOW_MAX_DAYS}.`}
+          </p>
+        </div>
       </div>
     </div>
   );
