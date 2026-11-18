@@ -98,9 +98,19 @@ describe('RoomCheckInPage', () => {
   });
 
   it('shows the server message for any other failure', async () => {
-    mockGetCurrentCheckIns.mockRejectedValue(new Error('Network down'));
+    mockGetCurrentCheckIns.mockRejectedValue({
+      response: { status: 409, data: { detail: 'Check-in is closed for this room.' } },
+    });
     renderPage();
     expect(await screen.findByRole('heading', { name: 'Room unavailable' })).toBeInTheDocument();
-    expect(screen.getByText('Network down')).toBeInTheDocument();
+    expect(screen.getByText('Check-in is closed for this room.')).toBeInTheDocument();
+  });
+
+  it('says the server failed, not the connection, on a 500', async () => {
+    mockGetCurrentCheckIns.mockRejectedValue({
+      response: { status: 500, data: { detail: 'Internal server error', code: 'LB-SYS-001' } },
+    });
+    renderPage();
+    expect(await screen.findByText(/the server hit a problem on its end/)).toHaveTextContent('LB-SYS-001');
   });
 });
