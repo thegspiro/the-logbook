@@ -133,3 +133,22 @@ describe('LocationKioskPage revocation', () => {
     }
   });
 });
+
+// W23-4: the QR codes render as images (role="img") and had no name, so a
+// screen reader announced an unlabelled image where the kiosk's main action is.
+describe('LocationKioskPage QR codes', () => {
+  it('names the single check-in code', async () => {
+    mockFetch.mockResolvedValue(feed({}));
+    renderKiosk();
+
+    expect(await screen.findByRole('img', { name: 'Check-in QR code for Monthly Drill' })).toBeInTheDocument();
+  });
+
+  it('names the member and guest codes apart when guests may sign in', async () => {
+    mockFetch.mockResolvedValue(feed({ current_events: [{ ...event, allow_guest_check_in: true }] }));
+    renderKiosk();
+
+    expect(await screen.findByRole('img', { name: 'Member check-in QR code for Monthly Drill' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Guest sign-in QR code for Monthly Drill' })).toBeInTheDocument();
+  });
+});

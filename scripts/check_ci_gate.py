@@ -20,6 +20,16 @@ to block would merge with the checker red.
 Run from inside `ci-success`, the gate cannot be green unless the check passed,
 whatever the `needs:` list says.
 
+CONCURRENCY IS PER JOB
+----------------------
+It also asserts that every job carries its own `concurrency:` block and that
+the workflow has none. A workflow-level group holds a pull request's new run
+until every job of the run it replaced has finished, and `ci-success`, being
+`always()`, outlives the cancellation and then waits for a runner: on
+2026-11-17 that held #4375's new run at "pending" for five and a half hours.
+The gate's condition cannot be relaxed to avoid it, because a gate a cancel
+could skip would report "skipped", which branch protection counts as a pass.
+
 Usage:  python3 scripts/check_ci_gate.py [--workflow PATH]
 Exits 0 when the gate is complete, 1 with an explanation otherwise.
 """
@@ -39,8 +49,20 @@ GATE = "ci-success"
 UNCONDITIONAL = {"always()", "${{ always() }}"}
 
 
-def load_jobs(workflow_path):
-    return yaml.safe_load(Path(workflow_path).read_text())["jobs"]
+# Every job's group, written out with its own id because `github.job` is not
+# available to a job's `concurrency:` key. `strategy.job-index` keeps a matrix
+# job's legs apart; the SHA gives every main commit a group of its own, so no
+# main commit loses its CI record to eviction.
+CONCURRENCY_GROUP = (
+    "${{{{ github.workflow }}}}-{job}-${{{{ strategy.job-index }}}}-"
+    "${{{{ github.ref }}}}-"
+    "${{{{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}}}"
+)
+CANCEL_IN_PROGRESS = "${{ github.ref != 'refs/heads/main' }}"
+
+
+def load_workflow(workflow_path):
+    return yaml.safe_load(Path(workflow_path).read_text())
 
 
 def gate_problems(jobs):
@@ -84,6 +106,51 @@ def gate_problems(jobs):
     return problems
 
 
+def _normalized(value):
+    return " ".join(str(value).split())
+
+
+def concurrency_problems(workflow):
+    """Return a list of problems with how the workflow's runs replace each other."""
+    problems = []
+
+    if "concurrency" in workflow:
+        problems.append(
+            "The workflow has a top-level `concurrency:` block. A new run then "
+            f"waits until every job of the run it replaced has finished, and "
+            f"`{GATE}` outlives the cancellation and waits for a runner. Set "
+            "concurrency on each job instead."
+        )
+
+    for job_id, job in workflow.get("jobs", {}).items():
+        concurrency = job.get("concurrency")
+        expected = CONCURRENCY_GROUP.format(job=job_id)
+        if not isinstance(concurrency, dict):
+            problems.append(
+                f"`{job_id}` has no `concurrency:` block, so a superseded run "
+                f"of it is never cancelled. Give it group {expected!r} and "
+                f"cancel-in-progress {CANCEL_IN_PROGRESS!r}."
+            )
+            continue
+        group = _normalized(concurrency.get("group", ""))
+        if group != expected:
+            problems.append(
+                f"`{job_id}`'s concurrency group is {group!r}; expected "
+                f"{expected!r}. Another job's id would make the two jobs cancel "
+                f"each other, and a group without the SHA lets one main commit "
+                f"evict another's run."
+            )
+        cancel = _normalized(concurrency.get("cancel-in-progress", ""))
+        if cancel != CANCEL_IN_PROGRESS:
+            problems.append(
+                f"`{job_id}`'s cancel-in-progress is {cancel!r}; expected "
+                f"{CANCEL_IN_PROGRESS!r}, which cancels a superseded pull "
+                f"request run and never a main one."
+            )
+
+    return problems
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -96,9 +163,13 @@ def main():
     )
     args = parser.parse_args()
 
-    problems = gate_problems(load_jobs(args.workflow))
+    workflow = load_workflow(args.workflow)
+    problems = gate_problems(workflow["jobs"]) + concurrency_problems(workflow)
     if not problems:
-        print(f"CI gate OK: `{GATE}` requires every other job and is unconditional.")
+        print(
+            f"CI gate OK: `{GATE}` requires every other job and is "
+            f"unconditional, and every job sets its own concurrency."
+        )
         return 0
 
     for problem in problems:
