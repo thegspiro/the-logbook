@@ -1087,7 +1087,17 @@ class StorefrontService:
         notified = 0
         settings = await self.get_settings(organization_id)
         if notify_members and settings.send_vendor_order_updates:
-            recipients = await self._window_customer_emails(window.id, organization_id)
+            # Under pay-before-vendor-order an unpaid order was held out of
+            # this purchase order, so telling its member "placed with the
+            # vendor" is the claim the rule exists to prevent (W67b-11). Only
+            # members whose orders went into the order hear about it.
+            recipients = await self._window_customer_emails(
+                window.id,
+                organization_id,
+                settled_only=(
+                    settings.payment_policy == StorePaymentPolicy.BEFORE_VENDOR_ORDER
+                ),
+            )
             if recipients:
                 notified = await self.notifications.send_vendor_order_placed(
                     window, settings, recipients, message=message
@@ -1165,17 +1175,29 @@ class StorefrontService:
         await self.db.commit()
 
     async def _window_customer_emails(
-        self, window_id: str, organization_id: str
+        self, window_id: str, organization_id: str, settled_only: bool = False
     ) -> List[str]:
+        """The members with a live order in this window, one address each.
+
+        ``settled_only`` keeps only orders with nothing owed, decided by
+        ``_is_settled`` -- the same rule that holds an unpaid order out of the
+        vendor order, so the two cannot disagree about who was ordered for.
+        """
         result = await self.db.execute(
-            select(StoreOrder.customer_email).where(
+            select(StoreOrder).where(
                 StoreOrder.window_id == str(window_id),
                 StoreOrder.organization_id == str(organization_id),
                 StoreOrder.status != StoreOrderStatus.CANCELLED,
                 StoreOrder.customer_email.isnot(None),
             )
         )
-        return sorted({email for email in result.scalars().all() if email})
+        return sorted(
+            {
+                order.customer_email
+                for order in result.scalars().all()
+                if order.customer_email and (not settled_only or _is_settled(order))
+            }
+        )
 
     # ==================================================================
     # Shopper view
