@@ -37,6 +37,7 @@ from app.models.training import (
 )
 from app.services import file_storage_service as file_storage
 from app.services.file_storage_service import StorageArea
+from app.services.member_files import confined_attachment_path
 
 # A submission is only swept once its decision is final; draft, pending and
 # revision-requested submissions are still the member's to change, and their
@@ -47,17 +48,11 @@ _BATCH_SIZE = 200
 
 
 def _org_confined_path(attachment: Any, organization_id: str) -> str | None:
-    """Real path of an attachment stored in this organization's self-reports.
-
-    ``file_path`` round-trips through a JSON column, so a path is trusted only
-    if it resolves inside the organization's own self-report storage (current
-    or legacy layout). Anything else (another organization's file, a URL, a
-    legacy reference) is neither deleted nor removed from the row.
-    """
-    if not isinstance(attachment, dict):
-        return None
-    return file_storage.resolve(
-        attachment.get("file_path"), organization_id, StorageArea.SELF_REPORTS
+    """An attachment in this organization's own self-report storage (current or
+    legacy layout). Anything else (another organization's file, a URL, a
+    legacy bare-string reference) is neither deleted nor removed from the row."""
+    return confined_attachment_path(
+        attachment, organization_id, StorageArea.SELF_REPORTS
     )
 
 

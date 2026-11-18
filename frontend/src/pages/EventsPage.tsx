@@ -50,7 +50,7 @@ import { EventsPageHeader } from '../components/events/EventsPageHeader';
 import { NfcTapButton } from '../components/nfc/NfcTapButton';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
-import { DEFAULT_PAGE_SIZE, EVENT_MISSED_LOOKBACK_DAYS } from '../constants/config';
+import { DEFAULT_PAGE_SIZE, EVENT_MANDATORY_RSVP_WINDOW_DAYS, EVENT_MISSED_LOOKBACK_DAYS } from '../constants/config';
 import { EventType as EventTypeEnum } from '../constants/enums';
 import { CalendarView } from '../components/CalendarView';
 
@@ -129,6 +129,7 @@ export const EventsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [visibleTypes, setVisibleTypes] = useState<EventType[]>(ALL_EVENT_TYPES);
+  const [mandatoryRsvpWindowDays, setMandatoryRsvpWindowDays] = useState(EVENT_MANDATORY_RSVP_WINDOW_DAYS);
   const [customCategories, setCustomCategories] = useState<EventCategoryConfig[]>([]);
   const [visibleCustomCategories, setVisibleCustomCategories] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -504,6 +505,10 @@ export const EventsPage: React.FC = () => {
         setVisibleTypes(data.visible_event_types ?? ALL_EVENT_TYPES);
         setCustomCategories(data.custom_event_categories || []);
         setVisibleCustomCategories(data.visible_custom_categories || []);
+        // Absent from a backend that predates the setting; keep the default.
+        if (typeof data.mandatory_rsvp_window_days === 'number') {
+          setMandatoryRsvpWindowDays(data.mandatory_rsvp_window_days);
+        }
       })
       .catch(() => {
         /* fall back to showing all types */
@@ -545,7 +550,9 @@ export const EventsPage: React.FC = () => {
       // no RSVP is the most mine of all, and it is what the band's
       // "+N more need a response" link narrows the grid to — filtering on
       // user_rsvp_status alone would hide the very events that link promises.
-      filtered = filtered.filter((e) => e.user_rsvp_status || isUrgentEventState(getEventUrgency(e, now)));
+      filtered = filtered.filter(
+        (e) => e.user_rsvp_status || isUrgentEventState(getEventUrgency(e, now, mandatoryRsvpWindowDays))
+      );
     }
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -558,7 +565,7 @@ export const EventsPage: React.FC = () => {
       );
     }
     return filtered;
-  }, [typeFilteredEvents, searchQuery, showMyEventsOnly, now]);
+  }, [typeFilteredEvents, searchQuery, showMyEventsOnly, now, mandatoryRsvpWindowDays]);
 
   const sortedEvents = useMemo(() => {
     const sorted = [...searchFilteredEvents];
@@ -967,6 +974,7 @@ export const EventsPage: React.FC = () => {
           pastMandatoryEvents={pastMandatoryEvents}
           timezone={tz}
           now={now}
+          mandatoryRsvpWindowDays={mandatoryRsvpWindowDays}
           rsvpLoading={rsvpLoading}
           onQuickRSVP={handleQuickRSVPAction}
           onShowAll={handleShowAllNeedsYou}
@@ -1295,7 +1303,7 @@ export const EventsPage: React.FC = () => {
                 <EventListCard
                   key={event.id}
                   event={event}
-                  urgency={getEventUrgency(event, now)}
+                  urgency={getEventUrgency(event, now, mandatoryRsvpWindowDays)}
                   timezone={tz}
                   timezoneAbbr={tzAbbr}
                   now={now}
