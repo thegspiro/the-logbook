@@ -73,7 +73,7 @@ describe('useFieldErrors', () => {
 
     expect(matched).toEqual({});
     expect(result.current.errors).toEqual({});
-    expect(result.current.formError).toBe('first_name: Not allowed.');
+    expect(result.current.formError).toBe('First name: Not allowed.');
   });
 
   it('lists the summary in the order the form declares its fields', () => {
