@@ -38,7 +38,41 @@
 # the library through ctypes.util.find_library("magic"), i.e. by soname, so the
 # soname is also the thing that actually has to be true.
 
+# Two later additions, both from 2026-11-18, when ubuntu-latest began handing
+# jobs to ubuntu-26.04 runners. That image ships libmagic but not ffmpeg, so
+# defence #1 no longer covers ffmpeg there, and every backend job that lands on
+# 26.04 downloads ~66 MB (81 packages) through the runner's regional mirror. On
+# #4424 that mirror (us-east-2.ec2.archive.ubuntu.com) delivered 14 of them in
+# about three minutes, and the first `apt-get install` held the whole budget
+# while it crawled, so the retries below never ran and Backend Unit Tests
+# failed before a test started.
+#
+#   3. A job that never runs ffmpeg says so with INSTALL_MEDIA_TOOLS=false, and
+#      the media tools are not installed there at all. Type Check and Security
+#      Scan are such jobs; the unit, integration and contract tests are not
+#      (tests/test_history_media*.py run the real ffmpeg).
+#   4. The first attempt gets at most half the budget, and every retry points
+#      apt at archive.ubuntu.com instead of the regional mirror, as
+#      install-webkit-deps.sh does for the Azure one. The packages the first
+#      attempt finished downloading stay in apt's archive cache, so the retry
+#      fetches only the rest.
+#
+# Overridable through the environment, so scripts/test_install_system_deps.py
+# can run this against stubs with no network and no root:
+#   INSTALL_MEDIA_TOOLS  "false" to skip ffmpeg/ffprobe     (default: true)
+#   APT_GET              the apt-get command                (default: sudo apt-get)
+#   AS_ROOT              prefix for editing apt's sources   (default: sudo)
+#   APT_ETC              apt's configuration root           (default: /etc/apt)
+#   APT_BUDGET           seconds for every attempt together (default: 240)
+#   LDCONFIG             the ldconfig binary                (default: found on PATH)
+
 set -euo pipefail
+
+install_media_tools="${INSTALL_MEDIA_TOOLS:-true}"
+read -r -a apt_get <<< "${APT_GET:-sudo apt-get}"
+read -r -a as_root <<< "${AS_ROOT-sudo}"
+apt_etc="${APT_ETC:-/etc/apt}"
+fallback_host="archive.ubuntu.com"
 
 # soname:candidate-packages. The soname is what gets checked; the packages are
 # candidate names tried in order, and only when the soname is missing.
@@ -54,14 +88,15 @@ DEPENDENCIES=(
 )
 
 # command:package. Checked with `command -v`, the same lookup the backend's
-# shutil.which makes. The ubuntu-latest image ships ffmpeg; this installs it
-# only on an image that does not.
+# shutil.which makes. The ubuntu-24.04 image ships ffmpeg and ubuntu-26.04 does
+# not; this installs it only on an image that does not, and only for a job
+# that runs it (see INSTALL_MEDIA_TOOLS above).
 COMMAND_DEPENDENCIES=(
     "ffmpeg:ffmpeg"
     "ffprobe:ffmpeg"
 )
 
-ldconfig_bin=$(command -v ldconfig || echo /sbin/ldconfig)
+ldconfig_bin="${LDCONFIG:-$(command -v ldconfig || echo /sbin/ldconfig)}"
 
 # `ldconfig -p` prints one tab-indented entry per line:
 #     \tlibmagic.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libmagic.so.1
@@ -110,7 +145,9 @@ done
 for dep in "${COMMAND_DEPENDENCIES[@]}"; do
     command_name="${dep%%:*}"
     package="${dep#*:}"
-    if command -v "$command_name" >/dev/null 2>&1; then
+    if [ "$install_media_tools" = "false" ]; then
+        echo "Not checking ${command_name}: this job does not run it (INSTALL_MEDIA_TOOLS=false)."
+    elif command -v "$command_name" >/dev/null 2>&1; then
         echo "Found ${command_name} (provided by the runner image); no install needed."
     elif [[ " ${missing_packages[*]} " != *" ${package} "* ]]; then
         echo "Missing ${command_name}; will install ${package}."
@@ -130,12 +167,19 @@ fi
 # means the worst case is bounded no matter how the failures are distributed:
 # either the library is installed within it or the job fails fast with a clear
 # reason, which is the better outcome of the two.
-total_budget=240
+total_budget="${APT_BUDGET:-240}"
 max_attempts=3
 deadline=$(( $(date +%s) + total_budget ))
+# The first attempt's own deadline: half the budget, so a crawling mirror
+# leaves the other half for the retries on archive.ubuntu.com.
+attempt_deadline=$(( $(date +%s) + total_budget / 2 ))
 
 remaining_budget() {
-    echo $(( deadline - $(date +%s) ))
+    local until=$deadline
+    if [ "$attempt_deadline" -lt "$until" ]; then
+        until=$attempt_deadline
+    fi
+    echo $(( until - $(date +%s) ))
 }
 
 # timeout(1) treats a duration of 0 as "no timeout at all", so a budget that has
@@ -145,21 +189,49 @@ run_bounded() {
     local budget
     budget=$(remaining_budget)
     if [ "$budget" -le 0 ]; then
-        echo "apt budget of ${total_budget}s is exhausted; not starting: $*"
+        echo "apt budget for this attempt is exhausted; not starting: $*"
         return 1
     fi
     timeout "$budget" "$@"
 }
 
+# Regional mirrors are subdomains of archive.ubuntu.com (azure., us-east-2.ec2.,
+# ...). Rewriting the host in every apt source and the runner's mirror list
+# sends the next `apt-get update` to the main archive instead. Done once.
+mirror_switched=no
+switch_mirror() {
+    local files=() f
+    mirror_switched=yes
+    for f in "$apt_etc/sources.list" "$apt_etc/apt-mirrors.txt" \
+             "$apt_etc"/sources.list.d/*.list "$apt_etc"/sources.list.d/*.sources; do
+        [ -f "$f" ] && grep -qE '[a-z0-9-]+\.archive\.ubuntu\.com' "$f" && files+=("$f")
+    done
+    if [ "${#files[@]}" -eq 0 ]; then
+        echo "No apt source names a regional mirror; retrying with the sources unchanged."
+        return 0
+    fi
+    echo "Pointing apt at ${fallback_host} instead of the regional mirror in: ${files[*]}"
+    "${as_root[@]}" sed -i -E "s/([a-z0-9-]+\.)+archive\.ubuntu\.com/${fallback_host}/g" "${files[@]}"
+}
+
 for attempt in $(seq 1 "$max_attempts"); do
-    if run_bounded sudo apt-get update -o Acquire::Retries=3 \
-        && run_bounded sudo apt-get install -y --no-install-recommends "${missing_packages[@]}"; then
+    if [ "$attempt" -gt 1 ]; then
+        attempt_deadline=$deadline
+        if [ "$mirror_switched" = "no" ]; then
+            switch_mirror
+        fi
+    fi
+    if run_bounded "${apt_get[@]}" update -o Acquire::Retries=3 \
+        && run_bounded "${apt_get[@]}" install -y --no-install-recommends "${missing_packages[@]}"; then
         echo "Installed: ${missing_packages[*]}"
         exit 0
     fi
 
-    backoff=$(( attempt * 10 ))
-    budget=$(remaining_budget)
+    # No wait before the second attempt: it goes to a different mirror, so a
+    # pause buys nothing, and after a first attempt stopped at half the budget
+    # a backoff check could otherwise end the loop before the switch is tried.
+    backoff=$(( (attempt - 1) * 10 ))
+    budget=$(( deadline - $(date +%s) ))
     if [ "$attempt" -ge "$max_attempts" ] || [ "$budget" -le "$backoff" ]; then
         break
     fi

@@ -354,6 +354,7 @@ GET    /agencies                        # Outside departments (scheduling.manage
 POST   /agencies                        # (scheduling.manage)
 PATCH  /agencies/{agency_id}            # (scheduling.manage)
 DELETE /agencies/{agency_id}            # (scheduling.manage)
+POST   /agencies/{agency_id}/merge      # Fold into into_agency_id; relabels its shifts (scheduling.manage)
 POST   /agencies/{agency_id}/apparatus  # Add a unit (scheduling.manage)
 PATCH  /apparatus/{apparatus_id}        # (scheduling.manage)
 DELETE /apparatus/{apparatus_id}        # Refused once shifts are logged on it (scheduling.manage)
