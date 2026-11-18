@@ -2063,7 +2063,7 @@ class TrainingService:
     async def get_applicable_requirements(
         self, user_id: UUID, organization_id: UUID | str, year: Optional[int] = None
     ) -> List[TrainingRequirement]:
-        """The active requirements that apply to a user, in a stable order."""
+        """The active requirements that grade a user, in a stable order."""
         # NOTE: `year` defaults to None → the year filter below is skipped (all
         # years). A prior no-op `year or <current year>` here was dead code;
         # whether this should default to the current year is a compliance-
@@ -2102,12 +2102,26 @@ class TrainingService:
         result = await self.db.execute(query)
         requirements = result.scalars().all()
 
-        # The shared definition, so /my-training, the matrix and the
-        # dashboard agree on who a requirement grades — including its
-        # grandfathering dates.
-        from app.services.training_compliance import requirement_applies_to_user
+        # ComplianceGrading.for_member is the one definition of which
+        # requirements grade a member: the matching compliance profile
+        # narrows the set, then applicability by type, rank, position and
+        # grandfathering dates. /my-training, the profile card, the matrix and
+        # the dashboard resolve through it too, so every one of them answers
+        # the same (D10). Filtering by a keep-set preserves the (name, id)
+        # order a paged caller relies on; for_member returns the profile's
+        # own id order instead.
+        from app.services.training_compliance import (
+            ComplianceGrading,
+            _load_compliance_config,
+        )
 
-        return [req for req in requirements if requirement_applies_to_user(req, user)]
+        grading = ComplianceGrading.from_config(
+            await _load_compliance_config(self.db, str(organization_id))
+        )
+        keep = {
+            str(r.id) for r in grading.for_member(user, list(requirements)).requirements
+        }
+        return [req for req in requirements if str(req.id) in keep]
 
     async def get_expiring_certifications(
         self,
