@@ -65,7 +65,12 @@ type SectionKey = 'visibility' | 'categories' | 'attendance' | 'hour_tracking' |
 const SECTIONS: SettingsSection<SectionKey, PublicRequestsPage>[] = [
   { key: 'visibility', label: 'Visibility', icon: Settings, description: 'Primary filter categories' },
   { key: 'categories', label: 'Categories', icon: Tag, description: 'Custom event categories' },
-  { key: 'attendance', label: 'Attendance', icon: Users, description: "Who sees who's going; who takes requests" },
+  {
+    key: 'attendance',
+    label: 'Attendance',
+    icon: Users,
+    description: "Who sees who's going; who takes requests; when to ask for a response",
+  },
   { key: 'hour_tracking', label: 'Hour Tracking', icon: Clock, description: 'Map events to admin hours' },
   {
     key: 'public_requests',
@@ -284,6 +289,10 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
       { attendance_request_fallback_positions: { [eventType]: positionId } },
       'Failed to update who receives attendance requests.'
     );
+  };
+
+  const setMandatoryRsvpWindow = (days: number) => {
+    void saveSettings({ mandatory_rsvp_window_days: days }, 'Failed to update the mandatory event response window.');
   };
 
   const toggleCategoryVisibility = (categoryValue: string) => {
@@ -709,6 +718,7 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
             onChangeAttendeeVisibility={(value) => void setAttendeeVisibility(value)}
             positionOptions={positionOptions}
             onChangeFallbackPosition={setFallbackPosition}
+            onChangeMandatoryRsvpWindow={setMandatoryRsvpWindow}
           />
         );
       case 'hour_tracking':

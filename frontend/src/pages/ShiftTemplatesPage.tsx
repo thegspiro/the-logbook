@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
 import {
@@ -8,30 +9,20 @@ import {
   Edit2,
   Trash2,
   Clock,
-  Calendar,
-  Repeat,
-  Play,
   CheckCircle,
   Users,
   Truck,
   Filter,
-  Pause,
   RotateCcw,
 } from 'lucide-react';
 import { normalizePositions, schedulingService } from '../modules/scheduling/services/api';
 import type { ApparatusOption } from '../modules/scheduling/services/api';
-import type { ShiftTemplateCreate, ShiftPatternCreate } from '../modules/scheduling/types';
-import { useTimezone } from '../hooks/useTimezone';
-import { formatDate, formatTimeOfDay } from '../utils/dateFormatting';
+import type { ShiftTemplateCreate } from '../modules/scheduling/types';
+import { formatTimeOfDay } from '../utils/dateFormatting';
 import TemplateFormModal from '../modules/scheduling/components/TemplateFormModal';
-import PatternFormModal from '../modules/scheduling/components/PatternFormModal';
-import PatternTemplateInactiveNotice from '../modules/scheduling/components/PatternTemplateInactiveNotice';
-import GenerateShiftsModal from '../modules/scheduling/components/GenerateShiftsModal';
 import type {
   ShiftTemplate,
-  ShiftPattern,
   TemplateFormData,
-  PatternFormData,
   TemplateCategory,
   ResourceUnit,
   PositionEntry,
@@ -41,20 +32,17 @@ import {
   TEMPLATE_CATEGORIES,
   EVENT_TYPES,
   RESOURCE_TYPE_OPTIONS,
-  PATTERN_TYPES,
   getPositionOptions,
 } from '../modules/scheduling/components/shiftTemplateTypes';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { useTablist } from '../hooks/useTablist';
 
-type TabView = 'templates' | 'patterns';
-
+/**
+ * Shift templates: what a shift is. The patterns that repeat a template are
+ * made, edited and generated only in Planning › Patterns; this page carried a
+ * second pattern form until W32-6, and the two drifted.
+ */
 export const ShiftTemplatesPage: React.FC = () => {
-  const tablist = useTablist();
-  const tz = useTimezone();
-  const [activeTab, setActiveTab] = useState<TabView>('templates');
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
-  const [patterns, setPatterns] = useState<ShiftPattern[]>([]);
   const { confirm } = useConfirm();
   const [categoryFilter, setCategoryFilter] = useState<TemplateCategory | 'all'>('all');
   const [loading, setLoading] = useState(true);
@@ -62,13 +50,8 @@ export const ShiftTemplatesPage: React.FC = () => {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ShiftTemplate | null>(null);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
-
-  const [showPatternModal, setShowPatternModal] = useState(false);
-  const [editingPattern, setEditingPattern] = useState<ShiftPattern | null>(null);
-  const [deletingPatternId, setDeletingPatternId] = useState<string | null>(null);
-  const [generatingPattern, setGeneratingPattern] = useState<ShiftPattern | null>(null);
-  // The template or pattern whose active state is being changed, so its
-  // button can't be pressed twice while the request is in flight.
+  // The template being reactivated, so its button can't be pressed twice
+  // while the request is in flight.
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const [apparatusOptions, setApparatusOptions] = useState<ApparatusOption[]>([]);
@@ -80,15 +63,6 @@ export const ShiftTemplatesPage: React.FC = () => {
       setTemplates(data as unknown as ShiftTemplate[]);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load templates'));
-    }
-  }, []);
-
-  const loadPatterns = useCallback(async () => {
-    try {
-      const data = await schedulingService.getPatterns({ active_only: false });
-      setPatterns(data as unknown as ShiftPattern[]);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to load patterns'));
     }
   }, []);
 
@@ -105,9 +79,9 @@ export const ShiftTemplatesPage: React.FC = () => {
 
   const loadAll = useCallback(async () => {
     setLoading(true);
-    await Promise.all([loadTemplates(), loadPatterns(), loadApparatusOptions()]);
+    await Promise.all([loadTemplates(), loadApparatusOptions()]);
     setLoading(false);
-  }, [loadTemplates, loadPatterns, loadApparatusOptions]);
+  }, [loadTemplates, loadApparatusOptions]);
 
   useEffect(() => {
     void loadAll();
@@ -161,68 +135,11 @@ export const ShiftTemplatesPage: React.FC = () => {
     try {
       await schedulingService.updateTemplate(template.id, { is_active: true });
       toast.success(`"${template.name}" is active again. Patterns using it generate shifts again.`);
-      // Patterns carry the inactive-template flag, so both lists change.
-      await Promise.all([loadTemplates(), loadPatterns()]);
+      await loadTemplates();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to reactivate template'));
     } finally {
       setTogglingId(null);
-    }
-  };
-
-  const handleTogglePattern = async (pattern: ShiftPattern) => {
-    const resume = !pattern.is_active;
-    setTogglingId(pattern.id);
-    try {
-      await schedulingService.updatePattern(pattern.id, { is_active: resume });
-      toast.success(
-        resume ? `"${pattern.name}" resumed` : `"${pattern.name}" paused — it generates no new shifts until resumed`
-      );
-      await loadPatterns();
-    } catch (err) {
-      toast.error(getErrorMessage(err, resume ? 'Failed to resume pattern' : 'Failed to pause pattern'));
-    } finally {
-      setTogglingId(null);
-    }
-  };
-
-  const handleCreatePattern = async (data: Record<string, unknown>) => {
-    await schedulingService.createPattern(data as unknown as ShiftPatternCreate);
-    toast.success('Pattern created');
-    void loadPatterns();
-  };
-
-  const handleUpdatePattern = async (data: Record<string, unknown>, options?: { keepOpen?: boolean }) => {
-    if (!editingPattern) return;
-    await schedulingService.updatePattern(editingPattern.id, data);
-    void loadPatterns();
-    // A save that kept a refused field back leaves the dialog open with that
-    // field flagged (owner rule, 2026-11-05); the list behind it still refreshes.
-    if (options?.keepOpen) return;
-    toast.success('Pattern updated');
-    setEditingPattern(null);
-  };
-
-  const handleDeletePattern = async (id: string) => {
-    const pattern = patterns.find((p) => p.id === id);
-    if (
-      !(await confirm({
-        title: 'Delete pattern',
-        message: `Delete "${pattern?.name ?? 'this pattern'}"? This cannot be undone.`,
-        confirmLabel: 'Delete',
-        cancelLabel: 'Keep it',
-      }))
-    )
-      return;
-    setDeletingPatternId(id);
-    try {
-      await schedulingService.deletePattern(id);
-      toast.success('Pattern deleted');
-      void loadPatterns();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to delete pattern'));
-    } finally {
-      setDeletingPatternId(null);
     }
   };
 
@@ -263,18 +180,6 @@ export const ShiftTemplatesPage: React.FC = () => {
     };
   };
 
-  const patternToForm = (p: ShiftPattern): PatternFormData => ({
-    name: p.name,
-    description: p.description || '',
-    pattern_type: p.pattern_type,
-    template_id: p.template_id || '',
-    rotation_days: p.rotation_days ? String(p.rotation_days) : '',
-    days_on: p.days_on ? String(p.days_on) : '',
-    days_off: p.days_off ? String(p.days_off) : '',
-    start_date: p.start_date,
-    end_date: p.end_date || '',
-  });
-
   return (
     // Vertical padding only: this renders inside SchedulingPlanningPage, which
     // already pads the sides; the doubled gutter took 48px from every card.
@@ -286,46 +191,25 @@ export const ShiftTemplatesPage: React.FC = () => {
               is the page's h1; a second h1 split the page in two. */}
           <h2 className="text-theme-text-primary flex items-center gap-3 text-2xl font-bold">
             <LayoutTemplate className="h-7 w-7 shrink-0" aria-hidden="true" />
-            Shift Templates & Patterns
+            Shift Templates
           </h2>
-          <p className="text-theme-text-muted mt-1">Manage reusable shift configurations and scheduling patterns</p>
+          <p className="text-theme-text-muted mt-1">
+            Reusable shift configurations. To repeat a template on a schedule, make a pattern in{' '}
+            <Link
+              to="/scheduling/admin/planning/patterns"
+              className="touch:min-h-11 inline-flex items-center font-medium underline"
+            >
+              Shift patterns
+            </Link>
+            .
+          </p>
         </div>
         <button
-          onClick={() => (activeTab === 'templates' ? setShowTemplateModal(true) : setShowPatternModal(true))}
+          onClick={() => setShowTemplateModal(true)}
           className="split-row-aside btn-primary flex shrink-0 items-center gap-2 self-start sm:self-auto"
         >
           <Plus className="h-5 w-5" aria-hidden="true" />
-          {activeTab === 'templates' ? 'New Template' : 'New Pattern'}
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="tab-scroll mb-6" role="tablist" {...tablist} aria-label="Templates and patterns">
-        <button
-          onClick={() => setActiveTab('templates')}
-          role="tab"
-          aria-selected={activeTab === 'templates'}
-          className={`px-4 py-3 text-sm font-medium ${
-            activeTab === 'templates'
-              ? 'border-b-2 border-red-500 text-red-900 dark:text-red-300'
-              : 'text-theme-text-muted hover:text-theme-text-primary'
-          }`}
-        >
-          <LayoutTemplate className="mr-2 inline-block h-4 w-4" aria-hidden="true" />
-          Templates ({templates.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('patterns')}
-          role="tab"
-          aria-selected={activeTab === 'patterns'}
-          className={`px-4 py-3 text-sm font-medium ${
-            activeTab === 'patterns'
-              ? 'border-b-2 border-red-500 text-red-900 dark:text-red-300'
-              : 'text-theme-text-muted hover:text-theme-text-primary'
-          }`}
-        >
-          <Repeat className="mr-2 inline-block h-4 w-4" aria-hidden="true" />
-          Patterns ({patterns.length})
+          New Template
         </button>
       </div>
 
@@ -335,8 +219,8 @@ export const ShiftTemplatesPage: React.FC = () => {
           <RefreshCw className="text-theme-text-muted h-8 w-8 animate-spin" aria-hidden="true" />
           <span className="sr-only">Loading...</span>
         </div>
-      ) : activeTab === 'templates' ? (
-        <div role="tabpanel">
+      ) : (
+        <div>
           {/* Category filter */}
           {templates.length > 0 && (
             <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -606,125 +490,6 @@ export const ShiftTemplatesPage: React.FC = () => {
             </div>
           )}
         </div>
-      ) : (
-        <div role="tabpanel">
-          {patterns.length === 0 ? (
-            <div className="card-secondary px-4 py-12 text-center">
-              <Repeat className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
-              <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">No Patterns Yet</h3>
-              <p className="text-theme-text-muted mb-4">Create a shift pattern to define recurring schedules</p>
-              <button onClick={() => setShowPatternModal(true)} className="btn-primary inline-flex items-center gap-2">
-                <Plus className="h-5 w-5" aria-hidden="true" />
-                Create Pattern
-              </button>
-            </div>
-          ) : (
-            <div className="card-grid gap-4">
-              {patterns.map((pattern) => (
-                <div key={pattern.id} className="card-secondary p-5">
-                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                    <h3 className="text-theme-text-primary text-lg font-semibold">{pattern.name}</h3>
-                    <div className="flex items-center gap-1">
-                      <span
-                        className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
-                          pattern.is_active
-                            ? 'bg-green-500/10 text-green-900 dark:bg-green-500/20 dark:text-green-300'
-                            : 'bg-red-500/10 text-red-900 dark:bg-red-500/20 dark:text-red-300'
-                        }`}
-                      >
-                        {pattern.is_active ? 'Active' : 'Paused'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {(pattern.inactive_templates?.length ?? 0) > 0 && (
-                    <div className="mb-3">
-                      <PatternTemplateInactiveNotice names={pattern.inactive_templates} />
-                    </div>
-                  )}
-
-                  {pattern.description && <p className="text-theme-text-muted mb-3 text-sm">{pattern.description}</p>}
-
-                  <div className="mb-4 space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Repeat className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
-                      <span className="text-theme-text-secondary">
-                        {PATTERN_TYPES.find((pt) => pt.value === pattern.pattern_type)?.label || pattern.pattern_type}
-                      </span>
-                      {pattern.days_on && pattern.days_off && (
-                        <span className="text-theme-text-muted">
-                          ({pattern.days_on} on / {pattern.days_off} off)
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
-                      <span className="text-theme-text-secondary">
-                        {formatDate(pattern.start_date, tz)}
-                        {pattern.end_date && ` - ${formatDate(pattern.end_date, tz)}`}
-                      </span>
-                    </div>
-                    {pattern.rotation_days && (
-                      <div className="text-theme-text-muted text-sm">Rotation: {pattern.rotation_days} days</div>
-                    )}
-                  </div>
-
-                  <div className="border-theme-surface-border flex flex-wrap items-center gap-2 border-t pt-3">
-                    <button
-                      onClick={() => setGeneratingPattern(pattern)}
-                      // The server refuses a paused pattern or one held by an
-                      // inactive template (409); the notice above says why.
-                      disabled={!pattern.is_active || (pattern.inactive_templates?.length ?? 0) > 0}
-                      className="btn-primary flex items-center gap-1 px-3 py-1.5 text-sm disabled:opacity-50"
-                      aria-label={`Generate shifts from ${pattern.name}`}
-                    >
-                      <Play className="h-3.5 w-3.5" aria-hidden="true" />
-                      Generate
-                    </button>
-                    <button
-                      onClick={() => {
-                        void handleTogglePattern(pattern);
-                      }}
-                      disabled={togglingId === pattern.id}
-                      className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary touch:min-h-11 flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm disabled:opacity-50"
-                      aria-label={`${pattern.is_active ? 'Pause' : 'Resume'} ${pattern.name}`}
-                    >
-                      {pattern.is_active ? (
-                        <Pause className="h-3.5 w-3.5" aria-hidden="true" />
-                      ) : (
-                        <Play className="h-3.5 w-3.5" aria-hidden="true" />
-                      )}
-                      {pattern.is_active ? 'Pause' : 'Resume'}
-                    </button>
-                    <button
-                      onClick={() => setEditingPattern(pattern)}
-                      className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary touch:min-h-11 flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm"
-                      aria-label={`Edit ${pattern.name}`}
-                    >
-                      <Edit2 className="h-3.5 w-3.5" aria-hidden="true" />
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => {
-                        void handleDeletePattern(pattern.id);
-                      }}
-                      disabled={deletingPatternId === pattern.id}
-                      className="bg-theme-surface hover:bg-theme-surface-hover touch:min-h-11 flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm text-red-900 disabled:opacity-50 dark:text-red-300"
-                      aria-label={`Delete ${pattern.name}`}
-                    >
-                      {deletingPatternId === pattern.id ? (
-                        <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                      )}
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       )}
 
       {/* Modals */}
@@ -745,29 +510,6 @@ export const ShiftTemplatesPage: React.FC = () => {
         title="Edit Template"
         apparatusOptions={apparatusOptions}
         apparatusSource={apparatusSource}
-      />
-
-      <PatternFormModal
-        isOpen={showPatternModal}
-        onClose={() => setShowPatternModal(false)}
-        onSubmit={handleCreatePattern}
-        title="Create Pattern"
-        templates={templates}
-      />
-
-      <PatternFormModal
-        isOpen={!!editingPattern}
-        onClose={() => setEditingPattern(null)}
-        onSubmit={handleUpdatePattern}
-        initialData={editingPattern ? patternToForm(editingPattern) : undefined}
-        title="Edit Pattern"
-        templates={templates}
-      />
-
-      <GenerateShiftsModal
-        isOpen={!!generatingPattern}
-        onClose={() => setGeneratingPattern(null)}
-        pattern={generatingPattern}
       />
     </div>
   );

@@ -419,8 +419,8 @@ const ApplicationsTable: React.FC<ApplicationsTableProps> = ({ filters, timezone
 
   return (
     <div className="card mt-6 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full" aria-busy={isLoading}>
+      <div className="rwd-table-container overflow-x-auto">
+        <table className="rwd-table rwd-table-wide w-full" aria-busy={isLoading}>
           <thead>
             <tr className="border-theme-surface-border bg-theme-surface border-b">
               <SortableHeader
@@ -494,35 +494,45 @@ const ApplicationsTable: React.FC<ApplicationsTableProps> = ({ filters, timezone
                 onClick={() => void navigate(`/grants/applications/${app.id}`)}
                 className="hover:bg-theme-surface-hover cursor-pointer transition-colors"
               >
-                <td className="text-theme-text-primary px-4 py-3 text-sm font-medium">{app.grantProgramName}</td>
-                <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">{app.grantAgency}</td>
-                <td className="px-4 py-3 whitespace-nowrap">
+                <td
+                  data-label="Program Name"
+                  className="rwd-table-lead text-theme-text-primary px-4 py-3 text-sm font-medium"
+                >
+                  {app.grantProgramName}
+                </td>
+                <td data-label="Agency" className="text-theme-text-secondary px-4 py-3 text-sm">
+                  {app.grantAgency}
+                </td>
+                <td data-label="Status" className="px-4 py-3 whitespace-nowrap">
                   <span
                     className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${APPLICATION_STATUS_COLORS[app.applicationStatus] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                   >
                     {APPLICATION_STATUS_LABELS[app.applicationStatus] ?? app.applicationStatus}
                   </span>
                 </td>
-                <td className="text-theme-text-primary px-4 py-3 text-sm font-semibold whitespace-nowrap">
+                <td
+                  data-label="Amount Requested"
+                  className="text-theme-text-primary px-4 py-3 text-sm font-semibold whitespace-nowrap"
+                >
                   {formatCurrencyWhole(app.amountRequested)}
                 </td>
-                <td className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap">
+                <td data-label="Amount Awarded" className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap">
                   {formatCurrencyWhole(app.amountAwarded)}
                 </td>
-                <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                <td data-label="Deadline" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                   {app.applicationDeadline ? formatDate(app.applicationDeadline, timezone) : '--'}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap">
+                <td data-label="Priority" className="px-4 py-3 whitespace-nowrap">
                   <span
                     className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[app.priority] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                   >
                     {PRIORITY_LABELS[app.priority] ?? app.priority}
                   </span>
                 </td>
-                <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                <td data-label="Assigned To" className="text-theme-text-secondary px-4 py-3 text-sm">
                   {nameOf(app.assignedTo)}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap">
+                <td data-label="Actions" className="px-4 py-3 whitespace-nowrap">
                   <ExternalLink className="text-theme-text-secondary h-4 w-4" />
                 </td>
               </tr>

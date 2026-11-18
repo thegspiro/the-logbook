@@ -1222,8 +1222,8 @@ const ImportMembers: React.FC = () => {
                   be imported
                 </p>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                <div className="rwd-table-container overflow-x-auto">
+                  <table className="rwd-table rwd-table-wide w-full text-sm">
                     <thead className="bg-theme-input-bg border-theme-surface-border border-b">
                       <tr>
                         <th scope="col" className="text-theme-text-secondary px-4 py-2 text-left">
@@ -1246,13 +1246,19 @@ const ImportMembers: React.FC = () => {
                     <tbody className="divide-theme-surface-border divide-y">
                       {preflight.valid.slice(0, 5).map(({ line, data }) => (
                         <tr key={line} className="hover:bg-theme-surface-secondary">
-                          <td className="text-theme-text-primary px-4 py-2">
+                          <td data-label="Name" className="rwd-table-lead text-theme-text-primary px-4 py-2">
                             {data.firstName} {data.lastName}
                           </td>
-                          <td className="text-theme-text-secondary px-4 py-2 font-mono">{data.membershipNumber}</td>
-                          <td className="text-theme-text-secondary px-4 py-2">{data.email}</td>
-                          <td className="text-theme-text-secondary px-4 py-2">{data.primaryPhone}</td>
-                          <td className="text-theme-text-secondary px-4 py-2">
+                          <td data-label="Member #" className="text-theme-text-secondary px-4 py-2 font-mono">
+                            {data.membershipNumber}
+                          </td>
+                          <td data-label="Email" className="text-theme-text-secondary min-w-0 px-4 py-2 break-all">
+                            {data.email}
+                          </td>
+                          <td data-label="Phone" className="text-theme-text-secondary px-4 py-2">
+                            {data.primaryPhone}
+                          </td>
+                          <td data-label="Emergency Contact" className="text-theme-text-secondary px-4 py-2">
                             {data.emergencyName1
                               ? `${data.emergencyName1}${data.emergencyRelationship1 ? ` (${data.emergencyRelationship1})` : ''}`
                               : '—'}
