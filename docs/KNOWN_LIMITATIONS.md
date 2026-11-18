@@ -288,8 +288,9 @@ now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
   `docs/PDF_REPORTS.md`.)
 - **Minutes, the inventory impact plan and the election documents keep their
   own layouts.** Minutes, the evaluation and the election documents are
-  numbered "Page N" rather than "Page X of Y" (except the ballot), and the
-  impact plan carries no footer or page numbers at all. Since 2026-11-16 every
+  numbered "Page N" rather than "Page X of Y" (except the ballot). The impact
+  plan, which had no footer at all, is numbered "Page X of Y" since
+  2026-11-17. Since 2026-11-16 every
   one of them repeats the department's logo, name and the document's title at
   the top of each later page, so a loose page is still identifiable. They
   escape correctly and are audited; moving them onto the kit's footer is a
