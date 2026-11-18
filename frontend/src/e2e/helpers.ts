@@ -15,6 +15,8 @@ import type {
   TrainingSummaryReport,
 } from '../modules/reports/types';
 import type { KnowledgeTest } from '../types/knowledgeTest';
+import type { ErrorCodeEntry, ErrorLogRecord } from '../services/adminServices';
+import type { PlatformAnalytics } from '../types/platformAnalytics';
 import type { CrewMember } from '../types/user';
 import type { Facility, Inspection, MaintenanceRecord } from '../modules/facilities/types/facilities';
 import type {
@@ -850,6 +852,90 @@ const FACILITY_INSPECTIONS: Inspection[] = [
     updatedAt: '2026-11-01T12:00:00Z',
   },
 ];
+
+const ERROR_LOG: ErrorLogRecord[] = [
+  {
+    id: 'err-1',
+    error_type: 'NETWORK_ERROR',
+    error_message:
+      'Request to /api/v1/scheduling/shifts timed out after 30000ms while the station Wi-Fi was reconnecting',
+    user_message: 'We could not reach the server.',
+    troubleshooting_steps: ['Check your connection', 'Try again in a minute'],
+    context: { path: '/scheduling' },
+    user_id: 'crew-2',
+    user_name: 'Alex Johnson',
+    user_username: 'ajohnson',
+    created_at: '2026-11-15T13:04:00Z',
+  },
+  {
+    id: 'err-2',
+    error_type: 'EVENT_NOT_FOUND',
+    error_message: 'Event evt-404 not found',
+    user_message: 'That event no longer exists.',
+    troubleshooting_steps: [],
+    context: {},
+    user_id: 'crew-9',
+    user_name: null,
+    user_username: null,
+    event_id: 'evt-404',
+    created_at: '2026-11-14T22:10:00Z',
+  },
+  {
+    id: 'err-3',
+    error_type: 'AUTHENTICATION_REQUIRED',
+    error_message: 'Session expired',
+    user_message: 'Please sign in again.',
+    troubleshooting_steps: ['Sign in again'],
+    context: {},
+    created_at: '2026-11-14T08:00:00Z',
+  },
+];
+
+const ERROR_CODES: ErrorCodeEntry[] = [
+  {
+    code: 'NETWORK_ERROR',
+    category: 'Connectivity',
+    title: 'Network error',
+    description: 'The browser could not reach the server.',
+    resolution: ['Check the network', 'Retry'],
+  },
+  {
+    code: 'EVENT_NOT_FOUND',
+    category: 'Events',
+    title: 'Event not found',
+    description: 'The event was deleted or the link is out of date.',
+    resolution: ['Open the event from the calendar'],
+  },
+];
+
+const dailyCounts = (counts: number[]) =>
+  counts.map((count, i) => ({ date: `2026-11-${String(i + 2).padStart(2, '0')}`, count }));
+
+const PLATFORM_ANALYTICS: PlatformAnalytics = {
+  totalUsers: 64,
+  activeUsers: 50,
+  inactiveUsers: 14,
+  newUsersLast30Days: 3,
+  adoptionRate: 78,
+  loginTrend: dailyCounts([31, 28, 35, 40, 22, 18, 37, 41, 39, 30, 26, 19, 42, 44]),
+  modules: [
+    { name: 'Training', enabled: true, recordCount: 1842, lastActivity: '2026-11-15T12:00:00Z' },
+    { name: 'Scheduling', enabled: true, recordCount: 960, lastActivity: '2026-11-15T09:30:00Z' },
+    { name: 'Inventory', enabled: true, recordCount: 412, lastActivity: '2026-11-12T16:00:00Z' },
+    { name: 'Elections', enabled: false, recordCount: 0, lastActivity: null },
+  ],
+  totalEvents: 38,
+  eventsLast30Days: 10,
+  totalCheckIns: 351,
+  trainingHoursLast30Days: 286.5,
+  formsSubmittedLast30Days: 47,
+  errorsLast7Days: 3,
+  errorTrend: dailyCounts([1, 0, 0, 0, 1, 0, 1]),
+  topErrorTypes: { NETWORK_ERROR: 2, EVENT_NOT_FOUND: 1 },
+  totalDocuments: 233,
+  documentsLast30Days: 12,
+  generatedAt: '2026-11-15T12:00:00Z',
+};
 
 const TRAINING_CREW_CONTEXT: CrewRecordingContext = {
   can_record: true,
@@ -5037,6 +5123,24 @@ const routes = ({
     }),
   ],
   ['**/api/v1/minutes-records/templates**', () => (empty ? [] : MINUTES_OUTLINES)],
+
+  // Error monitoring reads the list with `?limit=`; the bare path is the
+  // clear-all DELETE, and `/errors/log` (the client's own reports) keeps the
+  // catch-all.
+  ['**/api/v1/errors?**', () => (empty ? { errors: [], total: 0 } : { errors: ERROR_LOG, total: ERROR_LOG.length })],
+  [
+    '**/api/v1/errors/stats',
+    () =>
+      empty
+        ? { total: 0, by_type: {}, recent_errors: [] }
+        : {
+            total: 3,
+            by_type: { NETWORK_ERROR: 1, EVENT_NOT_FOUND: 1, AUTHENTICATION_REQUIRED: 1 },
+            recent_errors: ERROR_LOG,
+          },
+  ],
+  ['**/api/v1/errors/codes', () => ({ codes: ERROR_CODES })],
+  ['**/api/v1/platform-analytics', () => PLATFORM_ANALYTICS],
 
   ['**/api/v1/training/module-config/my-training**', () => ({ hours_summary: { total_hours: 12 } })],
 
