@@ -814,6 +814,12 @@ any type (`event_id`) from the **Linked Meeting** field on the detail page
 no-op change shows no toast. The detail page also lists upcoming events for
 quick linking.
 
+The **Create New Election** dialog loads meeting records (`GET /meetings`,
+gated by the Minutes module and `meetings.view` / `minutes.view`) and upcoming
+events (`GET /events`) independently (`Promise.allSettled`), so a refused
+meetings request no longer empties the events half of the **Linked Meeting**
+picker _(2026-11-17, #4337)_.
+
 **Import Attendees from Meeting / Event**
 (`POST /elections/{id}/import-meeting-attendees`) copies members marked
 present at the linked meeting, or members who checked in to the linked event
