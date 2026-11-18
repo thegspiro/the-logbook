@@ -9,7 +9,7 @@
  * - Generate shifts from any pattern for a given date range
  */
 
-import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import {
   Plus,
   RefreshCw,
@@ -24,6 +24,7 @@ import {
   Sun,
   Moon,
   Pause,
+  Edit2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
@@ -37,9 +38,13 @@ import { PlatoonSelector } from './PlatoonSelector';
 import PatternTemplateInactiveNotice from '../../modules/scheduling/components/PatternTemplateInactiveNotice';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
+import { patternToFormData } from '../../modules/scheduling/components/shiftTemplateTypes';
 
 const PresetPatterns = lazyWithRetry(() => import('./PresetPatterns'));
 const CustomPatternBuilder = lazyWithRetry(() => import('./CustomPatternBuilder'));
+// The one edit form for a stored pattern; this section is the only place a
+// pattern is made or changed (W32-6).
+const PatternFormModal = lazyWithRetry(() => import('../../modules/scheduling/components/PatternFormModal'));
 
 type CreationMode = 'preset' | 'custom' | 'manual';
 
@@ -162,6 +167,10 @@ export const PatternsTab: React.FC = () => {
   // Generate form
   const [generatingFor, setGeneratingFor] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [editingPattern, setEditingPattern] = useState<ShiftPattern | null>(null);
+  // Memoized: the form re-seeds itself whenever this object changes, and a save
+  // that keeps a refused field flagged reloads the list behind the dialog.
+  const editingForm = useMemo(() => (editingPattern ? patternToFormData(editingPattern) : undefined), [editingPattern]);
   const [generateForm, setGenerateForm] = useState({
     start_date: '',
     end_date: '',
@@ -445,6 +454,17 @@ export const PatternsTab: React.FC = () => {
     } finally {
       setTogglingId(null);
     }
+  };
+
+  const handleUpdatePattern = async (data: Record<string, unknown>, options?: { keepOpen?: boolean }) => {
+    if (!editingPattern) return;
+    await schedulingService.updatePattern(editingPattern.id, data);
+    void loadData();
+    // A save that kept a refused field back leaves the dialog open with that
+    // field flagged (owner rule, 2026-11-05); the list behind it still refreshes.
+    if (options?.keepOpen) return;
+    toast.success('Pattern updated');
+    setEditingPattern(null);
   };
 
   const handleDelete = async (patternId: string) => {
@@ -1355,6 +1375,13 @@ export const PatternsTab: React.FC = () => {
                           {pattern.is_active ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                           {pattern.is_active ? 'Pause' : 'Resume'}
                         </button>
+                        <button
+                          onClick={() => setEditingPattern(pattern)}
+                          className="btn-secondary flex items-center gap-1.5 px-3 py-2 text-sm"
+                          aria-label={`Edit ${pattern.name}`}
+                        >
+                          <Edit2 className="h-3.5 w-3.5" aria-hidden="true" /> Edit
+                        </button>
                         <div className="flex-1" />
                         {confirmingDelete === pattern.id ? (
                           <div className="flex flex-wrap items-center gap-2">
@@ -1394,6 +1421,19 @@ export const PatternsTab: React.FC = () => {
             );
           })}
         </div>
+      )}
+
+      {editingPattern && (
+        <Suspense fallback={null}>
+          <PatternFormModal
+            isOpen
+            onClose={() => setEditingPattern(null)}
+            onSubmit={handleUpdatePattern}
+            initialData={editingForm}
+            title="Edit Pattern"
+            templates={templates}
+          />
+        </Suspense>
       )}
     </div>
   );

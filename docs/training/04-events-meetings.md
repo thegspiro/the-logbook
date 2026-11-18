@@ -108,13 +108,15 @@ open now. The band clears itself as you respond. A member who joined after an
 event ran, or who was not in its audience, is never listed as having missed
 it.
 
-_(2026-11-16)_ **A mandatory event asks for your response only in the two
-months before it.** An unanswered mandatory event joins the band, with the
-card's **Response needed** strip, once it starts within the next 60 days, or
-sooner if its RSVP deadline is less than two days away. A mandatory training
-series no longer lists every date of the year at once; each date appears as it
-comes within two months. You can still respond to a later date from its card
-or page at any time.
+_(2026-11-16)_ **A mandatory event asks for your response only in the weeks
+before it.** An unanswered mandatory event joins the band, with the card's
+**Response needed** strip, once it starts within the department's response
+window, or sooner if its RSVP deadline is less than two days away. The window
+is 60 days unless an officer changes it under **Events settings → Attendance →
+Mandatory event responses** (1 to 365 days). A mandatory training series no
+longer lists every date of the year at once; each date appears as it comes
+within the window. You can still respond to a later date from its card or page
+at any time.
 
 **An empty list.** When nothing is scheduled you see **No upcoming events
 yet**, a short explanation of what will appear here, and a link: **Take the
