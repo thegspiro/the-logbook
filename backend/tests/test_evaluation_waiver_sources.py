@@ -26,6 +26,7 @@ from app.core.database import get_db
 from app.models.attendance_waiver import (
     LIVE_STATUSES,
     AttendanceWaiverAction,
+    AttendanceWaiverAttachment,
     AttendanceWaiverRequest,
     AttendanceWaiverRequestAction,
     AttendanceWaiverStatus,
@@ -566,6 +567,58 @@ class TestRequestsTheEngineWrites:
         text = json.dumps(detail)
         assert "SECRET-REASON" not in text
         assert "SECRET-NOTE" not in text
+
+
+class TestAttachmentOnFile:
+    async def _attach(
+        self, dept: _Dept, request: AttendanceWaiverRequest, *, org: str, ordinal=1
+    ) -> None:
+        dept.db.add(
+            AttendanceWaiverAttachment(
+                organization_id=org,
+                request_id=request.id,
+                ordinal=ordinal,
+                file_path=f"attendance-waivers/{request.id}/SECRET-PATH-{ordinal}.pdf",
+                mime_type="application/pdf",
+                file_size=1024,
+                sha256="f" * 64,
+                uploaded_by=dept.member.id,
+            )
+        )
+        await dept.db.flush()
+
+    async def test_a_request_with_a_file_on_file_says_so_and_nothing_more(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        with_files = await _request(
+            dept,
+            date(2025, 3, 4),
+            title="With note",
+            steps=((AttendanceWaiverAction.APPROVED, dept.officer),),
+            status=AttendanceWaiverStatus.APPROVED,
+        )
+        await self._attach(dept, with_files, org=dept.org, ordinal=1)
+        await self._attach(dept, with_files, org=dept.org, ordinal=2)
+        await _request(dept, date(2025, 4, 1), title="Without note")
+        # A row stamped with another department is not this department's
+        # record, whatever request it names.
+        stray = await _request(dept, date(2025, 5, 6), title="Stray row")
+        await self._attach(dept, stray, org=await _org(dept.db))
+
+        _, history = _training(await _figures(dept, make_client))
+
+        on_file = {line["event_title"]: line["attachment_on_file"] for line in history}
+        assert on_file == {
+            "With note": True,
+            "Without note": False,
+            "Stray row": False,
+        }
+        (noted,) = [line for line in history if line["event_title"] == "With note"]
+        assert noted["label"].endswith("; attachment on file")
+        # Only the fact: never the file's path, its hash, or how many.
+        text = json.dumps(history)
+        assert "SECRET-PATH" not in text
+        assert "f" * 64 not in text
 
 
 class TestThePreview:

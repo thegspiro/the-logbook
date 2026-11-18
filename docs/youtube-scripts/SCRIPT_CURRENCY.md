@@ -1,5 +1,43 @@
 # Script currency
 
+## 2026-11-18 pass
+
+**Edited:** 03 IT Manager (Chapter 10, anonymizing: the dialog's Removed list
+now includes certificates uploaded with self-reported training; one beat
+added, re-record note `EDITOR — 2026-11-18 PASS`). 14 Multi-class courses
+(the cohort wizard's Course step lists only courses with a syllabus; one
+sentence added, editor note at the end).
+
+**Flagged, not edited** (no script quotes these labels): any scheduling beat
+showing the Templates tab's **Templates / Patterns** switch — it is gone, and
+patterns are edited from the Patterns tab's **Edit** button; 06 Member and 03
+(My Shifts → Past now shows **Hours credited** and "awaiting close-out"); 04
+Chief and 07 Secretary (officer check-ins after the start count from the
+scheduled start; the mandatory RSVP window setting); 05, 09 and 16 (the
+**Operational members** shortcut includes Senior where the tier exists; rolling
+evaluation-credited requirements show a due date); 12 Elections (Linked Meeting
+lists events when Minutes is off); 10 mobile segments (more tables reflow to
+cards; report results show as cards on desktop too). See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-17--18-2026).
+
+## 2026-11-15 pass
+
+**Edited:** 07 Secretary. Its Email Templates chapter quoted the old category
+list, which the 2026-11-14 change made wrong; the list is rewritten and a beat
+added for the minutes and election emails that are now templates. Re-record
+note and `EDITOR — 2026-11-15 PASS` log in the script.
+
+**Flagged, not edited** (no script quotes these labels, so nothing on screen is
+wrong yet): 04 Chief and 06 Member (leave requests, leave reminders, and the
+member's own leave on My Training); 05, 09 and 16 (linked evaluated-shift
+requirements credited from shift evaluations; no-show trainees no longer owe a
+report; the shift report keeps its draft across an evaluation); 13 Department
+Store (**Cancel order** section, delivery details, backward status moves only
+among Ordered / Ready for pickup / Fulfilled); 12 Elections (count on the
+**Candidates** tab; minutes say **Votes cast**); 04 Chief and 07 Secretary
+(History documents). See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-14--15-2026).
+
 ## Flagged 2026-11-11 (not edited)
 
 Worth a beat or a re-record note when next touched: 03 IT and 04 Chief

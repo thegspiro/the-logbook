@@ -5,6 +5,86 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 17 – 18, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-17--18-2026).
+
+- **Shift patterns live in one place**: make, **Edit** and generate them on
+  **Shift Planning → Patterns**. The Templates tab no longer has its own
+  Patterns switch. See [Scheduling](Module-Scheduling).
+- **My Shifts → Past** shows the same credited hours as **Hours**. A shift an
+  officer has not closed out yet reads "awaiting close-out" instead of adding
+  to the total, and members with more than 50 past shifts now see all of them.
+- **Event check-in**: when an officer checks a member in after the event has
+  started, the member is credited from the scheduled start. Use **Edit Times**
+  for someone who really arrived late. Members' own taps are unchanged.
+- **Mandatory events**: how far ahead an unanswered mandatory event asks for a
+  response is now a setting, **Event settings → Attendance → Mandatory event
+  responses** (60 days unless changed).
+- **Training requirements**: the **Operational members** button also ticks
+  **Senior** if your department has that tier. Requirements scoped with it
+  earlier don't include Senior: open them and select the button again. A
+  rolling evaluated-shifts, calls, transports or refusals requirement now shows
+  a due date from the member's latest evaluation.
+- **Course cohorts**: the wizard lists only courses that have classes on
+  their syllabus.
+- **Imported training**: re-mapping a course after its hours were edited now
+  moves the right hours.
+- **Anonymizing a member** also deletes the certificates they uploaded with
+  self-reported training (the training record stays). Permanently deleting a
+  member removes their training and waiver files. See
+  [Privacy](Security-Privacy).
+- **Elections**: **Linked Meeting** lists upcoming events even when the
+  Minutes module is off.
+- **Phones and reports**: many more tables become labelled cards on a phone
+  (grants, expense line items, message history, member import, inventory
+  imports, election integrity report), and report results show as cards in the
+  report window on every screen size. The inventory stock matrix keeps its
+  Size column pinned.
+
+## Recent changes: November 14 – 15, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-14--15-2026).
+
+- **Leave of absence**: members can ask for leave from **Leave Requests**
+  (off until the department turns it on), and approvers decide by a rule the
+  department picks. Members are emailed before their leave ends and when an
+  officer records, changes or removes it; officers get a monthly list of
+  open-ended leaves. The Annual Training and Program Requirement reports show
+  leave. Settings are under **Members → Administration → Settings → Leave of
+  Absence**.
+- **My Training**: shift and call requirements have **Show monthly shifts**
+  (or calls), with leave months labelled. A target that leave brings to zero
+  reads **Nothing owed (on leave)**. Members see their own leave dates and the
+  department's leave rule.
+- **Training requirements**: **Member Categories** lists your department's
+  own tiers, such as Senior. Check any requirement scoped by category.
+  Evaluated-shift, transport and refusal requirements linked into a program
+  are now credited from shift evaluations.
+- **Evaluations**: three more figures for a template (events by type,
+  certifications expiring soon, field shift evaluation averages); sources
+  from a module that is off read **(turned off)**; the builder warns about
+  gaps between score bands.
+- **Shift close-out**: a trainee marked No-show or still Pending no longer
+  needs a report or an evaluation. The shift report keeps everything typed
+  when you step out to an evaluation.
+- **Department Store**: an order shows how it is delivered, the address and
+  the member's notes, and its subtotal, tax, shipping and discount. Cancel
+  from the new **Cancel order** section (it emails the member and does not
+  refund). An order moves back only among Ordered, Ready for pickup and
+  Fulfilled.
+- **Email Templates**: the election and minutes emails can be reworded,
+  previewed and switched off, in **Elections & Voting** and a new **Meetings
+  & Minutes** group.
+- **Elections**: the **Candidates** tab shows a count; minutes say **Votes
+  cast**.
+- **History**: a **Documents** section for letters, minutes and clippings.
+  See the new [History](Module-History) page.
+- **Known problem**: `main` currently has three database migration heads, so
+  a fresh install or upgrade from it will not start until PR #4323 merges.
+
 ## Recent changes: November 14, 2026 (PayPal)
 
 The engineering audit is

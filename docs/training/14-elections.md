@@ -117,24 +117,24 @@ You can move between the tabs with the arrow keys, Home and End.
 1. Open **Elections** and select **Create Election**.
 2. Fill in the form:
 
-| Field                                | What to enter                                                                                                                                                                                                     |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Title** (required)                 | For example, "2026 Annual Officer Election"                                                                                                                                                                       |
-| **Description**                      | What the election is for                                                                                                                                                                                          |
-| **Linked Meeting**                   | The meeting or event the vote is held at, or **No linked meeting**. Choosing one sets the voting window to that meeting's start and end                                                                           |
-| **Held at** _(2026-10-29)_           | **Regular business meeting** or **Annual meeting**. Decides which voter rules from Election Settings the election starts with. Linking an annual meeting record picks **Annual meeting**; you can still change it |
-| **Start Date & Time** (required)     | When voting opens                                                                                                                                                                                                 |
-| **End Date & Time** (required)       | When voting closes. **Quick duration** buttons set it to 1, 2 or 4 hours after the start, or **End of Day**                                                                                                       |
-| **Positions**                        | The offices being filled. Pick from the list or type one, then select **Add**                                                                                                                                     |
-| **How is the Winner Determined?**    | The voting method and winning rule together (see below)                                                                                                                                                           |
-| **Enable Automatic Runoffs**         | Create a runoff when nobody meets the winning rule. Then choose **Runoff Type** and **Maximum Runoff Rounds** (1 to 10)                                                                                           |
-| **Anonymous Voting**                 | Votes are saved without the voter's name or address. On unless you untick it                                                                                                                                      |
-| **Allow Write-in Candidates**        | Voters may type in someone not on the ballot. Off unless you tick it. Never offered on an Approve/Deny item                                                                                                       |
-| **Show Results Immediately**         | Members see the running tally while voting is open. Cannot be changed once voting opens                                                                                                                           |
-| **Open Automatically at Start Time** | Voting opens by itself at the start time, and the ballots are emailed. Shown only when scheduled opening is on                                                                                                    |
-| **Auto-Remind Non-Voters**           | One reminder email 2 hours to 3 days before close, or none. Shown only when reminders are on                                                                                                                      |
-| **If the Top Candidates Tie**        | The tie rule. See [Tie Handling](#tie-handling)                                                                                                                                                                   |
-| **Seats per Race**                   | How many people each race elects, from 1 to 50                                                                                                                                                                    |
+| Field                                | What to enter                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Title** (required)                 | For example, "2026 Annual Officer Election"                                                                                                                                                                                                                                                                                |
+| **Description**                      | What the election is for                                                                                                                                                                                                                                                                                                   |
+| **Linked Meeting**                   | The meeting or event the vote is held at, or **No linked meeting**. Choosing one sets the voting window to that meeting's start and end. Upcoming events are listed even when the Minutes module is off or you cannot view meeting records _(2026-11-17; before, the list showed only **No linked meeting** in that case)_ |
+| **Held at** _(2026-10-29)_           | **Regular business meeting** or **Annual meeting**. Decides which voter rules from Election Settings the election starts with. Linking an annual meeting record picks **Annual meeting**; you can still change it                                                                                                          |
+| **Start Date & Time** (required)     | When voting opens                                                                                                                                                                                                                                                                                                          |
+| **End Date & Time** (required)       | When voting closes. **Quick duration** buttons set it to 1, 2 or 4 hours after the start, or **End of Day**                                                                                                                                                                                                                |
+| **Positions**                        | The offices being filled. Pick from the list or type one, then select **Add**                                                                                                                                                                                                                                              |
+| **How is the Winner Determined?**    | The voting method and winning rule together (see below)                                                                                                                                                                                                                                                                    |
+| **Enable Automatic Runoffs**         | Create a runoff when nobody meets the winning rule. Then choose **Runoff Type** and **Maximum Runoff Rounds** (1 to 10)                                                                                                                                                                                                    |
+| **Anonymous Voting**                 | Votes are saved without the voter's name or address. On unless you untick it                                                                                                                                                                                                                                               |
+| **Allow Write-in Candidates**        | Voters may type in someone not on the ballot. Off unless you tick it. Never offered on an Approve/Deny item                                                                                                                                                                                                                |
+| **Show Results Immediately**         | Members see the running tally while voting is open. Cannot be changed once voting opens                                                                                                                                                                                                                                    |
+| **Open Automatically at Start Time** | Voting opens by itself at the start time, and the ballots are emailed. Shown only when scheduled opening is on                                                                                                                                                                                                             |
+| **Auto-Remind Non-Voters**           | One reminder email 2 hours to 3 days before close, or none. Shown only when reminders are on                                                                                                                                                                                                                               |
+| **If the Top Candidates Tie**        | The tie rule. See [Tie Handling](#tie-handling)                                                                                                                                                                                                                                                                            |
+| **Seats per Race**                   | How many people each race elects, from 1 to 50                                                                                                                                                                                                                                                                             |
 
 3. Select **Create Election**. The election starts as a **Draft**.
 
@@ -382,6 +382,11 @@ Candidates tab; the ballot _is_ their view of who is standing.
 ## Nominating Candidates
 
 **Who can do this:** roles that can manage elections.
+
+The **Candidates** tab shows a count beside its name _(2026-11-14)_, as the
+**Ballot** tab does, so an empty slate shows from the tab bar. It counts
+nominees only, not a ballot item's Approve/Deny options, and changes as you
+add or remove one.
 
 1. Open the election and the **Candidates** tab.
 2. Select **+ Add Candidate**.
@@ -1699,6 +1704,16 @@ differently.
   election again.
 - **On older anonymous elections**, the audit log may still name in-app voters
   beside their vote.
+- **Minutes say "Votes cast", not "Ballots cast"** _(2026-11-14)_. The figure
+  counts one vote per race a ballot marked, so in a multi-race election it was
+  never the number of ballots. The minutes PDF, the generated minutes document
+  and the filed-result panel now say **Votes cast**, as the certified results
+  PDF already did. Older minutes still read "Ballots cast".
+- **The election emails can be reworded** _(2026-11-14)_. **Nominations
+  Open**, **You've Been Nominated**, **Nomination Accepted for You**, **Proxy
+  Authorized** and **Pre-Meeting Package** are templates under
+  **Communications → Email Templates → Elections & Voting**. See
+  [Email Templates](./08-admin-reports.md#email-templates).
 
 ---
 

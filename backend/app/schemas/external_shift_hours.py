@@ -240,6 +240,23 @@ class ExternalAgencyListResponse(BaseModel):
     agencies: List[ExternalAgencyResponse]
 
 
+class ExternalAgencyMerge(BaseModel):
+    """Merge the agency in the path into this one, which is the one kept."""
+
+    into_agency_id: UUID
+
+
+class ExternalAgencyMergeResponse(BaseModel):
+    #: The kept agency, as the list now shows it.
+    agency: ExternalAgencyResponse
+    #: Units that moved across unchanged.
+    moved_apparatus: int
+    #: Units folded into a same-named unit the kept agency already had.
+    combined_apparatus: int
+    #: Logged shifts now carrying the kept agency's name.
+    relabelled_shifts: int
+
+
 class ExternalApparatusSummaryRow(BaseModel):
     external_apparatus_id: Optional[str] = None
     agency_name: str

@@ -5,6 +5,103 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 17 – 18, 2026
+
+The last 25 hours of `main`: the 26 first-parent merges after `f337be43`
+through `775eb7df` (2026-11-18 10:56 UTC), #4364 at 2026-11-17 13:38 UTC to
+#4423. `CHANGELOG.md` stays closed.
+
+**Not covered:** the 37 first-parent merges between the November 14 – 15
+pass (`79ab1c88`) and #4364, plus the 40 that pass already left for a
+catch-up (session waiver requests' screens, History phases 2 and 3, the shift
+evaluation review). A catch-up pass should take both ranges.
+
+| Change                                                                                                                                                                                                                                                                          | Guide  | Disposition                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shift patterns made and edited in one place: **Edit** on each pattern in Shift Planning → Patterns; the Templates tab's Templates / Patterns switch, second pattern form and generate dialog removed (W32-6, #4388)                                                             | 03     | Written; wiki `Module-Scheduling`. `Module-Scheduling-Developer` already updated by the PR. `03-133` should be re-shot from the Patterns tab                                          |
+| My Shifts → Past shows the Hours view's credited hours, marks shifts awaiting close-out, and loads every attended shift (it stopped at 50) (#4381)                                                                                                                              | 03     | Written; wiki `Module-Scheduling`; `UPGRADING.md` note. API additive (`history`, `offset`, `shift_is_finalized`)                                                                      |
+| Officer check-in after an event starts is recorded at the scheduled start; dialog text changed (#4395)                                                                                                                                                                          | 04     | New subsection and "older version" bullet; wiki `Module-Events`; `UPGRADING.md` note                                                                                                  |
+| Mandatory RSVP window is a department setting, Event settings → Attendance → **Mandatory event responses**, 1–365 days, default 60 (#4361)                                                                                                                                      | 04     | Written (Needs You band, settings table and section). Wiki `Module-Events` already updated by the PR                                                                                  |
+| **Operational members** shortcut also ticks Senior where the tier exists (#4370)                                                                                                                                                                                                | 02     | Written, including a note that requirements scoped before today lack Senior; wiki `Module-Training`                                                                                   |
+| Rolling evaluated-shifts / calls / transports / refusals requirement falls due from the latest evaluation (#4379)                                                                                                                                                               | 02     | Written under Rolling Period Requirements; wiki `Module-Training`. `KNOWN_LIMITATIONS.md` already updated by the PR                                                                   |
+| Cohort wizard offers only courses with a syllabus (W27-4, #4385); `GET /training/courses?with_classes=true`                                                                                                                                                                     | 02     | Written; wiki `Module-Training`; YouTube 14 edited                                                                                                                                    |
+| Re-mapping an imported course compares against the hours the import took (`external_training_imports.course_hours_credited`, migration `bbeb4867d393`) (#4423)                                                                                                                  | 02     | Sentence written; wiki `Module-Training`; migration noted in `UPGRADING.md` (additive, nullable, backfilled). `TRAINING_MODULE.md` and `DATABASE_SCHEMA.md` already updated by the PR |
+| Anonymising a member deletes certificates uploaded with self-reported training; permanent delete removes the member's files after commit (D11, #4405)                                                                                                                           | 17     | Written, with the worked example; `UPGRADING.md` note; YouTube 03 edited. `wiki/Security-Privacy`, `COMPLIANCE.md` and `KNOWN_LIMITATIONS.md` already updated by the PR               |
+| Create New Election's **Linked Meeting** lists events when `/meetings` is refused (#4337)                                                                                                                                                                                       | 14     | Table row updated; wiki `Module-Elections`                                                                                                                                            |
+| Kiosk QR codes named for screen readers (W23-4, #4374)                                                                                                                                                                                                                          | 06     | Sentence written                                                                                                                                                                      |
+| Report results reflow to labelled cards in the report window, desktop included except Training Summary and Event Attendance (#4414)                                                                                                                                             | 08, 10 | Paragraph written in 08; mobile list in 10                                                                                                                                            |
+| Phone table reflows: grants (#4417), members import and Assigned Inventory (#4412), message history and outreach events (#4410), error code reference (#4409), election integrity tables (#4408), expense line items (#4416), inventory stock matrix and three previews (#4411) | 10     | Listed under "Wide tables become cards"; the stock matrix's pinned Size column described. Steps unchanged elsewhere                                                                   |
+| W24-4 marked fixed (receipt no longer promises a review within a week) (#4385)                                                                                                                                                                                                  | none   | Already true in guide 02 since #3701                                                                                                                                                  |
+| Storefront payments security pass 16, 0 findings (#4359)                                                                                                                                                                                                                        | none   | `docs/security-review/` updated by the PR                                                                                                                                             |
+| Stripe 17.0.0 (#4372), Python (#4371) and npm (#4364) patch groups                                                                                                                                                                                                              | none   | Stripe 17's breaking change (API keys dropped from pickled `StripeObject`s) does not apply: nothing in `backend/app` pickles one                                                      |
+| CI per-job concurrency (#4428), merge-queue runs (#4375), session-start `npm ci` (#4398)                                                                                                                                                                                        | none   | Internal                                                                                                                                                                              |
+
+**Alembic heads.** `main` at `775eb7df` has one head, `bbeb4867d393`.
+
+**Screenshots to create or replace:** see "Queued by the November 17 – 18
+documentation pass" in `docs/training/SCREENSHOT_CURRENCY.md`. **Replace or
+check:** `03-133-pattern-form-template-inactive` (taken from the removed
+Templates-tab form), `03-12-shift-templates` and `03-129-template-reactivate`
+(may show the removed switch). **Create:** pattern card **Edit**, Past view
+with credited hours, Check In Members dialog, Mandatory event responses,
+Operational members with Senior, report results as cards, the Anonymize
+Member dialog, phone table captures.
+
+**YouTube scripts:** 03 IT Manager and 14 Multi-class courses edited; others
+flagged in `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
+## Change audit: November 14 – 15, 2026
+
+Merged to `main` after `b44b32ea` (2026-11-14 04:56 UTC) through `79ab1c88`
+(2026-11-15 10:49 UTC), 24 first-parent merges. PayPal Settings (#4289) has
+its own section below. `CHANGELOG.md` stays closed.
+
+**Not covered:** the 40 merges between the November 10 – 11 pass
+(`dcc32fe2`) and `b44b32ea`, which the November 13 and 14 targeted passes
+left for a full pass. They include session waiver requests' screens
+(#4241–#4244, #4248), History phases 2 and 3 (#4263, #4279) and the shift
+evaluation review (#4264, #4275, #4276). A catch-up pass should take them;
+this pass only corrected guide 01's History "does not do yet" list, which
+they had made wrong.
+
+| Change                                                                                                                                                                                                    | Guide      | Disposition                                                                                                                                                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Leave reminders, open-ended leave digest, member **Leave Requests** with approver positions and a decision rule; leave on the Annual Training and Program Requirement reports; leave notice email (#4303) | 01, 02, 08 | Already written by the PR. Migrations `b4e7c2a91f06`, `c8d2f61a7e34` in `UPGRADING.md`. Screenshots queued here (the PR added none)                                                  |
+| Shift and call requirements broken down by month (**Show monthly shifts**); **Nothing owed (on leave)**; My Training lists the member's own leave; compliance setting changes audited (#4287)             | 02         | Written; wiki `Module-Training` updated                                                                                                                                              |
+| Linked evaluated-shift / transport / refusal requirements credited from shift evaluations (#4311); credit row locked (#4298)                                                                              | 02         | Paragraph written under Shift Evaluations; wiki `Module-Training`                                                                                                                    |
+| Requirement **Member Categories** lists the department's own tiers (#4309)                                                                                                                                | 02         | Written; wiki `Module-Training`                                                                                                                                                      |
+| Evaluations: three new data sources, **(turned off)** sources, unscored-band warning, PDF dates (#4292)                                                                                                   | 02         | Written; wiki `Module-Evaluations`. `EVALUATIONS_MODULE.md` already updated by the PR                                                                                                |
+| No-show and pending crew no longer owe trainee reports or evaluations at close-out (#4300)                                                                                                                | 03         | Note written under the close-out settings                                                                                                                                            |
+| Shift report keeps every trainee's evaluation fields and per-member calls across a trip to an evaluation (#4296)                                                                                          | 03         | Written under Working Offline                                                                                                                                                        |
+| Store orders: **Delivery** box and charge lines, **Cancel order** section, status transition rules (W67b-3/4/5, #4288)                                                                                    | 18         | New "Cancelling an order" section and two paragraphs; "If You Learned an Older Version" updated. `STOREFRONT_MODULE.md` already updated by the PR                                    |
+| Ten election and minutes notices became editable templates; **Meetings & Minutes** category; evaluation templates filed under **Performance Evaluations** (#4294)                                         | 08, 04, 14 | Written; wiki `Module-Communications`. Migration `c4e81b7a2d95`. Guide 08's category list had already been missing **Business Meetings** and **Performance Evaluations**; corrected  |
+| **Candidates** tab count; minutes say **Votes cast** (#4285)                                                                                                                                              | 14         | Written; wiki `Module-Elections`                                                                                                                                                     |
+| Draft request form's **Go to Forms to edit and publish** button (W22-5, #4310)                                                                                                                            | 04         | Sentence added                                                                                                                                                                       |
+| History phase 4: documents (#4313)                                                                                                                                                                        | 01         | New Documents section; "does not do yet" list corrected; new wiki page `Module-History` (the module had none) linked from the sidebar. `HISTORY_MODULE.md` already updated by the PR |
+| Outside-shift restore only for rejected entries; duplicate evaluation-form name is a 400 (#4307); skills save false conflict (#4291); iPad date fields (#4309)                                            | none       | Bug fixes with no change to the steps                                                                                                                                                |
+| Mobile sweeps for scheduling and communications screens, AAA contrast raises, touch-target floors (#4280, #4306, #4317)                                                                                   | none       | Visual only. Patterns' **Generate** wraps under the toggle on a phone; no guide step names its position                                                                              |
+| CI: first-load budget, frozen test clocks, session-start migration hint (#4283, #4286, #4304, #4318, #4319)                                                                                               | none       | Internal                                                                                                                                                                             |
+
+**Alembic heads.** `main` at `79ab1c88` has three heads (`c8d2f61a7e34`,
+`e2b7d94c1a63`, `169a11ebf589`): three merge revisions of the same pair of
+parents landed from three branches. `alembic upgrade head` refuses to run, so
+a fresh install or an upgrade will not boot. Open PR #4323 joins them; not
+fixed here to avoid a fourth join.
+
+**Screenshots to create:** see the table in
+`docs/training/SCREENSHOT_CURRENCY.md` ("Queued by the November 14 – 15
+documentation pass"): the store's order dialog (delivery, Cancel order, a
+cancelled order), Email Templates' Meetings & Minutes group, the Candidates
+count, monthly shifts and Nothing owed, My Training's leave list, the
+evaluation builder's turned-off source, History documents, Leave Requests and
+its settings. **Replace:** `08-34-email-templates` (old category list),
+`18-04-my-orders-unpaid` (card now shows delivery and charges); check
+`14-25-candidates-as-manager`.
+
+**YouTube scripts:** 07 Secretary edited (its Email Templates chapter quoted
+the old category list; re-record note added). Others flagged in
+`docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
 ## Change audit: PayPal Settings, November 14, 2026
 
 A targeted pass for the PayPal changes of November 14: a **Settings** button on

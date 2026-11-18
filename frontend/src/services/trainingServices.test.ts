@@ -55,6 +55,16 @@ describe('trainingService', () => {
         params: { active_only: false },
       });
     });
+
+    it('asks only for courses with classes on their syllabus when requested', async () => {
+      mockGet.mockResolvedValueOnce({ data: [] });
+
+      await trainingService.getCourses(true, { withClasses: true });
+
+      expect(mockGet).toHaveBeenCalledWith('/training/courses', {
+        params: { active_only: true, with_classes: true },
+      });
+    });
   });
 
   describe('getCourse', () => {

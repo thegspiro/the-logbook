@@ -218,10 +218,10 @@ const isRsvpDeadlineSoon = (event: EventListItem, nowMs: number): boolean => {
  * occurrence for the year ahead. An unparseable start is treated as inside the
  * window, so a malformed payload cannot silently drop a required response.
  */
-const isWithinMandatoryRsvpWindow = (event: EventListItem, nowMs: number): boolean => {
+const isWithinMandatoryRsvpWindow = (event: EventListItem, nowMs: number, windowDays: number): boolean => {
   const startsAt = Date.parse(event.start_datetime);
   if (Number.isNaN(startsAt)) return true;
-  return startsAt - nowMs <= EVENT_MANDATORY_RSVP_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  return startsAt - nowMs <= windowDays * 24 * 60 * 60 * 1000;
 };
 
 /**
@@ -253,7 +253,11 @@ export function isRsvpClosed(
  * a cancelled event has nothing to answer, and a draft is a manager's
  * unpublished working copy that must never nag anyone.
  */
-export function getEventUrgency(event: EventListItem, now: Date = new Date()): EventUrgency {
+export function getEventUrgency(
+  event: EventListItem,
+  now: Date = new Date(),
+  mandatoryRsvpWindowDays: number = EVENT_MANDATORY_RSVP_WINDOW_DAYS
+): EventUrgency {
   const nowMs = now.getTime();
 
   if (event.is_cancelled || event.is_draft) return 'routine';
@@ -276,7 +280,10 @@ export function getEventUrgency(event: EventListItem, now: Date = new Date()): E
   if (!hasEnded && !event.user_rsvp_status) {
     // A deadline about to pass outranks the window: a mandatory event whose
     // RSVP closes in two days needs the answer now, however far off it starts.
-    if (event.is_mandatory && (isWithinMandatoryRsvpWindow(event, nowMs) || isRsvpDeadlineSoon(event, nowMs))) {
+    if (
+      event.is_mandatory &&
+      (isWithinMandatoryRsvpWindow(event, nowMs, mandatoryRsvpWindowDays) || isRsvpDeadlineSoon(event, nowMs))
+    ) {
       return 'action';
     }
     if (event.requires_rsvp && isRsvpDeadlineSoon(event, nowMs)) return 'action';

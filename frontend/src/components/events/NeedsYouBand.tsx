@@ -2,7 +2,7 @@
  * The "Needs You" band above the events grid.
  *
  * It holds only events with an outstanding action — check-in open now, a
- * mandatory event starting within the next two months with no RSVP, a
+ * mandatory event starting within the organization's response window with no RSVP, a
  * mandatory event that ended with no check-in recorded — each next to the
  * single control that clears it. Membership comes
  * from the same {@link getEventUrgency} the cards use, so the band can never
@@ -31,6 +31,8 @@ export interface NeedsYouBandProps {
   pastMandatoryEvents: EventListItem[];
   timezone: string;
   now: Date;
+  /** The organization's mandatory-RSVP window, in days. */
+  mandatoryRsvpWindowDays: number;
   rsvpLoading: Record<string, boolean>;
   onQuickRSVP: (eventId: string, status: 'going' | 'not_going') => void;
   /** Reveals the rows the cap hid, by narrowing the grid to what needs a response. */
@@ -55,6 +57,7 @@ export const NeedsYouBand: React.FC<NeedsYouBandProps> = ({
   pastMandatoryEvents,
   timezone,
   now,
+  mandatoryRsvpWindowDays,
   rsvpLoading,
   onQuickRSVP,
   onShowAll,
@@ -68,7 +71,7 @@ export const NeedsYouBand: React.FC<NeedsYouBandProps> = ({
       if (seen.has(event.id)) continue;
       seen.add(event.id);
 
-      const urgency = getEventUrgency(event, now);
+      const urgency = getEventUrgency(event, now, mandatoryRsvpWindowDays);
       if (isUrgentEventState(urgency)) collected.push({ event, urgency });
     }
 
@@ -81,7 +84,7 @@ export const NeedsYouBand: React.FC<NeedsYouBandProps> = ({
       const distance = (row: BandRow): number => Math.abs(Date.parse(row.event.start_datetime) - now.getTime());
       return distance(a) - distance(b);
     });
-  }, [events, pastMandatoryEvents, now]);
+  }, [events, pastMandatoryEvents, now, mandatoryRsvpWindowDays]);
 
   if (rows.length === 0) return null;
 

@@ -108,6 +108,15 @@ open now. The band clears itself as you respond. A member who joined after an
 event ran, or who was not in its audience, is never listed as having missed
 it.
 
+**How far ahead a mandatory event asks for your answer** _(2026-11-17)_. An
+unanswered mandatory event joins the band once it starts within your
+department's response window, so a recurring mandatory series does not ask
+about every future meeting at once; later ones appear as they come within
+range. The window is 60 days unless an event manager changes it under
+**Event settings → Attendance → Mandatory event responses** (1 to 365 days).
+An event whose RSVP deadline is less than two days away is always in the band,
+whatever the window.
+
 **An empty list.** When nothing is scheduled you see **No upcoming events
 yet**, a short explanation of what will appear here, and a link: **Take the
 short walkthrough in the Learning Center**. **No events found** means a
@@ -660,6 +669,27 @@ happens:
 - **The tap time is kept** as the true record of when they arrived.
 - The monitoring view lists everyone who tapped in before the start and how
   early they were. The same flag appears beside them on the attendance list.
+
+#### Members an officer checks in after the start _(2026-11-17)_
+
+When an officer, or the event's organizer or alternate, checks someone in from
+**Check In Members** after the event has started, the member is credited from
+the **scheduled start**, not from the moment of the click. Working down the
+list ten minutes in used to cost everyone near the bottom ten minutes they were
+present for. An officer checking someone in is vouching that they were there.
+
+- This is stored as the check-in itself, so the row does not read **(times
+  edited)** and is not shown as a correction on the approval page or the
+  monitoring dashboard.
+- **Self check-ins are unchanged.** A member who taps their ID card, scans the
+  QR code or uses their own check-in button late is still credited from the tap.
+- **A member who really did arrive late:** use **Edit Times** to set their
+  arrival. The time you actually clicked is still kept in the audit log.
+
+The dialog's own text now says this: _"Anyone you check in after it starts is
+credited from the scheduled start; use Edit Times for someone who arrived
+late."_ _Screenshot: create one of the Check In Members dialog showing this
+line (the guide has no image of the dialog yet)._
 
 There is nothing to correct for a member who simply turned up early. The list
 is there for the other case: somebody who really **was** working before the
@@ -1659,7 +1689,7 @@ about the old date, and may not need to be excused from the new one.
 - **A denied request stays denied.** The first decision is final.
 - Changing only the title, location, description or end time does nothing to
   the requests. Cancelling or deleting the event closes pending requests, as
-  before.
+  before, and each member is told in the app and by email.
 
 **What if Confirm is refused?** The message says why: the member already
 checked in to the event, or (for a business meeting) a leave of absence now
@@ -1755,10 +1785,18 @@ and who may see the list, is covered in
 | -------------------- | ------------------------------------------------------------------------------ |
 | **Visibility**       | Which event types and categories appear as filters (**Event Type Visibility**) |
 | **Categories**       | Your **Custom Event Categories** and their colours                             |
-| **Attendance**       | _"Who sees who's going; who takes requests"_                                   |
+| **Attendance**       | _"Who sees who's going; who takes requests"_, and **Mandatory event responses** |
 | **Hour Tracking**    | Mapping events to admin hours                                                  |
 | **Public Requests**  | Everything about outreach events the public asks for — see below               |
 | **Headline Metrics** | The four numbers at the top of the page                                        |
+
+**Mandatory event responses** _(2026-11-17)_, at the foot of **Attendance**,
+sets **Ask for a response … days before the event**: how close a mandatory
+event must be before an unanswered one appears in members' **Needs You** band.
+Enter a whole number from 1 to 365; the default is 60. It saves when you leave
+the box or press Enter, not on every keystroke, and a number outside the range
+shows an error under the box and is not saved. _Screenshot: create one of this
+section._
 
 **Public Requests** is the one section with pages of its own, listed in the
 order a request moves through them. It applies only to requests from the
@@ -2051,6 +2089,14 @@ image attachments and appends PDF attachments, within size and page limits.
 schedule as the bell reminder. The department can opt out of this email under
 the minutes notification settings.
 
+**Rewording the minutes emails** _(2026-11-14)_. **Minutes Ready for Review**,
+**Action Items Assigned**, **Action Item Reminder (Minutes)**, **Open Action
+Items Digest** and **Action Item Reminder (Meetings)** are templates under
+**Communications → Email Templates → Meetings & Minutes**: reword, preview,
+test-send or switch each off there. They now carry your department's logo,
+footer and mail settings. See
+[Email Templates](./08-admin-reports.md#email-templates).
+
 ### Who is listed on the roll (department default and per minutes)
 
 _(2026-10-18)_ The roll is always recorded in full; quorum and the attendance
@@ -2325,9 +2371,12 @@ answered on that card, and a moved meeting is confirmed or withdrawn there
 too, since meetings have no list like My Training's.
 
 **Deciding.** Everyone who decides is emailed a link to the request. The list
-of requests waiting for you is at **Waiver requests** on Meeting Attendance (or
-the link in the email), and each request opens the same decision page as a
-training request. An approved request is written onto the meeting's minutes
+of requests waiting for you is **Governance → Waiver Requests**, which appears
+for everyone who decides meeting requests (by a chosen position, as Chief,
+President or Secretary, as the alternate, or by managing meetings), with the
+number waiting on you badged on it at the top of every Governance page. It is
+also on Meeting Attendance as **Waiver requests**. Each request opens the same
+decision page as a training request. An approved request is written onto the meeting's minutes
 roll call as an excused absence.
 
 ### Business-meeting waiver requests: asking for more information _(2026-11-13)_
@@ -2653,6 +2702,10 @@ given an **Event Request** integration. Your other published forms (a
 near-miss report, a gear-sizing survey) never appear there. Answers to a form
 without that integration are kept as form submissions; they do not open
 requests.
+
+A form still in draft carries a **Go to Forms to edit and publish** button, named
+for that form, which opens Forms to edit and publish it _(2026-11-14; was
+plain text)_.
 
 Officers who can manage events see this page without needing any Forms
 permission.
@@ -3002,6 +3055,11 @@ have moved, been renamed or work differently.
   when they sign in at the door.
 - **Early check-ins are credited from the scheduled start.** The tap time is
   kept, and officers see how early it was.
+- **An officer's check-in after the start is credited from the scheduled
+  start** _(2026-11-17)_, not from the click. Use **Edit Times** for a member
+  who really arrived late.
+- **Mandatory events ask for a response only within the department's window**
+  _(60 days by default, set under Event settings → Attendance)_.
 - **The QR code is hidden until check-in can succeed.**
 - **Guests take seats.** A capped event fills sooner than it once did.
 - **"Require RSVP" means a response is expected**, not that only some events

@@ -586,6 +586,13 @@ with `{"receipt": …}` in the body verifies one publicly (rate-limited); the
 
 ## Nominations
 
+_(2026-11-14)_ The detail page's **Candidates** tab carries a count of
+nominees for a manager, using the same `nomineesOf` filter as the list (a
+ballot item's Approve/Deny rows are options, not nominees). The minutes module
+labels `total_votes` **Votes cast**, not "Ballots cast", matching the
+certified results PDF. The nomination and proxy emails are editable templates
+(see [Communications](Module-Communications)).
+
 When the **nominations** feature is enabled, an officer opens a nomination
 phase (`POST /elections/{id}/open-nominations`). Any member can nominate a
 member or themselves; the nominee accepts or declines (a declined entry is
@@ -806,6 +813,12 @@ any type (`event_id`) from the **Linked Meeting** field on the detail page
 (**Link Meeting or Event**). Clearing the link sends explicit `null`s, and a
 no-op change shows no toast. The detail page also lists upcoming events for
 quick linking.
+
+The **Create New Election** dialog loads meeting records (`GET /meetings`,
+gated by the Minutes module and `meetings.view` / `minutes.view`) and upcoming
+events (`GET /events`) independently (`Promise.allSettled`), so a refused
+meetings request no longer empties the events half of the **Linked Meeting**
+picker _(2026-11-17, #4337)_.
 
 **Import Attendees from Meeting / Event**
 (`POST /elections/{id}/import-meeting-attendees`) copies members marked
