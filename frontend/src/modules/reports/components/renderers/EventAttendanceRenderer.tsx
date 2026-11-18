@@ -35,6 +35,7 @@ export const EventAttendanceRenderer: React.FC<Props> = ({ data }) => {
         <StatCard label="Total Attended" value={data.events.reduce((sum, e) => sum + e.attended, 0)} />
       </div>
       <ReportTable
+        reflow="phone"
         rows={data.events as unknown as Array<Record<string, unknown>>}
         columns={columns}
         emptyMessage="No event attendance records found."
