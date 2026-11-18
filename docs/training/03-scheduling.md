@@ -381,6 +381,29 @@ month's shift count and hours. Before, Past was one flat list with no year on
 any card, so a long-serving member saw "Sat, Oct 11" twice with nothing to tell
 the years apart. _Screenshot: replace the Past view image._
 
+**Past now shows credited hours, the same figures as Hours** _(2026-11-17)_.
+Past used to add up the raw time between check-in and check-out. **Hours**
+credits a shift only once an officer closes it out (finalizes it), plus any
+approved pre-shift prep, so a year with a shift still awaiting close-out read
+higher on Past than on Hours, with nothing to say why. Now:
+
+- The tiles read **Hours credited**, **Credited shifts** and **Avg
+  hours/shift**, and match the **Hours** view. Time not yet credited is shown
+  beneath, for example "+12 hrs awaiting close-out".
+- Each shift card says **Xh credited**, or **Xh · awaiting close-out** in amber
+  for a shift an officer has not closed out yet.
+- Month headers read, for example, "4 shifts · 36.5 hrs credited · 12 hrs
+  awaiting close-out".
+- If your credited hours cannot be loaded, a yellow notice says so, the hours
+  read "—", and your shifts are still listed.
+- **Older shifts are no longer cut off.** Past used to load only your 50 most
+  recent attended shifts, so a member with more lost the older ones, and their
+  hours, without warning. Every shift is now loaded.
+
+_Screenshot: create the Past view image (still outstanding from
+2026-11-09) after this change, with the **Hours credited** tiles and an amber
+**awaiting close-out** pill in frame._
+
 For each shift you see:
 
 - the date and time;
@@ -408,8 +431,9 @@ and their Confirm, Decline, Swap and Details actions are unchanged.
 **Past** opens on your newest year. Pick another year, or **All time**, from the
 **Year** dropdown; the three stat tiles follow it. A bar chart shows hours worked
 by month (by year under **All time**), and tapping a bar jumps to that month.
-Shifts are listed under month headers carrying the month's shift count and hours,
-and a header always equals the sum of the **Xh worked** pills under it. Shifts you
+Shifts are listed under month headers carrying the month's shift count and
+credited hours, plus any hours awaiting close-out. Each shift's pill reads **Xh
+credited** or **Xh · awaiting close-out** _(2026-11-17; it read "Xh worked")_. Shifts you
 declined or that were cancelled no longer appear in Past, because you did not work
 them; a seat you declined but then worked still shows, with its hours.
 
@@ -3280,6 +3304,19 @@ has three tabs: **Staffing gaps**, **Templates** and **Patterns**. The hub
 also has its own **Shift Templates** and **Shift Patterns** cards that open the
 same tabs.
 
+**Patterns are made and edited only on the Patterns tab** _(2026-11-17)_. The
+**Templates** tab used to carry its own **Templates / Patterns** switch, with a
+second pattern list, a second pattern form and a second **Generate** dialog.
+The two copies had drifted apart, and only the one on the Templates tab could
+edit an existing pattern. Now the **Templates** tab shows templates only, and
+its heading points to **Shift patterns**. Each pattern on the **Patterns** tab
+has an **Edit** button, which opens **Edit Pattern** and saves exactly as the
+old form did: emptying a field clears it, a field the server refuses stays
+flagged while the rest saves, and an inactive template is warned about.
+_Screenshots: check `03-12-shift-templates` and `03-129-template-reactivate`
+and replace either if it shows the old Templates / Patterns switch; create one
+of a pattern card on the Patterns tab with its **Edit** button._
+
 ### Templates
 
 Select **New Template** to create one, or select a template to edit it.
@@ -3433,6 +3470,9 @@ only bounds when automatic generation begins.
 ![The Weekend Duty Rotation weekly pattern in the pattern list, expanded: the sun and moon glyphs beside each covered weekday, and the weekly shifts listed as Sunday: Day, Friday: Night and Saturday: Day + Night](./images/03-128-pattern-list-glyphs.png)
 
 Select **Create Pattern** to save it.
+
+**To change a pattern later,** select **Edit** on its card. The form is the
+same one **New Pattern** uses, titled **Edit Pattern**.
 
 **A pattern needs a template.** Generating from a pattern with no template
 linked is refused: _"A shift template must be linked to the pattern before

@@ -51,7 +51,9 @@ reports.
   requests, with separation of duties on review
 - **Shift Templates & Patterns** — reusable shift configurations (hours, crew
   seats, vehicle, named checklists) and daily, weekly, platoon and custom
-  patterns for bulk generation
+  patterns for bulk generation. Patterns are created, **edited** and generated
+  only on **Shift Planning → Patterns**; the Templates tab is templates only
+  _(2026-11-17, W32-6, #4388)_
 - **Shift Pattern Presets** — 24/48, 48/96, Kelly Schedule, California
   3-Platoon, ABCAB, plus a custom pattern builder with a 30-day preview
 - **Bulk Shift Generation** — generate shifts from templates and patterns;
@@ -834,7 +836,11 @@ Notification links open the scheduling page with the shift pre-selected;
   (`POST /scheduling/calendar-feed/rotate`).
 - **My Shifts** has **Upcoming**, **Past** and **Hours** views and honours
   `?view=past` / `?view=hours`. The past view includes walk-on attendance as
-  completed entries; the dashboard Standby card links to it. Pending
+  completed entries. Its hours are the **Hours** view's credited figures
+  (`GET /scheduling/my-hours-history` → `history`), with time on shifts not
+  yet finalized shown as "awaiting close-out", and it pages through
+  `GET /scheduling/my-attendance-history?offset=` so a member with more than
+  50 attended shifts no longer loses the older ones _(2026-11-17, #4381)_; the dashboard Standby card links to it. Pending
   assignments can be confirmed or declined in bulk, with the UI rolling back on
   failure.
 - **Overtime advisory** — **Settings → General → Overtime advisory**: an
