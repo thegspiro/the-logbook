@@ -27,7 +27,7 @@ export interface AppError {
  * mounted sub-application, a gateway-generated 422 — arrives in the original
  * form.
  */
-interface ValidationErrorEntry {
+export interface ValidationErrorEntry {
   loc?: Array<string | number>;
   msg?: string;
   field?: string;
@@ -113,7 +113,7 @@ function capitalize(text: string): string {
  * attribute to any field; prefixing the message with it reads as a field called
  * "request", so that one is dropped rather than shown.
  */
-function describeValidationError(entry: ValidationErrorEntry): string {
+export function describeValidationError(entry: ValidationErrorEntry): string {
   const locField = entry.loc?.length ? String(entry.loc[entry.loc.length - 1]) : undefined;
   const field = entry.field || locField;
   const message = entry.message || entry.msg || 'Invalid value';

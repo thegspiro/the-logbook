@@ -44,7 +44,7 @@ describe('useFieldErrors', () => {
     });
 
     expect(result.current.errors).toEqual({});
-    expect(result.current.formError).toBe('positions: Too many seats. End must be after start.');
+    expect(result.current.formError).toBe('Positions: Too many seats. End must be after start.');
   });
 
   it('turns a failure that is not a 422 into the form-level message, with its code', () => {
