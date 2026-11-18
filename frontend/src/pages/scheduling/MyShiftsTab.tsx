@@ -22,7 +22,7 @@ import {
 import { Link, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
-import type { ShiftRecord, ShiftAttendanceRecord } from '../../modules/scheduling/services/api';
+import type { MemberHoursMonth, ShiftRecord, ShiftAttendanceRecord } from '../../modules/scheduling/services/api';
 import type { ExchangeCandidate } from '../../modules/scheduling/types';
 import type { Assignment } from '../../types/scheduling';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -77,6 +77,9 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
 
   // Attendance history for hours display, keyed by shift_id.
   const [attendanceMap, setAttendanceMap] = useState<Map<string, ShiftAttendanceRecord>>(new Map());
+  // Credited hours by month, the Hours tab's figures, for the Past view's
+  // totals. Null when they could not be loaded.
+  const [creditHistory, setCreditHistory] = useState<MemberHoursMonth[] | null>(null);
 
   // Swap request modal
   const [showSwapModal, setShowSwapModal] = useState(false);
@@ -113,11 +116,13 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [assignData, attHistory] = await Promise.all([
+      const [assignData, attHistory, hoursHistory] = await Promise.all([
         schedulingService.getMyAssignments(),
-        schedulingService.getMyAttendanceHistory().catch(() => []),
+        schedulingService.getAllMyAttendanceHistory().catch(() => []),
+        schedulingService.getMyHoursHistory().catch(() => null),
       ]);
       setAssignments(assignData);
+      setCreditHistory(hoursHistory?.history ?? null);
       const map = new Map<string, ShiftAttendanceRecord>();
       for (const att of attHistory) {
         map.set(att.shift_id, att);
@@ -552,7 +557,14 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
 
       {view === 'hours' && <MyHoursSummary />}
 
-      {view === 'past' && <PastShiftsHistory past={past} attendanceByShift={attendanceMap} onViewShift={onViewShift} />}
+      {view === 'past' && (
+        <PastShiftsHistory
+          past={past}
+          attendanceByShift={attendanceMap}
+          creditHistory={creditHistory}
+          onViewShift={onViewShift}
+        />
+      )}
 
       {/* Upcoming shift list */}
       {view === 'upcoming' &&
