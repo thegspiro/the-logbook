@@ -24,7 +24,7 @@ from fastapi import (
 )
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -41,6 +41,7 @@ from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.event import Event, EventRSVP
 from app.models.training import (
+    CourseClass,
     DueDateType,
     RequirementType,
     SkillEvaluation,
@@ -682,11 +683,15 @@ async def link_suggested_course_names(
 @router.get("/courses", response_model=list[TrainingCourseResponse])
 async def list_courses(
     active_only: bool = True,
+    with_classes: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     List all training courses
+
+    ``with_classes=true`` keeps only courses with at least one class on their
+    syllabus: the ones a cohort can be generated from.
 
     **Authentication required**
     """
@@ -696,6 +701,11 @@ async def list_courses(
 
     if active_only:
         query = query.where(TrainingCourse.active == True)  # noqa: E712
+
+    if with_classes:
+        # Correlated on the course itself, which is already org-scoped above,
+        # so another department's class rows cannot make a course qualify.
+        query = query.where(exists().where(CourseClass.course_id == TrainingCourse.id))
 
     query = query.order_by(TrainingCourse.name)
 
