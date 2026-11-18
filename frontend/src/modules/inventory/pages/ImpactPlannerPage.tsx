@@ -927,8 +927,8 @@ const ImpactPlannerPage: React.FC = () => {
                       description="Adjust the filters or the list search to see members."
                     />
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                    <div className="rwd-table-container overflow-x-auto">
+                      <table className="rwd-table rwd-table-narrow w-full text-sm">
                         <thead>
                           <tr className="border-theme-surface-border border-b text-left">
                             <th className="py-2 pr-3">
@@ -940,7 +940,7 @@ const ImpactPlannerPage: React.FC = () => {
                                 onSort={onSort}
                               />
                             </th>
-                            <th className="hidden px-3 py-2 sm:table-cell">
+                            <th className="px-3 py-2">
                               <SortableHeader
                                 label="Rank / Station"
                                 field="rank"
@@ -973,7 +973,7 @@ const ImpactPlannerPage: React.FC = () => {
                         <tbody>
                           {sortedMembers.map((m) => (
                             <tr key={m.user_id} className="border-theme-surface-border/50 border-b last:border-0">
-                              <td className="py-2.5 pr-3">
+                              <td data-label="Member" className="rwd-table-lead py-2.5 pr-3">
                                 <Link
                                   to={`/members/${m.user_id}`}
                                   className="text-theme-text-primary font-medium hover:text-blue-600 dark:hover:text-blue-400"
@@ -989,12 +989,16 @@ const ImpactPlannerPage: React.FC = () => {
                                   </span>
                                 )}
                               </td>
-                              <td className="text-theme-text-secondary hidden px-3 py-2.5 sm:table-cell">
-                                <span>{enumLabel(m.rank) || '—'}</span>
-                                {m.station && <span className="text-theme-text-muted block text-xs">{m.station}</span>}
+                              <td data-label="Rank / Station" className="text-theme-text-secondary px-3 py-2.5">
+                                <div className="min-w-0">
+                                  <span>{enumLabel(m.rank) || '—'}</span>
+                                  {m.station && (
+                                    <span className="text-theme-text-muted block text-xs">{m.station}</span>
+                                  )}
+                                </div>
                               </td>
                               {result.size_field && (
-                                <td className="px-3 py-2.5">
+                                <td data-label="Size" className="px-3 py-2.5">
                                   {m.needed_size ? (
                                     <span className="text-theme-text-primary font-medium">
                                       {sizeLabel(m.needed_size)}
@@ -1005,7 +1009,7 @@ const ImpactPlannerPage: React.FC = () => {
                                 </td>
                               )}
                               {relatedCategoryId && (
-                                <td className="px-3 py-2.5">
+                                <td data-label="Existing" className="px-3 py-2.5">
                                   {m.has_related_item ? (
                                     <span
                                       className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:text-green-400"
@@ -1027,22 +1031,24 @@ const ImpactPlannerPage: React.FC = () => {
                                   )}
                                 </td>
                               )}
-                              <td className="text-theme-text-secondary py-2.5 pl-3">
-                                {m.email ? (
-                                  <a
-                                    href={`mailto:${m.email}`}
-                                    className="break-all hover:text-blue-600 dark:hover:text-blue-400"
-                                  >
-                                    {m.email}
-                                  </a>
-                                ) : m.phone ? (
-                                  <span>{m.phone}</span>
-                                ) : (
-                                  <span className="text-theme-text-muted text-xs">—</span>
-                                )}
-                                {m.email && m.phone && (
-                                  <span className="text-theme-text-muted block text-xs">{m.phone}</span>
-                                )}
+                              <td data-label="Contact" className="text-theme-text-secondary py-2.5 pl-3">
+                                <div className="min-w-0">
+                                  {m.email ? (
+                                    <a
+                                      href={`mailto:${m.email}`}
+                                      className="break-all hover:text-blue-600 dark:hover:text-blue-400"
+                                    >
+                                      {m.email}
+                                    </a>
+                                  ) : m.phone ? (
+                                    <span>{m.phone}</span>
+                                  ) : (
+                                    <span className="text-theme-text-muted text-xs">—</span>
+                                  )}
+                                  {m.email && m.phone && (
+                                    <span className="text-theme-text-muted block text-xs">{m.phone}</span>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           ))}
