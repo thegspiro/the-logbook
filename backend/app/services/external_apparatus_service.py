@@ -19,6 +19,7 @@ from app.models.external_shift_hours import (
     ExternalShiftHours,
 )
 from app.utils.model_updates import apply_updates
+from app.utils.sql_results import rows_affected
 
 
 class ExternalApparatusInUseError(Exception):
@@ -316,7 +317,7 @@ class ExternalApparatusService:
                 .values(**values)
                 .execution_options(synchronize_session=False)
             )
-            relabelled += result.rowcount or 0
+            relabelled += rows_affected(result)
             if match is not None:
                 await self.db.delete(unit)
                 combined += 1
@@ -334,7 +335,7 @@ class ExternalApparatusService:
             .values(agency_name=target.name)
             .execution_options(synchronize_session=False)
         )
-        relabelled += detached.rowcount or 0
+        relabelled += rows_affected(detached)
 
         # The moves must reach the database before the source goes: its
         # delete cascades to whatever units still name it.
