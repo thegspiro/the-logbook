@@ -95,11 +95,14 @@ so it clears as the member types. Covered by a new case in
 Covered by the new `ReviewSubmissionsPage.test.tsx` (fails against the old page).
 Re-driven: All Submissions shows "Sep 27, 2026".
 
-### W24-4 — NIT — The receipt promises review "within a week" — OPEN
+### W24-4 — NIT — The receipt promises review "within a week" — ✅ FIXED (#3701)
 
-**Where:** `frontend/src/components/training/submit/SubmissionReceipt.tsx:37`.
-The department's configured approval deadline is 14 days. The sentence is
-advice, not a deadline the member can hold the department to, so it is left.
+**Where:** `frontend/src/components/training/submit/SubmissionReceipt.tsx`.
+The department's configured approval deadline is 14 days. #3701 rewrote the
+receipt on 2026-10-25, and it no longer promises a review time: a pending
+entry says "You can edit or delete it until an officer approves it. The hours
+count toward your requirements once approved." Confirmed against `main` on
+2026-11-16.
 
 ## Checklist
 

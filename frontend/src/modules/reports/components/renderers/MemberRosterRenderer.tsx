@@ -21,7 +21,13 @@ export const MemberRosterRenderer: React.FC<Props> = ({ data }) => {
       render: (_: unknown, row: Record<string, unknown>) =>
         `${toDisplayString(row.first_name)} ${toDisplayString(row.last_name)}`.trim(),
     },
-    { key: 'email', header: 'Email' },
+    {
+      key: 'email',
+      header: 'Email',
+      // An address has no break opportunity, so without break-all it sets the
+      // column's width on its own and pushes the card past a phone screen.
+      render: (v: unknown) => <span className="min-w-0 break-all">{v != null ? toDisplayString(v) : '-'}</span>,
+    },
     { key: 'rank', header: 'Rank' },
     {
       key: 'status',

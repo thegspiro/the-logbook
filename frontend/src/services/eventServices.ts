@@ -656,12 +656,15 @@ export const eventService = {
     custom_event_categories: import('../types/event').EventCategoryConfig[];
     visible_custom_categories: string[];
     membership_types: { value: string; label: string }[];
+    /** Absent from a backend that predates the setting. */
+    mandatory_rsvp_window_days?: number | undefined;
   }> {
     const response = await api.get<{
       visible_event_types: import('../types/event').EventType[];
       custom_event_categories: import('../types/event').EventCategoryConfig[];
       visible_custom_categories: string[];
       membership_types: { value: string; label: string }[];
+      mandatory_rsvp_window_days?: number | undefined;
     }>('/events/visible-event-types');
     return response.data;
   },

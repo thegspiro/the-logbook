@@ -6,6 +6,9 @@
  *   once, and never the baseline "Member" position.
  * - Linking a meeting sets the voting window to the meeting's own start and
  *   end, read as the department's wall-clock time.
+ * - Upcoming events and meeting records are offered independently: a refused
+ *   meetings request (the Minutes module turned off) must not empty the event
+ *   half of the picker, where most departments' business meetings live.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -17,6 +20,7 @@ const mockGetElections = vi.fn();
 const mockGetRanks = vi.fn();
 const mockGetRoles = vi.fn();
 const mockGetMeetings = vi.fn();
+const mockGetEvents = vi.fn();
 
 vi.mock('../services/api', () => ({
   // Read by the Governance section strip in the page header.
@@ -29,7 +33,7 @@ vi.mock('../services/api', () => ({
     getElections: (...args: unknown[]) => mockGetElections(...args) as unknown,
     getElectionSettings: vi.fn().mockRejectedValue(new Error('not needed')),
   },
-  eventService: { getEvents: vi.fn().mockResolvedValue([]) },
+  eventService: { getEvents: (...args: unknown[]) => mockGetEvents(...args) as unknown },
   meetingsService: { getMeetings: (...args: unknown[]) => mockGetMeetings(...args) as unknown },
   ranksService: { getRanks: (...args: unknown[]) => mockGetRanks(...args) as unknown },
   roleService: { getRoles: (...args: unknown[]) => mockGetRoles(...args) as unknown },
@@ -72,6 +76,8 @@ describe('ElectionsPage create form: positions and linked meeting', () => {
     ]);
     mockGetMeetings.mockReset();
     mockGetMeetings.mockResolvedValue({ meetings: [] });
+    mockGetEvents.mockReset();
+    mockGetEvents.mockResolvedValue([]);
   });
 
   it('offers department positions beside ranks, each name once, without Member', async () => {
@@ -133,5 +139,37 @@ describe('ElectionsPage create form: positions and linked meeting', () => {
     await userEvent.selectOptions(await screen.findByLabelText(/Linked Meeting/), 'meeting:m1');
 
     expect(screen.getByLabelText(/Start Date & Time/, { selector: 'input' })).toHaveValue('');
+  });
+
+  it('still offers upcoming events when the meetings list cannot be read', async () => {
+    mockGetMeetings.mockRejectedValue(new Error('403'));
+    mockGetEvents.mockResolvedValue([
+      {
+        id: 'e1',
+        title: 'December Business Meeting',
+        event_type: 'business_meeting',
+        start_datetime: '2099-12-10T19:00:00Z',
+        end_datetime: '2099-12-10T21:00:00Z',
+      },
+    ]);
+    await openCreateDialog();
+
+    const picker = await screen.findByLabelText(/Linked Meeting/);
+    await waitFor(() =>
+      expect(within(picker).getByRole('option', { name: /December Business Meeting/ })).toHaveValue('event:e1')
+    );
+  });
+
+  it('still offers meeting records when the events list cannot be read', async () => {
+    mockGetEvents.mockRejectedValue(new Error('network'));
+    mockGetMeetings.mockResolvedValue({
+      meetings: [{ id: 'm1', title: 'Annual Meeting', meeting_date: '2099-12-10' }],
+    });
+    await openCreateDialog();
+
+    const picker = await screen.findByLabelText(/Linked Meeting/);
+    await waitFor(() =>
+      expect(within(picker).getByRole('option', { name: /Annual Meeting/ })).toHaveValue('meeting:m1')
+    );
   });
 });

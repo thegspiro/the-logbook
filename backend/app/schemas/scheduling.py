@@ -903,6 +903,11 @@ class MemberHoursHistoryResponse(BaseModel):
     # rendering it when the summary cards moved to this month / this year /
     # all time; dropping the field would break any other caller for nothing.
     previous_month: MemberHoursMonth
+    #: Every month with any attendance, credited, pending or external, oldest
+    #: first. The same buckets ``months`` and ``all_time`` are cut from, so the
+    #: Past view of My Shifts can show any year, or all time, in the figures the
+    #: Hours tab shows, from one request.
+    history: List[MemberHoursMonth] = Field(default_factory=list)
 
 
 class SchedulingWidgetFilters(BaseModel):
