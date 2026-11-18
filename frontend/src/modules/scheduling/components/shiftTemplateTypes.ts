@@ -459,6 +459,29 @@ export const newTemplateForm = (defaults: {
   };
 };
 
+/** A stored pattern as the edit form starts from it. */
+export const patternToFormData = (p: {
+  name: string;
+  description?: string | null | undefined;
+  pattern_type: PatternFormData['pattern_type'];
+  template_id?: string | null | undefined;
+  rotation_days?: number | null | undefined;
+  days_on?: number | null | undefined;
+  days_off?: number | null | undefined;
+  start_date: string;
+  end_date?: string | null | undefined;
+}): PatternFormData => ({
+  name: p.name,
+  description: p.description || '',
+  pattern_type: p.pattern_type,
+  template_id: p.template_id || '',
+  rotation_days: p.rotation_days ? String(p.rotation_days) : '',
+  days_on: p.days_on ? String(p.days_on) : '',
+  days_off: p.days_off ? String(p.days_off) : '',
+  start_date: p.start_date,
+  end_date: p.end_date || '',
+});
+
 export const emptyPatternForm: PatternFormData = {
   name: '',
   description: '',

@@ -105,6 +105,15 @@ describe('CohortWizard', () => {
     expect(screen.getByRole('option', { name: /Recruit School/ })).toBeInTheDocument();
   });
 
+  // W27-4: a course with an empty syllabus was offered and failed only at the
+  // preview, under a hint saying the course must already have classes.
+  it('offers only courses with classes on their syllabus', async () => {
+    render(<CohortWizard onComplete={vi.fn()} onCancel={vi.fn()} />);
+
+    await screen.findByRole('option', { name: /Recruit School/ });
+    expect(mockGetCourses).toHaveBeenCalledWith(true, { withClasses: true });
+  });
+
   it('requires a course before advancing', async () => {
     const user = userEvent.setup();
     render(<CohortWizard onComplete={vi.fn()} onCancel={vi.fn()} />);
