@@ -1401,6 +1401,52 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/history', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/history/media', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/history/documents', maxSmallTargets: 0, maxTinyText: 0 },
+  // The rest of the archive's list and form screens. `history.manage` is what
+  // the forms, the importer and the settings screen are gated on; each
+  // `expectText` is drawn only by its populated fixture (helpers.ts) or its form.
+  { path: '/history/people', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Robert Doyle' },
+  {
+    path: '/history/people/new',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'Add to the archive',
+  },
+  {
+    path: '/history/import',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'roster-1976-2000.csv',
+  },
+  {
+    path: '/history/media/upload',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'People in every file',
+  },
+  {
+    path: '/history/documents/upload',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: 'Transcription',
+  },
+  { path: '/history/albums', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Centennial Parade, 1923' },
+  {
+    path: '/history/honor-roll',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: 'Lost when the roof of the Grange Hall collapsed during an interior attack.',
+  },
+  {
+    path: '/history/settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['history.manage'],
+    expectText: '3 records · retired',
+  },
   { path: '/medical-supplies', maxSmallTargets: 0, maxTinyText: 0, permissions: ['inventory.view_medical'] },
   { path: '/ip-security', maxSmallTargets: 0, maxTinyText: 0, permissions: ['security.manage'] },
   // Both are settings.manage-gated, so they cost no extra sign-in between them.
