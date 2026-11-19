@@ -1373,6 +1373,31 @@ class DocumentsService:
             if file_path:
                 file_paths.append(file_path)
 
+        # delete_document refuses a History-catalogued document one at a
+        # time (source_type == HISTORY_DOCUMENT_SOURCE_TYPE); this cascade's
+        # bulk DELETE below has no such per-row check, so it must be refused
+        # here instead, before any write. Not reachable today -- a catalogued
+        # document only ever lives in the History root, which is_system
+        # already keeps out of any subtree this method will delete (the
+        # check at the top of this method, and the per-descendant check in
+        # the walk above) -- but the cascade's own delete is a raw
+        # ``DELETE ... WHERE id IN (...)``, not a per-row call through
+        # delete_document, so it would not inherit that protection if it
+        # ever became reachable (a future write path that re-parents one, or
+        # a bug in is_in_history_tree/ensure_history_folder).
+        if document_ids:
+            catalogued = await self.db.execute(
+                select(Document.id).where(
+                    Document.id.in_(document_ids),
+                    Document.source_type == HISTORY_DOCUMENT_SOURCE_TYPE,
+                )
+            )
+            if catalogued.scalars().first() is not None:
+                raise ValueError(
+                    "This folder contains a document catalogued in History. "
+                    "Delete it there."
+                )
+
         # A facility record can reference one of these documents without a
         # foreign key (see _delete_facility_document_references) -- clean
         # that up in the same transaction as the cascade delete, not after.
