@@ -220,7 +220,10 @@ class TestStreamedAgainstTheDatabase:
         assert len(chunks) == 4
         rows = list(csv.reader(io.StringIO("".join(chunks))))
         assert rows[0][0] == "Member"
-        assert [r[-1] for r in rows[1:]] == [f"day {d}" for d in (4, 3, 2, 1, 0)]
+        description = rows[0].index("Description")
+        assert [r[description] for r in rows[1:]] == [
+            f"day {d}" for d in (4, 3, 2, 1, 0)
+        ]
 
     async def test_certification_rows_arrive_over_several_batches(
         self, db_session, monkeypatch

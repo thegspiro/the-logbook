@@ -1,0 +1,72 @@
+{
+  "script": "docs/youtube-scripts/08-quick-tips-and-shorts.md — SHORT 8C",
+  "title": "Swap a Shift",
+  "callout": "Digital shift swaps — no more phone tag",
+  "endCard": {
+    "headline": "Try The Logbook",
+    "sub": "Free & Open Source",
+    "url": "github.com/thegspiro/the-logbook"
+  },
+  "shots": [
+    {
+      "id": "hook",
+      "say": "Need to swap a shift? Here's how. No phone calls required.",
+      "caption": "Swap a shift, no phone calls"
+    },
+    {
+      "id": "giveup",
+      "say": "Option one: hand your seat to somebody. Tap your shift on the schedule, then Give up this shift.",
+      "caption": "Your shift → Give up this shift"
+    },
+    {
+      "id": "specific",
+      "say": "Choose Offer it to someone specific.",
+      "caption": "Offer it to someone specific"
+    },
+    {
+      "id": "filtered",
+      "say": "This list has already dropped anyone who couldn't take it: people already on the shift, on approved leave, not cleared for your seat, or working a shift right next to this one. Fewest shifts that month comes first.",
+      "caption": "Only people who can actually take it"
+    },
+    {
+      "id": "send",
+      "say": "Pick someone and send the offer. They get Take the shift or Decline. If they take it, that's it. No officer needed.",
+      "caption": "They tap Take the shift. Done."
+    },
+    {
+      "id": "pending",
+      "say": "Until they answer, the shift is still yours, and nobody else can claim it. You can withdraw the offer any time.",
+      "caption": "Still yours until they accept"
+    },
+    {
+      "id": "option2",
+      "say": "Option two: on My Shifts, tap Swap on your shift.",
+      "caption": "My Shifts → Swap"
+    },
+    {
+      "id": "specificshift",
+      "say": "Specific Shift asks to move you to another shift you pick.",
+      "caption": "Specific Shift: move to another shift"
+    },
+    {
+      "id": "openswap",
+      "say": "Open Swap offers your seat to members who are cleared for it. It stays yours until one of them picks it up.",
+      "caption": "Open Swap: any cleared member can pick it up"
+    },
+    {
+      "id": "exchange",
+      "say": "Exchange With a Member is a real trade. You take their seat, they take yours, and it only lists swaps you're both cleared for.",
+      "caption": "Exchange: trade seats with a member"
+    },
+    {
+      "id": "submit",
+      "say": "Submit the request. An exchange goes to a duty officer, and never one who's part of the swap. Anything still unanswered the day before the shift is closed automatically, and you're told.",
+      "caption": "An officer outside the swap signs off"
+    },
+    {
+      "id": "outro",
+      "say": "Digital shift swaps. No more phone tag.",
+      "caption": "No more phone tag"
+    }
+  ]
+}
