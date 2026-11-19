@@ -262,352 +262,387 @@ type Theme = 'light' | 'dark' | 'high-contrast';
 
 const THEMES: Theme[] = ['light', 'dark', 'high-contrast'];
 
+/**
+ * The pass is cut into this many tests, each walking a contiguous slice of
+ * ROUTES, so the CI matrix can put the slices on separate runners.
+ *
+ * As one test it could not be sharded, and it had grown from 25 minutes to
+ * 55-72 (its CI job on four runs of 2026-11-19), inside an 85-minute budget
+ * and alone setting how long a pull request that touches the frontend waits.
+ * Every route is still measured against the same budgets; a slice only decides
+ * which test reports it.
+ *
+ * Changing this number moves the `@sweep` test count, which is what
+ * `--shard` in ci.yml's `frontend-e2e` matrix balances on. Re-derive the
+ * matrix there with it.
+ */
+const PARTS = 4;
+
+const routesInPart = (part: number) =>
+  ROUTES.filter((_, index) => Math.floor((index * PARTS) / ROUTES.length) === part);
+
 test.describe('mobile accessibility', () => {
   // No retries. This audit is deterministic — it drives mocked routes, so a
-  // failure is a finding, not a flake — and a clean run is around 25 minutes.
-  // The `frontend-e2e` job cap is derived from this test's budget below, so
-  // even one of the config's two CI retries would run into it, re-deriving the
-  // same result and replacing the assertion's report with a job timeout.
+  // failure is a finding, not a flake. The `frontend-e2e` job cap is derived
+  // from the budget below, so even one of the config's two CI retries would
+  // run into it, re-deriving the same result and replacing the assertion's
+  // report with a job timeout.
   test.describe.configure({ retries: 0 });
 
-  test('every feature meets WCAG AA in every theme and reflows to 320px @sweep', async ({ page }) => {
-    // ~50 routes, each rendered in three themes with an axe run apiece.
-    //
-    // Measured 2026-10-12 to 10-15 from the "Run E2E tests" step of the
-    // `sweep 1/3` leg (where this test runs), 377 passing jobs: median 25.2
-    // min, p90 26.5, worst 28.8. The step reads 0.02-0.15 min above the time
-    // Playwright prints for the test, checked on 33 jobs. Runs fall into two
-    // groups, about 18-20 min and 24-27 min, on `main` and PR branches alike;
-    // what decides the group was not investigated. Three first attempts on
-    // 2026-10-14 (#3228, #3230, #3237), while ~18 PRs ran CI at once, hit the
-    // previous 32-min budget; each passed on a re-run.
-    //
-    // 48 min is 1.66x the worst passing run, the same ratio the previous
-    // budget took against its own samples. That budget (32 min) was 1.66x the
-    // 19.3-min worst of three runs on 2026-10-04/05 (16.0, 19.3, 18.6 min);
-    // the test has since grown to a ~25-min normal run, which left 32 at only
-    // 1.11x the worst — headroom a busy runner used up. Quoted against the
-    // worst rather than the mean for the same reason as before.
-    //
-    // Raised on 2026-11-13, by owner decision, to 2x the measured run rather
-    // than 1.66x the worst: 28.8 min on `main` (run 43208484077, 2026-11-12);
-    // 36.5 min once the finance screens joined (#4267, run 43415858920); the
-    // nine grants screens were estimated at ~5%, but the first run with them
-    // in measured 42.4 min (#4269, run 43444576216), so 2x is 85.
-    //
-    // The job cap in ci.yml is derived from this number; re-derive it with
-    // any change here. Add a sample before narrowing either.
-    test.setTimeout(5_100_000);
+  for (let part = 0; part < PARTS; part++) {
+    const routes = routesInPart(part);
+    // ROUTES can be narrowed to a handful by the route filter in
+    // mobile-routes.ts; a slice left empty would pass having measured nothing.
+    if (routes.length === 0) continue;
 
-    // Contrast is measured on the settled page, not mid-animation. `EmptyState`
-    // fades in over one second (`animate-fade-in`, opacity 0 -> 1) and the audit
-    // starts 350ms after the first heading appears, so on a loaded runner axe
-    // measured its buttons through a partial opacity and reported white on
-    // red-800 as failing AA — a result that came and went with runner speed.
-    // index.css collapses every animation to 0.01ms under reduced motion, which
-    // makes each render final the moment it paints.
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-
-    let granted: SignInState | null = null;
-
-    /**
-     * Both of axe's result arrays, from one run.
-     *
-     * `incomplete` is the one a pass like this quietly loses. When axe cannot
-     * compute a result it does not report a violation — it files the node under
-     * `incomplete` with a reason, and text over a CSS gradient (`bgGradient`)
-     * is the common case here, the onboarding CTA among them. Reading only
-     * `violations` therefore reports zero for the nodes nobody has measured,
-     * which is the same false assurance this whole change is about.
-     */
-    const runAxe = async (options: unknown): Promise<{ violations: Summary[]; incomplete: Summary[] }> => {
-      await page.addScriptTag({ path: AXE_PATH });
-      return page.evaluate(async (opts) => {
-        type Check = { message: string };
-        type Result = {
-          id: string;
-          impact: string;
-          help: string;
-          nodes: Array<{ target: string[]; html: string; any: Check[]; all: Check[]; none: Check[] }>;
-        };
-        const axe = (
-          window as unknown as {
-            axe: {
-              run: (context: Document, options: unknown) => Promise<{ violations: Result[]; incomplete: Result[] }>;
-            };
-          }
-        ).axe;
-        const summarise = (results: Result[]) =>
-          results.map((v) => ({
-            id: v.id,
-            impact: v.impact,
-            help: v.help,
-            count: v.nodes.length,
-            // Why axe abstained, verbatim. The count of undecided nodes is not
-            // the useful signal — the reason is.
-            reasons: [...new Set(v.nodes.flatMap((n) => [...n.any, ...n.all, ...n.none].map((c) => c.message)))],
-            examples: v.nodes
-              .slice(0, 2)
-              .map((n) => `${n.target.join(' ')} :: ${n.html.replace(/\s+/g, ' ').slice(0, 120)}`),
-          }));
-        const result = await axe.run(document, opts);
-        return { violations: summarise(result.violations), incomplete: summarise(result.incomplete) };
-      }, options);
-    };
-
-    const setTheme = (theme: Theme) => page.evaluate((t) => localStorage.setItem('theme-preference', t), theme);
-
-    const aaFailures: string[] = [];
-    const advisoryBusted: string[] = [];
-    const aaaBusted: string[] = [];
-    const reflowed: string[] = [];
-    const advisoryDetail: string[] = [];
-    const undecidedDetail: string[] = [];
-    const undecidedBusted: string[] = [];
-    const notRendered: string[] = [];
-    const table: string[] = [];
-
-    for (const route of ROUTES) {
-      granted = await signInForRoute(page, route, granted);
-
-      // PhoneMonth's past-day dimming (`isPastDay`) reads the real wall-clock
-      // date, so how much of this route renders dimmed depends on the day the
-      // suite happens to run on — none on a Sunday, up to six on a Saturday.
-      // Freezing to a fixed Monday makes it exactly one prior day, every run.
+    test(`every feature meets WCAG AA in every theme and reflows to 320px, part ${part + 1} of ${PARTS} @sweep`, async ({
+      page,
+    }) => {
+      // ~50 routes, each rendered in three themes with an axe run apiece.
       //
-      // This and the dim's own contrast arrived as two answers to one defect,
-      // on separate branches, and both are kept because they cover different
-      // ground. The dim measures 7.95:1 (opacity-75 in PhoneMonth), so no date
-      // fails AAA whatever the calendar says, which is why there is
-      // deliberately no /scheduling entry in AAA_CONTRAST_BUDGET. Freezing the
-      // clock is what stops any *other* finding on this route from moving with
-      // the date — a budget is a ratchet only while what it counts holds still.
+      // Measured 2026-10-12 to 10-15 from the "Run E2E tests" step of the
+      // `sweep 1/3` leg (where this test runs), 377 passing jobs: median 25.2
+      // min, p90 26.5, worst 28.8. The step reads 0.02-0.15 min above the time
+      // Playwright prints for the test, checked on 33 jobs. Runs fall into two
+      // groups, about 18-20 min and 24-27 min, on `main` and PR branches alike;
+      // what decides the group was not investigated. Three first attempts on
+      // 2026-10-14 (#3228, #3230, #3237), while ~18 PRs ran CI at once, hit the
+      // previous 32-min budget; each passed on a re-run.
       //
-      // /grants/opportunities is the same case: its deadline urgency counts
-      // days from the real clock to the fixture's fixed deadlines (helpers.ts),
-      // so the AFG row turned yellow on 2026-11-15, 30 days out, and the
-      // sweep failed on every branch that day.
-      const frozenAt = FROZEN_CLOCK[route.path];
-      if (frozenAt) {
-        await page.clock.setFixedTime(new Date(frozenAt));
-      }
+      // 48 min is 1.66x the worst passing run, the same ratio the previous
+      // budget took against its own samples. That budget (32 min) was 1.66x the
+      // 19.3-min worst of three runs on 2026-10-04/05 (16.0, 19.3, 18.6 min);
+      // the test has since grown to a ~25-min normal run, which left 32 at only
+      // 1.11x the worst — headroom a busy runner used up. Quoted against the
+      // worst rather than the mean for the same reason as before.
+      //
+      // Raised on 2026-11-13, by owner decision, to 2x the measured run rather
+      // than 1.66x the worst: 28.8 min on `main` (run 43208484077, 2026-11-12);
+      // 36.5 min once the finance screens joined (#4267, run 43415858920); the
+      // nine grants screens were estimated at ~5%, but the first run with them
+      // in measured 42.4 min (#4269, run 43444576216), so 2x is 85.
+      //
+      //
+      // Split into PARTS tests on 2026-11-19. The whole pass was then taking
+      // 55-72 minutes (its job on four runs that day), so a quarter is about
+      // 18 at worst, and 2x that is 36. This is an estimate from the whole:
+      // routes differ in cost, so replace it with measured per-part times
+      // once CI has produced some.
+      //
+      // The job cap in ci.yml is derived from this number; re-derive it with
+      // any change here. Add a sample before narrowing either.
+      test.setTimeout(2_160_000);
 
-      await page.setViewportSize(PHONE);
-      let aaCount = 0;
-      let aaaCount = 0;
-      let advisoryCount = 0;
-      let undecidedCount = 0;
-      const perTheme: string[] = [];
+      // Contrast is measured on the settled page, not mid-animation. `EmptyState`
+      // fades in over one second (`animate-fade-in`, opacity 0 -> 1) and the audit
+      // starts 350ms after the first heading appears, so on a loaded runner axe
+      // measured its buttons through a partial opacity and reported white on
+      // red-800 as failing AA — a result that came and went with runner speed.
+      // index.css collapses every animation to 0.01ms under reduced motion, which
+      // makes each render final the moment it paints.
+      await page.emulateMedia({ reducedMotion: 'reduce' });
 
-      for (const theme of THEMES) {
-        await setTheme(theme);
-        // First theme lands via goto; the rest need a reload to re-read the
-        // preference, which is also what a real theme switch does to the page.
-        if (theme === 'light') await page.goto(route.path);
-        else await page.reload();
-        await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
-        // The `networkidle` timeout above is swallowed on purpose — several
-        // routes hold a long-poll open and never reach idle — so it cannot be
-        // what says the page is ready. Without this, a slow chunk on a loaded
-        // runner meant auditing `PageLoadingFallback`'s spinner and reporting
-        // zero violations for a screen that had not rendered.
-        const ready = await page
-          .waitForFunction(
-            () => {
-              if (document.querySelector('.page-loading-fallback')) return false;
-              const main = document.getElementById('main-content');
-              if (!main) return false;
-              return !!main.querySelector('h1, h2, h3') || (main.innerText ?? '').trim().length > 40;
-            },
-            undefined,
-            { timeout: 15_000 }
-          )
-          .then(() => true)
-          .catch(() => false);
-        if (!ready) {
-          notRendered.push(`${route.path} [${theme}] never left its loading state`);
-          continue;
-        }
-        await page.waitForTimeout(350);
+      let granted: SignInState | null = null;
 
-        // Everything but contrast is theme-independent, so the full rule sets
-        // run once, in light. The other two themes measure contrast only.
-        const rules = theme === 'light' ? { type: 'tag', values: [...AA_TAGS, ...ADVISORY_TAGS] } : null;
-        if (rules) {
-          const all = (await runAxe({ runOnly: rules, resultTypes: ['violations'] })).violations;
-          const advisoryIds = new Set(
-            (
-              await runAxe({ runOnly: { type: 'tag', values: ADVISORY_TAGS }, resultTypes: ['violations'] })
-            ).violations.map((v) => v.id)
-          );
-          const aa = all.filter((v) => !advisoryIds.has(v.id));
-          const advisory = all.filter((v) => advisoryIds.has(v.id));
-          aaCount += aa.reduce((sum, v) => sum + v.count, 0);
-          advisoryCount = advisory.reduce((sum, v) => sum + v.count, 0);
-          if (aa.length) {
-            aaFailures.push(
-              `${route.path} [${theme}]:\n    ` +
-                aa
-                  .map((v) => `${v.id} (${v.impact}) x${v.count} — ${v.help}\n      ${v.examples.join('\n      ')}`)
-                  .join('\n    ')
-            );
-          }
-          if (advisory.length) {
-            // Named, not just counted: a budget that says "1" tells you nothing
-            // about which rule, and these cluster — one shared component is
-            // usually behind the same finding on twenty routes.
-            advisoryDetail.push(
-              `${route.path}: ${advisory.map((v) => `${v.id} x${v.count}`).join(', ')}\n      ${advisory[0]?.examples[0] ?? ''}`
-            );
-          }
-        }
+      /**
+       * Both of axe's result arrays, from one run.
+       *
+       * `incomplete` is the one a pass like this quietly loses. When axe cannot
+       * compute a result it does not report a violation — it files the node under
+       * `incomplete` with a reason, and text over a CSS gradient (`bgGradient`)
+       * is the common case here, the onboarding CTA among them. Reading only
+       * `violations` therefore reports zero for the nodes nobody has measured,
+       * which is the same false assurance this whole change is about.
+       */
+      const runAxe = async (options: unknown): Promise<{ violations: Summary[]; incomplete: Summary[] }> => {
+        await page.addScriptTag({ path: AXE_PATH });
+        return page.evaluate(async (opts) => {
+          type Check = { message: string };
+          type Result = {
+            id: string;
+            impact: string;
+            help: string;
+            nodes: Array<{ target: string[]; html: string; any: Check[]; all: Check[]; none: Check[] }>;
+          };
+          const axe = (
+            window as unknown as {
+              axe: {
+                run: (context: Document, options: unknown) => Promise<{ violations: Result[]; incomplete: Result[] }>;
+              };
+            }
+          ).axe;
+          const summarise = (results: Result[]) =>
+            results.map((v) => ({
+              id: v.id,
+              impact: v.impact,
+              help: v.help,
+              count: v.nodes.length,
+              // Why axe abstained, verbatim. The count of undecided nodes is not
+              // the useful signal — the reason is.
+              reasons: [...new Set(v.nodes.flatMap((n) => [...n.any, ...n.all, ...n.none].map((c) => c.message)))],
+              examples: v.nodes
+                .slice(0, 2)
+                .map((n) => `${n.target.join(' ')} :: ${n.html.replace(/\s+/g, ' ').slice(0, 120)}`),
+            }));
+          const result = await axe.run(document, opts);
+          return { violations: summarise(result.violations), incomplete: summarise(result.incomplete) };
+        }, options);
+      };
 
-        // One run, both arrays: a second axe pass per route per theme would add
-        // a third to this test's wall clock for a result the first already has.
-        const { violations: contrast, incomplete: undecided } = await runAxe({
-          runOnly: { type: 'rule', values: CONTRAST_RULES },
-          resultTypes: ['violations', 'incomplete'],
-        });
-        undecidedCount += undecided.reduce((sum, v) => sum + v.count, 0);
-        for (const finding of undecided) {
-          for (const reason of finding.reasons) {
-            if (ALLOWED_UNDECIDED.some((allowed) => allowed.test(reason))) continue;
-            undecidedBusted.push(`${route.path} [${theme}] ${finding.id}: ${reason}`);
-          }
-        }
-        if (undecided.length) {
-          undecidedDetail.push(
-            `${route.path} [${theme}]: ${undecided.map((v) => `${v.id} x${v.count}`).join(', ')} — ${undecided.flatMap((v) => v.reasons).join('; ')}`
-          );
-        }
-        const themeAa = contrast.filter((v) => v.id === 'color-contrast');
-        const themeAaa = contrast.find((v) => v.id === 'color-contrast-enhanced')?.count ?? 0;
-        aaaCount += themeAaa;
-        // The light theme's contrast is already inside the AA run above; only
-        // the other two need reporting here, or every finding is counted twice.
-        if (theme !== 'light' && themeAa.length) {
-          aaCount += themeAa.reduce((sum, v) => sum + v.count, 0);
-          aaFailures.push(
-            `${route.path} [${theme}] contrast:\n    ` +
-              themeAa.map((v) => `${v.id} x${v.count}\n      ${v.examples.join('\n      ')}`).join('\n    ')
-          );
-        }
-        perTheme.push(`${theme[0]}:${themeAaa}`);
-      }
+      const setTheme = (theme: Theme) => page.evaluate((t) => localStorage.setItem('theme-preference', t), theme);
 
-      // Reflow is measured by narrowing the rendered page rather than by
-      // reloading it: that is what a magnifier or a rotated phone does to a
-      // live layout, and it exercises the media-query listeners too.
-      await setTheme('light');
-      await page.setViewportSize(NARROW);
-      await page.waitForTimeout(250);
-      const overflow = await page.evaluate(() => {
-        const doc = document.documentElement;
-        const viewportWidth = doc.clientWidth;
-        const isVisible = (el: Element) => {
-          const b = el.getBoundingClientRect();
-          return b.width > 0 && b.height > 0;
-        };
-        // Overflow is directional, and the two edges mean different things.
+      const aaFailures: string[] = [];
+      const advisoryBusted: string[] = [];
+      const aaaBusted: string[] = [];
+      const reflowed: string[] = [];
+      const advisoryDetail: string[] = [];
+      const undecidedDetail: string[] = [];
+      const undecidedBusted: string[] = [];
+      const notRendered: string[] = [];
+      const table: string[] = [];
+
+      for (const route of routes) {
+        granted = await signInForRoute(page, route, granted);
+
+        // PhoneMonth's past-day dimming (`isPastDay`) reads the real wall-clock
+        // date, so how much of this route renders dimmed depends on the day the
+        // suite happens to run on — none on a Sunday, up to six on a Saturday.
+        // Freezing to a fixed Monday makes it exactly one prior day, every run.
         //
-        // Past the RIGHT edge is the reflow defect, and it counts even when the
-        // element sits entirely beyond the viewport — requiring it to intersect
-        // first discards the very worst case, content stranded wholly
-        // off-screen.
+        // This and the dim's own contrast arrived as two answers to one defect,
+        // on separate branches, and both are kept because they cover different
+        // ground. The dim measures 7.95:1 (opacity-75 in PhoneMonth), so no date
+        // fails AAA whatever the calendar says, which is why there is
+        // deliberately no /scheduling entry in AAA_CONTRAST_BUDGET. Freezing the
+        // clock is what stops any *other* finding on this route from moving with
+        // the date — a budget is a ratchet only while what it counts holds still.
         //
-        // Past the LEFT edge only counts when the element still reaches into
-        // the viewport. A closed navigation drawer is parked at left=-256,
-        // right=0 by design; flagging that reports the shell of the app as a
-        // reflow bug on every route.
-        const overflows = (b: DOMRect) => b.right > viewportWidth + 1 || (b.left < -1 && b.right > 0);
-        return [...document.body.querySelectorAll('*')]
-          .filter((el) => {
-            if (!isVisible(el) || el.closest('[data-mobile-scroll-region]')) return false;
-            return overflows(el.getBoundingClientRect());
-          })
-          .slice(0, 6)
-          .map((el) => {
-            const b = el.getBoundingClientRect();
-            const name = ((el as HTMLElement).innerText || el.getAttribute('aria-label') || el.tagName)
-              .trim()
-              .replace(/\s+/g, ' ')
-              .slice(0, 40);
-            const classes = [...el.classList]
-              .slice(0, 2)
-              .map((c) => `.${c}`)
-              .join('');
-            return `${el.tagName.toLowerCase()}${classes} "${name}" [left=${Math.round(b.left)}, right=${Math.round(b.right)}]`;
+        // /grants/opportunities is the same case: its deadline urgency counts
+        // days from the real clock to the fixture's fixed deadlines (helpers.ts),
+        // so the AFG row turned yellow on 2026-11-15, 30 days out, and the
+        // sweep failed on every branch that day.
+        const frozenAt = FROZEN_CLOCK[route.path];
+        if (frozenAt) {
+          await page.clock.setFixedTime(new Date(frozenAt));
+        }
+
+        await page.setViewportSize(PHONE);
+        let aaCount = 0;
+        let aaaCount = 0;
+        let advisoryCount = 0;
+        let undecidedCount = 0;
+        const perTheme: string[] = [];
+
+        for (const theme of THEMES) {
+          await setTheme(theme);
+          // First theme lands via goto; the rest need a reload to re-read the
+          // preference, which is also what a real theme switch does to the page.
+          if (theme === 'light') await page.goto(route.path);
+          else await page.reload();
+          await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
+          // The `networkidle` timeout above is swallowed on purpose — several
+          // routes hold a long-poll open and never reach idle — so it cannot be
+          // what says the page is ready. Without this, a slow chunk on a loaded
+          // runner meant auditing `PageLoadingFallback`'s spinner and reporting
+          // zero violations for a screen that had not rendered.
+          const ready = await page
+            .waitForFunction(
+              () => {
+                if (document.querySelector('.page-loading-fallback')) return false;
+                const main = document.getElementById('main-content');
+                if (!main) return false;
+                return !!main.querySelector('h1, h2, h3') || (main.innerText ?? '').trim().length > 40;
+              },
+              undefined,
+              { timeout: 15_000 }
+            )
+            .then(() => true)
+            .catch(() => false);
+          if (!ready) {
+            notRendered.push(`${route.path} [${theme}] never left its loading state`);
+            continue;
+          }
+          await page.waitForTimeout(350);
+
+          // Everything but contrast is theme-independent, so the full rule sets
+          // run once, in light. The other two themes measure contrast only.
+          const rules = theme === 'light' ? { type: 'tag', values: [...AA_TAGS, ...ADVISORY_TAGS] } : null;
+          if (rules) {
+            const all = (await runAxe({ runOnly: rules, resultTypes: ['violations'] })).violations;
+            const advisoryIds = new Set(
+              (
+                await runAxe({ runOnly: { type: 'tag', values: ADVISORY_TAGS }, resultTypes: ['violations'] })
+              ).violations.map((v) => v.id)
+            );
+            const aa = all.filter((v) => !advisoryIds.has(v.id));
+            const advisory = all.filter((v) => advisoryIds.has(v.id));
+            aaCount += aa.reduce((sum, v) => sum + v.count, 0);
+            advisoryCount = advisory.reduce((sum, v) => sum + v.count, 0);
+            if (aa.length) {
+              aaFailures.push(
+                `${route.path} [${theme}]:\n    ` +
+                  aa
+                    .map((v) => `${v.id} (${v.impact}) x${v.count} — ${v.help}\n      ${v.examples.join('\n      ')}`)
+                    .join('\n    ')
+              );
+            }
+            if (advisory.length) {
+              // Named, not just counted: a budget that says "1" tells you nothing
+              // about which rule, and these cluster — one shared component is
+              // usually behind the same finding on twenty routes.
+              advisoryDetail.push(
+                `${route.path}: ${advisory.map((v) => `${v.id} x${v.count}`).join(', ')}\n      ${advisory[0]?.examples[0] ?? ''}`
+              );
+            }
+          }
+
+          // One run, both arrays: a second axe pass per route per theme would add
+          // a third to this test's wall clock for a result the first already has.
+          const { violations: contrast, incomplete: undecided } = await runAxe({
+            runOnly: { type: 'rule', values: CONTRAST_RULES },
+            resultTypes: ['violations', 'incomplete'],
           });
-      });
+          undecidedCount += undecided.reduce((sum, v) => sum + v.count, 0);
+          for (const finding of undecided) {
+            for (const reason of finding.reasons) {
+              if (ALLOWED_UNDECIDED.some((allowed) => allowed.test(reason))) continue;
+              undecidedBusted.push(`${route.path} [${theme}] ${finding.id}: ${reason}`);
+            }
+          }
+          if (undecided.length) {
+            undecidedDetail.push(
+              `${route.path} [${theme}]: ${undecided.map((v) => `${v.id} x${v.count}`).join(', ')} — ${undecided.flatMap((v) => v.reasons).join('; ')}`
+            );
+          }
+          const themeAa = contrast.filter((v) => v.id === 'color-contrast');
+          const themeAaa = contrast.find((v) => v.id === 'color-contrast-enhanced')?.count ?? 0;
+          aaaCount += themeAaa;
+          // The light theme's contrast is already inside the AA run above; only
+          // the other two need reporting here, or every finding is counted twice.
+          if (theme !== 'light' && themeAa.length) {
+            aaCount += themeAa.reduce((sum, v) => sum + v.count, 0);
+            aaFailures.push(
+              `${route.path} [${theme}] contrast:\n    ` +
+                themeAa.map((v) => `${v.id} x${v.count}\n      ${v.examples.join('\n      ')}`).join('\n    ')
+            );
+          }
+          perTheme.push(`${theme[0]}:${themeAaa}`);
+        }
 
-      if (overflow.length) {
-        reflowed.push(`${route.path} at ${NARROW.width}px:\n    ${overflow.join('\n    ')}`);
+        // Reflow is measured by narrowing the rendered page rather than by
+        // reloading it: that is what a magnifier or a rotated phone does to a
+        // live layout, and it exercises the media-query listeners too.
+        await setTheme('light');
+        await page.setViewportSize(NARROW);
+        await page.waitForTimeout(250);
+        const overflow = await page.evaluate(() => {
+          const doc = document.documentElement;
+          const viewportWidth = doc.clientWidth;
+          const isVisible = (el: Element) => {
+            const b = el.getBoundingClientRect();
+            return b.width > 0 && b.height > 0;
+          };
+          // Overflow is directional, and the two edges mean different things.
+          //
+          // Past the RIGHT edge is the reflow defect, and it counts even when the
+          // element sits entirely beyond the viewport — requiring it to intersect
+          // first discards the very worst case, content stranded wholly
+          // off-screen.
+          //
+          // Past the LEFT edge only counts when the element still reaches into
+          // the viewport. A closed navigation drawer is parked at left=-256,
+          // right=0 by design; flagging that reports the shell of the app as a
+          // reflow bug on every route.
+          const overflows = (b: DOMRect) => b.right > viewportWidth + 1 || (b.left < -1 && b.right > 0);
+          return [...document.body.querySelectorAll('*')]
+            .filter((el) => {
+              if (!isVisible(el) || el.closest('[data-mobile-scroll-region]')) return false;
+              return overflows(el.getBoundingClientRect());
+            })
+            .slice(0, 6)
+            .map((el) => {
+              const b = el.getBoundingClientRect();
+              const name = ((el as HTMLElement).innerText || el.getAttribute('aria-label') || el.tagName)
+                .trim()
+                .replace(/\s+/g, ' ')
+                .slice(0, 40);
+              const classes = [...el.classList]
+                .slice(0, 2)
+                .map((c) => `.${c}`)
+                .join('');
+              return `${el.tagName.toLowerCase()}${classes} "${name}" [left=${Math.round(b.left)}, right=${Math.round(b.right)}]`;
+            });
+        });
+
+        if (overflow.length) {
+          reflowed.push(`${route.path} at ${NARROW.width}px:\n    ${overflow.join('\n    ')}`);
+        }
+        // Reflow also fails when content stays inside the screen but is drawn
+        // over its neighbours: a word too long for the box it was squeezed into
+        // runs across whatever sits beside it. See spilledText.ts.
+        const spilledAtNarrow = await page.evaluate(findSpilledText);
+        if (spilledAtNarrow.length) {
+          reflowed.push(
+            `${route.path} at ${NARROW.width}px, text outside its box:\n    ${spilledAtNarrow.slice(0, 6).join('\n    ')}`
+          );
+        }
+        const advisoryBudget = ADVISORY_BUDGET[route.path] ?? 0;
+        if (advisoryCount > advisoryBudget) {
+          advisoryBusted.push(`${route.path}: ${advisoryCount} advisory findings, budget ${advisoryBudget}`);
+        }
+        const aaaBudget = AAA_CONTRAST_BUDGET[route.path] ?? 0;
+        if (aaaCount > aaaBudget) {
+          aaaBusted.push(`${route.path}: ${aaaCount} nodes below 7:1 across themes, budget ${aaaBudget}`);
+        }
+
+        table.push(
+          [
+            route.path.padEnd(44),
+            `AA ${String(aaCount).padStart(2)}`,
+            `adv ${String(advisoryCount).padStart(3)}`,
+            `AAA ${String(aaaCount).padStart(3)}`,
+            `undec ${String(undecidedCount).padStart(2)}`,
+            `reflow ${String(overflow.length).padStart(2)}`,
+            perTheme.join(' '),
+          ].join('  ')
+        );
+
+        if (frozenAt) {
+          // No true "uninstall" in Playwright's Clock API (setFixedTime/
+          // setSystemTime only) — reset to a fresh real timestamp so later
+          // routes in this same loop don't inherit the frozen date.
+          await page.clock.setFixedTime(new Date());
+        }
       }
-      // Reflow also fails when content stays inside the screen but is drawn
-      // over its neighbours: a word too long for the box it was squeezed into
-      // runs across whatever sits beside it. See spilledText.ts.
-      const spilledAtNarrow = await page.evaluate(findSpilledText);
-      if (spilledAtNarrow.length) {
-        reflowed.push(
-          `${route.path} at ${NARROW.width}px, text outside its box:\n    ${spilledAtNarrow.slice(0, 6).join('\n    ')}`
+
+      console.log(
+        `\nMobile accessibility, part ${part + 1} of ${PARTS} — axe at ${PHONE.width}px in ${THEMES.join('/')}, reflow at ${NARROW.width}px\n` +
+          table.join('\n')
+      );
+
+      if (advisoryDetail.length) {
+        console.log('\nBest-practice findings (ratcheted, not asserted):\n  ' + advisoryDetail.join('\n  '));
+      }
+
+      if (undecidedDetail.length) {
+        console.log(
+          '\nContrast axe could not decide, by stated reason (measured by value in themeGradientContrast.test.ts):\n  ' +
+            undecidedDetail.join('\n  ')
         );
       }
-      const advisoryBudget = ADVISORY_BUDGET[route.path] ?? 0;
-      if (advisoryCount > advisoryBudget) {
-        advisoryBusted.push(`${route.path}: ${advisoryCount} advisory findings, budget ${advisoryBudget}`);
-      }
-      const aaaBudget = AAA_CONTRAST_BUDGET[route.path] ?? 0;
-      if (aaaCount > aaaBudget) {
-        aaaBusted.push(`${route.path}: ${aaaCount} nodes below 7:1 across themes, budget ${aaaBudget}`);
-      }
 
-      table.push(
-        [
-          route.path.padEnd(44),
-          `AA ${String(aaCount).padStart(2)}`,
-          `adv ${String(advisoryCount).padStart(3)}`,
-          `AAA ${String(aaaCount).padStart(3)}`,
-          `undec ${String(undecidedCount).padStart(2)}`,
-          `reflow ${String(overflow.length).padStart(2)}`,
-          perTheme.join(' '),
-        ].join('  ')
-      );
-
-      if (frozenAt) {
-        // No true "uninstall" in Playwright's Clock API (setFixedTime/
-        // setSystemTime only) — reset to a fresh real timestamp so later
-        // routes in this same loop don't inherit the frozen date.
-        await page.clock.setFixedTime(new Date());
-      }
-    }
-
-    console.log(
-      `\nMobile accessibility — axe at ${PHONE.width}px in ${THEMES.join('/')}, reflow at ${NARROW.width}px\n` +
-        table.join('\n')
-    );
-
-    if (advisoryDetail.length) {
-      console.log('\nBest-practice findings (ratcheted, not asserted):\n  ' + advisoryDetail.join('\n  '));
-    }
-
-    if (undecidedDetail.length) {
-      console.log(
-        '\nContrast axe could not decide, by stated reason (measured by value in themeGradientContrast.test.ts):\n  ' +
-          undecidedDetail.join('\n  ')
-      );
-    }
-
-    // Asserted first: a route that never rendered makes every count below it
-    // meaningless, and reporting those counts as clean is the failure mode this
-    // whole pass exists to stop.
-    expect(notRendered, 'routes audited before their body rendered').toEqual([]);
-    expect(aaFailures, 'routes with WCAG A/AA violations in some theme').toEqual([]);
-    expect(reflowed, `routes with content outside the viewport at ${NARROW.width}px (SC 1.4.10)`).toEqual([]);
-    expect(advisoryBusted, 'routes that grew best-practice findings').toEqual([]);
-    expect(aaaBusted, 'routes that grew AAA-only contrast findings').toEqual([]);
-    expect(
-      [...new Set(undecidedBusted)],
-      'contrast nodes axe could not decide for a reason nothing else measures'
-    ).toEqual([]);
-  });
+      // Asserted first: a route that never rendered makes every count below it
+      // meaningless, and reporting those counts as clean is the failure mode this
+      // whole pass exists to stop.
+      expect(notRendered, 'routes audited before their body rendered').toEqual([]);
+      expect(aaFailures, 'routes with WCAG A/AA violations in some theme').toEqual([]);
+      expect(reflowed, `routes with content outside the viewport at ${NARROW.width}px (SC 1.4.10)`).toEqual([]);
+      expect(advisoryBusted, 'routes that grew best-practice findings').toEqual([]);
+      expect(aaaBusted, 'routes that grew AAA-only contrast findings').toEqual([]);
+      expect(
+        [...new Set(undecidedBusted)],
+        'contrast nodes axe could not decide for a reason nothing else measures'
+      ).toEqual([]);
+    });
+  }
 });
