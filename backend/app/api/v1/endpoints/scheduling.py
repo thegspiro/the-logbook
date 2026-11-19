@@ -1778,6 +1778,7 @@ async def get_active_shift_for_apparatus(
 @router.get("/my-attendance-history")
 async def get_my_attendance_history(
     limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     start_date: str | None = None,
     end_date: str | None = None,
     db: AsyncSession = Depends(get_db),
@@ -1786,7 +1787,13 @@ async def get_my_attendance_history(
     """Get the current member's attendance history.
 
     Optional ``start_date`` / ``end_date`` (YYYY-MM-DD) bound the lookup by
-    shift date so callers can paginate further back than ``limit`` records.
+    shift date. ``offset`` pages past ``limit`` records: the Past view of My
+    Shifts reads a member's whole history this way, and stopped at the first
+    50 before it could.
+
+    Each record says whether its shift is finalized, which is when its hours
+    become credit (``get_member_month_totals``), so a row can say "credited"
+    or "awaiting close-out" in the terms the Hours tab totals.
     """
     from app.models.training import Shift, ShiftAttendance
 
@@ -1810,7 +1817,13 @@ async def get_my_attendance_history(
         query = query.where(Shift.shift_date >= start)
     if end:
         query = query.where(Shift.shift_date <= end)
-    query = query.order_by(Shift.shift_date.desc()).limit(limit)
+    # The id breaks ties between records on one date, so a page boundary that
+    # falls inside a date cannot repeat one record and skip another.
+    query = (
+        query.order_by(Shift.shift_date.desc(), ShiftAttendance.id)
+        .offset(offset)
+        .limit(limit)
+    )
 
     result = await db.execute(query)
     rows = result.all()
@@ -1828,6 +1841,7 @@ async def get_my_attendance_history(
             entry["shift_end_time"] = (
                 shift.end_time.isoformat() if shift.end_time else None
             )
+            entry["shift_is_finalized"] = bool(shift.is_finalized)
     return enriched
 
 

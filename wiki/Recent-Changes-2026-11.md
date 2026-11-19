@@ -5,6 +5,44 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 17 – 18, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-17--18-2026).
+
+- **Shift patterns live in one place**: make, **Edit** and generate them on
+  **Shift Planning → Patterns**. The Templates tab no longer has its own
+  Patterns switch. See [Scheduling](Module-Scheduling).
+- **My Shifts → Past** shows the same credited hours as **Hours**. A shift an
+  officer has not closed out yet reads "awaiting close-out" instead of adding
+  to the total, and members with more than 50 past shifts now see all of them.
+- **Event check-in**: when an officer checks a member in after the event has
+  started, the member is credited from the scheduled start. Use **Edit Times**
+  for someone who really arrived late. Members' own taps are unchanged.
+- **Mandatory events**: how far ahead an unanswered mandatory event asks for a
+  response is now a setting, **Event settings → Attendance → Mandatory event
+  responses** (60 days unless changed).
+- **Training requirements**: the **Operational members** button also ticks
+  **Senior** if your department has that tier. Requirements scoped with it
+  earlier don't include Senior: open them and select the button again. A
+  rolling evaluated-shifts, calls, transports or refusals requirement now shows
+  a due date from the member's latest evaluation.
+- **Course cohorts**: the wizard lists only courses that have classes on
+  their syllabus.
+- **Imported training**: re-mapping a course after its hours were edited now
+  moves the right hours.
+- **Anonymizing a member** also deletes the certificates they uploaded with
+  self-reported training (the training record stays). Permanently deleting a
+  member removes their training and waiver files. See
+  [Privacy](Security-Privacy).
+- **Elections**: **Linked Meeting** lists upcoming events even when the
+  Minutes module is off.
+- **Phones and reports**: many more tables become labelled cards on a phone
+  (grants, expense line items, message history, member import, inventory
+  imports, election integrity report), and report results show as cards in the
+  report window on every screen size. The inventory stock matrix keeps its
+  Size column pinned.
+
 ## Recent changes: November 16, 2026 (Google Workspace and Microsoft 365)
 
 The engineering audit is

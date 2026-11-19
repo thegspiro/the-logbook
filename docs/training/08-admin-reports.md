@@ -927,6 +927,17 @@ report shows **Open Work Orders**.
      cover the report on screen even if you have since changed the dates;
    - **Compare** shows the previous period of the same length beside it.
 
+**Report results show as cards** _(2026-11-17)_. The report window is never
+wider than about 970 pixels, and most reports have more columns than fit, so
+the results used to scroll sideways with no sign there was more — on a phone
+only two of eight columns showed. Each row is now a labelled card, with the
+first column (usually the member's name) at the top. Nothing is hidden or
+shortened. The **Training Summary** tabs and **Event Attendance** are narrow
+enough to stay a table from tablet width up and become cards only on a phone.
+CSV and PDF downloads are unchanged. _Screenshot: replace any image of a
+report's on-screen results, such as the Certification Expiration or Member
+Roster report._
+
 **"Today" in a report is the department's date.** The certification report's
 expiring and expired flags, apparatus inspection due dates and the call-volume
 year-to-date all follow the department's clock. A custom range is read the same

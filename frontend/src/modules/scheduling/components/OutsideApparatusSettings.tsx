@@ -10,15 +10,19 @@
  * logged on cannot be deleted — the server answers 409 — because those shifts
  * would lose the record of where they were worked; turning it off hides it
  * from members instead and leaves the history intact.
+ *
+ * Two spellings of one department are merged rather than deleted: the
+ * department's units move to the one kept, and its shifts take that name.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Merge, Pencil, Plus, Trash2 } from 'lucide-react';
 import { schedulingService } from '../services/api';
 import type { ExternalAgency, ExternalApparatus } from '../services/api';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { PromptDialog } from '../../../components/ux/PromptDialog';
+import { MergeAgencyDialog } from './MergeAgencyDialog';
 import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 
 type RenameTarget = { kind: 'agency'; item: ExternalAgency } | { kind: 'apparatus'; item: ExternalApparatus };
@@ -59,6 +63,7 @@ export const OutsideApparatusSettings: React.FC = () => {
   const [newAgency, setNewAgency] = useState('');
   const [newUnit, setNewUnit] = useState<Record<string, { name: string; type: string }>>({});
   const [renaming, setRenaming] = useState<RenameTarget | null>(null);
+  const [merging, setMerging] = useState<ExternalAgency | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -138,6 +143,25 @@ export const OutsideApparatusSettings: React.FC = () => {
     await run(() => schedulingService.deleteExternalApparatus(unit.id), 'Apparatus deleted', 'Failed to delete', true);
   };
 
+  const mergeAgency = async (source: ExternalAgency, target: ExternalAgency) => {
+    setBusy(true);
+    try {
+      const result = await schedulingService.mergeExternalAgency(source.id, target.id);
+      const parts = [
+        `${result.moved_apparatus} apparatus moved`,
+        result.combined_apparatus > 0 ? `${result.combined_apparatus} combined` : '',
+        `${result.relabelled_shifts} ${result.relabelled_shifts === 1 ? 'shift' : 'shifts'} relabelled`,
+      ].filter(Boolean);
+      toast.success(`${source.name} merged into ${target.name}: ${parts.join(', ')}`);
+      setMerging(null);
+      await load();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to merge the departments'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submitRename = async (name: string) => {
     const target = renaming;
     if (!target) return;
@@ -167,7 +191,8 @@ export const OutsideApparatusSettings: React.FC = () => {
         <p className="text-theme-text-muted mt-0.5 text-sm">
           The departments your members ride with, and their units. Members pick from this list when they log a shift
           with another department, and Scheduling Reports totals shifts and hours per unit from it. Turn an entry off to
-          hide it from members; shifts already logged on it keep their record.
+          hide it from members; shifts already logged on it keep their record. If one department is listed twice under
+          different names, merge one into the other.
         </p>
 
         <div className="mt-4 flex flex-wrap items-end gap-2">
@@ -245,6 +270,18 @@ export const OutsideApparatusSettings: React.FC = () => {
                   >
                     <Pencil className="h-4 w-4" aria-hidden="true" />
                   </button>
+                  {agencies.length > 1 && (
+                    <button
+                      type="button"
+                      className="btn-icon"
+                      aria-label={`Merge ${agency.name} into another department`}
+                      title="Merge into another department"
+                      disabled={busy}
+                      onClick={() => setMerging(agency)}
+                    >
+                      <Merge className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn-icon text-red-700 dark:text-red-400"
@@ -380,6 +417,14 @@ export const OutsideApparatusSettings: React.FC = () => {
           );
         })
       )}
+
+      <MergeAgencyDialog
+        source={merging}
+        agencies={agencies}
+        busy={busy}
+        onClose={() => setMerging(null)}
+        onMerge={(source, target) => void mergeAgency(source, target)}
+      />
 
       <PromptDialog
         isOpen={renaming !== null}

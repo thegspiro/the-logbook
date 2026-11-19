@@ -15,7 +15,7 @@ import toast from 'react-hot-toast';
 import { knowledgeTestService } from '../../services/knowledgeTestService';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { TrainingPageHeader } from '../../components/training/TrainingPageHeader';
-import { getErrorMessage, toAppError } from '../../utils/errorHandling';
+import { getActionFailureMessage, getErrorMessage, toAppError } from '../../utils/errorHandling';
 import type { KnowledgeAttempt, KnowledgeQuestionDelivered } from '../../types/knowledgeTest';
 
 const SAVE_DEBOUNCE_MS = 800;
@@ -138,6 +138,9 @@ export const KnowledgeTestAttemptPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  // Why the last save failed. Unsent answers stay pending and go with the
+  // next change or on Submit, so this says why, not what to press.
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -177,8 +180,10 @@ export const KnowledgeTestAttemptPage: React.FC = () => {
     try {
       await knowledgeTestService.saveAnswers(attemptId, toSend);
       setSaveState('saved');
+      setSaveError(null);
     } catch (err: unknown) {
       setSaveState('failed');
+      setSaveError(getActionFailureMessage(err, 'save your answers'));
       // 409 means the attempt closed under us (time ran out); the server
       // graded what it had, so show that.
       if (toAppError(err).status === 409) {
@@ -314,7 +319,7 @@ export const KnowledgeTestAttemptPage: React.FC = () => {
                     idle: 'Answers save as you go',
                     saving: 'Saving…',
                     saved: 'Saved',
-                    failed: 'Not saved — check your connection',
+                    failed: saveError ?? 'Not saved',
                   }[saveState]
                 }
               </span>

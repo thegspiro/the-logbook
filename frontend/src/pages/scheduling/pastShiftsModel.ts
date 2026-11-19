@@ -1,20 +1,25 @@
 /**
  * Grouping and totals for the Past view of My Shifts.
  *
- * Kept free of React so the arithmetic the stat tiles, the chart and the month
- * headers all show is one computation, tested once. The three must agree: a
- * chart bar reading 36.5 over a month header reading 34 is the kind of quiet
- * disagreement a member notices and nobody can explain.
+ * Kept free of React so the stat tiles, the chart and the month headers all
+ * read one computation, tested once.
  *
- * Hours here are the member's own check-in to check-out time — the same figure
- * each row's "Xh worked" pill shows — so a year's total is exactly the sum of
- * the pills beneath it. The Hours tab reports *credited* hours (counted once an
- * officer closes the shift out), which can differ; that tab says so itself.
+ * **The hours are the Hours tab's hours.** Every total here is folded from the
+ * credited month buckets `/scheduling/my-hours-history` returns: attendance on
+ * finalized shifts plus approved pre-shift prep, with time on a shift still
+ * awaiting close-out reported apart as pending. Before, this view summed raw
+ * check-in to check-out time and read higher than the Hours tab for any year
+ * with an unfinalized shift in it (Pitfall #29: the screen reports what the
+ * backend decided).
+ *
+ * A row still shows its own time worked, tagged credited or awaiting close-out.
+ * Credited rows can sum to less than their month header, because approved
+ * prep counts toward the month but belongs to no single row.
  */
 
 import type { Assignment } from '../../types/scheduling';
 import { sumHoursToQuarter } from '../../utils/hoursFormatting';
-import type { ShiftAttendanceRecord } from '../../modules/scheduling/services/api';
+import type { MemberHoursMonth, ShiftAttendanceRecord } from '../../modules/scheduling/services/api';
 
 /** The dropdown value for every year at once. */
 export const ALL_TIME = 'all';
@@ -42,15 +47,13 @@ export interface PastShiftRow {
   month: number | null;
   /** Hours worked, or null when the member has not checked out of it. */
   hours: number | null;
+  /** True once an officer has finalized the shift, which makes its hours credit. */
+  credited: boolean;
 }
 
 export interface PeriodTotals {
+  /** Shifts listed — the rows on screen, not the credited count. */
   shifts: number;
-  hours: number;
-  /** Shifts that have hours logged — the divisor for the average. */
-  loggedShifts: number;
-  /** Mean hours across shifts with hours logged; 0 when none are. */
-  averageHours: number;
 }
 
 export interface YearSummary extends PeriodTotals {
@@ -63,6 +66,17 @@ export interface MonthGroup extends PeriodTotals {
   year: number | null;
   month: number | null;
   rows: PastShiftRow[];
+}
+
+/** Credited and pending figures for a period, in the Hours tab's terms. */
+export interface CreditedTotals {
+  /** Finalized shifts attended. */
+  shifts: number;
+  hours: number;
+  pendingShifts: number;
+  pendingHours: number;
+  /** Credited hours per credited shift; 0 when there are none. */
+  averageHours: number;
 }
 
 export const UNDATED_KEY = 'undated';
@@ -88,30 +102,53 @@ export const buildPastRows = (
     const year = match ? Number(match[1]) : null;
     const month = match ? Number(match[2]) : null;
     const shiftId = assignment.shift?.id ?? assignment.shift_id;
+    const attendance = shiftId ? attendanceByShift.get(shiftId) : undefined;
     return {
       assignment,
       year,
       month: month !== null && month >= 1 && month <= 12 ? month : null,
-      hours: hoursWorked(shiftId ? attendanceByShift.get(shiftId) : undefined),
+      hours: hoursWorked(attendance),
+      credited: attendance?.shift_is_finalized === true,
     };
   });
 
+export const monthKey = (year: number, month: number): string => `${year}-${String(month).padStart(2, '0')}`;
+
 /**
- * Each row's hours are quarter-rounded before they are added, the way the
- * member adds up the pills on screen — so a month header never reads a quarter
- * off the rows beneath it.
+ * Totals over credited month buckets, folded the way the backend's `_fold`
+ * in `get_my_hours_history` folds them: each bucket's already-rounded hours
+ * summed through `sumHoursToQuarter`. So a year folded here is the year the
+ * Hours tab shows, and all of `history` folded is its all-time figure.
  */
-export const totalsFor = (rows: PastShiftRow[]): PeriodTotals => {
-  const logged = rows.flatMap((row) => (row.hours === null ? [] : [row.hours]));
-  const hours = sumHoursToQuarter(logged);
+export const foldCredit = (months: MemberHoursMonth[]): CreditedTotals => {
+  const shifts = months.reduce((sum, m) => sum + m.shifts, 0);
+  const hours = sumHoursToQuarter(months.map((m) => m.hours));
   return {
-    shifts: rows.length,
+    shifts,
     hours,
-    loggedShifts: logged.length,
+    pendingShifts: months.reduce((sum, m) => sum + m.pending_shifts, 0),
+    pendingHours: sumHoursToQuarter(months.map((m) => m.pending_hours)),
     // An average is not recorded time, so it is not quarter-rounded; two
     // places keeps it readable without float drift.
-    averageHours: logged.length > 0 ? Math.round((hours / logged.length) * 100) / 100 : 0,
+    averageHours: shifts > 0 ? Math.round((hours / shifts) * 100) / 100 : 0,
   };
+};
+
+/** The credited buckets a dropdown choice covers. */
+export const creditInScope = (history: MemberHoursMonth[], scope: string): MemberHoursMonth[] =>
+  scope === ALL_TIME ? history : history.filter((m) => String(m.year) === scope);
+
+export const creditByMonth = (history: MemberHoursMonth[]): Map<string, MemberHoursMonth> =>
+  new Map(history.map((m) => [monthKey(m.year, m.month), m]));
+
+export const creditByYear = (history: MemberHoursMonth[]): Map<number, CreditedTotals> => {
+  const byYear = new Map<number, MemberHoursMonth[]>();
+  for (const m of history) {
+    const bucket = byYear.get(m.year);
+    if (bucket) bucket.push(m);
+    else byYear.set(m.year, [m]);
+  }
+  return new Map([...byYear.entries()].map(([year, months]) => [year, foldCredit(months)]));
 };
 
 /** Every year with at least one shift, newest first. */
@@ -123,7 +160,7 @@ export const summarizeYears = (rows: PastShiftRow[]): YearSummary[] => {
     if (bucket) bucket.push(row);
     else byYear.set(row.year, [row]);
   }
-  return [...byYear.entries()].sort(([a], [b]) => b - a).map(([year, list]) => ({ year, ...totalsFor(list) }));
+  return [...byYear.entries()].sort(([a], [b]) => b - a).map(([year, list]) => ({ year, shifts: list.length }));
 };
 
 /**
@@ -143,7 +180,7 @@ export const groupByMonth = (rows: PastShiftRow[], order: 'newest' | 'soonest' =
   const groups = new Map<string, { year: number | null; month: number | null; rows: PastShiftRow[] }>();
   for (const row of rows) {
     const dated = row.year !== null && row.month !== null;
-    const key = dated ? `${row.year}-${String(row.month).padStart(2, '0')}` : UNDATED_KEY;
+    const key = row.year !== null && row.month !== null ? monthKey(row.year, row.month) : UNDATED_KEY;
     const group = groups.get(key);
     if (group) group.rows.push(row);
     else groups.set(key, { year: dated ? row.year : null, month: dated ? row.month : null, rows: [row] });
@@ -154,7 +191,7 @@ export const groupByMonth = (rows: PastShiftRow[], order: 'newest' | 'soonest' =
       if (b === UNDATED_KEY) return -1;
       return order === 'newest' ? b.localeCompare(a) : a.localeCompare(b);
     })
-    .map(([key, group]) => ({ key, ...group, ...totalsFor(group.rows) }));
+    .map(([key, group]) => ({ key, ...group, shifts: group.rows.length }));
 };
 
 /** "October 2026" — the year is always named, so December and January read apart. */
