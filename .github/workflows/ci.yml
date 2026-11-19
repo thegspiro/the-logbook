@@ -1225,12 +1225,23 @@ jobs:
   # with 29 minutes of tests behind it, every test so far passing; on #4202
   # (89811d54) the same leg passed at 43 minutes. A third leg brings the tests
   # to about 23 minutes, so the slowest install observed still finishes near 40.
+  #
+  # Pinned to ubuntu-24.04, not ubuntu-latest. From 2026-11-16 GitHub began
+  # handing ubuntu-latest jobs to ubuntu-26.04 runners, and Playwright's WebKit
+  # build (webkit-2388) links against libicudata.so.74, which is ICU 74 from
+  # 24.04 and is absent from 26.04. On #4337 (87a5c83f), shards 1 and 3 landed
+  # on 26.04 and every test failed in about 4ms with MiniBrowser unable to
+  # load that library; shard 2 landed on 24.04 and passed. Move this to a
+  # newer image only once the pinned Playwright ships a WebKit build that
+  # starts there. The release is also in both cache keys below: runner.os is
+  # only "Linux", so without it a cache saved on one release is restored on
+  # the other.
   frontend-e2e-safari:
     name: Frontend E2E (Mobile Safari ${{ matrix.shard }}/3)
     concurrency:
       group: ${{ github.workflow }}-frontend-e2e-safari-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       # One leg failing must not cancel the other, for the reason given on the

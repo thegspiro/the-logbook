@@ -871,7 +871,8 @@ client API cache (`/attendance-petitions` in `UNCACHEABLE_PREFIXES`).
   needs attendance reopened first, and that declining works either way, instead
   of the plain "Review the request" line.
 - **Across events:** `/events/attendance-requests` lists every pending request
-  on events the viewer organizes or is alternate for, oldest first, with
+  routed to the viewer — on events they organize or are alternate for, and any
+  a fallback step sent them — oldest first, with
   **Approve** / **Decline** in place (the same dialogs as the event card,
   `AttendancePetitionDecisionDialogs.tsx`). `events.manage` holders get **All
   events**. The Events page shows "N attendance requests are waiting for you"
