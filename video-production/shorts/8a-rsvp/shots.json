@@ -1,0 +1,29 @@
+{
+  "script": "docs/youtube-scripts/08-quick-tips-and-shorts.md — SHORT 8A",
+  "title": "RSVP in 30 Seconds",
+  "callout": "The Logbook — RSVP in seconds",
+  "endCard": {
+    "headline": "Try The Logbook",
+    "sub": "Free & Open Source",
+    "url": "github.com/thegspiro/the-logbook"
+  },
+  "shots": [
+    {
+      "id": "hook",
+      "say": "RSVP to a fire department event in under thirty seconds. Here's how.",
+      "caption": "RSVP in under 30 seconds"
+    },
+    { "id": "events", "say": "Tap Events.", "caption": "Tap Events" },
+    { "id": "event", "say": "Tap the event.", "caption": "Tap the event" },
+    {
+      "id": "rsvp",
+      "say": "Tap RSVP Now. Choose Going, Not Going, or Maybe.",
+      "caption": "RSVP Now → Going, Not Going or Maybe"
+    },
+    {
+      "id": "done",
+      "say": "Done. Your officers can see you're coming. No group texts, no phone calls.",
+      "caption": "Done — your officers can see you're coming"
+    }
+  ]
+}

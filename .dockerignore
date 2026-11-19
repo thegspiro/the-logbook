@@ -24,6 +24,8 @@ backend
 # Documentation, screenshots and ops assets
 docs
 wiki
+# The YouTube video tool: never part of the application
+video-production
 static
 scripts
 unraid

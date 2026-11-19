@@ -1,8 +1,248 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14), 2026-11-04 (pass 15) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10), 2026-10-22 (pass 11), 2026-10-25 (pass 12), 2026-10-28 (pass 13), 2026-10-31 (pass 14), 2026-11-04 (pass 15), 2026-11-18 (pass 16) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
 
 ---
+
+## Pass 16 (2026-11-18) — real delta: live QuickBooks Online connection (new, ~2,200 L across 3 files), the approve/deny permission model moved into the service layer, budget-request drafts, cash-advance statements, dual-approval second-approver notices — 0 fixed, 0 new findings; scope correction to the tracker
+
+**Watchdog pickup.** `list_pull_requests` (state `open`) returned 0 results for
+a `claude/security-review-*` head. PR #4359 (Feature 04, Storefront &
+payments, pass 16) had merged. Row 05 was the next `⬜` row, confirmed on a
+freshly fetched, pulled `main` (`b25ea82cff`, 630 commits ahead of this
+session's stale starting point and far ahead of pass 15's own baseline).
+
+**Scope correction (tracker).** `docs/security-review/PROGRESS.md`'s feature
+table named this feature's QuickBooks file `services/quickbooks_online.py`.
+No such file exists; the actual QBO surface is three files —
+`api/v1/endpoints/quickbooks_online.py` (8 routes), `services/
+quickbooks_online_client.py` (the Intuit HTTP/OAuth client, no routes) and
+`services/quickbooks_sync_service.py` (the posting engine, no routes) —
+corrected in the tracker's row in this same commit.
+
+**Baseline.** Pass 15 merged as `683d044936` (PR #4043). `git diff --numstat
+683d044936..HEAD` over the established scope plus the two newly-discovered
+QBO files: `finance.py` +747/−50, `finance_service.py` +997/−84, `models/
+finance.py` +316/−4, `schemas/finance.py` +522/−34, `public/
+finance_approvals.py` +7/−0 (one addition: queue and send approval-decision
+notices after commit, reusing the already-reviewed `finance_approval_
+notifications.send_approval_notices`, which never raises and logs ids, not
+PII). Two brand-new backend files not in the tracker's own list carry the
+dual-approval-threshold and approval-notification logic: `finance_second_
+approval.py` (351 L) and `finance_approval_notifications.py` (353 L); a third,
+`finance_budget_request_notifications.py`, grew +215/−36 (an in-app bell
+alongside the existing budget-request-deadline email, gated by a new owner-
+decided setting). Frontend: 111 files changed under `modules/finance/`, almost
+entirely the shared forms/`FormField`/`useDiscardGuard`/mobile-reflow rollout
+already reviewed generically in other features' passes; the one new component,
+`QuickBooksOnlineSection.tsx` (443 L, plus its own test file), renders only
+what `QuickBooksConnectionResponse` sends — confirmed by grep that neither it
+nor the response schema carries `accessToken`/`refreshToken` in any casing.
+
+**Route enumeration, this pass's own (not carried over from pass 15).**
+`finance.py` by AST walk: **150 routes**, verified against pass 15's own
+fresh count of 137 by diffing `(method, path)` tuples against that baseline
+rather than trusting the delta: **+13 added, 0 removed** — two receipt
+routes on check requests (upload/download), a line-item receipt-share route,
+`GET /advances/holders`, `GET /budget-amendments/pending`, `GET /dues-
+schedules/membership-type-options`, `GET /my-dues`, three new reports
+(dues-delinquency, expense-summary-by-member, purchases-by-vendor) and the
+budget-request-reminder settings get/put pair. Every one of the 13 carries a
+`require_permission` grant or (for `/my-dues`) a bare `Depends(get_current_
+user)` self-scoped to the caller, consistent with the rest of the file. Every
+route in the file carries either a permission grant or an authenticated-
+self-scoped dependency — none with no dependency at all. `public/
+finance_approvals.py`: **3 routes**, unchanged. New: `api/v1/endpoints/
+quickbooks_online.py`, **8 routes** (`GET /connection`, `POST /oauth/start`,
+`GET /oauth/callback` — public by design, see below —, `POST /disconnect`,
+`PUT /connection`, `POST /sync`, `GET /postings`, `POST /postings/{id}/
+retry`), every authenticated one gated `finance.view` or `finance.manage`,
+mounted under `/finance/quickbooks` with the same `module_gate("finance", …)`
+dependency as the rest of the module.
+
+**The one change that moves an authorization boundary — read in full, not
+taken on its commit message.** `approve_step` and `deny_step` changed, in this
+window (`5cb8589dcb8`, "Finance: build the owner's 2026-11-01 approval,
+amendment and payment decisions"), from `Depends(require_permission(
+"finance.approve"))` to a bare `Depends(get_current_user)`, moving "may this
+caller act on _this_ step" entirely into the service layer (owner decision
+2026-11-01, "naming grants that step" — a step's named position/member/email
+approver may act on it without holding `finance.approve` at all). This is
+exactly the kind of change this pass's instructions called out to scrutinize,
+so it was traced end to end rather than trusted:
+
+- `FinanceService.approve_step`/`deny_step` (`finance_service.py:3818`,
+  `:3902`) resolve the step record through `ApprovalChain.organization_id ==
+org_id` (an explicit comment names the IDOR this join closes — a bare
+  `ApprovalStepRecord.id` lookup would let a caller in org A act on org B's
+  step, since the endpoint now proves nothing about the caller's org beyond
+  "authenticated"), `.with_for_update()` locked, before anything else runs.
+- `_refuse_unnamed_member` → `may_reach_step` (`finance_approver_matching.py:
+269`) is checked **before** the step's order or the request's status, so a
+  member nobody named learns neither. It returns true for any
+  `finance.approve` holder (the pre-existing, pre-2026-10 rule, preserved) or
+  a match on the step's own `position`/`permission`/`specific_user`/`email`
+  type, each resolved through `_is_active_member_of(user, org_id)` — the org
+  check endpoint's `require_permission` used to imply is reconstructed inside
+  the matcher for every approver type, not assumed.
+- `_authorize_step_actor` → `authorize_step_actor` then decides whether the
+  caller is _that step's_ named approver or an approvals admin
+  (`finance.configure_approvals` **and** `finance.approve`, both — `may_
+override`) overriding with a stated reason, raising `ApproverMismatchError`
+  (a `PermissionError`, not a `ValueError`, so the endpoint's generic
+  `except ValueError → 400` cannot swallow it into the wrong status code)
+  otherwise.
+- Self-approval is unaffected by the permission move: `assert_different_
+person` (approver vs. the request's creator, resolved by `_entity_
+creator_id`, itself `model.id == entity_id, model.organization_id ==
+org_id`-scoped) and `assert_not_raiser` (an officer who raised a cash
+  advance on a member's behalf) still run immediately after authorization,
+  before any mutation — unchanged from pass 9's original FIN-4 fix, and still
+  the only guard against a requester self-approving, since being named on a
+  step and being the step's own request's requester are orthogonal checks.
+  `approver_type IS NULL` (an unassigned step) still requires `finance.
+approve` in `user_matches_step` — the "unassigned" branch does not
+  accidentally admit the bare-`get_current_user` endpoint change to widen to
+  "anyone signed in."
+- No other path sets an approval-step or entity status to `APPROVED` outside
+  `_finalize_approval` (grepped for `status = …APPROVED` across `finance_
+service.py`; the one non-`_finalize_approval` hit, `_unsettle_report`'s
+  `er.status = ExpenseReportStatus.APPROVED`, is the check-void reversal
+  restoring a report that was already approved before being paid — not a new
+  approval, and it is reached only after a budget reversal of its own).
+
+**QuickBooks Online connection, read end to end (new this window,
+`2b971c2a2d`/owner decision 2026-11-01) — the areas this pass's instructions
+named specifically:**
+
+- **OAuth token storage.** `QuickBooksConnection.access_token`/`refresh_token`/
+  `pending_attempt` are `EncryptedText` (`models/finance.py:2212-2220`) — the
+  app's existing AES-256-GCM-backed column type (`core/encrypted_types.py`),
+  the same mechanism CLAUDE.md's "Encryption at rest" line already covers, not
+  a new or weaker one. The migration (`e4c6e82acbc2`) creates the columns as
+  plain `Text`, matching every other `EncryptedText` column in this schema —
+  the encryption is a model-layer concern, transparent to the column type.
+  Nothing (no log line, no response schema, no frontend component) echoes
+  either token back; confirmed by grep.
+- **CSRF/replay on the OAuth dance.** `begin_connect` binds the attempt three
+  ways (module docstring, `quickbooks_sync_service.py:278`): a 10-minute
+  signed JWT `state` (`purpose`/`org`/`usr`/`nonce`/`exp`, `settings.
+SECRET_KEY`), the same nonce double-submitted through an httpOnly, `Lax`,
+  path-scoped cookie, and the nonce again inside the connection's encrypted
+  `pending_attempt`. `complete_connect` clears `pending_attempt` **before**
+  comparing it (so a replayed `state` finds nothing to match, win or lose),
+  compares both nonces with `secrets.compare_digest` (constant-time), and
+  re-checks the connecting user still holds `finance.manage` in that org at
+  completion time (`_may_still_manage`) — a permission lost during the
+  10-minute consent window is not grandfathered in. `realm_id` (interpolated
+  into the QBO API base path) is validated `isalnum()` and ≤32 chars before
+  use, closing a path-injection avenue into `/v3/company/{realm_id}`.
+- **Idempotency / no inbound webhook.** This integration is outbound-only
+  (push each payment to QBO; grepped the repo for any `quickbooks` webhook
+  route — none exists), so Pitfall #36's signature-verification concern does
+  not apply; the relevant idempotency is a **unique constraint** on
+  `(organization_id, payment_type, payment_id)` plus Intuit's own `requestid`
+  dedup (migration `e4c6e82acbc2`, `uq_quickbooks_postings_payment`/
+  `uq_quickbooks_postings_request_id`), and a `sync_lease_until` lease
+  (`_acquire_lease`, a conditional `UPDATE … WHERE sync_lease_until IS NULL OR
+< now`) serializes two overlapping `run_for_organization` calls so a crash
+  mid-run cannot double-post — traced through `enqueue`/`_send_due`/`retry_
+posting`, all org-scoped and the latter two `.with_for_update()`-locked.
+  `_access_token`'s refresh also locks the connection row first, so two
+  concurrent token refreshes (which would otherwise race on Intuit's
+  refresh-token rotation and strand one request authenticated with a token
+  Intuit has already superseded) cannot interleave.
+- **Org-scoping.** Every query in `quickbooks_sync_service.py` filters
+  `organization_id == org_id` (31 occurrences grepped and spot-checked); `
+connected_by`/the FK to `organizations.id` are `ondelete="SET NULL"`/
+  `"CASCADE"` respectively with the SET NULL column correctly `nullable=True`
+  (Pitfall #2). `organization_id` is `UniqueConstraint`-bound on `quickbooks_
+connections` — one connection per department, consistent with the 2026-11-01
+  single-department owner policy.
+- **Migration** (`e4c6e82acbc2`): both tables are new and start empty (no
+  existing-rows settlement needed, Pitfall #35), guarded with `_has_table`
+  (Pitfall #26), `mysql_charset=utf8mb4`/`utf8mb4_unicode_ci` matching the
+  schema's convention. `validate_migrations.py --strict` (below) confirms a
+  single head with this revision in the chain.
+
+**Budget-request drafts (`8ac362f441`) — `requested_amount`/`justification`
+loosened from `NOT NULL` to nullable** (model + migration `0136dd6d4144`,
+present and paired, not just a model-only change — Pitfall #35's "the DB
+matters, not just the model"). The business rule that actually matters —
+**a draft cannot be submitted without them** — lives at `submit_request`
+(`finance_budget_request_service.py:655`), which calls `_missing_for_the_
+treasurer` and raises `BudgetRequestIncompleteError` before flipping status
+off `DRAFT`; the DB-level nullability only ever permits the earlier,
+unsubmitted state.
+
+**Dual-approval second-approver notices (`finance_second_approval.py`,
+new).** The threshold check itself (`_held_for_second_approver`, unchanged
+logic, now read again for this pass) is the single chokepoint both the
+approval-chain-completion and manual-approval paths reach, so a single-step
+chain or one person approving every step still cannot complete a request
+above the threshold alone. `email_identity` — "one person, however they
+approved" — resolves an emailed approval's address to a department member by
+comparing `email_hash` fingerprints (never a plaintext comparison against the
+randomised-IV-encrypted `User.email` column, which cannot be compared in SQL
+at all), so a member cannot supply both approvals by using the in-app
+approval once and the emailed-link approval once under the same identity.
+`claim_second_approval_notice` is the same conditional-`UPDATE …
+WHERE … IS NULL` idempotent-claim shape as the approval-link resend (pass 15)
+and the dues late fee (Pitfall #36) — one notice per hold, survives a crash
+between claim and send (loses at most the email, never double-sends).
+
+**Cash advance statements** (`AdvanceStatement`, new table, migration within
+this window): `check_request_id` FK is `ondelete="CASCADE"`/`nullable=False`
+(correctly paired — no `nullable=True` needed since it's not `SET NULL`), org
+id present and FK'd to `organizations.id`.
+
+**Standing items** (FIN-30, FIN8-05-1, the `_mutate_budget` overspend ceiling,
+CSV/LIKE escaping) — none of their files carry a diff in this window beyond
+what's already covered above; re-confirmed by direct read rather than
+re-asserted from a prior pass's word: `list_dues_payments`
+(`finance_service.py`, grepped, unchanged) still takes no `.offset()`/
+`.limit()` — still the accepted 2026-10-05 owner decision in `docs/
+KNOWN_LIMITATIONS.md`, not a live gap. FIN8-05-1 and FIN-4 remain resolved
+(owner decisions already recorded; see `docs/KNOWN_LIMITATIONS.md`'s "Finance:
+no separation of duties on terminal money movement" and "FIN8-05-1" rows).
+The one `.like()` call in `finance_service.py` (the internal request-number
+generator, no client input) still carries `escape=LIKE_ESCAPE_CHAR`. `
+SafeCsvWriter` is still the only CSV writer in the finance service (grepped;
+no bare `csv.writer`).
+
+**0 fixed, 0 new findings.** Every area this pass's instructions called out —
+approval-chain self-approval, the public token routes' idempotency/replay/
+org-scoping, and the QuickBooks OAuth token storage/encryption and (absent)
+webhook — was traced to a concrete mechanism rather than asserted, and each
+held. The one finding-shaped item is the tracker's own stale file path,
+corrected above and in `PROGRESS.md`, not a code defect.
+
+### Completion gate (pass 16)
+
+| Check                                                                                                                                                                | Result                                                                                                                         |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (CI's pin, 7.4.1, invoked from the path carrying that exact version — the sandbox's bare `flake8` resolves to a different install)     | clean                                                                                                                          |
+| `black --check app/ tests/ alembic/` (CI's pin, 26.10.1, same path correction)                                                                                       | clean, 3265 files unchanged                                                                                                    |
+| `isort --check-only app/ tests/ alembic/` (9.0.2, matches CI)                                                                                                        | clean                                                                                                                          |
+| `scripts/validate_migrations.py --strict`                                                                                                                            | 784 revisions, single head `053d3e96b4fa`                                                                                      |
+| `scripts/check_route_permissions.py --strict` (repo root)                                                                                                            | 327 routes, 0 errors, 0 warnings                                                                                               |
+| `pytest tests/ -q -k "finance or approval or quickbooks"` (run under `/usr/bin/python3.13`, the interpreter the backend's actual dependencies are installed against) | **1973 passed**, 2 skipped (both environment-only: `pywebpush`, and a sandbox with no time-zone tables loaded), 0 failed, 495s |
+| `frontend: npm run typecheck`                                                                                                                                        | 0 errors                                                                                                                       |
+| `frontend: npm run lint`                                                                                                                                             | 0 errors, 0 warnings (`eslint --max-warnings 10`)                                                                              |
+
+**Sandbox note, for the next pass.** This session's `python3`/`flake8`/`black`/
+`isort`/`pytest` on `$PATH` resolve to a _different_, older interpreter/tool
+set than the one the backend's dependencies and CI's pinned lint versions
+actually live under. `pip show <pkg>` and the bare CLI disagreed on version
+for every one of these tools. Working versions, confirmed against CI's pins:
+`/usr/bin/python3.13` (has `fastapi`/`sqlalchemy`/`pytest` installed),
+`/usr/local/bin/black` (26.10.1), `/root/.local/bin/flake8` (7.4.1),
+`/usr/local/bin/isort` (9.0.2). The local MySQL (`intranet_db`) was already at
+head (`053d3e96b4fa`, every new finance/QBO table present) — the task
+briefing's warning about a dirty local DB from a prior session did not apply
+this pass; no `DROP DATABASE` was needed.
+
+No code change was made this pass, so no new guard test was added.
 
 ## Pass 15 (2026-11-04) — watchdog pickup: real delta verified (approval-link send-status tracking, re-send, and the approver-facing subject fields), 0 fixed, 0 new findings
 
