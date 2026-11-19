@@ -18154,6 +18154,32 @@ export const SHOTS = [
   },
   {
     // Settings appears only on a connected card; see showIntegrationConnected.
+    // The instance URL is an example, not a real Salesforce org.
+    id: "16-29-salesforce-settings",
+    doc: "16-integrations.md",
+    line: 215,
+    anchor:
+      "Salesforce settings on a connected Salesforce card, as an administrator",
+    alt: "Salesforce settings on a connected card: the Instance URL and Environment shown read-only with the note to disconnect and connect again to change org, Contact Matching, the Re-authorize with Salesforce button, the Client ID, Client Secret and Refresh Token boxes with notes that blank keeps what is saved, Sync Direction, the two tick boxes, and the notice that saved settings apply from the next sync",
+    route: "/integrations",
+    beforeNavigate: showIntegrationConnected("salesforce", {
+      instance_url: "https://oakvillefd.my.salesforce.com",
+      environment: "production",
+      sync_direction: "push",
+      match_strategy: "email",
+      graceful_fields: true,
+      auto_sync_enabled: true,
+    }),
+    prepare: openIntegrationSettings("Salesforce", "salesforce"),
+    expect: "The connected org does not change",
+    // "No personal information" is a chip on the Claude card behind the
+    // dialog, not an empty page.
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 1900 },
+    fullPage: false,
+  },
+  {
+    // Settings appears only on a connected card; see showIntegrationConnected.
     // The base URL is an example self-hosted server, not a real one.
     id: "16-28-documenso-settings",
     doc: "16-integrations.md",
