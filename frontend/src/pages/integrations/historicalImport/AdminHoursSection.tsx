@@ -22,8 +22,10 @@ import type {
   AdminSettings,
   HistoricalImportDetail,
 } from '../../../modules/integrations/types/historicalImport';
+import { HistoricalUndoStep } from '../../../modules/integrations/types/historicalImport';
 import { formatNumber } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import StepUndo from './StepUndo';
 
 interface AdminHoursSectionProps {
   detail: HistoricalImportDetail;
@@ -119,7 +121,7 @@ const AdminHoursSection: React.FC<AdminHoursSectionProps> = ({ detail }) => {
       title: 'Import the administrative hours?',
       message: `This writes ${formatNumber(preview.pending_records)} approved Admin Hours entries${
         creating ? ` and creates ${creating} archived former-member records` : ''
-      }. Rows already imported are skipped. There is no batch undo; entries are corrected one at a time.`,
+      }. Rows already imported are skipped. You can undo this step afterwards.`,
       confirmLabel: 'Import entries',
       cancelLabel: 'Not yet',
     });
@@ -179,6 +181,13 @@ const AdminHoursSection: React.FC<AdminHoursSectionProps> = ({ detail }) => {
               {preview.result.members_created ? ` and ${preview.result.members_created} former members` : ''}.
             </p>
           )}
+
+          <StepUndo
+            importId={importId}
+            step={HistoricalUndoStep.ADMIN}
+            noun="administrative hours"
+            onUndone={() => void load()}
+          />
 
           <form
             className="space-y-4"
