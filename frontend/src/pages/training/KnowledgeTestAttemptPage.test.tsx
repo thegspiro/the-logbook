@@ -93,6 +93,29 @@ describe('KnowledgeTestAttemptPage', () => {
     await waitFor(() => expect(saveAnswers).toHaveBeenLastCalledWith('a1', { q1: ['o1'], q2: ['o3', 'o4'] }));
   });
 
+  it('says why an answer did not save', async () => {
+    saveAnswers.mockRejectedValue({
+      response: { status: 500, data: { detail: 'Internal server error', code: 'LB-SYS-001' } },
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByLabelText('Red'));
+
+    expect(await screen.findByText(/Could not save your answers: the server hit a problem/)).toBeInTheDocument();
+    expect(screen.queryByText(/check your connection/i)).not.toBeInTheDocument();
+  });
+
+  it('points at the connection when the save got no answer', async () => {
+    saveAnswers.mockRejectedValue({ request: {}, code: 'ERR_NETWORK', message: 'Network Error' });
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByLabelText('Red'));
+
+    expect(
+      await screen.findByText('Could not save your answers. Check your connection and try again.')
+    ).toBeInTheDocument();
+  });
+
   it('warns about unanswered questions before submitting, then shows the result', async () => {
     submitAttempt.mockResolvedValue(
       open({

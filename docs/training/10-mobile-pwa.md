@@ -330,6 +330,18 @@ screens adapt:
   training administration tables, waivers, prospective members, voter
   eligibility roster, admin hours entries, issuance charges and scheduling
   reports. Each row reads as a labelled card.
+  _(2026-11-17)_ More tables joined them: report results in the report
+  window (as cards at every width, desktop included, except Training Summary
+  and Event Attendance, which stay a table from tablet width up), grant
+  applications and the Grants dashboard's recent donations, the member import
+  preview and a profile's **Assigned Inventory**, message history and the
+  outreach events list, the error code reference, an election's voided votes
+  and integrity audit log, expense report line items (totals row included),
+  the inventory import preview, the equipment-check CSV import preview and the
+  Impact Planner's member list (which now shows Rank / Station on a phone).
+- **The inventory stock matrix stays a grid** _(2026-11-17)_: its **Size**
+  column stays pinned while the colours scroll, and a fading edge with a
+  chevron shows there are more colours to the side.
 - **Tab rows** scroll sideways inside themselves instead of wrapping onto two
   lines.
 - **Two-column forms** become one column.
