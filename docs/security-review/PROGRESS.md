@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this commit)** (branch `claude/security-review-documents-legal-p16` —
+**PR [#4440](https://github.com/thegspiro/the-logbook/pull/4440)** (branch `claude/security-review-documents-legal-p16` —
 `claude/security-review-documents-legal` has multiple merged PRs against it
 (#3734, #3160, #2962, #2187) and must not be reused per CLAUDE.md Pitfall
 #24; `-p15` is also taken, so `-p16`, the next pass number per
