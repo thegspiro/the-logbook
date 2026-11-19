@@ -16,6 +16,65 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this commit)** (branch `claude/security-review-elections-ballots`):
+Feature 06 (Elections & ballots), pass 16 — watchdog pickup. PR #4430
+(Feature 05, Finance & approvals, pass 16) was found open, fully green
+(all 26 check runs `success`, `mergeable_state: clean`) and unmerged for
+roughly 14 hours — its only comments were Codex and Copilot both reporting
+they lacked review quota, not a real finding — so the watchdog merged it
+(`2f46fb26f`) before continuing. A fresh `list_pull_requests` (state
+`open`) then found no `claude/security-review-*` head, and row 06 was the
+next `⬜` row.
+
+**0 fixed, 0 new findings.** Baseline `683d044936` (pass 15's merge, PR
+#4043). Real delta: 66 files, +7136/-2403, from 8 non-merge commits — most
+significantly a new per-member-type voter eligibility engine (version 2
+rules, `app/services/voter_rules.py`: one explicit `may_vote`/wait/
+attendance row per member status, department tier or class, replacing
+version-1 election-wide rules plus each tier's own voting benefits; a
+member is judged by their status row **and**, when administrative or
+social, their class row — both must pass, owner decision 2026-11-13);
+per-election and per-ballot-item rule overrides requiring and auditing a
+secretary's stated reason when they differ from the department's defaults;
+a new Meeting Attendance page and service
+(`app/services/election_attendance_service.py`) with one genuinely new
+route, `GET /{election_id}/attendance/{user_id}/meetings`; and a handful of
+smaller refinements (off-roll reason sharing, attendance-counting
+look-back, ten election/minutes notices moving to editable templates).
+`elections.py` re-enumerated fresh by AST: **76 routes**, up from pass 15's
+75 (+1, the new attendance-by-member route — `elections.manage`-gated, org-
+scoped member resolution, correctly excluded from the self-service
+baseline). The voter-eligibility engine — the highest-risk change, since it
+decides who may vote — was traced end to end: Pydantic schema bounds
+(`extra="forbid"`, capped integers, regex-validated row keys), the
+override-reason requirement's enforcement at the API layer, and the "both
+rows must pass" AND semantics in `type_rules_reason`/`row_waits`, confirmed
+by tracing the loop rather than taking the docstring's claim on faith.
+Nomination accept-on-behalf (`update_candidate`) stays `elections.manage`-
+gated and org-scoped, independent of the nominee's own `elections.view`-
+gated accept/decline path. **ELEC-49** (a stale addendum left in circulated
+minutes after a rollback) is closed: this delta's own commits added a real
+dated-correction path plus a backfill migration, matching
+`docs/KNOWN_LIMITATIONS.md`'s existing "Resolved" note, verified by
+re-reading the code. Full write-up:
+`docs/security-review/ELEC-06-elections-ballots.md`'s **Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+single head `bbeb4867d393`, 785 revisions; `check_route_permissions.py
+--strict` (repo root) — 327 routes, 0 errors/warnings; scoped backend
+suite (`-k "election or ballot or vote or candidate or attendance"`,
+run under `/usr/bin/python3.13`) — **2486 passed**, 1 pre-existing
+environment-only skip (`pywebpush`), 0 failed; `npm run typecheck` — 0
+errors; `npm run lint` — 0 errors, 0 warnings (`eslint --max-warnings 10`).
+
+Row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
+organizations) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 16, PR #4430, merged), preserved for history</summary>
+
 **PR [#4430](https://github.com/thegspiro/the-logbook/pull/4430)** (branch
 `claude/security-review-finance-approvals`): Feature 05 (Finance &
 approvals), pass 16 — watchdog pickup. PR #4359 (Feature 04, Storefront &
@@ -26414,7 +26473,7 @@ iteration's commit" rule.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (51 unauth routes, added pass 16), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`, `zeffy_webhook.py`, `shift_evaluations.py` (added pass 16)                                                                                                 | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                                                                                                                                                        | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (9 routes, added pass 17)                                                                                                                                                                 | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                                                                                                                            | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                                                                                                                                                                | ⬜     |
@@ -26486,6 +26545,74 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-19 — Feature 05 (Finance & approvals, pass 16) merged after a 14-hour idle PR; Feature 06 (Elections & ballots, pass 16) — watchdog pickup, voter-eligibility engine traced end to end, 0 fixed, 0 new findings
+
+Watchdog pickup, running on its own 30-minute schedule rather than inside
+the dedicated `/loop 30m /security-review` session (confirmed unreachable
+via `ListAgents`, no reachable agents). PR #4430 (Feature 05, Finance &
+approvals, pass 16) was found still open: every one of its 26 check runs
+had completed `success`, `mergeable_state` was `clean`, and its only
+comments were Codex and Copilot both reporting they had run out of review
+quota — not a real finding — yet it had sat unmerged for roughly 14 hours.
+The watchdog merged it (`2f46fb26f`) rather than treating a quota-exhausted
+bot comment as a blocking review. A fresh `list_pull_requests` (state
+`open`) then found no head branch starting `claude/security-review-`; row
+06 (Elections & ballots) was the next `⬜` row.
+
+Baseline `683d044936` (pass 15's merge, PR #4043). This window's real delta
+is substantial: 66 files, +7136/-2403, across 8 non-merge commits. The
+headline change is a new per-member-type voter eligibility engine (version
+2 rules, `app/services/voter_rules.py`) that replaces version-1
+election-wide rules plus each membership tier's own voting benefits with
+one explicit `may_vote`/wait/attendance row per member status, department
+tier, or administrative/social class — a member must pass their status row
+**and**, when administrative or social, their class row (owner decision
+2026-11-13). Alongside it: per-election and per-ballot-item rule overrides
+that require and audit a secretary's stated reason whenever they differ
+from the department's copied defaults; a new Meeting Attendance page and
+service with one genuinely new route (`GET /{election_id}/attendance/
+{user_id}/meetings`, `elections.manage`-gated, org-scoped member
+resolution); and several smaller refinements (shared off-roll reasoning,
+an attendance look-back fix, ten election/minutes notices moving onto the
+existing editable-template mechanism).
+
+The voter-eligibility engine was traced end to end rather than taken on its
+own docstrings: the Pydantic schema is tightly bounded (`extra="forbid"`,
+`MAX_TYPE_RULES=60`, `MAX_WAITING_PERIOD_MONTHS=600`, regex-validated row
+keys), the override-reason requirement is enforced server-side
+(`_settle_override_reason` raises 400 when rules differ with no reason
+given, on both the election and per-item paths), the "both rows must pass"
+AND semantics hold by tracing `type_rules_reason`'s loop directly, and
+malformed stored rules degrade to "no rule" rather than raising (consistent
+with the pre-existing `_stored_eligibility` pattern). Nomination
+accept-on-behalf stays `elections.manage`-gated and org-scoped
+independently of the nominee's own `elections.view`-gated accept/decline
+path. `elections.py` re-enumerated fresh by AST: 76 routes, up from pass
+15's 75 (+1, the new attendance route, correctly excluded from the
+self-service permissionless baseline).
+
+**0 fixed, 0 new findings.** All standing findings (ELEC-12, ELEC-14,
+ELEC-16, ELEC-28/W50-10, ELEC-40, ELEC-48, ELEC-50, ELEC-51) re-confirmed
+unchanged by direct re-read of their files. **ELEC-49 closed** (a stale
+addendum left in circulated minutes after a rollback): this window's own
+commits added `supersede_filed_results`, a real dated-correction path for
+the rollback case, plus a backfill migration for rows left stale by an
+earlier rollback — matching `docs/KNOWN_LIMITATIONS.md`'s existing
+"Resolved" note for this item, verified by re-reading the code rather than
+taken on that note's word.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+single head `bbeb4867d393`, 785 revisions; `check_route_permissions.py
+--strict` — 327 routes, 0 errors/warnings; scoped backend suite
+(`-k "election or ballot or vote or candidate or attendance"`) — 2486
+passed, 1 pre-existing environment-only skip (`pywebpush`); `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings.
+
+Row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
+organizations) — re-check `list_pull_requests` fresh rather than trusting
+this note.
 
 ### 2026-11-18 — Feature 04 (Storefront & payments, pass 16) merged; Feature 05 (Finance & approvals, pass 16) — watchdog pickup, real delta traced end to end, 0 fixed, 0 new findings; tracker file-path correction
 
