@@ -563,6 +563,9 @@ class TestColumnConstraints:
             # history_clearance_decisions: the row is the decision, stamped
             # when it is made and never updated.
             "decided_at",
+            # training_course_links: the row is the link, server-stamped when
+            # it is made; a separate created_at would always equal it.
+            "linked_at",
         }
         missing_timestamp = []
         for table_name, table in _tables.items():
