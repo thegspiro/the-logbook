@@ -180,7 +180,7 @@ describe('errorHandling', () => {
       const result = toAppError(axiosError);
 
       expect(result.status).toBe(422);
-      expect(result.message).toBe('date_of_birth: Invalid date format. emergency_contacts.0.email: Invalid value.');
+      expect(result.message).toBe('Date of birth: Invalid date format. Emergency contacts email: Invalid value.');
     });
 
     it('does not double the period on messages that already carry one', () => {
@@ -218,7 +218,7 @@ describe('errorHandling', () => {
         },
       };
 
-      expect(toAppError(axiosError).message).toBe('email: field required.');
+      expect(toAppError(axiosError).message).toBe('Email: field required.');
     });
 
     it('extracts the message from a structured object detail (not "[object Object]")', () => {
@@ -468,7 +468,46 @@ describe('errorHandling', () => {
           },
         },
       };
-      expect(getErrorDetail(error)).toBe('title: Field required. end_datetime: Invalid date.');
+      expect(getErrorDetail(error)).toBe('Title: Field required. End datetime: Invalid date.');
+    });
+
+    // W42-7: the toast named a column, "charge_amount: Value is out of the allowed range."
+    it('labels the field rather than showing its API name', () => {
+      const error = {
+        response: { data: { detail: [{ field: 'charge_amount', message: 'Value is out of the allowed range.' }] } },
+      };
+      expect(getErrorDetail(error)).toBe('Charge amount: Value is out of the allowed range.');
+    });
+
+    // W40-8: "expected_return_at: expected_return_at must be in the future."
+    it('does not repeat a field the message already names', () => {
+      const error = {
+        response: {
+          data: { detail: [{ field: 'expected_return_at', message: 'expected_return_at must be in the future.' }] },
+        },
+      };
+      expect(getErrorDetail(error)).toBe('Expected return must be in the future.');
+    });
+
+    it('labels a camelCase field and drops a trailing id', () => {
+      const error = {
+        response: {
+          data: {
+            detail: [
+              { field: 'unitNumber', message: 'Value is too long.' },
+              { field: 'category_id', message: 'Invalid ID format.' },
+            ],
+          },
+        },
+      };
+      expect(getErrorDetail(error)).toBe('Unit number: Value is too long. Category: Invalid ID format.');
+    });
+
+    it('replaces only the whole field name, not a longer name that starts with it', () => {
+      const error = {
+        response: { data: { detail: [{ field: 'unit_no', message: 'Both unit_nos and unit_no are set.' }] } },
+      };
+      expect(getErrorDetail(error)).toBe('Both unit_nos and unit no are set.');
     });
 
     it("surfaces a structured detail's message", () => {
