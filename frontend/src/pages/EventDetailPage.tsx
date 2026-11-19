@@ -1143,7 +1143,7 @@ export const EventDetailPage: React.FC = () => {
 
   const exportAttendanceCSV = () => {
     if (!rsvps || !event) return;
-    const headers = ['Name', 'Email', 'RSVP Status', 'Guest Count', 'Checked In', 'Check-In Time', 'Notes'];
+    const headers = ['Name', 'Email', 'RSVP Status', 'Guest Count', 'Checked In', 'Check-In Time', 'Notes', 'Source'];
     const rows = rsvps.map((r) => [
       r.user_name || '',
       r.user_email || '',
@@ -1152,6 +1152,7 @@ export const EventDetailPage: React.FC = () => {
       r.checked_in ? 'Yes' : 'No',
       r.checked_in_at ? formatDateTime(r.checked_in_at, tz) : '',
       r.notes || '',
+      r.source_label || '',
     ]);
     downloadCsv(buildCsv([headers, ...rows]), `${event.title.replace(/[^a-zA-Z0-9]/g, '_')}_attendance.csv`);
   };

@@ -22,6 +22,12 @@ function makeApiError(message: string, status = 400) {
 }
 
 // Mock the API module
+const downloadCsv = vi.fn();
+vi.mock('../utils/csv', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../utils/csv')>();
+  return { ...actual, downloadCsv: (...args: unknown[]) => downloadCsv(...args) as unknown };
+});
+
 vi.mock('../services/api', () => ({
   // Behind the transfer dialog's organizer pickers.
   userService: {
@@ -470,6 +476,25 @@ describe('EventDetailPage', () => {
         expect(screen.getByRole('button', { name: /cancel event/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /delete event/i })).toBeInTheDocument();
       });
+    });
+
+    it('exports where each check-in came from', async () => {
+      downloadCsv.mockReset();
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([
+        { ...mockRSVPs[0], source: 'imported', source_label: 'Imported' } as RSVP,
+      ]);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Export CSV' }));
+
+      expect(downloadCsv).toHaveBeenCalledTimes(1);
+      const [csv] = downloadCsv.mock.calls[0] as [string];
+      const [header, row] = csv.trim().split(/\r?\n/);
+      expect(header).toBe('Name,Email,RSVP Status,Guest Count,Checked In,Check-In Time,Notes,Source');
+      expect(row?.endsWith(',Imported')).toBe(true);
     });
 
     it('defaults official event times to the scheduled times', async () => {
