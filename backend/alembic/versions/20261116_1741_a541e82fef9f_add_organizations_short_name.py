@@ -1,7 +1,7 @@
 """Organizations: add a short name
 
 Revision ID: a541e82fef9f
-Revises: 053d3e96b4fa
+Revises: 0d54dd90d6ba
 Create Date: 2026-11-16 17:41:32.163921
 
 Adds ``organizations.short_name`` (VARCHAR(20), nullable): how the department
@@ -25,7 +25,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a541e82fef9f"
-down_revision: Union[str, None] = "053d3e96b4fa"
+down_revision: Union[str, None] = "0d54dd90d6ba"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
