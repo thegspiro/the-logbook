@@ -45,6 +45,7 @@ from app.models.event import (
     EventType,
     RSVPStatus,
 )
+from app.models.historical_import import ImportedRecordKind
 from app.models.notification import NotificationChannel
 from app.models.user import (
     ACTIVE_ACCOUNT_STATUSES,
@@ -130,6 +131,12 @@ from app.services.file_storage_service import (
     StorageArea,
 )
 from app.services.guest_check_in_service import GuestCheckInService
+from app.services.import_provenance import (
+    imported_event_ids,
+    imported_record_ids,
+    kind_for,
+    label_for,
+)
 from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
 )
@@ -702,10 +709,19 @@ def _build_rsvp_response(rsvp, user=None, event=None) -> RSVPResponse:
 async def _list_items(
     db: AsyncSession, organization_id: str, rows: list[dict]
 ) -> list[EventListItem]:
+    event_ids = [str(row["event"].id) for row in rows]
     counted = await TrainingSessionService(db).events_counting_toward_attendance(
-        [str(row["event"].id) for row in rows], organization_id
+        event_ids, organization_id
     )
-    return [_to_list_item(row, str(row["event"].id) in counted) for row in rows]
+    imported = await imported_event_ids(db, organization_id, event_ids)
+    items = []
+    for row in rows:
+        item = _to_list_item(row, str(row["event"].id) in counted)
+        was_imported = str(row["event"].id) in imported
+        item.source = kind_for(was_imported)
+        item.source_label = label_for(was_imported)
+        items.append(item)
+    return items
 
 
 def _to_list_item(row: dict, counts_toward_attendance: bool = False) -> EventListItem:
@@ -2453,6 +2469,15 @@ async def list_event_rsvps(
     responses = [
         _build_rsvp_response(rsvp, user=rsvp.user, event=rsvp.event) for rsvp in rsvps
     ]
+    imported = await imported_record_ids(
+        db,
+        str(current_user.organization_id),
+        ImportedRecordKind.EVENT_RSVP,
+        [str(r.id) for r in rsvps],
+    )
+    for response, rsvp in zip(responses, rsvps):
+        response.source = kind_for(str(rsvp.id) in imported)
+        response.source_label = label_for(str(rsvp.id) in imported)
     if access != ACCESS_EVENTS_MANAGER:
         # An organizer can be any member, so off the events.manage path the
         # roster's email column answers to the same contact policy as

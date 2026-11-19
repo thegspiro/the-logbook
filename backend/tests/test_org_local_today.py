@@ -335,30 +335,42 @@ class TestEquipmentCheckReports:
 
 
 class TestTrainingCertificationCsv:
-    async def test_a_cert_expiring_today_locally_is_not_expired(self):
+    async def test_a_cert_expiring_today_locally_is_not_expired(self, monkeypatch):
+        from app.services import training_enhancement_service
         from app.services.training_enhancement_service import ReportExportService
+        from app.services.training_record_source import SourceLookup
 
         user = SimpleNamespace(
             id="u1", first_name="Jane", last_name="Smith", email="j@x.org"
         )
         record = SimpleNamespace(
+            id="r1",
             user_id="u1",
             course_name="EMT",
             certification_number="C-1",
             issuing_agency=None,
             completion_date=None,
             expiration_date=LOCAL_TODAY,
+            external_provider_id=None,
+            external_record_id=None,
         )
         db = MagicMock()
         db.execute = AsyncMock(side_effect=[_one(_org()), _scalars([user])])
         # The records are read through a server-side cursor (AH-16).
         db.stream = AsyncMock(return_value=_StreamedResult([record]))
+        # The Source column's lookup is its own concern
+        # (test_export_sources.py); here it finds nothing imported.
+        monkeypatch.setattr(
+            training_enhancement_service,
+            "load_source_lookup",
+            AsyncMock(return_value=SourceLookup(provider_labels={}, imported=set())),
+        )
 
         csv_text = await ReportExportService(db).generate_certification_csv("org-1")
 
         # Valid through today on the department's calendar; the server's date
         # (tomorrow) would have printed it Expired at -1 days.
-        assert csv_text.splitlines()[1].endswith(",Expiring Soon,0")
+        assert csv_text.splitlines()[1].endswith(",Expiring Soon,0,The Logbook")
 
 
 class TestTrainingStats:
@@ -488,10 +500,15 @@ class TestRenewalTasks:
 
 
 class TestCertificationExpirationReport:
-    async def test_a_cert_expiring_today_locally_is_not_reported_expired(self):
+    async def test_a_cert_expiring_today_locally_is_not_reported_expired(
+        self, monkeypatch
+    ):
+        from app.services import reports_service
         from app.services.reports_service import ReportsService
+        from app.services.training_record_source import LOGBOOK
 
         record = SimpleNamespace(
+            id="r1",
             user_id="u1",
             course_name="EMT",
             certification_number="C-1",
@@ -508,6 +525,12 @@ class TestCertificationExpirationReport:
         )
         service = ReportsService(db)
         service._get_rank_display_map = AsyncMock(return_value={})
+        # The Source column's lookup is its own concern (test_export_sources.py).
+        monkeypatch.setattr(
+            reports_service,
+            "record_sources",
+            AsyncMock(return_value={"r1": LOGBOOK}),
+        )
 
         report = await service._generate_certification_expiration("org-1")
 
