@@ -16,6 +16,58 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this commit)** (branch `claude/security-review-users-organizations-p16`
+— a stale, never-merged `claude/security-review-users-organizations-p14`
+already exists from an earlier pass; not reused, per CLAUDE.md Pitfall #24):
+Feature 07 (Users & organizations), pass 16 — watchdog pickup. PR #4435
+(Feature 06, Elections & ballots, pass 16) had merged (`762f1c93a`) before
+this iteration started. A fresh `list_pull_requests` (state `open`) found
+no `claude/security-review-*` head, and row 07 was the next `⬜` row.
+
+**0 fixed, 0 new findings.** Baseline `1ebcc5e7f` (pass 15's head). Real
+delta: 19 non-merge commits touching the feature's declared files
+directly, every one read in full — most significantly: step-up now
+required on a member's **own** email change as well as a colleague's
+(forgot-password resolves an account by email, so a stolen session could
+otherwise chain an own-email repoint into a password reset the owner never
+sees); a new `leave_requests.py` (7 routes, 9 with two settings routes
+moved under it) letting a member ask for leave, decided by the
+department's chosen approver positions under a locked vote (pitfall #27),
+with the requester excluded from their own approver pool by construction;
+a dated history of position/office terms (`member_position_terms`),
+reconciled against `user_positions` by a session-flush hook so it is
+idempotent rather than event-replayed; and a hard-delete/anonymize file-
+cleanup fix (collects the member's file-naming rows before the commit,
+deletes only after it succeeds, confined to the organization's own storage
+areas). The rest of the delta is settings-schema additions from Finance/
+Documents/Minutes/Training owner-decision batches landing in
+`organizations.py` only incidentally, and two data-exposure _fixes_
+(`d5db81200`/`226930a20`) correctly gating the sections and defaults they
+touch. All 97 routes across the five principal files (34/30/17/7/9) re-
+enumerated by AST; every `get_current_user`-only route cross-checked
+against `tests/permissionless_route_baseline.txt`. **Correction:** pass
+15 recorded 35 routes for `users.py`; re-counted at pass 15's own baseline
+commit, it already had 34 — pass 15's figure was off by one, no route was
+removed since. USR-5 and USR-8 (both long-open, owner-accepted) re-
+verified unchanged. Full write-up:
+`docs/security-review/USR-07-users-organizations.md`'s **Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+single head `bbeb4867d393`, 785 revisions; `check_route_permissions.py
+--strict` (repo root) — 327 routes, 0 errors/warnings; scoped backend
+suite (`-k "user or organization or member_status or member_leave or
+leave_request"`, run under `/usr/bin/python3.13`) — **962 passed**, 2
+pre-existing environment-only skips, 0 failed; `npm run typecheck` — 0
+errors; `npm run lint` — 0 errors, 0 warnings (`eslint --max-warnings 10`).
+
+Row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
+pipeline) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 16, PR #4435, merged), preserved for history</summary>
+
 **PR (this commit)** (branch `claude/security-review-elections-ballots-p16`
 — a plain `claude/security-review-elections-ballots` with no pass suffix
 already exists as a stale, never-merged branch from an earlier naming
@@ -74,6 +126,8 @@ errors; `npm run lint` — 0 errors, 0 warnings (`eslint --max-warnings 10`).
 Row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
 organizations) — re-check `list_pull_requests` fresh rather than trusting
 this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 16, PR #4430, merged), preserved for history</summary>
@@ -26477,7 +26531,7 @@ iteration's commit" rule.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                                                                                                                                                                    | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (9 routes, added pass 17)                                                                                                                                                                 | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (9 routes, added pass 17)                                                                                                                                                                 | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                                                                                                                            | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                                                                                                                                                                | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ⬜     |
@@ -26548,6 +26602,23 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-19 — Feature 06 (Elections & ballots, pass 16) merged; Feature 07 (Users & organizations, pass 16) — watchdog pickup, own-email step-up gap closed, new leave-requests surface traced end to end, 0 fixed, 0 new findings
+
+Watchdog pickup, running on its own 30-minute schedule rather than inside
+the dedicated `/loop 30m /security-review` session (confirmed unreachable
+via `ListAgents`, no reachable agents). PR #4435 (Feature 06, Elections &
+ballots, pass 16) had merged (`762f1c93a`) before this iteration started.
+A fresh `list_pull_requests` (state `open`) found no head branch starting
+`claude/security-review-`; row 07 (Users & organizations) was the next
+`⬜` row. 19 non-merge commits touched the feature's declared files since
+pass 15's baseline, most significantly `3eb2d7a40`/`f20928e79` (step-up now
+required on a member's own email change, not just a colleague's — closes a
+forgot-password-chaining gap) and `b30cd2ac3` (a brand-new `leave_requests.py`
+surface, traced end to end for org scoping, separation of duties, and the
+locked-vote pattern from pitfall #27). 0 fixed, 0 new findings; USR-5 and
+USR-8 (both long-open, owner-accepted) re-verified unchanged. Full write-up:
+`docs/security-review/USR-07-users-organizations.md`'s **Pass 16** section.
 
 ### 2026-11-19 — Feature 05 (Finance & approvals, pass 16) merged after a 14-hour idle PR; Feature 06 (Elections & ballots, pass 16) — watchdog pickup, voter-eligibility engine traced end to end, 0 fixed, 0 new findings
 
