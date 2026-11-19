@@ -16,9 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this commit)** (branch `claude/security-review-users-organizations-p16`
-— a stale, never-merged `claude/security-review-users-organizations-p14`
-already exists from an earlier pass; not reused, per CLAUDE.md Pitfall #24):
+**PR [#4436](https://github.com/thegspiro/the-logbook/pull/4436)** (branch
+`claude/security-review-users-organizations-p16` — a stale, never-merged
+`claude/security-review-users-organizations-p14` already exists from an
+earlier pass; not reused, per CLAUDE.md Pitfall #24):
 Feature 07 (Users & organizations), pass 16 — watchdog pickup. PR #4435
 (Feature 06, Elections & ballots, pass 16) had merged (`762f1c93a`) before
 this iteration started. A fresh `list_pull_requests` (state `open`) found
