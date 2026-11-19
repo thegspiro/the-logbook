@@ -26,9 +26,9 @@
 #      ships libmagic.so.1 (via `file` / `libmagic1t64`), so the apt call was
 #      pure risk for no benefit.
 #   2. When a library genuinely is missing, retry apt under ONE overall
-#      deadline covering every attempt. A stalled mirror then costs four
-#      minutes and either recovers or fails loudly, instead of costing the job
-#      and silently skipping every job downstream of it.
+#      deadline covering every attempt. A stalled mirror then costs at most
+#      ten minutes and either recovers or fails loudly, instead of costing the
+#      job and silently skipping every job downstream of it.
 #
 # The presence check is on the SONAME, not the package name, and that is
 # load-bearing. Ubuntu 24.04 (noble) renamed the package to `libmagic1t64` in
@@ -63,7 +63,7 @@
 #   APT_GET              the apt-get command                (default: sudo apt-get)
 #   AS_ROOT              prefix for editing apt's sources   (default: sudo)
 #   APT_ETC              apt's configuration root           (default: /etc/apt)
-#   APT_BUDGET           seconds for every attempt together (default: 240)
+#   APT_BUDGET           seconds for every attempt together (default: 600)
 #   LDCONFIG             the ldconfig binary                (default: found on PATH)
 
 set -euo pipefail
@@ -167,7 +167,18 @@ fi
 # means the worst case is bounded no matter how the failures are distributed:
 # either the library is installed within it or the job fails fast with a clear
 # reason, which is the better outcome of the two.
-total_budget="${APT_BUDGET:-240}"
+#
+# 600s, raised from 240s on 2026-11-19. On ubuntu-26.04 the ffmpeg install is
+# 66 MB, and the regional mirror delivered it slowly enough that 240s failed
+# Backend Unit, Integration and Contract jobs on several PRs that day (a 9 MB
+# package took 2.5 minutes), with every test it would have run never started.
+# The budget has to fit inside every job that runs this:
+#   - unit and contract tests (30-minute limit) take about 15 and 5 minutes;
+#   - integration tests take up to 40 minutes on MySQL, so that job's limit
+#     went from 45 to 55 minutes alongside this change (.github/workflows/ci.yml);
+#   - Type Check and Security Scan (20-minute limit) skip ffmpeg, and both
+#     runner images ship libmagic, so they reach apt only if an image drops it.
+total_budget="${APT_BUDGET:-600}"
 max_attempts=3
 deadline=$(( $(date +%s) + total_budget ))
 # The first attempt's own deadline: half the budget, so a crawling mirror

@@ -526,7 +526,10 @@ jobs:
     # 30 left no headroom: on 2026-10-27 the MySQL leg took 23, 25, 28 and 30
     # minutes on healthy runs and was killed at 30m30s on #3743 with pytest
     # still passing. 45 is still well short of a hang going unnoticed.
-    timeout-minutes: 45
+    # 55 from 2026-11-19: install-system-deps.sh's apt budget went from 4 to 10
+    # minutes for ubuntu-26.04's slow ffmpeg download, and the MySQL leg already
+    # takes up to 40 of the 45, so 45 would turn a slow mirror into a timeout.
+    timeout-minutes: 55
     # No `needs:`. This job used to sit behind `needs: [backend-lint,
     # backend-test]` as a fail-fast guard — don't spend a database runner if
     # the cheap checks are already red. That guard was costing far more than
