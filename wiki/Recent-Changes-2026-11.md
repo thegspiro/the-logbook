@@ -5,6 +5,45 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 18 – 19, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-18--19-2026).
+
+- **My Training follows compliance profiles.** A member on a profile with its
+  own required list now sees only those requirements on My Training and their
+  profile card, matching the Compliance Matrix. See
+  [Compliance](Module-Compliance).
+- **Scheduling notification settings**: the Notifications section now shows
+  what your department saved. Before, it showed defaults, and saving it
+  overwrote your choices, so **check it once**. Failed equipment checks now
+  alert Chief and Captain in a department that never set that group, as the
+  screen always showed. See [Scheduling](Module-Scheduling).
+- **Exports say where rows came from**: a **Source** column (Imported, The
+  Logbook, or the training provider) ends the training record and
+  certification exports, the Admin Hours exports and the event exports.
+- **Training providers** stay verified when you only change their schedule;
+  before, that silently stopped automatic syncs. **Test** any provider showing
+  _Connection not verified_. Sync History marks **Manual pull**.
+- **Department Store**: **Record refund** asks for an amount and a reason,
+  then confirms. A typed payment cannot exceed the balance; an overpaid order
+  offers a refund of the excess. Shipped orders read **Ready to ship** and
+  **Shipped**. No item or option can be priced below zero, and reloading
+  checkout keeps your cart.
+- **Attendance Requests** lists requests passed on to you as well as those on
+  your own events; the toggle reads **Sent to me**. See [Events](Module-Events).
+- **Inventory**: a new item in a Consumable or Medical category starts as
+  **Pool**. The Impact Planner PDF numbers its pages. See
+  [Inventory](Module-Inventory).
+- **Elections**: the election page's meeting picker lists the next 100
+  upcoming events, so a business meeting weeks away can be linked.
+- **Error messages** say whether the problem is your connection, a missing
+  permission or the server (with an error code for IT).
+- **Phones**: Scheduling Reports tables become cards; an installed Android app
+  shows a white strip under the bottom bar in every theme.
+- **Training videos**: Shorts 8A–8F have been produced, and their scripts now
+  match what was recorded.
+
 ## Recent changes: November 17 – 18, 2026
 
 The engineering audit is

@@ -13,6 +13,7 @@ No intros, no outros — straight to the point.
 
 **Length:** 45 seconds
 **Extracted From:** Script 6, Chapter 3
+**Produced:** 2026-11-18, `video-production/shorts/8a-rsvp` (phone, 390×640)
 
 ---
 
@@ -20,17 +21,17 @@ No intros, no outros — straight to the point.
 
 > "RSVP to a fire department event in under thirty seconds. Here's how."
 
-**[SCREEN: Click "Events" in the sidebar]**
+**[SCREEN: Tap "Events" in the bottom bar]**
 
-> "Click Events."
+> "Tap Events."
 
-**[SCREEN: Click on the event card]**
+**[SCREEN: Tap the event card]**
 
-> "Click the event."
+> "Tap the event."
 
-**[SCREEN: Click the RSVP button → select "Yes"]**
+**[SCREEN: Tap **RSVP Now** → choose **Going**]**
 
-> "Click RSVP. Choose Yes, No, or Maybe."
+> "Tap RSVP Now. Choose Going, Not Going, or Maybe."
 
 **[SCREEN: Show the confirmation — Your RSVP reads Going. (On a full event it
 reads Waitlisted, with your place in line.)]**
@@ -39,110 +40,133 @@ reads Waitlisted, with your place in line.)]**
 
 **[CALLOUT: "The Logbook — RSVP in seconds"]**
 
+**[PRODUCTION NOTE — 2026-11-19 PASS. Narration brought into line with the
+recorded short. The button is **RSVP Now** and the choices are **Going / Not
+Going / Maybe**, not "Yes, No, or Maybe" (guide 04, "RSVPing"); a new event
+offers Maybe only when the organizer ticks it. "Click" became "Tap" because the
+short is recorded on a phone.]**
+
 ---
 
 ## SHORT 8B: Checking Your Training Compliance Status
 
 **Length:** 60 seconds
 **Extracted From:** Script 6, Chapter 4
+**Produced:** 2026-11-18, `video-production/shorts/8b-compliance` (phone)
 
 ---
 
-**[SCREEN: The Logbook sidebar]**
+**[SCREEN: The Logbook on a phone]**
 
-> "How to check if your certifications are current — in one minute."
+> "How to check if your certifications are current, in one minute."
 
-**[SCREEN: Click Training → My Training]**
+**[SCREEN: Bottom bar **More** → **Training** → **My Training**]**
 
-> "Go to Training, then My Training."
+> "Open More, then Training, then My Training."
 
-**[SCREEN: Show the My Training page with certification cards]**
+**[SCREEN: My Training, **Certifications** section with its coloured cards]**
 
-> "Green means current. Yellow means expiring soon — you need to renew. Red
-> means expired — talk to your Training Officer."
+> "Open Certifications. Green means current. Yellow means it expires soon, so
+> renew it. Red means it has expired. Talk to your training officer."
 
-**[SCREEN: Click on a yellow certification to show the detail]**
+**[SCREEN: The expiration date on each card; the Upcoming Expirations & Due
+Dates list at the top]**
 
-> "Click on any certification to see when it expires and what you need to do."
+> "Every certification shows its expiration date, and anything due in the next
+> six months is listed at the top."
 
-**[SCREEN: Show the expiration date and the requirement details]**
+**[SCREEN: Tap the **Submit Training** button]**
 
-> "If you've completed training externally, click 'Submit Training' to upload
-> your certificate for credit."
-
-**[SCREEN: Quick flash of the Submit Training button]**
+> "Took a class somewhere else? Tap the Submit Training button to send it in
+> for credit."
 
 > "Stay ahead of your certs. Your career depends on it."
 
 **[CALLOUT: "Check your training status weekly"]**
 
+**[PRODUCTION NOTE — 2026-11-19 PASS. Narration brought into line with the
+recorded short. There is no per-certification detail screen to click into:
+each card already shows its date, and the Upcoming list sits at the top. On a
+phone, Training is reached through **More**. "Tap Submit" was reworded to "Tap
+the Submit Training button" because the synthetic voice slurred it.]**
+
 ---
 
 ## SHORT 8C: Submitting a Shift Swap Request
 
-**Length:** 60 seconds
+**Length:** 75 seconds
 **Extracted From:** Script 6, Chapter 5
+**Produced:** 2026-11-18, `video-production/shorts/8c-shift-swap` (phone)
 
 ---
 
-**[SCREEN: The scheduling calendar with a member's shift highlighted]**
+**[SCREEN: The schedule with the member's shift highlighted]**
 
-> "Need to swap a shift? Here's how — no phone calls required."
+> "Need to swap a shift? Here's how. No phone calls required."
 
-**[SCREEN: The schedule board. On your next-shift card, click "Offer trade"]**
+**[SCREEN: Tap the shift on the schedule → **Give up this shift**. (On a
+computer the next-shift card's **Offer trade** opens the same dialog.)]**
 
-> "Option one: hand your seat to somebody. On the schedule, click **Offer
-> trade** on your shift."
+> "Option one: hand your seat to somebody. Tap your shift on the schedule, then
+> Give up this shift."
 
-**[SCREEN: The "Give up this shift" dialog with "Offer it to someone specific"
-selected. The target-side Accept / Decline control DOES now exist for a one-way
-offer — stage it. — REWRITTEN 2026-08-24; the previous version said no such
-control existed, which was true until August 23. REWRITTEN AGAIN 2026-10-04:
-there is no "Request Swap" button and no "post as open for anyone" option;
-re-record this cue and the two after it.]**
+**[SCREEN: Choose **Offer it to someone specific**]**
 
-> "Name them, and the list you pick from has already dropped anyone who
-> couldn't take it anyway — people already on the shift, people on approved
-> leave, people not cleared for the position, and anyone working a tour that
-> runs into this one. Least-loaded first."
+> "Choose Offer it to someone specific."
 
-**[SCREEN: Show the candidate list; click "Send offer to <name>"]**
+**[SCREEN: The candidate list]**
 
-> "They get an Accept or Decline. If they accept, that's it — no officer, no
-> waiting. Accepting is just you dropping the seat and them picking it up, and
-> neither of those needed permission in the first place."
+> "This list has already dropped anyone who couldn't take it: people already on
+> the shift, on approved leave, not cleared for your seat, or working a shift
+> right next to this one. Fewest shifts that month comes first."
 
-**[SCREEN: My Shifts → Upcoming → "Swap" → "Request Shift Swap" → "Specific
-Shift"]**
+**[SCREEN: Pick a member, send the offer; the recipient's **Take the shift** /
+**Decline**]**
 
-> "Option two: a real trade — your Tuesday for their Thursday. That one starts
-> from **Swap** on My Shifts. It moves two rosters, so it goes to an officer,
-> and it has to be an officer who isn't in the swap. A swap is signed off by
-> somebody with no stake in it."
+> "Pick someone and send the offer. They get Take the shift or Decline. If they
+> take it, that's it. No officer needed."
 
-> "And **Open Swap** in that same dialog doesn't post your shift anywhere — no
-> member sees it. An officer finds cover; it stays yours until then."
+**[SCREEN: The pending offer with its **Withdraw** control]**
 
-**[SCREEN: The same dialog, third card — "Exchange With a Member" — and its
-list of seats. ADDED 2026-10-06: a seat-for-seat trade only lists pairs where
-both members are cleared for each other's seat.]**
+> "Until they answer, the shift is still yours, and nobody else can claim it.
+> You can withdraw the offer any time."
 
-> "Third option: **Exchange With a Member** — you take their seat, they take
-> yours. The list only shows swaps you're both cleared for."
+**[SCREEN: My Shifts → Upcoming → **Swap** → Request Shift Swap]**
 
-**[SCREEN: Click "Submit Request".]**
+> "Option two: on My Shifts, tap Swap on your shift."
 
-> "One thing to know: while your offer is sitting with somebody, you can't
-> release the seat or offer it to anyone else. Withdraw first — otherwise
-> they're holding an offer you've already given away."
+**[SCREEN: **Specific Shift** card and its shift picker]**
 
-> "And an offer nobody answers gets closed the day before the shift, with you,
-> them and the duty officer all told. It won't quietly sit there until the
-> shift starts."
+> "Specific Shift asks to move you to another shift you pick."
 
-**[SCREEN: Show the pending swap notification]**
+**[SCREEN: **Open Swap** card]**
+
+> "Open Swap offers your seat to members who are cleared for it. It stays yours
+> until one of them picks it up."
+
+**[SCREEN: **Exchange With a Member** card and its list of seats]**
+
+> "Exchange With a Member is a real trade. You take their seat, they take
+> yours, and it only lists swaps you're both cleared for."
+
+**[SCREEN: Tap **Submit Request**]**
+
+> "Submit the request. An exchange goes to a duty officer, and never one who's
+> part of the swap. Anything still unanswered the day before the shift is
+> closed automatically, and you're told."
 
 > "Digital shift swaps. No more phone tag."
+
+**[CALLOUT: "Digital shift swaps — no more phone tag"]**
+
+**[PRODUCTION NOTE — 2026-11-19 PASS. Narration brought into line with the
+recorded short. **Correction:** the previous text said Open Swap "doesn't post
+your shift anywhere — no member sees it. An officer finds cover". That has not
+been true since the 2026-11-04/05 changes: an open swap is offered, by bell
+entry, to members cleared for the seat, and the first to pick it up takes it
+(guide 03, "Picking up an open swap"). The recipient's buttons read **Take the
+shift** / **Decline**, and the candidate list is ordered by fewest shifts that
+month.]**
 
 ---
 
@@ -150,47 +174,49 @@ both members are cleared for each other's seat.]**
 
 **Length:** 90 seconds
 **Extracted From:** Script 4, Chapter 3
+**Produced:** 2026-11-18, `video-production/shorts/8d-qr-check-in` (phone)
 
 ---
 
 **[SCREEN: Events page]**
 
-> "Create an event with automatic attendance tracking — using QR codes."
+> "Create an event with automatic attendance tracking, using QR codes."
 
-**[SCREEN: Click "Create Event"]**
+**[SCREEN: Tap "Create Event"; fill in the basics]**
 
-> "Click Create Event. Fill in the basics — name, date, time, location."
-
-**[SCREEN: Fill in form fields quickly]**
-
-> "Every event gets its own check-in QR code — there's nothing to switch on.
-> Scroll to **Check-In Settings** and pick the **Check-In Window**: Flexible,
-> Strict, or Window."
+> "Tap Create Event. Fill in the basics: name, date, time, and location."
 
 **[SCREEN: Open the **Check-In Window** dropdown: "Flexible - Opens before the
 start, closes when the event ends" (the default), "Strict - Only while the
 event is running", "Window - Opens before the start, closes after the end".
-— REWRITTEN 2026-09-30; there has never been a QR on/off toggle on this form]**
+— there has never been a QR on/off toggle on this form]**
+
+> "Every event gets its own check-in QR code. There's nothing to switch on. In
+> Check-In Settings, pick the Check-In Window: Flexible, Strict, or Window."
 
 > "Save the event. The QR code is ready straight away."
 
-**[SCREEN: Show the event detail page with the QR code visible]**
+**[SCREEN: The event's QR code page. NEVER a scannable code — the capture
+swaps in a decoy pattern (`decoyQr`).]**
 
-> "Print this QR code or display it on a tablet at the door."
+> "Print this QR code, or show it on a tablet at the door."
 
-**[SCREEN: Navigate to the QR Code page (EventQRCodePage). Show the large,
-printable QR code.]**
+**[SCREEN: A member's phone: sign in if needed, tap **Check In to This Event**,
+then **You're Checked In**]**
 
 > "When members arrive, they scan the code, sign in if they need to, and tap
-> **Check In to This Event**. Their screen says 'You're Checked In'."
+> Check In to This Event."
 
-**[SCREEN: Simulate scanning the QR code. Tap **Check In to This Event**. Show
-**You're Checked In**.]**
+> "Their screen says You're Checked In. No more paper sign-in sheets. No more
+> chasing people down after the event."
 
-> "No more paper sign-in sheets. No more chasing people down after the event.
-> Attendance just works."
+> "Attendance just works."
 
 **[CALLOUT: "QR Check-In — contactless attendance tracking"]**
+
+**[PRODUCTION NOTE — 2026-11-19 PASS. Wording matches the recorded short; no
+correction needed. Any re-record must keep the decoy QR: the app's codes
+encode live links a viewer could scan off the video.]**
 
 ---
 
@@ -198,42 +224,53 @@ printable QR code.]**
 
 **Length:** 90 seconds
 **Extracted From:** Script 4, Chapter 5
+**Produced:** 2026-11-18, `video-production/shorts/8e-election` (portrait
+tablet, 820×1180 — election setup is sent to "a tablet or computer")
 
 ---
 
-**[SCREEN: Elections page]**
+**[SCREEN: Elections page on a tablet]**
 
-> "Run a department election — digitally, securely, and faster than paper
-> ballots."
+> "Run a department election digitally, securely, and faster than paper
+> ballots. Set it up on a tablet or computer."
 
-**[SCREEN: Click "Create Election"]**
+**[SCREEN: Tap **Create Election**; name, voting window, offices]**
 
-> "Create Election. Name it, set the voting window — when it opens and closes."
+> "Tap Create Election. Name it, set when voting opens and closes, and add the
+> offices being contested."
 
-**[SCREEN: Fill in basic election fields]**
+**[SCREEN: **Majority Required** and automatic runoffs switched on]**
 
-> "Add the offices being contested — Chief, Captain, President."
+> "Choose Majority Required and turn on automatic runoffs. If nobody wins
+> outright, a runoff is drafted for you."
 
-**[SCREEN: Add offices]**
+**[SCREEN: Add candidates to each office, each with a statement]**
 
-> "Add candidates to each office. They can have photos and statements."
+> "Then add candidates to each office, each with a statement."
 
-**[SCREEN: Add a couple of candidates]**
+**[SCREEN: Open the election; send the ballot emails]**
 
-> "Open voting. Eligible members get notified and cast their ballots from any
-> device."
+> "Open the election, then send the ballot emails. Each eligible member gets
+> their own ballot link."
 
-**[SCREEN: Show the ballot from a voter's perspective — quick]**
+**[SCREEN: The ballot from a voter's perspective — quick]**
 
-> "When voting closes, results are tabulated automatically. Review them and
-> publish to the membership — and if nobody wins outright, a runoff is created
-> for you."
+> "Members vote from any device, from that link or by signing in."
 
-**[SCREEN: Show the results page with vote totals]**
+**[SCREEN: Close the election; the results page with vote totals]**
 
-> "Secure. Confidential. No more counting paper ballots until midnight."
+> "When voting closes, the results are counted automatically, and closing the
+> election releases them."
+
+> "Secret ballots by default. No more counting paper until midnight."
 
 **[CALLOUT: "The Logbook Elections — secure digital voting"]**
+
+**[PRODUCTION NOTE — 2026-11-19 PASS. Narration brought into line with the
+recorded short. Opening an election does not notify voters by itself: ballot
+emails are sent separately (guide 14). Results are released by closing the
+election, not by a separate "publish" step, and a runoff is created only when
+**Enable Automatic Runoffs** is on.]**
 
 ---
 
@@ -241,51 +278,56 @@ printable QR code.]**
 
 **Length:** 60 seconds
 **Extracted From:** Script 3, Chapter 3
+**Produced:** 2026-11-18, `video-production/shorts/8f-new-member` (phone)
 
 ---
 
 **[SCREEN: Members page]**
 
-> "New member joining the department? Add them in sixty seconds."
+> "New member joining the department? Adding them takes about a minute."
 
-**[SCREEN: Click "Add Member"]**
+**[SCREEN: Tap **Add**]**
 
-> "Click Add Member."
+> "On the Members page, tap Add."
 
-**[SCREEN: Fill in the form — name, address, phone, email, one emergency
-contact]**
+**[SCREEN: Fill in name, address, phone, email; leave Membership Number blank
+where numbering is automatic]**
 
-> "Name, address, phone, email and one emergency contact are required — the
-> membership number too, unless your department numbers members
-> automatically."
+> "Fill in their name, address, phone and email. Leave the membership number
+> blank if your department numbers members automatically."
 
-**[SCREEN: Set Membership Type to Probationary; pick a Position from the
-dropdown]**
+**[SCREEN: Point to **Set initial password**, unchecked]**
 
-> "Set their **Membership Type** — Probationary for a new joiner — and give
-> them a Position if they hold one."
+> "Leave Set initial password unchecked, and they're emailed a temporary
+> password. If email isn't set up, set one here and hand it to them."
 
-**[SCREEN: Point to "Set initial password". Click Save. Show the success
-message.]**
+**[SCREEN: **Membership status** reading Probationary; pick a Rank and a
+Position]**
 
-> "Save. If email is configured, leave **Set initial password** unchecked and
-> they're emailed a temporary password. If it isn't, that box is required —
-> set a password and hand it to them."
+> "Membership status starts at Probationary for a new joiner. Pick their rank,
+> and a position if they hold one."
 
-**[PRODUCTION NOTE — 2026-10-04. Rewritten. "Name and email. That's the
-minimum" was never true of the form, and Probationary is a membership type,
-not a position — both pre-existing. The required password when email is off
-is new (2026-09-27). Re-record all three cues; the short now runs closer to
-70 seconds.]**
+**[SCREEN: Emergency contact fields]**
 
-**[SCREEN: Show the invitation email preview if available]**
+> "One emergency contact is required."
 
-> "For bulk import — twenty members, fifty members — use the CSV import. Download
-> the template, fill it in, upload. Only first name, last name and email are
-> required, so don't stall waiting on addresses. We cover that in the full
-> IT Manager guide."
+**[SCREEN: Tap **Save Member**; the member on the roster]**
+
+> "Tap Save Member, and the new member is on the roster."
+
+**[SCREEN: The **Import** button]**
+
+> "Adding twenty or fifty members at once? Use Import instead. Only first name,
+> last name and email are required."
+
+> "New member, added in a minute."
 
 **[CALLOUT: "CSV import for bulk roster upload"]**
+
+**[PRODUCTION NOTE — 2026-11-19 PASS. Narration brought into line with the
+recorded short. The field is **Membership status** (guide 01), which starts at
+Probationary; "Membership Type" was the old name. The phone layout's button
+reads **Add**. The CSV template walkthrough is left to Script 3.]**
 
 ---
 
