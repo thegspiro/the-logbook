@@ -50,6 +50,30 @@ Member dialog, phone table captures.
 **YouTube scripts:** 03 IT Manager and 14 Multi-class courses edited; others
 flagged in `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
 
+## Change audit: Documenso Settings, November 16, 2026
+
+A targeted pass for the **Settings** button on a connected Documenso card, the
+Documenso counterpart of Cal.com's. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                | Guide | Disposition                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------ |
+| **Settings** on a connected Documenso card: edit the API token, base URL and webhook secret without disconnecting; the base URL in use is shown, and blank token and secret boxes keep the saved ones | 16    | Paragraph written; `16-28-documenso-settings` captured |
+| Moving Documenso to a different base URL needs that server's API token in the same save. The API already refused this with 422; the dialog now says so and asks before sending                        | 16    | Note written; `wiki/Integration-Documenso.md` updated  |
+
+**Screenshots:** none queued.
+
+## Change audit: Cal.com Settings, November 16, 2026
+
+A targeted pass for the **Settings** button on a connected Cal.com card, the
+Cal.com counterpart of Zeffy's and PayPal's. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                          | Guide | Disposition                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | --------------------------------------------------- |
+| **Settings** on a connected Cal.com card: edit the API key, base URL and webhook secret without disconnecting; the base URL in use is shown, and blank key and secret boxes keep the saved ones | 16    | Paragraph written; `16-27-calcom-settings` captured |
+| Moving Cal.com to a different base URL needs that server's API key in the same save. The API already refused this with 422; the dialog now says so and asks before sending                      | 16    | Note written; `wiki/Integration-Calcom.md` updated  |
+
+**Screenshots:** none queued.
+
 ## Change audit: November 14 – 15, 2026
 
 Merged to `main` after `b44b32ea` (2026-11-14 04:56 UTC) through `79ab1c88`
