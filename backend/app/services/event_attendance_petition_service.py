@@ -50,6 +50,7 @@ from app.services.event_organizer_service import (
     EVENT_MANAGER_PERMISSION,
     EventOrganizerService,
     can_manage_organizers,
+    organizer_ids,
 )
 from app.services.event_service import (
     EventService,
@@ -279,11 +280,15 @@ class EventAttendancePetitionService:
     ) -> List[Tuple[EventAttendancePetition, Event]]:
         """Pending requests the reviewer can act on, oldest first.
 
-        By default, the events they organize or are alternate for — the same
-        pair a request is routed to. ``include_all`` widens it to every event
-        in the department and is for ``events.manage`` holders only, who may
-        decide any of them. Their own requests are left out either way, since
-        nobody decides their own.
+        By default, the requests routed to them: those on events they organize
+        or are alternate for, and those a fallback step sent them because the
+        event's organizers could not take it (``attendance_request_recipients``,
+        the same rule that notified them). The Events page counts this list
+        for its "waiting for you" banner, so a fallback holder's banner and
+        list now match their notifications. ``include_all`` widens it to every
+        event in the department and is for ``events.manage`` holders only, who
+        may decide any of them. Their own requests are left out either way,
+        since nobody decides their own.
         """
         if include_all and not user_has_permission(reviewer, EVENT_MANAGER_PERMISSION):
             raise PermissionError(
@@ -305,15 +310,31 @@ class EventAttendancePetitionService:
             # keeps the order stable between loads.
             .order_by(EventAttendancePetition.created_at, EventAttendancePetition.id)
         )
-        if not include_all:
-            query = query.where(
-                or_(
-                    Event.organizer_id == str(reviewer.id),
-                    Event.alternate_organizer_id == str(reviewer.id),
+        rows = [
+            (petition, event)
+            for petition, event in (await self.db.execute(query)).all()
+        ]
+        if include_all:
+            return rows
+        reviewer_id = str(reviewer.id)
+        organizers = EventOrganizerService(self.db)
+        # Routing depends on the event and on who is asking (the requester is
+        # skipped at every step), so it is resolved once per pair.
+        routed: Dict[Tuple[str, str], bool] = {}
+        mine: List[Tuple[EventAttendancePetition, Event]] = []
+        for petition, event in rows:
+            if reviewer_id in organizer_ids(event):
+                mine.append((petition, event))
+                continue
+            key = (str(event.id), str(petition.user_id))
+            if key not in routed:
+                recipients = await organizers.attendance_request_recipients(
+                    event, exclude_user_id=str(petition.user_id)
                 )
-            )
-        result = await self.db.execute(query)
-        return [(petition, event) for petition, event in result.all()]
+                routed[key] = any(str(u.id) == reviewer_id for u in recipients)
+            if routed[key]:
+                mine.append((petition, event))
+        return mine
 
     async def display_names(
         self, user_ids: Iterable[Optional[str]], organization_id: str

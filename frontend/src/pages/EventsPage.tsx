@@ -310,9 +310,9 @@ export const EventsPage: React.FC = () => {
     };
   }, [canManage]);
 
-  // Requests waiting on the viewer's own events. Most members organize
-  // nothing and get an empty list, so the link appears only for someone with
-  // something to decide; a failed load simply leaves it out.
+  // Requests sent to the viewer: their own events and any a fallback step
+  // routed to them. Most members get an empty list, so the link appears only
+  // for someone with something to decide; a failed load simply leaves it out.
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
   useEffect(() => {
     let cancelled = false;

@@ -9,7 +9,7 @@ import { useSubmitGuard } from '../hooks/useSubmitGuard';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { roleService } from '../services/api';
 import type { Role, PermissionCategory } from '../types/role';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorMessage, getLoadFailureMessage } from '../utils/errorHandling';
 import { mirrorsRank } from '../utils/positions';
 import { PositionKind } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -93,8 +93,8 @@ export const RoleManagementPage: React.FC = () => {
 
       setRoles(rolesData);
       setPermissionCategories(permsData);
-    } catch (_err) {
-      setError('Could not load roles and permissions. Check your connection and refresh the page.');
+    } catch (err: unknown) {
+      setError(getLoadFailureMessage(err, 'roles and permissions'));
     } finally {
       setLoading(false);
     }
