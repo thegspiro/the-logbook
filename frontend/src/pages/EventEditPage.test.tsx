@@ -899,6 +899,28 @@ describe('EventEditPage', () => {
       expect(screen.getByText("was 2 hours (the event's length)")).toBeInTheDocument();
     });
 
+    it('keeps a lead instructor who has since left, marked, and offers only current members', async () => {
+      vi.mocked(trainingSessionService.getSessionByEvent).mockResolvedValue({
+        ...session,
+        instructor: 'Owen Kittredge',
+        instructor_id: 'u-owen',
+      });
+      vi.mocked(userService.getUsers).mockResolvedValue([
+        { id: 'u-dana', username: 'dokafor', first_name: 'Dana', last_name: 'Okafor', status: 'active' },
+        { id: 'u-owen', username: 'okitt', first_name: 'Owen', last_name: 'Kittredge', status: 'retired' },
+        { id: 'u-lee', username: 'lpark', first_name: 'Lee', last_name: 'Park', status: 'archived' },
+      ] as never);
+      window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
+      renderWithRouter(<EventEditPage />);
+
+      await screen.findByText('Step 2 of 4 · Training Info');
+      const picker = screen.getByLabelText(/Lead Instructor/);
+      await waitFor(() => expect(picker).toHaveValue('u-owen'));
+      expect(within(picker).getByRole('option', { name: 'Owen Kittredge (former member)' })).toBeInTheDocument();
+      expect(within(picker).getByRole('option', { name: 'Dana Okafor' })).toBeInTheDocument();
+      expect(within(picker).queryByRole('option', { name: /Lee Park/ })).toBeNull();
+    });
+
     // Training Admin's old create path wrote the session's instructor,
     // certification, agency, expiry and auto-create settings to the event's
     // custom_fields as well. The event page lists a copy that differs from the
@@ -917,7 +939,7 @@ describe('EventEditPage', () => {
         },
       });
       vi.mocked(userService.getUsers).mockResolvedValue([
-        { id: 'u-dana', username: 'dokafor', first_name: 'Dana', last_name: 'Okafor' },
+        { id: 'u-dana', username: 'dokafor', first_name: 'Dana', last_name: 'Okafor', status: 'active' },
       ] as never);
       window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
       const user = userEvent.setup();
