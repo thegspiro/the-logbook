@@ -16,8 +16,10 @@ which are about a shift that just happened and would be noise — or a flood of
 notifications — for one from 2019. Time on another agency's unit becomes
 ``ExternalShiftHours``, counted on arrival like a member's own entry.
 
-A commit is final. There is no batch undo; imported shifts are corrected one
-at a time like any other shift.
+A commit is final. Imported shifts are corrected one at a time like any other
+shift, except that the shift batches a Historical Data Import sent here are
+undone together by undoing that import's shift hours step
+(``historical_import_undo``).
 """
 
 import copy
