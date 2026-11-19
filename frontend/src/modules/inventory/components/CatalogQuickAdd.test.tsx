@@ -395,6 +395,41 @@ describe('CatalogQuickAdd', () => {
     expect(onAdd).not.toHaveBeenCalled();
   });
 
+  // Forms review F-3: Add sat greyed out until something was typed, and never
+  // said why it would not press.
+  it('says what is missing when Add is pressed on an empty box', async () => {
+    const user = userEvent.setup();
+    renderWith();
+
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(onAdd).not.toHaveBeenCalled();
+    expect(screen.getByRole('combobox')).toHaveAccessibleDescription(
+      'Type an item name, or search the catalog, to add it.'
+    );
+    expect(screen.getByRole('combobox')).toHaveFocus();
+  });
+
+  // Forms review F-2: a refused create cleared the box first and then said why
+  // in a toast, so the name had to be typed again.
+  it('keeps the typed name and says why under the bar when a create is refused', async () => {
+    const user = userEvent.setup();
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 6 });
+    mockCreateItemIfAbsent.mockRejectedValueOnce({
+      response: { status: 403, data: { detail: 'You cannot add to the inventory catalog.' } },
+    });
+    renderWith();
+
+    await typeName(user, 'Burn Sheet');
+    await user.click(await screen.findByText(/Create .Burn Sheet. in inventory/));
+
+    const box = screen.getByRole('combobox');
+    await waitFor(() => expect(box).toHaveValue('Burn Sheet'));
+    expect(box).toHaveAccessibleDescription('You cannot add to the inventory catalog.');
+    expect(box).toHaveAttribute('aria-invalid', 'true');
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
   it('positions the results list against the viewport, not the input', () => {
     // The compartment card this bar sits in is `overflow-hidden` so it can clip
     // its own rounded corners, and the quick-add bar is the *last* element in

@@ -714,6 +714,22 @@ own errors, and a refusal no longer reloads the order, which used to reseed the
 amount and reference just refused. Send update and Import are no longer greyed
 out until answered; pressing them says what is missing.
 
+**Rolled out further on 2026-11-16** (batch 22): a facility's overview (edit),
+files (the caption and description dialog) and Facility Settings' lookup
+dialog; inventory's catalog quick add, stock lots (Add Lot) and checklist
+settings; and store settings. The same rules apply. The overview is an edit,
+so a blank type or status, a mistyped email or an out-of-range number no
+longer holds back the rest of it. Store settings is the exception: it carries
+the payment configuration, so a refused setting holds the whole save back,
+listed with the others at the top of the page; its payload, payment methods
+and provider behaviour are unchanged. Checklist settings still save as each
+control changes, and now say on that control what happened (a refused save,
+an unusable entry, a number folded back into range). Catalog quick add hands
+a refused name back instead of clearing it. Not converted, and still listed in
+`docs/FORMS_REVIEW_2026-11-05.md`: the checklist builder, the full apparatus
+form and its documents, and a facility's extended sections (utilities, keys,
+shutoffs, capital projects, insurance, occupants).
+
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
 
