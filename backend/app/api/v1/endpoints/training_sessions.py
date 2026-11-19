@@ -23,6 +23,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.event import Event
 from app.models.training import TrainingApproval, TrainingSession
 from app.models.user import User
@@ -44,6 +45,7 @@ from app.services.training_session_service import (
     TRAINING_DETAILS_EXIST,
     TrainingSessionService,
 )
+from app.utils.org_scoping import assert_current_members
 
 router = APIRouter()
 
@@ -141,6 +143,20 @@ async def create_training_session(
     **Authentication required**
     **Requires permission: events.manage**
     """
+    # A lead instructor is picked from current members only. Checked here
+    # rather than in the service, which cohort generation also calls with
+    # instructors saved on class templates.
+    try:
+        await assert_current_members(
+            db,
+            [session_data.instructor_id],
+            current_user.organization_id,
+            label="the lead instructor",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     service = TrainingSessionService(db)
 
     training_session, error = await service.create_training_session(
@@ -191,6 +207,20 @@ async def create_recurring_training_session(
     **Authentication required**
     **Requires permission: events.manage**
     """
+    # A lead instructor is picked from current members only. Checked here
+    # rather than in the service, which cohort generation also calls with
+    # instructors saved on class templates.
+    try:
+        await assert_current_members(
+            db,
+            [session_data.instructor_id],
+            current_user.organization_id,
+            label="the lead instructor",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     service = TrainingSessionService(db)
 
     training_sessions, error = await service.create_recurring_training_session(
