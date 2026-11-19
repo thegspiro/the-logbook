@@ -16,6 +16,76 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this commit)** (branch `claude/security-review-inventory-p16` —
+the plain `claude/security-review-inventory` has multiple merged **and**
+closed-unmerged PRs against it going back to pass 3, so it must not be
+reused per CLAUDE.md Pitfall #24; `-p16` is the next pass number per
+`INV-11-inventory.md`'s most recent `## Pass 15` section):
+Feature 11 (Inventory), pass 16 — watchdog pickup. PR #4440 (Feature 10,
+Documents & legal, pass 16) had merged before this iteration started. A
+fresh `list_pull_requests` (state `open`, perPage 100) found no
+`claude/security-review-*` head, and row 11 was the next `⬜` row.
+
+**0 fixed, 0 new findings — but a real, substantial delta: three already-
+shipped backend changes, all verified correct, plus a route-count
+correction.** Baseline resolution hit this repo's usual squash/orphan-merge
+artifact again: neither PR #4106's recorded merge commit (`3ed12fcb5`) nor
+its own branch head (`9e1b5cf41a`) is an ancestor of current `main` by
+`git merge-base --is-ancestor`, though both exist as reachable objects. The
+real delta was found with a direct tree diff between that branch head and
+`origin/main` (works regardless of ancestry), scoped to every declared file.
+
+AST-enumerating all six endpoint files gives **199** routes, not the 198
+pass 15 recorded — re-running the identical count against the actual
+pass-15 snapshot returns 199 there too, so this is pass 15's own miscount,
+not a route added since (same class as pass 17's 63→64 correction for Users
+& organizations). The tree diff adds zero new route decorators; the set is
+unchanged, and all 199 still carry a recognized auth dependency.
+
+Three backend changes, all in `inventory.py` plus one unrelated line in
+`inventory_service.py`, read in full and verified against the running code
+rather than assumed correct from the diff: (1) the inventory WebSocket's
+`?token=` query-param fallback was removed (a URL-borne bearer token reaches
+access logs) and a **new `inventory.manage` gate** was added before
+`ws_manager.connect()` — previously any authenticated org member could watch
+who holds/checks out which item, an INV-9-class over-exposure now closed;
+the frontend's `4003` handling already treated it as terminal, so no
+frontend change was needed. (2) the impact-plan PDF export is now
+audit-logged (it discloses member contact details) and its
+`Content-Disposition` filename is now quoted. (3)
+`GET /members/{user_id}/size-preferences` and `GET /my/size-preferences`
+return `null` instead of 404 for "no sizes saved" — the existing
+`_require_self_or_quartermaster` gate still runs first and unchanged, so
+this closes a logged-404-on-every-first-visit annoyance, not an authz gap.
+
+Frontend delta: 62 files, +6296/-2355, overwhelmingly the "Forms batch
+16–20" rollout and the inventory AAA contrast pass — swept in full for
+every injection/credential/storage pattern this checklist covers
+(`dangerouslySetInnerHTML`, `window.confirm`/`alert`/`prompt`,
+`localStorage.`, a hand-rolled `Authorization:` header, a new
+`axios.create`/bare `fetch(`, the banned locale-method/`date-fns` set,
+`eval(`, raw `innerHTML`): zero matches across all 6296 added lines.
+
+INV-16 and INV-17 (both MED, FLAGGED, owner decisions pending) and INV-22
+(owner-accepted) all re-confirmed OPEN and unaffected — none of their
+underlying functions appear in this window's backend diff. Full write-up:
+`docs/security-review/INV-11-inventory.md`'s **Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 786
+revisions, single head `0d54dd90d6ba`; `check_route_permissions.py --strict`
+(repo root) — 327 routes, 0 errors/warnings; scoped backend suite (`-k
+"inventory or nfc or kiosk or label"`, run under `python3.13`) — **2136
+passed**, 1 pre-existing environment-only skip (`py_vapid`), 0 failed; `npm
+run typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings; `npx
+vitest run src/modules/inventory` — 1983 passed (127 files).
+
+Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 16, PR #4440, merged), preserved for history</summary>
+
 **PR [#4440](https://github.com/thegspiro/the-logbook/pull/4440)** (branch `claude/security-review-documents-legal-p16` —
 `claude/security-review-documents-legal` has multiple merged PRs against it
 (#3734, #3160, #2962, #2187) and must not be reused per CLAUDE.md Pitfall
@@ -83,6 +153,8 @@ src/utils/fileTypeLabel.test.ts` — 74 passed (5 files).
 
 Row 10 → ✅ (pending this PR's merge); next is Feature 11 (Inventory) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 16, PR #4439, merged), preserved for history</summary>
@@ -26724,7 +26796,7 @@ iteration's commit" rule.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                                                                                                                            | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                                                                                                                                         | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ⬜     |
@@ -26791,6 +26863,59 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-19 — Feature 10 (Documents & legal, pass 16) merged; Feature 11 (Inventory, pass 16) — watchdog pickup, 3 already-shipped backend changes verified correct, route-count correction, 0 fixed/0 new findings
+
+Watchdog pickup, running on its own 30-minute schedule rather than inside the
+dedicated `/loop 30m /security-review` session (unreachable). PR #4440
+(Feature 10, Documents & legal, pass 16) had merged before this iteration
+started. A fresh `list_pull_requests` (state `open`, perPage 100) found no
+head branch starting `claude/security-review-`; row 11 (Inventory) was the
+next `⬜` row.
+
+Baseline resolution hit the same squash/orphan-merge artifact this log keeps
+recording: neither PR #4106's recorded merge commit (`3ed12fcb5`) nor its
+own branch head (`9e1b5cf41a`) is an ancestor of current `main`. Rather than
+trust a path-scoped `git log` (broken for this exact reason on the last two
+passes), the delta was found with a direct tree diff between that branch
+head and `origin/main`, which works between any two commits regardless of
+shared ancestry.
+
+AST-enumerating all six endpoint files gives 199 routes. Re-running the same
+count against the pass-15 snapshot itself also returns 199 — pass 15's own
+"198" was a miscount, not a route added since; the tree diff confirms zero
+new route decorators and an identical set. All 199 still carry a recognized
+auth dependency.
+
+Three real backend changes, all already shipped and all verified correct
+against the running code: the inventory WebSocket dropped its `?token=`
+query-param fallback and gained a new `inventory.manage` gate before
+`ws_manager.connect()` (previously any authenticated org member could watch
+who holds/checks out which item — an INV-9-class over-exposure, now closed,
+with the frontend's existing `4003`-is-terminal handling needing no change);
+the impact-plan PDF export is now audit-logged and its filename is quoted;
+the two size-preferences GET routes return `null` instead of 404 for "none
+saved" (the `_require_self_or_quartermaster` gate is unchanged and still
+runs first — this closes a logged-404-on-every-visit annoyance, not an
+authz gap). The frontend's 62-file, +6296/-2355 delta (the "Forms batch
+16–20" rollout and the inventory AAA contrast pass) was swept in full for
+every injection/credential/storage pattern this checklist covers: zero
+matches. INV-16, INV-17 (both FLAGGED) and INV-22 (owner-accepted)
+re-confirmed OPEN, unaffected — none of their underlying functions appear in
+this window's diff. See `docs/security-review/INV-11-inventory.md`'s **Pass
+16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 786
+revisions, single head `0d54dd90d6ba`; `check_route_permissions.py --strict`
+— 327 routes, 0 errors/warnings; scoped backend suite (`-k "inventory or nfc
+or kiosk or label"`) — 2136 passed, 1 pre-existing environment-only skip
+(`py_vapid`); `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run src/modules/inventory` — 1983 passed (127
+files).
+
+Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-19 — Feature 09 (Medical screening, PHI, pass 16) merged; Feature 10 (Documents & legal, pass 16) — watchdog pickup, DOC-31 confirmed resolved, 1 new finding fixed (DOC-32, LOW)
 
