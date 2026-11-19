@@ -1,0 +1,7 @@
+# Piper voices make-short.sh may download, pinned to one revision of
+# huggingface.co/rhasspy/piper-voices and checked by SHA-256 before use.
+# Only voices whose training data permits publishing the output belong here:
+# see "Voice licensing" in README.md before adding one.
+#
+# name                  path under the revision        sha256 (.onnx)                                                    sha256 (.onnx.json)                                               training data licence
+en_US-ljspeech-high     en/en_US/ljspeech/high         5d4f08ba6a2a48c44592eed3ce56bf85e9de3dd4e20df90541ae68a8310c029a  7e1f4634af596d83cca997fb7a931ba80b70f8a316a2655ee69c55365e0ace14  public-domain

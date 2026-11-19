@@ -66,7 +66,9 @@ def _session_error(error: str) -> HTTPException:
 
 
 def _session_response(
-    ts: TrainingSession, attendance_requirement_ids: Optional[list[str]] = None
+    ts: TrainingSession,
+    attendance_requirement_ids: Optional[list[str]] = None,
+    counts_toward_attendance: bool = False,
 ) -> TrainingSessionResponse:
     """Build the response schema from a TrainingSession row.
 
@@ -85,6 +87,7 @@ def _session_response(
         phase_id=ts.phase_id,
         requirement_id=ts.requirement_id,
         attendance_requirement_ids=attendance_requirement_ids or [],
+        counts_toward_attendance=counts_toward_attendance,
         course_name=ts.course_name,
         course_code=ts.course_code,
         training_type=ts.training_type.value,
@@ -114,7 +117,10 @@ async def _session_payload(
     service: TrainingSessionService, ts: TrainingSession
 ) -> TrainingSessionResponse:
     links = await service.attendance_requirement_ids([str(ts.id)])
-    return _session_response(ts, links.get(str(ts.id)))
+    counted = await service.events_counting_toward_attendance(
+        [str(ts.event_id)], ts.organization_id
+    )
+    return _session_response(ts, links.get(str(ts.id)), str(ts.event_id) in counted)
 
 
 @router.post(
@@ -215,7 +221,14 @@ async def create_recurring_training_session(
     links = await service.attendance_requirement_ids(
         [str(ts.id) for ts in training_sessions]
     )
-    return [_session_response(ts, links.get(str(ts.id))) for ts in training_sessions]
+    counted = await service.events_counting_toward_attendance(
+        [str(ts.event_id) for ts in training_sessions],
+        current_user.organization_id,
+    )
+    return [
+        _session_response(ts, links.get(str(ts.id)), str(ts.event_id) in counted)
+        for ts in training_sessions
+    ]
 
 
 @router.get("/by-event/{event_id}", response_model=Optional[TrainingSessionResponse])

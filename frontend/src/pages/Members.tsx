@@ -20,7 +20,7 @@ import {
 import { userService } from '../services/api';
 import type { User } from '../types/user';
 import { memberDirectoryService, type MemberDirectoryEntry } from '../services/memberDirectoryService';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorMessage, getLoadFailureMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
 import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
@@ -173,7 +173,7 @@ const Members: React.FC = () => {
       };
       setStats(calculatedStats);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to load the member list. Check your connection and try again.'));
+      setError(getLoadFailureMessage(err, 'the member list'));
     } finally {
       setLoading(false);
     }

@@ -1396,6 +1396,43 @@ describe('EventDetailPage', () => {
       const trainingEvent = (custom: Record<string, unknown>) =>
         ({ ...withCustomFields(custom), event_type: 'training' }) as unknown as Event;
 
+      // The ids still list a link to a deactivated requirement (the editor
+      // removes it), so the badge follows the server's answer, not their count.
+      it('drops the attendance badge when every link is to an inactive requirement', async () => {
+        mockReportedSession = {
+          id: 'sess-1',
+          require_completion_confirmation: false,
+          attendance_requirement_ids: ['retired'],
+          counts_toward_attendance: false,
+        };
+        vi.mocked(eventService.getEvent).mockResolvedValue({
+          ...trainingEvent({ dress_code: 'Class B uniform' }),
+          counts_toward_attendance: true,
+        });
+
+        renderWithRouter(<EventDetailPage />);
+
+        expect(await screen.findByText('Class B uniform')).toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByText('Counts toward attendance')).not.toBeInTheDocument());
+      });
+
+      it('shows the attendance badge once the session reports it counts', async () => {
+        mockReportedSession = {
+          id: 'sess-1',
+          require_completion_confirmation: false,
+          attendance_requirement_ids: ['active'],
+          counts_toward_attendance: true,
+        };
+        vi.mocked(eventService.getEvent).mockResolvedValue({
+          ...trainingEvent({ dress_code: 'Class B uniform' }),
+          counts_toward_attendance: false,
+        });
+
+        renderWithRouter(<EventDetailPage />);
+
+        expect(await screen.findByText('Counts toward attendance')).toBeInTheDocument();
+      });
+
       // The card now reports the instructor, certification and record
       // settings from the session as well, and the training form edits them
       // there, so the copies the event was created with would contradict it.

@@ -1,0 +1,57 @@
+{
+  "script": "docs/youtube-scripts/08-quick-tips-and-shorts.md — SHORT 8F",
+  "title": "Add a New Member",
+  "callout": "CSV import for bulk roster upload",
+  "endCard": {
+    "headline": "Try The Logbook",
+    "sub": "Free & Open Source",
+    "url": "github.com/thegspiro/the-logbook"
+  },
+  "shots": [
+    {
+      "id": "hook",
+      "say": "New member joining the department? Adding them takes about a minute.",
+      "caption": "Adding a new member"
+    },
+    {
+      "id": "add",
+      "say": "On the Members page, tap Add.",
+      "caption": "Members → Add"
+    },
+    {
+      "id": "details",
+      "say": "Fill in their name, address, phone and email. Leave the membership number blank if your department numbers members automatically.",
+      "caption": "Name, address, phone, email"
+    },
+    {
+      "id": "password",
+      "say": "Leave Set initial password unchecked, and they're emailed a temporary password. If email isn't set up, set one here and hand it to them.",
+      "caption": "Unchecked = temporary password by email"
+    },
+    {
+      "id": "standing",
+      "say": "Membership status starts at Probationary for a new joiner. Pick their rank, and a position if they hold one.",
+      "caption": "Probationary by default · pick a rank"
+    },
+    {
+      "id": "contact",
+      "say": "One emergency contact is required.",
+      "caption": "One emergency contact"
+    },
+    {
+      "id": "save",
+      "say": "Tap Save Member, and the new member is on the roster.",
+      "caption": "Save Member"
+    },
+    {
+      "id": "import",
+      "say": "Adding twenty or fifty members at once? Use Import instead. Only first name, last name and email are required.",
+      "caption": "Bulk? Import a CSV"
+    },
+    {
+      "id": "outro",
+      "say": "New member, added in a minute.",
+      "caption": "New member, added in a minute"
+    }
+  ]
+}

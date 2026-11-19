@@ -377,7 +377,7 @@ No console errors and no failed API calls.
 that `styles/index.css` does not define, so those buttons render unstyled.
 It is outside this module; it is recorded here as a lead.
 
-### W67b-6 — MED — A size can be priced below zero — OPEN
+### W67b-6 — MED — A size can be priced below zero — ✅ FIXED (2026-11-16)
 
 **Did:**
 
@@ -395,10 +395,38 @@ marked PAID with `paid_at` set.
 - `storefront_service.py` `_price_lines`: no floor on the unit price;
 - `create_order`: the `total <= 0` branch.
 
-**Fix (not applied):** refuse a negative unit price in `_price_lines`, and
-when a variant or window price is saved.
+**Fix:** in `storefront_service.py`, `_option_below_zero` checks whether any
+active option's price falls below zero. An option may still lower the price,
+down to exactly zero. The check runs in four places:
 
-### W67b-7 — MED — A payment larger than the balance is accepted — OPEN
+- **`create_product`**, against the options sent;
+- **`update_product`**, against the product as it will be after the update,
+  since a lower base price can take an existing option below zero;
+- **`_replace_offerings`**, against a window's price override with each of
+  the product's active options. Every offering is checked before the
+  window's old offerings are deleted, so a refused save changes nothing;
+- **`_price_lines`**, refusing any order line priced below zero. This is the
+  guard nothing bypasses: it also catches prices saved before the
+  save-time checks existed.
+
+**Tests:** `TestNoPriceBelowZero` in `tests/test_storefront_service.py`:
+
+- a product with an option below zero is refused;
+- an option that brings the price to exactly zero is allowed;
+- lowering the base price under an option is refused;
+- a window override under an option is refused;
+- an order line below zero, from a price stored directly in the database, is
+  refused.
+
+The four refusal cases failed against the old code; the zero case passed both
+before and after, as a guard.
+
+**Re-driven:** creating "Patch" at $3.00 with a "Youth" option at −$5.00 is
+refused with 400: "'Patch' would be priced below zero for 'Youth': 3.00 with
+-5.00 comes to -2.00. An option can lower the price, but not below zero."
+A $5.00 product with the same option is accepted.
+
+### W67b-7 — MED — A payment larger than the balance is accepted — ✅ FIXED (2026-11-16)
 
 **Did:** recorded $150 against a $15 order as `quartermaster`.
 **Saw:** 200; `amountPaid: 150.00`, `balanceDue: 0`.
@@ -409,7 +437,71 @@ accepted the same way.
 
 **Where:** `storefront_service.py` `record_payment`.
 
-### W67b-8 — LOW — Refund is one tap and always refunds everything — OPEN
+**Owner decision (2026-11-15):** refuse a typed overpayment; record a PayPal
+capture as it arrived, and show the excess as owed back to the member. The
+alternatives were "refuse everywhere" and "warn and allow", the dues pattern,
+which the store cannot follow since it has no donation path.
+
+**Fix:**
+
+- **Typed payments:** `record_payment` refuses an explicit amount above the
+  balance: "That is more than the 15.00 still owed on this order. Record
+  15.00, and return the rest to the member." It also refuses any explicit
+  amount on an order already paid in full. Settling the balance (`amount`
+  left out) is unchanged.
+- **PayPal captures:** `apply_payment_event` passes `allow_overpayment=True`,
+  so applying a capture records the money that actually arrived and the
+  ledger matches PayPal.
+- **Showing the excess:** the order response gains `overpaid_amount` (an
+  additive field), money recorded beyond the total.
+  - The admin order dialog shows "$5.00 more than the order total has been
+    recorded. It is owed back to the member." It offers "Refund the $5.00
+    excess", which asks first.
+  - My Orders shows the member "Owed to you $5.00".
+- **Refund status:** `refund_order` now sets the payment status from what is
+  left. Refunding only the excess leaves the order Paid; it used to read
+  Partially paid after any partial refund.
+
+**Tests:**
+
+- `TestTypedOverpayment` in `tests/test_storefront_service.py`, three cases:
+  more than the balance is refused, a payment on an order paid in full is
+  refused, and the exact balance still settles.
+- `TestAppliedOverpayment` in `tests/test_storefront_reconciliation.py`, two
+  cases: an applied overpaying capture is recorded in full, and refunding
+  only the excess leaves the order Paid.
+- In `components/OrderDetailModal.test.tsx` and `pages/MyOrdersPage.test.tsx`:
+  the excess is offered for refund at exactly its amount, nothing is offered
+  when there is none, and the member sees what they are owed.
+
+Every case that checks new behaviour failed against the old code. The
+exact-balance, applied-capture and nothing-overpaid cases passed before and
+after, as guards for behaviour that must not change.
+
+`OrderDetailModal.test.tsx` had a bare `refundOrder: vi.fn()` in its service
+mock, and the later key silently overrode the recording mock, so the new
+refund test first failed on wiring rather than behaviour. The duplicate key is
+removed; no assertion changed.
+
+**Re-driven** on the review install, restarted onto the new code:
+
+1. In Manage on ORD-2026-0009 ($15.00), typed 150 and pressed Record payment.
+   The Payment section showed the refusal above, and nothing was recorded.
+2. A $20.00 PayPal capture for the order was recorded through the webhook's
+   own `record_external_payment` and listed as "Needs a decision". Applying
+   it from the Payments tab recorded $20.00: Paid, $0.00 due, $5.00 overpaid.
+3. As `member2`, My Orders showed "Owed to you $5.00".
+4. As `quartermaster`, Manage showed the excess notice. "Refund the $5.00
+   excess" asked "Refund $5.00 to Alex Brooks?". After confirming, the order
+   read $15.00 paid and still Paid, and the notice was gone.
+
+The only failed request was the deliberate refusal.
+
+**Not changed:** on an order paid in full, the Payment section still offers
+Record payment. The server now refuses it ("This order is already paid in
+full"), so nothing wrong is recorded, but the control could be hidden.
+
+### W67b-8 — LOW — Refund is one tap and always refunds everything — ✅ FIXED (2026-11-16)
 
 Read from code, not clicked:
 
@@ -420,7 +512,40 @@ Read from code, not clicked:
 
 **Where:** `components/OrderDetailModal.tsx` `refund`.
 
-### W67b-9 — LOW — A pickup order keeps the home address typed for shipping — OPEN
+**Fix:** Refund now has its own section in the order dialog, in place of the
+one-tap button in the Payment row. Frontend only.
+
+- **An amount,** defaulting to everything paid, so a partial refund is
+  possible. An amount of zero, or above what was paid, is named on its field
+  ("Enter no more than the $15.00 paid.") before anything is asked or sent.
+- **A reason,** shown to the member.
+- **A question first:** "Refund $5.00 to Jordan Avery?" with "Not now" and
+  "Refund $5.00".
+- **Shown whenever money has been paid,** cancelled orders included: that is
+  how money on a cancelled order goes back. A cancelled order no longer shows
+  a Payment section, since nothing in it applies.
+
+**Tests:** three new cases in `components/OrderDetailModal.test.tsx`:
+
+- the whole amount paid is offered, and the amount and reason given are
+  refunded once confirmed;
+- backing out records nothing;
+- an amount above what was paid is named on its field, and nothing is asked
+  or sent.
+
+All three failed against the old dialog. In the existing cancelled-order
+case, the selector for the refund button changed from `/Refund/` to "Record
+refund" to match the new label; what it checks is unchanged.
+
+**Re-driven:** see W67b-9. ORD-2026-0010 was marked paid ($15.00).
+
+1. The Refund amount defaulted to 15.00.
+2. Entering 100 showed the field error and opened no confirmation.
+3. Entering 5 with a reason asked "Refund $5.00 to Jordan Avery?".
+4. After confirming, the order read $10.00 paid, Partially paid, $5.00 due,
+   with the reason on the timeline.
+
+### W67b-9 — LOW — A pickup order keeps the home address typed for shipping — ✅ FIXED (2026-11-16)
 
 **Did:**
 
@@ -437,7 +562,32 @@ an order that has no use for it.
 **Where:** `pages/CheckoutPage.tsx` `handleSubmit`; `storefront_service.py`
 `create_order`.
 
-### W67b-10 — LOW — Loading the checkout page directly sends the member back to the store — OPEN
+**Fix:** both ends.
+
+- Checkout sends an address only when the order ships.
+- `create_order` stores one only for a shipped order, whatever a client sends.
+- The order screens already hide an address on a pickup order (W67b-3).
+
+**Tests:**
+
+- `CheckoutPage.test.tsx`: an address typed for shipping is not sent after
+  the member switches back to pickup.
+- `TestPickupKeepsNoAddress` in `tests/test_storefront_service.py`: a pickup
+  order stores no address, and a shipped order keeps its address.
+
+The two cases checking the fix failed against the old code; the
+shipped-order case passed before and after, as a guard.
+
+**Re-driven:** as `member`, checked out a Ball Cap, typed an address under
+"Ship to me", switched back to pickup and submitted. ORD-2026-0010 was stored
+`pickup` with no address.
+
+**Not changed: addresses already stored on pickup orders.** Clearing them
+would mean a data migration that deletes member data, which needs the
+owner's go-ahead. Until then they stay in the database, though no screen
+shows them.
+
+### W67b-10 — LOW — Loading the checkout page directly sends the member back to the store — ✅ FIXED (2026-11-17)
 
 **Did:** as `member2`, with an item in the cart, loaded `/store/checkout`
 directly, then reloaded it.
@@ -450,7 +600,32 @@ unpersisted", which W67-6's fix of 2026-10-27 made untrue.
 
 **Where:** `pages/CheckoutPage.tsx`.
 
-### W67b-18 — LOW — The progress steps on a shipped order end at "Ready for pickup" — OPEN
+**Fix:** `CheckoutPage.tsx` makes no decision about the cart until the store
+has loaded, since loading it is what restores the cart saved in this browser.
+Frontend only.
+
+- **While loading:** the page shows its loading skeleton.
+- **If the load fails:** it shows the error with "Try again", where it used
+  to drop the member on the store.
+- **Once loaded:** an empty cart still goes back to the store, as before.
+- **Stale comment corrected:** the page no longer says the cart is "deliberately
+  unpersisted".
+
+**Tests:** three new cases in `pages/CheckoutPage.test.tsx`:
+
+- a reload with a saved cart comes back to the review;
+- a failed load shows the error and a retry;
+- an empty cart is still sent to the store once the store has loaded.
+
+The first two failed against the old page; the third passed before and after,
+as a guard.
+
+**Re-driven:** as `member2`, added a Ball Cap and opened checkout. After a
+reload, and after loading `/store/checkout` directly, the page stayed on
+"Review your order" with "Ball Cap × 1". No console errors and no failed
+requests.
+
+### W67b-18 — LOW — The progress steps on a shipped order end at "Ready for pickup" — ✅ FIXED (2026-11-17)
 
 **Saw:** while re-driving W67b-3, the step list on My Orders for the shipped
 ORD-2026-0007 read Submitted, Payment due, Ordered, Ready for pickup.
@@ -459,6 +634,50 @@ ORD-2026-0007 read Submitted, Payment due, Ordered, Ready for pickup.
 `fulfillmentMethod`. The order statuses have no shipped state either, so a
 fix needs a decision on what a shipped order's last step is called and when it
 is reached.
+
+**Owner decision (2026-11-17):** relabel everywhere. A shipped order keeps
+the same statuses, but "Ready for pickup" reads "Ready to ship" and
+"Fulfilled" reads "Shipped". The alternatives were the progress steps only,
+or a new Shipped status with its own transitions and migration.
+
+**Fix:** no new status, no migration, no change to stored data.
+
+- **Backend:** `_status_label` in `storefront_service.py` gives the shipping
+  wording to the status-change email (its subject and body), the order
+  timeline entry, the payment-gate refusal and the status-transition refusal.
+- **Frontend:** `utils/orderStatus.ts` `orderStatusLabel` mirrors it. The
+  wording follows each order's delivery method in:
+  - the member's progress steps and badge (My Orders);
+  - the staff order dialog's badge and status picker;
+  - the orders list row;
+  - the admin overview's recent orders.
+- **Left general:** lists that mix pickup and shipped orders keep the general
+  wording. That covers the status filters, the overview counts, and the
+  activity feed built from events alone.
+
+**Tests:**
+
+- `TestShippedOrderWording` in `tests/test_storefront_service.py`: a shipped
+  order's email and timeline read "Ready to ship" and then "Shipped"; a
+  pickup order keeps "Ready for pickup".
+- `utils/orderStatus.test.ts` covers the label helper.
+- `MyOrdersPage.test.tsx` and `OrderDetailModal.test.tsx` cover the progress
+  steps, badges and status picker for a shipped order.
+
+The shipped-order cases failed against the old code; the pickup cases passed
+before and after, as guards.
+
+**Re-driven:**
+
+1. As `member2`, placed a shipped order (ORD-2026-0011); as `quartermaster`,
+   marked it paid.
+2. In Manage, the status picker offered "Ready to ship". After choosing it,
+   the badge read "Ready to ship" and the timeline "Status changed to Ready
+   to ship".
+3. As `member2`, My Orders showed "Ready to ship" in the badge and as the
+   last progress step.
+
+No console errors and no failed requests.
 
 ### Read from code, not driven
 

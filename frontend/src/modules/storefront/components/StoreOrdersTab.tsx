@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { orderStatusLabel } from '../utils/orderStatus';
 import { CircleDollarSign, Download, Loader2, ShoppingBag } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { EmptyState } from '../../../components/ux/EmptyState';
@@ -518,7 +519,7 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <span className={`badge ${ORDER_STATUS_BADGES[order.status] ?? ''}`}>
-                    {ORDER_STATUS_LABELS[order.status] ?? order.status}
+                    {orderStatusLabel(order.status, order.fulfillmentMethod)}
                   </span>
                   <span className={`badge ${PAYMENT_STATUS_BADGES[order.paymentStatus] ?? ''}`}>
                     {PAYMENT_STATUS_LABELS[order.paymentStatus] ?? order.paymentStatus}

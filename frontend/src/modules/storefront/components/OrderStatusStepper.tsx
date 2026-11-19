@@ -11,7 +11,7 @@
 
 import React from 'react';
 import { Check, CircleDollarSign, PackageCheck, Send, Truck, XCircle } from 'lucide-react';
-import { StoreOrderStatus, StorePaymentStatus, type StoreOrder } from '../types';
+import { StoreFulfillmentMethod, StoreOrderStatus, StorePaymentStatus, type StoreOrder } from '../types';
 
 type StepState = 'complete' | 'current' | 'pending';
 
@@ -115,10 +115,14 @@ export const OrderStatusStepper: React.FC<{ order: StoreOrder }> = ({ order }) =
         const Icon = state === 'complete' ? Check : step.icon;
         // "Payment due" is a demand, not a milestone — once it is met the stop
         // has to stop demanding, or a paid-up member reads the card as a bill.
+        // A shipped order's last stop is the same status with shipping
+        // wording, as on its badge and in its email (W67b-18).
         const label =
           step.key === 'payment' && state === 'complete'
             ? (SETTLED_LABEL[order.paymentStatus] ?? 'Settled')
-            : step.label;
+            : step.key === 'ready' && order.fulfillmentMethod === StoreFulfillmentMethod.SHIP
+              ? 'Ready to ship'
+              : step.label;
         return (
           <React.Fragment key={step.key}>
             {index > 0 && (

@@ -1,7 +1,104 @@
 # Application Review — Locations & Kiosk
 
 **Prefix:** `LOC` · **Iteration:** A8 · **Reviewed:** 2026-08-05 (pass 1),
-2026-08-08 (pass 2), 2026-10-04 (pass 3)
+2026-08-08 (pass 2), 2026-10-04 (pass 3), 2026-11-16 (pass 4)
+
+## Pass 4 (2026-11-16) — the uniqueness key, the shared builder, and email-first guest sign-in
+
+Scope: the delta since pass 3 (`f9211ea3`): `public/display.py` (+374/−),
+`location_service.py` (+421/−), the new `location_display.py`,
+`models/location.py`'s generated `building_key`, `locations.py`, and the kiosk
+and QR pages. The security rotation re-derived this feature on 2026-11-11
+(`docs/security-review/LOC13-32-locations-kiosk.md`, every route by AST), so
+this pass took the other five lenses and re-checked rather than repeated the
+authorization work. **1 fix, 0 flagged; every pass-3 flag is resolved.**
+
+### LOC-42 — LOW — The delete route documented three of eleven references, and no 409 — ✅ FIXED
+
+`DELETE /locations/{id}`'s docstring, which is also its OpenAPI description,
+said a location that "events, event templates or apparatus" reference is
+deactivated rather than deleted. `_RESTRICTING_LOCATION_REFERENCES`
+(`location_service.py:42`) lists eleven columns: those three, apparatus location
+history, four kinds of training history, meetings and event requests — the
+last six added by the owner's 2026-11-01 decision to protect training history.
+It also did not mention the 409 the route returns when a reference appears
+mid-delete (`LocationInUseError`). The docstring now names every kind, points
+at the constant, and documents the 409 and that a retry deactivates
+(`locations.py:227`). Documentation only.
+
+### Pass-3 flags — all resolved
+
+- **LOC-37** (expired session loses the room) — fixed 2026-11-05.
+- **LOC-40** (two display builders) — consolidated into
+  `build_location_display`; the one deliberate difference is the
+  `recheck_window` keyword, and both endpoints now fill `timezone`,
+  `badge_check_in_enabled` and `allow_guest_check_in` the same way.
+- **LOC-41** (no uniqueness constraint) — migration `2bb7c963f351` adds the
+  stored generated column `building_key = COALESCE(building, '')` and
+  `uq_locations_org_name_building`, so a location with no building is covered,
+  which a key on the nullable `building` would not be.
+- **LOC-3** (authenticated display endpoint had no consumer) — it has one,
+  `RoomCheckInPage`, and shares the builder.
+
+### Verified good ✅
+
+- **Routes:** 8 in `locations.py` (reads on `get_current_user`, writes on
+  `locations.create/edit/delete` OR `locations.manage`, the badge switch on
+  `locations.manage_nfc_tags`) and 6 public in `display.py`, each behind a
+  per-IP rate limit; badge taps also per room. Matches LOC13's table.
+- **Email-first guest sign-in** (`guest-lookup` → `guest-confirm`, new): the
+  display code alone decides the organization and the event must be held in
+  that room; every unavailable case answers one 404, so event ids and which
+  events feed the pipeline cannot be probed; a member's own address answers
+  as an unknown one; the honeypot answers like a miss; the gates run before
+  the daily cap, so refused traffic spends no allowance; every lookup is
+  audited with its true outcome and without the email. The confirm token is an
+  HS256 JWT of its own `type`, bound to prospect, event, room and organization,
+  ten minutes long; it cannot authenticate a session, because
+  `get_user_from_token` requires `type == "access"` and a live session row.
+  The prospect is re-read as still active at confirm time, and a repeat confirm
+  is reported as already checked in under the event's lock.
+- **Uniqueness:** the friendly pre-check, the key and the system-named path
+  (`save_system_named_location`) agree on scope; a lost race answers the same
+  400; a facility room's location is numbered rather than refused, retried
+  once in a savepoint with a locking re-read that sees the winner.
+- **`update_location`** re-checks uniqueness when only the building changes,
+  tells an explicit `building: null` from an omitted one by
+  `model_fields_set`, and the schema refuses an explicit null for the two
+  NOT NULL fields it carries, so its `setattr` loop cannot reach a constraint.
+- **The kiosk takes itself down when its code is rotated:** a 404 on a refresh
+  clears the payload, so a revoked link stops rendering (LOC-33's frontend
+  half). The QR page's Card Readers link and the command palette entry carry
+  the route's own permission set.
+
+### Leads for other passes
+
+- **Organizations:** `Organization.timezone` is validated for length only
+  (`schemas/organization.py:1850`, `:1993`). The UI offers fixed lists, but an
+  API caller with settings permission can store a string that is not an IANA
+  zone. Server code degrades it (`scheduling_timezone`'s fallback); the
+  frontend does not — `formatTime` and friends pass it to
+  `Intl.DateTimeFormat`, which throws `RangeError`, and `useTimezone()` hands
+  it to every page, the kiosk included through `LocationDisplayInfo.timezone`.
+  The fix is validation at the write.
+- **Membership pipeline:** LOC10-4 (an applicant's email logged by f-string in
+  `create_prospect`) remains open there, as LOC13 records.
+
+### Pass 4 completion gate
+
+| Check                                     | Result                   |
+| ----------------------------------------- | ------------------------ |
+| `npm run typecheck`                       | ✅ exit 0                |
+| `npm run lint`                            | ✅ exit 0                |
+| `python -m flake8 app/ tests/`            | ✅ 0 violations          |
+| `black --check app/ tests/`               | ✅ 2470 files unchanged  |
+| locations, display, kiosk and guest tests | ✅ 301 passed (22 files) |
+
+The sandbox database was again behind head (`67ad01c43434` against
+`053d3e96b4fa`) and was upgraded with `alembic upgrade head` and
+`repair_schema.py` before the tests ran.
+
+---
 
 ## Pass 3 (2026-10-04) — the kiosk grew a card reader and a revocation button
 

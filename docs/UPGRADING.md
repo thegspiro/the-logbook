@@ -818,6 +818,30 @@ types and changes no other table.
   requests. The officers who manage leave are emailed each time.
 - **Downgrading** deletes any customised copies of the two new templates.
 
+### Anonymising a member deletes their uploaded certificates; officer check-ins count from the start (2026-11-17)
+
+Nothing blocks a restart. Migration `bbeb4867d393` adds one nullable column,
+`external_training_imports.course_hours_credited`, and backfills it for
+imported records that still hold their mapped course's hours; no other row
+changes and the downgrade drops the column.
+
+- **Anonymising a member now deletes files** _(#4405)_. The certificates the
+  member uploaded with self-reported training are removed from storage, and
+  their attachment entries go with them; the training records stay. Permanently
+  deleting a member removes the files on the training submissions, training
+  records and waiver documents the delete cascades away, after the delete
+  commits. A file another row still names is kept either way. If your
+  department relies on keeping those certificates after a member leaves,
+  download them before anonymising. What remains on disk is listed under "D11"
+  in `docs/KNOWN_LIMITATIONS.md`.
+- **An officer's check-in after an event starts is recorded at the scheduled
+  start** _(#4395)_, not at the click. Attendance figures for events checked
+  in late by an officer will read higher than the same habit produced before
+  the upgrade. Rows already recorded are not changed.
+- **My Shifts → Past shows credited hours** _(#4381)_, so a member with a
+  shift awaiting close-out sees a lower figure than before, matching the Hours
+  view.
+
 ### Leave requests: extensions, questions, changed dates and reminders (2026-11-16)
 
 Nothing blocks a restart. Migration `e5a9c3d71b28` adds columns to
