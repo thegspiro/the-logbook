@@ -825,6 +825,16 @@ decline/drop alerts (`org.settings["scheduling"]`), assignment notifications
 (`org.settings["scheduling_assignment"]`, in-app plus optional email), shift
 reminders, and equipment-check failure alerts.
 
+`GET /organization/settings` (and the PATCH response) now return those four
+sections to settings administrators and `scheduling.manage` holders, and
+`station_mode` to everyone _(2026-11-18, #4401)_. Before, the response model
+dropped them, so the panel always showed its built-in defaults and a save from
+it overwrote the department's configuration. `EquipmentCheckAlertSettings`
+(`schemas/organization.py`) is the one definition of the equipment-check
+defaults; the sender reads it through `from_stored()`, so a department that
+never saved the section alerts the Chief and Captain positions in the app, as
+the panel shows (before, it alerted nobody).
+
 Notification links open the scheduling page with the shift pre-selected;
 `SchedulingPage` accepts `?tab=schedule|my-shifts|open-shifts|requests|shift-reports`.
 
@@ -929,7 +939,11 @@ and not an empty result.
 - **Member Hours** — hours per member from shift assignments, with the
   **Outside Hours** column, the **Outside apparatus staffed** summary, and
   reject/restore of outside entries.
-- **Coverage** — staffing coverage over a range.
+- **Coverage** — staffing coverage over a range. Coverage, Call Volume and
+  Availability reflow to labelled cards on a phone; Coverage and Availability
+  use `rwd-table-container` with the narrow tier, so they also do on a tablet
+  with the side navigation open _(2026-11-18, #4415;
+  `e2e/table-fit-scheduling-phone.spec.ts`)_.
 - **Call Volume** — detailed-mode shift calls grouped by day/week/month (see
   [Reading the call volume report](#reading-the-call-volume-report)).
 - **Shift Compliance** — grades **only shift-credited requirements**: a SHIFTS
