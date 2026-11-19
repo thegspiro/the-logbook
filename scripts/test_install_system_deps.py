@@ -166,6 +166,22 @@ class InstallSystemDepsTest(unittest.TestCase):
         assert self._installs() == 2
         assert elapsed < 15, elapsed
 
+    def test_the_default_budget_is_ten_minutes(self):
+        # A failing apt returns at once, so this finishes after the retries'
+        # backoff rather than after the budget; only the message is under test.
+        env = {key: value for key, value in self.env.items() if key != "APT_BUDGET"}
+
+        result = subprocess.run(
+            ["bash", str(SCRIPT)],
+            env={**env, "MODE": "fail"},
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        assert result.returncode == 1
+        assert "Failed to install system packages within 600s: ffmpeg" in result.stdout
+
 
 if __name__ == "__main__":
     unittest.main()

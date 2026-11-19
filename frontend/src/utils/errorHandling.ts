@@ -27,7 +27,7 @@ export interface AppError {
  * mounted sub-application, a gateway-generated 422 — arrives in the original
  * form.
  */
-interface ValidationErrorEntry {
+export interface ValidationErrorEntry {
   loc?: Array<string | number>;
   msg?: string;
   field?: string;
@@ -68,18 +68,63 @@ function retryAfterSeconds(response: HttpErrorResponse['response']): number | un
   return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
 }
 
+/** Lowercase words of one API field name, snake_case or camelCase. */
+function fieldWords(name: string): string[] {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((word) => word.toLowerCase());
+}
+
 /**
- * Renders one validation entry as `field: reason`, tolerating either spelling.
+ * A readable label for an API field path: `charge_amount` is "Charge amount",
+ * `emergency_contacts.0.email` is "Emergency contacts email".
+ *
+ * A trailing `at` or `id` word is dropped (`expected_return_at` is "Expected
+ * return", `category_id` is "Category"): they are storage suffixes, and the
+ * label sits beside a form field that is named for the thing, not the column.
+ * List indexes carry nothing a reader can act on and are skipped.
+ */
+function fieldLabel(path: string): string {
+  const words = path
+    .split('.')
+    .filter((segment) => !/^\d+$/.test(segment))
+    .flatMap(fieldWords);
+  if (words.length > 1 && (words[words.length - 1] === 'at' || words[words.length - 1] === 'id')) words.pop();
+  return words.join(' ');
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * Renders one validation entry as `Field: reason`, tolerating either spelling.
+ *
+ * The field is shown as a label, not the raw API name: a toast reading
+ * "charge_amount: Value is out of the allowed range." names a column the
+ * officer has never seen (workflow review W42-7). A validator's own message
+ * often names the field already ("expected_return_at must be in the future"),
+ * so when it does the name is replaced in place rather than prefixed, which
+ * otherwise said it twice (W40-8).
  *
  * The backend uses the literal field name `"request"` for an error it could not
  * attribute to any field; prefixing the message with it reads as a field called
  * "request", so that one is dropped rather than shown.
  */
-function describeValidationError(entry: ValidationErrorEntry): string {
+export function describeValidationError(entry: ValidationErrorEntry): string {
   const locField = entry.loc?.length ? String(entry.loc[entry.loc.length - 1]) : undefined;
   const field = entry.field || locField;
   const message = entry.message || entry.msg || 'Invalid value';
-  const described = field && field !== 'request' ? `${field}: ${message}` : message;
+  let described = message;
+  if (field && field !== 'request') {
+    const label = fieldLabel(field);
+    const rawName = field.split('.').pop() ?? field;
+    const named = new RegExp(`\\b${rawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+    if (label)
+      described = named.test(message) ? capitalize(message.replace(named, label)) : `${capitalize(label)}: ${message}`;
+  }
   // The two 422 sources punctuate differently — the API's handler ends each
   // message with a period, Pydantic's own do not — so entries are terminated
   // here and joined on a single space. Joining on ". " instead produced

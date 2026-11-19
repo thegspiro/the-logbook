@@ -29,6 +29,7 @@ import { formCoercions } from '@/utils/formValues';
 import { FormField } from '@/components/ux/FormField';
 import { mapServerFieldErrors, type ServerFieldSpec } from '@/utils/serverFieldErrors';
 import { displayNameOf } from '@/utils/memberName';
+import { isActiveAccount } from '@/constants/enums';
 import { userService } from '@/services/api';
 import type { User } from '@/types/user';
 
@@ -189,6 +190,10 @@ export const GrantApplicationFormPage: React.FC = () => {
   }));
   const [opportunities, setOpportunities] = useState<GrantOpportunity[]>([]);
   const [members, setMembers] = useState<User[]>([]);
+  // Only current members are offered as the assignee. The full list is kept
+  // so an application already assigned to someone who has left still names them.
+  const assignableMembers = members.filter((m) => isActiveAccount(m.status));
+  const storedAssignee = members.find((m) => m.id === formData.assignedTo);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -575,13 +580,18 @@ export const GrantApplicationFormPage: React.FC = () => {
                   className={selectClass}
                 >
                   <option value="">Unassigned</option>
-                  {/* Keeps a stored assignee who is no longer on the member
-                    list selectable, so saving does not silently swap them
-                    for whichever option the browser shows first. */}
-                  {formData.assignedTo && !members.some((member) => member.id === formData.assignedTo) && (
-                    <option value={formData.assignedTo}>Current assignee</option>
+                  {/* Keeps a stored assignee who is not offered (deleted, or
+                    no longer a current member) selectable, so saving does not
+                    silently swap them for whichever option the browser shows
+                    first. */}
+                  {formData.assignedTo && !assignableMembers.some((member) => member.id === formData.assignedTo) && (
+                    <option value={formData.assignedTo}>
+                      {storedAssignee
+                        ? `${displayNameOf(storedAssignee) || storedAssignee.username} (former member)`
+                        : 'Current assignee'}
+                    </option>
                   )}
-                  {members.map((member) => (
+                  {assignableMembers.map((member) => (
                     <option key={member.id} value={member.id}>
                       {displayNameOf(member) || member.username}
                     </option>

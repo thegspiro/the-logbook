@@ -394,7 +394,12 @@ credit. The other manager controls — Edit, Finalize, Record Times, the More
 menu — stay with `events.manage`. See
 [Module-Events-Developer](Module-Events-Developer) for the access table.
 
-- **Export CSV** of the attendee list and **Print roster**.
+- **Export CSV** of the attendee list and **Print roster**. The attendee CSV
+  and both event-list exports end with a **Source** column, **Imported** (the
+  Historical Data Import wrote it, per the `imported_source_records` ledger)
+  or **The Logbook** _(2026-11-19, #4355; `services/import_provenance.py`;
+  `source` / `source_label` on `EventListItem` and the roster's
+  `RSVPResponse`)_.
 - **Non-respondent reminders** (`POST /events/{id}/send-reminders`) — exclude
   members who already responded (going, not going or maybe).
 - **Get Directions** — a map link for events with a location.

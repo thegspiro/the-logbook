@@ -45,7 +45,7 @@ const directory = (offices: DepartmentOfficer[]) => ({
   variables: [{ name: 'president_name', description: 'Full name of the current President' }],
 });
 
-const members = [{ id: 'u1', full_name: 'Jane Doe', email: 'jane@fd.org' }];
+const members = [{ id: 'u1', full_name: 'Jane Doe', email: 'jane@fd.org', status: 'active' }];
 
 describe('OfficersPanel', () => {
   beforeEach(() => {
@@ -142,6 +142,25 @@ describe('OfficersPanel', () => {
     expect(screen.getByLabelText('Email override')).toHaveValue('office@fd.org');
     // Name is inherited from the member, so it is not an override.
     expect(screen.getByLabelText('Name override')).toHaveValue('');
+  });
+
+  it('offers only current members, keeping a holder who has since left', async () => {
+    const user = userEvent.setup();
+    mockGetOfficers.mockResolvedValue(directory([makeOffice({ name: 'Lee Park', user_id: 'u3', source: 'assigned' })]));
+    const roster = [
+      ...members,
+      { id: 'u2', full_name: 'Sam Cole', email: 'sam@fd.org', status: 'archived' },
+      { id: 'u3', full_name: 'Lee Park', email: 'lee@fd.org', status: 'retired' },
+    ];
+
+    render(<OfficersPanel members={roster} isLoadingMembers={false} />);
+
+    await user.click(await screen.findByText('Assign'));
+
+    expect(screen.getByLabelText('Member')).toHaveValue('u3');
+    expect(screen.getByRole('option', { name: /Jane Doe/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Lee Park.*\(former member\)/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Sam Cole/ })).not.toBeInTheDocument();
   });
 
   it('clears an assignment', async () => {

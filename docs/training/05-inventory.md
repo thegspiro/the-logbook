@@ -384,6 +384,15 @@ Every item is tracked one of two ways:
 > (pool). The line under **Tracking Type** on the item form describes the one
 > you picked.
 
+**The category picks a starting tracking type** _(2026-11-18)_. On a new item,
+choosing a **Consumable** or **Medical** category sets **Tracking Type** to
+**Pool**, because stock that is used up is counted by quantity and medical lots
+exist only on pool items. Any other category, or no category, sets
+**Individual**. It is only a starting point: once you pick a tracking type
+yourself, changing the category leaves your choice alone. Editing an existing
+item never changes it. Before, every new item started as Individual, and a box
+of gloves saved that way could not be issued by count.
+
 ![The Firefighting Gloves pool card with Issuances open: its on-hand and issued counts, and three members holding pairs, each with the count, the date issued and a Return button](./images/05-94-pool-issuances.png)
 
 ### Reading the stock numbers
@@ -2748,6 +2757,9 @@ the analysis has no size on file.
 
 - The PDF includes your department name, the date, every filter you used, and
   the size breakdown.
+- _(2026-11-18)_ Every page of the PDF ends with "Inventory Impact Plan · Page
+  N of M", so loose pages handed round at a purchasing meeting can be put back
+  in order and shown to be complete. Before, the plan had no footer.
 - Email and phone columns are included only if your department's contact
   settings allow it.
 - Useful for budget meetings and purchasing paperwork.

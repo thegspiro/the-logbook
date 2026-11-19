@@ -1529,6 +1529,10 @@ You can link an election to a meeting or event. When it is linked:
 
 1. When creating the election, choose it under **Linked Meeting**.
 2. Or link one later from the election's page with **Link a meeting**.
+   _(2026-11-19)_ Its list offers the next 100 upcoming events, the same as
+   the create dialog. Before, it showed only the next ten of any type, which
+   were often all trainings, so a business meeting a few weeks out could not
+   be picked.
 
 > **Tip.** For an annual business meeting: create the meeting first, take
 > attendance with the QR check-in, then open the election. Checked-in members

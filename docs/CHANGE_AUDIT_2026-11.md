@@ -5,6 +5,56 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 18 – 19, 2026
+
+The last 25 hours of `main`: the 19 first-parent merges after `775eb7df`
+through `762f1c93` (2026-11-19 12:47 UTC), #4419 to #4435, less the November
+17 – 18 pass itself (#4431). #4363 (Cal.com and Documenso Settings) merged in
+this range but was documented by its own targeted sections below.
+`CHANGELOG.md` stays closed.
+
+**Still not covered:** the two earlier ranges the November 17 – 18 pass left
+for a catch-up (the 37 merges between `79ab1c88` and #4364, and the 40 before
+`b44b32ea`). This pass did not take them.
+
+| Change                                                                                                                                                                                                                                                        | Guide      | Disposition                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Source** column on every export whose rows can be told apart: training Member Records and Certification CSVs, Certification Expiration and Admin Hours report downloads, Admin Hours **Export CSV**, event list exports, attendee CSV (#4355)               | 02, 04, 08 | Written in all three; wiki `Module-Training`, `Module-Events`, `Module-Admin-Hours`; `UPGRADING.md` note. Downloads only, so no screenshot changes                                                                                           |
+| My Training, the officer's member view, the profile card and requirement progress graded through the member's compliance profile (D10, #4403)                                                                                                                 | 02         | Bullet written; wiki `Module-Training`; `UPGRADING.md` note. `COMPLIANCE_CONFIG.md`, `KNOWN_LIMITATIONS.md` and wiki `Module-Compliance` already updated by the PR                                                                           |
+| Scheduling Notifications panel now receives the saved settings (a save from it used to overwrite them with defaults); Equipment Check Alerts default to Chief and Captain when never saved; Attendance Requests **Sent to me** (#4401)                        | 03, 04     | 03: two paragraphs; `UPGRADING.md` asks operators to re-check the section. 04 and wiki `Module-Events` already updated by the PR; wiki `Module-Scheduling` written                                                                           |
+| Store: no price below zero; typed payment capped at the balance; overpaid orders and **Refund the $… excess**; **Record refund** section with amount, reason and confirmation; **Ready to ship / Shipped**; checkout reload; pickup stores no address (#4391) | 18         | New "Recording a refund" section, paragraphs in Options, Working the Orders, Recording Payment and checkout; "If You Learned an Older Version" updated; wiki `Integration-PayPal`; YouTube 13 edited. `STOREFRONT_MODULE.md` already updated |
+| Training providers stay verified unless the connection changes; **Manual pull** in Sync History (#4419)                                                                                                                                                       | 02         | Two paragraphs; wiki `Module-Training`; `UPGRADING.md` asks operators to **Test** providers left unverified                                                                                                                                  |
+| **Counts toward attendance** badge only for links to an active requirement (#4378)                                                                                                                                                                            | 02         | Sentence written; wiki `Module-Training`                                                                                                                                                                                                     |
+| New item's tracking type follows its category: Consumable / Medical start as Pool (W38-3, #4399)                                                                                                                                                              | 05         | Paragraph written; wiki `Module-Inventory`                                                                                                                                                                                                   |
+| Impact plan PDF numbered "Page N of M" (#4421)                                                                                                                                                                                                                | 05         | Bullet written; wiki `Module-Inventory`. `PDF_REPORTS.md` and `KNOWN_LIMITATIONS.md` already updated by the PR                                                                                                                               |
+| Election page's **Link a meeting** lists the next 100 upcoming events (was 10) (#4424)                                                                                                                                                                        | 14         | Sentence written; wiki `Module-Elections`                                                                                                                                                                                                    |
+| Load, save and delete failures say why (connection, permission, server fault with error code) instead of always blaming the connection (#4367)                                                                                                                | 10         | Troubleshooting row added                                                                                                                                                                                                                    |
+| Scheduling Reports' Coverage, Call Volume and Availability tables reflow to cards (#4415)                                                                                                                                                                     | 03, 10     | Sentence in each; wiki `Module-Scheduling`                                                                                                                                                                                                   |
+| Installed Android app's gesture strip is white (#4373)                                                                                                                                                                                                        | 10         | Paragraph under Installing on Android                                                                                                                                                                                                        |
+| Outside apparatus: merge two spellings of one department (#4404)                                                                                                                                                                                              | 03         | Already written by the PR, with wiki `Module-Scheduling` and `-Developer`                                                                                                                                                                    |
+| Video production pipeline and Shorts 8A–8F (#4400)                                                                                                                                                                                                            | none       | Script 08's 8A–8F reconciled with the recorded narration; two script errors corrected (8C Open Swap, 8E ballot emails). See `SCRIPT_CURRENCY.md`                                                                                             |
+| Locations A8 app-review pass 4 (#4368); finance-approvals (#4430) and elections-ballots (#4435) security passes 16, 0 findings                                                                                                                                | none       | `docs/app-review/` and `docs/security-review/` updated by the PRs                                                                                                                                                                            |
+| CI: Mobile Safari pinned to ubuntu-24.04 (#4368), ffmpeg install on ubuntu-26.04 (#4429)                                                                                                                                                                      | none       | Internal                                                                                                                                                                                                                                     |
+
+**Also fixed on the way:** guide 02's "Your training history" list had item 4
+glued onto the end of the 2026-11-10 Source paragraph, so it rendered as prose;
+it is a list item again, above that paragraph.
+
+**Alembic heads.** No migration in this range; `main` at `762f1c93` has one
+head, `bbeb4867d393` (checked with `alembic heads`).
+
+**Screenshots to create or replace:** see "Queued by the November 18 – 19
+documentation pass" in `docs/training/SCREENSHOT_CURRENCY.md`. **No existing
+image is made wrong.** **Create:** the store's Refund section and
+confirmation, overpaid order and **Owed to you**, shipped-order steps, the
+Equipment Check Alerts defaults, Scheduling Reports cards at 390px, Attendance
+Requests' **Sent to me**, Sync History's **Manual pull**, Add Item switching to
+Pool. The November 14 – 15 row for a cancelled order "only **Refund** left" is
+superseded.
+
+**YouTube scripts:** 08 (Shorts 8A–8F) and 13 Department Store edited; others
+flagged in `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
 ## Change audit: November 17 – 18, 2026
 
 The last 25 hours of `main`: the 26 first-parent merges after `f337be43`

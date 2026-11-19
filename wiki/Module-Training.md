@@ -60,7 +60,10 @@ program enrollments, external training integrations, and compliance reporting.
 - **Expiring Certifications** — Tiered alerts at 90/60/30/7 days with
   escalation for expired certs
 - **Compliance Summary** — Per-member green/yellow/red compliance card on
-  profiles
+  profiles. Since 2026-11-18 (D10, #4403) the card, **My Training**, the
+  officer's per-member requirements view and requirement progress list only
+  the requirements of the member's matching compliance profile, through
+  `ComplianceGrading.for_member`; see [Compliance](Module-Compliance)
 - **Training Waivers** — Leave of Absence auto-linking, waiver management,
   proportional requirement adjustment. Supports permanent waivers (no end date),
   a New Member waiver type, and multi-select "Applies To" (Training + Meetings +
@@ -127,7 +130,13 @@ requirements; a session linked to none charges nobody. The rule is written once
 (`training_compliance.tally_session_attendance`) and every grader reads it, with
 `load_held_sessions` passed through each caller. `PUT
 /training/sessions/{id}/attendance-requirements` replaces a session's links and
-is allowed after attendance is finalized.
+is allowed after attendance is finalized. The **Counts toward attendance**
+badge (event cards, calendar, event page) shows only when a linked requirement
+is **active** _(2026-11-18, #4378)_: `events_counting_toward_attendance` joins
+the requirement, and `TrainingSessionResponse.counts_toward_attendance`
+carries the same answer to the event page, which no longer counts
+`attendance_requirement_ids` (that list still includes stale links so the
+editor can remove them).
 
 A requirement with `allows_chief_override` accepts rows in
 `training_requirement_overrides` (who, when, dates, encrypted reason; revoked,
@@ -1036,6 +1045,15 @@ errors. Its scheduled sync is an hourly pull plus a daily 30-day **review** at
 sync log (`sync_type = "review"`). Detail:
 [16-integrations › Setting up Target Solutions](https://github.com/thegspiro/the-logbook/blob/main/docs/training/16-integrations.md#setting-up-target-solutions).
 
+**Verification and the scheduler** _(2026-11-18, #4419)_. Auto-sync runs only
+for a provider with `connection_verified`. A save now resets it only when the
+connection changes (`api_base_url`, `client_id` or `auth_type` differs from the
+stored value, a new secret arrives, or a stored secret is cleared). Before,
+the edit form's every save sent `api_base_url` and un-verified the provider,
+so editing the sync interval silently stopped its scheduled pulls. Sync
+History labels a run with `initiated_by` set as **Manual pull**; the scheduler
+never sets it.
+
 ---
 
 ## Member & Officer Exports
@@ -1046,7 +1064,11 @@ sync log (`sync_type = "review"`). Detail:
   either is off). Omitting `start_date` returns the member's entire history.
 - **Officer exports** (`POST /training/reports/export`, `training.manage`):
   `compliance`, `individual`, `member_records` (bulk, all active members),
-  `hours_summary`, and `certification` as CSV. PDF is available only for
+  `hours_summary`, and `certification` as CSV. `member_records` and
+  `certification` end with a **Source** column (provider name, **Imported** or
+  **The Logbook**) _(2026-11-19, #4355)_, labelled from
+  `training_record_source.load_source_lookup`, which loads every label before
+  the server-side cursor opens. PDF is available only for
   `individual`, `member_records`, and `compliance`; bulk PDFs are merged with
   `pypdf` (an empty result gets a placeholder page). An unknown `report_type`
   returns 400.
