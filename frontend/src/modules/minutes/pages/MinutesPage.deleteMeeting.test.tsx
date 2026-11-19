@@ -146,4 +146,22 @@ describe('MinutesPage meeting delete', () => {
     expect(mockDeleteMeeting).toHaveBeenCalledWith('meet-1');
     expect(screen.queryByText(/Check your connection/)).not.toBeInTheDocument();
   });
+
+  it('says the server failed, not the connection, when the delete hits a 500', async () => {
+    mockDeleteMeeting.mockRejectedValue({
+      response: { status: 500, data: { detail: 'Internal server error', code: 'LB-SYS-001' } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<MinutesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete October Business Meeting' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        'Could not delete the meeting: the server hit a problem on its end. Try again in a moment. If it keeps happening, tell IT (Error code: LB-SYS-001).'
+      )
+    );
+  });
 });

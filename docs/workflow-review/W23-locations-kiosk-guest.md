@@ -144,11 +144,17 @@ Covered by the new `LocationsPage.test.tsx` (3 tests, all failing against the
 old page). Re-driven: `member` sees only the room toggle; `admin` sees every
 control.
 
-### W23-4 — NIT — The kiosk's two QR codes have no accessible name — OPEN
+### W23-4 — NIT — The kiosk's two QR codes have no accessible name — ✅ FIXED
 
-**Where:** `/display/:code`. Each is labelled by the text beside it
-("Department member", "Visiting us today?"), and nobody scans a QR code with
-a screen reader, so this is left.
+**Where:** `/display/:code`. `qrcode.react` renders each code as an
+`<svg role="img">` and names it only from its `title` prop, so the kiosk
+showed screen readers an unnamed image where its main action is. The text
+beside each code ("Department member", "Visiting us today?") was not tied to
+it. Each code now carries a `title` naming what it does and for which event:
+"Member check-in QR code for …" and "Guest sign-in QR code for …" when guests
+may sign in, otherwise "Check-in QR code for …". The room's own kiosk code on
+`LocationsPage` already did this. `LocationKioskPage.test.tsx` covers both
+layouts; both tests failed before the change.
 
 ## Checklist
 
@@ -160,7 +166,7 @@ a screen reader, so this is left.
 | 4. Browser signals      | ✅ only the expected 404 for a regenerated code, and the 403 behind W23-3        |
 | 5. Coming back to it    | ✅ regenerate retires the old URL                                                |
 | 6. On a phone           | ✅ guest page and kiosk at 390×844                                               |
-| 7. Everyone can use it  | ✅ labelled fields, hidden honeypot; W23-4 NIT                                   |
+| 7. Everyone can use it  | ✅ labelled fields, hidden honeypot; W23-4 fixed                                 |
 | 8. What happens around  | Flagged W23-1, W23-2                                                             |
 
 ## Completion gate

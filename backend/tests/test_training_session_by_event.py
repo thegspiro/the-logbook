@@ -71,13 +71,16 @@ class TestGetTrainingSessionByEvent:
         )
 
     async def test_an_attached_session_is_returned_unchanged(self):
-        attached = SimpleNamespace(id="session-1")
+        attached = SimpleNamespace(
+            id="session-1", event_id="event-1", organization_id="org-1"
+        )
         shaped = object()
         service = SimpleNamespace(
             get_session_by_event=AsyncMock(return_value=attached),
             attendance_requirement_ids=AsyncMock(
                 return_value={"session-1": ["requirement-1"]}
             ),
+            events_counting_toward_attendance=AsyncMock(return_value={"event-1"}),
         )
         with (
             patch.object(endpoint, "TrainingSessionService", return_value=service),
@@ -88,7 +91,36 @@ class TestGetTrainingSessionByEvent:
             )
 
         assert result is shaped
-        shape.assert_called_once_with(attached, ["requirement-1"])
+        shape.assert_called_once_with(attached, ["requirement-1"], True)
+        service.events_counting_toward_attendance.assert_awaited_once_with(
+            ["event-1"], "org-1"
+        )
+
+    async def test_a_session_linked_only_to_inactive_requirements_does_not_count(
+        self,
+    ):
+        # The service leaves an event out of its answer when every link is to
+        # a deactivated requirement; the session's own flag must say so too,
+        # though the stale id is still listed for the editor to remove.
+        attached = SimpleNamespace(
+            id="session-1", event_id="event-1", organization_id="org-1"
+        )
+        service = SimpleNamespace(
+            get_session_by_event=AsyncMock(return_value=attached),
+            attendance_requirement_ids=AsyncMock(
+                return_value={"session-1": ["retired-requirement"]}
+            ),
+            events_counting_toward_attendance=AsyncMock(return_value=set()),
+        )
+        with (
+            patch.object(endpoint, "TrainingSessionService", return_value=service),
+            patch.object(endpoint, "_session_response") as shape,
+        ):
+            await endpoint.get_training_session_by_event(
+                event_id=uuid4(), db=_published_event_db(), current_user=_caller()
+            )
+
+        shape.assert_called_once_with(attached, ["retired-requirement"], False)
 
     def test_declared_response_admits_null_so_the_contract_matches(self):
         # A handler that returns None under a non-optional response_model is a

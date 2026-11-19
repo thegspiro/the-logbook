@@ -112,12 +112,17 @@ for candidate in python3 python3.13 /usr/bin/python3 /usr/bin/python3.13; do
 done
 
 # ── Node dependencies ────────────────────────────────────────────────────────
-# From the repo root: npm workspaces, one lockfile. `install` rather than `ci`
-# so a cached container reuses what is already unpacked.
+# From the repo root: npm workspaces, one lockfile. `ci`, as CI runs it, and
+# not `install`: `install` re-resolves from the manifests and rewrote
+# package-lock.json in place (loosening the root's pinned vite, flipping
+# "peer" flags), leaving every session with an uncommitted lockfile diff that
+# CLAUDE.md forbids committing. `ci` installs exactly what the lockfile says
+# and never writes to it. The node_modules check still lets a cached container
+# skip the install, which matters because `ci` deletes node_modules first.
 if [ ! -d node_modules ]; then
   log "installing frontend dependencies"
-  npm install --no-audit --no-fund >/dev/null 2>&1 || {
-    log "WARNING: npm install reported errors"
+  npm ci --no-audit --no-fund >/dev/null 2>&1 || {
+    log "WARNING: npm ci reported errors"
   }
 fi
 

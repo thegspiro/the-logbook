@@ -1,5 +1,25 @@
 # Script currency
 
+## 2026-11-18 pass
+
+**Edited:** 03 IT Manager (Chapter 10, anonymizing: the dialog's Removed list
+now includes certificates uploaded with self-reported training; one beat
+added, re-record note `EDITOR — 2026-11-18 PASS`). 14 Multi-class courses
+(the cohort wizard's Course step lists only courses with a syllabus; one
+sentence added, editor note at the end).
+
+**Flagged, not edited** (no script quotes these labels): any scheduling beat
+showing the Templates tab's **Templates / Patterns** switch — it is gone, and
+patterns are edited from the Patterns tab's **Edit** button; 06 Member and 03
+(My Shifts → Past now shows **Hours credited** and "awaiting close-out"); 04
+Chief and 07 Secretary (officer check-ins after the start count from the
+scheduled start; the mandatory RSVP window setting); 05, 09 and 16 (the
+**Operational members** shortcut includes Senior where the tier exists; rolling
+evaluation-credited requirements show a due date); 12 Elections (Linked Meeting
+lists events when Minutes is off); 10 mobile segments (more tables reflow to
+cards; report results show as cards on desktop too). See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-17--18-2026).
+
 ## 2026-11-15 pass
 
 **Edited:** 07 Secretary. Its Email Templates chapter quoted the old category

@@ -323,6 +323,11 @@ export interface ShiftAttendanceRecord {
   shift_date?: string;
   shift_start_time?: string;
   shift_end_time?: string;
+  /**
+   * Whether the shift has been finalized, which is when its hours become
+   * credit. Set by /scheduling/my-attendance-history; absent elsewhere.
+   */
+  shift_is_finalized?: boolean;
 }
 
 export interface SchedulingSummary {
@@ -398,6 +403,11 @@ export interface MemberHoursHistory {
   /** Carry their own year: every January, last month was last year. */
   current_month: MemberHoursMonth;
   previous_month: MemberHoursMonth;
+  /**
+   * Every month with any attendance, oldest first — the buckets `months` and
+   * `all_time` are cut from. Absent on responses from before it was added.
+   */
+  history?: MemberHoursMonth[];
 }
 
 export interface SchedulingWidgetSummary {
@@ -685,6 +695,17 @@ export interface ExternalAgency {
   apparatus: ExternalApparatus[];
 }
 
+export interface ExternalAgencyMergeResult {
+  /** The kept agency, with every unit it now holds. */
+  agency: ExternalAgency;
+  /** Units that moved across unchanged. */
+  moved_apparatus: number;
+  /** Units folded into a same-named unit the kept agency already had. */
+  combined_apparatus: number;
+  /** Logged shifts now carrying the kept agency's name. */
+  relabelled_shifts: number;
+}
+
 export interface ExternalAgencyList {
   agencies: ExternalAgency[];
 }
@@ -769,6 +790,10 @@ const api = createApiClient();
 // ============================================
 // Scheduling Service
 // ============================================
+
+/** The endpoint's largest page. */
+const ATTENDANCE_HISTORY_PAGE_SIZE = 200;
+const ATTENDANCE_HISTORY_MAX_PAGES = 100;
 
 export const schedulingService = {
   async getShifts(
@@ -992,6 +1017,13 @@ export const schedulingService = {
   async deleteExternalAgency(id: string): Promise<void> {
     await api.delete(`/scheduling/external-hours/agencies/${id}`);
   },
+  /** Merge one agency into another; the second is kept. */
+  async mergeExternalAgency(id: string, intoAgencyId: string): Promise<ExternalAgencyMergeResult> {
+    const response = await api.post<ExternalAgencyMergeResult>(`/scheduling/external-hours/agencies/${id}/merge`, {
+      into_agency_id: intoAgencyId,
+    });
+    return response.data;
+  },
   async createExternalApparatus(agencyId: string, data: ExternalApparatusCreate): Promise<ExternalApparatus> {
     const response = await api.post<ExternalApparatus>(
       `/scheduling/external-hours/agencies/${agencyId}/apparatus`,
@@ -1118,13 +1150,32 @@ export const schedulingService = {
 
   // Attendance history
   async getMyAttendanceHistory(
-    options: { limit?: number; start_date?: string; end_date?: string } = {}
+    options: { limit?: number; offset?: number; start_date?: string; end_date?: string } = {}
   ): Promise<ShiftAttendanceRecord[]> {
-    const { limit = 50, start_date, end_date } = options;
+    const { limit = 50, offset = 0, start_date, end_date } = options;
     const response = await api.get<ShiftAttendanceRecord[]>('/scheduling/my-attendance-history', {
-      params: { limit, start_date, end_date },
+      params: { limit, offset, start_date, end_date },
     });
     return asArray(response.data);
+  },
+  /**
+   * The caller's whole attendance history, read a page at a time. The
+   * endpoint caps a page at 200, and a single request at its default of 50
+   * left a long-serving member's older shifts and hours off My Shifts.
+   */
+  async getAllMyAttendanceHistory(): Promise<ShiftAttendanceRecord[]> {
+    const records: ShiftAttendanceRecord[] = [];
+    // Bounds the loop if a server ever ignored `offset` and kept returning
+    // full pages; 100 pages is 20,000 shifts, beyond any career.
+    for (let page = 0; page < ATTENDANCE_HISTORY_MAX_PAGES; page += 1) {
+      const batch = await schedulingService.getMyAttendanceHistory({
+        limit: ATTENDANCE_HISTORY_PAGE_SIZE,
+        offset: page * ATTENDANCE_HISTORY_PAGE_SIZE,
+      });
+      records.push(...batch);
+      if (batch.length < ATTENDANCE_HISTORY_PAGE_SIZE) break;
+    }
+    return records;
   },
 
   // Active shift lookup

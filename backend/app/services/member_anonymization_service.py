@@ -22,6 +22,11 @@ docs/COMPLIANCE.md):
   meeting-attendance waivers (frequently medical/family detail); the reason
   on the member's attendance waiver requests and the decision notes on them.
   The requests and their decision log are kept, as the waivers are.
+- The certificate files the member uploaded with self-reported training,
+  and the entries naming them on their submissions and on the training
+  records approval copied them to (the rows stay). A file another row still
+  names is kept and only the member's entry goes; a file that cannot be
+  deleted keeps its entry, its filename replaced, and is counted.
 - event_rsvps: dietary restrictions, accessibility needs, notes.
 - external_user_mappings: duplicated name/email/username copies.
 - candidates.photo_url (second copy of the member photo). Candidate names
@@ -40,6 +45,9 @@ What is deliberately NOT touched:
 - votes/ballots — election integrity signatures must not change.
 - Operational history rows (training, attendance, hours, custody, dues,
   exposure records) — they now point at the anonymized shell.
+- Files uploaded to the member's training records themselves (the
+  training-records storage area, not a self-report certificate): department
+  training evidence, kept with the completions they document.
 - membership_number and previous_membership_number — department-assigned
   keys, not personal data: they are what rosters and paper records cite, and
   the anonymized shell is identified by them.
@@ -49,12 +57,14 @@ departed/archived status). Anonymization is irreversible by design.
 """
 
 import copy
+import os
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import case, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.attendance_waiver import (
     AttendanceWaiverRequest,
@@ -73,7 +83,13 @@ from app.models.membership_pipeline import (
     ProspectiveMember,
     ProspectStepProgress,
 )
-from app.models.training import ExternalUserMapping, ShiftTimeOff, TrainingWaiver
+from app.models.training import (
+    ExternalUserMapping,
+    ShiftTimeOff,
+    TrainingRecord,
+    TrainingSubmission,
+    TrainingWaiver,
+)
 from app.models.user import (
     MemberLeaveOfAbsence,
     PasswordHistory,
@@ -83,6 +99,12 @@ from app.models.user import (
 )
 from app.services import file_storage_service as file_storage
 from app.services.attendance_waiver_attachments import remove_member_attachments
+from app.services.file_storage_service import StorageArea
+from app.services.member_files import (
+    collect_member_files,
+    confined_attachment_path,
+    referenced_elsewhere,
+)
 from app.services.membership_pipeline_service import prospect_document_path
 from app.services.passkey_service import delete_all_passkeys
 from app.utils.sql_results import rows_affected
@@ -294,11 +316,98 @@ class MemberAnonymizationService:
         counts["form_submissions_scrubbed"] = prospect_counts["form_submissions"]
         counts["step_progress_scrubbed"] = prospect_counts["step_progress"]
 
+        # --- self-reported training certificates -----------------------
+        # Last, so the files go as late as possible before the endpoint's
+        # commit: a failure in any step above rolls back before a single
+        # certificate has been deleted.
+        counts.update(await self._remove_self_report_certificates(user))
+
         await self.db.flush()
         return {
             "user_id": user.id,
             "anonymized_at": now.isoformat(),
             **counts,
+        }
+
+    async def _remove_self_report_certificates(self, user: User) -> dict[str, int]:
+        """Delete the certificates the member uploaded with self-reported
+        training, and the entries naming them on their submissions and on the
+        training records approval copied them to. The rows stay.
+
+        Files first, rows after, as the retention sweep does. If a later step
+        or the endpoint's commit fails, the rows still name files that are
+        gone and ``anonymized_at`` is unset, so anonymisation may be run
+        again: :func:`file_storage.delete` reports a missing file as removed,
+        and the rerun completes (pitfall #36).
+
+        A file that cannot be deleted keeps its entry, with the uploader's
+        filename replaced, and is counted. Unlike
+        ``remove_member_attachments``, which drops the row whatever happens
+        to the file, this keeps the reference: anonymisation refuses to run
+        twice, so a dropped reference would leave an orphan nothing could
+        ever find again, and the count tells the administrator the erasure
+        is incomplete.
+
+        Files uploaded to the training records themselves (the TRAINING_RECORDS
+        area) are department training evidence and are kept, as the training
+        completions are.
+        """
+        org_id = str(user.organization_id)
+        # Locks the member's submissions and records until the commit: an
+        # approval, a reversal or an officer's attachment append running now
+        # would otherwise write back an entry naming a file deleted below.
+        files = await collect_member_files(self.db, str(user.id), org_id, lock=True)
+        # The records' half matters on its own: after an approval is reversed
+        # and the member removes the attachment from the submission, only the
+        # voided record still names the certificate.
+        candidates = files.self_report_paths
+        shared = await referenced_elsewhere(
+            self.db, org_id, candidates, exclude_rows=files.own_rows
+        )
+
+        removed: set[str] = set()
+        failed: set[str] = set()
+        for path in sorted(candidates - shared):
+            if await file_storage.delete(path):
+                removed.add(path)
+            else:
+                failed.add(path)
+
+        if candidates:
+            rows: list[TrainingSubmission | TrainingRecord] = []
+            if files.submission_ids:
+                rows.extend(
+                    (
+                        await self.db.execute(
+                            select(TrainingSubmission).where(
+                                TrainingSubmission.organization_id == org_id,
+                                TrainingSubmission.id.in_(files.submission_ids),
+                            )
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+            if files.record_ids:
+                rows.extend(
+                    (
+                        await self.db.execute(
+                            select(TrainingRecord).where(
+                                TrainingRecord.organization_id == org_id,
+                                TrainingRecord.id.in_(files.record_ids),
+                            )
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+            for row in rows:
+                _strip_certificates(row, org_id, removed | shared, failed)
+
+        return {
+            "self_report_files_deleted": len(removed),
+            "self_report_files_not_deleted": len(failed),
+            "self_report_files_shared_kept": len(shared),
         }
 
     async def _scrub_prospect(self, user: User, token: str) -> dict[str, int]:
@@ -488,3 +597,36 @@ class MemberAnonymizationService:
             "form_submissions": form_submissions_scrubbed,
             "step_progress": step_progress_scrubbed,
         }
+
+
+def _strip_certificates(
+    row: TrainingSubmission | TrainingRecord,
+    org_id: str,
+    drop: set[str],
+    unnamed: set[str],
+) -> None:
+    """Remove the entries naming *drop* from *row*'s attachments, and replace
+    the uploader's filename on the entries naming *unnamed*."""
+    attachments = row.attachments
+    if not isinstance(attachments, list):
+        return
+    kept: list[Any] = []
+    changed = False
+    for attachment in attachments:
+        path = confined_attachment_path(attachment, org_id, StorageArea.SELF_REPORTS)
+        if path is not None and path in drop:
+            changed = True
+            continue
+        if path is not None and path in unnamed and isinstance(attachment, dict):
+            # The stored name is server-chosen; its extension is the only part
+            # of the label that does not come from the member.
+            label = "certificate" + os.path.splitext(path)[1]
+            if attachment.get("file_name") != label:
+                attachment = {**copy.deepcopy(attachment), "file_name": label}
+                changed = True
+        kept.append(attachment)
+    if changed:
+        # A new list and flag_modified: the JSON column does not track
+        # in-place mutation (pitfall #12).
+        row.attachments = kept
+        flag_modified(row, "attachments")
