@@ -16,10 +16,75 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this commit)** (branch `claude/security-review-membership-pipeline-p17`
-— a plain `claude/security-review-membership-pipeline` with no pass suffix
-already exists as a stale, never-merged branch from an earlier naming
-convention; not reused, per CLAUDE.md Pitfall #24):
+**PR (this commit)** (branch `claude/security-review-medical-screening` — the
+plain, no-suffix name: `git ls-remote --heads origin
+'refs/heads/claude/security-review-medical*'` returned nothing before this
+branch was pushed, so no pass suffix was needed per CLAUDE.md Pitfall #24):
+Feature 09 (Medical screening, PHI), pass 16 — watchdog pickup. PR #4438
+(Feature 08, Membership pipeline, pass 17) had merged (`81ed96b021`) before
+this iteration started. A fresh `list_pull_requests` (state `open`) found no
+`claude/security-review-*` head, and row 09 was the next `⬜` row. Re-checked
+immediately before pushing, per this run's own collision warning: still no
+`claude/security-review-medical*` branch and no matching open PR.
+
+**0 fixed, 0 new findings — but a real, substantial delta, found despite a
+git-history trap that made it look like there was none.** PR #4098 (pass
+15)'s own recorded head and base commits are not ancestors of current `main`
+(the same squash/orphan-merge artifact this file has recorded before, this
+time affecting the PR's own commits), and a plain `git log -- <path>` over
+every declared backend file plus the frontend module returned only 2 commits
+total, ever — both unrelated CSS/form-field sweeps. Trusting that would have
+been a false negative. The actual delta was found by listing
+`backend/alembic/versions/` in date order and by grepping for the encryption
+primitives directly: migration `ac1687769b62` (2026-11-08, two days after
+pass 15) extends MS-18's encryption from `status` alone to `screening_type`
+and `requirement_id` as well (owner decision 2026-11-06, "type + link +
+audit") — read in full, its FK/index drop is introspected rather than
+hardcoded (works against both a `create_all` build and a migration-built one),
+it fails closed without `ENCRYPTION_KEY` when there are rows, and it is
+tested against real rows including upgrade/downgrade round-trips and an
+orphaned-link-on-downgrade case
+(`tests/test_encrypt_screening_type_migration.py`, Pitfall #35 done right). A
+repo-wide grep confirmed no SQL comparison anywhere touches either now-
+ciphertext column (only `.isnot(None)` NULL checks), and every Python-side
+reader of the decrypted value is already org-scoped. A new file,
+`app/services/screening_reminder_service.py` (W71b-4, screening expiry
+reminders, not one of this feature's previously-declared files), was also
+reviewed for the first time: reuses the Compliance tab's own due-date rule
+(Pitfall #29), is wired through `NotificationRuleResolver` with
+`MEDICAL_SCREENING_EXPIRY` confirmed in `ENFORCED_TRIGGERS` (Pitfall #19,
+not a switch wired to nothing), sends email only — never a bell/log entry,
+since that would put the screening type back at rest in plaintext (Pitfall
+#18) — is idempotent via a unique `(screening_record_id, tier_days,
+due_date)` claim (Pitfall #36), and logs only ids/counts, never PHI (Pitfall
+#33). `KNOWN_LIMITATIONS.md` already correctly documented all of this; only
+this file's own MS-18 status (still reading "FLAGGED" from pass 15, which
+predates the type+link half) needed updating to RESOLVED. MS-15 (roster,
+unbounded, long-open, owner-accepted) re-confirmed OPEN, unchanged. All 16
+routes re-enumerated by AST, unchanged from pass 13–15. Full write-up:
+`docs/security-review/MS-09-medical-screening.md`'s **Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 785
+revisions, single head `bbeb4867d393`; `check_route_permissions.py --strict`
+(repo root) — 327 routes, 0 errors/warnings; scoped backend suite (`-k
+"medical_screening or medical_screen or screening"`, run under
+`python3.13`) — **265 passed**, 1 pre-existing environment-only skip
+(`py_vapid`), 0 failed; `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors, 0 warnings; `npx vitest run src/modules/medical-screening` — 85
+passed (15 files).
+
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 17, PR #4438, merged), preserved for history</summary>
+
+**PR [#4438](https://github.com/thegspiro/the-logbook/pull/4438)** (branch
+`claude/security-review-membership-pipeline-p17` — a plain
+`claude/security-review-membership-pipeline` with no pass suffix already
+exists as a stale, never-merged branch from an earlier naming convention; not
+reused, per CLAUDE.md Pitfall #24):
 Feature 08 (Membership pipeline), pass 17 — watchdog pickup. PR #4436
 (Feature 07, Users & organizations, pass 16) had merged (`c552cd3cd`)
 before this iteration started. A fresh `list_pull_requests` (state `open`)
@@ -59,9 +124,9 @@ errors; `npx eslint src/modules/prospective-members` — 0 errors, 0
 warnings; `npx vitest run src/modules/prospective-members` — 410 passed
 (45 files).
 
-Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
-screening, PHI) — re-check `list_pull_requests` fresh rather than trusting
-this note.
+Row 08 → ✅ (merged); next was Feature 09 (Medical screening, PHI).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 16, PR #4436, merged), preserved for history</summary>
@@ -26584,7 +26649,7 @@ iteration's commit" rule.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (9 routes, added pass 17)                                                                                                                                                                 | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                                                                                                                            | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                                                                                                                                                                | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ⬜     |
@@ -26653,6 +26718,43 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-19 — Feature 08 (Membership pipeline, pass 17) merged; Feature 09 (Medical screening, PHI, pass 16) — watchdog pickup, found a real delta a git-history artifact had hidden (MS-18 now fully resolved, new reminder service reviewed), 0 fixed, 0 new findings
+
+Watchdog pickup, running on its own 30-minute schedule rather than inside the
+dedicated `/loop 30m /security-review` session (confirmed unreachable via
+`ListAgents`, no reachable agents). PR #4438 (Feature 08, Membership
+pipeline, pass 17) had merged (`81ed96b021`) before this iteration started.
+A fresh `list_pull_requests` (state `open`) found no head branch starting
+`claude/security-review-`; row 09 (Medical screening, PHI) was the next `⬜`
+row. Re-checked immediately before pushing (per this run's own
+concurrent-session warning): still no `claude/security-review-medical*`
+branch or open PR.
+
+PR #4098 (pass 15)'s own recorded head and base commits are not ancestors of
+current `main` (the squash/orphan-merge artifact this file has recorded
+before, this time hitting the PR's own commits), and a plain path-scoped
+`git log` over this feature's declared files returned only 2 unrelated
+commits, ever — which would have read as "no delta" and was not. The real
+delta was found instead by listing `backend/alembic/versions/` in date order
+and grepping for the encryption primitives directly: migration `ac1687769b62`
+(2026-11-08) extends MS-18's encryption from `status` alone (pass 15) to
+`screening_type` and `requirement_id` as well (owner decision 2026-11-06,
+"type + link + audit") — read in full and verified against its own
+real-rows migration test, a repo-wide sweep for any remaining SQL comparison
+on either now-ciphertext column (none), and org-scoping on every Python-side
+reader of the decrypted value. A new file, `screening_reminder_service.py`
+(W71b-4, screening expiry reminders), was reviewed for the first time:
+reuses the Compliance tab's own due-date rule, is wired through
+`NotificationRuleResolver` with its trigger confirmed in `ENFORCED_TRIGGERS`,
+sends email only (never a bell/log entry, which would put the screening type
+back at rest in plaintext), is idempotent via a unique per-tier claim, and
+logs only ids/counts, never PHI. `KNOWN_LIMITATIONS.md` already correctly
+documented both; only this file's own MS-18 status needed updating to
+RESOLVED. MS-15 (roster, unbounded, long-open, owner-accepted) re-confirmed
+OPEN, unchanged. All 16 routes re-enumerated by AST, unchanged. 0 fixed, 0
+new findings. Full write-up:
+`docs/security-review/MS-09-medical-screening.md`'s **Pass 16** section.
 
 ### 2026-11-19 — Feature 07 (Users & organizations, pass 16) merged; Feature 08 (Membership pipeline, pass 17) — watchdog pickup, no real backend delta, a stale route-count corrected, 0 fixed, 0 new findings
 
