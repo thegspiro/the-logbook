@@ -16,6 +16,56 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this commit)** (branch `claude/security-review-membership-pipeline-p17`
+— a plain `claude/security-review-membership-pipeline` with no pass suffix
+already exists as a stale, never-merged branch from an earlier naming
+convention; not reused, per CLAUDE.md Pitfall #24):
+Feature 08 (Membership pipeline), pass 17 — watchdog pickup. PR #4436
+(Feature 07, Users & organizations, pass 16) had merged (`c552cd3cd`)
+before this iteration started. A fresh `list_pull_requests` (state `open`)
+found no `claude/security-review-*` head, and row 08 was the next `⬜` row.
+
+**0 fixed, 0 new findings.** Baseline `4f05d3457` (pass 16's merge, PR
+#4087). Real delta: 9 non-merge commits touching the feature's declared
+files, every one read in full — and none of them backend-security-relevant.
+Eight are UI/accessibility/bundle-size changes (a lazy import, a test-only
+fix, stat-tile and button-style conformance, inline validation display on
+`TargetRolePicker`, a forms-rollout pass, and a phone/tablet table reflow).
+The ninth (`3e478316d`) is the one line this pass's delta touches in the
+feature's own service code: the `MEDICAL_SCREENING` step-completion check's
+`screening_type` filter moved from SQL into Python, forced by an unrelated
+feature's own encryption change (medical-screening's MS-18, which made that
+column ciphertext) — traced directly as a correct like-for-like port, not a
+regression here. Route count corrected: `membership_pipeline.py` has 64
+routes, not the 63 pass 16 recorded — the discrepancy is pass 16's own
+undercount (confirmed by re-running the same AST walk against pass 16's own
+merge commit, which also returns 64; zero route-decorator lines differ
+between the two commits), not a route added since. The one route pass 16's
+count missed (`get_interview_follow_up_form_answers`) was traced end to end
+this pass: its sensitive-answer grant to an assigned interviewer is looked
+up per `(prospect_id, user_id, organization_id)`, never globally. MP-10
+(listing half) and MP-22 (both long-open, owner-accepted) re-verified
+unchanged. Full write-up:
+`docs/security-review/MP-08-membership-pipeline.md`'s **Pass 17** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+single head `bbeb4867d393`, 785 revisions; `check_route_permissions.py
+--strict` (repo root) — 327 routes, 0 errors/warnings; scoped backend
+suite (`-k "membership or prospect or pipeline or follow_up or
+assignment"`, run under `python3.13`) — **1,747 passed**, 1 pre-existing
+environment-only skip (`py_vapid`), 0 failed; `npm run typecheck` — 0
+errors; `npx eslint src/modules/prospective-members` — 0 errors, 0
+warnings; `npx vitest run src/modules/prospective-members` — 410 passed
+(45 files).
+
+Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
+screening, PHI) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 16, PR #4436, merged), preserved for history</summary>
+
 **PR [#4436](https://github.com/thegspiro/the-logbook/pull/4436)** (branch
 `claude/security-review-users-organizations-p16` — a stale, never-merged
 `claude/security-review-users-organizations-p14` already exists from an
@@ -62,9 +112,9 @@ leave_request"`, run under `/usr/bin/python3.13`) — **962 passed**, 2
 pre-existing environment-only skips, 0 failed; `npm run typecheck` — 0
 errors; `npm run lint` — 0 errors, 0 warnings (`eslint --max-warnings 10`).
 
-Row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
-pipeline) — re-check `list_pull_requests` fresh rather than trusting this
-note.
+Row 07 → ✅ (merged); next was Feature 08 (Membership pipeline).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 16, PR #4435, merged), preserved for history</summary>
@@ -26533,7 +26583,7 @@ iteration's commit" rule.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`, `endpoints/quickbooks_online.py` (8 routes; corrected from `services/quickbooks_online.py`, pass 16), `services/quickbooks_online_client.py`, `services/quickbooks_sync_service.py` (both added pass 16) | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (76 routes, token-scoped voting), `election_service.py`, `services/voter_rules.py` (added pass 16), `services/election_attendance_service.py` (added pass 16), `services/election_defaults.py` (added pass 16)                                               | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (9 routes, added pass 17)                                                                                                                                                                 | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                                                                                                                            | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                                                                                                                            | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                                                                                                                                                                | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ⬜     |
@@ -26603,6 +26653,26 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-19 — Feature 07 (Users & organizations, pass 16) merged; Feature 08 (Membership pipeline, pass 17) — watchdog pickup, no real backend delta, a stale route-count corrected, 0 fixed, 0 new findings
+
+Watchdog pickup, running on its own 30-minute schedule rather than inside
+the dedicated `/loop 30m /security-review` session (confirmed unreachable
+via `ListAgents`, no reachable agents). PR #4436 (Feature 07, Users &
+organizations, pass 16) had merged (`c552cd3cd`) before this iteration
+started. A fresh `list_pull_requests` (state `open`) found no head branch
+starting `claude/security-review-`; row 08 (Membership pipeline) was the
+next `⬜` row. Nine non-merge commits touched the feature's declared files
+since pass 16's baseline (`4f05d3457`), none backend-security-relevant:
+eight UI/accessibility/bundle-size changes, plus one line in
+`membership_pipeline_service.py` that an unrelated feature's own encryption
+change forced to move a `screening_type` filter from SQL into Python
+(traced as a correct like-for-like port). Also corrected pass 16's own
+route count for `membership_pipeline.py` (64, not 63 — a pre-existing
+undercount, not a new route). 0 fixed, 0 new findings; MP-10 (listing half)
+and MP-22 (both long-open, owner-accepted) re-verified unchanged. Full
+write-up: `docs/security-review/MP-08-membership-pipeline.md`'s **Pass 17**
+section.
 
 ### 2026-11-19 — Feature 06 (Elections & ballots, pass 16) merged; Feature 07 (Users & organizations, pass 16) — watchdog pickup, own-email step-up gap closed, new leave-requests surface traced end to end, 0 fixed, 0 new findings
 
