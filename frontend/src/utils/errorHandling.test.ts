@@ -4,6 +4,8 @@ import {
   toAppError,
   getErrorDetail,
   getErrorMessage,
+  getActionFailureMessage,
+  getLoadFailureMessage,
   getSaveFailureMessage,
   isNetworkError,
   isNonRetryableHttpError,
@@ -555,6 +557,93 @@ describe('errorHandling', () => {
       expect(isNonRetryableHttpError({ response: { status: 429 } })).toBe(false);
     });
   });
+  describe('getActionFailureMessage', () => {
+    const http = (status: number, data: Record<string, unknown> = {}) => ({ response: { status, data } });
+
+    it('blames the connection only when nothing came back', () => {
+      expect(
+        getActionFailureMessage({ request: {}, code: 'ERR_NETWORK', message: 'Network Error' }, 'delete the document')
+      ).toBe('Could not delete the document. Check your connection and try again.');
+    });
+
+    it('says the server failed, with the support code, on a 5xx', () => {
+      expect(
+        getActionFailureMessage(
+          http(500, { detail: 'Internal server error', code: 'LB-SYS-001' }),
+          'delete the document'
+        )
+      ).toBe(
+        'Could not delete the document: the server hit a problem on its end. Try again in a moment. If it keeps happening, tell IT (Error code: LB-SYS-001).'
+      );
+    });
+
+    it('says permission is missing on a 403, with the server’s reason', () => {
+      expect(
+        getActionFailureMessage(
+          http(403, { detail: 'That position carries more than you hold.' }),
+          'remove the position'
+        )
+      ).toBe(
+        'You do not have permission to remove the position. That position carries more than you hold. Ask an administrator if you need to.'
+      );
+    });
+
+    it('passes a refusal through as the server wrote it', () => {
+      expect(
+        getActionFailureMessage(http(409, { detail: 'This meeting has approved minutes.' }), 'delete the meeting')
+      ).toBe('This meeting has approved minutes.');
+    });
+
+    it('keeps a developer message off screen when the page itself failed', () => {
+      expect(getActionFailureMessage(new TypeError('blob is undefined'), 'download the document')).toBe(
+        'Could not download the document. Try again, and if it keeps happening, tell IT.'
+      );
+    });
+  });
+
+  describe('getLoadFailureMessage', () => {
+    const http = (status: number, data: Record<string, unknown> = {}) => ({ response: { status, data } });
+
+    it('blames the connection only when nothing came back', () => {
+      expect(
+        getLoadFailureMessage({ request: {}, code: 'ERR_NETWORK', message: 'Network Error' }, 'members and positions')
+      ).toBe('Could not load members and positions. Check your connection and refresh the page.');
+    });
+
+    it('says the server failed, with the support code, on a 5xx', () => {
+      const message = getLoadFailureMessage(
+        http(500, { detail: 'Internal server error', code: 'LB-SYS-001' }),
+        'members and positions'
+      );
+
+      expect(message).toBe(
+        'Could not load members and positions: the server hit a problem on its end. Refresh the page in a moment. If it keeps happening, tell IT (Error code: LB-SYS-001).'
+      );
+      expect(message).not.toContain('connection');
+    });
+
+    it('says permission is missing on a 403, with the server’s reason', () => {
+      expect(getLoadFailureMessage(http(403, { detail: 'Requires positions.view.' }), 'members and positions')).toBe(
+        'You do not have permission to see members and positions. Requires positions.view. Ask an administrator if you need it.'
+      );
+    });
+
+    it('keeps a developer message off screen when the page itself failed', () => {
+      const message = getLoadFailureMessage(
+        new TypeError('The training dashboard response was not a summary'),
+        'the dashboard'
+      );
+
+      expect(message).toBe('Could not load the dashboard. Refresh the page, and if it keeps happening, tell IT.');
+    });
+
+    it('passes any other answer through as the server wrote it', () => {
+      expect(getLoadFailureMessage(http(404, { detail: 'Organization not found' }), 'members and positions')).toBe(
+        'Organization not found'
+      );
+    });
+  });
+
   describe('getSaveFailureMessage', () => {
     it('names the action, reassures, and keeps the support code on a server fault', () => {
       const message = getSaveFailureMessage(

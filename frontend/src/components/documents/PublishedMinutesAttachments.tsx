@@ -3,6 +3,7 @@ import { Download, Paperclip } from 'lucide-react';
 import { Modal } from '../Modal';
 import { documentsService } from '../../services/api';
 import type { PublishedMinutesAttachment } from '../../services/documentsService';
+import { getLoadFailureMessage } from '../../utils/errorHandling';
 
 interface PublishedMinutesAttachmentsProps {
   documentId: string;
@@ -34,8 +35,8 @@ export const PublishedMinutesAttachments: React.FC<PublishedMinutesAttachmentsPr
     setItems(null);
     try {
       setItems(await documentsService.getPublishedMinutesAttachments(documentId));
-    } catch {
-      setError('Could not load the attachments. Check your connection and try again.');
+    } catch (err: unknown) {
+      setError(getLoadFailureMessage(err, 'the attachments'));
     }
   };
 

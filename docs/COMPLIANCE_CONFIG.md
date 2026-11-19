@@ -115,8 +115,13 @@ the matching profile's `required_requirement_ids` narrow the requirements, its
 threshold overrides replace the org's, and then each remaining requirement is
 checked with `requirement_applies_to_user` (join date, rank, membership type).
 It is the same for the dashboard percentage, the compliance matrix, the
-**Department Compliance** card (TR4-3), and the annual and monthly compliance
-reports (CMP4-3). Before 2026-10-05 the card graded every member against every
+**Department Compliance** card (TR4-3), the annual and monthly compliance
+reports (CMP4-3), and — since 2026-11-16 (D10) — a member's own **My Training**
+page, the officer's view of one member's requirements, the member profile's
+compliance card, and requirement progress (`/training/requirements/progress`,
+the per-member training report and the MCP `get_member_requirements_progress`
+tool). The profile card's green / yellow / red colour still uses its own
+fixed rule rather than the profile's thresholds (see `docs/KNOWN_LIMITATIONS.md`). Before 2026-10-05 the card graded every member against every
 applicable requirement at 100%, and the reports used the fixed 100% / 75%
 thresholds, so a department using profiles read different figures in each place.
 Stored reports keep the figures they were generated with; departments without a
