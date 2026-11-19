@@ -16,7 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this commit)** (branch `claude/security-review-elections-ballots`):
+**PR (this commit)** (branch `claude/security-review-elections-ballots-p16`
+— a plain `claude/security-review-elections-ballots` with no pass suffix
+already exists as a stale, never-merged branch from an earlier naming
+convention; reused per CLAUDE.md Pitfall #24, never pushed to):
 Feature 06 (Elections & ballots), pass 16 — watchdog pickup. PR #4430
 (Feature 05, Finance & approvals, pass 16) was found open, fully green
 (all 26 check runs `success`, `mergeable_state: clean`) and unmerged for
