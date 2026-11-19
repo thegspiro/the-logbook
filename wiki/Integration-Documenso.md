@@ -1,6 +1,6 @@
 # Documenso Integration
 
-_(Added 2026-07-13)_
+_(Added 2026-07-13; Settings button 2026-11-16)_
 
 The Documenso integration lets a department send documents out for electronic
 signature — an open-source [DocuSign](https://documenso.com) alternative. It
@@ -17,18 +17,25 @@ a prospective member's stage.
 - **Pipeline E-Signature Stage** — A **Document Upload** pipeline stage can collect a signature via Documenso instead of a file upload; applicants see a "Documents sent for signature" note on their public status page
 - **Auto-Advance on Completion** — With a webhook secret configured, a completed signature advances the matching prospect's stage automatically, correlated by the signer's email
 - **Secure Inbound Webhook** — Rate-limited, secret/signature-verified, audit-logged receiver mirroring the Salesforce webhook
+- **Settings on a connected card** — The API token, base URL and webhook secret can be changed without disconnecting. A blank token or secret box keeps what is saved
 
 ---
 
 ## Pages
 
-| URL             | Page                              | Permission            |
-| --------------- | --------------------------------- | --------------------- |
-| `/integrations` | Integrations Hub (Documenso card) | `integrations.manage` |
+| URL             | Page                                            | Permission            |
+| --------------- | ----------------------------------------------- | --------------------- |
+| `/integrations` | Integrations Hub (Documenso card, **Settings**) | `integrations.manage` |
 
 Documenso is configured from the **Integrations** page. The connect dialog
 collects the API token, optional base URL, and an optional webhook secret, and
 displays the inbound callback URL to paste into Documenso.
+
+To change them later, use **Settings** on the connected card. It shows the base
+URL in use; a blank **API Token** or **Webhook Secret** box keeps the saved one.
+**Moving to a different base URL needs that server's API token in the same
+save.** The API refuses with 422 to carry a stored token to a new address, and
+the dialog asks for the token before it sends the save.
 
 ---
 
@@ -39,7 +46,7 @@ displays the inbound callback URL to paste into Documenso.
 ```
 POST   /api/v1/integrations/{id}/connect            # Store token/base URL/webhook secret, enable
 POST   /api/v1/integrations/{id}/disconnect         # Disconnect
-PATCH  /api/v1/integrations/{id}                     # Update config
+PATCH  /api/v1/integrations/{id}                     # Settings: store only the fields sent
 POST   /api/v1/integrations/{id}/test-connection     # Verify the API token
 ```
 
