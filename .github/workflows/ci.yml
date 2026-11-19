@@ -14,6 +14,10 @@ on:
   # Up to Date to Merge" in docs/KNOWN_LIMITATIONS.md.
   merge_group:
     types: [checks_requested]
+  # A manual run tests everything on both database engines, on any branch.
+  # It is how to exercise MariaDB or a skipped suite on a pull request's
+  # branch before merging.
+  workflow_dispatch:
 
 # No job here needs to write to the repository, so drop the token to
 # read-only at the workflow level (matching secret-scan, supply-chain and
@@ -22,41 +26,21 @@ on:
 permissions:
   contents: read
 
-# Concurrency is set per job, not here. Every job below carries the same
-# `concurrency:` block, differing only in its own id; scripts/check_ci_gate.py
-# asserts that it does and that no workflow-level block comes back.
+# Pull request runs replace each other per job; main runs one at a time.
+# scripts/check_ci_gate.py asserts both halves, and its header has the two
+# incidents behind them.
 #
-# A workflow-level group held a pull request's new run until EVERY job of the
-# run it replaced had finished, and one never finishes quickly: `ci-success`
-# runs `if: always()`, so it survives the cancellation, then queues for a
-# runner like any other job. While runners were backlogged in November 2026
-# that one queued job held new runs at "pending" for hours: #4375's run waited
-# five and a half hours on 2026-11-17 behind its own replaced run's gate. Per
-# job, each job of the new run cancels only its own counterpart in the old
-# one, so the new run starts at once. The gate stays `always()`: a gate that
-# a cancel could skip would report "skipped", which branch protection counts
-# as a pass.
-#
-# Within a job's group, PR pushes share it per ref, so a superseded push is
-# cancelled. Every commit on main gets a group of its own, so every main
-# commit ends up with a CI record. `cancel-in-progress: false` was not enough
-# on its own: GitHub keeps at most one running and one *pending* entry per
-# group, so when three or more main runs overlapped each new arrival evicted
-# the pending one and that commit was never built. On 2026-08-23, 8c61c948
-# (#1709) merged to main and its run was evicted by the next merge 17 seconds
-# later, leaving that commit with no CI record at all. Keying on the SHA gives
-# each commit its own group, where there is nothing to evict it from.
-#
-# The cost was accepted deliberately: a merge train of N commits runs N full
-# job sets concurrently, competing with PR runs for the same runner pool. If
-# PR latency degrades, the fix is to make main's run cheaper (a reduced job
-# set whose only purpose is the record) rather than to go back to a shared
-# group — a gap in the record is not recoverable after the fact.
-#
-# `strategy.job-index` keeps the legs of a matrix job apart (0 for a job with
-# no matrix); without it the three Safari shards would cancel one another.
-# The job id is written out because `github.job` is not available to a job's
-# `concurrency:` key.
+# This block applies to main alone. Every other ref gets a group of its own
+# here (the run id), so the group never holds a pull request's run: each job
+# below carries its own `concurrency:` block and a new push cancels that job's
+# counterpart in the run it replaces. On main one run executes at a time and
+# is never cancelled, so it always completes, and of the merges that land
+# while it runs only the newest waits. The intermediate commits of a merge
+# train get no run of their own (owner decision, 2026-11-19): eleven merges in
+# three minutes had queued about 240 jobs ahead of every open pull request.
+concurrency:
+  group: ${{ github.ref == 'refs/heads/main' && 'ci-main' || github.run_id }}
+  cancel-in-progress: false
 
 # Every job below sets timeout-minutes. GitHub's default is 360 minutes, which
 # is not a safety net — on 2026-08-17 the MariaDB contract job hung in
@@ -67,6 +51,40 @@ permissions:
 # run is never killed; raise the number if a job legitimately outgrows it
 # rather than removing the key.
 jobs:
+  # ──────────────────────────────────────────────
+  # What this change can affect
+  # ──────────────────────────────────────────────
+  # Decides which of the expensive suites run. A job below with
+  # `if: needs.changes.outputs.<area> == 'true'` is skipped when the pull
+  # request touches nothing in its area, and `ci-success` accepts exactly
+  # those skips and no others. scripts/ci_changed_areas.py has the rules and
+  # the reasons the lint jobs and both unit suites are never skipped.
+  #
+  # Pushes to main, merge queue commits and manual runs run everything, on
+  # both database engines.
+  changes:
+    name: Changed Areas
+    concurrency:
+      group: ${{ github.workflow }}-changes-${{ strategy.job-index }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.areas.outputs.backend }}
+      frontend: ${{ steps.areas.outputs.frontend }}
+      docker: ${{ steps.areas.outputs.docker }}
+      db_matrix: ${{ steps.areas.outputs.db_matrix }}
+    steps:
+      # Depth 2 is the merge commit GitHub builds for a pull request plus its
+      # parents, which is all the diff against the base needs.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Classify the changed paths
+        id: areas
+        run: python3 scripts/ci_changed_areas.py --event "${{ github.event_name }}"
+
   # ──────────────────────────────────────────────
   # Backend
   # ──────────────────────────────────────────────
@@ -91,7 +109,7 @@ jobs:
   migration-chain:
     name: Migration Chain
     concurrency:
-      group: ${{ github.workflow }}-migration-chain-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      group: ${{ github.workflow }}-migration-chain-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -116,7 +134,7 @@ jobs:
   backend-lint:
     name: Backend Lint
     concurrency:
-      group: ${{ github.workflow }}-backend-lint-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      group: ${{ github.workflow }}-backend-lint-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -289,8 +307,10 @@ jobs:
 
   backend-typecheck:
     name: Backend Type Check
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     concurrency:
-      group: ${{ github.workflow }}-backend-typecheck-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      group: ${{ github.workflow }}-backend-typecheck-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -329,8 +349,10 @@ jobs:
 
   backend-security:
     name: Backend Security Scan
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     concurrency:
-      group: ${{ github.workflow }}-backend-security-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      group: ${{ github.workflow }}-backend-security-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -400,7 +422,7 @@ jobs:
   backend-test:
     name: Backend Unit Tests
     concurrency:
-      group: ${{ github.workflow }}-backend-test-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      group: ${{ github.workflow }}-backend-test-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     # The suite itself now runs ~17-18 minutes (18,776 tests), and checkout +
@@ -440,9 +462,16 @@ jobs:
         # Coverage floor is a RATCHET set ~2 points under measured coverage
         # (53.1% on 2026-08-16) — it blocks regressions, not an aspiration.
         # Raise it as coverage grows; never lower it.
+        #
+        # -n auto: one worker per core. Run serially the suite took 13-21
+        # minutes of this job; on four workers it measured 6m38s on
+        # 2026-11-19. These tests share no database, so nothing needs a
+        # worker of its own. The database-backed jobs below stay serial:
+        # their tests share one schema.
         run: |
           pytest tests/ \
             -m "not integration and not slow and not docker" \
+            -n auto \
             -v --tb=short \
             --junitxml=reports/junit-unit.xml \
             --cov=app --cov-report=term --cov-report=xml:reports/coverage.xml \
@@ -519,8 +548,10 @@ jobs:
 
   backend-test-integration:
     name: Backend Integration Tests (${{ matrix.db.name }})
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     concurrency:
-      group: ${{ github.workflow }}-backend-test-integration-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      group: ${{ github.workflow }}-backend-test-integration-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     # 30 left no headroom: on 2026-10-27 the MySQL leg took 23, 25, 28 and 30
@@ -530,7 +561,8 @@ jobs:
     # minutes for ubuntu-26.04's slow ffmpeg download, and the MySQL leg already
     # takes up to 40 of the 45, so 45 would turn a slow mirror into a timeout.
     timeout-minutes: 55
-    # No `needs:`. This job used to sit behind `needs: [backend-lint,
+    # No `needs:` on another test job; `changes` is the only edge, and it
+    # finishes in seconds. This job used to sit behind `needs: [backend-lint,
     # backend-test]` as a fail-fast guard — don't spend a database runner if
     # the cheap checks are already red. That guard was costing far more than
     # it saved. Every `needs:` edge is a *re-queue*, and on a repository this
@@ -560,14 +592,11 @@ jobs:
       # failure is exactly how a MariaDB-only regression would get masked by a
       # green MySQL run.
       fail-fast: false
+      # MySQL 8.0 on a pull request; MariaDB 10.11 as well on main, in the
+      # merge queue and on a manual run. The list is built by
+      # scripts/ci_changed_areas.py.
       matrix:
-        db:
-          - name: MySQL 8.0
-            image: mysql:8.0
-            slug: mysql-8-0
-          - name: MariaDB 10.11
-            image: mariadb:10.11
-            slug: mariadb-10-11
+        db: ${{ fromJSON(needs.changes.outputs.db_matrix) }}
     services:
       mysql:
         image: ${{ matrix.db.image }}
@@ -709,12 +738,15 @@ jobs:
 
   backend-test-contract:
     name: Backend API Contract Tests (${{ matrix.db.name }})
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     concurrency:
-      group: ${{ github.workflow }}-backend-test-contract-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      group: ${{ github.workflow }}-backend-test-contract-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # No `needs:` — see the note on backend-test-integration. This was behind
+    # No `needs:` on another test job — see the note on
+    # backend-test-integration. This was behind
     # `needs: [backend-lint, backend-test]` for the same fail-fast reason and
     # paid the same re-queue penalty.
     strategy:
@@ -742,14 +774,11 @@ jobs:
       # the first wave and finishes in ~3m, well inside the ~4m40s the
       # integration legs take, so it is not on the critical path.
       fail-fast: false
+      # MySQL 8.0 on a pull request; MariaDB 10.11 as well on main, in the
+      # merge queue and on a manual run. The list is built by
+      # scripts/ci_changed_areas.py.
       matrix:
-        db:
-          - name: MySQL 8.0
-            image: mysql:8.0
-            slug: mysql-8-0
-          - name: MariaDB 10.11
-            image: mariadb:10.11
-            slug: mariadb-10-11
+        db: ${{ fromJSON(needs.changes.outputs.db_matrix) }}
     services:
       mysql:
         image: ${{ matrix.db.image }}
@@ -836,15 +865,18 @@ jobs:
   # ──────────────────────────────────────────────
   docker-build:
     name: Docker Image Build & Container Tests
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
     concurrency:
-      group: ${{ github.workflow }}-docker-build-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      group: ${{ github.workflow }}-docker-build-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     # 45, not 30: TestCombinedImage builds the backend and frontend a second
     # time on a fresh docker-container builder (the driver the release
     # workflow uses), which shares no layer cache with the daemon's builds.
     timeout-minutes: 45
-    # No `needs:` — see the note on backend-test-integration. This was behind
+    # No `needs:` on another test job — see the note on
+    # backend-test-integration. This was behind
     # `needs: [backend-lint, frontend-lint]` for the same fail-fast reason and
     # paid the same re-queue penalty.
     defaults:
@@ -934,8 +966,10 @@ jobs:
   # report "Frontend Checks failed" having never built the app at all.
   frontend-checks:
     name: Frontend Lint, Typecheck & Build
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     concurrency:
-      group: ${{ github.workflow }}-frontend-checks-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      group: ${{ github.workflow }}-frontend-checks-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -991,7 +1025,7 @@ jobs:
   frontend-test:
     name: Frontend Tests
     concurrency:
-      group: ${{ github.workflow }}-frontend-test-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      group: ${{ github.workflow }}-frontend-test-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     # Coverage instruments the entire 414-file source denominator and the
@@ -1048,8 +1082,10 @@ jobs:
 
   frontend-e2e:
     name: Frontend E2E (${{ matrix.leg.name }})
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     concurrency:
-      group: ${{ github.workflow }}-frontend-e2e-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      group: ${{ github.workflow }}-frontend-e2e-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     # Derived, not chosen: the cap must exceed the largest per-test budget in any
@@ -1073,7 +1109,8 @@ jobs:
     # cap is a hang guard, not a target; the spec's comment has the samples
     # behind the 85.
     timeout-minutes: 88
-    # No `needs:` — see the note on backend-test-integration.
+    # No `needs:` on another test job — see the note on
+    # backend-test-integration.
     defaults:
       run:
         working-directory: frontend
@@ -1241,8 +1278,10 @@ jobs:
   # the other.
   frontend-e2e-safari:
     name: Frontend E2E (Mobile Safari ${{ matrix.shard }}/3)
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     concurrency:
-      group: ${{ github.workflow }}-frontend-e2e-safari-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      group: ${{ github.workflow }}-frontend-e2e-safari-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -1362,8 +1401,10 @@ jobs:
   # one leg the odd one out.
   frontend-pwa:
     name: Frontend PWA Smoke Test
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     concurrency:
-      group: ${{ github.workflow }}-frontend-pwa-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      group: ${{ github.workflow }}-frontend-pwa-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -1409,7 +1450,7 @@ jobs:
   docs-links:
     name: Docs Link Check
     concurrency:
-      group: ${{ github.workflow }}-docs-links-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      group: ${{ github.workflow }}-docs-links-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -1489,20 +1530,21 @@ jobs:
   # omission it exists to block, merging with the checker red. Run from here,
   # the gate cannot be green unless the check passed.
   #
-  # Consequence worth knowing before adding `paths`/`paths-ignore` filters to
-  # any job above: a filtered-out job reports `skipped` and would fail this
-  # gate. Route path filtering through the workflow-level `on:` triggers, or
-  # give the skipped job an `if:` that this step tolerates explicitly.
+  # A job skipped because `changes` found its area untouched is the one skip
+  # this gate accepts. scripts/ci_gate_verdict.py reads each job's `if:` from
+  # this file to decide that, so do not add `paths` filters or any other
+  # condition to a job above: its skip would fail the gate.
   ci-success:
     name: CI Success
     concurrency:
-      group: ${{ github.workflow }}-ci-success-${{ strategy.job-index }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'shared' }}
+      group: ${{ github.workflow }}-ci-success-${{ strategy.job-index }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     # always() so the gate still reports when an upstream job failed; without
     # it this job would itself be skipped and the branch protection check would
     # sit pending forever.
     if: always()
     needs:
+      - changes
       - backend-lint
       - backend-typecheck
       - backend-security
@@ -1526,46 +1568,17 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Verify every job succeeded
+      - name: Install gate dependency
+        run: pip install 'PyYAML==6.0.2'
+
+      - name: Verify every job that had to run succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-        run: |
-          python3 - <<'PYEOF'
-          import json
-          import os
-          import sys
-
-          results = json.loads(os.environ["NEEDS_JSON"])
-          bad = {
-              job: meta.get("result")
-              for job, meta in sorted(results.items())
-              if meta.get("result") != "success"
-          }
-
-          for job, meta in sorted(results.items()):
-              print(f"{meta.get('result'):>10}  {job}")
-
-          if not bad:
-              print("\nAll jobs succeeded.")
-              sys.exit(0)
-
-          print("\nCI failed. Jobs that did not succeed:")
-          for job, result in bad.items():
-              # Name the distinction explicitly: a skipped job usually means an
-              # upstream `needs:` dependency died, which is a different thing to
-              # debug than a test that ran and failed.
-              hint = " (never ran — an upstream dependency failed)" if result == "skipped" else ""
-              print(f"  - {job}: {result}{hint}")
-          sys.exit(1)
-          PYEOF
+        run: python3 scripts/ci_gate_verdict.py
 
       # `!cancelled()` so an incomplete gate is reported even when the run is
       # already failing for another reason — the two problems are independent
       # and a reviewer needs to see both.
-      - name: Install gate-check dependency
-        if: "!cancelled()"
-        run: pip install 'PyYAML==6.0.2'
-
       - name: Verify this gate requires every job
         if: "!cancelled()"
         run: python3 scripts/check_ci_gate.py
