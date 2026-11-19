@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 
-// Forms batch 22: the six extended sections share one ResourceSection, so the
+// Forms batch 23: the six extended sections share one ResourceSection, so the
 // form pattern is checked through two of them and the readings form.
 
 const getUtilityAccounts = vi.fn();
@@ -66,7 +66,7 @@ const renderInsurance = () =>
     </ConfirmProvider>
   );
 
-describe('extended facility section forms (batch 22)', () => {
+describe('extended facility section forms (batch 23)', () => {
   beforeEach(() => {
     for (const mock of [
       getUtilityAccounts,

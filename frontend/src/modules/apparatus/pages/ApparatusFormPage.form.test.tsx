@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 
-// Forms batch 22: the apparatus form under the shared field, its summary, the
+// Forms batch 23: the apparatus form under the shared field, its summary, the
 // single-save rule on edit and the discard question.
 
 vi.mock('@/hooks/useRanks', () => ({ useRanks: () => ({ ranks: [], loading: false }) }));
@@ -75,7 +75,7 @@ const renderAt = (path: string) =>
     </ConfirmProvider>
   );
 
-describe('ApparatusFormPage (batch 22)', () => {
+describe('ApparatusFormPage (batch 23)', () => {
   beforeEach(() => {
     localStorage.setItem('has_session', 'true');
     store.currentApparatus = null;

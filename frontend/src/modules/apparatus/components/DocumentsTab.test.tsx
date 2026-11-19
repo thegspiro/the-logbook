@@ -173,7 +173,7 @@ describe('DocumentsTab', () => {
     );
   });
 
-  describe('the upload form (forms batch 22)', () => {
+  describe('the upload form (forms batch 23)', () => {
     const pick = async () => {
       grantedPermissions = new Set(['apparatus.view', 'apparatus.edit']);
       renderWithRouter(<DocumentsTab id="a-1" />);

@@ -730,7 +730,7 @@ a refused name back instead of clearing it. Not converted, and still listed in
 form and its documents, and a facility's extended sections (utilities, keys,
 shutoffs, capital projects, insurance, occupants).
 
-**Rolled out further on 2026-11-16** (batch 22): the full apparatus form (add
+**Rolled out further on 2026-11-16** (batch 23): the full apparatus form (add
 and edit) and the Documents tab's upload form, and a facility's six extended
 sections (utilities with their readings, access keys, shutoffs, capital
 projects, insurance, occupants). The same rules apply: adding refuses until

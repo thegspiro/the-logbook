@@ -626,7 +626,7 @@ the full apparatus form and its documents; and a facility's extended sections
 which share one `ResourceSection` and were not on earlier lists. The other rows
 of the batch 18 list are unchanged.
 
-## Rollout status, 2026-11-16 (batch 22)
+## Rollout status, 2026-11-16 (batch 23)
 
 The same steps, on these:
 
