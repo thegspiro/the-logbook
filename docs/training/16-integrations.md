@@ -201,6 +201,19 @@ Two tick boxes finish the form:
 - **Sync automatically every 30 minutes** in the direction you chose. The
   manual sync buttons still work.
 
+**To change these later**, use **Settings** on the connected card. Contact
+matching, sync direction and the two tick boxes take effect from the next sync.
+A Client ID, Client Secret or Refresh Token box left blank keeps what is saved.
+**Re-authorize with Salesforce** signs in again and replaces the stored token,
+for when it was revoked or has expired; sign in to the same org.
+
+The **Instance URL** and **Environment** are shown but cannot be changed in
+Settings. The saved sign-in belongs to one Salesforce org, so moving to another
+org would keep syncing to the old one. To change org, disconnect and connect
+again.
+
+![Salesforce settings on a connected card: the Instance URL and Environment shown read-only with the note to disconnect and connect again to change org, Contact Matching, the Re-authorize with Salesforce button, the Client ID, Client Secret and Refresh Token boxes with notes that blank keeps what is saved, Sync Direction, the two tick boxes, and the notice that saved settings apply from the next sync](./images/16-29-salesforce-settings.png)
+
 ### Choose an Authentication Method
 
 **Interactive (best when an administrator manages Salesforce):** select
@@ -325,6 +338,17 @@ acknowledgments. It works with Documenso Cloud or your own Documenso server.
 
 After saving, select **Test** on the card to check the token.
 
+To change any of these later, use **Settings** on the connected card. Documenso
+stays connected and the webhook address does not change. Leave the **API
+Token** or **Webhook Secret** box blank to keep the saved one. The **API Base
+URL** box shows the address in use. **Moving to a different Documenso server
+needs that server's API token in the same save**: a token works only on the
+server it was created on, so The Logbook will not send the saved token to a new
+address. To return to Documenso Cloud, enter `https://app.documenso.com/api/v1`
+with a Cloud token.
+
+![Documenso settings on a connected card: the API Token box reading Leave blank to keep the current token, the API Base URL box showing the department's own Documenso server with the note that changing it needs that server's token in the same save, the Webhook Secret box with its note that a blank box keeps the saved secret, the webhook address, and the notice that a new token or base URL is used from the next request to Documenso](./images/16-28-documenso-settings.png)
+
 ### Auto-Advancing a Signing Stage (Webhooks)
 
 When you set a **Webhook Secret**, the connect window shows a **callback URL**
@@ -371,6 +395,16 @@ or your own Cal.com server.
 | **Webhook Secret** _(optional)_ | A shared secret. It lets a finished meeting move the applicant on by itself      |
 
 After saving, select **Test** on the card to check the key.
+
+To change any of these later, use **Settings** on the connected card. Cal.com
+stays connected and the webhook address does not change. Leave the **API Key**
+or **Webhook Secret** box blank to keep the saved one. The **API Base URL** box
+shows the address in use. **Moving to a different Cal.com server needs that
+server's API key in the same save**: a key works only on the server it was
+created on, so The Logbook will not send the saved key to a new address. To
+return to Cal.com Cloud, enter `https://api.cal.com/v1` with a Cloud key.
+
+![Cal.com settings on a connected card: the API Key box reading Leave blank to keep the current key, the API Base URL box showing the department's own Cal.com server with the note that changing it needs that server's key in the same save, the Webhook Secret box with its note that a blank box keeps the saved secret, the webhook address, and the notice that a new key or base URL is used from the next booking lookup](./images/16-27-calcom-settings.png)
 
 ### Viewing Bookings
 

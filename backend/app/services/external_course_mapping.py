@@ -65,14 +65,6 @@ def normalize_course_title(title: Optional[str]) -> str:
     return " ".join(_NON_WORD.sub(" ", text).split())
 
 
-def _similarity(a: str, b: str) -> float:
-    if not a or not b:
-        return 0.0
-    if a == b:
-        return 1.0
-    return SequenceMatcher(None, a, b).ratio()
-
-
 class SuggestionCandidates:
     """Everything a suggestion is chosen from, loaded once per request.
 
@@ -90,6 +82,12 @@ class SuggestionCandidates:
         self.mapped = mapped
         self.library = library
         self.courses = courses
+        # One matcher per candidate name, built on first use. SequenceMatcher
+        # analyses its second sequence and caches that, so holding the
+        # candidate there and swapping only the target in keeps every score
+        # exactly SequenceMatcher(None, target, name).ratio(), while that
+        # analysis is done once per candidate instead of once per pair.
+        self._matchers: Dict[str, SequenceMatcher] = {}
 
     def pick(
         self, external_course_id: str, external_course_name: str
@@ -98,19 +96,43 @@ class SuggestionCandidates:
         if not target:
             return None
         best_score, best_course_id = 0.0, None
-        for other_id, name, course_id in self.mapped:
-            if other_id == external_course_id:
-                continue
-            score = _similarity(target, name)
-            if score > best_score:
-                best_score, best_course_id = score, course_id
-        for name, course_id in self.library:
-            score = _similarity(target, name)
+        candidates = [
+            (name, course_id)
+            for other_id, name, course_id in self.mapped
+            if other_id != external_course_id
+        ] + list(self.library)
+        for name, course_id in candidates:
+            score = self._score(target, name, floor=best_score)
             if score > best_score:
                 best_score, best_course_id = score, course_id
         if best_course_id is None or best_score < SUGGESTION_THRESHOLD:
             return None
         return self.courses.get(best_course_id)
+
+    def _score(self, target: str, name: str, floor: float) -> float:
+        """``SequenceMatcher(None, target, name).ratio()``, or 0.0 when it
+        cannot matter.
+
+        A pair that cannot reach the threshold, or cannot beat the best score
+        already found, is never picked, so its exact ratio is not computed:
+        ``real_quick_ratio`` and ``quick_ratio`` are cheap upper bounds on
+        ``ratio``. With a few thousand unlinked names against a library of a
+        couple of hundred courses this is the difference between seconds and
+        a fraction of one, and the course picked is unchanged.
+        """
+        if not name:
+            return 0.0
+        if target == name:
+            return 1.0
+        matcher = self._matchers.get(name)
+        if matcher is None:
+            matcher = self._matchers[name] = SequenceMatcher(None, "", name)
+        matcher.set_seq1(target)
+        for bound in (matcher.real_quick_ratio, matcher.quick_ratio):
+            upper = bound()
+            if upper < SUGGESTION_THRESHOLD or upper <= floor:
+                return 0.0
+        return matcher.ratio()
 
 
 async def load_suggestion_candidates(

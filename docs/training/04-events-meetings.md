@@ -244,7 +244,9 @@ feed listing every change, such as "John Smith changed from Maybe to Going at
 **More tools on the attendee list (officers):**
 
 - **Print Roster** prints the attendee list for use at the door.
-- **Export CSV** downloads it.
+- **Export CSV** downloads it. _(2026-11-19)_ Its last column, **Source**,
+  reads **Imported** for a check-in the Historical Data Import wrote and **The
+  Logbook** for the rest.
 - **Send Reminders** sends a reminder to **Non-respondents only** (everyone
   who has not answered) or **All members**.
 
@@ -323,10 +325,11 @@ Nobody decides their own request.
 
 **Every request in one place.** When requests are waiting on your events, the
 Events page shows _"N attendance requests are waiting for you"_. It opens
-**Attendance Requests**, which lists every waiting request on events you
-organize or are alternate for, oldest first, with the same **Approve** and
-**Decline**. Officers who can manage events can switch between **My events**
-and **All events**.
+**Attendance Requests**, which lists every waiting request sent to you, oldest
+first, with the same **Approve** and **Decline**: those on events you organize
+or are alternate for, and any passed on to you because the event's organizers
+could not take it. Officers who can manage events can switch between **Sent to
+me** and **All events**.
 
 **Who is told.**
 
@@ -1595,6 +1598,11 @@ can't undo this."_ — with **Cancel Events** and **Keep Events**.
 
 **Export to CSV** in the same **⋯** menu exports the whole list without
 selecting.
+
+Both event exports end with a **Source** column _(2026-11-19)_: **Imported**
+for an event the Historical Data Import created (from a staffing roster, or
+behind a drill from a training file) and **The Logbook** for the rest. It is
+the last column, so a spreadsheet that reads columns by position keeps working.
 
 ### Cancelling an event or a series
 

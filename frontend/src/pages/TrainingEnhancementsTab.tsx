@@ -64,6 +64,7 @@ import type {
   ParticipatingOrganization,
 } from '../types/training';
 import type { User } from '../types/user';
+import { isActiveAccount } from '../constants/enums';
 import { StatGrid } from '../components/ux/StatGrid';
 
 const inputClass = 'form-input px-3 focus:ring-red-500/50 focus:border-red-500';
@@ -406,7 +407,10 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
       .getUsers()
       .then((users) => {
         if (cancelled) return;
-        const named = users.map((u) => ({ user: u, name: displayNameOf(u) || u.username }));
+        // A qualification is recorded for a current member, never a former one.
+        const named = users
+          .filter((u) => isActiveAccount(u.status))
+          .map((u) => ({ user: u, name: displayNameOf(u) || u.username }));
         named.sort((a, b) => a.name.localeCompare(b.name));
         setMembers(named.map((n) => n.user));
       })

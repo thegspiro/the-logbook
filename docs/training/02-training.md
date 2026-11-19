@@ -231,15 +231,19 @@ record for you.
 3. **Search courses** filters by course name. **Type** filters by training
    type. Both narrow the years and the lists together.
 
+4. A record **with no completion date** is grouped under **No completion date**,
+   above the years, whatever you filter by. This includes a record still waiting
+   for approval and a completed record imported without a date; each row shows
+   its own status. (The group was headed "Awaiting approval" before 2026-10-21.)
+
 _Added 2026-11-10._ **Where a record came from.** Training lists, the print page
 and the individual CSV and PDF exports say whether a record was **synced from a
 training provider** (for example "Target Solutions"), written by the **Historical
 Data Import** ("Imported"), or entered in The Logbook. The CSV adds a **Source**
 column at the end; the PDF prints it under the course name. Records added by the
-older CSV importers leave no mark and read "The Logbook". 4. A record **with no completion date** is grouped under **No completion date**,
-above the years, whatever you filter by. This includes a record still waiting
-for approval and a completed record imported without a date; each row shows
-its own status. (The group was headed "Awaiting approval" before 2026-10-21.)
+older CSV importers leave no mark and read "The Logbook". Since 2026-11-19 the
+department-wide exports carry the same column; see
+[Bulk and Reporting Exports](#bulk-and-reporting-exports-reports-tab).
 
 The top of the tab shows your **all-time** courses and hours and how many years
 are on record. The History tab reads your whole record, however long it is.
@@ -1347,7 +1351,10 @@ drills graded at 60% for active members and 30% for senior members, say.
 **Who sees which sessions count.** A session linked to an attendance
 requirement carries a **Counts toward attendance** badge on its event card in
 the events list, on the calendar and on its event page, so members know which
-drills they are expected at.
+drills they are expected at. _(2026-11-18)_ The badge shows only while at least
+one linked requirement is **active**. A session linked only to deactivated
+requirements counts against nobody, so it no longer carries the badge. The
+session editor still lists those old links so you can remove them.
 
 **How compliance counts it.** For each member, in the requirement's current
 period:
@@ -2279,6 +2286,20 @@ the same rules, so their figures agree:
   with the same thresholds. The figure you file for the year matches the
   dashboard. A report already generated keeps the figures it was generated
   with.
+- **My Training uses compliance profiles too** _(2026-11-18)_. When a member
+  matches a compliance profile that lists its own required requirements, their
+  **My Training** page, the officer's view of that member's requirements, the
+  member profile's compliance card and the per-member training report list
+  only that profile's requirements (those that also apply by type, rank,
+  position and join date). Before, those pages listed every requirement, so a
+  Life member on a non-riding profile saw shift and call requirements the
+  department never grades them on, and their "X of Y requirements met" and
+  average progress disagreed with the Compliance Matrix. Nothing changes for a
+  department without profiles, for a profile that sets only thresholds, or for
+  a member who matches no active profile. The profile card's green, yellow or
+  red colour still uses its own fixed rule, not the profile's thresholds, so it
+  can occasionally disagree with the matrix (see `docs/KNOWN_LIMITATIONS.md`,
+  "D10 follow-up").
 - **A requirement limited to certain ranks applies to those ranks.** The
   **Required roles** on a requirement are **ranks**. Members of those ranks
   are graded on it on My Training, the matrix, the dashboard, the member
@@ -3562,6 +3583,14 @@ exports:
 4. **Compliance Report** — department-wide compliance for all members and
    requirements.
 
+**A Source column on the record exports** _(2026-11-19)_. The **Member
+Records** CSV and the **Certification Report** CSV end with a **Source**
+column: the training provider's name for a synced record, **Imported** for one
+the Historical Data Import wrote, and **The Logbook** for everything else. It
+is the last column, so a spreadsheet that reads the columns by position keeps
+working. The Hours Summary and Compliance Report add up records rather than
+listing them, so they have no Source column.
+
 ![Training admin reports tab with the compliance, hours, and certification cards](./images/02-41-training-admin-reports.png)
 
 > **Hint:** A bulk PDF for a period with no records still downloads, as a
@@ -3646,6 +3675,21 @@ The icon beside Active / Inactive is a **separate** fact: it shows whether the
 sign-in details have been proved to work. A newly saved provider has an amber
 triangle reading _Connection not verified_. It is active; it has just never
 been tested. Select **Test** to turn it green.
+
+**Which edits need a new Test** _(2026-11-18)_. Only a change to the connection
+itself returns a provider to _Connection not verified_: a different API URL,
+client ID or authentication type, a new secret, or clearing a saved secret.
+Changing the sync interval, the daily review time or the provider's name keeps
+it verified. **Automatic syncs run only for a verified provider**, and before
+this change any save un-verified it, so a provider whose schedule was edited
+silently stopped syncing on its own while **Sync Now** still worked. If a
+provider's last scheduled pull is older than its interval, open it and select
+**Test**.
+
+**Manual pulls are labelled** _(2026-11-18)_. In **Sync History**, a pull an
+officer started with **Sync Now** reads **Manual pull**. Before, it read
+**Scheduled pull**, so a provider that had dropped off the schedule looked as
+if it was still syncing by itself.
 
 ![The Integrations tab with a saved provider — its platform, last sync, auto-sync interval and sync actions](./images/02-42-external-integrations.png)
 

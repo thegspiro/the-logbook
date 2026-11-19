@@ -83,6 +83,14 @@ screen, without the Safari toolbar.
 The Logbook icon appears on your home screen and in your app drawer. It opens
 full screen.
 
+**The strip under the bottom bar is white** _(2026-11-18)_. Android paints its
+gesture bar (the thin strip with the swipe handle below the app) in one colour
+chosen when the app is installed, and it cannot follow the theme. It now
+matches the light-mode bottom bar. In **Dark** or **High Contrast** you will
+see a white strip under the dark bar; that is expected, because no single
+colour matches all three themes. An app installed before the change keeps the
+old navy strip until it is removed and installed again.
+
 > **Hint:** Some Android phones can also install from Firefox or Samsung
 > Internet. Look for "Install" or "Add to Home screen" in that browser's menu.
 
@@ -339,6 +347,11 @@ screens adapt:
   and integrity audit log, expense report line items (totals row included),
   the inventory import preview, the equipment-check CSV import preview and the
   Impact Planner's member list (which now shows Rank / Station on a phone).
+  _(2026-11-18)_ **Scheduling Reports'** **Coverage**, **Call Volume** and
+  **Availability** tabs now reflow too: each date, period or member leads its
+  own card, and a long email address under a member's name wraps instead of
+  pushing the table off the screen. Coverage and Availability also become cards
+  on a tablet with the side navigation open.
 - **The inventory stock matrix stays a grid** _(2026-11-17)_: its **Size**
   column stays pinned while the colours scroll, and a fading edge with a
   chevron shows there are more colours to the side.
@@ -1061,6 +1074,7 @@ had open.
 | A page looks wrong on a phone                                    | Use **My Account → App → Force refresh** to load the latest version. For wide tables, turn the phone sideways. If it still scrolls sideways, report the page.                                                                   |
 | Sign-in page says "Too many failed attempts"                     | Wait for the countdown to finish before trying again.                                                                                                                                                                            |
 | A page shows "could not load" or "Something went wrong"          | Often station Wi-Fi with a sign-in page, or a carrier page, answering instead of The Logbook. Get a proper connection and select retry. If it keeps happening, note the page and report it; your IT manager can see these failures on the **Error Monitor** page. |
+| Error message after a load, save or delete fails                 | An error now says why _(2026-11-18)_. **"Check your connection"** means no answer came back: often station Wi-Fi with a sign-in page; get a proper connection and retry. **"You do not have permission"** is a refusal; ask an administrator. **"The server hit a problem on its end"** is a fault on the server, not your phone; try again in a moment and, if it repeats, give IT the **Error code** shown. Before, most screens blamed the connection for every failure. |
 | A button is hard to hit, or text is too small, on a phone        | Every control should be at least 44 pixels on a phone or tablet, and ordinary text at least 12 pixels. If you find one that is not, report it — it is a fault, not a known gap.                                                 |
 | The camera preview froze after switching apps                    | The scanner releases the camera when you leave and resumes when you return. If it stays frozen, close and reopen the scanner, and report it.                                                                                    |
 

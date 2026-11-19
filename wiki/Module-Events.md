@@ -394,7 +394,12 @@ credit. The other manager controls — Edit, Finalize, Record Times, the More
 menu — stay with `events.manage`. See
 [Module-Events-Developer](Module-Events-Developer) for the access table.
 
-- **Export CSV** of the attendee list and **Print roster**.
+- **Export CSV** of the attendee list and **Print roster**. The attendee CSV
+  and both event-list exports end with a **Source** column, **Imported** (the
+  Historical Data Import wrote it, per the `imported_source_records` ledger)
+  or **The Logbook** _(2026-11-19, #4355; `services/import_provenance.py`;
+  `source` / `source_label` on `EventListItem` and the roster's
+  `RSVPResponse`)_.
 - **Non-respondent reminders** (`POST /events/{id}/send-reminders`) — exclude
   members who already responded (going, not going or maybe).
 - **Get Directions** — a map link for events with a location.
@@ -871,7 +876,8 @@ client API cache (`/attendance-petitions` in `UNCACHEABLE_PREFIXES`).
   needs attendance reopened first, and that declining works either way, instead
   of the plain "Review the request" line.
 - **Across events:** `/events/attendance-requests` lists every pending request
-  on events the viewer organizes or is alternate for, oldest first, with
+  routed to the viewer — on events they organize or are alternate for, and any
+  a fallback step sent them — oldest first, with
   **Approve** / **Decline** in place (the same dialogs as the event card,
   `AttendancePetitionDecisionDialogs.tsx`). `events.manage` holders get **All
   events**. The Events page shows "N attendance requests are waiting for you"

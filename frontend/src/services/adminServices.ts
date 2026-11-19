@@ -110,6 +110,12 @@ export interface TrainingSessionResponse {
    * backend that predates them; treat that as none.
    */
   attendance_requirement_ids?: string[];
+  /**
+   * Whether the session is linked to an active attendance requirement: the
+   * server's answer, matching the event's own flag. A link to a deactivated
+   * requirement stays in `attendance_requirement_ids` but counts for no one.
+   */
+  counts_toward_attendance?: boolean;
   course_name: string;
   course_code?: string;
   training_type: string;

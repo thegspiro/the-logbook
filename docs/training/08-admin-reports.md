@@ -938,6 +938,19 @@ CSV and PDF downloads are unchanged. _Screenshot: replace any image of a
 report's on-screen results, such as the Certification Expiration or Member
 Roster report._
 
+**A Source column where rows can come from an import** _(2026-11-19)_. Two
+reports say where each row came from in their **CSV** and **PDF** downloads
+(the on-screen results are unchanged): **Certification Expiration** (the training provider's name for a
+synced record, **Imported** for one the Historical Data Import wrote, otherwise
+**The Logbook**) and **Admin Hours** (**Imported** or **The Logbook**). The
+same column is added at the end of the **Export CSV** on Admin Hours' **All
+Entries** tab, of the training record exports (see
+[Training, Bulk and Reporting Exports](./02-training.md#bulk-and-reporting-exports-reports-tab))
+and of the event exports (see
+[Events and Meetings](./04-events-meetings.md#selecting-several-events)).
+**Source** is not the same as Admin Hours' **Method** column, which says how
+an entry was logged (clock in, manual, QR). Reports whose rows cannot be told
+apart this way have no Source column, by the owner's decision of 2026-11-16.
 **"Today" in a report is the department's date.** The certification report's
 expiring and expired flags, apparatus inspection due dates and the call-volume
 year-to-date all follow the department's clock. A custom range is read the same
@@ -1291,6 +1304,9 @@ days.
   out.
 - **Category limits are set elsewhere.** **Auto-approve under (hours)** and
   **Max hours per session** are set on each category in the **Categories** tab.
+- **Export CSV** on the **All Entries** tab ends with a **Source** column
+  _(2026-11-19)_: **Imported** for an entry the Historical Data Import wrote,
+  **The Logbook** for the rest.
 
 > **What if a member forgets to clock out?** A session that runs past its
 > category's **Max hours per session** is closed for the member. Every 30

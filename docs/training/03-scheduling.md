@@ -1789,6 +1789,11 @@ the **Manage schedules** permission. It has five tabs:
 | **Availability**     | Member availability over the dates you pick                                                |
 | **Shift Compliance** | Each member's progress against shift and hours requirements                                |
 
+_(2026-11-18)_ On a phone, the **Coverage**, **Call Volume** and
+**Availability** tables show each row as a labelled card, led by its date,
+period or member. Coverage and Availability do the same on a tablet with the
+side navigation open. The figures are unchanged.
+
 ### Member Hours: worked vs. scheduled
 
 The headline figures, **Shifts Worked** and **Hours Worked**, come from shift
@@ -3730,6 +3735,20 @@ once email is ticked.
 | **Shift Assignment Alerts**        | The member, when an officer assigns them to a shift                                             |
 | **Start-of-Shift Reminders**       | Members assigned to a shift that is about to start                                              |
 | **Equipment Check Alerts**         | Chosen ranks and the shift officer, when an equipment check fails                               |
+
+**The section shows what is saved** _(2026-11-18)_. Before this date the
+Notifications section never received the department's saved choices: it
+always showed the built-in defaults, and saving it wrote those defaults over
+whatever had been configured. If your department set up these alerts and then
+saved this section, check each group and set it again. The section is shown
+to settings administrators and holders of **Manage schedules**.
+
+**Equipment Check Alerts when nobody has saved them** _(2026-11-18)_. The
+section shows **Chief** and **Captain** ticked in a department that has never
+saved it, and those positions are now what is alerted, in the app, when an
+equipment check fails. Before, a department that had never saved the section
+alerted nobody, although the screen said otherwise. Email still goes only
+when **Also send email notification** is ticked.
 
 **Shift Assignment Alerts.** The in-app notice gives the seat, the shift date
 and its start time in your department's time zone. If the shift has
