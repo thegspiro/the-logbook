@@ -8,21 +8,21 @@ events module. What the module does and how departments use it is on
 
 ### Member and manager pages
 
-| URL                               | Page                                                                                                                          | Permission       |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `/events`                         | Events List                                                                                                                   | Authenticated    |
-| `/events/:id`                     | Event Detail                                                                                                                  | Authenticated    |
-| `/events/:id/qr-code`             | Event QR Code (and NFC tag writer)                                                                                            | Authenticated    |
-| `/events/:id/check-in`            | Self Check-In                                                                                                                 | Authenticated    |
-| `/events/attendance-requests`     | Attendance requests across events — pending "I was there" requests on the viewer's events; **All events** for `events.manage` | Authenticated    |
-| `/locations/:locationId/check-in` | Room check-in — where a room's NFC tag lands; forwards to the open event's `/events/:id/check-in`                             | Authenticated    |
-| `/events/:id/edit`                | Edit Event                                                                                                                    | `events.manage`  |
-| `/events/:id/monitoring`          | Check-In Monitoring                                                                                                           | `events.manage`  |
-| `/events/:id/analytics`           | Per-event analytics dashboard                                                                                                 | `analytics.view` |
-| `/events/analytics`               | Event Analytics Dashboard                                                                                                     | `analytics.view` |
-| `/events/templates`               | Event Templates Management                                                                                                    | `events.manage`  |
-| `/events/admin`                   | Events Admin Hub (the **Manage Events** menu entry); Create/Settings deep-link here via `?tab=create` / `?tab=settings`       | `events.manage`  |
-| `/events/new`                     | Redirects to `/events/admin?tab=create`                                                                                       | `events.manage`  |
+| URL                               | Page                                                                                                                      | Permission       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `/events`                         | Events List                                                                                                               | Authenticated    |
+| `/events/:id`                     | Event Detail                                                                                                              | Authenticated    |
+| `/events/:id/qr-code`             | Event QR Code (and NFC tag writer)                                                                                        | Authenticated    |
+| `/events/:id/check-in`            | Self Check-In                                                                                                             | Authenticated    |
+| `/events/attendance-requests`     | Attendance requests across events — pending "I was there" requests sent to the viewer; **All events** for `events.manage` | Authenticated    |
+| `/locations/:locationId/check-in` | Room check-in — where a room's NFC tag lands; forwards to the open event's `/events/:id/check-in`                         | Authenticated    |
+| `/events/:id/edit`                | Edit Event                                                                                                                | `events.manage`  |
+| `/events/:id/monitoring`          | Check-In Monitoring                                                                                                       | `events.manage`  |
+| `/events/:id/analytics`           | Per-event analytics dashboard                                                                                             | `analytics.view` |
+| `/events/analytics`               | Event Analytics Dashboard                                                                                                 | `analytics.view` |
+| `/events/templates`               | Event Templates Management                                                                                                | `events.manage`  |
+| `/events/admin`                   | Events Admin Hub (the **Manage Events** menu entry); Create/Settings deep-link here via `?tab=create` / `?tab=settings`   | `events.manage`  |
+| `/events/new`                     | Redirects to `/events/admin?tab=create`                                                                                   | `events.manage`  |
 
 The Events Admin Hub has six tabs: **Create Event**, **Past Events**,
 **Requests** (outreach requests), **QR Code Analytics**, **Community
@@ -51,7 +51,7 @@ POST   /events                                   # Create event (manage)
 POST   /events/recurring                         # Create recurring series (manage)
 POST   /events/import-csv                        # Bulk create from CSV (manage)
 GET    /events/missed-mandatory                  # Caller's missed mandatory events
-GET    /events/visible-event-types               # Visible types + custom categories
+GET    /events/visible-event-types               # Visible types, custom categories, mandatory RSVP window
 GET    /events/public-calendar                   # Public calendar feed (no auth)
 GET    /events/analytics/summary                 # analytics.view or manage
 GET    /events/settings                          # Event settings (manage)

@@ -24,6 +24,17 @@ interface ReportTableProps {
   pageSize?: number;
   emptyMessage?: string;
   maxHeight?: string;
+  /**
+   * Where the rows turn into stacked cards. The report dialog's body is at
+   * most 974px (~61rem) at any screen width and 688px at 768px, where the
+   * base reflow stops. A table needing more than that 688px with long data
+   * (WebKit's ~4% included) would overflow somewhere from 768px up, and the
+   * next tier, 64rem, is wider than the dialog ever gets — so `wide`, the
+   * default, shows cards at every width; the nine- and ten-column reports
+   * measured 917-958px. A renderer whose table measures under 688px passes
+   * `phone` and stays a table from 768px.
+   */
+  reflow?: 'phone' | 'wide';
 }
 
 export const ReportTable: React.FC<ReportTableProps> = ({
@@ -32,6 +43,7 @@ export const ReportTable: React.FC<ReportTableProps> = ({
   pageSize = 25,
   emptyMessage = 'No data found.',
   maxHeight = '50vh',
+  reflow = 'wide',
 }) => {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -79,8 +91,8 @@ export const ReportTable: React.FC<ReportTableProps> = ({
 
   return (
     <div>
-      <div className={`overflow-x-auto overflow-y-auto`} style={{ maxHeight }}>
-        <table className="w-full text-left text-sm">
+      <div className="rwd-table-container overflow-x-auto overflow-y-auto" style={{ maxHeight }}>
+        <table className={`rwd-table ${reflow === 'wide' ? 'rwd-table-wide' : ''} w-full text-left text-sm`}>
           <thead className="text-theme-text-muted surface-secondary-opaque sticky top-0 z-10 text-xs uppercase">
             <tr>
               {columns.map((col) => (
@@ -98,10 +110,11 @@ export const ReportTable: React.FC<ReportTableProps> = ({
           <tbody className="divide-theme-surface-border divide-y">
             {paginatedRows.map((row, i) => (
               <tr key={i} className="text-theme-text-secondary hover:bg-theme-surface-hover/50">
-                {columns.map((col) => (
+                {columns.map((col, colIndex) => (
                   <td
                     key={col.key}
-                    className={`px-4 py-2 whitespace-nowrap ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''}`}
+                    data-label={col.header}
+                    className={`px-4 py-2 ${col.align === 'right' ? 'text-right whitespace-nowrap' : col.align === 'center' ? 'text-center whitespace-nowrap' : ''} ${colIndex === 0 ? 'rwd-table-lead' : ''}`}
                   >
                     {col.render ? col.render(row[col.key], row) : toStr(row[col.key], '-')}
                   </td>

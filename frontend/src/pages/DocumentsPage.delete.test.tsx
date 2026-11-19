@@ -100,4 +100,22 @@ describe('DocumentsPage delete', () => {
     expect(await screen.findByText(REFUSAL)).toBeInTheDocument();
     expect(screen.queryByText(/Check your connection/)).not.toBeInTheDocument();
   });
+
+  it('says the server failed, not the connection, when the delete hits a 500', async () => {
+    mockDeleteDocument.mockRejectedValue({
+      response: { status: 500, data: { detail: 'Internal server error', code: 'LB-SYS-001' } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /all documents/i }));
+    await screen.findByText('Hose receipt.pdf');
+    await user.click(screen.getAllByTitle('Delete document')[0] ?? document.body);
+    await user.click(screen.getByRole('button', { name: 'Delete Document' }));
+
+    expect(await screen.findByText(/Could not delete the document: the server hit a problem/)).toHaveTextContent(
+      'LB-SYS-001'
+    );
+    expect(screen.queryByText(/Check your connection/)).not.toBeInTheDocument();
+  });
 });

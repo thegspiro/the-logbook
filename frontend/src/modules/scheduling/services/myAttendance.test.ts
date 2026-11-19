@@ -64,3 +64,47 @@ describe('schedulingService.getMyAttendance', () => {
     await expect(schedulingService.getMyAttendance('shift-1')).rejects.toBeInstanceOf(AxiosError);
   });
 });
+
+/**
+ * The Past view reads a member's whole attendance history. A single request
+ * at the endpoint's default of 50 left a long-serving member's older shifts
+ * and their hours off the screen.
+ */
+describe('schedulingService.getAllMyAttendanceHistory', () => {
+  const page = (count: number, start: number) =>
+    Array.from({ length: count }, (_, i) => ({ ...record, id: `att-${start + i}`, shift_id: `shift-${start + i}` }));
+
+  beforeEach(() => {
+    mockGet.mockReset();
+  });
+
+  it('reads page after page until one comes back short', async () => {
+    mockGet
+      .mockResolvedValueOnce({ data: page(200, 0) })
+      .mockResolvedValueOnce({ data: page(200, 200) })
+      .mockResolvedValueOnce({ data: page(37, 400) });
+
+    const records = await schedulingService.getAllMyAttendanceHistory();
+
+    expect(records).toHaveLength(437);
+    expect(new Set(records.map((r) => r.id)).size).toBe(437);
+    expect(mockGet.mock.calls.map((call) => (call[1] as { params: { offset: number } }).params.offset)).toEqual([
+      0, 200, 400,
+    ]);
+    expect(mockGet).toHaveBeenCalledWith('/scheduling/my-attendance-history', {
+      params: { limit: 200, offset: 0, start_date: undefined, end_date: undefined },
+    });
+  });
+
+  it('makes one request for a member with less than a page', async () => {
+    mockGet.mockResolvedValueOnce({ data: page(3, 0) });
+    await expect(schedulingService.getAllMyAttendanceHistory()).resolves.toHaveLength(3);
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops after its page limit if every page comes back full', async () => {
+    mockGet.mockResolvedValue({ data: page(200, 0) });
+    await schedulingService.getAllMyAttendanceHistory();
+    expect(mockGet).toHaveBeenCalledTimes(100);
+  });
+});

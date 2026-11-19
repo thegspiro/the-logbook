@@ -1085,8 +1085,8 @@ export const MemberProfilePage: React.FC = () => {
                   ) : inventoryItems.length === 0 ? (
                     <p className="text-theme-text-muted text-sm">No equipment is assigned to this member.</p>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="divide-theme-surface-border min-w-full divide-y">
+                    <div className="rwd-table-container overflow-x-auto">
+                      <table className="rwd-table rwd-table-narrow divide-theme-surface-border min-w-full divide-y">
                         <thead>
                           <tr>
                             <th
@@ -1124,10 +1124,19 @@ export const MemberProfilePage: React.FC = () => {
                         <tbody className="divide-theme-surface-border divide-y">
                           {inventoryItems.map((item) => (
                             <tr key={item.id} className="hover:bg-theme-surface-hover">
-                              <td className="text-theme-text-primary px-4 py-3 text-sm font-medium">{item.name}</td>
-                              <td className="text-theme-text-secondary px-4 py-3 text-sm">{item.item_number}</td>
-                              <td className="text-theme-text-secondary px-4 py-3 text-sm">{item.category}</td>
-                              <td className="px-4 py-3">
+                              <td
+                                data-label="Item"
+                                className="rwd-table-lead text-theme-text-primary px-4 py-3 text-sm font-medium"
+                              >
+                                {item.name}
+                              </td>
+                              <td data-label="Item #" className="text-theme-text-secondary px-4 py-3 text-sm break-all">
+                                {item.item_number}
+                              </td>
+                              <td data-label="Category" className="text-theme-text-secondary px-4 py-3 text-sm">
+                                {item.category}
+                              </td>
+                              <td data-label="Condition" className="px-4 py-3">
                                 <span
                                   className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
                                     item.condition === 'Excellent'
@@ -1140,7 +1149,7 @@ export const MemberProfilePage: React.FC = () => {
                                   {item.condition}
                                 </span>
                               </td>
-                              <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                              <td data-label="Assigned" className="text-theme-text-secondary px-4 py-3 text-sm">
                                 {formatDate(item.assigned_date, tz)}
                               </td>
                             </tr>

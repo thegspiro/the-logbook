@@ -10,7 +10,7 @@ shifts would quietly change the apparatus summary leadership reads.
 
 from typing import Any, Dict, List, Mapping, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.external_shift_hours import (
@@ -19,6 +19,7 @@ from app.models.external_shift_hours import (
     ExternalShiftHours,
 )
 from app.utils.model_updates import apply_updates
+from app.utils.sql_results import rows_affected
 
 
 class ExternalApparatusInUseError(Exception):
@@ -106,23 +107,50 @@ class ExternalApparatusService:
     async def get_pickable_apparatus(
         self, organization_id: str, apparatus_id: str
     ) -> Optional[tuple[ExternalApparatus, ExternalAgency]]:
-        """The unit and its agency, if a member may log a shift on it now."""
-        row = (
+        """The unit and its agency, if a member may log a shift on it now.
+
+        The unit row is read with a shared lock, held until the caller
+        commits the shift it is logging. :meth:`merge_agency` takes an
+        exclusive lock on the same row before it moves or removes the unit, so
+        the two serialize: a shift logged during a merge waits for it and
+        then reads the unit's new agency, and a merge started while a shift
+        is being logged waits for that shift and relabels it. Without it, a
+        shift could land on a moved unit still carrying the merged-away name.
+
+        Only the unit is locked, and its agency read without one. The merge
+        locks agencies before units; locking both here, in a join whose row
+        order the database chooses, could take them the other way round and
+        deadlock. The unit's lock is the one that matters: it is what a merge
+        rewrites.
+        """
+        unit = (
             await self.db.execute(
-                select(ExternalApparatus, ExternalAgency)
-                .join(ExternalAgency, ExternalAgency.id == ExternalApparatus.agency_id)
+                select(ExternalApparatus)
                 .where(
                     ExternalApparatus.id == str(apparatus_id),
                     ExternalApparatus.organization_id == str(organization_id),
-                    ExternalAgency.organization_id == str(organization_id),
                     ExternalApparatus.is_active.is_(True),
+                )
+                .with_for_update(read=True)
+                # A copy already in the session would otherwise be handed
+                # back as it was, not as the locked read found it.
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if unit is None:
+            return None
+        agency = (
+            await self.db.execute(
+                select(ExternalAgency).where(
+                    ExternalAgency.id == unit.agency_id,
+                    ExternalAgency.organization_id == str(organization_id),
                     ExternalAgency.is_active.is_(True),
                 )
             )
-        ).first()
-        if row is None:
+        ).scalar_one_or_none()
+        if agency is None:
             return None
-        return row[0], row[1]
+        return unit, agency
 
     # ------------------------------------------------------------------
     # Agencies
@@ -197,6 +225,164 @@ class ExternalApparatusService:
         await self.db.delete(agency)
         await self.db.commit()
         return agency
+
+    async def merge_agency(
+        self,
+        organization_id: str,
+        source_id: str,
+        target_id: str,
+        *,
+        commit: bool = True,
+    ) -> Optional[Dict[str, Any]]:
+        """Fold ``source`` into ``target``: one department under one name.
+
+        For when the same department reached the list twice under two
+        spellings ("Arlington County" and "Arlington County Fire
+        Department"), typically from a history import.
+
+        * Each of the source's units moves to the target. A unit the target
+          already has under the same name, as the database's collation
+          judges it (see :meth:`_same_named_unit`), is combined instead: its shifts
+          are repointed to the target's unit and the duplicate is removed.
+        * **Past shifts are relabelled** with the target's name — owner
+          decision 2026-11-16, overriding the usual rule that a shift keeps
+          the names it was logged under, because the point of a merge is that
+          one department reads as one everywhere. That covers shifts on the
+          source's units and shifts whose unit was deleted but which still
+          carry the source's name. It cannot be undone from the record; the
+          endpoint's audit event keeps both names.
+        * The target keeps its own settings (active, evaluated shifts), so a
+          moved unit's shifts follow the target's evaluation setting.
+        * A shift's review status is untouched: an officer combining two
+          spellings has not changed what the member claimed.
+
+        ``commit=False`` leaves the transaction open, so the endpoint can add
+        the audit record and have both commit together: the relabel
+        overwrites the old name on every shift, so the audit event is the only
+        place it survives, and a merge committed without it would lose it.
+
+        Both agency rows are locked for the transaction, so two officers
+        merging at once cannot each move half the units. Returns None when
+        either agency is not in the organization.
+        """
+        org = str(organization_id)
+        if str(source_id) == str(target_id):
+            raise ValueError("Choose a different department to merge into")
+
+        agencies = {
+            a.id: a
+            for a in (
+                await self.db.execute(
+                    select(ExternalAgency)
+                    .where(
+                        ExternalAgency.organization_id == org,
+                        ExternalAgency.id.in_([str(source_id), str(target_id)]),
+                    )
+                    .with_for_update()
+                )
+            ).scalars()
+        }
+        source = agencies.get(str(source_id))
+        target = agencies.get(str(target_id))
+        if source is None or target is None:
+            return None
+
+        units = list(
+            (
+                await self.db.execute(
+                    select(ExternalApparatus)
+                    .where(
+                        ExternalApparatus.organization_id == org,
+                        ExternalApparatus.agency_id.in_([source.id, target.id]),
+                    )
+                    .with_for_update()
+                )
+            ).scalars()
+        )
+        target_units = {u.id: u for u in units if u.agency_id == target.id}
+
+        moved = combined = relabelled = 0
+        for unit in (u for u in units if u.agency_id == source.id):
+            match_id = await self._same_named_unit(org, target.id, unit.name)
+            match = target_units.get(match_id) if match_id else None
+            values: Dict[str, Any] = {"agency_name": target.name}
+            if match is not None:
+                values.update(external_apparatus_id=match.id, apparatus_name=match.name)
+            result = await self.db.execute(
+                update(ExternalShiftHours)
+                .where(
+                    ExternalShiftHours.organization_id == org,
+                    ExternalShiftHours.external_apparatus_id == unit.id,
+                )
+                .values(**values)
+                .execution_options(synchronize_session=False)
+            )
+            relabelled += rows_affected(result)
+            if match is not None:
+                await self.db.delete(unit)
+                combined += 1
+            else:
+                unit.agency_id = target.id
+                moved += 1
+
+        detached = await self.db.execute(
+            update(ExternalShiftHours)
+            .where(
+                ExternalShiftHours.organization_id == org,
+                ExternalShiftHours.external_apparatus_id.is_(None),
+                ExternalShiftHours.agency_name == source.name,
+            )
+            .values(agency_name=target.name)
+            .execution_options(synchronize_session=False)
+        )
+        relabelled += rows_affected(detached)
+
+        # The moves must reach the database before the source goes: its
+        # delete cascades to whatever units still name it.
+        await self.db.flush()
+        source_name = source.name
+        await self.db.delete(source)
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
+        return {
+            "agency_id": target.id,
+            "source_name": source_name,
+            "target_name": target.name,
+            "moved_apparatus": moved,
+            "combined_apparatus": combined,
+            "relabelled_shifts": relabelled,
+        }
+
+    async def _same_named_unit(
+        self, organization_id: str, agency_id: str, name: str
+    ) -> Optional[str]:
+        """The agency's unit the database counts as having this name, if any.
+
+        Asked of the database rather than compared in Python because the
+        unique index on ``(agency_id, name)`` decides by the column's
+        collation (``utf8mb4_unicode_ci``): case- and accent-blind, trailing
+        spaces ignored, leading ones not. A Python approximation disagrees
+        with it somewhere, and where it says "different" and the index says
+        "same", moving the unit violates the index and the merge rolls back.
+        """
+        return (
+            await self.db.execute(
+                select(ExternalApparatus.id).where(
+                    ExternalApparatus.organization_id == str(organization_id),
+                    ExternalApparatus.agency_id == str(agency_id),
+                    ExternalApparatus.name == name,
+                )
+                # A locking read, so it sees the latest committed names rather
+                # than the snapshot the request's first plain read (loading
+                # the signed-in user) fixed. A unit renamed after that point
+                # would otherwise be missed, or matched by its old name. The
+                # merge already holds these rows' locks, so this waits on
+                # nothing new.
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
 
     # ------------------------------------------------------------------
     # Apparatus
