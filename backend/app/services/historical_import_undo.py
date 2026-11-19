@@ -29,7 +29,7 @@ from __future__ import annotations
 import copy
 import importlib
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from functools import lru_cache
 from types import SimpleNamespace
 from typing import Any, Dict, Iterable, List, Optional, Sequence
@@ -66,11 +66,7 @@ from app.services.user_deletion_service import (
     count_user_references,
     release_user_references,
 )
-
-#: How far apart a record's own timestamp and its ledger entry may be and still
-#: count as written by the same commit. Commits run in seconds; two minutes
-#: leaves room for a slow one without reaching an officer's later edit.
-EDIT_TOLERANCE = timedelta(minutes=2)
+from app.utils.edit_window import EDIT_TOLERANCE, as_utc, changed_since
 
 STEP_ADMIN = "admin"
 STEP_TRAINING = "training"
@@ -131,21 +127,6 @@ class StepUndoPlan:
     # The staffing roster removes several kinds at once, by kind.
     _remove_by_kind: Dict[str, List[str]] = field(default_factory=dict, repr=False)
     _ledger_ids: List[str] = field(default_factory=list, repr=False)
-
-
-def _aware(value: Optional[datetime]) -> Optional[datetime]:
-    if value is None:
-        return None
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-
-
-def changed_since(updated_at: Optional[datetime], entered_at: datetime) -> bool:
-    """Was the record changed after the commit that wrote it?"""
-    updated = _aware(updated_at)
-    entered = _aware(entered_at)
-    if updated is None or entered is None:
-        return False
-    return updated - entered > EDIT_TOLERANCE
 
 
 def _chunks(values: Sequence[str]) -> Iterable[List[str]]:
@@ -267,7 +248,7 @@ class HistoricalImportUndoService:
         # into one); it was entered when its first row was.
         entered: Dict[str, datetime] = {}
         for entry in ledger:
-            at = _aware(entry.created_at) or datetime.now(timezone.utc)
+            at = as_utc(entry.created_at) or datetime.now(timezone.utc)
             entered[entry.record_id] = min(entered.get(entry.record_id, at), at)
         kept_ids = set()
         for record_id, row in rows.items():
@@ -292,7 +273,7 @@ class HistoricalImportUndoService:
             record.organization_id,
             [str(s.event_id) for s in sessions.values() if s.event_id],
         )
-        entered = {e.record_id: _aware(e.created_at) for e in ledger}
+        entered = {e.record_id: as_utc(e.created_at) for e in ledger}
         kept_ids = set()
         for session_id, session in sessions.items():
             event = events.get(str(session.event_id))
@@ -363,7 +344,7 @@ class HistoricalImportUndoService:
         ) -> Optional[bool]:
             """True: made by the commit and unchanged. False: made by it, then
             edited. None: not made by it."""
-            made = _aware(
+            made = as_utc(
                 row.responded_at
                 if kind == ImportedRecordKind.EVENT_RSVP
                 else row.created_at
@@ -375,7 +356,7 @@ class HistoricalImportUndoService:
         def entered(kind: ImportedRecordKind) -> Dict[str, datetime]:
             times: Dict[str, datetime] = {}
             for e in entries[kind]:
-                at = _aware(e.created_at) or datetime.now(timezone.utc)
+                at = as_utc(e.created_at) or datetime.now(timezone.utc)
                 times[e.record_id] = min(times.get(e.record_id, at), at)
             return times
 
@@ -553,7 +534,7 @@ class HistoricalImportUndoService:
         plan.already_gone += len(set(ids) - set(attendance))
         entered: Dict[str, datetime] = {}
         for e in attendance_entries:
-            at = _aware(e.created_at) or datetime.now(timezone.utc)
+            at = as_utc(e.created_at) or datetime.now(timezone.utc)
             entered[e.record_id] = min(entered.get(e.record_id, at), at)
 
         # Per shift: when its imported crew was entered, and who they are.
@@ -575,7 +556,7 @@ class HistoricalImportUndoService:
             )
             for seat in found.scalars().all():
                 shift_id = str(seat.shift_id)
-                made = _aware(seat.created_at)
+                made = as_utc(seat.created_at)
                 ours = (
                     str(seat.user_id) in crew.get(shift_id, set())
                     and made is not None
@@ -588,7 +569,7 @@ class HistoricalImportUndoService:
 
         remove_shifts: List[str] = []
         for shift_id, shift in shifts.items():
-            made = _aware(shift.created_at)
+            made = as_utc(shift.created_at)
             if made is None or abs(made - shift_entered[shift_id]) > EDIT_TOLERANCE:
                 plan.reused += 1
                 continue
@@ -609,7 +590,7 @@ class HistoricalImportUndoService:
         hours = await self._load(
             ExternalShiftHours, org_id, sorted({e.record_id for e in hours_entries})
         )
-        hours_at = {e.record_id: _aware(e.created_at) for e in hours_entries}
+        hours_at = {e.record_id: as_utc(e.created_at) for e in hours_entries}
         remove_hours: List[str] = []
         kept_hours: set[str] = set()
         for hours_id, entry in hours.items():
@@ -918,11 +899,11 @@ class HistoricalImportUndoService:
         if not event_ids:
             return 0
         drill_times = [
-            _aware(e.created_at)
+            as_utc(e.created_at)
             for e in await self._ledger(record, ImportedRecordKind.TRAINING_SESSION)
         ]
         imported_at = {
-            e.record_id: _aware(e.created_at)
+            e.record_id: as_utc(e.created_at)
             for e in await self._ledger(record, ImportedRecordKind.TRAINING_RECORD)
         }
         for chunk in _chunks(event_ids):
@@ -1094,13 +1075,13 @@ def _label(kind: ImportedRecordKind, row: Any) -> str:
         day = row.completion_date.isoformat() if row.completion_date else "undated"
         return f"{row.course_name} ({day})"
     if kind == ImportedRecordKind.ADMIN_HOURS_ENTRY:
-        start = _aware(row.clock_in_at)
+        start = as_utc(row.clock_in_at)
         return (
             f"{start.date().isoformat() if start else 'undated'}: "
             f"{round((row.duration_minutes or 0) / 60, 2)} h"
         )
     if kind == ImportedRecordKind.EVENT:
-        start = _aware(row.start_datetime)
+        start = as_utc(row.start_datetime)
         return f"{row.title} ({start.date().isoformat() if start else 'undated'})"
     if kind == ImportedRecordKind.SHIFT:
         day = row.shift_date.isoformat() if row.shift_date else "undated"
