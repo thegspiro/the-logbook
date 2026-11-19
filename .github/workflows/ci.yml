@@ -1094,17 +1094,18 @@ jobs:
     # the exact loss the note at the top of this file warns about and the thing
     # that cancelled #2890 twice.
     #
-    # The heaviest leg holds two parts of mobile-accessibility at 2_160_000
-    # (36 min) each, so 72; the dialogs and presentation legs hold one test of
-    # 31 and 33. Setup measured 0.4-0.6 min on 2026-10-04 (the Playwright
-    # cache hits); 75 leaves the 3 min the cold-cache install needs when the
-    # lockfile hash invalidates it. Re-derive this if a @sweep budget, the
-    # number of accessibility parts or the sweep shard count changes — the
-    # spec files are the source, this is the consequence.
+    # Each leg runs three `@sweep` tests (see the matrix below), and the
+    # largest budget among them is a mobile-accessibility part's 1_440_000
+    # (24 min), so a leg can spend 72. Setup measured 0.4-0.6 min on
+    # 2026-10-04 (the Playwright cache hits); 75 leaves the 3 min the
+    # cold-cache install needs when the lockfile hash invalidates it.
+    # Re-derive this if a @sweep budget, a sweep's number of parts or the
+    # sweep shard count changes — the spec files are the source, this is the
+    # consequence.
     #
-    # The cap is a hang guard, not a target. Until 2026-11-19 the
-    # accessibility pass was one test with an 85-minute budget and this cap
-    # was 88; its job was taking 55-72 minutes.
+    # The cap is a hang guard, not a target. Until 2026-11-19 each sweep was
+    # one test, the accessibility one had an 85-minute budget and this cap
+    # was 88; that job was taking 55-72 minutes.
     timeout-minutes: 75
     # No `needs:` on another test job — see the note on
     # backend-test-integration.
@@ -1124,15 +1125,17 @@ jobs:
         # runners idle, so the wall clock barely moved.
         #
         # Splitting the tag out gives the sweeps runners of their own and
-        # leaves the other tests to share two. There are six `@sweep` tests:
-        # four parts of mobile-accessibility, then dialogs, then presentation.
-        # `--shard=i/4` deals them out in that order as 2, 2, 1, 1, which puts
-        # two accessibility parts (about 17 min each) on each of the first two
-        # legs and the 30- and 18-minute tests on a leg apiece. A different
-        # number of parts or of `@sweep` tests changes that deal: list it with
-        # `npx playwright test --project=chromium --grep @sweep --shard=i/4
-        # --list` and re-derive the cap above. e2eSweepTagIntegrity.test.ts
-        # fails if a long test forgets the tag.
+        # leaves the other tests to share two. Each sweep is cut into parts of
+        # about ten minutes (`routesInPart` in e2e/mobile-routes.ts): seven
+        # of mobile-accessibility, three of mobile-dialogs, two of
+        # mobile-presentation. Because the twelve tests are about equal,
+        # `--shard`'s balance by count is a balance by time, and `--shard=i/4`
+        # gives each leg three of them, about 30 minutes. More legs would
+        # shorten that for the same runner time and more queued jobs; fewer
+        # would lengthen it. After changing a part count or the leg count,
+        # list the deal with `npx playwright test --project=chromium --grep
+        # @sweep --shard=i/4 --list` and re-derive the cap above.
+        # e2eSweepTagIntegrity.test.ts fails if a long test forgets the tag.
         leg:
           - name: sweep 1/4
             select: --grep @sweep --shard=1/4

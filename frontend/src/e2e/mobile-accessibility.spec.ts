@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createRequire } from 'node:module';
-import { NARROW, PHONE, ROUTES, signInForRoute } from './mobile-routes';
+import { NARROW, PHONE, routesInPart, signInForRoute } from './mobile-routes';
 import { findSpilledText } from './spilledText';
 import type { SignInState } from './mobile-routes';
 
@@ -263,23 +263,19 @@ type Theme = 'light' | 'dark' | 'high-contrast';
 const THEMES: Theme[] = ['light', 'dark', 'high-contrast'];
 
 /**
- * The pass is cut into this many tests, each walking a contiguous slice of
- * ROUTES, so the CI matrix can put the slices on separate runners.
+ * How many tests the pass is cut into; see `routesInPart` in mobile-routes.ts.
  *
  * As one test it could not be sharded, and it had grown from 25 minutes to
  * 55-72 (its CI job on four runs of 2026-11-19), inside an 85-minute budget
  * and alone setting how long a pull request that touches the frontend waits.
- * Every route is still measured against the same budgets; a slice only decides
- * which test reports it.
+ * Seven makes a part about ten minutes, the size of a dialogs or presentation
+ * part. Every route is still measured against the same budgets; a slice only
+ * decides which test reports it.
  *
- * Changing this number moves the `@sweep` test count, which is what
- * `--shard` in ci.yml's `frontend-e2e` matrix balances on. Re-derive the
- * matrix there with it.
+ * Changing this number moves the `@sweep` test count that ci.yml's matrix is
+ * derived from.
  */
-const PARTS = 4;
-
-const routesInPart = (part: number) =>
-  ROUTES.filter((_, index) => Math.floor((index * PARTS) / ROUTES.length) === part);
+const PARTS = 7;
 
 test.describe('mobile accessibility', () => {
   // No retries. This audit is deterministic — it drives mocked routes, so a
@@ -290,7 +286,7 @@ test.describe('mobile accessibility', () => {
   test.describe.configure({ retries: 0 });
 
   for (let part = 0; part < PARTS; part++) {
-    const routes = routesInPart(part);
+    const routes = routesInPart(part, PARTS);
     // ROUTES can be narrowed to a handful by the route filter in
     // mobile-routes.ts; a slice left empty would pass having measured nothing.
     if (routes.length === 0) continue;
@@ -324,14 +320,16 @@ test.describe('mobile accessibility', () => {
       //
       //
       // Split into PARTS tests on 2026-11-19. The whole pass was then taking
-      // 55-72 minutes (its job on four runs that day), so a quarter is about
-      // 18 at worst, and 2x that is 36. This is an estimate from the whole:
-      // routes differ in cost, so replace it with measured per-part times
-      // once CI has produced some.
+      // 55-72 minutes (its job on four runs that day), so a seventh is about
+      // 10 at worst. Slices are not equal in cost: cut in four and run
+      // locally, the slowest part took more than 1.1x the fastest. So the
+      // budget is 24 minutes rather than a flat 2x of 10. It is an estimate
+      // from the whole; replace it with measured per-part times once CI has
+      // produced some.
       //
       // The job cap in ci.yml is derived from this number; re-derive it with
       // any change here. Add a sample before narrowing either.
-      test.setTimeout(2_160_000);
+      test.setTimeout(1_440_000);
 
       // Contrast is measured on the settled page, not mid-animation. `EmptyState`
       // fades in over one second (`animate-fade-in`, opacity 0 -> 1) and the audit

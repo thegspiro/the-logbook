@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { MIN_FONT_PX, MIN_TAP, PHONE, ROUTES, signInForRoute } from './mobile-routes';
+import { MIN_FONT_PX, MIN_TAP, PHONE, routesInPart, signInForRoute } from './mobile-routes';
 import type { SignInState } from './mobile-routes';
 import { findSpilledText } from './spilledText';
 
@@ -69,449 +69,470 @@ interface Measurement {
  */
 const fingerprintOf = (m: Measurement) => `${m.textLength}:${m.totalTargets}`;
 
+/**
+ * How many tests the pass is cut into; see `routesInPart` in mobile-routes.ts.
+ * Changing it moves the `@sweep` test count that ci.yml's matrix is derived
+ * from.
+ */
+const PARTS = 2;
+
 test.describe('mobile presentation', () => {
-  test('every feature is presentable at phone width @sweep', async ({ page }) => {
-    // ~30 routes, each with a settle delay and a full render. Measured at 5.9 min
-    // on a dedicated CI runner (2026-10-04); 2x that, the multiple every @sweep
-    // test uses.
-    //
-    // This one was RAISED, not tightened. The old 400_000 was 6.67 min against a
-    // 5.9 min run — 1.13x — so an ordinary slow runner would have taken it red,
-    // and a 4-worker local run did exactly that by starvation. A budget that
-    // close to the measured time reports load, not a defect.
-    //
-    // Raised again on 2026-10-29, for the tablet pass below: 7.5-8.8 min
-    // measured locally with it (5.9 on CI without it), and 2x the slower is
-    // the budget.
-    //
-    // Raised on 2026-11-13, by owner decision, to 2x the measured run as the
-    // route list grows. 9.9 min on `main` (run 43208484077, 2026-11-12); 15.4
-    // min on both of #4267's runs once the finance screens joined; the nine
-    // grants screens add ~5% more, so ~16.2 min, and 2x that is 33.
-    test.setTimeout(1_980_000);
-    await page.setViewportSize(PHONE);
-    // The fixture user has no permissions by default (`signIn` sets
-    // `permissions: []`, overriding TEST_USER's list), so a manager-gated route
-    // in the list below redirects and this pass silently measures the
-    // dashboard instead of the page it names. `inventory.manage` is granted for
-    // /inventory, which is manager-only — without it the run reported
-    // "rendered little content" for a page that renders plenty. `facilities.manage`
-    // is granted for the same reason: /facilities/settings requires it, and
-    // without it that route (and /facilities itself, which only needs
-    // facilities.view) would silently measure the dashboard instead.
-    let granted: SignInState | null = null;
+  for (let part = 0; part < PARTS; part++) {
+    const routes = routesInPart(part, PARTS);
+    // The route filter in mobile-routes.ts can leave a slice empty.
+    if (routes.length === 0) continue;
 
-    const crashed: string[] = [];
-    const wrongPage: string[] = [];
-    const unchangedStates: string[] = [];
-    const missingStates: string[] = [];
-    const overflowed: string[] = [];
-    const invalidScrollRegions: string[] = [];
-    const tapBudgetBusted: string[] = [];
-    const textBudgetBusted: string[] = [];
-    const spilled: string[] = [];
-    const headerRows: string[] = [];
-    const tabletFailures: string[] = [];
-    const blank: string[] = [];
-    const table: string[] = [];
-
-    for (const route of ROUTES) {
-      // Re-signs only when what the route needs actually changed, so the common
-      // case stays one sign-in for the whole pass.
-      granted = await signInForRoute(page, route, granted);
-
-      await page.setViewportSize(PHONE);
-      await page.goto(route.path);
-      await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
-      await page.waitForTimeout(400);
-
-      // Did this visit reach the page the entry names? Every budget below is
-      // meaningless on a route that quietly rendered something else, and this
-      // pass has shipped that twice: /analytics and /profile reporting the
-      // dashboard's numbers, and /scheduling/admin/settings/platoons reporting
-      // General's because the fixture had platoons off and the page substituted
-      // a section. Opt-in per route via `expectText`, since most routes have no
-      // second page they could plausibly be confused with.
+    test(`every feature is presentable at phone width, part ${part + 1} of ${PARTS} @sweep`, async ({ page }) => {
+      // ~30 routes, each with a settle delay and a full render. Measured at 5.9 min
+      // on a dedicated CI runner (2026-10-04); 2x that, the multiple every @sweep
+      // test uses.
       //
-      // `exact: true`, and it is the whole difference between a check and a
-      // decoration. The first version of this used the default substring match,
-      // which is case-insensitive, so "Platoon Roster" — the heading of the
-      // panel that was not rendering — was satisfied by the General tab's own
-      // body copy, "...and show platoon rosters on shifts". The guard passed on
-      // exactly the page it was written to catch.
-      if (route.expectText && !(await page.getByText(route.expectText, { exact: true }).first().isVisible())) {
-        wrongPage.push(`${route.path}: expected text "${route.expectText}" is not on the page`);
-      }
+      // This one was RAISED, not tightened. The old 400_000 was 6.67 min against a
+      // 5.9 min run — 1.13x — so an ordinary slow runner would have taken it red,
+      // and a 4-worker local run did exactly that by starvation. A budget that
+      // close to the measured time reports load, not a defect.
+      //
+      // Raised again on 2026-10-29, for the tablet pass below: 7.5-8.8 min
+      // measured locally with it (5.9 on CI without it), and 2x the slower is
+      // the budget.
+      //
+      // Raised on 2026-11-13, by owner decision, to 2x the measured run as the
+      // route list grows. 9.9 min on `main` (run 43208484077, 2026-11-12); 15.4
+      // min on both of #4267's runs once the finance screens joined; the nine
+      // grants screens add ~5% more, so ~16.2 min, and 2x that is 33.
+      //
+      // Split into PARTS tests on 2026-11-19, when the whole pass was an
+      // 18-minute CI job: half is about 9 minutes, and 2x that is 18. An
+      // estimate from the whole, to be replaced by measured per-part times.
+      test.setTimeout(1_080_000);
+      await page.setViewportSize(PHONE);
+      // The fixture user has no permissions by default (`signIn` sets
+      // `permissions: []`, overriding TEST_USER's list), so a manager-gated route
+      // in the list below redirects and this pass silently measures the
+      // dashboard instead of the page it names. `inventory.manage` is granted for
+      // /inventory, which is manager-only — without it the run reported
+      // "rendered little content" for a page that renders plenty. `facilities.manage`
+      // is granted for the same reason: /facilities/settings requires it, and
+      // without it that route (and /facilities itself, which only needs
+      // facilities.view) would silently measure the dashboard instead.
+      let granted: SignInState | null = null;
 
-      const measure = async (): Promise<Measurement> => ({
-        ...(await measureGeometry()),
-        spilledText: await page.evaluate(findSpilledText),
-      });
-      const measureGeometry = (): Promise<Omit<Measurement, 'spilledText'>> =>
-        page.evaluate(
-          ({ minTap, minFont }) => {
-            const doc = document.documentElement;
-            const isVisible = (el: Element) => {
-              const b = el.getBoundingClientRect();
-              return b.width > 0 && b.height > 0 && b.right > 0 && b.left < doc.clientWidth;
-            };
+      const crashed: string[] = [];
+      const wrongPage: string[] = [];
+      const unchangedStates: string[] = [];
+      const missingStates: string[] = [];
+      const overflowed: string[] = [];
+      const invalidScrollRegions: string[] = [];
+      const tapBudgetBusted: string[] = [];
+      const textBudgetBusted: string[] = [];
+      const spilled: string[] = [];
+      const headerRows: string[] = [];
+      const tabletFailures: string[] = [];
+      const blank: string[] = [];
+      const table: string[] = [];
 
-            const targets = [
-              ...document.querySelectorAll('button, a[href], [role="button"], select, input:not([type=hidden])'),
-            ].filter(isVisible);
+      for (const route of routes) {
+        // Re-signs only when what the route needs actually changed, so the common
+        // case stays one sign-in for the whole pass.
+        granted = await signInForRoute(page, route, granted);
 
-            const small = targets.filter((el) => {
-              // A checkbox or radio is 16px by design and cannot be padded — the
-              // <label> wrapping it is what the finger actually lands on, so
-              // measure that instead of flagging every checkbox forever.
-              const box =
-                (el instanceof HTMLInputElement &&
-                  (el.type === 'checkbox' || el.type === 'radio') &&
-                  el.closest('label')) ||
-                el;
-              const b = box.getBoundingClientRect();
-              // The "skip to main content" link is deliberately 1x1 until
-              // focused; counting it would flag every page forever.
-              if (b.width <= 2 && b.height <= 2) return false;
-              // WCAG 2.5.5 and 2.5.8 both carve out the Inline case: "the target
-              // is in a sentence, or its size is otherwise constrained by the
-              // line-height of non-target text." A link inside running prose
-              // cannot be padded to 44px without breaking the paragraph it sits
-              // in, and enlarging it is not what the rule asks for. Detected as
-              // an anchor with non-whitespace text beside it in the same
-              // parent — which is what "in a sentence" means structurally.
-              // A sibling *text node* specifically, not a sibling element: a row
-              // of `<a>Edit</a> <a>Delete</a>` would otherwise have each link
-              // excuse the other, which is a row of controls, not a sentence.
-              if (el.tagName === 'A' && el.parentElement) {
-                const inSentence = [...el.parentElement.childNodes].some(
-                  (node) => node.nodeType === Node.TEXT_NODE && !!node.textContent?.trim()
-                );
-                if (inSentence) return false;
-              }
-              return b.height < minTap || b.width < minTap;
-            });
+        await page.setViewportSize(PHONE);
+        await page.goto(route.path);
+        await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
+        await page.waitForTimeout(400);
 
-            const tiny = [...document.querySelectorAll('p, span, div, td, li, label')].filter(
-              (el) => isVisible(el) && !!el.textContent?.trim() && parseFloat(getComputedStyle(el).fontSize) < minFont
-            );
+        // Did this visit reach the page the entry names? Every budget below is
+        // meaningless on a route that quietly rendered something else, and this
+        // pass has shipped that twice: /analytics and /profile reporting the
+        // dashboard's numbers, and /scheduling/admin/settings/platoons reporting
+        // General's because the fixture had platoons off and the page substituted
+        // a section. Opt-in per route via `expectText`, since most routes have no
+        // second page they could plausibly be confused with.
+        //
+        // `exact: true`, and it is the whole difference between a check and a
+        // decoration. The first version of this used the default substring match,
+        // which is case-insensitive, so "Platoon Roster" — the heading of the
+        // panel that was not rendering — was satisfied by the General tab's own
+        // body copy, "...and show platoon rosters on shifts". The guard passed on
+        // exactly the page it was written to catch.
+        if (route.expectText && !(await page.getByText(route.expectText, { exact: true }).first().isVisible())) {
+          wrongPage.push(`${route.path}: expected text "${route.expectText}" is not on the page`);
+        }
 
-            // Intentionally wide tables, charts, timelines, and tab strips opt
-            // out at their nearest boundary with data-mobile-scroll-region.
-            // Everything else must fit: checking descendant rectangles catches
-            // clipped controls even when an ancestor hides the page overflow and
-            // documentElement.scrollWidth therefore still equals the viewport.
-            const viewportWidth = document.documentElement.clientWidth;
-            const overflowing = [...document.body.querySelectorAll('*')].filter((el) => {
-              if (!isVisible(el) || el.closest('[data-mobile-scroll-region]')) return false;
-              const b = el.getBoundingClientRect();
-              return b.left < -1 || b.right > viewportWidth + 1;
-            });
+        const measure = async (): Promise<Measurement> => ({
+          ...(await measureGeometry()),
+          spilledText: await page.evaluate(findSpilledText),
+        });
+        const measureGeometry = (): Promise<Omit<Measurement, 'spilledText'>> =>
+          page.evaluate(
+            ({ minTap, minFont }) => {
+              const doc = document.documentElement;
+              const isVisible = (el: Element) => {
+                const b = el.getBoundingClientRect();
+                return b.width > 0 && b.height > 0 && b.right > 0 && b.left < doc.clientWidth;
+              };
 
-            const describe = (el: Element) => {
-              const b = el.getBoundingClientRect();
-              const name = (
-                el.getAttribute('aria-label') ||
-                el.getAttribute('title') ||
-                (el as HTMLElement).innerText ||
-                el.tagName
-              )
-                .trim()
-                .replace(/\s+/g, ' ')
-                .slice(0, 48);
-              const identity = [
-                el.tagName.toLowerCase(),
-                el.id ? `#${el.id}` : '',
-                ...[...el.classList].slice(0, 2).map((className) => `.${className}`),
-              ].join('');
-              return `${identity} "${name}" [left=${Math.round(b.left)}, right=${Math.round(b.right)}, width=${Math.round(b.width)}]`;
-            };
+              const targets = [
+                ...document.querySelectorAll('button, a[href], [role="button"], select, input:not([type=hidden])'),
+              ].filter(isVisible);
 
-            const invalidScrollRegions = [...document.querySelectorAll('[data-mobile-scroll-region]')]
-              .filter(isVisible)
-              .flatMap((el) => {
-                const failures: string[] = [];
-                const overflowX = getComputedStyle(el).overflowX;
-                if (overflowX !== 'auto' && overflowX !== 'scroll') failures.push(`overflow-x is ${overflowX}`);
-                if (!el.getAttribute('aria-label')?.trim() && !el.getAttribute('aria-labelledby')?.trim()) {
-                  failures.push('has no accessible label');
+              const small = targets.filter((el) => {
+                // A checkbox or radio is 16px by design and cannot be padded — the
+                // <label> wrapping it is what the finger actually lands on, so
+                // measure that instead of flagging every checkbox forever.
+                const box =
+                  (el instanceof HTMLInputElement &&
+                    (el.type === 'checkbox' || el.type === 'radio') &&
+                    el.closest('label')) ||
+                  el;
+                const b = box.getBoundingClientRect();
+                // The "skip to main content" link is deliberately 1x1 until
+                // focused; counting it would flag every page forever.
+                if (b.width <= 2 && b.height <= 2) return false;
+                // WCAG 2.5.5 and 2.5.8 both carve out the Inline case: "the target
+                // is in a sentence, or its size is otherwise constrained by the
+                // line-height of non-target text." A link inside running prose
+                // cannot be padded to 44px without breaking the paragraph it sits
+                // in, and enlarging it is not what the rule asks for. Detected as
+                // an anchor with non-whitespace text beside it in the same
+                // parent — which is what "in a sentence" means structurally.
+                // A sibling *text node* specifically, not a sibling element: a row
+                // of `<a>Edit</a> <a>Delete</a>` would otherwise have each link
+                // excuse the other, which is a row of controls, not a sentence.
+                if (el.tagName === 'A' && el.parentElement) {
+                  const inSentence = [...el.parentElement.childNodes].some(
+                    (node) => node.nodeType === Node.TEXT_NODE && !!node.textContent?.trim()
+                  );
+                  if (inSentence) return false;
                 }
-                // WCAG 2.1.1 asks that the off-screen end be reachable without a
-                // mouse, not specifically that the container be focusable. A
-                // strip of buttons already satisfies it — tabbing to the last
-                // button scrolls it into view — and forcing tabIndex=0 on top of
-                // that adds a redundant stop. It is actively wrong on a
-                // `role="tablist"`, which ARIA APG requires to stay out of the
-                // tab order because its tabs use roving tabindex.
-                //
-                // So the container must be focusable only when nothing inside it
-                // is: a wide table, a chart, a timeline. That is the case the
-                // rule was written for and it still fails here.
-                const focusableChild = el.querySelector(
-                  'a[href], button, input:not([type=hidden]), select, textarea, [tabindex]:not([tabindex="-1"])'
-                );
-                if ((el as HTMLElement).tabIndex !== 0 && !focusableChild) {
-                  failures.push('is not keyboard reachable: give it tabIndex={0} or focusable children');
-                }
-                return failures.length ? [`${describe(el)}: ${failures.join(', ')}`] : [];
+                return b.height < minTap || b.width < minTap;
               });
 
-            // The header's buttons, as the page-header-actions rule in index.css
-            // lays them out on a phone: text buttons on one row share it at one
-            // width, and an icon-only button keeps its square. A row of
-            // lopsided buttons, or an icon button stretched across the row
-            // because it was styled by hand without btn-icon / btn-icon-sm, is
-            // reported here. Within 1px, so fractional layout cannot flag a row
-            // that is equal by construction.
-            const headerButtons = [...document.querySelectorAll('.page-header .page-header-actions')]
-              .filter(isVisible)
-              .flatMap((area) => {
-                const children = [...area.children].filter(
-                  (el) => (el.tagName === 'BUTTON' || el.tagName === 'A') && isVisible(el)
-                );
-                const icons = children.filter((el) => el.matches('.btn-icon, .btn-icon-sm'));
-                const text = children.filter((el) => !icons.includes(el));
-                const problems = icons
-                  .filter((el) => el.getBoundingClientRect().width > 48)
-                  .map((el) => `icon button stretched: ${describe(el)}`);
-                const rows = new Map<number, Element[]>();
-                for (const el of text) {
-                  const top = Math.round(el.getBoundingClientRect().top);
-                  const row = [...rows.keys()].find((key) => Math.abs(key - top) <= 2) ?? top;
-                  rows.set(row, [...(rows.get(row) ?? []), el]);
-                }
-                for (const row of rows.values()) {
-                  const widths = row.map((el) => el.getBoundingClientRect().width);
-                  if (Math.max(...widths) - Math.min(...widths) > 1) {
-                    problems.push(`unequal row: ${row.map(describe).join(' | ')}`);
+              const tiny = [...document.querySelectorAll('p, span, div, td, li, label')].filter(
+                (el) => isVisible(el) && !!el.textContent?.trim() && parseFloat(getComputedStyle(el).fontSize) < minFont
+              );
+
+              // Intentionally wide tables, charts, timelines, and tab strips opt
+              // out at their nearest boundary with data-mobile-scroll-region.
+              // Everything else must fit: checking descendant rectangles catches
+              // clipped controls even when an ancestor hides the page overflow and
+              // documentElement.scrollWidth therefore still equals the viewport.
+              const viewportWidth = document.documentElement.clientWidth;
+              const overflowing = [...document.body.querySelectorAll('*')].filter((el) => {
+                if (!isVisible(el) || el.closest('[data-mobile-scroll-region]')) return false;
+                const b = el.getBoundingClientRect();
+                return b.left < -1 || b.right > viewportWidth + 1;
+              });
+
+              const describe = (el: Element) => {
+                const b = el.getBoundingClientRect();
+                const name = (
+                  el.getAttribute('aria-label') ||
+                  el.getAttribute('title') ||
+                  (el as HTMLElement).innerText ||
+                  el.tagName
+                )
+                  .trim()
+                  .replace(/\s+/g, ' ')
+                  .slice(0, 48);
+                const identity = [
+                  el.tagName.toLowerCase(),
+                  el.id ? `#${el.id}` : '',
+                  ...[...el.classList].slice(0, 2).map((className) => `.${className}`),
+                ].join('');
+                return `${identity} "${name}" [left=${Math.round(b.left)}, right=${Math.round(b.right)}, width=${Math.round(b.width)}]`;
+              };
+
+              const invalidScrollRegions = [...document.querySelectorAll('[data-mobile-scroll-region]')]
+                .filter(isVisible)
+                .flatMap((el) => {
+                  const failures: string[] = [];
+                  const overflowX = getComputedStyle(el).overflowX;
+                  if (overflowX !== 'auto' && overflowX !== 'scroll') failures.push(`overflow-x is ${overflowX}`);
+                  if (!el.getAttribute('aria-label')?.trim() && !el.getAttribute('aria-labelledby')?.trim()) {
+                    failures.push('has no accessible label');
+                  }
+                  // WCAG 2.1.1 asks that the off-screen end be reachable without a
+                  // mouse, not specifically that the container be focusable. A
+                  // strip of buttons already satisfies it — tabbing to the last
+                  // button scrolls it into view — and forcing tabIndex=0 on top of
+                  // that adds a redundant stop. It is actively wrong on a
+                  // `role="tablist"`, which ARIA APG requires to stay out of the
+                  // tab order because its tabs use roving tabindex.
+                  //
+                  // So the container must be focusable only when nothing inside it
+                  // is: a wide table, a chart, a timeline. That is the case the
+                  // rule was written for and it still fails here.
+                  const focusableChild = el.querySelector(
+                    'a[href], button, input:not([type=hidden]), select, textarea, [tabindex]:not([tabindex="-1"])'
+                  );
+                  if ((el as HTMLElement).tabIndex !== 0 && !focusableChild) {
+                    failures.push('is not keyboard reachable: give it tabIndex={0} or focusable children');
+                  }
+                  return failures.length ? [`${describe(el)}: ${failures.join(', ')}`] : [];
+                });
+
+              // The header's buttons, as the page-header-actions rule in index.css
+              // lays them out on a phone: text buttons on one row share it at one
+              // width, and an icon-only button keeps its square. A row of
+              // lopsided buttons, or an icon button stretched across the row
+              // because it was styled by hand without btn-icon / btn-icon-sm, is
+              // reported here. Within 1px, so fractional layout cannot flag a row
+              // that is equal by construction.
+              const headerButtons = [...document.querySelectorAll('.page-header .page-header-actions')]
+                .filter(isVisible)
+                .flatMap((area) => {
+                  const children = [...area.children].filter(
+                    (el) => (el.tagName === 'BUTTON' || el.tagName === 'A') && isVisible(el)
+                  );
+                  const icons = children.filter((el) => el.matches('.btn-icon, .btn-icon-sm'));
+                  const text = children.filter((el) => !icons.includes(el));
+                  const problems = icons
+                    .filter((el) => el.getBoundingClientRect().width > 48)
+                    .map((el) => `icon button stretched: ${describe(el)}`);
+                  const rows = new Map<number, Element[]>();
+                  for (const el of text) {
+                    const top = Math.round(el.getBoundingClientRect().top);
+                    const row = [...rows.keys()].find((key) => Math.abs(key - top) <= 2) ?? top;
+                    rows.set(row, [...(rows.get(row) ?? []), el]);
+                  }
+                  for (const row of rows.values()) {
+                    const widths = row.map((el) => el.getBoundingClientRect().width);
+                    if (Math.max(...widths) - Math.min(...widths) > 1) {
+                      problems.push(`unequal row: ${row.map(describe).join(' | ')}`);
+                    }
+                  }
+                  return problems;
+                });
+
+              return {
+                crashed: document.body.innerText.includes('Oops! Something went wrong'),
+                scrollWidth: doc.scrollWidth,
+                overflowExamples: overflowing.slice(0, 8).map(describe),
+                invalidScrollRegions,
+                textLength: document.body.innerText.trim().length,
+                totalTargets: targets.length,
+                smallTargets: small.length,
+                smallExamples: small.slice(0, 4).map((el) => {
+                  const b = el.getBoundingClientRect();
+                  const label = (el.getAttribute('aria-label') || (el as HTMLElement).innerText || el.tagName)
+                    .trim()
+                    .slice(0, 24);
+                  return `${label} ${Math.round(b.width)}x${Math.round(b.height)}`;
+                }),
+                tinyText: tiny.length,
+                headerButtons,
+              };
+            },
+            { minTap: MIN_TAP, minFont: MIN_FONT_PX }
+          );
+
+        // `label` rather than `route.path`, because a route can be measured more
+        // than once: once on arrival, then once per state below. Everything a
+        // failure prints has to say *which* of those it came from, or a red run
+        // sends someone looking at the wrong screen.
+        const record = (label: string, m: Measurement) => {
+          if (m.crashed) crashed.push(label);
+          if (m.overflowExamples.length) {
+            overflowed.push(
+              `${label} (page scroll width ${m.scrollWidth}px):\n    ${m.overflowExamples.join('\n    ')}`
+            );
+          }
+          if (m.spilledText.length) {
+            spilled.push(`${label}:\n    ${m.spilledText.slice(0, 6).join('\n    ')}`);
+          }
+          if (m.headerButtons.length) {
+            headerRows.push(`${label}:\n    ${m.headerButtons.join('\n    ')}`);
+          }
+          if (m.invalidScrollRegions.length) {
+            invalidScrollRegions.push(`${label}:\n    ${m.invalidScrollRegions.join('\n    ')}`);
+          }
+          if (m.smallTargets > route.maxSmallTargets) {
+            tapBudgetBusted.push(
+              `${label}: ${m.smallTargets} under ${MIN_TAP}px, budget ${route.maxSmallTargets}` +
+                (m.smallExamples.length ? ` — e.g. ${m.smallExamples.join(', ')}` : '')
+            );
+          }
+          if (m.tinyText > route.maxTinyText) {
+            textBudgetBusted.push(`${label}: ${m.tinyText} nodes under ${MIN_FONT_PX}px, budget ${route.maxTinyText}`);
+          }
+          // Reported, not asserted: under the E2E mock a page can legitimately be
+          // empty, so this cannot distinguish "no data" from "rendered nothing".
+          if (m.textLength < 600) blank.push(label);
+
+          table.push(
+            [
+              label.padEnd(28),
+              m.crashed ? 'CRASH' : 'ok   ',
+              `tap ${String(m.smallTargets).padStart(2)}/${String(m.totalTargets).padEnd(3)}`,
+              `tiny ${String(m.tinyText).padStart(2)}`,
+              `text ${String(m.textLength).padStart(5)}`,
+              m.smallExamples.join(', '),
+            ].join('  ')
+          );
+        };
+
+        const arrival = await measure();
+        record(route.path, arrival);
+
+        // Drive the route's other states, if it has any. See `states` in
+        // mobile-routes.ts for why arrival alone is not the whole of a screen.
+        //
+        // One set for the whole route, not one per group. Per-group, the
+        // duplicate-state guard below was dead exactly where it was needed: the
+        // two apparatus groups are capped at one control each, so the set was
+        // always empty when its only entry was checked, and a resource click that
+        // left the apparatus form on screen would have been recorded as a
+        // successful resource measurement.
+        //
+        // Arrival is compared against separately rather than seeded into the set,
+        // because whether a state may reproduce it is a property of the group and
+        // not of the route: a tab strip's first tab legitimately renders what
+        // arrival rendered, while an Edit button that leaves the page unchanged
+        // has plainly done nothing. Seeding would have to pick one answer for
+        // both; `mayRepeatArrival` lets the strip opt out and leaves every other
+        // group held to the stricter one.
+        const seen = new Set<string>();
+        const arrivalFingerprint = fingerprintOf(arrival);
+
+        for (const group of route.states ?? []) {
+          const { selector, label: stateLabel, max, mayRepeatArrival } = group;
+          // Only what a phone can actually see. These panels ship a `md:hidden`
+          // strip and a desktop `<aside>` holding the same controls, and the
+          // hidden copy is still in the DOM — enumerating both drives the loop
+          // into elements that will never become clickable.
+          //
+          // Resolved to handles up front rather than driven through `nth(i)`. A
+          // locator resolves at action time, and some of these controls destroy
+          // their own match: an apparatus card's Edit button is replaced by the
+          // form it opens, so after the first click there is one fewer match and
+          // `nth(1)` is the element that *was* at index 2. The loop then walked
+          // past the card it was supposed to reach.
+          const handles = await page.locator(selector).filter({ visible: true }).elementHandles();
+          const chosen = handles.slice(0, max ?? handles.length);
+
+          // A selector that matches nothing is not "no states to drive", it is a
+          // route whose extra coverage silently disappeared — after a markup
+          // change, a fixture change or a typo. Same shape as `expectText` and
+          // `unchangedStates`: the quiet version of this failure is the one worth
+          // asserting on.
+          if (chosen.length === 0) {
+            missingStates.push(`${route.path} [${stateLabel}]: selector "${selector}" matched no visible control`);
+          }
+
+          for (const [i, control] of chosen.entries()) {
+            // Whichever of the two actually identifies the row. A tab strip's
+            // buttons name themselves ("Rating Scale") and the group label
+            // ("subsection") says nothing; a group that names one control is the
+            // other way round — both apparatus cards' buttons read "Edit", so the
+            // group's own label is what distinguishes the apparatus form from the
+            // resource one in the output.
+            const text = (await control.innerText().catch(() => '')).trim();
+            const name = chosen.length === 1 ? stateLabel : text || `${stateLabel} ${i + 1}`;
+            // Dispatched on the element, not aimed at a point on the screen.
+            // These strips scroll smoothly, so an ordinary click never passes the
+            // stability check, and `{ force: true }` is worse than it looks: force
+            // skips the actionability checks but Playwright still computes a click
+            // point first, and the strip slides out from under it — every click
+            // landed on the neighbouring tab, so seven tabs produced five distinct
+            // screens and two subsections were measured twice under the wrong
+            // names. The trade is that a synthetic click skips hit-testing, so an
+            // overlay covering a control would go unnoticed here; this pass
+            // measures geometry, and mis-measuring the wrong screen is the worse
+            // failure of the two.
+            await control.dispatchEvent('click');
+            await page.waitForTimeout(350);
+            const m = await measure();
+
+            // A state that did not change the page is not a state. Without this,
+            // the bug above stayed silent: a subsection never reached still gets a
+            // row and a green budget, which is the whole failure this pass exists
+            // to stop, one level in.
+            const fingerprint = fingerprintOf(m);
+            if (seen.has(fingerprint)) {
+              unchangedStates.push(`${route.path} [${name}]: rendered the same content as an earlier state`);
+            } else if (!mayRepeatArrival && fingerprint === arrivalFingerprint) {
+              unchangedStates.push(`${route.path} [${name}]: rendered the same content as the route's arrival screen`);
+            }
+            seen.add(fingerprint);
+
+            record(`${route.path} [${name}]`, m);
+          }
+        }
+
+        // The same page, resized rather than reloaded — what rotating a tablet or
+        // dragging a window does — so this costs a layout, not a visit. Reduced
+        // motion settles it at once: growing past `md` slides the side
+        // navigation in over 300ms, and a measurement taken during the slide
+        // reports it hanging off the left edge.
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        for (const size of TABLET_SIZES) {
+          await page.setViewportSize(size);
+          await page.waitForTimeout(250);
+          const at = `${route.path} at ${size.width}x${size.height}`;
+          const tabletSpill = await page.evaluate(findSpilledText);
+          const tabletOverflow = await page.evaluate(() => {
+            const width = document.documentElement.clientWidth;
+            return [...document.body.querySelectorAll('*')]
+              .filter((el) => {
+                if (el.closest('[data-mobile-scroll-region]')) return false;
+                // The shapes inside an icon are judged by the <svg> that holds
+                // them. An <svg> clips its own content by default, so the walk
+                // below would stop at it and blame an icon scrolled out of a
+                // table's card, though the card it scrolls in is on screen.
+                if (el instanceof SVGElement && !(el instanceof SVGSVGElement)) return false;
+                const b = el.getBoundingClientRect();
+                if (!(b.width > 0 && b.height > 0 && b.right > 0 && (b.right > width + 1 || b.left < -1))) return false;
+                // A table wider than its card is fine when the card scrolls and
+                // stays on screen: the overflow is reachable, not lost. What
+                // decides is the nearest ancestor that clips.
+                for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+                  if (getComputedStyle(p).overflowX !== 'visible') {
+                    const pb = p.getBoundingClientRect();
+                    return pb.right > width + 1 || pb.left < -1;
                   }
                 }
-                return problems;
-              });
-
-            return {
-              crashed: document.body.innerText.includes('Oops! Something went wrong'),
-              scrollWidth: doc.scrollWidth,
-              overflowExamples: overflowing.slice(0, 8).map(describe),
-              invalidScrollRegions,
-              textLength: document.body.innerText.trim().length,
-              totalTargets: targets.length,
-              smallTargets: small.length,
-              smallExamples: small.slice(0, 4).map((el) => {
-                const b = el.getBoundingClientRect();
-                const label = (el.getAttribute('aria-label') || (el as HTMLElement).innerText || el.tagName)
-                  .trim()
-                  .slice(0, 24);
-                return `${label} ${Math.round(b.width)}x${Math.round(b.height)}`;
-              }),
-              tinyText: tiny.length,
-              headerButtons,
-            };
-          },
-          { minTap: MIN_TAP, minFont: MIN_FONT_PX }
-        );
-
-      // `label` rather than `route.path`, because a route can be measured more
-      // than once: once on arrival, then once per state below. Everything a
-      // failure prints has to say *which* of those it came from, or a red run
-      // sends someone looking at the wrong screen.
-      const record = (label: string, m: Measurement) => {
-        if (m.crashed) crashed.push(label);
-        if (m.overflowExamples.length) {
-          overflowed.push(`${label} (page scroll width ${m.scrollWidth}px):\n    ${m.overflowExamples.join('\n    ')}`);
+                return true;
+              })
+              .slice(0, 4)
+              .map(
+                (el) =>
+                  `${el.tagName.toLowerCase()}.${[...el.classList].slice(0, 2).join('.')} "${(el as HTMLElement).innerText?.trim().slice(0, 40) ?? ''}"`
+              );
+          });
+          if (tabletSpill.length)
+            tabletFailures.push(`${at} — text outside its box:\n    ${tabletSpill.slice(0, 6).join('\n    ')}`);
+          if (tabletOverflow.length)
+            tabletFailures.push(`${at} — past the screen edge:\n    ${tabletOverflow.join('\n    ')}`);
         }
-        if (m.spilledText.length) {
-          spilled.push(`${label}:\n    ${m.spilledText.slice(0, 6).join('\n    ')}`);
-        }
-        if (m.headerButtons.length) {
-          headerRows.push(`${label}:\n    ${m.headerButtons.join('\n    ')}`);
-        }
-        if (m.invalidScrollRegions.length) {
-          invalidScrollRegions.push(`${label}:\n    ${m.invalidScrollRegions.join('\n    ')}`);
-        }
-        if (m.smallTargets > route.maxSmallTargets) {
-          tapBudgetBusted.push(
-            `${label}: ${m.smallTargets} under ${MIN_TAP}px, budget ${route.maxSmallTargets}` +
-              (m.smallExamples.length ? ` — e.g. ${m.smallExamples.join(', ')}` : '')
-          );
-        }
-        if (m.tinyText > route.maxTinyText) {
-          textBudgetBusted.push(`${label}: ${m.tinyText} nodes under ${MIN_FONT_PX}px, budget ${route.maxTinyText}`);
-        }
-        // Reported, not asserted: under the E2E mock a page can legitimately be
-        // empty, so this cannot distinguish "no data" from "rendered nothing".
-        if (m.textLength < 600) blank.push(label);
-
-        table.push(
-          [
-            label.padEnd(28),
-            m.crashed ? 'CRASH' : 'ok   ',
-            `tap ${String(m.smallTargets).padStart(2)}/${String(m.totalTargets).padEnd(3)}`,
-            `tiny ${String(m.tinyText).padStart(2)}`,
-            `text ${String(m.textLength).padStart(5)}`,
-            m.smallExamples.join(', '),
-          ].join('  ')
-        );
-      };
-
-      const arrival = await measure();
-      record(route.path, arrival);
-
-      // Drive the route's other states, if it has any. See `states` in
-      // mobile-routes.ts for why arrival alone is not the whole of a screen.
-      //
-      // One set for the whole route, not one per group. Per-group, the
-      // duplicate-state guard below was dead exactly where it was needed: the
-      // two apparatus groups are capped at one control each, so the set was
-      // always empty when its only entry was checked, and a resource click that
-      // left the apparatus form on screen would have been recorded as a
-      // successful resource measurement.
-      //
-      // Arrival is compared against separately rather than seeded into the set,
-      // because whether a state may reproduce it is a property of the group and
-      // not of the route: a tab strip's first tab legitimately renders what
-      // arrival rendered, while an Edit button that leaves the page unchanged
-      // has plainly done nothing. Seeding would have to pick one answer for
-      // both; `mayRepeatArrival` lets the strip opt out and leaves every other
-      // group held to the stricter one.
-      const seen = new Set<string>();
-      const arrivalFingerprint = fingerprintOf(arrival);
-
-      for (const group of route.states ?? []) {
-        const { selector, label: stateLabel, max, mayRepeatArrival } = group;
-        // Only what a phone can actually see. These panels ship a `md:hidden`
-        // strip and a desktop `<aside>` holding the same controls, and the
-        // hidden copy is still in the DOM — enumerating both drives the loop
-        // into elements that will never become clickable.
-        //
-        // Resolved to handles up front rather than driven through `nth(i)`. A
-        // locator resolves at action time, and some of these controls destroy
-        // their own match: an apparatus card's Edit button is replaced by the
-        // form it opens, so after the first click there is one fewer match and
-        // `nth(1)` is the element that *was* at index 2. The loop then walked
-        // past the card it was supposed to reach.
-        const handles = await page.locator(selector).filter({ visible: true }).elementHandles();
-        const chosen = handles.slice(0, max ?? handles.length);
-
-        // A selector that matches nothing is not "no states to drive", it is a
-        // route whose extra coverage silently disappeared — after a markup
-        // change, a fixture change or a typo. Same shape as `expectText` and
-        // `unchangedStates`: the quiet version of this failure is the one worth
-        // asserting on.
-        if (chosen.length === 0) {
-          missingStates.push(`${route.path} [${stateLabel}]: selector "${selector}" matched no visible control`);
-        }
-
-        for (const [i, control] of chosen.entries()) {
-          // Whichever of the two actually identifies the row. A tab strip's
-          // buttons name themselves ("Rating Scale") and the group label
-          // ("subsection") says nothing; a group that names one control is the
-          // other way round — both apparatus cards' buttons read "Edit", so the
-          // group's own label is what distinguishes the apparatus form from the
-          // resource one in the output.
-          const text = (await control.innerText().catch(() => '')).trim();
-          const name = chosen.length === 1 ? stateLabel : text || `${stateLabel} ${i + 1}`;
-          // Dispatched on the element, not aimed at a point on the screen.
-          // These strips scroll smoothly, so an ordinary click never passes the
-          // stability check, and `{ force: true }` is worse than it looks: force
-          // skips the actionability checks but Playwright still computes a click
-          // point first, and the strip slides out from under it — every click
-          // landed on the neighbouring tab, so seven tabs produced five distinct
-          // screens and two subsections were measured twice under the wrong
-          // names. The trade is that a synthetic click skips hit-testing, so an
-          // overlay covering a control would go unnoticed here; this pass
-          // measures geometry, and mis-measuring the wrong screen is the worse
-          // failure of the two.
-          await control.dispatchEvent('click');
-          await page.waitForTimeout(350);
-          const m = await measure();
-
-          // A state that did not change the page is not a state. Without this,
-          // the bug above stayed silent: a subsection never reached still gets a
-          // row and a green budget, which is the whole failure this pass exists
-          // to stop, one level in.
-          const fingerprint = fingerprintOf(m);
-          if (seen.has(fingerprint)) {
-            unchangedStates.push(`${route.path} [${name}]: rendered the same content as an earlier state`);
-          } else if (!mayRepeatArrival && fingerprint === arrivalFingerprint) {
-            unchangedStates.push(`${route.path} [${name}]: rendered the same content as the route's arrival screen`);
-          }
-          seen.add(fingerprint);
-
-          record(`${route.path} [${name}]`, m);
-        }
+        await page.emulateMedia({ reducedMotion: 'no-preference' });
       }
 
-      // The same page, resized rather than reloaded — what rotating a tablet or
-      // dragging a window does — so this costs a layout, not a visit. Reduced
-      // motion settles it at once: growing past `md` slides the side
-      // navigation in over 300ms, and a measurement taken during the slide
-      // reports it hanging off the left edge.
-      await page.emulateMedia({ reducedMotion: 'reduce' });
-      for (const size of TABLET_SIZES) {
-        await page.setViewportSize(size);
-        await page.waitForTimeout(250);
-        const at = `${route.path} at ${size.width}x${size.height}`;
-        const tabletSpill = await page.evaluate(findSpilledText);
-        const tabletOverflow = await page.evaluate(() => {
-          const width = document.documentElement.clientWidth;
-          return [...document.body.querySelectorAll('*')]
-            .filter((el) => {
-              if (el.closest('[data-mobile-scroll-region]')) return false;
-              // The shapes inside an icon are judged by the <svg> that holds
-              // them. An <svg> clips its own content by default, so the walk
-              // below would stop at it and blame an icon scrolled out of a
-              // table's card, though the card it scrolls in is on screen.
-              if (el instanceof SVGElement && !(el instanceof SVGSVGElement)) return false;
-              const b = el.getBoundingClientRect();
-              if (!(b.width > 0 && b.height > 0 && b.right > 0 && (b.right > width + 1 || b.left < -1))) return false;
-              // A table wider than its card is fine when the card scrolls and
-              // stays on screen: the overflow is reachable, not lost. What
-              // decides is the nearest ancestor that clips.
-              for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
-                if (getComputedStyle(p).overflowX !== 'visible') {
-                  const pb = p.getBoundingClientRect();
-                  return pb.right > width + 1 || pb.left < -1;
-                }
-              }
-              return true;
-            })
-            .slice(0, 4)
-            .map(
-              (el) =>
-                `${el.tagName.toLowerCase()}.${[...el.classList].slice(0, 2).join('.')} "${(el as HTMLElement).innerText?.trim().slice(0, 40) ?? ''}"`
-            );
-        });
-        if (tabletSpill.length)
-          tabletFailures.push(`${at} — text outside its box:\n    ${tabletSpill.slice(0, 6).join('\n    ')}`);
-        if (tabletOverflow.length)
-          tabletFailures.push(`${at} — past the screen edge:\n    ${tabletOverflow.join('\n    ')}`);
+      console.log(`\nMobile presentation, part ${part + 1} of ${PARTS} — 390x844\n` + table.join('\n'));
+      if (blank.length) {
+        console.log(
+          `\nRendered little content (check these are genuinely empty, not broken):\n  ${blank.join('\n  ')}`
+        );
       }
-      await page.emulateMedia({ reducedMotion: 'no-preference' });
-    }
 
-    console.log('\nMobile presentation — 390x844\n' + table.join('\n'));
-    if (blank.length) {
-      console.log(`\nRendered little content (check these are genuinely empty, not broken):\n  ${blank.join('\n  ')}`);
-    }
-
-    expect(crashed, 'routes that hit the ErrorBoundary').toEqual([]);
-    // Before the budgets: a route measuring the wrong page makes every number
-    // below it a statement about somewhere else.
-    expect(wrongPage, 'routes that did not render the page their entry names').toEqual([]);
-    expect(unchangedStates, 'driven states that rendered content already measured').toEqual([]);
-    expect(missingStates, 'declared states whose selector matched nothing').toEqual([]);
-    expect(overflowed, 'routes with visible elements extending outside the viewport').toEqual([]);
-    // Text drawn outside the element holding it, which the overflow check above
-    // cannot see while the element itself stays on screen: a label run across
-    // its tile's chevron, a title spilling out of a squeezed header column.
-    expect(spilled, 'routes with text drawn outside its own box at phone width').toEqual([]);
-    expect(headerRows, 'page headers whose phone buttons are unequal on a row, or an icon button stretched').toEqual(
-      []
-    );
-    expect(tabletFailures, 'routes that spill or overflow at tablet width').toEqual([]);
-    expect(invalidScrollRegions, 'intentional scroll regions that break the accessibility contract').toEqual([]);
-    expect(tapBudgetBusted, `routes that grew tap targets under ${MIN_TAP}px`).toEqual([]);
-    expect(textBudgetBusted, `routes that grew text under ${MIN_FONT_PX}px`).toEqual([]);
-  });
+      expect(crashed, 'routes that hit the ErrorBoundary').toEqual([]);
+      // Before the budgets: a route measuring the wrong page makes every number
+      // below it a statement about somewhere else.
+      expect(wrongPage, 'routes that did not render the page their entry names').toEqual([]);
+      expect(unchangedStates, 'driven states that rendered content already measured').toEqual([]);
+      expect(missingStates, 'declared states whose selector matched nothing').toEqual([]);
+      expect(overflowed, 'routes with visible elements extending outside the viewport').toEqual([]);
+      // Text drawn outside the element holding it, which the overflow check above
+      // cannot see while the element itself stays on screen: a label run across
+      // its tile's chevron, a title spilling out of a squeezed header column.
+      expect(spilled, 'routes with text drawn outside its own box at phone width').toEqual([]);
+      expect(headerRows, 'page headers whose phone buttons are unequal on a row, or an icon button stretched').toEqual(
+        []
+      );
+      expect(tabletFailures, 'routes that spill or overflow at tablet width').toEqual([]);
+      expect(invalidScrollRegions, 'intentional scroll regions that break the accessibility contract').toEqual([]);
+      expect(tapBudgetBusted, `routes that grew tap targets under ${MIN_TAP}px`).toEqual([]);
+      expect(textBudgetBusted, `routes that grew text under ${MIN_FONT_PX}px`).toEqual([]);
+    });
+  }
 });

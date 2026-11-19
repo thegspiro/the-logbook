@@ -29,11 +29,11 @@ const E2E = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'e2e');
 
 /**
  * Five minutes. It has to sit under the *smallest* @sweep budget, which is
- * mobile-dialogs' 1_860_000 — otherwise this file calls a test ordinary
- * while the workflow treats it as a sweep, and the two halves disagree, which
- * is what the second assertion below exists to catch. Nothing else in the suite
- * declares a budget at all, so ordinary tests sit on Playwright's 30s default,
- * an order of magnitude clear of this.
+ * a mobile-presentation part's 1_080_000 — otherwise this file calls a test
+ * ordinary while the workflow treats it as a sweep, and the two halves
+ * disagree, which is what the second assertion below exists to catch. Nothing
+ * else in the suite declares a budget at all, so ordinary tests sit on
+ * Playwright's 30s default, an order of magnitude clear of this.
  *
  * Both margins are wide on purpose: raise this only if an ordinary test ever
  * needs a budget above it, and lower it if a sweep is ever budgeted below it.
