@@ -1,6 +1,6 @@
 # Cal.com Integration
 
-_(Added 2026-07-13)_
+_(Added 2026-07-13; Settings button 2026-11-16)_
 
 The Cal.com integration lets a department pull scheduled bookings and offer
 self-scheduling links — an open-source [Calendly](https://cal.com) alternative.
@@ -18,18 +18,25 @@ prospective member's stage.
 - **Pipeline Self-Scheduling Stage** — A **Meeting** pipeline stage can present a Cal.com booking link; applicants see a **Schedule** button on their public status page
 - **Auto-Advance on Attendance** — With a webhook secret configured and the Cal.com webhook subscribed to `MEETING_ENDED`, a finished meeting advances the matching prospect's stage automatically, correlated by the attendee's email
 - **Secure Inbound Webhook** — Rate-limited, HMAC-verified, audit-logged receiver mirroring the Salesforce webhook
+- **Settings on a connected card** — The API key, base URL and webhook secret can be changed without disconnecting. A blank key or secret box keeps what is saved
 
 ---
 
 ## Pages
 
-| URL             | Page                                             | Permission            |
-| --------------- | ------------------------------------------------ | --------------------- |
-| `/integrations` | Integrations Hub (Cal.com card + Bookings panel) | `integrations.manage` |
+| URL             | Page                                                          | Permission            |
+| --------------- | ------------------------------------------------------------- | --------------------- |
+| `/integrations` | Integrations Hub (Cal.com card, **Settings**, Bookings panel) | `integrations.manage` |
 
 Cal.com is configured from the **Integrations** page. The connect dialog collects
 the API key, optional base URL, and an optional webhook secret, and displays the
 inbound callback URL to paste into Cal.com.
+
+To change them later, use **Settings** on the connected card. It shows the base
+URL in use; a blank **API Key** or **Webhook Secret** box keeps the saved one.
+**Moving to a different base URL needs that server's API key in the same save.**
+The API refuses with 422 to carry a stored key to a new address, and the dialog
+asks for the key before it sends the save.
 
 ---
 
@@ -40,7 +47,7 @@ inbound callback URL to paste into Cal.com.
 ```
 POST   /api/v1/integrations/{id}/connect            # Store key/base URL/webhook secret, enable
 POST   /api/v1/integrations/{id}/disconnect         # Disconnect
-PATCH  /api/v1/integrations/{id}                     # Update config
+PATCH  /api/v1/integrations/{id}                     # Settings: store only the fields sent
 POST   /api/v1/integrations/{id}/test-connection     # Verify the API key
 GET    /api/v1/integrations/calcom/bookings          # Upcoming bookings (mapped to event shape)
 ```

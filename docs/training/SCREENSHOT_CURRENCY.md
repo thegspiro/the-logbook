@@ -327,6 +327,17 @@ store does not accept PayPal, so the choice is not in its frame.
 with the settings read answered as "connected account" and no connected
 PayPal integration.
 
+**`16-27-calcom-settings` added 2026-11-16**, with Cal.com's own **Settings**
+button. It uses the same mock (`showIntegrationConnected` in the manifest),
+with an example self-hosted base URL, `https://cal.oakvillefd.org/api/v1`,
+prefilled; it is not a real Cal.com server. The dialog is opened and never
+saved.
+
+**`16-28-documenso-settings` added 2026-11-16**, with Documenso's own
+**Settings** button, from the same mock with an example self-hosted base URL,
+`https://sign.oakvillefd.org/api/v1`; it is not a real Documenso server. The
+dialog is opened and never saved.
+
 ## The October 16 – November 1 queues, captured 2026-11-02
 
 Every queue from the October 16 – 18 pass to the October 31 – November 1 pass

@@ -774,6 +774,177 @@ describe('IntegrationsPage', () => {
     });
   });
 
+  // Cal.com cannot connect without an API key, and a stored key is never sent
+  // back, so Settings states that a blank box keeps it. The key belongs to the
+  // host it was entered for: the API refuses to move it to a new base URL.
+  describe('Cal.com settings', () => {
+    const calcomConnected = {
+      id: 'cal-1',
+      organization_id: 'org-1',
+      integration_type: 'calcom',
+      name: 'Cal.com',
+      description: 'Pull scheduled bookings from Cal.com',
+      category: 'Scheduling',
+      status: 'connected' as const,
+      config: { api_base_url: 'https://cal.oakvillefd.org/api/v1' },
+      enabled: true,
+      contains_phi: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+
+    beforeEach(() => {
+      mockGetIntegrations.mockReset();
+      mockUpdateIntegration.mockReset();
+      mockGetIntegrations.mockResolvedValue([calcomConnected]);
+      mockUpdateIntegration.mockResolvedValue(calcomConnected);
+      vi.mocked(toast.error).mockClear();
+    });
+
+    const openSettings = async (user: ReturnType<typeof userEvent.setup>) => {
+      renderPage();
+      const card = await screen.findByTestId('integration-card-calcom');
+      await user.click(within(card).getByRole('button', { name: 'Cal.com settings' }));
+      return screen.findByRole('dialog', { name: 'Cal.com settings' });
+    };
+
+    it('opens prefilled and saves only what was typed', async () => {
+      const user = userEvent.setup();
+      const dialog = await openSettings(user);
+
+      expect(within(dialog).getByLabelText('API Key')).toHaveAttribute(
+        'placeholder',
+        'Leave blank to keep the current key'
+      );
+      expect(within(dialog).getByLabelText('API Base URL (optional)')).toHaveValue('https://cal.oakvillefd.org/api/v1');
+      expect(dialog).toHaveTextContent('Changing it needs the API key for the new address in the same save.');
+      expect(dialog).toHaveTextContent('Leave it blank to keep the saved secret, if one was entered.');
+      expect(dialog).toHaveTextContent(
+        'A new key or base URL is used from the next booking lookup, and a new webhook secret from the next message Cal.com sends. The webhook address does not change.'
+      );
+
+      await user.type(within(dialog).getByLabelText('Webhook Secret (optional)'), 'cal-secret');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('cal-1', {
+        api_base_url: 'https://cal.oakvillefd.org/api/v1',
+        api_key: undefined,
+        webhook_secret: 'cal-secret',
+      });
+      expect(mockConnectIntegration).not.toHaveBeenCalled();
+    });
+
+    it('asks for the key before moving to a new base URL', async () => {
+      const user = userEvent.setup();
+      const dialog = await openSettings(user);
+      const baseUrl = within(dialog).getByLabelText('API Base URL (optional)');
+      await user.clear(baseUrl);
+      await user.type(baseUrl, 'https://api.cal.com/v1');
+
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(toast.error).toHaveBeenCalledWith(
+        'Enter the API key for the new base URL. The saved key belongs to the current one.'
+      );
+      expect(mockUpdateIntegration).not.toHaveBeenCalled();
+
+      await user.type(within(dialog).getByLabelText('API Key'), 'cal_live_new');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('cal-1', {
+        api_base_url: 'https://api.cal.com/v1',
+        api_key: 'cal_live_new',
+        webhook_secret: undefined,
+      });
+    });
+  });
+
+  // Documenso, like Cal.com, cannot connect without its credential, never
+  // sends it back, and binds it to the host it was made on.
+  describe('Documenso settings', () => {
+    const documensoConnected = {
+      id: 'doc-1',
+      organization_id: 'org-1',
+      integration_type: 'documenso',
+      name: 'Documenso',
+      description: 'Send documents for electronic signature',
+      category: 'Documents',
+      status: 'connected' as const,
+      config: { api_base_url: 'https://sign.oakvillefd.org/api/v1' },
+      enabled: true,
+      contains_phi: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+
+    beforeEach(() => {
+      mockGetIntegrations.mockReset();
+      mockUpdateIntegration.mockReset();
+      mockGetIntegrations.mockResolvedValue([documensoConnected]);
+      mockUpdateIntegration.mockResolvedValue(documensoConnected);
+      vi.mocked(toast.error).mockClear();
+    });
+
+    const openSettings = async (user: ReturnType<typeof userEvent.setup>) => {
+      renderPage();
+      const card = await screen.findByTestId('integration-card-documenso');
+      await user.click(within(card).getByRole('button', { name: 'Documenso settings' }));
+      return screen.findByRole('dialog', { name: 'Documenso settings' });
+    };
+
+    it('opens prefilled and saves only what was typed', async () => {
+      const user = userEvent.setup();
+      const dialog = await openSettings(user);
+
+      expect(within(dialog).getByLabelText('API Token')).toHaveAttribute(
+        'placeholder',
+        'Leave blank to keep the current token'
+      );
+      expect(within(dialog).getByLabelText('API Base URL (optional)')).toHaveValue(
+        'https://sign.oakvillefd.org/api/v1'
+      );
+      expect(dialog).toHaveTextContent('Changing it needs the API token for the new address in the same save.');
+      expect(dialog).toHaveTextContent('Leave it blank to keep the saved secret, if one was entered.');
+      expect(dialog).toHaveTextContent(
+        'A new token or base URL is used from the next request to Documenso, and a new webhook secret from the next message Documenso sends. The webhook address does not change.'
+      );
+
+      await user.type(within(dialog).getByLabelText('Webhook Secret (optional)'), 'doc-secret');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('doc-1', {
+        api_base_url: 'https://sign.oakvillefd.org/api/v1',
+        api_token: undefined,
+        webhook_secret: 'doc-secret',
+      });
+      expect(mockConnectIntegration).not.toHaveBeenCalled();
+    });
+
+    it('asks for the token before moving to a new base URL', async () => {
+      const user = userEvent.setup();
+      const dialog = await openSettings(user);
+      const baseUrl = within(dialog).getByLabelText('API Base URL (optional)');
+      await user.clear(baseUrl);
+      await user.type(baseUrl, 'https://app.documenso.com/api/v1');
+
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(toast.error).toHaveBeenCalledWith(
+        'Enter the API token for the new base URL. The saved token belongs to the current one.'
+      );
+      expect(mockUpdateIntegration).not.toHaveBeenCalled();
+
+      await user.type(within(dialog).getByLabelText('API Token'), 'api_cloud_new');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('doc-1', {
+        api_base_url: 'https://app.documenso.com/api/v1',
+        api_token: 'api_cloud_new',
+        webhook_secret: undefined,
+      });
+    });
+  });
+
   describe('NFC ID Cards (activation, not connection)', () => {
     const nfcAvailable = {
       id: 'nfc-1',
