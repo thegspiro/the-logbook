@@ -741,6 +741,11 @@ class EventListItem(UTCResponseBase):
     # The event's training session counts toward a session-attendance
     # requirement: members it grades are charged with attending it.
     counts_toward_attendance: bool = False
+    # Where the event came from: "imported" (a historical import wrote it)
+    # or "logbook", and the label to show (app/services/import_provenance.py).
+    # None where a response does not work it out.
+    source: Optional[str] = None
+    source_label: Optional[str] = None
 
     # Fields the member-facing list needs to tell an urgent event from a
     # routine one without a per-card round trip. The check-in window is
@@ -796,6 +801,10 @@ class RSVPResponse(RSVPBase, UTCResponseBase):
     # User details (populated by service)
     user_name: Optional[str] = None
     user_email: Optional[str] = None
+    # Where the check-in came from, as on EventListItem. The roster listing
+    # fills it; None elsewhere.
+    source: Optional[str] = None
+    source_label: Optional[str] = None
 
     # Attendance duration (populated when event has actual times)
     attendance_duration_minutes: Optional[int] = None

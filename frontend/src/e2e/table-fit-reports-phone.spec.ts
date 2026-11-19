@@ -73,6 +73,7 @@ const certificationExpiration: CertExpirationReport = {
     expiration_date: '2027-09-30',
     days_until_expiry: 349,
     expiry_status: i === 0 ? 'expiring_soon' : 'valid',
+    source: 'The Logbook',
   })),
 };
 
