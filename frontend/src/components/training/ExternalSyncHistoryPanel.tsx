@@ -33,6 +33,15 @@ const SYNC_TYPE_LABEL: Record<ExternalTrainingSyncLog['sync_type'], string> = {
   upload: 'Uploaded report',
 };
 
+// Sync Now sends the same "incremental" type the scheduler uses, so the type
+// alone cannot tell them apart. The scheduler never sets initiated_by; a
+// person's pull always does (the column is nulled only if that user is later
+// deleted, when the run reads as scheduled).
+const syncTypeLabel = (run: ExternalTrainingSyncLog): string => {
+  if (run.sync_type === 'incremental' && run.initiated_by) return 'Manual pull';
+  return SYNC_TYPE_LABEL[run.sync_type] ?? run.sync_type;
+};
+
 const SYNC_STATUS_LABEL: Record<SyncStatus, string> = {
   pending: 'Pending',
   in_progress: 'Running',
@@ -105,7 +114,7 @@ const SyncRun: React.FC<SyncRunProps> = ({ run, memberNames }) => {
         <div className="split-row-main">
           <p className="text-theme-text-primary text-sm font-semibold">{formatDateTime(run.started_at, tz)}</p>
           <p className="text-theme-text-secondary text-sm">
-            {SYNC_TYPE_LABEL[run.sync_type] ?? run.sync_type} · {SYNC_STATUS_LABEL[run.status] ?? run.status}
+            {syncTypeLabel(run)} · {SYNC_STATUS_LABEL[run.status] ?? run.status}
           </p>
           <p className="text-theme-text-muted mt-1 text-xs">
             {run.records_fetched} fetched · {run.records_imported} new · {run.records_updated} updated ·{' '}

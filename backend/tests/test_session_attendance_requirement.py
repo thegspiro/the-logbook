@@ -560,6 +560,34 @@ class TestTheCountsTowardAttendanceFlag:
 
         assert flagged == {linked.event_id}
 
+    async def test_a_link_to_an_inactive_requirement_does_not_flag(self, db_session):
+        org = await _org(db_session)
+        retired = await _requirement(db_session, org)
+        retired.active = False
+        drill = await _drill(db_session, org, _utc(2026, 2, 19, 23), link=[retired])
+
+        flagged = await TrainingSessionService(
+            db_session
+        ).events_counting_toward_attendance([drill.event_id], org.id)
+
+        assert flagged == set()
+
+    async def test_one_active_link_among_inactive_ones_still_flags(self, db_session):
+        org = await _org(db_session)
+        retired, current = await _requirement(db_session, org), await _requirement(
+            db_session, org
+        )
+        retired.active = False
+        drill = await _drill(
+            db_session, org, _utc(2026, 2, 19, 23), link=[retired, current]
+        )
+
+        flagged = await TrainingSessionService(
+            db_session
+        ).events_counting_toward_attendance([drill.event_id], org.id)
+
+        assert flagged == {drill.event_id}
+
     async def test_another_organizations_events_are_not_flagged(self, db_session):
         org, other = await _org(db_session), await _org(db_session)
         req = await _requirement(db_session, other)

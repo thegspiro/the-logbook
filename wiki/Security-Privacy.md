@@ -64,25 +64,27 @@ Departments must keep operational history long after a member departs, but
 nothing requires keeping the _person_ attached to it. Anonymization separates
 the two.
 
-| Scrubbed                                                                                                                                | Retained                                                        |
-| --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Names, username, email (replaced with per-member tokens), phone, mobile, address, date of birth, photo                                  | Training completions, certifications, instructor qualifications |
-| Emergency contacts, notification preferences, referral/interest free text                                                               | Attendance counts, service hours, shift assignments             |
-| Credentials, MFA secret and backup codes, OAuth linkage, password-reset and calendar-feed tokens                                        | Property custody, checkouts, departure clearance                |
-| Sessions and password history (rows deleted)                                                                                            | Dues and financial records                                      |
-| Body measurements / size preferences (rows deleted)                                                                                     | Screening status and dates, as compliance proof                 |
-| Medical screening content — results, notes, provider name                                                                               | Leave types and date ranges (compliance denominators)           |
-| Free-text reasons on leaves, training waivers, shift time-off, meeting waivers                                                          | Meeting attendance (present/excused)                            |
-| RSVP dietary restrictions, accessibility needs, notes                                                                                   | RSVP attendance and check-in times                              |
-| Duplicated identity copies in external-provider mappings; candidate photos                                                              | Candidate names on ballots (official election records)          |
-| The applicant-era prospect record: full PII block, notes, interview assessments, uploaded documents; its public status token is rotated | Pipeline stage history                                          |
+| Scrubbed                                                                                                                                                                                | Retained                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Names, username, email (replaced with per-member tokens), phone, mobile, address, date of birth, photo                                                                                  | Training completions, certifications, instructor qualifications             |
+| Emergency contacts, notification preferences, referral/interest free text                                                                                                               | Attendance counts, service hours, shift assignments                         |
+| Credentials, MFA secret and backup codes, OAuth linkage, password-reset and calendar-feed tokens                                                                                        | Property custody, checkouts, departure clearance                            |
+| Sessions and password history (rows deleted)                                                                                                                                            | Dues and financial records                                                  |
+| Body measurements / size preferences (rows deleted)                                                                                                                                     | Screening status and dates, as compliance proof                             |
+| Medical screening content — results, notes, provider name                                                                                                                               | Leave types and date ranges (compliance denominators)                       |
+| Free-text reasons on leaves, training waivers, shift time-off, meeting waivers                                                                                                          | Meeting attendance (present/excused)                                        |
+| RSVP dietary restrictions, accessibility needs, notes                                                                                                                                   | RSVP attendance and check-in times                                          |
+| Duplicated identity copies in external-provider mappings; candidate photos                                                                                                              | Candidate names on ballots (official election records)                      |
+| The applicant-era prospect record: full PII block, notes, interview assessments, uploaded documents; its public status token is rotated                                                 | Pipeline stage history                                                      |
+| Certificate files uploaded with self-reported training, and their copies on the member's training records (the submission and record rows stay; a file another row still names is kept) | Files uploaded to a training record itself, as department training evidence |
 
 **Never touched:**
 
 - **Audit logs** — append-only and hash-chained. Rewriting them would be
   tampering and would break integrity verification. The anonymization event
-  itself deliberately records only the user id, never the name, so it does not
-  reintroduce the identity into an immutable table.
+  itself deliberately records only the user id and integer file counts, never
+  the name or a file path, so it does not reintroduce the identity into an
+  immutable table.
 - **Votes and ballots** — election integrity signatures must not change.
 
 Preconditions: the member must already be departed (soft-deleted, or in a

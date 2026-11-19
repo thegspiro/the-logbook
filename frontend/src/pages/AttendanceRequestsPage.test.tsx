@@ -89,7 +89,7 @@ describe('AttendanceRequestsPage', () => {
   });
 
   // The events hub's attention row counts every event and links here with
-  // ?scope=all; opening on "My events" would show a different number.
+  // ?scope=all; opening on "Sent to me" would show a different number.
   it('opens on every event when the hub links here for the whole department', async () => {
     mockCheckPermission.mockReturnValue(true);
     window.history.replaceState({}, '', '/events/attendance-requests?scope=all');

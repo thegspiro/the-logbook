@@ -16,7 +16,7 @@ import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { medicalSuppliesService } from '@/services/medicalSuppliesService';
 import type { InventoryCategory, InventoryItem } from '@/services/eventServices';
-import { getErrorMessage } from '@/utils/errorHandling';
+import { getErrorMessage, getLoadFailureMessage } from '@/utils/errorHandling';
 import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
 
 interface MedicalCreatePanelProps {
@@ -34,7 +34,8 @@ const MedicalCreatePanel: React.FC<MedicalCreatePanelProps> = ({
   onCancel,
 }) => {
   const [categories, setCategories] = useState<InventoryCategory[] | null>(null);
-  const [loadFailed, setLoadFailed] = useState(false);
+  // The reason the categories did not load, or null while they have not failed.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [categoryError, setCategoryError] = useState<string | null>(null);
@@ -53,8 +54,8 @@ const MedicalCreatePanel: React.FC<MedicalCreatePanelProps> = ({
         // One category is not a choice, so do not make the officer make it.
         if (list.length === 1) setCategoryId(list[0]?.id ?? '');
       })
-      .catch(() => {
-        if (!cancelled) setLoadFailed(true);
+      .catch((err: unknown) => {
+        if (!cancelled) setLoadError(getLoadFailureMessage(err, 'medical categories'));
       });
     return () => {
       cancelled = true;
@@ -99,15 +100,15 @@ const MedicalCreatePanel: React.FC<MedicalCreatePanelProps> = ({
     <div className="card-secondary mt-2 space-y-2 p-3" role="group" aria-label="Create medical supply">
       <p className="text-theme-text-primary text-sm">Add “{name}” to Medical Supplies and link this item</p>
 
-      {categories === null && !loadFailed && (
+      {categories === null && !loadError && (
         <p role="status" className="text-theme-text-muted flex items-center gap-2 text-xs">
           <Loader2 className="h-3 w-3 animate-spin" /> Loading medical categories…
         </p>
       )}
 
-      {loadFailed && (
+      {loadError && (
         <p role="status" className="text-theme-text-muted text-xs">
-          Couldn&rsquo;t load medical categories. Check your connection and try again.
+          {loadError}
         </p>
       )}
 

@@ -1,5 +1,24 @@
 # Screenshot currency
 
+## Queued by the November 17 – 18 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-17--18-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 03 | Shift Planning → **Templates** tab: templates only, the heading's "make a pattern in **Shift patterns**" link, no Templates / Patterns switch | Check `03-12-shift-templates` and `03-129-template-reactivate`; replace either if it shows the old switch |
+| 03 | Shift Planning → **Patterns**: a pattern card with its **Edit** button; **Edit Pattern** open from it | Create; `03-133-pattern-form-template-inactive` was taken from the old Templates-tab form and should be re-shot from the Patterns tab |
+| 03 | My Shifts → **Past**: **Hours credited** / **Credited shifts** / **Avg hours/shift** tiles with "+N hrs awaiting close-out", a **Xh credited** pill and an amber **Xh · awaiting close-out** pill | Create (supersedes the 2026-11-09 Past row) |
+| 04 | **Check In Members** dialog with the new "credited from the scheduled start" line | Create |
+| 04 | Event settings → **Attendance** → **Mandatory event responses** with **Ask for a response** (60 days) and the error for an out-of-range value | Create |
+| 02 | Requirement **Member Categories** in a department with a Senior tier: **Operational members** selected, Senior ticked, the hint "Active, Probationary, Life and Senior Member" | Create (`02-135` stays valid for a department with no Senior tier) |
+| 02 | Cohort wizard Course step listing only courses with a syllabus | Check `02-104` series; create only if a course-step image is wanted |
+| 08 | A report's on-screen results as labelled cards (Certification Expiration or Member Roster); Training Summary as a table at desktop width | Create; also replace any report-results image showing a sideways-scrolling table |
+| 17 | **Anonymize Member** dialog, Removed list with **Certificates uploaded with their training reports** | Create |
+| 10 | Phone (390px): expense report line items as cards with the totals row; the inventory stock matrix with pinned Size column and scroll cue; message history as cards | Create |
+| 11, 12, 05, 01, 14 | Phone captures of expense line items, grant applications, inventory import preview, member import preview / Assigned Inventory, election integrity audit log | Optional; check any existing phone image of these tables (e.g. `10-05-mobile-inventory` is a different list and stays valid) |
+
 ## Queued by the November 14 – 15 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-14--15-2026).

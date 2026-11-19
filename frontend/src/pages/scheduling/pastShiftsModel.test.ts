@@ -1,17 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import type { Assignment } from '../../types/scheduling';
-import type { ShiftAttendanceRecord } from '../../modules/scheduling/services/api';
+import type { MemberHoursMonth, ShiftAttendanceRecord } from '../../modules/scheduling/services/api';
 import {
   ALL_TIME,
   UNDATED_KEY,
   buildPastRows,
+  creditByMonth,
+  creditByYear,
+  creditInScope,
+  foldCredit,
   groupByMonth,
   hoursWorked,
   monthHeading,
   resolveScope,
   rowsInScope,
   summarizeYears,
-  totalsFor,
 } from './pastShiftsModel';
 
 const assignment = (id: string, shiftDate: string): Assignment =>
@@ -24,7 +27,12 @@ const assignment = (id: string, shiftDate: string): Assignment =>
     shift: { id: `s-${id}`, shift_date: shiftDate, start_time: `${shiftDate}T07:00:00Z` },
   }) as unknown as Assignment;
 
-const attendance = (shiftId: string, minutes: number | undefined, checkedOut = true): ShiftAttendanceRecord => ({
+const attendance = (
+  shiftId: string,
+  minutes: number | undefined,
+  checkedOut = true,
+  finalized = true
+): ShiftAttendanceRecord => ({
   id: `att-${shiftId}`,
   shift_id: shiftId,
   user_id: 'u1',
@@ -32,6 +40,24 @@ const attendance = (shiftId: string, minutes: number | undefined, checkedOut = t
   checked_in_at: '2026-01-01T07:00:00Z',
   ...(checkedOut ? { checked_out_at: '2026-01-01T19:00:00Z' } : {}),
   ...(minutes !== undefined ? { duration_minutes: minutes } : {}),
+  shift_is_finalized: finalized,
+});
+
+const credited = (
+  year: number,
+  month: number,
+  shifts: number,
+  hours: number,
+  pendingShifts = 0,
+  pendingHours = 0
+): MemberHoursMonth => ({
+  year,
+  month,
+  shifts,
+  hours,
+  calls: 0,
+  pending_shifts: pendingShifts,
+  pending_hours: pendingHours,
 });
 
 describe('hoursWorked', () => {
@@ -54,35 +80,59 @@ describe('buildPastRows', () => {
       [null, null, null],
     ]);
   });
+
+  it('marks a row credited only once its shift is finalized', () => {
+    const rows = buildPastRows(
+      [assignment('done', '2025-10-11'), assignment('open', '2025-10-12'), assignment('none', '2025-10-13')],
+      new Map([
+        ['s-done', attendance('s-done', 720, true, true)],
+        ['s-open', attendance('s-open', 720, true, false)],
+      ])
+    );
+    expect(rows.map((r) => [r.assignment.id, r.credited])).toEqual([
+      ['done', true],
+      ['open', false],
+      ['none', false],
+    ]);
+  });
 });
 
-describe('totalsFor', () => {
-  it('averages over shifts with hours logged, not over every shift', () => {
-    const rows = buildPastRows(
-      [assignment('1', '2026-08-01'), assignment('2', '2026-08-02'), assignment('3', '2026-08-03')],
-      new Map([
-        ['s-1', attendance('s-1', 720)],
-        ['s-2', attendance('s-2', 180)],
-      ])
-    );
-    expect(totalsFor(rows)).toEqual({ shifts: 3, hours: 15, loggedShifts: 2, averageHours: 7.5 });
+describe('foldCredit', () => {
+  it('adds the credited figures and keeps pending apart', () => {
+    expect(foldCredit([credited(2026, 8, 3, 30, 1, 12), credited(2026, 10, 2, 13.5)])).toEqual({
+      shifts: 5,
+      hours: 43.5,
+      pendingShifts: 1,
+      pendingHours: 12,
+      averageHours: 8.7,
+    });
   });
 
-  it('adds the quarter-rounded hours each row shows, so the total matches its rows', () => {
-    // 8 minutes rounds to a quarter hour on each row (0.25 + 0.25 = 0.5);
-    // rounding the raw 16-minute sum would give 0.25 and disagree with them.
-    const rows = buildPastRows(
-      [assignment('1', '2026-08-01'), assignment('2', '2026-08-02')],
-      new Map([
-        ['s-1', attendance('s-1', 8)],
-        ['s-2', attendance('s-2', 8)],
-      ])
-    );
-    expect(totalsFor(rows).hours).toBe(0.5);
+  it('averages over credited shifts, and reports zero rather than NaN for none', () => {
+    expect(foldCredit([credited(2026, 8, 0, 0, 2, 20)]).averageHours).toBe(0);
+    expect(foldCredit([])).toEqual({ shifts: 0, hours: 0, pendingShifts: 0, pendingHours: 0, averageHours: 0 });
+  });
+});
+
+describe('credit by scope, month and year', () => {
+  const history = [credited(2024, 5, 1, 10), credited(2026, 2, 1, 4), credited(2026, 8, 2, 20.25, 1, 6)];
+
+  it('covers one year, or every year under All time', () => {
+    expect(foldCredit(creditInScope(history, '2026')).hours).toBe(24.25);
+    expect(foldCredit(creditInScope(history, ALL_TIME)).hours).toBe(34.25);
+    expect(creditInScope(history, '2025')).toEqual([]);
   });
 
-  it('reports zero, not NaN, when nothing is logged', () => {
-    expect(totalsFor([])).toEqual({ shifts: 0, hours: 0, loggedShifts: 0, averageHours: 0 });
+  it('finds a month by the same key the month sections use', () => {
+    expect(creditByMonth(history).get('2026-08')?.pending_hours).toBe(6);
+    expect(creditByMonth(history).get('2026-09')).toBeUndefined();
+  });
+
+  it('folds each year on its own', () => {
+    const byYear = creditByYear(history);
+    expect(byYear.get(2026)?.hours).toBe(24.25);
+    expect(byYear.get(2026)?.shifts).toBe(3);
+    expect(byYear.get(2024)?.hours).toBe(10);
   });
 });
 
@@ -102,11 +152,11 @@ describe('year and month grouping', () => {
     ])
   );
 
-  it('lists each year with shifts, newest first, with its own totals', () => {
-    expect(summarizeYears(rows).map((y) => [y.year, y.shifts, y.hours])).toEqual([
-      [2026, 3, 11.75],
-      [2025, 1, 1.25],
-      [2023, 1, 0],
+  it('lists each year with shifts, newest first, with how many it lists', () => {
+    expect(summarizeYears(rows).map((y) => [y.year, y.shifts])).toEqual([
+      [2026, 3],
+      [2025, 1],
+      [2023, 1],
     ]);
   });
 

@@ -24,7 +24,7 @@ from fastapi import (
 )
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -41,6 +41,7 @@ from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.event import Event, EventRSVP
 from app.models.training import (
+    CourseClass,
     DueDateType,
     RequirementType,
     SkillEvaluation,
@@ -682,11 +683,15 @@ async def link_suggested_course_names(
 @router.get("/courses", response_model=list[TrainingCourseResponse])
 async def list_courses(
     active_only: bool = True,
+    with_classes: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     List all training courses
+
+    ``with_classes=true`` keeps only courses with at least one class on their
+    syllabus: the ones a cohort can be generated from.
 
     **Authentication required**
     """
@@ -696,6 +701,11 @@ async def list_courses(
 
     if active_only:
         query = query.where(TrainingCourse.active == True)  # noqa: E712
+
+    if with_classes:
+        # Correlated on the course itself, which is already org-scoped above,
+        # so another department's class rows cannot make a course qualify.
+        query = query.where(exists().where(CourseClass.course_id == TrainingCourse.id))
 
     query = query.order_by(TrainingCourse.name)
 
@@ -2479,13 +2489,14 @@ async def get_compliance_summary(
 
     Uses ``_evaluate_member_requirement()`` for consistent per-type
     evaluation (hours, certification, shifts, calls, courses, fallback).
-    Only requirements applicable to the member (via ``applies_to_all``
-    or ``required_roles``) are counted.
+    The requirements counted are the ones ``ComplianceGrading.for_member``
+    resolves — the member's matching compliance profile narrows them, as on
+    the compliance matrix and the dashboard — so the card's "N of M" matches
+    those screens (D10).
     """
     await _require_self_or_training_officer(db, current_user, user_id)
     org_id = current_user.organization_id
     today = await resolve_org_today(db, org_id)
-    org_include_current = await get_org_include_current_month(db, str(org_id))
 
     # Get user stats for hours and cert counts
     training_service = TrainingService(db)
@@ -2533,16 +2544,15 @@ async def get_compliance_summary(
     )
     all_requirements = list(requirements_result.scalars().all())
 
-    # Filter to requirements applicable to this user. Was a hand-rolled
-    # loop that checked required_membership_types before applies_to_all --
-    # the wrong order, and one that also silently dropped a requirement
-    # scoped ONLY by required_membership_types (applies_to_all=False, no
-    # required_roles), since neither branch below it re-checked a
-    # membership-type match as its own inclusion criterion. See
-    # requirement_applies_to_member's docstring.
-    requirements = [
-        req for req in all_requirements if requirement_applies_to_user(req, target_user)
-    ]
+    # The requirements that grade this member: the matching compliance
+    # profile narrows the set, then applicability by type, rank, position and
+    # join date. One resolution, shared with the matrix and the dashboard
+    # (CLAUDE.md pitfall 29).
+    grading = ComplianceGrading.from_config(
+        await _load_compliance_config(db, str(org_id))
+    )
+    org_include_current = grading.include_current_month
+    requirements = grading.for_member(target_user, all_requirements).requirements
 
     # The member's records the grader can read for these requirements.
     member_records = await load_graded_records(
