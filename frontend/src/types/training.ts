@@ -2415,6 +2415,15 @@ export interface RequirementDetail {
    */
   monthly_hours?: RequirementMonth[] | null;
   /**
+   * For an hours requirement: the average hours a month in the months nothing
+   * excused, and the department's monthly pace (its unadjusted level over
+   * `window_months`). Worked out on the server from `monthly_hours`. Shown
+   * beside the total; `is_met` is still decided on the total. Null for every
+   * other type, and absent from an older server.
+   */
+  monthly_average?: number | null;
+  monthly_needed?: number | null;
+  /**
    * Shifts worked or calls run per calendar month, for a shift or call
    * requirement: `monthly_hours`' counterpart, with `count` in place of
    * `hours` and the same leave fields. Null for every other type.

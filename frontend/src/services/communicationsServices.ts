@@ -408,6 +408,13 @@ export interface ComplianceMatrixCell {
   catch_up_deadline?: string | null;
   /** Met by the Chief's override rather than by the count; absent from an older server. */
   overridden?: boolean;
+  /**
+   * Hours requirements only: the average hours a month in the months nothing
+   * excused, and the department's monthly pace. Displayed beside the total;
+   * `status` is still graded on the total. Absent from an older server.
+   */
+  monthly_average?: number | null;
+  monthly_needed?: number | null;
 }
 
 export interface ComplianceMatrixMember {
