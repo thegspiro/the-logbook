@@ -160,6 +160,11 @@ Things the page handles for you:
 - **A value too long for a small label** is refused with the reason rather than
   printed unscannable. A 58mm roll holds about 12 Code 128 characters and 80mm
   about 21 — use QR for longer values.
+- **Printer resolution** _(2026-11-03)_ — for a browser print of a Code 128
+  label, choose **Auto**, **203**, **300** or **600 dpi** under the barcode
+  style so the bars print evenly. It is remembered for that label size on that
+  computer. Auto assumes 300 dpi for Dymo and Letter sizes and 203 for the
+  rest. Network and PDF printing ignore it.
 
 ## Printing a station document
 

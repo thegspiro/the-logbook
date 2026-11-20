@@ -176,7 +176,7 @@ position and no ballot item are skipped at send time with a reason.
 
 Beyond standing, a member may also be restricted by:
 
-- **Membership tier rules** — Organization settings
+- **Membership tier rules** (version 1 elections only) — Organization settings
   (`membership_tiers[].benefits`) can mark a tier as not voting-eligible
   (`voting_eligible`) or require a minimum meeting attendance percentage
   (`voting_requires_meeting_attendance`, `voting_min_attendance_pct`). Both
@@ -186,10 +186,12 @@ Beyond standing, a member may also be restricted by:
   to be checked in as present at the meeting (`require_attendance`). The roll
   is frozen at open, so a member checked in after opening is recorded present
   but cannot vote without an override
-- **Election-wide rules** — `elections.eligibility_rules` holds a
-  meeting-attendance requirement and a waiting period per member type that
-  every voter in that election must meet, whatever the ballot item. See
-  [Election-Wide Voter Rules](#election-wide-voter-rules)
+- **Election-wide rules** — `elections.eligibility_rules` holds, since
+  2026-11-13, a row of rules per member type (see
+  [Voter Rules by Member Type](#voter-rules-by-member-type-version-2-2026-11-13));
+  older elections hold a meeting-attendance requirement and a waiting period
+  per member type (see
+  [Election-Wide Voter Rules](#election-wide-voter-rules))
 - **Restricted voter list** — An election can be limited to a specific
   `eligible_voters` list. An empty list is stored as `NULL` (no restriction)
 - **Secretary overrides** — The secretary can grant eligibility overrides for
@@ -199,8 +201,64 @@ Beyond standing, a member may also be restricted by:
   **extends** the list: the member votes in the app, is sent a ballot email
   and counts in the eligible total, as the roster shows
 
+### Voter Rules by Member Type (Version 2) _(2026-11-13)_
+
+Since #4265 an election's `eligibility_rules`, and the department's defaults,
+are **version 2** (`{"version": 2, "types": {...}}`), defined in
+`app/services/voter_rules.py`. They replace both the version 1 election-wide
+rules below and each tier's voting benefits, so who may vote is set in one
+place.
+
+- **Rows** (`voter_rows`): Regular, then each department tier, then Life,
+  Probationary, Retired, Honorary, Junior and Prospective, then the
+  Administrative and Social classes. Each row is a `TypeRule`: `may_vote`,
+  an optional `wait` (`months`, `counted_from`: `joined` or `type`) and up
+  to four `attendance` rules, all of which must pass.
+- **Which rows judge a member** (`member_row_keys`): the row for their status,
+  or their tier's own row when it has one (else the row its **Counts as**
+  names), and, for an administrative or social member, also their class row.
+  Both must pass (owner decision 2026-11-13).
+- **No data migration.** `rules_from_v1` converts stored version 1 defaults
+  plus the tier ladder when they are read, and is never written back.
+  Elections created before the change keep version 1 and are judged as
+  before until they close; the tier table on Election Settings shows only
+  beside version 1 rules.
+- **Version 2 skips the tier checks** on the ballot check, the roster and the
+  ballot send. Two behaviour changes follow, both of which can only remove a
+  vote: a tier's attendance threshold now also applies at roster and send
+  time, and an administrative or social member is also held to their status
+  row's waiting period. Both are recorded in `docs/KNOWN_LIMITATIONS.md`.
+- **Four kinds of vote** (`meeting_kind`): `regular`, `annual`, `bylaws` and
+  `special`. Every kind but regular uses the regular defaults until given
+  its own (`annual_eligibility`, `bylaws_eligibility`,
+  `special_eligibility`). A linked special meeting starts a `special`
+  election. `MembershipTiersSection` no longer edits **Can vote** or the
+  attendance threshold; it links to Election Settings, and the stored
+  benefits are kept only to seed `rules_from_v1`.
+
+**A reason for any difference** _(#4270)_. Create and update require
+`eligibility_override_reason` (up to 2,000 characters) when the rules differ
+from the kind's defaults, and clear it when they match again; the check runs
+only when a request touches the rules, the kind or the reason. A new or
+changed reason writes the audit event `election_voter_rules_customized`, and
+is carried into the results as `voter_rule_exceptions`, which the minutes
+print as **Voter rules that differed from the defaults**. Clones and runoffs
+copy it. The create form's **Who may vote** section counts the members the
+rules would admit today through `POST /elections/eligibility-preview`.
+
+**Per-item carve-out.** A ballot item may carry `eligibility_kind` (that
+kind's defaults are copied onto it) or custom `eligibility_rules` (version 2
+only, with its own `eligibility_override_reason`). The item's rules replace
+the election's, and the tier ladder's, for that item in the ballot
+annotation, the roster, the ineligibility summary and the vote check. In an
+election with such an item a vote is judged live against its item, because
+the roll frozen at open holds everyone eligible for at least one item. Items
+without a carve-out are stored without the new keys, so resaving an
+unchanged ballot retires no links.
+
 ### Election-Wide Voter Rules
 
+This is version 1, which elections created before 2026-11-13 still carry.
 `elections.eligibility_rules` (`ElectionEligibilityRules`) is copied from
 the department's defaults (`org.settings.election_eligibility.rules`, set on
 **Election Settings → Voter Eligibility**) when the election is created. An
@@ -454,7 +512,7 @@ fresh draft from the setup with new dates. It copies ballot items
 (deep-copied), positions, position eligibility, seats and rules — never votes,
 tokens, attendees, overrides, proxy authorizations or the salt (a fresh salt
 is generated) — and optionally copies accepted candidates.
-`results_visible_immediately` is reset. The clone opens on `?tab=ballot`.
+`results_visible_immediately` is reset. The clone opens on its Ballot section (`/elections/<id>/ballot`).
 
 ---
 
@@ -710,7 +768,7 @@ candidate tallies before close.
 | Opening an election whose end date already passed   | Refused — update the dates first                                                         |
 | Reopen closed anonymous election with votes         | Refused — create a new election instead                                                  |
 | Runoff chain for standalone election                | Shows single-node chain                                                                  |
-| Results tab auto-select                             | Navigates to Results when the election is closed                                         |
+| Closed election opened                              | Opens the Overview (since 2026-11-15); members' Overview includes the results            |
 
 ---
 
@@ -806,6 +864,28 @@ and statements, the voter-eligibility roster and a per-item eligibility block
 
 ---
 
+## Meeting Attendance Page _(2026-11-13)_
+
+`/elections/attendance` (`elections.manage`), reached from the Elections
+pages row and from **Meeting attendance** on an election's voter rules
+(`?election=<id>`). It shows each member's meetings over a chosen period and
+whether they may vote in the chosen election.
+
+- `GET /elections/{id}/attendance` takes `start`, `end` and repeated
+  `meeting_type`. It defaults to the last 12 months and refuses a backwards
+  period, one longer than 5 years, or an unknown meeting type.
+- **May vote** comes from the election's eligibility roster, the answer the
+  ballot send acts on; counts come from `tally_attendance`, the
+  classification the ballot check uses.
+- `GET /elections/{id}/attendance/{user_id}/meetings` lists one member's
+  meetings, newest first, with how each counted and where the record came
+  from.
+- `meeting_attendees` gains `checked_in_at`, `recorded_by` (`SET NULL`) and
+  `recorded_via` (`manual`, `event_check_in`, `event_rsvp`, `waiver`,
+  `waiver_request`), migration `7d4374ffee39`. Existing rows keep NULL.
+- The **Voting** column on **Minutes → Attendance** moved onto the same gate
+  (`voting_reason_under_rules`), so it agrees with the ballots again.
+
 ## Meeting and Event Links
 
 An election links to either a meeting record (`meeting_id`) or an event of
@@ -852,8 +932,9 @@ with status badges and links.
 Stored in `org.settings.election_eligibility` (`EligibilityDefaults`). Each
 part has a reader, and none of them changes an existing election:
 
-- **Rules every voter must meet** (attendance, waiting periods) are copied onto each new
-  election. See [Election-Wide Voter Rules](#election-wide-voter-rules).
+- **Rules by member type** are copied onto each new election. See
+  [Voter Rules by Member Type](#voter-rules-by-member-type-version-2-2026-11-13).
+  Stored version 1 rules are converted when read.
 - **New ballot items**: the check-in requirement and **Who can vote** that new
   and custom items start with in the ballot builder. Built-in templates keep
   their own per-template voter types.
@@ -861,30 +942,36 @@ part has a reader, and none of them changes an existing election:
   election's `position_eligibility` is seeded for the positions it names,
   matched without regard to case, and a custom ballot item takes the mapped
   voter types when its position is chosen.
-- **Membership tier rules** are shown read-only (`tier_voting_rules`) with a
-  link to the tier settings where they are edited.
+- **Membership tier rules** are shown read-only (`tier_voting_rules`) only
+  beside version 1 rules, which since 2026-11-13 means never for the
+  department's own defaults.
 
 #### Regular Business Meetings and the Annual Meeting
 
-Every election records where it is held, in `elections.meeting_kind`: either
-`regular` (a business meeting) or `annual`. The section keeps two sets of the
-defaults above, and an election copies the set for its kind:
+Every election records its kind of vote in `elections.meeting_kind`:
+`regular` (a business meeting), `annual`, and since 2026-11-13 `bylaws` and
+`special`. The section keeps a set of the defaults above for each kind, and
+an election copies the set for its kind. `bylaws_eligibility` and
+`special_eligibility` work as the annual set below does, with **Use different
+rules for bylaws amendments** and **Use different rules at special meetings**:
 
 - **Regular business meetings** use `org.settings.election_eligibility`.
 - **The annual meeting** uses `org.settings.election_eligibility_annual` when
   **Use different rules at the annual meeting** is on. It starts as a copy of
   the regular set, so only what differs needs changing. When the toggle is
   off, the setting is `null` and the annual meeting uses the regular set.
-- **On the create form**, **Held at** sets the kind. Linking a meeting record
-  whose type is annual selects **Annual meeting**. Calendar events carry no
-  annual type. A request that omits the kind gets `annual` from a linked annual
-  meeting, and `regular` otherwise.
+- **On the create form**, **Kind of vote** (it read **Held at** until
+  2026-11-13) sets the kind. Linking a meeting record whose type is annual or
+  special selects that kind. Calendar events carry no
+  annual type. A request that omits the kind gets `annual` or `special` from a
+  linked meeting of that type, and `regular` otherwise.
 - **Changing an election's kind** on its Eligibility tab replaces its rules and
   `position_eligibility` with that kind's defaults, after a confirmation. This
   is allowed until voting opens. Rules sent in the same request win.
 - **Runoffs and clones** keep the kind.
 
-The membership tier rules apply at both kinds of meeting.
+On version 1 elections the membership tier rules apply at every kind of
+meeting.
 
 ### Defaults
 

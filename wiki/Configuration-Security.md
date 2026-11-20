@@ -148,13 +148,14 @@ See [Malware scanning of uploads](#malware-scanning-of-uploads) below.
 
 The Logbook supports multiple authentication methods:
 
-| Method                          | Description                                                                                                                        | Configuration                      |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| **Local**                       | Username/password with Argon2id hashing                                                                                            | Default, always available          |
-| **OAuth (Google / Microsoft)**  | "Sign in with Google" and "Sign in with Microsoft" (Azure AD, single-tenant); link-existing-only, domain-restricted _(2026-05-29)_ | `GOOGLE_*` / `AZURE_AD_*` env vars |
-| ~~**SAML**~~                    | **Not implemented.** Previously documented in error                                                                                | —                                  |
-| ~~**LDAP / Active Directory**~~ | **Not implemented.** The `LDAP_*` settings exist in config but gate nothing _(clarified 2026-07-31)_                               | —                                  |
-| **TOTP MFA**                    | Time-based one-time passwords (Google Authenticator, etc.)                                                                         | Per-user opt-in or admin-enforced  |
+| Method                          | Description                                                                                                                                             | Configuration                                                                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Local**                       | Username/password with Argon2id hashing                                                                                                                 | Default, always available                                                                                                                                            |
+| **OAuth (Google / Microsoft)**  | "Sign in with Google" and "Sign in with Microsoft" (Azure AD, single-tenant); link-existing-only, domain-restricted _(2026-05-29)_                      | `GOOGLE_*` / `AZURE_AD_*` env vars                                                                                                                                   |
+| ~~**SAML**~~                    | **Not implemented.** Previously documented in error                                                                                                     | —                                                                                                                                                                    |
+| ~~**LDAP / Active Directory**~~ | **Not implemented.** The `LDAP_*` settings exist in config but gate nothing _(clarified 2026-07-31)_                                                    | —                                                                                                                                                                    |
+| **TOTP MFA**                    | Time-based one-time passwords (Google Authenticator, etc.)                                                                                              | Per-user opt-in or admin-enforced; **required** for members holding administration or health-record permissions after a `MFA_GRACE_DAYS` grace period _(2026-10-23)_ |
+| **Passkeys**                    | A passkey on the member's phone or computer as the second factor ([MFA](https://github.com/thegspiro/the-logbook/blob/main/docs/MFA.md)) _(2026-10-25)_ | Needs `FRONTEND_URL` on HTTPS at a domain name; can be turned off under **Settings > Authentication**                                                                |
 
 ---
 
@@ -171,18 +172,22 @@ The Logbook supports multiple authentication methods:
 
 ## Rate Limiting
 
-| Endpoint              | Limit     | Description            |
-| --------------------- | --------- | ---------------------- |
-| Login                 | 5/minute  | Per IP address         |
-| API (general)         | 60/minute | Per authenticated user |
-| Public forms (view)   | 60/minute | Per IP                 |
-| Public forms (submit) | 10/minute | Per IP                 |
+| Endpoint              | Limit     | Description                                                                     |
+| --------------------- | --------- | ------------------------------------------------------------------------------- |
+| Login                 | 5/minute  | Per account at an address, with a 30/minute backstop per address _(2026-11-03)_ |
+| API (general)         | 60/minute | Per authenticated user                                                          |
+| Public forms (view)   | 60/minute | Per IP                                                                          |
+| Public forms (submit) | 10/minute | Per IP                                                                          |
 
 The bundled nginx proxies add a per-address ceiling in front of these _(2026-10-05)_:
 `limit_conn 400` concurrent requests and the API zone at 50 requests a second with
 `burst=600 delay=100` (the first 100 requests of a burst pass at once, the rest
 queue rather than being refused). The values are sized for a station of about a
-hundred members sharing one public address; sign-in stays at 5 a minute (burst 3).
+hundred members sharing one public address. The sign-in zone is 30 a minute
+(burst 30), matching the backend's per-address backstop; the tight 5 a minute is
+the backend's per account, which nginx cannot see _(2026-11-03)_. A host install
+that copied `nginx.conf` before then keeps the old 5 a minute until it is copied
+again.
 A proxy you run yourself needs its own limits sized the same way. See
 [Deployment guide](https://github.com/thegspiro/the-logbook/blob/main/docs/DEPLOYMENT.md#docker-compose-production-profile).
 

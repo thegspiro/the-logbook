@@ -115,6 +115,7 @@ to document managers in general. Only a full administrator sees every folder.
 | Finance (and Receipts)                                                                      | Members who can view, manage or approve finance. A member opens their own receipt from the request itself                                        |
 | Member Separations                                                                          | Officers who can manage members. Property-return reports are filed here, because each names a departed member, the reason and their home address |
 | Member Files                                                                                | Each member sees only their own folder                                                                                                           |
+| History _(2026-11-14)_                                                                      | Members who can manage History. Filled through History, which catalogues each document; see below                                                |
 
 A built-in folder keeps its name and place and cannot be deleted, because the
 part of The Logbook that made it files into it. You can still change its
@@ -219,6 +220,15 @@ the file really is, not just its name.
 
 There is no move or rename. To file a document somewhere else, upload it again
 into the right folder and delete the old copy.
+
+**History's documents are managed in History** _(2026-11-14)_. The **History**
+folder holds the originals of the documents catalogued in the History module.
+Here they can only be downloaded: in place of **Delete** each one has a
+**Managed in History** link to its page in History, where it is edited, moved
+or deleted. Uploading into the History folder is refused with _"The History
+folder is filled through History, which catalogues each document and makes the
+copy members read. Upload it there instead."_ Members who can only view History
+read its documents on the History pages, not here.
 
 > **Tip.** Events, training sessions and meetings can also have documents
 > attached on their own pages. Those are filed into the matching built-in

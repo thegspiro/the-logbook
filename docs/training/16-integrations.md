@@ -155,9 +155,11 @@ webhooks, Cal.com and Documenso. Use the service's public web address.
 
 **Keys are needed before it connects** _(2026-10-28)_. PayPal, Documenso,
 Cal.com and Salesforce refuse to connect until their keys are filled in, with a
-message naming what is missing, such as "PayPal needs: client_id,
-client_secret". Before, they connected with blank keys and showed as connected
-until a test failed.
+message naming what is missing, such as "PayPal needs: `client_id`,
+`client_secret`". Before, they connected with blank keys and showed as connected
+until a test failed. Slack, Discord, Microsoft Teams and the generic webhook
+likewise refuse to connect without the address to post to, with "Enter the
+webhook URL for {name}" _(2026-10-16)_.
 
 > **What if a test fails with a general message?** When something unexpected
 > goes wrong, the message reads "An unexpected error occurred. Please try
@@ -643,6 +645,7 @@ twice, however it arrives. **Sync now** on the Zeffy page runs it at once.
 The sync reads payments by the day they were made and looks back seven days
 each time. A refund made more than seven days after the sale is therefore seen
 only through the webhook.
+
 ---
 
 ## Google Workspace — Member Accounts
@@ -1424,7 +1427,7 @@ Details:
 - The provider card's **Auto-Sync** line shows both, for example "Every 1h ·
   review daily at 02:00".
 
-Other providers show only "Every _N_h". Their form has a single **Sync
+Other providers show only the interval, such as "Every 6h". Their form has a single **Sync
 Interval**, counted from the previous sync.
 
 #### Course mappings
