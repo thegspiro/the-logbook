@@ -49,6 +49,7 @@ from app.models.event import (
 )
 from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import (
+    TrainingCourse,
     TrainingRecord,
     TrainingSession,
     TrainingSessionRequirement,
@@ -59,6 +60,7 @@ from app.models.user import MemberLeaveOfAbsence, Organization, User
 from app.schemas.event import (
     EventCreate,
     EventStats,
+    EventTemplateTrainingDetails,
     EventUpdate,
     RSVPCreate,
     RSVPOverride,
@@ -79,6 +81,7 @@ from app.services.notifications_service import NotificationsService
 from app.utils.event_attachments import validate_attachments_for_org
 from app.utils.membership import member_holds_tier
 from app.utils.model_updates import apply_updates, reject_null_for_required
+from app.utils.org_scoping import is_in_org
 from app.utils.org_timezone import (
     format_in_org_timezone,
     local_and_utc_dates,
@@ -5840,6 +5843,56 @@ class EventService:
             ):
                 raise ValueError("Location not found")
 
+    async def _settle_template_training(
+        self,
+        data: Dict[str, Any],
+        organization_id: UUID | str,
+        current_type: Optional[str] = None,
+    ) -> None:
+        """Settle ``training_details`` in a template create/update payload.
+
+        Only a Training template carries training details. A non-null value
+        on any other type is refused; a template that is (or becomes) another
+        type has the column cleared, so a PATCH moving a template off Training
+        drops what it stored, and an explicit null is accepted on any type.
+
+        The endpoint dumps the request with ``exclude_unset=True``, which
+        drops the nested object's defaults and leaves its UUIDs as objects the
+        JSON column cannot serialise, so the value is re-validated and dumped
+        with ``mode="json"`` here: the column always holds the complete
+        canonical shape (pitfall #20).
+
+        The course and instructor are checked to be in the caller's org
+        (pitfall #14c) and nothing more: a course since deactivated, or an
+        instructor who has since left, still saves, so Save as Template from
+        an older event never fails. Applying the template falls back for both.
+        """
+        resulting = data.get("event_type", current_type)
+        if isinstance(resulting, Enum):
+            resulting = resulting.value
+        details = data.get("training_details")
+        if details is not None:
+            if resulting != EventType.TRAINING.value:
+                raise ValueError(
+                    "Training details can only be saved on a Training template"
+                )
+            settled = EventTemplateTrainingDetails.model_validate(details).model_dump(
+                mode="json"
+            )
+            course_id = settled.get("course_id")
+            if course_id and not await is_in_org(
+                self.db, TrainingCourse, course_id, organization_id
+            ):
+                raise ValueError("Training course not found")
+            instructor_id = settled.get("instructor_id")
+            if instructor_id and not await is_in_org(
+                self.db, User, instructor_id, organization_id
+            ):
+                raise ValueError("Invalid instructor")
+            data["training_details"] = settled
+        elif resulting != EventType.TRAINING.value:
+            data["training_details"] = None
+
     async def create_template(
         self,
         template_data: Dict[str, Any],
@@ -5850,6 +5903,7 @@ class EventService:
         await self._assert_template_location_in_org(
             template_data.get("default_location_id"), organization_id
         )
+        await self._settle_template_training(template_data, organization_id)
         template = EventTemplate(
             organization_id=str(organization_id),
             created_by=str(created_by),
@@ -5905,6 +5959,10 @@ class EventService:
             await self._assert_template_location_in_org(
                 update_data.get("default_location_id"), organization_id
             )
+
+        await self._settle_template_training(
+            update_data, organization_id, current_type=template.event_type
+        )
 
         apply_updates(template, update_data)
 
