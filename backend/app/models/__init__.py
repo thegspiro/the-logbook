@@ -43,6 +43,7 @@ from app.models.apparatus import (
 )
 from app.models.apparatus_event import (
     ApparatusEventEvocMode,
+    ApparatusEventSeatCall,
     ApparatusEventSeatMethod,
     ApparatusEventSeatType,
     ApparatusEventTemplate,
@@ -790,6 +791,7 @@ __all__ = [
     "ApparatusEventEvocMode",
     "ApparatusEventSeatMethod",
     "ApparatusEventSeatType",
+    "ApparatusEventSeatCall",
     "ApparatusEventTemplate",
     "ApparatusEventTemplateSeat",
     "ApparatusEventTemplateUnit",

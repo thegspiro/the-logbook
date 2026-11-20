@@ -293,6 +293,7 @@ DELIBERATELY_UNGATED = {
     "/api/v1/events": "essential module",
     "/api/v1/apparatus-events": "part of Events, an essential module: each apparatus night is an event",
     "/api/v1/event-requests": "public event requests; the form engine, not the Events screen",
+    "/api/v1/member-audience": "who an Events email goes to; part of Events, an essential module",
     "/api/v1/officers": "roster and org structure, not a module",
     "/api/v1/operational-ranks": "roster and org structure, not a module",
     "/api/v1/org-chart": "roster and org structure, not a module",

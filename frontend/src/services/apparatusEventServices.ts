@@ -23,6 +23,8 @@ import type {
   NightSummary,
   ScheduleNightsPayload,
   ScheduleNightsResult,
+  SeatCallPayload,
+  SeatCallResult,
 } from '../types/apparatusEvent';
 
 const BASE = '/apparatus-events';
@@ -126,6 +128,12 @@ export const apparatusEventService = {
       `/event-requests/${requestId}/apparatus-crew`,
       { template_id: templateId, acknowledge_conflicts: acknowledgeConflicts }
     );
+    return response.data;
+  },
+
+  /** Email the chosen members about the open seats on this night's whole run. */
+  async sendSeatCall(eventId: string, payload: SeatCallPayload): Promise<SeatCallResult> {
+    const response = await api.post<SeatCallResult>(`${BASE}/events/${eventId}/seat-call`, payload);
     return response.data;
   },
 

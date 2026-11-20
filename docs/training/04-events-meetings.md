@@ -1546,6 +1546,34 @@ Coordinators see **Assign…** and **Change…** on every seat. For a Driver sea
 the list starts with the members who qualify, each judged by the same EVOC
 rule the seat uses.
 
+### Emailing members about open seats
+
+On a night's event page, **Email members** sends one email about the whole run:
+it lists every upcoming night that still has a seat members can take, with the
+date, place, apparatus, which seats are open, and a link to take one. Nights
+that are full, have started, or take no self sign-ups are left out, and you
+can add a note that goes at the top.
+
+Choose who gets it in three groups, and leave a group empty to include
+everyone in it:
+
+- **Member class** — Operational, Administrative, Social.
+- **Membership status** — Probationary, Regular, Life and the rest, plus your
+  department's own membership tiers.
+- **Positions** — for example, only Lieutenants.
+
+Within a group, any ticked box counts (Regular _or_ Life). Across groups, a
+member must match every group you narrowed (Regular _and_ Lieutenant). The
+dialog shows how many members will be emailed before you send, and **Send
+email** stays off until at least one will be.
+
+Only current members are emailed — never anyone on leave, suspended, retired
+or dropped — and members who turned off **Volunteer calls** in their email
+settings are skipped (the count says how many). It is email only, never a
+text. You can send again later; the card shows when the membership was last
+emailed and to how many. If email is not set up for the department, nothing
+is sent and nothing is recorded.
+
 ### On the schedule
 
 Apparatus nights appear on **Shift Scheduling** as dashed
@@ -2738,7 +2766,10 @@ In the panel you can also:
    department calendar. A room that is already booked at that time is
    refused.
 4. **Open volunteer signups** and **Email the Membership**, on a scheduled
-   request. Bringing an apparatus? Add a crew from a template under
+   request. Choose who to ask by member class, membership status and
+   positions, the same way as
+   [emailing members about open seats](#emailing-members-about-open-seats);
+   leave everything empty to ask every current member. Bringing an apparatus? Add a crew from a template under
    **Apparatus Crew** as well, or instead — see
    [Staffing a public request with an apparatus](#staffing-a-public-request-with-an-apparatus).
 5. **Add comments** for internal notes. The requester never sees them.

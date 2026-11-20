@@ -942,7 +942,14 @@ export const eventRequestService = {
   },
   async sendVolunteerCall(
     requestId: string,
-    data: { message?: string | undefined; membership_types?: string[] | undefined }
+    data: {
+      message?: string | undefined;
+      /** Legacy filter on the combined field; prefer the three below. */
+      membership_types?: string[] | undefined;
+      member_classes?: string[] | undefined;
+      member_statuses?: string[] | undefined;
+      position_ids?: string[] | undefined;
+    }
   ): Promise<import('../types/event').EventRequestVolunteerCallResult> {
     const response = await api.post<import('../types/event').EventRequestVolunteerCallResult>(
       `/event-requests/${requestId}/volunteer-call`,

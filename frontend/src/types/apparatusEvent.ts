@@ -4,6 +4,8 @@
  * snake_case on the wire like the rest of the events module.
  */
 
+import type { MemberAudienceChoice } from './memberAudience';
+
 export const ApparatusEventEvocMode = {
   ENFORCE: 'enforce',
   WARN: 'warn',
@@ -205,6 +207,27 @@ export interface CrewBoard {
   can_manage: boolean;
   can_sign_up: boolean;
   warnings: DriverWarning[];
+  /** Coordinators only: when this run's open seats were last emailed. */
+  last_seat_call: LastSeatCall | null;
+}
+
+export interface LastSeatCall {
+  sent_at: string;
+  recipients: number;
+  sent_by_name: string | null;
+}
+
+export interface SeatCallPayload extends MemberAudienceChoice {
+  message?: string | undefined;
+}
+
+export interface SeatCallResult {
+  message: string;
+  recipients: number;
+  failed: number;
+  skipped_opted_out: number;
+  nights_listed: number;
+  sent_at: string;
 }
 
 export interface AssignableMember {

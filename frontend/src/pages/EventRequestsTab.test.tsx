@@ -8,6 +8,9 @@ const postponeRequest = vi.fn();
 const assignRequest = vi.fn();
 const updateRequestStatus = vi.fn();
 const toastError = vi.fn();
+const sendVolunteerCall = vi.fn();
+const getAudienceOptions = vi.fn();
+const previewAudience = vi.fn();
 
 vi.mock('react-hot-toast', () => ({
   default: Object.assign(vi.fn(), {
@@ -27,6 +30,11 @@ vi.mock('../services/api', () => ({
     listEmailTemplates: () => Promise.resolve([]),
     getOutreachRoles: () => Promise.resolve([]),
     getStaffing: () => Promise.resolve(null),
+    sendVolunteerCall: (...args: unknown[]) => sendVolunteerCall(...args) as unknown,
+  },
+  memberAudienceService: {
+    getOptions: (...args: unknown[]) => getAudienceOptions(...args) as unknown,
+    preview: (...args: unknown[]) => previewAudience(...args) as unknown,
   },
   eventService: {
     getModuleSettings: () =>
@@ -388,7 +396,10 @@ const mockViewportWidth = (width: number) => {
 };
 
 describe('EventRequestsTab at desktop width', () => {
-  const phoneMatchMedia = window.matchMedia;
+  // The implementation, not `window.matchMedia` itself: that is the mock, and
+  // restoring a mock as its own implementation makes every later call recurse
+  // until the stack overflows.
+  const phoneMatchMedia = vi.mocked(window.matchMedia).getMockImplementation();
 
   beforeEach(() => {
     listRequests.mockReset();
@@ -402,7 +413,7 @@ describe('EventRequestsTab at desktop width', () => {
   });
 
   afterEach(() => {
-    vi.mocked(window.matchMedia).mockImplementation(phoneMatchMedia);
+    if (phoneMatchMedia) vi.mocked(window.matchMedia).mockImplementation(phoneMatchMedia);
   });
 
   it('labels the drawer actions in words and keeps Take it beside the row', async () => {
@@ -415,5 +426,46 @@ describe('EventRequestsTab at desktop width', () => {
     const drawer = await screen.findByRole('dialog', { name: 'Maple Street HOA' });
     expect(within(drawer).getByRole('button', { name: 'Schedule event' })).toBeInTheDocument();
     expect(within(drawer).getByRole('button', { name: 'Email requester' })).toBeInTheDocument();
+  });
+});
+
+describe('EventRequestsTab volunteer call', () => {
+  beforeEach(() => {
+    for (const mock of [listRequests, getRequest, sendVolunteerCall, getAudienceOptions, previewAudience]) {
+      mock.mockReset();
+    }
+    listRequests.mockResolvedValue(QUEUE);
+    getRequest.mockImplementation((id: string) =>
+      Promise.resolve({ ...QUEUE.find((r) => r.id === id), activity_log: [] })
+    );
+    getAudienceOptions.mockResolvedValue({
+      member_classes: ['operational', 'administrative', 'social'],
+      member_statuses: [{ value: 'regular', label: null }],
+      positions: [{ id: 'pos-lt', name: 'Lieutenant' }],
+    });
+    previewAudience.mockResolvedValue({ recipients: 7, skipped_opted_out: 0 });
+    sendVolunteerCall.mockResolvedValue({ message: 'Volunteer call emailed to 7 members.', recipients: 7 });
+    useAuthStore.setState({ user: ME });
+  });
+
+  it('asks only the members the coordinator chose', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EventRequestsTab />);
+
+    await user.click(await screen.findByRole('button', { name: /^Scout Troop 12/ }));
+    const drawer = await screen.findByRole('dialog', { name: 'Scout Troop 12' });
+    await user.click(within(drawer).getByRole('button', { name: /Email the Membership/ }));
+    await user.click(await within(drawer).findByRole('checkbox', { name: 'Lieutenant' }));
+    expect(await within(drawer).findByText('7 members will be emailed')).toBeInTheDocument();
+    await user.click(within(drawer).getByRole('button', { name: /Send Request for Help/ }));
+
+    await waitFor(() =>
+      expect(sendVolunteerCall).toHaveBeenCalledWith('sched-1', {
+        member_classes: [],
+        member_statuses: [],
+        position_ids: ['pos-lt'],
+        message: undefined,
+      })
+    );
   });
 });

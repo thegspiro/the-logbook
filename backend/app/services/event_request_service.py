@@ -29,6 +29,7 @@ from app.services.email_policy import (
     department_required_kinds,
     member_receives_email,
 )
+from app.services.member_audience import AudienceFilter, resolve_audience
 from app.utils.member_names import format_display_name
 from app.utils.outreach_roles import (
     MAX_TOTAL_SEATS,
@@ -1176,7 +1177,7 @@ async def send_volunteer_call(
     org: Optional[Organization],
     actor: User,
     message: Optional[str] = None,
-    membership_types: Optional[list[str]] = None,
+    audience: Optional[AudienceFilter] = None,
 ) -> dict[str, Any]:
     """Email the membership asking who can help cover a scheduled request.
 
@@ -1195,28 +1196,12 @@ async def send_volunteer_call(
     if not event_request.event_date:
         raise ValueError("Confirm a date before asking the membership for help.")
 
-    query = select(User).where(
-        User.organization_id == str(event_request.organization_id),
-        User.is_active,
-        User.email.isnot(None),
+    audience = audience or AudienceFilter()
+    resolved = await resolve_audience(
+        db, org, str(event_request.organization_id), audience
     )
-    if membership_types:
-        query = query.where(User.membership_type.in_(membership_types))
-    members = list((await db.execute(query)).scalars().all())
-
-    recipients: list[str] = []
-    skipped = 0
-    for member in members:
-        if not member.email:
-            continue
-        if not member_receives_email(
-            member.notification_preferences,
-            EmailKind.VOLUNTEER_CALLS,
-            department_required_kinds(org),
-        ):
-            skipped += 1
-            continue
-        recipients.append(member.email)
+    recipients = resolved.emails
+    skipped = resolved.skipped_opted_out
 
     if not recipients:
         raise ValueError("No members are available to email about this event.")
@@ -1319,7 +1304,7 @@ async def send_volunteer_call(
             details={
                 "recipients": len(recipients),
                 "skipped_opted_out": skipped,
-                "membership_types": membership_types,
+                **audience.as_record(),
             },
             performed_by=str(actor.id),
         )
