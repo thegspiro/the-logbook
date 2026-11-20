@@ -31,6 +31,7 @@ def _org(**overrides):
     base = dict(
         id="org-1",
         name="Station 12",
+        short_name=None,
         timezone="America/New_York",
         phone=None,
         email=None,
