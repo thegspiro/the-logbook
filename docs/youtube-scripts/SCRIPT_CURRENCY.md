@@ -1,5 +1,66 @@
 # Script currency
 
+## 2026-11-19 pass
+
+**Produced (new):** Shorts **8A–8F** were rendered for the first time by the
+new `video-production/` pipeline (#4400, merged 2026-11-19): a phone-sized
+capture of the app on the E2E fixtures, a synthetic voice and burned-in
+captions, as a 9:16 Short and a 16:9 video. 8E is recorded on a portrait
+tablet. The narration actually recorded lives in each
+`video-production/shorts/<id>/shots.json`; renders are not committed, and
+uploading is manual.
+
+**Edited:** 08 Shorts — 8A to 8F rewritten to match the recorded narration,
+with a `PRODUCED` line and a `2026-11-19 PASS` production note on each. Two of
+the differences were errors in the script, not just wording:
+
+| Short | Script said                                                                              | Now                                                                                                        | Why                                                                 |
+| ----- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 8C    | Open Swap "doesn't post your shift anywhere — no member sees it. An officer finds cover" | Open Swap offers the seat to members cleared for it; it stays yours until one picks it up                  | **Wrong** since 2026-11-04/05 (guide 03, "Picking up an open swap") |
+| 8E    | "Open voting. Eligible members get notified"; results "review them and publish"          | Open the election, then send the ballot emails; closing the election releases the results                  | **Wrong**: ballot emails are a separate send (guide 14)             |
+| 8A    | "Click RSVP. Choose Yes, No, or Maybe"                                                   | "Tap RSVP Now. Choose Going, Not Going, or Maybe"                                                          | Labels                                                              |
+| 8B    | Click a certification to see its detail                                                  | Each card shows its date; the next six months are listed at the top; Training is under **More** on a phone | No detail screen exists                                             |
+| 8F    | **Membership Type**; "Click Add Member"                                                  | **Membership status**; "tap Add"                                                                           | Field renamed; phone button label                                   |
+| 8D    | —                                                                                        | Unchanged apart from "Tap"; decoy QR noted as a recording rule                                             | Already current                                                     |
+
+13 Department Store — Chapter 6 gains a beat for **Record refund** (amount,
+reason, confirmation), **Record payment** refusing more than the balance, and
+**Ready to ship / Shipped** on shipped orders (#4391), with a re-time note.
+
+**Flagged, not edited** (no script quotes these labels): 05, 09 and 16 (My
+Training lists only a profiled member's required requirements; **Counts
+toward attendance** only for active requirements; training providers stay
+verified when only the schedule is edited, and **Manual pull** in Sync
+History); 03 IT (re-check Scheduling → Notifications after upgrading; the
+Source column on exports); 04 Chief and 07 Secretary (Attendance Requests'
+**Sent to me** toggle; failed equipment checks alert Chief and Captain by
+default); 12 Elections (the election page's meeting picker lists 100 upcoming
+events); 10 mobile segments (Scheduling Reports tables as cards; the white
+gesture strip on Android). **04 Chief, Chapter 6** still carries the
+2026-10-05 note that its Open Swap approval beat is wrong; it has not been
+revised. See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-18--19-2026).
+
+## 2026-11-18 pass
+
+**Edited:** 03 IT Manager (Chapter 10, anonymizing: the dialog's Removed list
+now includes certificates uploaded with self-reported training; one beat
+added, re-record note `EDITOR — 2026-11-18 PASS`). 14 Multi-class courses
+(the cohort wizard's Course step lists only courses with a syllabus; one
+sentence added, editor note at the end).
+
+**Flagged, not edited** (no script quotes these labels): any scheduling beat
+showing the Templates tab's **Templates / Patterns** switch — it is gone, and
+patterns are edited from the Patterns tab's **Edit** button; 06 Member and 03
+(My Shifts → Past now shows **Hours credited** and "awaiting close-out"); 04
+Chief and 07 Secretary (officer check-ins after the start count from the
+scheduled start; the mandatory RSVP window setting); 05, 09 and 16 (the
+**Operational members** shortcut includes Senior where the tier exists; rolling
+evaluation-credited requirements show a due date); 12 Elections (Linked Meeting
+lists events when Minutes is off); 10 mobile segments (more tables reflow to
+cards; report results show as cards on desktop too). See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-17--18-2026).
+
 ## 2026-11-15 pass
 
 **Edited:** 07 Secretary. Its Email Templates chapter quoted the old category

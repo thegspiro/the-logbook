@@ -27,7 +27,7 @@ export interface AppError {
  * mounted sub-application, a gateway-generated 422 — arrives in the original
  * form.
  */
-interface ValidationErrorEntry {
+export interface ValidationErrorEntry {
   loc?: Array<string | number>;
   msg?: string;
   field?: string;
@@ -68,18 +68,63 @@ function retryAfterSeconds(response: HttpErrorResponse['response']): number | un
   return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
 }
 
+/** Lowercase words of one API field name, snake_case or camelCase. */
+function fieldWords(name: string): string[] {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((word) => word.toLowerCase());
+}
+
 /**
- * Renders one validation entry as `field: reason`, tolerating either spelling.
+ * A readable label for an API field path: `charge_amount` is "Charge amount",
+ * `emergency_contacts.0.email` is "Emergency contacts email".
+ *
+ * A trailing `at` or `id` word is dropped (`expected_return_at` is "Expected
+ * return", `category_id` is "Category"): they are storage suffixes, and the
+ * label sits beside a form field that is named for the thing, not the column.
+ * List indexes carry nothing a reader can act on and are skipped.
+ */
+function fieldLabel(path: string): string {
+  const words = path
+    .split('.')
+    .filter((segment) => !/^\d+$/.test(segment))
+    .flatMap(fieldWords);
+  if (words.length > 1 && (words[words.length - 1] === 'at' || words[words.length - 1] === 'id')) words.pop();
+  return words.join(' ');
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * Renders one validation entry as `Field: reason`, tolerating either spelling.
+ *
+ * The field is shown as a label, not the raw API name: a toast reading
+ * "charge_amount: Value is out of the allowed range." names a column the
+ * officer has never seen (workflow review W42-7). A validator's own message
+ * often names the field already ("expected_return_at must be in the future"),
+ * so when it does the name is replaced in place rather than prefixed, which
+ * otherwise said it twice (W40-8).
  *
  * The backend uses the literal field name `"request"` for an error it could not
  * attribute to any field; prefixing the message with it reads as a field called
  * "request", so that one is dropped rather than shown.
  */
-function describeValidationError(entry: ValidationErrorEntry): string {
+export function describeValidationError(entry: ValidationErrorEntry): string {
   const locField = entry.loc?.length ? String(entry.loc[entry.loc.length - 1]) : undefined;
   const field = entry.field || locField;
   const message = entry.message || entry.msg || 'Invalid value';
-  const described = field && field !== 'request' ? `${field}: ${message}` : message;
+  let described = message;
+  if (field && field !== 'request') {
+    const label = fieldLabel(field);
+    const rawName = field.split('.').pop() ?? field;
+    const named = new RegExp(`\\b${rawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+    if (label)
+      described = named.test(message) ? capitalize(message.replace(named, label)) : `${capitalize(label)}: ${message}`;
+  }
   // The two 422 sources punctuate differently — the API's handler ends each
   // message with a period, Pydantic's own do not — so entries are terminated
   // here and joined on a single space. Joining on ". " instead produced
@@ -217,6 +262,65 @@ export function getSaveFailureMessage(error: unknown, action: string): string {
   }
   const code = appError.code ? ` (Error code: ${appError.code})` : '';
   return `Could not ${action}: the server hit a problem on its end. Your entries are still on this page, so try again in a moment. If it keeps happening, tell IT${code}.`;
+}
+
+/**
+ * A message for a screen whose data failed to load, that says why.
+ *
+ * Pages wrote "Unable to load X. Check your connection and refresh the page."
+ * for every failure, so a server fault read as a network problem: the
+ * Members screen said it for days while one stored record made the server
+ * answer 500, and the officer was left checking Wi-Fi. `what` names the data,
+ * e.g. "members and positions".
+ */
+export function getLoadFailureMessage(error: unknown, what: string): string {
+  if (isNetworkError(error)) {
+    return `Could not load ${what}. Check your connection and refresh the page.`;
+  }
+  const appError = toAppError(error);
+  const code = appError.code ? ` (Error code: ${appError.code})` : '';
+  if (appError.status === 403) {
+    const reason = getErrorDetail(error);
+    return `You do not have permission to see ${what}.${reason ? ` ${reason}` : ''} Ask an administrator if you need it${code}.`;
+  }
+  if (appError.status !== undefined && appError.status >= 500) {
+    return `Could not load ${what}: the server hit a problem on its end. Refresh the page in a moment. If it keeps happening, tell IT${code}.`;
+  }
+  if (appError.status === undefined) {
+    // No answer and no transport failure: the page itself failed (a response
+    // it could not read, a thrown TypeError). Its message is for developers.
+    return `Could not load ${what}. Refresh the page, and if it keeps happening, tell IT.`;
+  }
+  return getErrorMessage(error, `Could not load ${what}`);
+}
+
+/**
+ * A message for an action that failed (a save, delete, upload or download),
+ * that says why. The action counterpart of `getLoadFailureMessage`: `action`
+ * is what the member was doing, e.g. "delete the document".
+ *
+ * These sites said "Check your connection and try again" for every failure,
+ * so a refusal or a server fault sent the member looking for a network
+ * problem. Only a request that got no answer mentions the connection.
+ */
+export function getActionFailureMessage(error: unknown, action: string): string {
+  if (isNetworkError(error)) {
+    return `Could not ${action}. Check your connection and try again.`;
+  }
+  const appError = toAppError(error);
+  const code = appError.code ? ` (Error code: ${appError.code})` : '';
+  if (appError.status === 403) {
+    const reason = getErrorDetail(error);
+    return `You do not have permission to ${action}.${reason ? ` ${reason}` : ''} Ask an administrator if you need to${code}.`;
+  }
+  if (appError.status !== undefined && appError.status >= 500) {
+    return `Could not ${action}: the server hit a problem on its end. Try again in a moment. If it keeps happening, tell IT${code}.`;
+  }
+  if (appError.status === undefined) {
+    // The page itself failed; the exception's text is for developers.
+    return `Could not ${action}. Try again, and if it keeps happening, tell IT.`;
+  }
+  return getErrorMessage(error, `Could not ${action}`);
 }
 
 /**

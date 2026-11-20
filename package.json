@@ -58,11 +58,11 @@
   "homepage": "https://github.com/thegspiro/the-logbook#readme",
   "devDependencies": {
     "@vitest/coverage-v8": "^5.1.0",
-    "concurrently": "^10.0.6",
+    "concurrently": "^10.0.7",
     "husky": "^9.0.11",
     "jsdom": "^30.0.1",
     "lint-staged": "^17.6.0",
-    "prettier": "^3.9.10"
+    "prettier": "^3.10.1"
   },
   "engines": {
     "node": ">=22.22.1",
@@ -91,6 +91,14 @@
     ],
     "{generate_registry.py,scripts/**/*.py}": [
       "bash -c 'python -m flake8 --config backend/.flake8 \"$@\"' --"
+    ],
+    "video-production/**/*.py": [
+      "bash -c 'python -m black --check --config backend/pyproject.toml \"$@\"' --",
+      "bash -c 'python -m flake8 --config backend/.flake8 \"$@\"' --",
+      "bash -c 'python -m isort --check-only --settings-path backend/pyproject.toml \"$@\"' --"
+    ],
+    "video-production/**/*.{ts,cjs}": [
+      "prettier --config frontend/.prettierrc.json --write"
     ]
   },
   "overrides": {

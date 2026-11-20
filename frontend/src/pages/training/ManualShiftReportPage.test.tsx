@@ -9,7 +9,11 @@ vi.mock('../../services/api', () => ({
     getConfig: () => Promise.resolve({ manual_entry_require_apparatus: true }),
   },
   userService: {
-    getUsers: () => Promise.resolve([{ id: 'u1', first_name: 'Jordan', last_name: 'Avery', status: 'active' }]),
+    getUsers: () =>
+      Promise.resolve([
+        { id: 'u1', first_name: 'Jordan', last_name: 'Avery', username: 'javery', status: 'active' },
+        { id: 'u2', first_name: 'Jordan', last_name: 'Pike', username: 'jpike', status: 'dropped_voluntary' },
+      ]),
   },
 }));
 
@@ -95,6 +99,16 @@ describe('ManualShiftReportPage', () => {
     expect(screen.getByLabelText(/^End Date/)).toHaveValue(today);
     expect(screen.getByLabelText(/^End Time/)).toHaveValue('');
     expect(screen.getByLabelText('Overall Shift Narrative')).toHaveValue('');
+  });
+
+  it('offers only current members to add to the crew', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ManualShiftReportPage />);
+
+    await user.type(await screen.findByRole('textbox', { name: 'Search members to add' }), 'Jordan');
+
+    expect(await screen.findByRole('button', { name: /Jordan Avery/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Jordan Pike/ })).not.toBeInTheDocument();
   });
 
   it('names its fields by their labels and exposes the chosen call types', async () => {

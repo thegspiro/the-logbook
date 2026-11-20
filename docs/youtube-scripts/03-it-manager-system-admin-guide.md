@@ -2231,6 +2231,11 @@ name → **Anonymize** enabled (do not confirm).]**
 > operational record: certifications, hours, attendance, property custody, and
 > the _fact_ that a medical clearance existed and when it expired."
 
+> "It also deletes the certificates they uploaded with their own training
+> reports — the photo of a CPR card, say. The training record stays and still
+> counts; the file is gone. A certificate an officer attached to a record is
+> department evidence, and it stays."
+
 **[CALLOUT: "Identity removed. History kept."]**
 
 > "Two things it never touches: the audit log, because it's cryptographically
@@ -2493,3 +2498,10 @@ narration only; none changes a chapter's order.
 **EDITOR:** roughly 6:00 on top of everything above. Re-time Chapters 2–10 and
 the clip table from the recorded take. New footage needed for every screen
 named above; use made-up keys, client IDs and addresses on screen.
+
+## EDITOR — 2026-11-18 PASS
+
+Anonymizing a departed member: the dialog's **Removed** panel gained a line,
+_Certificates uploaded with their training reports_ (2026-11-17), and a short
+narration beat now says so. Adds about 12 seconds. Re-shoot the dialog cue;
+re-time Chapter 10 from the recorded take.

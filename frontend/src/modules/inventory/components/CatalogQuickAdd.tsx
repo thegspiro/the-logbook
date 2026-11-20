@@ -26,6 +26,7 @@ import toast from 'react-hot-toast';
 import { inventoryService } from '@/services/inventoryService';
 import type { InventoryItem } from '@/services/eventServices';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { FIELD_ERROR_CLASS } from '@/components/ux/FormField';
 import MedicalCreatePanel from './MedicalCreatePanel';
 import {
   getCatalogItemLots,
@@ -52,6 +53,10 @@ interface CatalogResult {
 }
 
 const GEAR_ONLY: CatalogSearchScope = { gear: true, medical: false };
+
+// CheckTemplateItemCreate.name: the checklist line this bar adds is capped at
+// 200, below the catalog's own 255, so 200 is the limit for both outcomes.
+const ITEM_NAME_MAX = 200;
 
 interface CatalogQuickAddProps {
   value: string;
@@ -101,6 +106,10 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listboxId = useId();
+  const errorId = useId();
+  // Said under the bar rather than in a toast that vanished, with what was
+  // typed kept in the box (forms review F-2, F-3).
+  const [fieldError, setFieldError] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<{
     top: number;
     left: number;
@@ -155,6 +164,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
 
   const handleChange = (q: string) => {
     submittingRef.current = false;
+    setFieldError(null);
     setMedicalDraft(null);
     onChange(q);
     setOpen(true);
@@ -188,7 +198,14 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   /** Add exactly what was typed, with no catalog link. */
   const addAsFreeText = async () => {
     const name = value.trim();
-    if (!name || submittingRef.current) return;
+    if (submittingRef.current) return;
+    if (!name) {
+      // Add used to sit greyed out until something was typed, without saying
+      // why it would not press (forms review F-3).
+      setFieldError('Type an item name, or search the catalog, to add it.');
+      inputRef.current?.focus();
+      return;
+    }
     submittingRef.current = true;
     reset();
     await onAdd({ name });
@@ -265,7 +282,11 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
       );
     } catch (err: unknown) {
       submittingRef.current = false;
-      toast.error(getErrorMessage(err, 'Failed to create the inventory item'));
+      // reset() cleared the box before the request went out; a refusal hands
+      // the name back so it is not retyped, and says why under the bar.
+      onChange(name);
+      setFieldError(getErrorMessage(err, 'Failed to create the inventory item'));
+      inputRef.current?.focus();
     } finally {
       setCreating(false);
     }
@@ -375,7 +396,10 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
             className="text-theme-text-primary placeholder:text-theme-text-muted min-w-0 flex-1 bg-transparent text-sm outline-none"
             placeholder={placeholder}
             value={value}
+            maxLength={ITEM_NAME_MAX}
             disabled={disabled}
+            aria-invalid={fieldError ? true : undefined}
+            aria-describedby={fieldError ? errorId : undefined}
             role="combobox"
             aria-autocomplete="list"
             aria-expanded={open && typed.length > 0}
@@ -413,13 +437,19 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
         <button
           type="button"
           onClick={() => void addAsFreeText()}
-          disabled={disabled || !typed}
+          disabled={disabled}
           className="touch:min-h-[44px] touch:min-w-[44px] flex flex-shrink-0 items-center gap-1 rounded-md bg-red-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-40"
         >
           <Plus className="h-3 w-3" />
           Add
         </button>
       </div>
+
+      {fieldError && (
+        <p id={errorId} role="alert" className={`mt-1 text-xs ${FIELD_ERROR_CLASS}`}>
+          {fieldError}
+        </p>
+      )}
 
       {open && typed.length > 0 && anchor && (
         <div

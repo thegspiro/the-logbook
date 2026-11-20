@@ -4,10 +4,11 @@
  *
  * Each event's page already has an Attendance Requests card, but an organizer
  * running several events had to open each one to find out whether anybody was
- * waiting. Reachable by any member: the default list is the events they
- * organize or are alternate for, which is empty for most members. An
- * events.manage holder can widen it to the whole department. The server
- * decides who sees what; the toggle is only offered where it would answer.
+ * waiting. Reachable by any member: the default list is the requests sent to
+ * them — on events they organize or are alternate for, and any a fallback step
+ * routed to them — which is empty for most members. An events.manage holder can
+ * widen it to the whole department. The server decides who sees what; the
+ * toggle is only offered where it would answer.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -79,7 +80,7 @@ export const AttendanceRequestsPage: React.FC = () => {
                 onClick={() => setScope('mine')}
                 className={scope === 'mine' ? 'btn-primary text-sm' : 'btn-secondary text-sm'}
               >
-                My events
+                Sent to me
               </button>
               <button
                 type="button"
@@ -118,7 +119,7 @@ export const AttendanceRequestsPage: React.FC = () => {
             description={
               scope === 'all'
                 ? 'Nobody in the department is waiting to be marked present.'
-                : 'Nobody is waiting on an event you organize or are alternate for.'
+                : 'No request has been sent to you: none on events you organize or are alternate for, and none passed on to you.'
             }
           />
         ) : (

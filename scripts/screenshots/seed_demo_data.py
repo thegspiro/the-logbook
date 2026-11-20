@@ -2512,16 +2512,7 @@ class Seeder:
         if drill and pick(drill, "id"):
             ends = str(pick(drill, "end_datetime", "endDatetime") or "")
             if ends and ends < iso(NOW):
-                start = (NOW - timedelta(hours=2)).replace(
-                    minute=0, second=0, microsecond=0
-                )
-                self.api.patch(
-                    f"/events/{pick(drill, 'id')}",
-                    {
-                        "start_datetime": iso(start),
-                        "end_datetime": iso(start + timedelta(hours=4)),
-                    },
-                )
+                self._slide_in_progress_drill(str(pick(drill, "id")))
 
         for title, event_type, days_out, hours in planned:
             if title in titles:
@@ -2559,6 +2550,40 @@ class Seeder:
 
         created.extend(self._seed_recurring_series(titles))
         return created
+
+    def _slide_in_progress_drill(self, event_id: str) -> None:
+        """Move the ended drill to a window that is open now.
+
+        The API refuses to move an event whose members are checked in at a
+        time outside the new schedule, and the previous run checked nine in,
+        so a bare re-date failed on every run after the first and left the
+        monitor picturing a closed drill. Its remedy, postponing, refuses a
+        start in the past, which an in-progress drill needs. So the old
+        window's attendance goes first, as the refusal's other remedy says:
+        seed_event_checkins rebuilds it against the new window on this same
+        run, and deleting the RSVP is the only way to drop a check-in stamp,
+        which is write-once.
+
+        A capture can finalize the drill once it has ended (19-32 finalizes
+        an event the post-event check names), and a finalized event's times
+        cannot move, so that is reopened first, as the other live fixtures do.
+        """
+        start = (NOW - timedelta(hours=2)).replace(minute=0, second=0, microsecond=0)
+        window = {
+            "start_datetime": iso(start),
+            "end_datetime": iso(start + timedelta(hours=4)),
+        }
+        for rsvp in items(self.api.get(f"/events/{event_id}/rsvps"), "rsvps"):
+            user_id = pick(rsvp, "user_id", "userId")
+            if user_id and pick(rsvp, "checked_in", "checkedIn"):
+                self.api.delete(f"/events/{event_id}/rsvps/{user_id}")
+        try:
+            self.api.patch(f"/events/{event_id}", window)
+        except ApiError as exc:
+            if exc.code != 409 or "finalized" not in exc.detail.lower():
+                raise
+            self.api.post(f"/events/{event_id}/reopen-attendance", {})
+            self.api.patch(f"/events/{event_id}", window)
 
     RECURRING_SERIES_TITLE = "Monthly Officers Meeting"
 

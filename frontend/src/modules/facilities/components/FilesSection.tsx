@@ -34,6 +34,9 @@ export default function FilesSection({
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+  // The server's refusal of a caption or description, shown on the field
+  // rather than in a toast, with the dialog left open (forms review F-2).
+  const [editError, setEditError] = useState<string | null>(null);
   const { confirm } = useConfirm();
 
   const load = useCallback(async () => {
@@ -76,13 +79,14 @@ export default function FilesSection({
     if (!editTarget) return;
     const target = editTarget;
     const { kind, item } = target;
+    setEditError(null);
     try {
       if (kind === 'photo') await facilitiesService.updatePhoto(item.id, { caption: blankToNull(value) });
       else await facilitiesService.updateFacilityDocument(item.id, { description: blankToNull(value) });
     } catch (error) {
-      // Leave the dialog open on failure: closing it would discard the text
-      // the user typed while telling them nothing went wrong.
-      toast.error(getErrorMessage(error, kind === 'photo' ? 'Unable to save caption' : 'Unable to save description'));
+      // Leave the dialog open on failure, with the reason on the field:
+      // closing it would discard the text the user typed.
+      setEditError(getErrorMessage(error, kind === 'photo' ? 'Unable to save caption' : 'Unable to save description'));
       return;
     }
     // Only close the dialog this request opened -- a slower earlier submit
@@ -141,7 +145,10 @@ export default function FilesSection({
                 {canEdit && (
                   <button
                     aria-label={`Edit ${item.fileName}`}
-                    onClick={() => setEditTarget({ kind, item })}
+                    onClick={() => {
+                      setEditError(null);
+                      setEditTarget({ kind, item });
+                    }}
                     className="p-2"
                   >
                     <Pencil className="h-4 w-4" />
@@ -192,6 +199,8 @@ export default function FilesSection({
         }
         required={false}
         confirmLabel="Save"
+        askBeforeDiscard
+        error={editError}
       />
     </div>
   );

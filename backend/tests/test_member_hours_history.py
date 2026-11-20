@@ -713,3 +713,137 @@ class TestMemberHoursEndpoint:
                     uuid.UUID(stranger), 2025, db_session, officer
                 )
         assert missing.value.status_code == 404
+
+
+class TestHistoryMonths:
+    """``history`` is what the Past view of My Shifts totals from.
+
+    It must be the same buckets the Hours tab is cut from, or the two views
+    of one member's year disagree — the reason the field exists.
+    """
+
+    @pytest.mark.asyncio
+    async def test_lists_every_month_with_attendance_oldest_first(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        svc = SchedulingService(db_session)
+
+        await _worked(
+            db_session, org_id, user_id, date(2026, 3, 4), 600, finalized=True
+        )
+        await _worked(
+            db_session, org_id, user_id, date(2024, 11, 2), 480, finalized=True
+        )
+        # A month whose only shift is still awaiting close-out is still listed.
+        await _worked(
+            db_session, org_id, user_id, date(2025, 6, 9), 300, finalized=False
+        )
+
+        history = await svc.get_my_hours_history(user_id, org_id, 2026)
+
+        assert [(m["year"], m["month"]) for m in history["history"]] == [
+            (2024, 11),
+            (2025, 6),
+            (2026, 3),
+        ]
+        pending_only = history["history"][1]
+        assert pending_only["hours"] == 0.0
+        assert pending_only["pending_hours"] == 5.0
+
+    @pytest.mark.asyncio
+    async def test_a_years_months_add_up_to_that_years_totals(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        svc = SchedulingService(db_session)
+
+        await _worked(db_session, org_id, user_id, date(2026, 1, 5), 10, finalized=True)
+        await _worked(
+            db_session, org_id, user_id, date(2026, 8, 5), 725, finalized=True
+        )
+        await _worked(db_session, org_id, user_id, date(2025, 8, 5), 60, finalized=True)
+
+        history = await svc.get_my_hours_history(user_id, org_id, 2026)
+
+        in_2026 = [m for m in history["history"] if m["year"] == 2026]
+        assert sum(m["hours"] for m in in_2026) == history["totals"]["hours"]
+        assert sum(m["shifts"] for m in in_2026) == history["totals"]["shifts"]
+        assert (
+            sum(m["hours"] for m in history["history"]) == history["all_time"]["hours"]
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_member_with_no_attendance_has_an_empty_history(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        history = await SchedulingService(db_session).get_my_hours_history(
+            user_id, org_id, 2026
+        )
+        assert history["history"] == []
+
+
+class TestMyAttendanceHistoryPaging:
+    """The Past view reads a member's whole attendance history in pages."""
+
+    @staticmethod
+    async def _read(db_session, user_id, *, limit, offset):
+        current_user = await db_session.get(User, user_id)
+        return await scheduling_endpoint.get_my_attendance_history(
+            limit=limit,
+            offset=offset,
+            start_date=None,
+            end_date=None,
+            db=db_session,
+            current_user=current_user,
+        )
+
+    @pytest.mark.asyncio
+    async def test_pages_cover_every_record_once_across_a_shared_date(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        # Five records on one date: a page boundary falls inside the date, which
+        # is where ordering by date alone could repeat one and skip another.
+        expected = set()
+        for _ in range(5):
+            expected.add(
+                await _worked(
+                    db_session, org_id, user_id, date(2025, 5, 1), 60, finalized=True
+                )
+            )
+        expected.add(
+            await _worked(
+                db_session, org_id, user_id, date(2025, 4, 1), 60, finalized=True
+            )
+        )
+
+        seen = []
+        for offset in (0, 2, 4):
+            page = await self._read(db_session, user_id, limit=2, offset=offset)
+            seen.extend(entry["shift_id"] for entry in page)
+        past_the_end = await self._read(db_session, user_id, limit=2, offset=6)
+
+        assert len(seen) == 6
+        assert set(seen) == expected
+        assert past_the_end == []
+        # Newest date first; the older shift is last.
+        assert seen[-1] not in seen[:-1]
+
+    @pytest.mark.asyncio
+    async def test_each_record_says_whether_its_shift_is_finalized(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        credited = await _worked(
+            db_session, org_id, user_id, date(2025, 5, 2), 60, finalized=True
+        )
+        pending = await _worked(
+            db_session, org_id, user_id, date(2025, 5, 3), 60, finalized=False
+        )
+
+        page = await self._read(db_session, user_id, limit=50, offset=0)
+        finalized = {entry["shift_id"]: entry["shift_is_finalized"] for entry in page}
+
+        assert finalized == {credited: True, pending: False}

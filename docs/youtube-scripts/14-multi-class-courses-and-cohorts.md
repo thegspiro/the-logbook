@@ -122,7 +122,9 @@ requirements" checkbox, uncheck it.]**
 > "Syllabus done — and you never have to do that again. Now every September and
 > every March, you come here. Records, Course Cohorts, New cohort."
 
-> "Pick the course. Name this run — 'Recruit School, Fall 2026.' Next."
+> "Pick the course. Only courses that already have classes on their syllabus
+> are listed — if yours is missing, go back and build its syllabus first. Name
+> this run — 'Recruit School, Fall 2026.' Next."
 
 ### THE SCHEDULE RULES (4:30 – 5:15)
 
@@ -395,3 +397,8 @@ timeline with attendance counts.]**
 > syllabus still does not retroactively reschedule a running cohort."
 
 **EDITOR:** Re-time Chapters 3–6 and add a “Link a generated session to a requirement” clip.
+
+**EDITOR — 2026-11-18 pass:** the Course step now lists only courses with at
+least one syllabus class (2026-11-17). One sentence added to "Start the
+wizard" (about 5 seconds); the existing footage is still right if its course
+list held only multi-class courses, otherwise re-shoot that cue.

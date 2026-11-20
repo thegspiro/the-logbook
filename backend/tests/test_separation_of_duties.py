@@ -54,6 +54,9 @@ class TestAssertDifferentPerson:
     @pytest.mark.parametrize(
         ("actor", "subject"),
         [(None, _ALICE), (_ALICE, None), (None, None), ("", _ALICE)],
+        # Named: an id built from a value drawn at import differs in every
+        # process, and pytest-xdist refuses to run when its workers disagree.
+        ids=["no-actor", "no-subject", "neither", "blank-actor"],
     )
     def test_no_ops_when_either_side_is_unknown(self, actor, subject):
         # An unattributed record cannot be shown to be self-approval. Blocking

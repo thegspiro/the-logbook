@@ -124,3 +124,51 @@ async def assert_all_in_org(
     if unique_ids - found:
         name = label or getattr(model, "__name__", "referenced record")
         raise ValueError(f"Invalid {name}")
+
+
+async def assert_current_members(
+    db: AsyncSession,
+    user_ids: Optional[Iterable[Any]],
+    organization_id: Any,
+    *,
+    keep: Optional[Iterable[Any]] = None,
+    label: str = "member",
+) -> None:
+    """Raise ``ValueError`` unless every id names a *current* member of the org.
+
+    A current member is one ``User.is_active`` accepts: active or probationary,
+    and not deleted. The roster import brings in former members (archived,
+    retired, dropped, inactive), and a picker hiding them is not a guard, so a
+    path that names a member to do something — coordinate, approve, instruct,
+    enrol — checks here.
+
+    ``keep`` is the set of ids the record already holds. They are let through
+    unchecked, so a record naming someone who has since left can still be
+    saved unchanged; only a newly chosen former member is refused. An empty
+    or missing ``user_ids`` is accepted.
+
+    The message is the same for a former member, a deleted one and an id from
+    another organization, so it cannot be used to probe for existence.
+    """
+    from app.models.user import User
+
+    kept = {str(uid) for uid in keep or () if uid}
+    wanted = {str(uid) for uid in user_ids or () if uid and str(uid).strip()}
+    to_check = wanted - kept
+    if not to_check:
+        return
+
+    message = f"Only current members can be chosen as {label}"
+    if not organization_id:
+        raise ValueError(message)
+
+    result = await db.execute(
+        select(User.id).where(
+            User.id.in_(to_check),
+            User.organization_id == str(organization_id),
+            User.is_active,
+        )
+    )
+    found = {str(row[0]) for row in result.all()}
+    if to_check - found:
+        raise ValueError(message)

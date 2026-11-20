@@ -32,6 +32,7 @@ import GarmentStyleAxisPicker from './GarmentStyleAxisPicker';
 import {
   ITEM_TYPE_FIELDS,
   getItemTypeFromCategory,
+  defaultTrackingTypeFor,
   CUSTOM_SIZE_OPTION,
   SIZE_PICKER_GROUPS,
   GARMENT_STYLE_AXES,
@@ -274,6 +275,9 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   // form closes: the detail page passes the item it reloads as `editItem`, and
   // reloading while the form is open would reseed it and drop the flag.
   const savedExceptRefused = useRef(false);
+  // Whether a new item's tracking type is the officer's (or the opening page's)
+  // choice; until it is, it follows the category (W38-3).
+  const trackingChosen = useRef(false);
   const closeForm = () => {
     if (savedExceptRefused.current) {
       savedExceptRefused.current = false;
@@ -365,6 +369,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         tracking_type: defaultTrackingType || EMPTY.tracking_type,
       };
     }
+    trackingChosen.current = Boolean(editItem) || defaultTrackingType !== '';
     setF(seeded);
     setBaseline(changeSnapshot(seeded, false, [], [], ''));
     setShowFin(false);
@@ -385,6 +390,25 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   ]);
 
   const cat = useMemo(() => categories.find((c) => c.id === f.category_id), [categories, f.category_id]);
+
+  // A new item starts with the tracking its category implies, until the
+  // officer picks one. Effect-driven rather than in the Category onChange
+  // because the categories can arrive after the form opens on a preset one.
+  // No category is a choice too (Individual). A chosen one whose record has
+  // not loaded yet derives nothing, so a preset category cannot flicker.
+  const derivedTracking = !f.category_id ? defaultTrackingTypeFor(null) : cat ? defaultTrackingTypeFor(cat) : null;
+  useEffect(() => {
+    if (!isOpen || editItem || trackingChosen.current || !derivedTracking) return;
+    setF((prev) => (prev.tracking_type === derivedTracking ? prev : { ...prev, tracking_type: derivedTracking }));
+    // A category the page opened the form on is not an edit the officer made,
+    // so the starting point moves with it and Cancel still closes at once.
+    setBaseline((prev) => {
+      if (!prev) return prev;
+      const [stored, ...rest] = JSON.parse(prev) as [FD, ...unknown[]];
+      if (stored.category_id !== (cat?.id ?? '') || stored.tracking_type === derivedTracking) return prev;
+      return JSON.stringify([{ ...stored, tracking_type: derivedTracking }, ...rest]);
+    });
+  }, [isOpen, editItem, derivedTracking, cat?.id]);
   // The server refuses an item whose category requires these and lacks them
   // (`_validate_category_requirements`), so say so on the field rather than
   // in a 400 after Create.
@@ -830,7 +854,10 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   {...field}
                   className={inp}
                   value={f.tracking_type}
-                  onChange={(e) => up('tracking_type', e.target.value)}
+                  onChange={(e) => {
+                    trackingChosen.current = true;
+                    up('tracking_type', e.target.value);
+                  }}
                 >
                   <option value="individual">Individual</option>
                   <option value="pool">Pool</option>

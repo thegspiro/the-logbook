@@ -454,7 +454,9 @@ describe('DocumentsPage', () => {
 
   it('keeps the create dialog open with the server’s reason when it is refused', async () => {
     const user = userEvent.setup();
-    mockCreateFolder.mockRejectedValueOnce(new Error('These settings would shut you out of this folder.'));
+    mockCreateFolder.mockRejectedValueOnce({
+      response: { status: 400, data: { detail: 'These settings would shut you out of this folder.' } },
+    });
     renderWithRouter(<DocumentsPage />);
     await user.click(await screen.findByRole('button', { name: /new folder/i }));
     const dialog = screen.getByRole('dialog');
@@ -535,7 +537,7 @@ describe('DocumentsPage', () => {
     renderWithRouter(<DocumentsPage />);
     await user.click(await screen.findByRole('button', { name: /sops/i }));
 
-    expect(await screen.findByText(/unable to load documents/i)).toBeInTheDocument();
+    expect(await screen.findByText(/could not load documents/i)).toBeInTheDocument();
     expect(screen.getByText('SOPs', { selector: '[aria-current="page"]' })).toBeInTheDocument();
   });
 
