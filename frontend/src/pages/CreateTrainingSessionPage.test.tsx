@@ -632,6 +632,28 @@ describe('CreateTrainingSessionPage training info step', () => {
     expect(screen.getByLabelText(/Lead Instructor/)).toHaveValue(INSTRUCTOR_ID);
   });
 
+  it('does not offer a former member as lead instructor, nor pick one a course names', async () => {
+    getUsers.mockResolvedValue([
+      RITA,
+      { id: 'u-gone', username: 'opike', first_name: 'Owen', last_name: 'Pike', status: 'retired' },
+    ]);
+    getCourses.mockResolvedValue([{ ...CPR, instructor: 'Owen Pike' }]);
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /From the Course Library/ }));
+    await screen.findByRole('option', { name: 'CPR - CPR / BLS' });
+    await waitFor(() =>
+      expect(within(screen.getByLabelText(/Lead Instructor/)).getByRole('option', { name: 'Rita Cole' })).toBeVisible()
+    );
+    expect(within(screen.getByLabelText(/Lead Instructor/)).queryByRole('option', { name: /Owen Pike/ })).toBeNull();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /^Course/ }), 'course-cpr');
+
+    expect(screen.getByLabelText(/Lead Instructor/)).toHaveValue('');
+  });
+
   it('offers only session-attendance requirements under Counts toward attendance', async () => {
     linkageRequirements.value = [
       { id: 'req-drills', name: 'Company drills', requirement_type: 'session_attendance', required_attendance_pct: 60 },

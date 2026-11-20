@@ -8,7 +8,7 @@
  * hook holds those flags. It never blocks anything itself.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { getErrorMessage } from '../utils/errorHandling';
+import { describeValidationError, getErrorMessage } from '../utils/errorHandling';
 
 export interface FieldSpec {
   /** The input's DOM id — what FormField renders and what focus moves to. */
@@ -100,9 +100,10 @@ export function placeApiError<F extends string>(
     if (field) {
       if (!fieldErrors[field]) fieldErrors[field] = message;
     } else {
-      // `request` is the backend's name for an error it could not pin on
-      // any field; prefixing it would read as a field called "request".
-      unmatched.push(key && key !== 'request' ? `${key}: ${message}` : message);
+      // Worded by the same describer as every other 422 toast, so an entry
+      // no field claims reads "Positions: …" rather than the raw API name,
+      // and the backend's catch-all `request` field is still left unnamed.
+      unmatched.push(describeValidationError(entry));
     }
   }
   return { fieldErrors, unmatched };

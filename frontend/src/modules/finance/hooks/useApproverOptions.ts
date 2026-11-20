@@ -11,10 +11,16 @@
 import { useEffect, useState } from 'react';
 import { roleService, userService } from '../../../services/api';
 import { displayNameOf } from '../../../utils/memberName';
+import { isActiveAccount } from '../../../constants/enums';
 
 export interface ApproverOption {
   value: string;
   label: string;
+  /**
+   * A member who is no longer current. Kept in the list so a step that already
+   * names them still reads by name, but not offered as a new choice.
+   */
+  former?: boolean | undefined;
 }
 
 export interface ApproverOptions {
@@ -49,6 +55,7 @@ export function useApproverOptions(): ApproverOptions {
                   .map((u) => ({
                     value: u.id,
                     label: displayNameOf(u) || u.username,
+                    former: !isActiveAccount(u.status),
                   }))
                   .sort(byLabel)
               : null,

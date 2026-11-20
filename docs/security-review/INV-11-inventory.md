@@ -1,6 +1,203 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14), 2026-11-06 (pass 15, watchdog pickup) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), [#3580](https://github.com/thegspiro/the-logbook/pull/3580) (pass 11), [#3738](https://github.com/thegspiro/the-logbook/pull/3738) (pass 12), [#3823](https://github.com/thegspiro/the-logbook/pull/3823) (pass 13), [#3919](https://github.com/thegspiro/the-logbook/pull/3919) (pass 14), pass 15 (this PR)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14), 2026-11-06 (pass 15, watchdog pickup), 2026-11-19 (pass 16, watchdog pickup) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), [#3580](https://github.com/thegspiro/the-logbook/pull/3580) (pass 11), [#3738](https://github.com/thegspiro/the-logbook/pull/3738) (pass 12), [#3823](https://github.com/thegspiro/the-logbook/pull/3823) (pass 13), [#3919](https://github.com/thegspiro/the-logbook/pull/3919) (pass 14), [#4106](https://github.com/thegspiro/the-logbook/pull/4106) (pass 15), pass 16 (this PR)
+
+---
+
+## Pass 16 (2026-11-19) — watchdog pickup, real delta (3 backend changes already shipped and verified correct: WS auth hardening, impact-plan export audit logging, size-preference 404→null), 0 fixed, 0 new findings, route-count correction, INV-16/INV-17/INV-22 re-verified open/unaffected
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+remains unreachable. A fresh `list_pull_requests` (state=open, perPage=100)
+found no `claude/security-review-*` head branch — PR #4440 (Feature 10,
+Documents & legal, pass 16) had just merged, and row 11 (Inventory) was the
+next `⬜` in `PROGRESS.md`'s rotation table.
+
+**Baseline resolution hit the repo's usual squash/orphan-merge artifact.**
+PR #4106's own recorded merge commit (`3ed12fcb5`) is not an ancestor of
+current `main`, and neither is the PR branch's own head commit
+(`9e1b5cf41a`) by `git merge-base --is-ancestor` — both exist as reachable
+objects, just disconnected from `main`'s ancestry. Rather than trust a
+path-scoped `git log` across that broken history (this rotation's own
+documented trap), the real delta was found with a direct tree diff —
+`git diff 9e1b5cf41a origin/main -- <scope files>` — which works between any
+two commits regardless of ancestry and does not depend on walking history at
+all.
+
+### Route count correction
+
+AST-enumerating all six endpoint files gives **199** routes
+(150 + 4 + 2 + 29 + 3 + 11), not the 198 pass 15 recorded. Re-running the
+identical AST count against the actual pass-15 PR-head snapshot
+(`9e1b5cf41a`, extracted via `git show <sha>:<path>`) returns **199** there
+too, with an identical per-file breakdown — so this is pass 15's own
+miscount, not a route added since (the same class of correction pass 17 made
+for Users & organizations, 63→64). The tree diff of all six endpoint files
+between that snapshot and `origin/main` adds **zero** new `@router.*`
+decorator lines; every route in the set is identical. Every one of the 199
+still carries a recognized auth dependency (`get_current_user`,
+`require_permission`, or `require_all_permissions`) in its signature,
+confirmed by the same AST walk.
+
+### Real delta reviewed in full
+
+The tree diff (`9e1b5cf41a..origin/main`) touches exactly two backend files
+in scope: `inventory.py` (68 lines) and `inventory_service.py` (1 line, out
+of scope — see below). Three distinct, already-shipped changes, each
+verified directly against the running code rather than assumed correct from
+the diff alone:
+
+1. **`GET /ws` (the inventory WebSocket) — auth hardened, a real
+   authorization gap closed.** The `?token=` query-parameter fallback is
+   removed outright (a bearer token in a URL reaches proxy/server access
+   logs, where it can be replayed until expiry — the new docstring says so);
+   the socket now accepts only the httpOnly `access_token` cookie. More
+   significantly, a **new permission gate** was added: `may_watch =
+_has_permission("inventory.manage", _collect_user_permissions(user))` is
+   computed right after the user is authenticated via `AuthService`, and `if
+not may_watch: await websocket.close(code=4003, ...)` runs **before**
+   `ws_manager.connect()` is ever reached — read the full function
+   (`backend/app/api/v1/endpoints/inventory.py:6033-6122`) to confirm the
+   ordering, not inferred from the diff hunk alone. Before this change, any
+   authenticated member of the organization — not just `inventory.manage`
+   holders — could open this socket and watch every `item_assigned` /
+   `item_checked_out` event, which names which member holds which item (the
+   same INV-9 class of over-exposure this file already closed for the sizes
+   endpoints). `_has_permission`/`_collect_user_permissions` are the same
+   shared helpers used at ~15 other call sites in this file, not a one-off.
+   Frontend side: `useInventoryWebSocket.ts` already treats `4003` as
+   terminal (`if (event.code === 1000 || event.code === 4001 || event.code
+=== 4003) return;` — no reconnect loop), a case that already existed for
+   the "module not enabled" close, so the new "requires inventory.manage"
+   close needed no frontend change and got none.
+2. **Impact-plan PDF export — now audit-logged, and the filename is now
+   quoted.** `export_impact_plan_pdf` calls `log_audit_event(event_type=
+"inventory_impact_plan_exported", ...)` before streaming the response,
+   since the plan lists members with contact details (a disclosure, same as
+   any other PII export). `Content-Disposition` changed from
+   `attachment; filename=impact-plan.pdf` to `attachment;
+filename="impact-plan.pdf"` — the filename is a fixed literal, not
+   user-supplied, so this is a correctness/compliance quoting fix rather
+   than a header-injection fix. The one-line `inventory_service.py` change
+   (`"logo": org.logo if org else None` added to the same export's PDF meta
+   dict) is the owner's 2026-11-16 "running header on every PDF" decision
+   landing here too — `org` is already the caller's own org (org-scoped),
+   `logo` is a stored field already readable by the caller, so no new
+   exposure.
+3. **`GET /members/{user_id}/size-preferences` and `GET
+/my/size-preferences` — 404 replaced with `null`, deliberately, to close
+   a disclosure asymmetry.** `_require_self_or_quartermaster` still runs
+   **before** the service lookup (unchanged position — confirmed by reading
+   the surrounding function, not just the diff hunk), so a caller without
+   `inventory.manage` reading someone else's sizes is still refused with a
+   403 and the lookup never runs. The change is what happens _after_ that
+   gate passes: a member with no sizes saved used to get a 404
+   indistinguishable, status-code-wise, from hitting the gate itself (which
+   also 403s, not 404s, so this specific asymmetry was between "no sizes
+   saved" and "sizes saved" rather than an authz leak) — but it also meant
+   every ordinary first-time visit to "My Sizes" or the quartermaster's
+   sizes dialog logged a 404 as if something had failed. Both routes now
+   return `null` for "no sizes saved," matching `MemberSizePreferencesResponse
+| None`.
+
+No code change was needed from this pass — all three were already correct
+and already shipped; this pass's contribution is finding them (through the
+tree-diff method above, since the commit-log method this rotation normally
+relies on is broken for this window the same way it was for pass 16 of
+Documents & legal and Medical screening) and verifying each against the
+checklist rather than assuming the "0 backend delta" shape of recent prior
+passes still held.
+
+### Frontend delta
+
+62 files, +6296/-2355 — overwhelmingly the "Forms batch 16–20" shared-field/
+discard-protection/server-error rollout and the inventory AAA contrast pass
+(matching commit titles across the window), plus `defaultTrackingTypeFor`
+(`types/index.ts`, a pure UI default-selection helper with no data-flow
+effect). Swept the full diff for every risky pattern this checklist's
+dimensions 4–5 cover —
+`dangerouslySetInnerHTML`, `window.confirm`/`alert`/`prompt`,
+`localStorage.`, a hand-rolled `Authorization:` header, a new `axios.create`/
+bare `fetch(`, `.toLocaleString`/`.toLocaleDateString`/`.toLocaleTimeString`,
+a `date-fns` import, `eval(`, raw `innerHTML` — **zero** matches across all
+6296 added lines. `checkOutcome.ts`'s 16-line diff and the rest of
+`types/index.ts`'s are the same AAA contrast-token swap (e.g. `text-green-800`
+→ `text-green-900` in light mode, `dark:text-green-400` →
+`dark:text-green-300`), not logic.
+
+### Re-verified: INV-16, INV-17, INV-22 — all still OPEN, unaffected
+
+- **INV-22** (unbounded `.all()` in `get_fulfillment_options`/
+  `get_requestable_categories`, owner-accepted 2026-10-05): both functions
+  are untouched — the whole-file diff for `inventory_service.py` this window
+  is the single unrelated `logo` line above, confirmed by `grep`ing both
+  names in the diff (zero hits) rather than inferring from the file-level
+  stat alone.
+- **INV-16** (`PATCH /reorder-requests/{id}` bypasses the versioned
+  workflow, FLAGGED, owner decision pending): `update_reorder_request` does
+  not appear in the backend diff at all (the service file's only change is
+  the unrelated `logo` line). `ReorderRequestsPage.tsx` has a large
+  (780-line) diff from the forms rollout, but the one `version`-related text
+  in it is an unchanged pre-existing code comment, not new logic — confirmed
+  by reading the surrounding hunk.
+- **INV-17** (maintenance completion always creates a new record instead of
+  closing the open one, FLAGGED, owner decision pending):
+  `InventoryMaintenancePage.tsx`'s diff in this window is two lines, a
+  `touch:min-h-11` class addition to a history-link button — not the
+  completion flow. `docs/KNOWN_LIMITATIONS.md`'s entries for both remain
+  unchanged.
+
+### Verified good ✅ (pass 16)
+
+- The new WebSocket permission gate closes before `ws_manager.connect()` is
+  reached, using the same shared `_has_permission`/`_collect_user_permissions`
+  helpers as every other gate in this file — not a one-off hand-rolled check.
+- The size-preference authorization gate (`_require_self_or_quartermaster`)
+  still runs before the service call on both routes; only the post-gate
+  "nothing saved" response changed.
+- No new finding anywhere in dimensions 1–7: no route without an auth
+  dependency (199/199 carry one), no by-id query in the touched code missing
+  an org filter (the WS gate works off the authenticated user's own
+  `organization_id`, never a client-supplied one), no raw SQL/LIKE/CSV
+  pattern touched, no secret or PHI newly logged (the new audit event logs
+  only `{"format": "pdf"}` plus ids), no migration in this window (schema
+  notes below).
+- Frontend diff swept in full for every injection/credential/storage pattern
+  this checklist covers: zero matches across 6296 added lines.
+
+### Findings
+
+**0 fixed, 0 new findings.** The three backend changes this pass actually
+reviewed for the first time were all already correct when shipped. INV-16,
+INV-17 and INV-22 are the three standing items and all three remain
+unchanged.
+
+| ID     | Status                                                        |
+| ------ | ------------------------------------------------------------- |
+| INV-16 | Re-confirmed OPEN/FLAGGED, unchanged (owner decision pending) |
+| INV-17 | Re-confirmed OPEN/FLAGGED, unchanged (owner decision pending) |
+| INV-22 | Re-confirmed OPEN, unchanged (owner-accepted)                 |
+
+### Schema & migration notes
+
+No migration in this feature's scope since pass 15 — the most recent
+inventory-table migration remains `d1165a97b48e` (2026-11-05, `action` ENUM
+widening, reviewed in pass 15). `validate_migrations.py --strict` confirms a
+single head (see completion gate below). No JSON column touched, no
+seeded-grant change, no new FK.
+
+### Completion gate
+
+| Check                                                   | Result                  |
+| ------------------------------------------------------- | ----------------------- |
+| `flake8 app/ tests/ alembic/`                           | ✅ 0 violations         |
+| `black --check app/ tests/ alembic/`                    | ✅ clean                |
+| `isort --check-only app/ tests/ alembic/`               | ✅ clean                |
+| `python3 scripts/validate_migrations.py --strict`       | ✅ single head          |
+| `python3 scripts/check_route_permissions.py --strict`   | ✅ 0 errors, 0 warnings |
+| `pytest tests/ -k "inventory or nfc or kiosk or label"` | ✅ see PR body          |
+| `npm run typecheck`                                     | ✅ 0 errors             |
+| `npm run lint`                                          | ✅ 0 warnings           |
+| `npx vitest run src/modules/inventory`                  | ✅ see PR body          |
 
 ---
 

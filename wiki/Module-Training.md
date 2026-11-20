@@ -15,7 +15,10 @@ program enrollments, external training integrations, and compliance reporting.
   quarterly, monthly or one-time frequencies (plus rolling, certification-period
   and fixed-date due dates). Requirements target member categories (Active,
   Administrative, Probationary, Life, Retired, Honorary), ranks or positions, or
-  apply to all members. See [Training Requirements](#training-requirements)
+  apply to all members. See [Training Requirements](#training-requirements).
+  The editor's **Operational members** shortcut ticks Active, Probationary and
+  Life, plus **Senior** where the department's tier list has a `senior` tier
+  _(2026-11-17, #4370; Retired stays out per the 2026-11-06 owner decision)_
 - **Requirement Templates** — Ten built-in templates for common standards that
   pre-fill the create form for review
 - **Course-Library Requirement Links** — Course and certification requirements
@@ -57,7 +60,10 @@ program enrollments, external training integrations, and compliance reporting.
 - **Expiring Certifications** — Tiered alerts at 90/60/30/7 days with
   escalation for expired certs
 - **Compliance Summary** — Per-member green/yellow/red compliance card on
-  profiles
+  profiles. Since 2026-11-18 (D10, #4403) the card, **My Training**, the
+  officer's per-member requirements view and requirement progress list only
+  the requirements of the member's matching compliance profile, through
+  `ComplianceGrading.for_member`; see [Compliance](Module-Compliance)
 - **Training Waivers** — Leave of Absence auto-linking, waiver management,
   proportional requirement adjustment. Supports permanent waivers (no end date),
   a New Member waiver type, and multi-select "Applies To" (Training + Meetings +
@@ -124,7 +130,13 @@ requirements; a session linked to none charges nobody. The rule is written once
 (`training_compliance.tally_session_attendance`) and every grader reads it, with
 `load_held_sessions` passed through each caller. `PUT
 /training/sessions/{id}/attendance-requirements` replaces a session's links and
-is allowed after attendance is finalized.
+is allowed after attendance is finalized. The **Counts toward attendance**
+badge (event cards, calendar, event page) shows only when a linked requirement
+is **active** _(2026-11-18, #4378)_: `events_counting_toward_attendance` joins
+the requirement, and `TrainingSessionResponse.counts_toward_attendance`
+carries the same answer to the event page, which no longer counts
+`attendance_requirement_ids` (that list still includes stale links so the
+editor can remove them).
 
 A requirement with `allows_chief_override` accepts rows in
 `training_requirement_overrides` (who, when, dates, encrypted reason; revoked,
@@ -239,6 +251,19 @@ bypasses `allows_external_credit` by design, but not this). A record with no
 completion date fails closed there with "That training has no completion date,
 so it can't be credited toward this requirement's N-day window", matching the
 read-path evaluator. `recency_days` is in the update path's clearable set.
+
+### Rolling evaluation-credited requirements fall due from the latest evaluation _(2026-11-17, #4379)_
+
+A rolling **Evaluated shifts**, **Evaluated calls**, **Transports** or
+**Refusals** requirement takes its My Training due date from the latest counted
+shift evaluation plus `rolling_period_months`
+(`training_compliance.latest_evaluation_credit`, which respects
+`recency_days` but not the rolling window, so an old evaluation reads as
+overdue). Training records never count toward these types, so the old
+record-based date was blank or unrelated. `load_evaluation_credits(...,
+full_history=True)` supplies the history; the four callers that already load
+full shift history load evaluation credit the same way. Owner decision recorded
+in `docs/KNOWN_LIMITATIONS.md`.
 
 ### Existing-member exemption and catch-up
 
@@ -614,6 +639,10 @@ one inline.
 
 **Training → Records → Course Cohorts → New cohort.** The wizard runs Course →
 Schedule → **Preview** → Roster → Generate.
+
+The Course step lists only courses with at least one syllabus class
+(`GET /training/courses?with_classes=true`, an org-scoped `EXISTS`; without the
+parameter the endpoint is unchanged) _(2026-11-17, W27-4, #4385)_.
 
 Preview is the point of the wizard. Generating drops N events onto the
 department calendar and RSVPs the roster to each, so the officer first sees
@@ -998,7 +1027,11 @@ default duration come from **Manual Entry Rules** in the admin hub.
 
 Providers: Vector Solutions, Target Solutions, Lexipol, iAmResponding and
 Custom API, each with category, course and user mappings. Imports preserve CE
-credit hours (`external_training_imports.credit_hours`); the provider's
+credit hours (`external_training_imports.credit_hours`), and
+`external_training_imports.course_hours_credited` records the hours a record
+took from its mapped course, so a re-map or unmap compares against what the
+import actually gave rather than the course's current settings _(2026-11-18,
+#4423, migration `bbeb4867d393`)_; the provider's
 category catalog can be fetched up front (`sync-categories`). Imports feed
 pipeline progress only where a requirement allows external credit (see
 [What updates pipeline progress automatically](#what-updates-pipeline-progress-automatically)).
@@ -1012,6 +1045,15 @@ errors. Its scheduled sync is an hourly pull plus a daily 30-day **review** at
 sync log (`sync_type = "review"`). Detail:
 [16-integrations › Setting up Target Solutions](https://github.com/thegspiro/the-logbook/blob/main/docs/training/16-integrations.md#setting-up-target-solutions).
 
+**Verification and the scheduler** _(2026-11-18, #4419)_. Auto-sync runs only
+for a provider with `connection_verified`. A save now resets it only when the
+connection changes (`api_base_url`, `client_id` or `auth_type` differs from the
+stored value, a new secret arrives, or a stored secret is cleared). Before,
+the edit form's every save sent `api_base_url` and un-verified the provider,
+so editing the sync interval silently stopped its scheduled pulls. Sync
+History labels a run with `initiated_by` set as **Manual pull**; the scheduler
+never sets it.
+
 ---
 
 ## Member & Officer Exports
@@ -1022,7 +1064,11 @@ sync log (`sync_type = "review"`). Detail:
   either is off). Omitting `start_date` returns the member's entire history.
 - **Officer exports** (`POST /training/reports/export`, `training.manage`):
   `compliance`, `individual`, `member_records` (bulk, all active members),
-  `hours_summary`, and `certification` as CSV. PDF is available only for
+  `hours_summary`, and `certification` as CSV. `member_records` and
+  `certification` end with a **Source** column (provider name, **Imported** or
+  **The Logbook**) _(2026-11-19, #4355)_, labelled from
+  `training_record_source.load_source_lookup`, which loads every label before
+  the server-side cursor opens. PDF is available only for
   `individual`, `member_records`, and `compliance`; bulk PDFs are merged with
   `pypdf` (an empty result gets a placeholder page). An unknown `report_type`
   returns 400.

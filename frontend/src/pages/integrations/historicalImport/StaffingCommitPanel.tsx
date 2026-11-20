@@ -20,9 +20,11 @@ import type {
   StaffingCommitPreview,
   StaffingUnfilledView,
 } from '../../../modules/integrations/types/historicalImport';
+import { HistoricalUndoStep } from '../../../modules/integrations/types/historicalImport';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import MembersToDecide from './MembersToDecide';
+import StepUndo from './StepUndo';
 
 const PAGE_SIZE = 25;
 
@@ -126,7 +128,7 @@ const StaffingCommitPanel: React.FC<StaffingCommitPanelProps> = ({ importId }) =
         c.events ?? 0
       )} calendar events with ${formatNumber(c.check_ins ?? 0)} check-ins and ${formatNumber(
         c.outreach_seats ?? 0
-      )} outreach roles. No hours are credited. Running it again writes nothing twice; there is no batch undo.`,
+      )} outreach roles. No hours are credited. Running it again writes nothing twice, and you can undo it afterwards.`,
       confirmLabel: 'Write the roster',
       cancelLabel: 'Not yet',
       variant: 'info',
@@ -160,6 +162,18 @@ const StaffingCommitPanel: React.FC<StaffingCommitPanelProps> = ({ importId }) =
           .
         </p>
       )}
+
+      <StepUndo
+        importId={importId}
+        step={HistoricalUndoStep.STAFFING}
+        noun="roster's shifts, seats and events"
+        onUndone={() =>
+          void run(async () => {
+            setPreview(await historicalImportService.getStaffingCommit(importId));
+            await loadUnfilled(page);
+          }, 'Could not re-read the roster')
+        }
+      />
 
       <ul className="text-theme-text-secondary list-disc space-y-1 pl-5 text-sm">
         <li>

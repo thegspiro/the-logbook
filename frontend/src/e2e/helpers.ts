@@ -15,6 +15,15 @@ import type {
   TrainingSummaryReport,
 } from '../modules/reports/types';
 import type { KnowledgeTest } from '../types/knowledgeTest';
+import type {
+  AlbumSummary,
+  ClearanceStep,
+  HistoryDocumentType,
+  HistorySource,
+  HistoryTitle,
+  HonorRollEntry,
+  ImportSummary,
+} from '../modules/history/types';
 import type { SkillTemplateListItem, SkillTestListItem } from '../types/skillsTesting';
 import type { CourseCohort, CrewRecordingContext } from '../types/training';
 
@@ -320,6 +329,115 @@ const COMMUNITY_ENGAGEMENT = {
     },
   ],
 };
+
+const HISTORY_ALBUMS: AlbumSummary[] = [
+  {
+    id: 'album-1',
+    name: 'Centennial Parade, 1923',
+    description: "Photographs from the company's hundredth-anniversary parade down Main Street.",
+    level: 'members',
+    cover_media_id: null,
+    item_count: 42,
+  },
+  {
+    id: 'album-2',
+    name: 'Station 1 construction',
+    description: null,
+    level: 'draft',
+    cover_media_id: null,
+    item_count: 7,
+  },
+];
+
+const HISTORY_ROSTER_IMPORTS: ImportSummary[] = [
+  {
+    id: 'import-1',
+    status: 'committed',
+    source_filename: 'roster-1950-1975-transcribed-from-the-ledger.csv',
+    row_count: 118,
+    column_mapping: {},
+    summary: { created: 96, matched: 18, skipped: 4 },
+    expires_at: null,
+    created_at: '2026-10-02T14:00:00Z',
+    committed_at: '2026-10-02T14:20:00Z',
+  },
+  {
+    id: 'import-2',
+    status: 'draft',
+    source_filename: 'roster-1976-2000.csv',
+    row_count: 74,
+    column_mapping: {},
+    summary: null,
+    expires_at: '2026-12-01T00:00:00Z',
+    created_at: '2026-11-10T14:00:00Z',
+    committed_at: null,
+  },
+];
+
+const HISTORY_HONOR_ROLL: HonorRollEntry[] = [
+  {
+    id: 'e2e-history-2',
+    display_name: 'Robert Doyle',
+    titles: ['Assistant Engineer'],
+    service_years: 'c. 1923–1940',
+    death_date: '1940-02-01',
+    death_date_precision: 'month',
+    death_date_circa: false,
+    death_circumstances: 'Lost when the roof of the Grange Hall collapsed during an interior attack.',
+  },
+  {
+    id: 'honor-2',
+    display_name: 'William "Bill" Hargreaves-Montgomery',
+    titles: ['Firefighter'],
+    service_years: '1968–1979',
+    death_date: '1979-08-14',
+    death_date_precision: 'day',
+    death_date_circa: false,
+    death_circumstances: null,
+  },
+];
+
+const HISTORY_TITLES: HistoryTitle[] = [
+  { id: 'title-1', name: 'Chief', source: 'rank', sort_order: 1, is_retired: false, usage_count: 12 },
+  { id: 'title-2', name: 'Foreman', source: 'custom', sort_order: 2, is_retired: false, usage_count: 30 },
+  { id: 'title-3', name: 'Assistant Engineer', source: 'custom', sort_order: 3, is_retired: false, usage_count: 8 },
+  { id: 'title-4', name: 'Hose Company Steward', source: 'custom', sort_order: 4, is_retired: true, usage_count: 3 },
+];
+
+const HISTORY_SOURCES: HistorySource[] = [
+  { id: 'source-1', name: 'Smith family collection', sort_order: 1, is_retired: false, usage_count: 24 },
+  { id: 'source-2', name: 'County Historical Society', sort_order: 2, is_retired: false, usage_count: 9 },
+  { id: 'source-3', name: 'Old station scrapbook', sort_order: 3, is_retired: true, usage_count: 0 },
+];
+
+const HISTORY_DOCUMENT_TYPES: HistoryDocumentType[] = [
+  { id: 'doctype-1', name: 'Letter', sort_order: 1, is_retired: false, usage_count: 6 },
+  { id: 'doctype-2', name: 'Minutes', sort_order: 2, is_retired: false, usage_count: 14 },
+  { id: 'doctype-3', name: 'Newspaper clipping', sort_order: 3, is_retired: true, usage_count: 2 },
+];
+
+const HISTORY_CLEARANCE_STEPS: ClearanceStep[] = [
+  {
+    id: 'step-1',
+    step_order: 1,
+    name: 'Historian review',
+    position_id: 'pos-historian',
+    position_name: 'Department Historian',
+    blocked: false,
+  },
+  {
+    id: 'step-2',
+    step_order: 2,
+    name: 'Chief approval',
+    position_id: 'pos-chief',
+    position_name: 'Fire Chief',
+    blocked: false,
+  },
+];
+
+/** Answers a lookup list the way the API does: retired rows only on request. */
+const withRetired = <T extends { is_retired: boolean }>(rows: T[], request: Request): T[] =>
+  new URL(request.url()).searchParams.get('include_retired') === 'true' ? rows : rows.filter((row) => !row.is_retired);
 
 const TRAINING_CREW_CONTEXT: CrewRecordingContext = {
   can_record: true,
@@ -3586,7 +3704,21 @@ const routes = ({
 
   // History gallery: a recording and a photo with no thumbnail, so the page
   // is measured with its tiles and not with broken image requests.
-  ['**/api/v1/history/albums', () => []],
+  ['**/api/v1/history/albums', () => (empty ? [] : HISTORY_ALBUMS)],
+  ['**/api/v1/history/imports', () => (empty ? [] : HISTORY_ROSTER_IMPORTS)],
+  ['**/api/v1/history/honor-roll', () => (empty ? [] : HISTORY_HONOR_ROLL)],
+  // Titles, sources and document types are read with `?include_retired=…`;
+  // the settings screen asks for retired ones too, the pickers do not.
+  ['**/api/v1/history/titles?**', (request) => (empty ? [] : withRetired(HISTORY_TITLES, request))],
+  ['**/api/v1/history/sources?**', (request) => (empty ? [] : withRetired(HISTORY_SOURCES, request))],
+  ['**/api/v1/history/clearance/steps', () => (empty ? [] : HISTORY_CLEARANCE_STEPS)],
+  [
+    '**/api/v1/history/clearance/positions',
+    () => [
+      { id: 'pos-chief', name: 'Fire Chief' },
+      { id: 'pos-historian', name: 'Department Historian' },
+    ],
+  ],
   [
     '**/api/v1/history/media**',
     () => ({
@@ -3620,7 +3752,7 @@ const routes = ({
 
   // History documents: a letter and a scan with no preview, so the list is
   // measured with its tiles and not with broken image requests.
-  ['**/api/v1/history/document-types**', () => []],
+  ['**/api/v1/history/document-types**', (request) => (empty ? [] : withRetired(HISTORY_DOCUMENT_TYPES, request))],
   [
     '**/api/v1/history/documents**',
     () => ({

@@ -435,6 +435,11 @@ const ReviewRows: React.FC<ReviewRowsProps> = ({
   const [code, setCode] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // The lines the dialog listed when it opened. Excluding one of them usually
+  // settles the issue that joined it to the edited row, and the fresh analysis
+  // then names no issue linking the two; without this the excluded line would
+  // drop out of the dialog together with the button that includes it again.
+  const [openedRelated, setOpenedRelated] = useState<string[]>([]);
 
   const issuesByRow = useMemo(() => rowIssues(analysis), [analysis]);
   const rowsById = useMemo(() => new Map(analysis.rows.map((r) => [r.id, r])), [analysis.rows]);
@@ -490,10 +495,19 @@ const ReviewRows: React.FC<ReviewRowsProps> = ({
         : 'border-theme-surface-border text-theme-text-secondary'
     }`;
 
+  /** Lines sharing a row's issues; an issue naming more than ten is a member or unit question, not a clash. */
+  const relatedTo = (rowId: string): string[] =>
+    (issuesByRow.get(rowId) ?? [])
+      .flatMap((i) => (i.row_ids.length <= 10 ? i.row_ids : []))
+      .filter((id) => id !== rowId);
+  const openEditor = (rowId: string) => {
+    setOpenedRelated(relatedTo(rowId));
+    setEditingId(rowId);
+  };
+
   const editing = editingId ? rowsById.get(editingId) : undefined;
   const editingIssues = editing ? (issuesByRow.get(editing.id) ?? []) : [];
-  const relatedIds = new Set(editingIssues.flatMap((i) => (i.row_ids.length <= 10 ? i.row_ids : [])));
-  if (editing) relatedIds.delete(editing.id);
+  const relatedIds = new Set(editing ? [...openedRelated, ...relatedTo(editing.id)] : []);
   const related = [...relatedIds]
     .map((id) => rowsById.get(id))
     .filter((r): r is HistoryImportRow => r !== undefined)
@@ -697,7 +711,7 @@ const ReviewRows: React.FC<ReviewRowsProps> = ({
                           className="btn-icon"
                           aria-label={`Edit line ${row.line_number}`}
                           disabled={busy}
-                          onClick={() => setEditingId(row.id)}
+                          onClick={() => openEditor(row.id)}
                         >
                           <Pencil className="h-4 w-4" aria-hidden="true" />
                         </button>

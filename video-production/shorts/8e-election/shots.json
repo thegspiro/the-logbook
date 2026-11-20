@@ -1,0 +1,56 @@
+{
+  "script": "docs/youtube-scripts/08-quick-tips-and-shorts.md — SHORT 8E",
+  "title": "Run an Election",
+  "callout": "The Logbook Elections — secure digital voting",
+  "endCard": {
+    "headline": "Try The Logbook",
+    "sub": "Free & Open Source",
+    "url": "github.com/thegspiro/the-logbook"
+  },
+  "screen": {
+    "width": 820,
+    "height": 1180
+  },
+  "shots": [
+    {
+      "id": "hook",
+      "say": "Run a department election digitally, securely, and faster than paper ballots. Set it up on a tablet or computer.",
+      "caption": "Department elections, digitally"
+    },
+    {
+      "id": "create",
+      "say": "Tap Create Election. Name it, set when voting opens and closes, and add the offices being contested.",
+      "caption": "Name, voting window, offices"
+    },
+    {
+      "id": "runoffs",
+      "say": "Choose Majority Required and turn on automatic runoffs. If nobody wins outright, a runoff is drafted for you.",
+      "caption": "Majority required, automatic runoffs on"
+    },
+    {
+      "id": "candidates",
+      "say": "Then add candidates to each office, each with a statement.",
+      "caption": "Add candidates and statements"
+    },
+    {
+      "id": "open",
+      "say": "Open the election, then send the ballot emails. Each eligible member gets their own ballot link.",
+      "caption": "Open Election → Send Ballot Emails"
+    },
+    {
+      "id": "vote",
+      "say": "Members vote from any device, from that link or by signing in.",
+      "caption": "Vote from any device"
+    },
+    {
+      "id": "results",
+      "say": "When voting closes, the results are counted automatically, and closing the election releases them.",
+      "caption": "Counted automatically"
+    },
+    {
+      "id": "outro",
+      "say": "Secret ballots by default. No more counting paper until midnight.",
+      "caption": "Secret ballots by default"
+    }
+  ]
+}

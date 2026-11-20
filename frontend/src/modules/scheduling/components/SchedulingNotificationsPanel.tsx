@@ -76,6 +76,10 @@ const DEFAULT_REMINDER_SETTINGS: ShiftReminderSettings = {
   cc_emails: [],
 };
 
+// Only what shows before the settings load. The server reports
+// EquipmentCheckAlertSettings' defaults (backend schemas/organization.py) for
+// a department that never saved this section, and the failure-alert sender
+// reads that same model, so these must match it.
 const DEFAULT_EQUIPMENT_ALERT_SETTINGS: EquipmentCheckAlertSettings = {
   notify_on_failure: true,
   notify_roles: ['chief', 'captain'],
