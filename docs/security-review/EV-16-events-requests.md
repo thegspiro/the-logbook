@@ -26,9 +26,9 @@ attachment delete),
 [#4119](https://github.com/thegspiro/the-logbook/pull/4119) (pass 14,
 watchdog pickup, 0 fixed, 0 flagged — owner-decision batch work reviewed
 clean),
-(pass 15, watchdog pickup, 1 fixed — EV-31, a rank-only organizer silently
-skipped the guest-headcount reminder, see below for this pass's own PR
-number)
+[#4473](https://github.com/thegspiro/the-logbook/pull/4473) (pass 15,
+watchdog pickup, 1 fixed — EV-31, a rank-only organizer silently skipped
+the guest-headcount reminder)
 
 **Backend:** `api/v1/endpoints/events.py` (63 routes),
 `api/v1/endpoints/event_requests.py` (23 routes — includes the
