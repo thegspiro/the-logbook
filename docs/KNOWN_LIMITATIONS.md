@@ -1,5 +1,51 @@
 # Known Limitations & Open Decisions
 
+## CI — What a Pull Request No Longer Runs (Owner Decisions, 2026-11-19)
+
+Until this date every pull request and every merge to `main` started all 22 CI
+jobs, about 340 runner-minutes. The account runs a limited number of jobs at
+once, so jobs waited for a runner: on 2026-11-19 the jobs of #4435's run on
+`main` waited over three hours to start 72 minutes of work, and eleven merges
+inside three minutes queued about 240 jobs. A pull request that changed only
+prose (#4437) ran the full suite.
+
+### Decided
+
+- **A pull request runs only the suites its changes can affect.** The rules are
+  in `scripts/ci_changed_areas.py` and summarized under "What CI Runs, by What
+  Changed" in `CLAUDE.md`. The lint jobs, Migration Chain, the docs link check
+  and both unit suites always run.
+- **`main` runs one CI run at a time, in full, and it is never cancelled.** Of
+  the merges that land while it runs, only the newest waits; the ones between
+  get no run of their own.
+- **MariaDB 10.11 is tested on `main`, in the merge queue and on a manual run,
+  not on pull requests.** Pull requests test MySQL 8.0.
+
+### Accepted
+
+- **A break that only a skipped suite can see is found after the merge, on
+  `main`.** That covers MariaDB-only SQL (`docker-compose.arm.yml` ships
+  MariaDB), and a suite skipped by area that turns out to depend on the other
+  side. Two cases of the second kind are known and were measured: no Playwright
+  spec reads outside `frontend/`, and the backend tests that parse frontend
+  sources are all in the unit suite, which always runs. A database-backed test
+  that starts reading a frontend file would not run on a frontend-only pull
+  request.
+- **A red run on `main` may cover several merges.** When merges land faster
+  than a run completes, the run that finds a failure tests more than one
+  merged pull request, and the one at fault has to be worked out from the
+  failing test.
+- **Every gated job waits for the `changes` job first.** It takes seconds, but
+  it is one more wait for a runner when runners are short.
+
+### What would reopen this
+
+- **A failure reaching `main` that a pull request run would have caught.** Move
+  that suite to the always-run set, or classify the path it depends on.
+- **A department reporting a MariaDB-only fault.** Put the MariaDB legs back on
+  pull requests: `decide()` in `scripts/ci_changed_areas.py` chooses the
+  engines.
+
 ## Migration Chain — Branches Need Not Be Up to Date to Merge (Owner Decision, 2026-11-16)
 
 Two pull requests that each add an Alembic migration on the same parent both
