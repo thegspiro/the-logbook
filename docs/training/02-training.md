@@ -485,8 +485,42 @@ The record keeps its own name, date and hours. A record an officer already
 linked to a course by hand keeps its course. A course that grants a
 qualification updates the members' qualifications. Each link is audited.
 
-> **Important:** there is no undo screen. To unlink, edit the individual
-> records. Linking changes members' compliance; that is its purpose.
+Linking changes members' compliance; that is its purpose. Because it can be
+wrong — a suggestion that looked right, a course chosen from the wrong row —
+each link can now be undone _(2026-11-19)_.
+
+#### Undoing a link
+
+Below the names, **Recent links** lists the department's links, newest first,
+ten to a page: the name and the course it went to ("CPR Refresher → CPR for
+Healthcare Providers"), how many records it changed, and who linked it and
+when. Select **Undo** on a link and confirm (**Undo link** / **Keep it**).
+
+- Each record goes back to **no course**, with the category and training type
+  it had before the link, so it stops counting toward the requirements that
+  name that course.
+- **A record edited since the link keeps its course.** If an officer changed
+  the record after linking it (more than two minutes after, so the link's own
+  write does not count), the edit is theirs and is left alone. The message
+  after undoing counts both: "12 records unlinked; 2 records changed since
+  kept CPR for Healthcare Providers."
+- Members' qualifications are re-checked. A qualification that only the link
+  supported is removed, exactly as voiding the record would.
+- A link can be undone once. The row then reads "undone <date> by <name>" and
+  has no **Undo** button; link the name again to restore it.
+- **Links made before 2026-11-19 are not listed and cannot be undone** — they
+  were not recorded. Edit those records one at a time.
+
+#### The Training Admin badge
+
+When the course library has a suggested match for any unlinked name, Training
+Admin's attention list shows "N training names can be linked to a course,
+across N records" with **Review links**, and **Curriculum → Course Links**
+carries the count as a badge. Only names with a suggestion count: **Link all
+suggested** clears every one of them, whereas a name the library cannot match
+would hold the badge up for good with nothing to click. The count is read
+whenever the hub loads, so a provider sync or CSV import that brings in a new
+name shows next time, and it drops as soon as you link, link all or undo.
 
 When every record names a library course, the page says "Every training record
 names a library course."
@@ -591,7 +625,10 @@ later"** — the way most officers describe a schedule out loud.
    - tick **Skip this class** to leave one out of this intake;
    - tick any suggested holidays to skip them, then select **Recalculate**.
 6. **Roster** — select the members taking the course. They are enrolled in
-   the pipeline and added to every class on their calendar.
+   the pipeline and added to every class on their calendar. Only current
+   members (active or probationary) are listed; a former member sent anyway
+   by an out-of-date screen is skipped with the warning "A selected member is
+   no longer a current member." _(2026-11-19)_
 7. **Generate** — review the summary. If the course has no pipeline yet,
    **Build a matching pipeline** is ticked for you (untick it if you do not want
    one); if it already has one, members are enrolled in that pipeline instead.
@@ -3708,7 +3745,11 @@ instead of picking a scheduled shift.
 6. Add an **overall shift narrative**.
 7. **Search for each crew member and select them to add them.** A member you
    add arrives ticked. The tick box decides who gets a report, and the **✕**
-   removes the member from the list.
+   removes the member from the list. The search finds current members only
+   (active or probationary) _(2026-11-19)_; a report not tied to a scheduled
+   shift is refused if it names a former member ("Only current members can be
+   chosen as crew members"). A report filed against a scheduled shift is not
+   checked, since someone who worked that shift may have left since.
 8. For each crew member who needs one, select **Evaluate** to open their
    section:
    - performance rating (1–5 stars);
@@ -3949,7 +3990,10 @@ is still unmatched — "Categories (7 unmapped)".
   than the provider's sync window, which a later sync would never bring back.
   Setting it back to **Not mapped** removes the match and takes their waiting
   completions off the member again. Completions already imported keep the
-  member they were imported to. A deleted member cannot be chosen.
+  member they were imported to. A deleted member cannot be chosen, and the
+  list offers current members only (active or probationary) _(2026-11-19)_; a
+  user already matched to someone who has since left stays matched and still
+  shows that member's name.
 
 Users are also matched automatically by email on each sync. Putting the email
 the provider uses on the member's profile still works. Once you set or clear a
@@ -4174,6 +4218,12 @@ department is not on the map.
 
 - The heat-map is read when the tab opens. Switch away and back to see an
   evaluation recorded since.
+- **On a phone or narrow window** _(2026-11-20)_ the map stays a grid and
+  scrolls both ways inside its own box. The member column is pinned on the
+  left and the skill names along the top, so you always know whose row and
+  which skill a cell is; a fade and chevron on an edge mean there is more that
+  way. Long member names wrap within the pinned column rather than being cut
+  off. On a keyboard, tab into the map and use the arrow keys to scroll it.
 - An active member with no evaluations appears as a row of dashes, not left
   off, so a gap in the roster is visible.
 
@@ -4264,8 +4314,16 @@ covers when one is linked; the Add form has no field for it. **Status** reads:
 ### Assigning Instructors to Sessions
 
 When creating a training session, choose a **Lead Instructor**. The list shows
-every member; it does not check instructor qualifications. Check the
-Instructors list yourself before you assign someone.
+every current member (active or probationary); it does not check instructor
+qualifications. Check the Instructors list yourself before you assign someone.
+
+Former members — the archived, retired, dropped and inactive accounts a roster
+import brings in — are not offered, here or when adding an instructor
+qualification _(2026-11-19)_. A session that already names an instructor who
+has since left keeps them, shown as "(former member)", and saves unchanged; the
+server refuses only a newly chosen former member ("Only current members can be
+chosen as the lead instructor"). A course's named instructor fills the field
+only when it matches a current member.
 
 ### Edge Cases
 
@@ -4569,6 +4627,9 @@ Configuration**).
 | An outside integration is not syncing                  | Check the provider's settings and sync history, select **Test**, and check the user matching.                                                                                                                                                                                    |
 | Recertification reminders are not sending              | Check: (1) the certification has an expiry date; (2) a pathway's renewal window is set; (3) email is set up for your department. If all three are right, ask your system administrator to check the reminder schedule.                                                           |
 | The competency heat-map is out of date                 | It is read when the Competency tab opens. Switch away and back to see an evaluation recorded since.                                                                                                                                                                              |
+| Reordering said **Failed to reorder requirements**     | Moving a pipeline requirement up or down showed this, yet the order had changed. Fixed 2026-11-19: the new order was always saved; the error came from building the reply. Reload the pipeline to confirm the order, then carry on.                                              |
+| A linked course name was wrong                         | Open **Curriculum → Course Links**, find it under **Recent links** and select **Undo**. Links made before 2026-11-19 are not listed; edit those records individually.                                                                                                            |
+| A member who has left is missing from a member list    | Pickers offer current members only (active or probationary). A record that already names a former member still shows them, usually marked "(former member)", and saves unchanged.                                                                                                |
 | Effectiveness scores are not showing                   | Scores appear only once at least one evaluation has been submitted.                                                                                                                                                                                                              |
 
 ---

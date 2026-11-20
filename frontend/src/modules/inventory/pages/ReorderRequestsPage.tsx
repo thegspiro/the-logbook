@@ -1146,7 +1146,7 @@ export const ReorderRequestsPage: React.FC = () => {
         {loading && requests.length === 0 ? (
           <div className="text-theme-text-muted py-12 text-center">Loading...</div>
         ) : requests.length === 0 ? (
-          <div className="card-secondary rounded-lg py-12 text-center">
+          <div className="card-secondary rounded-lg px-4 py-12 text-center">
             <Package className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
             <p className="text-theme-text-muted">No reorder requests found</p>
             <button onClick={() => setShowCreate(true)} className="btn-info btn-md mt-3">

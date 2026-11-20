@@ -26,7 +26,7 @@ been through a review pass.
 | A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ✅     |
 | A7  | Dashboard & action items       | `endpoints/dashboard.py` (1452 L, 7 routes), `services/attendance_dashboard_service.py` (329 L), `dashboard_widget_service.py`; `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`, `components/dashboard/`                                             | DASH   | ✅     |
 | A8  | Locations & kiosk              | `endpoints/locations.py` (434 L, 8 routes), `services/location_service.py` (394 L), `api/public/display.py` (550 L, 4 routes); `pages/LocationKioskPage.tsx`, `RoomCheckInPage.tsx`, `RoomQRCodesPage.tsx`                                                                | LOC    | ✅     |
-| A9  | Platform ops & data lifecycle  | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (165 L), `data_export_service.py` (192 L), `separation_of_duties.py` (70 L, 20 call sites in 8 modules)                                                                                           | OPS    | ⬜     |
+| A9  | Platform ops & data lifecycle  | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (165 L), `data_export_service.py` (192 L), `separation_of_duties.py` (70 L, 20 call sites in 8 modules)                                                                                           | OPS    | ✅     |
 
 ## Tier B — second pass over the audited 27
 
@@ -3612,6 +3612,22 @@ secrets redacted for non-admins. See
   and an invalid zone throws in the frontend's formatters); membership pipeline
   (LOC10-4, still open there). Gate: typecheck, lint, flake8 and black clean; 301
   locations, display, kiosk and guest tests pass. See locations-kiosk.md → Pass 4. Next: A9 platform ops & data lifecycle.
+- **A9 platform ops & data lifecycle ✅ (pass 4).** Reviewed the delta since pass
+  3: audit shipping in chain order (SEC2-28-10), the data export's waiver
+  sections and `badge_code` exclusion, and all 28 separation-of-duties call sites
+  (20 at pass 3). Verified: the shipping watermark kept its meaning across the
+  switch (`chain_seq` backfilled to `id`), the export carries no credential
+  (every column of `User` and the 26 exported tables swept), and each guard pairs
+  the actor with the right person. **1 fix:** OPS-13 (LOW, docs), the wiki said
+  acknowledged rows are never re-shipped and the OPS-7 entry named the id
+  headers for deduplication; both now say at-least-once and the `Seq` headers.
+  **1 flagged:** OPS-14 (LOW), a driver-exception requester or beneficiary
+  cannot deny their own request, unlike every other denial in the app; the
+  panel matches the backend, so it may be intended, and it is in
+  KNOWN_LIMITATIONS for a decision. **Earlier flags settled:** OPS-5, 6 and 8
+  resolved; OPS-7 accepted by the owner. Gate: typecheck, lint, flake8, black and
+  the docs link check clean; no application code changed. See platform-ops.md →
+  Pass 4. Tier A's fourth pass is complete; next: B1 medical-screening.
 - **B1 medical-screening ✅ (pass 6).** Reviewed the three commits since the
   security rotation's pass 15 (expiry reminders, `screening_type` and
   `requirement_id` encrypted, the requirement-link race fix) and the open list,

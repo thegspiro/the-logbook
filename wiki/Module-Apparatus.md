@@ -120,7 +120,22 @@ DELETE /api/v1/scheduling/apparatus/{id}     # Delete basic apparatus
   no fuel type.
 - **Archiving takes a disposal record** — method (sold, traded, donated,
   scrapped), date, reason and notes, plus buyer details for a sale. Archive
-  from the apparatus page; the list row has no Archive button.
+  from the apparatus page; the list row has no Archive button. Before
+  2026-11-19 (#4390) archiving answered 500 **after** committing — the
+  response lazy-loaded the type and status on the async session — so a user
+  who retried got "Apparatus is already archived". `archive_facility` and
+  `restore_facility` had the same fault and the same fix: each returns the
+  record through its own eager-loading `get_*`.
+- **Field errors and the single-save rule** _(2026-11-20, forms batch 23)_.
+  The add / edit form and the Documents tab's upload form use `FormField`, with
+  an `ErrorSummary` on the form. Adding refuses until every flagged box is
+  fixed; an edit leaves a refused key out of the payload (so the stored value
+  stands), saves the rest and keeps the box flagged. A status that requires a
+  reason is never saved without one. Numbers are checked against the
+  server's bounds before sending; Cancel and leaving ask before discarding.
+  The facility overview, files, settings lookup dialog and the six extended
+  sections (one shared `ResourceSection`) follow the same rule (batches 22 and
+  23). See `docs/FORMS_REVIEW_2026-11-05.md`.
 - **Apparatus document sub-folders** (Maintenance, Manuals, Inspections) are
   gated on apparatus and document permissions, not facilities permissions.
 

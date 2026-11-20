@@ -63,6 +63,22 @@ def outreach_event_clause(organization_id: str) -> ColumnElement[bool]:
     )
 
 
+async def is_outreach_event(
+    db: AsyncSession, organization_id: str, event_id: str
+) -> bool:
+    """Whether one event counts as outreach, by the same rule as the counts."""
+    found = await db.scalar(
+        select(Event.id).where(
+            # Also inside outreach_event_clause; repeated here so the by-id
+            # filter is visible where the id is used (CLAUDE.md pitfall #14).
+            Event.organization_id == str(organization_id),
+            Event.id == str(event_id),
+            outreach_event_clause(str(organization_id)),
+        )
+    )
+    return found is not None
+
+
 def period_dates(period: str, today: date) -> tuple[date, date]:
     """Inclusive-start, exclusive-end calendar dates for a safe period."""
     if period == "rolling_30":

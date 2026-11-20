@@ -213,7 +213,11 @@ order, to your collector or SIEM as NDJSON batches:
   to deduplicate on, since ids in a batch need not be ascending).
 - A durable high-water mark (`audit_ship_state`) advances **only** after the
   collector answers 2xx, per batch. A failed delivery is retried on the next
-  run; acknowledged rows are never re-shipped.
+  run, and a run never re-sends a batch it already had acknowledged. Delivery
+  is still **at least once**: a scheduled run and a manual
+  `/scheduled/run-task?task=audit_log_ship` that overlap can each send the
+  same later batches (OPS-7, accepted by the owner on 2026-11-01). Deduplicate
+  on the `Seq` headers.
 - Batches are bounded per run, so first enablement on an old install drains
   gradually instead of blocking the scheduler.
 

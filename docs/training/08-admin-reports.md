@@ -294,6 +294,11 @@ Account, Email Templates and the others — works the same way:
 The **Profile**, **Contact** and **Addresses** sections hold:
 
 - **Department Name** and **Slug** (the short name used in links)
+- **Short Name** _(2026-11-20)_, up to 20 characters, for example "FCVFD".
+  It is used where the full name will not fit; today, that is the label
+  beside the department's own shifts in a member's **My Hours** list, where
+  they sit among shifts worked for other departments. Leave it blank to use
+  the full name. Emails still name the department in full.
 - **Department Type** and **Identifiers** (FDID, State ID)
 - **Timezone** — the department's clock. See
   [The department's timezone is the clock](#the-departments-timezone-is-the-clock).
@@ -1830,6 +1835,12 @@ See [The email link address](#the-email-link-address) and
   Pressing it with no changes does nothing.
 - **Discard** appears when you have unsaved changes. It puts the editor back to
   the last saved version.
+- **A refused field does not block the rest** _(2026-11-20)_. **Save** is no
+  longer greyed out while a CC or BCC list holds a bad address. A refused
+  subject, body or copy list is named under its field and left unsaved, still
+  holding what you typed, so you can correct it; everything else saves. Before,
+  one bad address held back the whole template without saying which box was
+  wrong.
 
 ![The template editor with unsaved changes, showing Discard beside Save](./images/08-56-template-discard.png)
 
