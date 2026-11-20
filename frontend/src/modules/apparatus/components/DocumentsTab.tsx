@@ -65,6 +65,8 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
   const tz = useTimezone();
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canUpload = checkPermission('apparatus.edit') || checkPermission('apparatus.manage');
+  // Deleting a photo or document takes manage alone on the backend.
+  const canRemove = checkPermission('apparatus.manage');
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -240,15 +242,17 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
                   {photo.photoType && <p className="text-theme-text-muted text-xs capitalize">{photo.photoType}</p>}
                   <div className="mt-2 flex items-center justify-between">
                     <span className="text-theme-text-muted text-xs">{formatDate(photo.uploadedAt, tz)}</span>
-                    <button
-                      onClick={() =>
-                        setDeleteTarget({ type: 'photo', id: photo.id, name: photo.title || photo.fileName })
-                      }
-                      className="text-theme-text-muted p-1 transition-colors hover:text-red-600"
-                      title="Delete photo"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {canRemove && (
+                      <button
+                        onClick={() =>
+                          setDeleteTarget({ type: 'photo', id: photo.id, name: photo.title || photo.fileName })
+                        }
+                        className="text-theme-text-muted p-1 transition-colors hover:text-red-600"
+                        title="Delete photo"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -422,13 +426,15 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
                       </a>
                     )
                   )}
-                  <button
-                    onClick={() => setDeleteTarget({ type: 'document', id: doc.id, name: doc.title })}
-                    className="text-theme-text-muted p-1 transition-colors hover:text-red-600"
-                    title="Delete document"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {canRemove && (
+                    <button
+                      onClick={() => setDeleteTarget({ type: 'document', id: doc.id, name: doc.title })}
+                      className="text-theme-text-muted p-1 transition-colors hover:text-red-600"
+                      title="Delete document"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

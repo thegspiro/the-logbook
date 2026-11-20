@@ -1104,8 +1104,7 @@ class ApparatusService:
                 )
 
         update_data = field_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(custom_field, field, value)
+        apply_updates(custom_field, update_data, skip={"id", "organization_id"})
 
         await self.db.commit()
         await self.db.refresh(custom_field)
@@ -1783,8 +1782,11 @@ class ApparatusService:
         )
 
         update_data = operator_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(operator, field, value)
+        apply_updates(
+            operator,
+            update_data,
+            skip={"id", "organization_id", "apparatus_id", "user_id"},
+        )
 
         await self.db.commit()
 
@@ -1907,8 +1909,9 @@ class ApparatusService:
                 allow_none=True,
                 label="inventory item",
             )
-        for field, value in update_data.items():
-            setattr(equipment, field, value)
+        apply_updates(
+            equipment, update_data, skip={"id", "organization_id", "apparatus_id"}
+        )
 
         await self.db.commit()
         await self.db.refresh(equipment)
