@@ -24,6 +24,9 @@ import type {
   HonorRollEntry,
   ImportSummary,
 } from '../modules/history/types';
+import type { TemplateListItem as MinutesOutline } from '../modules/minutes/types/minutes';
+import type { AttendanceDashboard, AttendanceDashboardMember } from '../services/meetingsServices';
+import type { AttendanceWaiverRequest } from '../types/attendanceWaiver';
 import type { SkillTemplateListItem, SkillTestListItem } from '../types/skillsTesting';
 import type { CourseCohort, CrewRecordingContext } from '../types/training';
 
@@ -438,6 +441,173 @@ const HISTORY_CLEARANCE_STEPS: ClearanceStep[] = [
 /** Answers a lookup list the way the API does: retired rows only on request. */
 const withRetired = <T extends { is_retired: boolean }>(rows: T[], request: Request): T[] =>
   new URL(request.url()).searchParams.get('include_retired') === 'true' ? rows : rows.filter((row) => !row.is_retired);
+
+const attendanceRow = (
+  overrides: Partial<AttendanceDashboardMember> & Pick<AttendanceDashboardMember, 'user_id' | 'name'>
+): AttendanceDashboardMember => ({
+  membership_tier: 'active',
+  tier_name: 'Active',
+  hire_date: '2018-04-01',
+  attendance_pct: 83.3,
+  meetings_attended: 10,
+  meetings_waived: 1,
+  meetings_on_leave: 0,
+  meetings_absent: 1,
+  total_meetings: 12,
+  eligible_meetings: 12,
+  voting_eligible: true,
+  voting_blocked_reason: null,
+  ...overrides,
+});
+
+const MEETING_ATTENDANCE_DASHBOARD: AttendanceDashboard = {
+  generated_at: '2026-11-15T12:00:00Z',
+  period_months: 12,
+  meeting_type_filter: null,
+  total_meetings_in_period: 12,
+  members: [
+    attendanceRow({
+      user_id: 'e2e-user-id',
+      name: 'E2E User',
+      attendance_pct: 100,
+      meetings_attended: 12,
+      meetings_waived: 0,
+      meetings_absent: 0,
+    }),
+    attendanceRow({ user_id: 'crew-2', name: 'Alex Johnson' }),
+    attendanceRow({
+      user_id: 'crew-3',
+      name: 'Maria Rodriguez-Castellanos',
+      membership_tier: 'probationary',
+      tier_name: 'Probationary',
+      hire_date: '2026-03-01',
+      attendance_pct: 37.5,
+      meetings_attended: 3,
+      meetings_waived: 0,
+      meetings_absent: 5,
+      total_meetings: 8,
+      eligible_meetings: 8,
+      voting_eligible: false,
+      voting_blocked_reason: 'Attended 37.5% of business meetings in the last 12 months; 50% is required to vote.',
+    }),
+    attendanceRow({
+      user_id: 'crew-4',
+      name: 'Sam Lee',
+      attendance_pct: 66.7,
+      meetings_attended: 6,
+      meetings_on_leave: 3,
+      meetings_waived: 0,
+      meetings_absent: 3,
+      eligible_meetings: 9,
+    }),
+  ],
+  summary: { total_members: 4, avg_attendance_pct: 71.9, voting_eligible_count: 3, voting_blocked_by_attendance: 1 },
+};
+
+const meetingWaiver = (
+  overrides: Partial<AttendanceWaiverRequest> & Pick<AttendanceWaiverRequest, 'id' | 'status' | 'member_name'>
+): AttendanceWaiverRequest => ({
+  workflow: 'meeting',
+  user_id: 'crew-2',
+  event_id: 'evt-business-nov',
+  event_title: 'November Business Meeting',
+  event_start: '2026-11-20T00:30:00Z',
+  session_date: '2026-11-19',
+  category: 'Work',
+  reason: 'Working a double shift at the hospital that evening.',
+  submitted_at: '2026-11-12T15:00:00Z',
+  decided_at: null,
+  decided_by: null,
+  decided_by_name: null,
+  chief_override: false,
+  expires_at: '2026-11-26T00:30:00Z',
+  info_requested_at: null,
+  reconfirm_requested_at: null,
+  can_withdraw: false,
+  can_respond: false,
+  can_confirm: false,
+  can_request_info: false,
+  can_decide: false,
+  can_override: false,
+  attachments: [],
+  actions: [],
+  ...overrides,
+});
+
+const MEETING_WAIVER_REQUESTS: AttendanceWaiverRequest[] = [
+  meetingWaiver({
+    id: 'mwr-1',
+    status: 'pending',
+    member_name: 'Alex Johnson',
+    can_decide: true,
+    can_request_info: true,
+  }),
+  meetingWaiver({
+    id: 'mwr-2',
+    status: 'approved',
+    member_name: 'Maria Rodriguez-Castellanos',
+    user_id: 'crew-3',
+    category: 'Family',
+    reason: null,
+    event_title: 'October Business Meeting',
+    event_start: '2026-10-16T00:30:00Z',
+    session_date: '2026-10-15',
+    submitted_at: '2026-10-10T15:00:00Z',
+    decided_at: '2026-10-11T13:00:00Z',
+    decided_by: 'e2e-user-id',
+    decided_by_name: 'E2E User',
+    expires_at: null,
+  }),
+  meetingWaiver({
+    id: 'mwr-3',
+    status: 'denied',
+    member_name: 'Sam Lee',
+    user_id: 'crew-4',
+    category: null,
+    event_title: 'Special Meeting — Apparatus Purchase',
+    event_start: '2026-09-25T00:30:00Z',
+    session_date: '2026-09-24',
+    submitted_at: '2026-09-24T22:00:00Z',
+    decided_at: '2026-09-25T13:00:00Z',
+    decided_by: 'e2e-user-id',
+    decided_by_name: 'E2E User',
+    expires_at: null,
+  }),
+];
+
+/** The approver queue reads pending requests and the full history with separate calls. */
+const meetingWaiverPage = (request: Request) => {
+  const status = new URL(request.url()).searchParams.get('status');
+  const items = status ? MEETING_WAIVER_REQUESTS.filter((row) => row.status === status) : MEETING_WAIVER_REQUESTS;
+  return { items, total: items.length, skip: 0, limit: 50 };
+};
+
+const MINUTES_OUTLINES: MinutesOutline[] = [
+  {
+    id: 'outline-1',
+    name: 'Monthly Business Meeting',
+    meeting_type: 'business',
+    is_default: true,
+    section_count: 11,
+    created_at: '2026-01-05T12:00:00Z',
+  },
+  {
+    id: 'outline-2',
+    name: 'Special Meeting — Single Item of Business',
+    meeting_type: 'special',
+    is_default: true,
+    section_count: 5,
+    created_at: '2026-02-01T12:00:00Z',
+  },
+  {
+    id: 'outline-3',
+    name: 'Board of Directors',
+    meeting_type: 'board',
+    is_default: false,
+    section_count: 8,
+    created_at: '2026-03-01T12:00:00Z',
+  },
+];
 
 const TRAINING_CREW_CONTEXT: CrewRecordingContext = {
   can_record: true,
@@ -4517,6 +4687,30 @@ const routes = ({
   ['**/api/v1/users/leave-requests/config', () => ({ requests_enabled: true })],
 
   ['**/api/v1/admin-hours/summary**', () => ({ totalHours: 8 })],
+
+  [
+    '**/api/v1/meetings/attendance/dashboard**',
+    () =>
+      empty
+        ? { ...MEETING_ATTENDANCE_DASHBOARD, members: [], total_meetings_in_period: 0 }
+        : MEETING_ATTENDANCE_DASHBOARD,
+  ],
+  // List reads only (`?**`): the bare path is the member's submit, and
+  // `/policy`, `/mine` and a request's own id keep their own answers.
+  [
+    '**/api/v1/meetings/waiver-requests?**',
+    (request) => (empty ? { items: [], total: 0, skip: 0, limit: 50 } : meetingWaiverPage(request)),
+  ],
+  [
+    '**/api/v1/meetings/waiver-requests/policy/positions',
+    () => ({
+      positions: [
+        { id: 'pos-president', name: 'President' },
+        { id: 'pos-secretary', name: 'Recording Secretary' },
+      ],
+    }),
+  ],
+  ['**/api/v1/minutes-records/templates**', () => (empty ? [] : MINUTES_OUTLINES)],
 
   ['**/api/v1/training/module-config/my-training**', () => ({ hours_summary: { total_hours: 12 } })],
 

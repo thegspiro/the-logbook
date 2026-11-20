@@ -16,7 +16,65 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this commit)** (branch `claude/security-review-inventory-p16` —
+**PR [#4446](https://github.com/thegspiro/the-logbook/pull/4446)** (branch `claude/security-review-facilities-p16` — the
+plain `claude/security-review-facilities` has multiple merged PRs against it
+going back to pass 1 and must not be reused per CLAUDE.md Pitfall #24; no
+`-pN`-suffixed branch for this feature survives on the remote (GitHub
+deletes a head on merge), so `-p16` — the next pass number per
+`FAC-12-facilities.md`'s most recent `## Pass 15` section — was confirmed
+free with `git ls-remote --heads origin 'refs/heads/claude/security-review-facilities-p*'`):
+Feature 12 (Facilities), pass 16 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable via `ListAgents`).
+PR #4445 (Feature 11, Inventory, pass 16) had already merged (`ff815adf9`)
+before this iteration started. A fresh `list_pull_requests` (state `open`)
+found no `claude/security-review-*` head, and row 12 was the next `⬜` row.
+
+**0 fixed, 0 new findings.** Baseline `2ff2abf75` (PR #4108's merge, pass 15) — unlike the last several passes, a genuine ancestor of current `main`
+(`git merge-base --is-ancestor` succeeds), so no tree-diff workaround was
+needed. Real delta across the declared scope (33 files, +3205/−1981): a
+`facilities_service.py` response-completeness fix (`update_facility`/
+`restore_facility` now return the fully-loaded record via the existing,
+already-org-scoped `get_facility` rather than a bare refreshed object with
+unloaded relationships — correctness, not an authz change); two changes in
+the shared `documents_service.py` (new History-document delete protection,
+a check-request receipt lock-order addition), both already reviewed for
+Documents & legal's own invariants by PR #4440 and confirmed here to read,
+write or refuse on no `facility_*` table or `FacilityDocument`/
+`FacilityPhoto` row; and a 29-file frontend forms-UX rollout (the
+established `FormField`/`useFieldErrors`/`saveExceptRefused`/
+`useDiscardGuard` pattern already seen on other features) whose actual
+wire-payload builders (`formToPayload`, `OverviewSection.tsx`'s inline
+update builder) are unchanged or already use `blankToNull`/`numberOrNull`
+correctly under Pitfall #1. 49 unrelated migrations landed in this window;
+none names a `facility_*` table. No new route (102, AST-confirmed
+unchanged from pass 15); `check_route_permissions.py --strict` — 327 routes
+repo-wide, 0 errors/warnings. No permission/role prop changed on any
+Facilities route; a full grep sweep of the frontend diff found no risky
+pattern (XSS, blocking dialogs, storage, raw fetch, banned locale methods).
+FAC-30 (P2, owner-accepted "leave as is") re-confirmed the only standing
+item. Full write-up: `docs/security-review/FAC-12-facilities.md`'s **Pass
+16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 786
+revisions, single head `0d54dd90d6ba`; `check_route_permissions.py --strict`
+— 327 routes, 0 errors/warnings; `pytest tests/ -k "facilit"` (run under
+`python3.13`) — 321 passed, 1 pre-existing environment-only skip
+(`py_vapid`); `pytest tests/test_capacity_locking.py
+tests/test_org_scoping_ratchet.py tests/test_like_escaping.py
+tests/test_csv_writer_sweep.py tests/test_alembic_migrations.py
+tests/test_migration_create_all_tables.py` — 175 passed; `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings; `npx vitest
+run src/modules/facilities` — 204 passed (23 files, up from 170/22 at pass
+15).
+
+Row 12 → ✅ (pending this PR's merge); next is Feature 13 (Apparatus &
+NFC) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 16, PR #4445, merged), preserved for history</summary>
+
+**PR [#4445](https://github.com/thegspiro/the-logbook/pull/4445)** (branch `claude/security-review-inventory-p16` —
 the plain `claude/security-review-inventory` has multiple merged **and**
 closed-unmerged PRs against it going back to pass 3, so it must not be
 reused per CLAUDE.md Pitfall #24; `-p16` is the next pass number per
@@ -80,8 +138,9 @@ passed**, 1 pre-existing environment-only skip (`py_vapid`), 0 failed; `npm
 run typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings; `npx
 vitest run src/modules/inventory` — 1983 passed (127 files).
 
-Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
-re-check `list_pull_requests` fresh rather than trusting this note.
+Row 11 → ✅ (merged as `ff815adf9`); next was Feature 12 (Facilities).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 16, PR #4440, merged), preserved for history</summary>
@@ -26797,7 +26856,7 @@ iteration's commit" rule.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                                                                                                                                         | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ⬜     |

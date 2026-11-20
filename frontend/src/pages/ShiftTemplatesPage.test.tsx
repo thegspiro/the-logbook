@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import type { ShiftTemplateRecord } from '../modules/scheduling/services/api';
@@ -228,5 +228,41 @@ describe('ShiftTemplatesPage and patterns', () => {
       '/scheduling/admin/planning/patterns'
     );
     expect(mockGetPatterns).not.toHaveBeenCalled();
+  });
+});
+
+describe('ShiftTemplatesPage — an edit saved with a refused field stays open (batch 24)', () => {
+  beforeEach(() => {
+    mockGetTemplates.mockReset();
+    // A fresh list per call, as the server sends: the same array twice would
+    // let React skip the re-render this test is about.
+    mockGetTemplates.mockImplementation(() => Promise.resolve([buildTemplate(['officer'])]));
+    mockUpdateTemplate.mockReset();
+    mockUpdateTemplate.mockResolvedValue(buildTemplate(['officer']));
+    toastSuccess.mockReset();
+  });
+
+  it('keeps the dialog, the typed values and the flag after the list behind it refreshes', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit Day Shift' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.clear(screen.getByLabelText(/^Name/));
+    await user.type(screen.getByLabelText('Description'), 'Twelve hours');
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    await waitFor(() => expect(mockUpdateTemplate).toHaveBeenCalledTimes(1));
+    expect(mockUpdateTemplate.mock.calls[0]?.[1]).not.toHaveProperty('name');
+    // The save reloads the list; the dialog must survive that refresh.
+    await waitFor(() => expect(mockGetTemplates).toHaveBeenCalledTimes(2));
+    // Let the reloaded list render before looking at the dialog.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByLabelText('Description')).toHaveValue('Twelve hours');
+    expect(screen.getByLabelText(/^Name/)).toHaveAccessibleDescription('Enter a name for the template.');
+    expect(toastSuccess).not.toHaveBeenCalled();
   });
 });
