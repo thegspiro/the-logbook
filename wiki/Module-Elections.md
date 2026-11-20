@@ -812,7 +812,8 @@ An election links to either a meeting record (`meeting_id`) or an event of
 any type (`event_id`) from the **Linked Meeting** field on the detail page
 (**Link Meeting or Event**). Clearing the link sends explicit `null`s, and a
 no-op change shows no toast. The detail page also lists upcoming events for
-quick linking.
+quick linking: the next 100, as the create dialog does _(2026-11-19, #4424;
+it asked for 10, which were often all trainings)_.
 
 The **Create New Election** dialog loads meeting records (`GET /meetings`,
 gated by the Minutes module and `meetings.view` / `minutes.view`) and upcoming

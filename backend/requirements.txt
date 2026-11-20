@@ -149,6 +149,7 @@ pytest-asyncio==1.5.0
 pytest-cov==7.1.0
 pytest-randomly==5.1.0
 pytest-timeout==2.4.0
+pytest-xdist==3.8.0  # CI runs the no-database suite with -n auto
 hypothesis==6.170.15  # schemathesis 4.x requires >=6.130.12
 schemathesis==4.33.4
 # Pinned because these two move together. 4.24.3 called

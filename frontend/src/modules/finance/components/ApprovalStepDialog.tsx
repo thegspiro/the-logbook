@@ -126,7 +126,11 @@ export const ApprovalStepDialog: React.FC<ApprovalStepDialogProps> = ({
   };
 
   const isApproval = values.stepType === ApprovalStepType.APPROVAL;
-  const pickerOptions = optionsFor(values.approverType, approverOptions);
+  // Former members are not offered; one this step already names stays, marked.
+  const pickerOptions =
+    optionsFor(values.approverType, approverOptions)
+      ?.filter((o) => !o.former || o.value === values.approverValue)
+      .map((o) => (o.former ? { ...o, label: `${o.label} (former member)` } : o)) ?? null;
   // Keep a stored value selectable even when it is not in today's list (a
   // position renamed, a member removed) so opening the form does not blank it.
   const pickerItems =

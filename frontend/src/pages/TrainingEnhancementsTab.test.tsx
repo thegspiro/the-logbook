@@ -38,13 +38,20 @@ vi.mock('react-hot-toast', () => ({
 import TrainingEnhancementsTab from './TrainingEnhancementsTab';
 
 const MEMBERS = [
-  { id: 'b5b0c5d2-0000-4000-8000-000000000002', username: 'zwells', first_name: 'Zoe', last_name: 'Wells' },
+  {
+    id: 'b5b0c5d2-0000-4000-8000-000000000002',
+    username: 'zwells',
+    first_name: 'Zoe',
+    last_name: 'Wells',
+    status: 'active',
+  },
   {
     id: 'b5b0c5d2-0000-4000-8000-000000000001',
     username: 'aboone',
     first_name: 'Adam',
     last_name: 'Boone',
     membership_number: '114',
+    status: 'active',
   },
 ];
 
@@ -68,6 +75,25 @@ describe('TrainingEnhancementsTab instructor qualifications', () => {
 
   // The form asked for a raw member UUID in a text box, which nobody filling
   // it in has to hand; the backend's InstructorQualificationCreate.user_id is a UUID.
+  it('does not offer a former member', async () => {
+    getUsers.mockResolvedValue([
+      ...structuredClone(MEMBERS),
+      {
+        id: 'b5b0c5d2-0000-4000-8000-000000000003',
+        username: 'lpark',
+        first_name: 'Lee',
+        last_name: 'Park',
+        status: 'archived',
+      },
+    ]);
+    const user = userEvent.setup();
+    const dialog = await openAddModal(user);
+
+    const member = within(dialog).getByRole('combobox', { name: /Member/ });
+    await waitFor(() => expect(within(member).getByRole('option', { name: 'Zoe Wells' })).toBeInTheDocument());
+    expect(within(member).queryByRole('option', { name: /Lee Park/ })).not.toBeInTheDocument();
+  });
+
   it('picks the member from the roster and sends their id', async () => {
     const user = userEvent.setup();
     const dialog = await openAddModal(user);

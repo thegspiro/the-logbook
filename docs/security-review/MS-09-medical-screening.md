@@ -1,6 +1,210 @@
 # Security Review — Medical Screening
 
-**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9, PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256) — corrected here from "(this PR)", which pass 9's own section never filled in after merge), 2026-10-18 (pass 10, PR [#3427](https://github.com/thegspiro/the-logbook/pull/3427)), 2026-10-23 (pass 11, PR [#3577](https://github.com/thegspiro/the-logbook/pull/3577)), 2026-10-25 (pass 12, PR [#3711](https://github.com/thegspiro/the-logbook/pull/3711)), 2026-10-28 (pass 13, PR [#3813](https://github.com/thegspiro/the-logbook/pull/3813)), 2026-11-01 (pass 14, PR [#3911](https://github.com/thegspiro/the-logbook/pull/3911) — corrected here from "(this PR)"), 2026-11-06 (pass 15) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, [#3256](https://github.com/thegspiro/the-logbook/pull/3256) (pass 9), [#3427](https://github.com/thegspiro/the-logbook/pull/3427) (pass 10), [#3577](https://github.com/thegspiro/the-logbook/pull/3577) (pass 11), [#3711](https://github.com/thegspiro/the-logbook/pull/3711) (pass 12), [#3813](https://github.com/thegspiro/the-logbook/pull/3813) (pass 13), [#3911](https://github.com/thegspiro/the-logbook/pull/3911) (pass 14), pass 15 (this PR)
+**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9, PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256) — corrected here from "(this PR)", which pass 9's own section never filled in after merge), 2026-10-18 (pass 10, PR [#3427](https://github.com/thegspiro/the-logbook/pull/3427)), 2026-10-23 (pass 11, PR [#3577](https://github.com/thegspiro/the-logbook/pull/3577)), 2026-10-25 (pass 12, PR [#3711](https://github.com/thegspiro/the-logbook/pull/3711)), 2026-10-28 (pass 13, PR [#3813](https://github.com/thegspiro/the-logbook/pull/3813)), 2026-11-01 (pass 14, PR [#3911](https://github.com/thegspiro/the-logbook/pull/3911) — corrected here from "(this PR)"), 2026-11-06 (pass 15, PR [#4098](https://github.com/thegspiro/the-logbook/pull/4098)), 2026-11-19 (pass 16) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, [#3256](https://github.com/thegspiro/the-logbook/pull/3256) (pass 9), [#3427](https://github.com/thegspiro/the-logbook/pull/3427) (pass 10), [#3577](https://github.com/thegspiro/the-logbook/pull/3577) (pass 11), [#3711](https://github.com/thegspiro/the-logbook/pull/3711) (pass 12), [#3813](https://github.com/thegspiro/the-logbook/pull/3813) (pass 13), [#3911](https://github.com/thegspiro/the-logbook/pull/3911) (pass 14), [#4098](https://github.com/thegspiro/the-logbook/pull/4098) (pass 15), pass 16 (this PR)
+
+---
+
+## Pass 16 (2026-11-19) — watchdog pickup: MS-18 now fully RESOLVED (type + requirement link + audit, built 2026-11-08, two days after pass 15 only reviewed the status half); new `screening_reminder_service.py` (W71b-4) reviewed for the first time; 0 new application-code findings; MS-15 (roster) re-confirmed OPEN, unchanged
+
+**Step 0.** A fresh `list_pull_requests` (state `open`) returned 0 results for
+a head branch starting `claude/security-review-`. PR #4436 (Feature 07, Users
+& organizations, pass 16) and PR #4438 (Feature 08, Membership pipeline, pass
+17, merge commit `81ed96b021`) had both already merged with no open rotation
+PR behind them. Row 09 (Medical screening, PHI) was confirmed the next `⬜` on
+a freshly pulled `main`. Re-checked again immediately before pushing this
+branch (`git ls-remote --heads origin 'refs/heads/claude/security-review-medical*'`
+— 0 results; a fresh `list_pull_requests` — still 0 `claude/security-review-*`
+heads), per this run's own collision warning: no concurrent session had
+claimed this feature.
+
+**Scope and a git-history trap worth recording for the next pass.** PR #4098
+(pass 15)'s recorded head (`bda52cff80a0eb2ac61bf9696142d8c598737be4`) and even
+its base (`e03cda0daa43c027d20c6d35654aac18f08b0d5f`) are **not** ancestors of
+current `main` — confirmed with `git merge-base --is-ancestor`, both `no`. This
+is the same "squash/orphan-merge artifact" this file's own pass 14/15 sections
+already named, just hitting the PR's own commits this time rather than an
+older baseline. Its consequence is sharper than previously recorded: a plain
+`git log -- <path>` over all five declared backend files plus the frontend
+module returned only **2 commits total, ever** (`e8c591561f`, `a0823cfd30`,
+both unrelated CSS/form-field sweeps) — history simplification silently
+collapses a long, real sequence of content changes into a near-empty log
+because the commits that made them aren't connected to `main`'s actual history
+under their recorded hashes. Trusting that emptiness would have been a false
+negative: it would have read as "zero delta since pass 15" when a substantial,
+unreviewed change had in fact landed. The content was located instead by
+listing `backend/alembic/versions/` in date order around pass 15's date and by
+grepping the tree for the encryption primitives directly
+(`grep -rl "EncryptedEnum\|EncryptedReference" backend/alembic/versions/`),
+not by walking commits. **Recommendation for the next pass:** when a path-
+scoped `git log` returns suspiciously few commits for a feature with this
+file's history of frequent change, corroborate with a content-based check
+(grep the relevant primitives, or list files in the surrounding date range)
+before concluding there is no delta.
+
+**The real delta: two pieces, both already built and already correctly
+documented in `KNOWN_LIMITATIONS.md`, neither previously reviewed by this
+file.**
+
+1. **Migration `ac1687769b62` (2026-11-08) — `screening_type` and
+   `requirement_id` are now AES-256-GCM ciphertext too** (owner decision
+   2026-11-06, "type + link + audit"; pass 15 only covered the `status` half,
+   built two days earlier by `80fa2c83bf9d`). Read in full
+   (`backend/alembic/versions/20261108_1200_ac1687769b62_...py`):
+   - Drops the foreign key on `requirement_id` (looked up by introspection,
+     not a hardcoded name, so it finds the constraint whichever name a
+     `create_all` build or a migration-built one gave it — Pitfall #26's
+     database-shape variance) and any index on that column alone, since
+     MySQL cannot index a TEXT column without a prefix and the FK can no
+     longer match ciphertext against `screening_requirements.id`.
+   - Converts both columns to `TEXT`, encrypts every existing value in place
+     (a legacy upper-case member name is lowercased to its value first, same
+     pattern as `80fa2c83bf9d`), and is idempotent (`$gcm1$`/`$gcm2$` prefix
+     check).
+   - Fails closed (`RuntimeError`) if there are rows to encrypt and
+     `ENCRYPTION_KEY` is unset; an empty table needs no key.
+   - `downgrade()` decrypts both columns, **clears any link to a requirement
+     that no longer exists** before restoring the foreign key (correct: the
+     FK would otherwise refuse to come back with an orphaned link in place —
+     the `ON DELETE SET NULL` the dropped FK used to provide, done by hand
+     before the FK itself returns), then restores the ENUM and the FK.
+   - `_has_table()` guards a `create_all`-only table correctly (Pitfall #26).
+   - **Tested against real rows, not CI's empty database**
+     (`tests/test_encrypt_screening_type_migration.py`, `pytest.mark.integration`,
+     scratch tables so it cannot disturb shared ones): upgrade with rows,
+     the FK/index are gone afterward, running upgrade twice does not
+     re-encrypt, a legacy upper-case value reads back correctly, an empty
+     table needs no key, rows without a key are refused rather than
+     scrambled, and downgrade round-trips exactly — including the
+     orphaned-link-cleared-first case. This is Pitfall #35 done right.
+   - The model (`models/medical_screening.py`) and the column-type mechanism
+     (`core/encrypted_types.py`'s `EncryptedEnum`/`EncryptedReference`,
+     subclassing `EncryptedText` with a `_NoComparison` comparator) were read
+     in full and match the migration exactly: `_NoComparison.operate` raises
+     `TypeError` on every SQL operator except `IS`/`IS NOT`, confirmed by a
+     direct unit test (`test_sql_comparison_on_either_column_is_refused`).
+     Swept the whole backend for a site that would trip it:
+     `grep -rn "ScreeningRecord\.screening_type\|ScreeningRecord\.requirement_id" backend/app/`
+     finds exactly two hits, both `.isnot(None)` NULL checks
+     (`medical_screening_service.py:503,1166`) — nothing would raise at
+     runtime from a forgotten SQL filter on either column.
+   - Checked every site that reads the decrypted value in Python for
+     org-scoping, since the database can no longer enforce it on these two
+     columns: `membership_pipeline_service.py`'s `MEDICAL_SCREENING` pipeline
+     gate (loads by `prospect_id`, already resolved in-org by its caller);
+     `admin_hub_service.py`'s missed-appointment metric (joins `User` and
+     filters both `organization_id`s); `medical_screening_service.py`'s own
+     `list_records`/`_due_in_window`/`unlink_records_from_requirement` (all
+     already filter `organization_id` in SQL before the Python-side match).
+     No cross-tenant read is possible through the new plaintext-in-Python
+     path.
+   - `enum_normalization.py` (a startup repair for columns whose MySQL ENUM
+     DDL was built with uppercase member names) explicitly excludes
+     `screening_records.status`/`.screening_type` with a comment explaining
+     why — rewriting a ciphertext column back through its ENUM-repair path
+     would destroy every encrypted value — read in full and correct.
+
+2. **New file `app/services/screening_reminder_service.py` (W71b-4, owner
+   decision 2026-11-06) — email reminders before a screening falls due.** Not
+   one of this file's previously-declared five backend files; found by
+   grepping for new callers of `medical_screening_service`'s
+   `get_reminder_candidates`/`screening_deadline`. Read in full, 292 lines:
+   - **Pitfall #29 (one definition).** Reuses
+     `MedicalScreeningService.get_reminder_candidates`, itself built on the
+     same `screening_deadline()`/`_due_in_window()` the Compliance tab and the
+     MCP tool use, so a reminder and the screen it points to cannot disagree
+     about what is due or when.
+   - **Pitfall #19 (wired reader before UI).** Gated on the medical-screening
+     module being enabled and on `NotificationRuleResolver`, which defaults
+     to **on** with no stored rule (owner decision: absence means the decided
+     behaviour) — confirmed `NotificationTrigger.MEDICAL_SCREENING_EXPIRY` is
+     in `ENFORCED_TRIGGERS` (`models/notification.py`) and in
+     `notification_rules.py`'s resolver map, and that the frontend
+     `NotificationsPage` admin rule-picker lists it (with its own test,
+     `NotificationsPage.rules.test.tsx`) — not a switch wired to nothing.
+   - **Pitfall #18 (email is the channel of record; no bell/log entry).** The
+     docstring states why directly: `notification_logs` stores a bell entry in
+     plaintext, and naming a member's screening there would put back at rest
+     exactly what MS-18 just encrypted. The email itself (`_email()`) is
+     `html.escape`d and names only the requirement and due date — never a
+     result, status or note, and the subject line names neither (subjects
+     reach mail previews and logs, which the comment states explicitly).
+   - **Pitfall #36 (idempotent, run twice).** The claim key
+     `(screening_record_id, tier_days, due_date)` is the unique constraint on
+     `screening_reminder_sends` (confirmed on the model,
+     `models/medical_screening.py`'s `ScreeningReminderSend`). `_claim()`
+     inserts inside a nested transaction (`begin_nested`, a SAVEPOINT) and
+     treats `IntegrityError` as "another run already has this one"; each item
+     commits or rolls back on its own before the loop moves to the next
+     record, so a crash mid-run leaves only the in-flight item uncommitted —
+     matching the docstring's stated "one screening at a time" and its
+     declared at-least-once semantics (right for a reminder, where a repeat is
+     a nuisance and a miss is a lapsed screening).
+   - **Pitfall #33 (no PHI in log messages, formatted once).** Both
+     `logger.error`/`logger.info` calls use positional arguments
+     (`logger.error("Screening reminder failed for record {}: {}",
+item.record_id, exc)`), name only an id and counts, never a requirement
+     name, status or free text.
+   - **Email preference respected per member.** Routed through
+     `member_receives_email(..., EmailKind.TRAINING_REMINDERS, ...)`, the same
+     channel certification reminders use, so a member who muted those is not
+     separately emailed about screenings.
+   - Wired into the scheduler via
+     `scheduled_tasks.run_medical_screening_expiry_reminders`, using the
+     shared `_for_each_org` helper every other per-org scheduled task in this
+     file already uses (out of this feature's own scope to re-review; not a
+     new concern it introduces).
+   - `tests/test_encrypt_screening_type_migration.py` aside, no
+     reminder-specific backend test file matched a targeted grep by name
+     during this pass; the scoped test run below (`-k "medical_screening or
+medical_screen or screening"`) passed in full either way, and the
+     frontend module's own test count rose from 78 (pass 15) to 85, consistent
+     with reminder-adjacent UI coverage landing alongside it. Not re-verified
+     line-by-line as a gap — flagged only as a note, not a finding, since
+     nothing observed behaves incorrectly and the service itself fails closed
+     everywhere it was checked above.
+
+**MS-18 — now fully RESOLVED**, not merely the status half pass 15 recorded.
+Type, requirement link and the audit entries that would have named either are
+all addressed. `KNOWN_LIMITATIONS.md`'s "Medical Screening — What Is Still
+Plaintext at Rest" section already states this correctly (its "✅ Decided
+2026-11-06" sub-section), so no doc correction was needed there — only this
+file's own standing-items list, which still read "FLAGGED for a product
+decision" from pass 15, needed updating.
+
+**All 16 routes re-enumerated by AST** (`ast.walk` over every
+`@router.{get,post,put,delete,patch}` decorator): unchanged from pass 13–15,
+same table, same `Depends`/`require_permission` arguments on direct re-read.
+
+**Standing items re-verified:**
+
+- **MS-14** (`medical_screening.view_details` narrative tier) — unchanged,
+  RESOLVED. `can_view_narrative()` and `NARRATIVE_FIELDS` re-read directly;
+  still the single gate every record response routes through.
+- **MS-15** (the compliance roster loads every screening record in the
+  organization, unbounded, LOW, FLAGGED, same class as MS-6/FIN-9/ELEC-12/
+  USR-5/MP-10/DOC-9) — `get_compliance_roster` unchanged this pass;
+  `list_requirements(..., is_active=True)` and `list_records(organization_id)`
+  still both pass `limit=None`. Re-confirmed OPEN.
+- **MS-18** — see above: now fully RESOLVED.
+
+**0 application-code defects found, 0 fixes needed.** This pass's own
+contribution is locating and reviewing the type+link encryption migration and
+the new reminder service — both already correct and already tested — and
+updating this file's own MS-18 status to match.
+
+### Completion gate (pass 16)
+
+| Check                                                                    | Result                                                  |
+| ------------------------------------------------------------------------ | ------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                            | ✅ 0 violations                                         |
+| `black --check app/ tests/ alembic/`                                     | ✅ 3278 files unchanged                                 |
+| `isort --check-only app/ tests/ alembic/`                                | ✅ clean                                                |
+| `python3 scripts/validate_migrations.py --strict`                        | ✅ 785 revisions, single head `bbeb4867d393`            |
+| `python3 scripts/check_route_permissions.py --strict`                    | ✅ 327 routes, 0 errors/warnings                        |
+| `pytest tests/ -q -k "medical_screening or medical_screen or screening"` | ✅ 265 passed, 1 skipped (environment-only, `py_vapid`) |
+| `cd frontend && npm run typecheck`                                       | ✅ clean (`tsc-native.mjs --noEmit`)                    |
+| `cd frontend && npm run lint`                                            | ✅ clean, 0 warnings                                    |
+| `npx vitest run src/modules/medical-screening`                           | ✅ 85 passed (15 files)                                 |
 
 ---
 

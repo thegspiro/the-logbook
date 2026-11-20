@@ -84,6 +84,7 @@ class TestLifecycle:
             id="app-1",
             application_status=ApplicationStatus.CLOSED,
             opportunity_id=None,
+            assigned_to=None,
         )
         db = MagicMock()
         db.flush = AsyncMock()

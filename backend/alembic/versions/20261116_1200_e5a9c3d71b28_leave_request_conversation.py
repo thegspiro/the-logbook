@@ -30,7 +30,7 @@ would violate it, so those earlier rounds' votes are deleted first), deletes
 any rows of the new template types, and narrows the enum.
 
 Revision ID: e5a9c3d71b28
-Revises: bbeb4867d393
+Revises: 0d54dd90d6ba
 Create Date: 2026-11-16 12:00:00
 """
 
@@ -41,7 +41,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "e5a9c3d71b28"
-down_revision: Union[str, None] = "bbeb4867d393"
+down_revision: Union[str, None] = "0d54dd90d6ba"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

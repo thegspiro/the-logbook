@@ -144,6 +144,17 @@ class TestReferences:
             f"{ORG}/documents",
             f"../{ORG}/documents/a.pdf",
         ],
+        # Named: an id built from a value drawn at import differs in every
+        # process, and pytest-xdist refuses to run when its workers disagree.
+        ids=[
+            "another-org",
+            "another-area",
+            "parent-segment",
+            "dot-segment",
+            "empty-segment",
+            "no-file",
+            "leading-parent",
+        ],
     )
     def test_refuses_anything_else(self, key):
         assert file_storage.resolve(_ref(key), ORG, StorageArea.DOCUMENTS) is None

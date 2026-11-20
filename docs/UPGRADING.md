@@ -802,6 +802,42 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### My Training follows compliance profiles; scheduling notification settings are read back; a Source column on exports (2026-11-19)
+
+Nothing blocks a restart, and no migration ships in this range: `main` at
+`762f1c93` still has the one head `bbeb4867d393`.
+
+- **My Training and the profile card narrow to the member's compliance
+  profile** _(#4403)_. In a department that uses compliance profiles with their
+  own required requirements, a profiled member's **My Training**, the
+  officer's per-member requirements view, the profile compliance card and
+  requirement progress list only that profile's requirements. "X of Y
+  requirements met", average progress and the Upcoming list will move for
+  those members. Departments without profiles see no change.
+- **Check Scheduling → Settings → Notifications** _(#4401)_. Before this
+  version the section never received the saved settings, so it showed the
+  built-in defaults and any save from it overwrote the department's decline /
+  drop, assignment, reminder and equipment-check alert choices with them. If
+  anyone saved that section, re-check it after upgrading.
+- **Failed equipment checks alert Chief and Captain by default** _(#4401)_. In
+  a department that never saved Equipment Check Alerts, holders of the Chief
+  and Captain positions now receive the in-app alert the screen always showed
+  as ticked; before, nobody was alerted. Email still needs **Also send email
+  notification**.
+- **A Source column ends several CSV exports** _(#4355)_: the training
+  Member Records and Certification Report exports, the Certification
+  Expiration and Admin Hours report downloads, Admin Hours' **Export CSV**, the
+  event list exports and an event's attendee CSV. It is always the last
+  column, so a sheet that reads columns by position keeps working; one that
+  checks the column count will see one more.
+- **Training providers stay verified when only their schedule is edited**
+  _(#4419)_. A provider whose sync interval or review time was edited on an
+  earlier version was un-verified by that save and has not auto-synced since.
+  Open **Training Admin → Integrations** and select **Test** on any provider
+  showing _Connection not verified_.
+- **Store payments typed by hand cannot exceed the balance** _(#4391)_, and
+  **Refund** asks for an amount, a reason and a confirmation.
+
 ### Leave requests: escalation, and members ending their own leave early (2026-11-17)
 
 Nothing blocks a restart. Migration `7b4e2d9c1a63` adds two email template

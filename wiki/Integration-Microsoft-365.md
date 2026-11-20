@@ -1,6 +1,6 @@
 # Microsoft 365 Integration
 
-_(Added 2026-10-17)_
+_(Added 2026-10-17; Settings documented 2026-11-16)_
 
 The Microsoft 365 integration gives each applicant the department converts to
 a member a Microsoft 365 account at their department email address — the
@@ -53,6 +53,8 @@ either is refused while the other is connected.
 5. Under **Roles and administrators → User Administrator → Add assignments**, assign the role to the application. Microsoft's documentation does not settle whether resetting a password with application permissions also needs this role; granting it avoids a retry failing for that reason.
 6. In The Logbook, open **Integrations → Microsoft 365 → Connect** and enter the tenant ID, client ID, client secret, the domain, the **usage location** (the two-letter country every new account gets; Microsoft will not license an account without one — `US` by default), an optional **license SKU ID**, and any groups.
 7. Click **Test**. It checks the credentials, reports the license and how many are left, and reads each group — nothing is created.
+
+**To change it later**, an organization administrator selects **Settings** on the connected card. The form opens with every saved value except the client secret. A blank **Client secret value** keeps the saved one; a new one goes in with its new **Client secret expires on** date (see below). Clearing **License SKU ID** leaves licensing to your groups for accounts created after the save. The save goes through `PATCH /integrations/{id}` and is checked as a connection is, so the domain must still match **Department Email**. It applies to the next member converted; accounts already created are not changed.
 
 ### Licensing
 

@@ -84,6 +84,7 @@ describe('AdminHoursRenderer (W72)', () => {
               date: '2026-10-15',
               hours: 1,
               entry_method: 'qr_scan',
+              source: 'The Logbook',
               status: 'pending',
             },
           ],
