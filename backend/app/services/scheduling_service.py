@@ -18,6 +18,7 @@ from loguru import logger
 from sqlalchemy import and_, case, delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.error_codes import CodedValueError, ErrorCode
 from app.core.utils import generate_uuid, list_within_detail_limit, utc_isoformat
@@ -60,9 +61,7 @@ from app.models.training import (
 from app.models.user import (
     MemberLeaveOfAbsence,
     Organization,
-    Position,
     User,
-    user_positions,
 )
 from app.schemas.organization import SchedulingNotificationSettings
 from app.services.call_tracking_service import CallTrackingService
@@ -82,15 +81,15 @@ from app.services.shift_eligibility_service import (
     DEFAULT_SIGNUP_CLOSES_MINUTES_BEFORE,
 )
 from app.services.training_compliance import (
+    ComplianceGrading,
+    _load_compliance_config,
     biannual_window,
     catch_up_deadline,
     completion_window,
     counts_shift_attendance,
     evaluate_member_requirement_detail,
-    get_org_include_current_month,
     load_credited_shift_dates,
     member_join_date,
-    requirement_applies_to_member,
     requirement_as_of,
 )
 from app.services.training_waiver_service import (
@@ -2219,8 +2218,6 @@ class SchedulingService:
         means the same occurrence is not generated, and so not skipped, twice.
         Returns the number of officers notified.
         """
-        from sqlalchemy.orm import selectinload
-
         from app.core.config import settings
         from app.core.permissions import permission_matches
         from app.models.user import ACTIVE_ACCOUNT_STATUSES
@@ -10706,36 +10703,42 @@ class SchedulingService:
         if not requirements:
             return []
 
-        # 2. Get all active users with their positions (for role filtering)
+        # 2. Get all active users with their positions. Compliance profiles
+        # and requirement scoping both read them; positions is a lazy
+        # relationship, so reading it unloaded on an AsyncSession raises
+        # MissingGreenlet.
         user_result = await self.db.execute(
             select(User)
+            .options(selectinload(User.positions))
             .where(User.organization_id == str(organization_id))
             .where(User.is_active)
             .order_by(User.last_name, User.first_name)
         )
         all_users = user_result.scalars().all()
 
-        # Load position slugs for all users in one query (avoids an N+1 over
-        # the active-member set on every compliance report request).
-        user_position_slugs: Dict[str, List[str]] = {}
-        if all_users:
-            pos_result = await self.db.execute(
-                select(user_positions.c.user_id, Position.slug)
-                .join(Position, Position.id == user_positions.c.position_id)
-                .where(user_positions.c.user_id.in_([u.id for u in all_users]))
-            )
-            for uid, slug in pos_result.all():
-                user_position_slugs.setdefault(uid, []).append(slug)
+        # Which of these requirements grade each member: their compliance
+        # profile's list, then type, rank, position and join date, as the
+        # compliance matrix resolves it (owner decision 2026-11-20, CLAUDE.md
+        # pitfall 29). Each row here is one requirement's met or unmet, with
+        # no member standing, so the profile narrows who is listed and its
+        # thresholds do not apply.
+        grading = ComplianceGrading.from_config(
+            await _load_compliance_config(self.db, str(organization_id))
+        )
+        graded_ids: Dict[str, set] = {
+            str(u.id): {
+                str(r.id)
+                for r in grading.for_member(u, list(requirements)).requirements
+            }
+            for u in all_users
+        }
 
         # SHIFTS requirements are graded by the shared grader, from the shared
         # count of shifts worked, on the same cut-off and waivers.
-        include_current_month = True
+        include_current_month = grading.include_current_month
         shifts_by_user: Dict[str, List[date]] = {}
         waivers_by_user: Dict[str, list] = {}
         if any(counts_shift_attendance(r) for r in requirements):
-            include_current_month = await get_org_include_current_month(
-                self.db, str(organization_id)
-            )
             shifts_by_user = await load_credited_shift_dates(
                 self.db,
                 str(organization_id),
@@ -10773,23 +10776,15 @@ class SchedulingService:
             else:
                 required_value = req.required_hours or 0
 
-            # Who this requirement grades: the shared definition every
-            # training screen uses (CLAUDE.md pitfall 29), with the rank and
-            # position slugs already loaded above. This report matched
-            # required_roles against the rank before the graders did (CMP4-5);
-            # it now also honours required_membership_types, which it alone
-            # ignored, so a requirement scoped by membership type grades the
-            # same members here as on the compliance matrix.
+            # Who this requirement grades: the member's compliance profile,
+            # then the shared applicability check every training screen uses
+            # (CLAUDE.md pitfall 29), resolved once per member above. This
+            # report matched required_roles against the rank before the
+            # graders did (CMP4-5), and honours required_membership_types,
+            # so a requirement grades the same members here as on the
+            # compliance matrix.
             applicable_users = [
-                user
-                for user in all_users
-                if requirement_applies_to_member(
-                    req,
-                    user.membership_type or "active",
-                    user.rank,
-                    join_date=member_join_date(user),
-                    position_slugs=user_position_slugs.get(user.id, []),
-                )
+                user for user in all_users if str(req.id) in graded_ids[str(user.id)]
             ]
 
             if not applicable_users:

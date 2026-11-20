@@ -184,8 +184,9 @@ requirement rather than entered.
   going forward against the new member.
 - **A record with neither an expiration date nor a frequency to derive one
   never lapses.**
-- **The Add Requirement / Add Record buttons show for view-only holders**, but
-  the server refuses the save without `medical_screening.manage`.
+- **Add, edit and delete are offered only with `medical_screening.manage`.** A
+  `medical_screening.view` holder reads the tabs and the roster; the server
+  refuses every write without `.manage` either way.
 
 ## For developers
 
