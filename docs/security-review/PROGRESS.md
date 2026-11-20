@@ -16,6 +16,105 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4465](https://github.com/thegspiro/the-logbook/pull/4465)** (branch
+`claude/security-review-scheduling-p15` — the bare name and the
+`-p12`/`-p14` branches all have merged PRs against them per this
+feature's own findings-file header, so `-p15` was used directly):
+Feature 15 (Scheduling), pass 15 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable). PR #4464
+(Feature 14, Equipment check & shifts, pass 16) had already merged
+(`2a5ca8e31`) before this iteration started. A fresh `list_pull_requests`
+(state `open`) found no `claude/security-review-*` head, and row 15 was
+confirmed the next `⬜` row.
+
+**0 fixed in Scheduling itself, 0 new findings — real delta, mostly
+already-landed defense-in-depth and one cross-feature fix.** Baseline
+`df47203db` (PR #4115's merge, pass 14) — a genuine ancestor of current
+`main`. Real changes in five declared files: two new self/permission-
+scoped member-shift-history routes (same shape pass 14's hours-history
+route already established), evaluation-credit resync on assignment
+change/delete/finalize/reopen, a notify-role sender moved to the shared
+current-member-aware helper (the same fix already reviewed under
+`EC-14-equipment-check-shifts.md`'s pass 16), an assignment-status
+tightening closing a call/training-credit correctness gap, and —
+opportunistically reviewed, outside prior declared scope — a
+self-supervisor-assignment refusal in `member_supervisor_service.py` that
+closes ADV-2, already tracked as Fixed in
+`ADV-01-adversarial-exfiltration.md`. SCH-20 unaffected. Full write-up:
+`docs/security-review/SCH-15-scheduling.md`'s **Pass 15** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 788
+revisions, single head `790a86084359`; `check_route_permissions.py
+--strict` — 327 routes, 0 errors/warnings; scoped backend pytest (`-k
+"scheduling or time_off or supervisor or seat_override or widget or
+eligibility or member_hours or on_call or shift_history or standing_shift
+or call_tracking"`) — 722 passed, 1 pre-existing environment-only skip
+(`py_vapid`); standing guard suites (capacity locking, org-scoping
+ratchet, LIKE escaping, CSV sweep, migration chain, `create_all`-table
+tolerance, account-status gates, log-call shape, baseline member grants)
+— 203 passed; `npm run typecheck` — 0 errors; `npm run lint` — 0 errors,
+0 warnings; `npx vitest run src/modules/scheduling src/pages/scheduling`
+— 1263 passed (78 files).
+
+Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 16, PR #4464, merged), preserved for history</summary>
+
+**PR [#4464](https://github.com/thegspiro/the-logbook/pull/4464)** (branch
+`claude/security-review-equipment-check-shifts-p16` — the bare name and
+the `-p13`/`-p14`/`-p15` suffixes all have merged PRs against them going
+back to pass 9, per this feature's own findings-file header, so `-p16`
+was used directly rather than re-deriving it from `ls-remote`, which only
+shows live refs):
+Feature 14 (Equipment check & shifts), pass 16 — watchdog pickup (the
+dedicated `/loop 30m /security-review` session remains unreachable). PR
+#4452 (Feature 13, Apparatus & NFC, pass 23) had already merged
+(`f0547e6ae`) before this iteration started. A fresh `list_pull_requests`
+(state `open`) found no `claude/security-review-*` head, and row 14 was
+confirmed the next `⬜` row.
+
+**0 fixed, 0 new findings — real delta, all already-landed defense-in-depth
+from other feature commits, none from this rotation.** Baseline `b26eb8b4f`
+(PR #4111's merge, pass 15) — a genuine ancestor of current `main`. Real
+changes in four of six declared backend files: an XC-3 fix (org-filtered a
+previously-unscoped `checked_by` lookup in `export_pdf`), new audit logging
+on CSV/PDF exports (ids/params only, Pitfall #33), a separation-of-duties
+tightening (a role reviewer may no longer review a report they filed, or
+one not awaiting review), alert-recipient resolution moved to a
+current-member-aware helper (closing a Pitfall #32-class gap where a
+departed member kept receiving equipment-check-failure notices), and
+current-member validation on a manual batch's crew (XC-1/Pitfall #32,
+matched by a frontend picker filter). Frontend also adopts a new
+`useSessionDraft`/`sessionDrafts.ts` hook (sessionStorage, user-scoped,
+no-PHI-by-design) for the first time, in `ManualShiftReportPage.tsx` —
+reviewed in full. EC-17 re-confirmed OPEN/FLAGGED, unaffected. Full
+write-up: `docs/security-review/EC-14-equipment-check-shifts.md`'s
+**Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 788
+revisions, single head `790a86084359`; `check_route_permissions.py
+--strict` — 327 routes, 0 errors/warnings; scoped backend pytest (`-k
+"equipment or shift_completion or shift_report"`) — 587 passed, 1
+pre-existing environment-only skip (`py_vapid`); standing guard suites
+(capacity locking, org-scoping ratchet, LIKE escaping, CSV sweep,
+migration chain, `create_all`-table tolerance, account-status gates,
+log-call shape, baseline member grants) — 203 passed; `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings; scoped
+`npx vitest run` (inventory module + this feature's own page/hook tests)
+— 2058 passed (132 files).
+
+Row 14 → ✅ (merged as `2a5ca8e31`); next was Feature 15 (Scheduling).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 23, PR #4452, merged), preserved for history</summary>
+
 **PR [#4452](https://github.com/thegspiro/the-logbook/pull/4452)** (branch
 `claude/security-review-apparatus-nfc-p23` — the bare
 `claude/security-review-apparatus-nfc` was tried first and opened as #4450,
@@ -75,9 +174,10 @@ baseline member grants) — 205 passed; `npm run typecheck` — 0 errors;
 `npm run lint` — 0 errors, 0 warnings; `npx vitest run
 src/modules/apparatus` — 150 passed (17 files, up from 123/15 at pass 22).
 
-Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
-& shifts) — re-check `list_pull_requests` fresh rather than trusting this
-note.
+Row 13 → ✅ (merged as `f0547e6ae`); next was Feature 14 (Equipment check
+& shifts).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 16, PR #4446, merged), preserved for history</summary>
@@ -26926,8 +27026,8 @@ iteration's commit" rule.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                                                                                                                                         | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ⬜     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ✅     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13)                                                                                                           | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14), `attendance_waiver_requests.py` (31 routes, added pass 17)                              | ⬜     |

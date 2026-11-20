@@ -365,7 +365,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           <div className="h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-red-500" />
         </div>
       ) : filteredTemplates.length === 0 ? (
-        <div className="card py-12 text-center">
+        <div className="card px-4 py-12 text-center">
           <ClipboardCheck className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-muted">No templates found</p>
           {/* Where a new department actually lands, so the library is offered

@@ -485,8 +485,42 @@ The record keeps its own name, date and hours. A record an officer already
 linked to a course by hand keeps its course. A course that grants a
 qualification updates the members' qualifications. Each link is audited.
 
-> **Important:** there is no undo screen. To unlink, edit the individual
-> records. Linking changes members' compliance; that is its purpose.
+Linking changes members' compliance; that is its purpose. Because it can be
+wrong — a suggestion that looked right, a course chosen from the wrong row —
+each link can now be undone _(2026-11-19)_.
+
+#### Undoing a link
+
+Below the names, **Recent links** lists the department's links, newest first,
+ten to a page: the name and the course it went to ("CPR Refresher → CPR for
+Healthcare Providers"), how many records it changed, and who linked it and
+when. Select **Undo** on a link and confirm (**Undo link** / **Keep it**).
+
+- Each record goes back to **no course**, with the category and training type
+  it had before the link, so it stops counting toward the requirements that
+  name that course.
+- **A record edited since the link keeps its course.** If an officer changed
+  the record after linking it (more than two minutes after, so the link's own
+  write does not count), the edit is theirs and is left alone. The message
+  after undoing counts both: "12 records unlinked; 2 records changed since
+  kept CPR for Healthcare Providers."
+- Members' qualifications are re-checked. A qualification that only the link
+  supported is removed, exactly as voiding the record would.
+- A link can be undone once. The row then reads "undone <date> by <name>" and
+  has no **Undo** button; link the name again to restore it.
+- **Links made before 2026-11-19 are not listed and cannot be undone** — they
+  were not recorded. Edit those records one at a time.
+
+#### The Training Admin badge
+
+When the course library has a suggested match for any unlinked name, Training
+Admin's attention list shows "N training names can be linked to a course,
+across N records" with **Review links**, and **Curriculum → Course Links**
+carries the count as a badge. Only names with a suggestion count: **Link all
+suggested** clears every one of them, whereas a name the library cannot match
+would hold the badge up for good with nothing to click. The count is read
+whenever the hub loads, so a provider sync or CSV import that brings in a new
+name shows next time, and it drops as soon as you link, link all or undo.
 
 When every record names a library course, the page says "Every training record
 names a library course."
@@ -591,7 +625,10 @@ later"** — the way most officers describe a schedule out loud.
    - tick **Skip this class** to leave one out of this intake;
    - tick any suggested holidays to skip them, then select **Recalculate**.
 6. **Roster** — select the members taking the course. They are enrolled in
-   the pipeline and added to every class on their calendar.
+   the pipeline and added to every class on their calendar. Only current
+   members (active or probationary) are listed; a former member sent anyway
+   by an out-of-date screen is skipped with the warning "A selected member is
+   no longer a current member." _(2026-11-19)_
 7. **Generate** — review the summary. If the course has no pipeline yet,
    **Build a matching pipeline** is ticked for you (untick it if you do not want
    one); if it already has one, members are enrolled in that pipeline instead.
@@ -2356,10 +2393,9 @@ the same rules, so their figures agree:
   department never grades them on, and their "X of Y requirements met" and
   average progress disagreed with the Compliance Matrix. Nothing changes for a
   department without profiles, for a profile that sets only thresholds, or for
-  a member who matches no active profile. The profile card's green, yellow or
-  red colour still uses its own fixed rule, not the profile's thresholds, so it
-  can occasionally disagree with the matrix (see `docs/KNOWN_LIMITATIONS.md`,
-  "D10 follow-up").
+  a member who matches no active profile. Since 2026-11-20 the profile card's
+  green, yellow or red colour is the member's standing on the Compliance
+  Matrix as well (see [Compliance Summary](#compliance-summary)).
 - **A requirement limited to certain ranks applies to those ranks.** The
   **Required roles** on a requirement are **ranks**. Members of those ranks
   are graded on it on My Training, the matrix, the dashboard, the member
@@ -2994,15 +3030,30 @@ settings**.
 ## Compliance Summary
 
 Each member's profile page has a **compliance summary card** showing their
-training status at a glance:
+training status at a glance. Its colour is the member's standing on the
+**Compliance Matrix**, so the two always agree _(2026-11-20)_. The thresholds
+are those of the member's compliance profile when it sets its own, otherwise
+the department's compliance settings (100% compliant and 75% at risk when
+nothing is configured):
 
-| Indicator               | Meaning                                                           |
-| ----------------------- | ----------------------------------------------------------------- |
-| **Green (Compliant)**   | All requirements met, no certification problems                   |
-| **Yellow (At Risk)**    | Some requirements not met, or certifications expiring soon        |
-| **Red (Non-Compliant)** | An expired certification, or fewer than half the requirements met |
-| **Not Applicable**      | No requirement applies to the member, and nothing is expiring     |
-| **Exempt**              | The member is marked exempt from compliance tracking              |
+| Indicator               | Meaning                                                                   |
+| ----------------------- | ------------------------------------------------------------------------- |
+| **Green (Compliant)**   | Compliant on the matrix: meets the compliant threshold                    |
+| **Yellow (At Risk)**    | At risk on the matrix: below the compliant threshold, at or above at-risk |
+| **Red (Non-Compliant)** | Non-compliant on the matrix: below the at-risk threshold                  |
+| **Not Applicable**      | No requirement grades the member                                          |
+| **Exempt**              | The member is marked exempt from compliance tracking                      |
+
+The same colour shows on **My Crew** and on the member's printed training
+record.
+
+The expiring-certificate figure is shown for information and does not set the
+colour. An expired certificate lowers the standing when a requirement grades
+it, because that requirement then reads **Expired**. A certificate that a
+renewal has replaced, or that no requirement grades, does not. When the
+department leaves the current month out of compliance, a certificate that
+lapsed this month still counts as met until the month ends, while the
+figure already shows it as expired.
 
 The card also shows:
 
@@ -3708,7 +3759,11 @@ instead of picking a scheduled shift.
 6. Add an **overall shift narrative**.
 7. **Search for each crew member and select them to add them.** A member you
    add arrives ticked. The tick box decides who gets a report, and the **✕**
-   removes the member from the list.
+   removes the member from the list. The search finds current members only
+   (active or probationary) _(2026-11-19)_; a report not tied to a scheduled
+   shift is refused if it names a former member ("Only current members can be
+   chosen as crew members"). A report filed against a scheduled shift is not
+   checked, since someone who worked that shift may have left since.
 8. For each crew member who needs one, select **Evaluate** to open their
    section:
    - performance rating (1–5 stars);
@@ -3949,7 +4004,10 @@ is still unmatched — "Categories (7 unmapped)".
   than the provider's sync window, which a later sync would never bring back.
   Setting it back to **Not mapped** removes the match and takes their waiting
   completions off the member again. Completions already imported keep the
-  member they were imported to. A deleted member cannot be chosen.
+  member they were imported to. A deleted member cannot be chosen, and the
+  list offers current members only (active or probationary) _(2026-11-19)_; a
+  user already matched to someone who has since left stays matched and still
+  shows that member's name.
 
 Users are also matched automatically by email on each sync. Putting the email
 the provider uses on the member's profile still works. Once you set or clear a
@@ -4174,6 +4232,12 @@ department is not on the map.
 
 - The heat-map is read when the tab opens. Switch away and back to see an
   evaluation recorded since.
+- **On a phone or narrow window** _(2026-11-20)_ the map stays a grid and
+  scrolls both ways inside its own box. The member column is pinned on the
+  left and the skill names along the top, so you always know whose row and
+  which skill a cell is; a fade and chevron on an edge mean there is more that
+  way. Long member names wrap within the pinned column rather than being cut
+  off. On a keyboard, tab into the map and use the arrow keys to scroll it.
 - An active member with no evaluations appears as a row of dashes, not left
   off, so a gap in the roster is visible.
 
@@ -4264,8 +4328,16 @@ covers when one is linked; the Add form has no field for it. **Status** reads:
 ### Assigning Instructors to Sessions
 
 When creating a training session, choose a **Lead Instructor**. The list shows
-every member; it does not check instructor qualifications. Check the
-Instructors list yourself before you assign someone.
+every current member (active or probationary); it does not check instructor
+qualifications. Check the Instructors list yourself before you assign someone.
+
+Former members — the archived, retired, dropped and inactive accounts a roster
+import brings in — are not offered, here or when adding an instructor
+qualification _(2026-11-19)_. A session that already names an instructor who
+has since left keeps them, shown as "(former member)", and saves unchanged; the
+server refuses only a newly chosen former member ("Only current members can be
+chosen as the lead instructor"). A course's named instructor fills the field
+only when it matches a current member.
 
 ### Edge Cases
 
@@ -4458,6 +4530,16 @@ It looks **30, 60 and 90 days** ahead: summary cards across the top, then one
 row per member showing each period alongside the certifications expiring in
 it.
 
+Each member is graded on what their compliance profile requires, as on the
+Compliance Matrix _(2026-11-20)_. The **Current** figure is coloured by the
+member's standing there — the profile's thresholds when it sets its own,
+otherwise the department's — so the same member reads the same here, on the
+Training Enhancements forecast and on the matrix. The 30, 60 and 90-day
+figures are estimates and keep fixed colour bands. They subtract every
+certificate expiring in the window, including one no requirement grades, so
+for a member whose profile lists few requirements one expiring certificate
+moves the projection further.
+
 ![Compliance forecast projecting each member's compliance over 90 days](./images/02-75-compliance-forecast.png)
 
 ### Edge Cases
@@ -4569,6 +4651,9 @@ Configuration**).
 | An outside integration is not syncing                  | Check the provider's settings and sync history, select **Test**, and check the user matching.                                                                                                                                                                                    |
 | Recertification reminders are not sending              | Check: (1) the certification has an expiry date; (2) a pathway's renewal window is set; (3) email is set up for your department. If all three are right, ask your system administrator to check the reminder schedule.                                                           |
 | The competency heat-map is out of date                 | It is read when the Competency tab opens. Switch away and back to see an evaluation recorded since.                                                                                                                                                                              |
+| Reordering said **Failed to reorder requirements**     | Moving a pipeline requirement up or down showed this, yet the order had changed. Fixed 2026-11-19: the new order was always saved; the error came from building the reply. Reload the pipeline to confirm the order, then carry on.                                              |
+| A linked course name was wrong                         | Open **Curriculum → Course Links**, find it under **Recent links** and select **Undo**. Links made before 2026-11-19 are not listed; edit those records individually.                                                                                                            |
+| A member who has left is missing from a member list    | Pickers offer current members only (active or probationary). A record that already names a former member still shows them, usually marked "(former member)", and saves unchanged.                                                                                                |
 | Effectiveness scores are not showing                   | Scores appear only once at least one evaluation has been submitted.                                                                                                                                                                                                              |
 
 ---

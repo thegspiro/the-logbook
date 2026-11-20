@@ -2580,6 +2580,10 @@ scheduling and communication.
 4. Under **Handling** (**Request Handling**), set:
    - **Default Coordinator** — the member assigned every new request. The
      list shows each member's rank by name ("Jordan Avery — Firefighter").
+     Only current members (active or probationary) are listed _(2026-11-19)_.
+     A default coordinator who has since left stays selected, marked
+     "(former member)", so saving the section does not swap them out — but
+     new requests will keep going to them until you choose someone current.
    - **Request Checklist** — your checklist steps, such as "Chief Approval",
      "Email Volunteer Signup" or "Prep Equipment". Use the up and down arrows
      to reorder them.
@@ -2654,7 +2658,9 @@ own email app. **More** holds the rest:
 In the panel you can also:
 
 1. **Assign or reassign** the coordinator, beside **Coordinator** under the
-   title.
+   title. Only current members are offered _(2026-11-19)_; choosing a former
+   member through an out-of-date screen is refused with "Only current members
+   can be chosen as coordinator".
 2. **Tick off checklist steps** as they are done. The first one ticked moves
    the request from **Submitted** to **In Progress**.
 3. **Schedule Event**: enter the **Start Date & Time**, **End Date & Time**
@@ -2751,6 +2757,20 @@ The card appears for officers who can manage events, on an outreach event that
 has started and is not cancelled. A headcount can be recorded or changed after
 the event's attendance is finalized: it is a count of the public, not members'
 credited time.
+
+If an outreach event ends without a headcount, the next morning its organizer
+and alternate are emailed and sent a notification asking for one, with a link
+to the event. Only those who can manage events are asked; when neither of them
+can, the officer who created the event is asked instead, and when nobody can,
+nobody is. Each event is reminded about once, and only events that ended in
+the last 14 days. Postponing an event lets it be reminded about again after
+its new date.
+
+The email is the **Guest Headcount Reminder** template under **Communications →
+Email Templates → Events & Scheduling**, where a department can reword it or
+switch it off. A member
+can stop receiving it by turning off **Event officer duties** in their email
+preferences; the notification still arrives.
 
 ### Public Request Form
 

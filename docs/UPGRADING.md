@@ -830,6 +830,45 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### My Hours counts outside hours; Course Links and historical imports can be undone (2026-11-20)
+
+Nothing blocks a restart. Two additive migrations ship in this range, and
+`main` at `357402ed` has one head, `a541e82fef9f`:
+
+- `0d54dd90d6ba` creates `training_course_links` and
+  `training_course_link_records`, so a Course Links link can be undone. No
+  existing row changes. Links made before the upgrade were not recorded and
+  cannot be unlinked from the screen. The downgrade drops both tables and the
+  link history with them; the training records keep their courses.
+- `a541e82fef9f` adds the nullable `organizations.short_name` (up to 20
+  characters). Every existing department gets NULL and reads exactly as
+  before; the downgrade drops the column and any short name entered.
+
+Changes you will notice:
+
+- **My Hours and the profile's Shift & Call History include counted outside
+  hours** _(#4394)_. A member who logs shifts worked for other departments
+  sees higher headline totals than before, split by a two-colour bar. The
+  department's **Member Hours** report is unchanged. Set a **Short Name** in
+  **Settings → Profile** so the department's own shifts are labelled briefly in
+  the new **All shifts** list.
+- **Former members are refused on member-picker writes** _(#4380, #4432)_.
+  Pickers across training, events, communications, finance approvals and
+  grants no longer list members who have left. The server answers **400**,
+  "Only current members can be chosen as …", when a former member is sent as
+  an event request's coordinator, the events default coordinator, a grant
+  assignee, an instructor qualification's member, a lead instructor, or crew
+  on a shift report with no linked shift; a cohort skips one with a warning.
+  A record that already names a former member still saves unchanged. An
+  integration or script that assigns work to departed members now gets that
+  error instead of a stored row.
+- **Historical Data Import steps have Undo this step** _(#4353, #4389)_. An
+  undo removes what that committed step wrote, keeps records edited since, and
+  runs in order.
+- **Archiving a vehicle, or archiving or restoring a facility, no longer
+  returns an error after it worked** _(#4390)_; nor does reordering a training
+  program's requirements.
+
 ### My Training follows compliance profiles; scheduling notification settings are read back; a Source column on exports (2026-11-19)
 
 Nothing blocks a restart, and no migration ships in this range: `main` at
@@ -842,6 +881,18 @@ Nothing blocks a restart, and no migration ships in this range: `main` at
   requirement progress list only that profile's requirements. "X of Y
   requirements met", average progress and the Upcoming list will move for
   those members. Departments without profiles see no change.
+- **The profile card's colour is the member's Compliance Matrix standing**
+  (owner decision 2026-11-20). The compliance card on a member's profile, the
+  My Crew badge and the printed training record now read green / yellow / red
+  exactly as the matrix classifies the member — the profile's thresholds, else
+  the department's — instead of their own 50% / 100% rule and certificate
+  overlay. Colours move in **every** department, including one with no
+  compliance settings: under the default 100% / 75% thresholds a member
+  meeting half but under three quarters of their requirements turns from
+  yellow to red, and a member who meets everything but holds a certificate
+  expiring within 90 days turns from yellow to green. The expiring and expired
+  certificate counts are still shown, for information. Nothing blocks a
+  restart and no migration ships.
 - **Check Scheduling → Settings → Notifications** _(#4401)_. Before this
   version the section never received the saved settings, so it showed the
   built-in defaults and any save from it overwrote the department's decline /

@@ -650,6 +650,7 @@ class TrainingService:
             latest_evaluation_credit,
             monthly_counts,
             monthly_hours,
+            monthly_pace,
             next_window_opens,
             recency_cutoff,
             rolling_hours_has_no_deadline,
@@ -1062,6 +1063,12 @@ class TrainingService:
         else:
             deadline = None
 
+        pace = (
+            monthly_pace(month_breakdown, base_required, start_date, end_date)
+            if month_breakdown is not None
+            else None
+        )
+
         return {
             "id": str(req.id),
             "name": req.name,
@@ -1104,6 +1111,10 @@ class TrainingService:
                 else None
             ),
             "monthly_hours": month_breakdown,
+            # The same MonthlyPace the compliance matrix reports, from the
+            # rows above, so the two screens print one average.
+            "monthly_average": pace.average if pace else None,
+            "monthly_needed": pace.needed if pace else None,
             "monthly_counts": count_breakdown,
             "course_checklist": course_checklist,
         }

@@ -397,7 +397,7 @@ const StoreAdminPage: React.FC = () => {
                   ))}
                 </ol>
               ) : (
-                <div className="card-secondary text-theme-text-muted py-8 text-center text-sm">
+                <div className="card-secondary text-theme-text-muted px-4 py-8 text-center text-sm">
                   No order updates in the last 7 days.
                 </div>
               )}
@@ -464,7 +464,7 @@ const StoreAdminPage: React.FC = () => {
                   ))}
                 </ul>
               ) : (
-                <div className="card-secondary text-theme-text-muted py-8 text-center text-sm">
+                <div className="card-secondary text-theme-text-muted px-4 py-8 text-center text-sm">
                   No orders yet. New orders appear here.
                 </div>
               )}

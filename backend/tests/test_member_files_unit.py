@@ -7,10 +7,11 @@ could otherwise turn into an arbitrary unlink.
 
 import os
 import uuid
+from unittest.mock import AsyncMock
 
 import pytest
 
-from app.services import file_storage_service
+from app.services import file_storage_service, member_files
 from app.services.file_storage_service import StorageArea
 from app.services.member_files import (
     MemberFiles,
@@ -125,3 +126,53 @@ class TestMemberFiles:
             ("training_submissions", "s1"),
             ("training_records", "r1"),
         }
+
+
+class TestRemoveUnreferencedFiles:
+    """The one post-commit removal: delete what nothing else names, and
+    nothing at all when that cannot be answered."""
+
+    async def test_deletes_only_what_no_other_row_names(self, root, monkeypatch):
+        alone = _file(root / ORG / "self-reports" / "a")
+        shared = _file(root / ORG / "self-reports" / "b")
+        monkeypatch.setattr(
+            member_files, "referenced_elsewhere", AsyncMock(return_value={str(shared)})
+        )
+
+        result = await member_files.remove_unreferenced_files(
+            None, ORG, {str(alone), str(shared)}, subject_id="sub-1"
+        )
+
+        assert not alone.exists()
+        assert shared.exists()
+        assert result == member_files.FileRemoval(
+            deleted=1, not_deleted=0, shared_kept=1
+        )
+
+    async def test_an_unanswerable_check_deletes_nothing(self, root, monkeypatch):
+        first = _file(root / ORG / "self-reports" / "a")
+        second = _file(root / ORG / "self-reports" / "b")
+        monkeypatch.setattr(
+            member_files,
+            "referenced_elsewhere",
+            AsyncMock(side_effect=RuntimeError("database went away")),
+        )
+
+        result = await member_files.remove_unreferenced_files(
+            None, ORG, {str(first), str(second)}, subject_id="sub-1"
+        )
+
+        assert first.exists()
+        assert second.exists()
+        assert result == member_files.FileRemoval(not_deleted=2)
+
+    async def test_no_paths_asks_nothing(self, monkeypatch):
+        check = AsyncMock()
+        monkeypatch.setattr(member_files, "referenced_elsewhere", check)
+
+        result = await member_files.remove_unreferenced_files(
+            None, ORG, set(), subject_id="sub-1"
+        )
+
+        assert result == member_files.FileRemoval()
+        check.assert_not_awaited()

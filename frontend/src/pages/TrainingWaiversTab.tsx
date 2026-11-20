@@ -250,7 +250,7 @@ const TrainingWaiversTab: React.FC = () => {
 
       {/* Waiver Table */}
       {filteredWaivers.length === 0 ? (
-        <div className="card py-12 text-center">
+        <div className="card px-4 py-12 text-center">
           <p className="text-theme-text-muted">No training waivers match the current filter.</p>
         </div>
       ) : (

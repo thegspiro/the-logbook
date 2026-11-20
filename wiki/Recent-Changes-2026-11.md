@@ -5,6 +5,40 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 19 – 20, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-19--20-2026).
+
+- **My Hours redesigned.** The cards now total your own and other
+  departments' hours, with a split bar. A chart shows the year by month, and
+  one **All shifts** list holds every shift you worked; **Log outside shift**
+  moved into it. Administrators can set a department **Short Name**
+  (Settings → Profile) to label your own shifts. The Member Hours report is
+  unchanged. See [Scheduling](Module-Scheduling).
+- **Undo for bulk changes.** A Course Links link can be undone from **Recent
+  links**, and each committed Historical Data Import step has **Undo this
+  step**. Both keep records an officer has edited since. Links made before
+  this update cannot be undone. See [Training](Module-Training) and
+  [Historical Data Import](Integration-Historical-Data-Import).
+- **Former members** no longer appear in the training, event coordinator,
+  grant assignee, finance approver and messaging pickers, and the server
+  refuses them. A record that already names one keeps them, marked
+  "(former member)".
+- **Forms point at the problem.** The shift template dialog, Scheduling
+  settings, the apparatus form, facility sections, Store Settings, the
+  suggestion form and box dialog and the email template editor name a refused
+  value under its field. When editing, the rest saves; closing a form you
+  have typed in asks first. A cleared overtime hours limit no longer quietly
+  switches the advisory off.
+- **My Issued Gear** shows **Quartermaster notified** with the date once you
+  have sent a return notice.
+- **False errors fixed**: archiving a vehicle, archiving or restoring a
+  facility, and reordering a training program's requirements no longer show
+  an error after they worked.
+- **Phones**: seven training tables become cards, and the competency
+  heat-map scrolls with its names pinned.
+
 ## Recent changes: November 18 – 19, 2026
 
 The engineering audit is

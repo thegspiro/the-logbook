@@ -155,6 +155,11 @@ that type. Each step is either:
 - **Notification** — marked sent and skipped past. **No email is actually sent**
   for a notification step.
 
+A **specific member** step's picker lists current members only (active or
+probationary) since 2026-11-19 (#4380); a step already naming someone who has
+left keeps them, marked "(former member)". The backend already refused an
+inactive member for a new specific-member approver.
+
 Only the step's named approver can act on it, from **Approvals** or the
 request's own page. Being named is enough: a Chief named on a step approves or
 denies that step without `finance.approve` (on that step only), working from

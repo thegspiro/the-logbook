@@ -1,27 +1,21 @@
-"""Leave request escalation, and a member ending their own leave early
+"""Guest headcount reminder becomes an email template
+
+Revision ID: 73f64017f9e2
+Revises: 790a86084359
+Create Date: 2026-11-20 12:00:00.000000
 
 ``email_templates.template_type`` and ``scheduled_emails.template_type`` gain
-two values:
+``guest_headcount_reminder``: the email sent the morning after an outreach
+event ends with no guest headcount recorded. No template row is created;
+``ensure_default_templates`` makes it.
 
-- ``leave_request_escalation``: a request still waiting after the
-  department's chosen number of days, sent to the Chief (or the officers who
-  manage leave) once per request;
-- ``leave_ended_early``: a member set the end of their own leave, sent to the
-  officers who manage leave.
+Existing rows: only an enum value is added, so no row is touched. Safe to run
+twice: the upgrade checks for the value first.
 
-No template rows are created; ``ensure_default_templates`` makes them. No
-other table changes: the escalation setting lives in the organization's
-settings JSON, read with defaults, and each escalation is claimed in the
-existing ``leave_notice_sends``.
-
-Existing rows: widening an ENUM leaves every stored value valid. Safe to run
-twice: the upgrade checks the column first.
-
-Downgrade deletes any rows of the two new types, then narrows the enum.
-
-Revision ID: 7b4e2d9c1a63
-Revises: e5a9c3d71b28
-Create Date: 2026-11-17 12:00:00
+Downgrade deletes any rows of the new type, a department's edits to the
+template included, and narrows the enum back. Which events were already
+reminded lives in ``events.custom_fields`` and is not touched either way, so an
+upgrade after a downgrade does not remind about those events again.
 """
 
 from typing import Sequence, Union
@@ -30,17 +24,14 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "7b4e2d9c1a63"
-down_revision: Union[str, None] = "e5a9c3d71b28"
+revision: str = "73f64017f9e2"
+down_revision: Union[str, None] = "790a86084359"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_NEW_TEMPLATE_TYPES = (
-    "leave_request_escalation",
-    "leave_ended_early",
-)
+_NEW_TEMPLATE_TYPES = ("guest_headcount_reminder",)
 
-# EmailTemplateType as this revision finds it (e5a9c3d71b28's ALL_TYPES).
+# EmailTemplateType as this revision finds it (c8d2f61a7e34's ALL_TYPES).
 # Written out rather than imported so a later edit to the enum cannot rewrite
 # this step.
 _EXISTING_TEMPLATE_TYPES = (
@@ -126,9 +117,6 @@ _EXISTING_TEMPLATE_TYPES = (
     "open_ended_leave_digest",
     "leave_request_submitted",
     "leave_request_denied",
-    "leave_request_for_member",
-    "leave_request_update",
-    "leave_request_reminder",
     "custom",
 )
 
@@ -137,10 +125,13 @@ _EXISTING_TEMPLATE_TYPES = (
 # EmailTemplateType.
 ALL_TYPES = _EXISTING_TEMPLATE_TYPES[:-1] + _NEW_TEMPLATE_TYPES + ("custom",)
 
-_TEMPLATE_COLUMNS = (
-    ("email_templates", "template_type"),
-    ("scheduled_emails", "template_type"),
-)
+TEMPLATES = "email_templates"
+SCHEDULED = "scheduled_emails"
+
+
+def _template_columns():
+    # Read at call time so a test can point the step at scratch tables.
+    return ((TEMPLATES, "template_type"), (SCHEDULED, "template_type"))
 
 
 def _has_table(table: str) -> bool:
@@ -164,7 +155,7 @@ def _enum_values(table: str, column: str) -> str:
 
 
 def upgrade() -> None:
-    for table, column in _TEMPLATE_COLUMNS:
+    for table, column in _template_columns():
         if not _has_table(table):
             continue
         if all(f"'{v}'" in _enum_values(table, column) for v in _NEW_TEMPLATE_TYPES):
@@ -179,7 +170,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    for table, column in _TEMPLATE_COLUMNS:
+    for table, column in _template_columns():
         if not _has_table(table):
             continue
         op.execute(

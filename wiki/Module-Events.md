@@ -1043,7 +1043,13 @@ modal (`EventTemplateForm`), active toggle and delete confirmation.
   previous period. `GET /dashboard/community-engagement/events?period=` returns
   every event in the period, for the export. An outreach event's **Guest
   headcount** card (`PUT /events/{id}/guest-headcount`, `events.manage`) sets or
-  clears `events.guest_headcount`.
+  clears `events.guest_headcount`. The daily `guest_headcount_reminders` task
+  emails and notifies, once, the organizer and alternate (else the creator) who
+  hold `events.manage` of an outreach event that ended before today, within the
+  last 14 days, with no headcount. The email is the switchable **Guest Headcount
+  Reminder** template, under the member's **Event officer duties** preference;
+  the event's `custom_fields.guest_headcount_reminder_sent` records that it was
+  sent, and postponing clears it.
 
 ---
 
@@ -1075,7 +1081,12 @@ tab of the Events admin hub.
   categories (e.g. `fire_safety_demo`, `station_tour`, `school_visit`); the ID
   is generated from the label.
 - **Default coordinator assignment** — new requests auto-assign to a configured
-  coordinator, who receives an email.
+  coordinator, who receives an email. Since 2026-11-19 (#4380, #4432) the
+  default-coordinator and per-request coordinator pickers list current members
+  only (active or probationary), and `PATCH /events/settings` and
+  `PATCH /event-requests/{id}/assign` refuse a newly chosen former member with
+  a 400 "Only current members can be chosen as … coordinator". A coordinator
+  already saved who has since left is kept (shown "(former member)").
 - **Flexible date preferences** — exact dates, a general timeframe, or full
   flexibility.
 - **Configurable pipeline tasks** — custom, reorderable checklist steps (e.g.
