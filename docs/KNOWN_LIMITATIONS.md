@@ -844,6 +844,20 @@ apparatus form lists every open problem at the top of the page. Not converted,
 and still listed in `docs/FORMS_REVIEW_2026-11-05.md`: the equipment checklist
 builder.
 
+**Rolled out further on 2026-11-20** (batch 24): the scheduling shift template
+dialog; a suggestion box's intake questions, both as a member answers them and
+as an administrator writes them; the member's suggestion form; the email
+template editor; and the two typed-number cards in Scheduling › Settings ›
+General. The same rules apply. The shift template and the email template are
+edits that save the rest and keep a refused field flagged; the email template
+keeps a refused copy list typed across the reset a save makes. A suggestion
+box replaces its questions whole, so a refused question is saved as stored
+while the rest of the box saves. Photo consent was looked at and left: it is a
+read-only roster with filters, not a form. Not converted, and still listed in
+`docs/FORMS_REVIEW_2026-11-05.md`: the rest of Scheduling › Settings (shift
+reports, eligibility, outside apparatus, notifications, platoons, and the
+defaults cards under the footer's Save Settings).
+
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
 

@@ -32,7 +32,7 @@ loses it too, which is the cost of reversing a grant nothing distinguishes
 from the seed.
 
 Revision ID: 3f8a1c6e2b94
-Revises: 0d54dd90d6ba
+Revises: a541e82fef9f
 Create Date: 2026-11-16 16:02:22.764791
 """
 
@@ -43,7 +43,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "3f8a1c6e2b94"
-down_revision: Union[str, None] = "0d54dd90d6ba"
+down_revision: Union[str, None] = "a541e82fef9f"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

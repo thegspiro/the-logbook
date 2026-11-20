@@ -138,7 +138,7 @@ export const OutlinesPage: React.FC = () => {
                         <p className="text-theme-text-primary font-medium">
                           {item.name}
                           {item.is_default && (
-                            <span className="ml-2 rounded-sm bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
+                            <span className="ml-2 rounded-sm bg-green-100 px-2 py-0.5 text-xs font-medium text-green-900 dark:bg-green-500/20 dark:text-green-300">
                               Default
                             </span>
                           )}
@@ -153,7 +153,7 @@ export const OutlinesPage: React.FC = () => {
                               void makeDefault(item);
                             }}
                             className="btn-secondary touch:min-h-11 inline-flex items-center gap-1 text-sm"
-                            aria-label={`Make ${item.name} the default`}
+                            aria-label={`Make default: ${item.name}`}
                           >
                             <Star className="h-4 w-4" aria-hidden="true" />
                             Make default

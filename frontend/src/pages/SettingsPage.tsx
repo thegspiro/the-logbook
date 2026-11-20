@@ -1175,6 +1175,29 @@ export const SettingsPage: React.FC = () => {
               </div>
             </div>
 
+            <div className="mt-4 sm:w-1/2 sm:pr-2">
+              <label
+                htmlFor="settings-department-short-name"
+                className="text-theme-text-primary mb-1 block text-sm font-medium"
+              >
+                Short Name
+              </label>
+              <input
+                id="settings-department-short-name"
+                type="text"
+                value={profile?.short_name || ''}
+                maxLength={ORGANIZATION_PROFILE_MAX_LENGTH.shortName}
+                onChange={(e) => updateProfileField('short_name', e.target.value)}
+                aria-describedby="settings-department-short-name-hint"
+                placeholder="e.g. FCVFD"
+                className="form-input"
+              />
+              <p id="settings-department-short-name-hint" className="text-theme-text-muted mt-1 text-xs">
+                Used where the full name will not fit, such as beside the department&apos;s own shifts in a
+                member&apos;s hours. Leave blank to use the full name.
+              </p>
+            </div>
+
             {/* Navigation layout */}
             <fieldset className="border-theme-surface-border mt-6 border-t pt-6">
               <legend className="sr-only">Navigation layout</legend>

@@ -16,10 +16,14 @@ vi.mock('../../modules/scheduling/services/api', () => ({
   },
 }));
 
-// The outside-shifts list has its own suite; here it only needs to be
-// present, and a stub keeps these tests off its service calls.
-vi.mock('./MyExternalShifts', () => ({
-  MyExternalShifts: () => <div data-testid="my-external-shifts" />,
+// The shift list has its own suite; here a stub records what it was handed
+// and keeps these tests off its service calls.
+const mockShiftList = vi.fn();
+vi.mock('./MemberShiftHistory', () => ({
+  MemberShiftHistory: (props: Record<string, unknown>) => {
+    mockShiftList(props);
+    return <div data-testid="member-shift-history" />;
+  },
 }));
 
 vi.mock('../../modules/scheduling/store/schedulingStore', () => ({
@@ -64,6 +68,7 @@ const history = (over: Partial<MemberHoursHistory> = {}): MemberHoursHistory => 
   all_time: { shifts: 8, hours: 96, calls: 20, pending_shifts: 0, pending_hours: 0 },
   current_month: month(2, { shifts: 1, hours: 12, calls: 3 }),
   previous_month: month(1, { shifts: 2, hours: 24, calls: 6 }),
+  department_label: 'FCVFD',
   ...over,
 });
 
@@ -75,7 +80,13 @@ const history = (over: Partial<MemberHoursHistory> = {}): MemberHoursHistory => 
 const useDefaultHistory = (payload: MemberHoursHistory = history()) => {
   mockGetMyHoursHistory.mockReset();
   mockGetMyHoursHistory.mockResolvedValue(payload);
+  mockShiftList.mockReset();
   mockCallTrackingMode = 'detailed';
+};
+
+/** The month table sits behind a toggle under the chart. */
+const openTable = async () => {
+  await userEvent.setup().click(await screen.findByRole('button', { name: 'Show as table' }));
 };
 
 describe('MyHoursSummary', () => {
@@ -126,14 +137,14 @@ describe('MyHoursSummary', () => {
   it('labels the bar column instead of leaving it to be guessed at', async () => {
     render(<MyHoursSummary />);
 
-    await screen.findByText('My Hours');
+    await openTable();
     expect(screen.getByRole('columnheader', { name: 'vs. busiest month' })).toBeInTheDocument();
   });
 
   it('lists every month of the year, including the quiet ones', async () => {
     render(<MyHoursSummary />);
 
-    await screen.findByText('My Hours');
+    await openTable();
     const table = screen.getByRole('table');
     // Twelve month rows plus the totals row in the footer.
     expect(within(table).getAllByRole('row')).toHaveLength(14);
@@ -153,26 +164,83 @@ describe('MyHoursSummary', () => {
     render(<MyHoursSummary />);
 
     expect(await screen.findByText(/5 more hours are logged on shifts/)).toBeInTheDocument();
+    await openTable();
     expect(screen.getByText('(+5 pending)')).toBeInTheDocument();
   });
 
-  it('shows hours with other departments beside the credited ones, not inside them', async () => {
+  it('heads each card with every shift hour, and splits it by department beneath', async () => {
+    // Owner decision 2026-11-16: the headline is all shift hours, the
+    // department's own and those with other departments together.
     const months = history().months;
     months[1] = month(2, { shifts: 1, hours: 12, calls: 3, external_shifts: 1, external_hours: 10 });
     useDefaultHistory(
       history({
         months,
-        totals: { shifts: 3, hours: 36, calls: 9, pending_shifts: 0, pending_hours: 0, external_hours: 10 },
+        totals: {
+          shifts: 3,
+          hours: 36,
+          calls: 9,
+          pending_shifts: 0,
+          pending_hours: 0,
+          external_shifts: 1,
+          external_hours: 10,
+        },
       })
     );
 
     render(<MyHoursSummary />);
 
     const yearCard = await screen.findByRole('group', { name: 'This year' });
-    expect(within(yearCard).getByText('36')).toBeInTheDocument();
-    expect(within(yearCard).getByText('+10 hrs with other departments')).toBeInTheDocument();
+    expect(within(yearCard).getByText('46')).toBeInTheDocument();
+    expect(within(yearCard).getByText('36 FCVFD')).toBeInTheDocument();
+    expect(within(yearCard).getByText('+10 with other departments')).toBeInTheDocument();
+    expect(within(yearCard).getByText('4 shifts · 9 calls')).toBeInTheDocument();
+    // The table keeps the two apart, as the payload does.
+    await openTable();
     expect(screen.getAllByText('(+10 outside)')).toHaveLength(2);
-    expect(screen.getByTestId('my-external-shifts')).toBeInTheDocument();
+  });
+
+  it('draws a bar per month that names both figures, and marks the month chosen in the list', async () => {
+    const months = history().months;
+    months[1] = month(2, { shifts: 1, hours: 12, calls: 3, external_shifts: 1, external_hours: 10 });
+    useDefaultHistory(history({ months }));
+    const user = userEvent.setup();
+    render(<MyHoursSummary />);
+
+    const feb = await screen.findByRole('button', {
+      name: 'February: 12 hours FCVFD, 10 hours with other departments, 3 calls',
+    });
+    // Quiet months have no bar to press.
+    expect(screen.queryByRole('button', { name: /^March:/ })).not.toBeInTheDocument();
+
+    await user.hover(feb);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('February 2026');
+
+    await user.click(feb);
+    expect(feb).toHaveAttribute('aria-pressed', 'true');
+    expect(mockShiftList).toHaveBeenLastCalledWith(expect.objectContaining({ highlightMonth: 2, selectedYear: 2026 }));
+  });
+
+  it('summarises the year under the chart', async () => {
+    render(<MyHoursSummary />);
+
+    await screen.findByText('Busiest month');
+    const list = screen.getByRole('group', { name: '2026 summary' });
+    expect(within(list).getByText('January · 24 hrs')).toBeInTheDocument();
+    expect(within(list).getByText('2 of 12')).toBeInTheDocument();
+    expect(within(list).getByText('18 hrs')).toBeInTheDocument();
+    expect(within(list).getByText('3')).toBeInTheDocument();
+  });
+
+  it('hands the shift list every year on record and the department label', async () => {
+    const years = [{ year: 2026, totals: history().totals, months: history().months }];
+    useDefaultHistory(history({ years }));
+    render(<MyHoursSummary />);
+
+    await screen.findByTestId('member-shift-history');
+    expect(mockShiftList).toHaveBeenLastCalledWith(
+      expect.objectContaining({ years, departmentLabel: 'FCVFD', memberId: undefined })
+    );
   });
 
   describe('when the department does not track calls', () => {
@@ -184,7 +252,7 @@ describe('MyHoursSummary', () => {
     it('drops the calls column rather than showing a column of zeros', async () => {
       render(<MyHoursSummary />);
 
-      await screen.findByText('My Hours');
+      await openTable();
       expect(screen.queryByRole('columnheader', { name: 'Calls' })).not.toBeInTheDocument();
       const yearCard = screen.getByRole('group', { name: 'This year' });
       expect(within(yearCard).getByText('3 shifts')).toBeInTheDocument();
@@ -241,6 +309,15 @@ describe('MyHoursSummary', () => {
       expect([...select.options].map((o) => o.value)).toEqual(['2026', '2025', '2024']);
       expect(select.value).toBe('2024');
     });
+
+    it('steps to the previous year, and has no next year past the current one', async () => {
+      const user = userEvent.setup();
+      render(<MyHoursSummary />);
+
+      expect(await screen.findByRole('button', { name: 'Next year' })).toBeDisabled();
+      await user.click(screen.getByRole('button', { name: 'Previous year' }));
+      await waitFor(() => expect(mockGetMyHoursHistory).toHaveBeenCalledWith(2025));
+    });
   });
 
   describe('failures', () => {
@@ -267,6 +344,7 @@ describe('MyHoursSummary', () => {
 describe('MyHoursSummary on a member profile', () => {
   beforeEach(() => {
     mockGetMyHoursHistory.mockReset();
+    mockShiftList.mockReset();
     mockGetMemberHoursHistory.mockReset();
     mockCallTrackingMode = 'detailed';
     mockGetMemberHoursHistory.mockResolvedValue(
@@ -293,8 +371,8 @@ describe('MyHoursSummary on a member profile', () => {
     expect(await screen.findByRole('heading', { name: 'Shift & Call History' })).toBeInTheDocument();
     expect(mockGetMemberHoursHistory).toHaveBeenCalledWith('u-77', undefined);
     expect(mockGetMyHoursHistory).not.toHaveBeenCalled();
-    // The outside-shift editor is the member's own, on My Hours.
-    expect(screen.queryByTestId('my-external-shifts')).not.toBeInTheDocument();
+    // The list is shown read-only for the member being viewed.
+    expect(mockShiftList).toHaveBeenLastCalledWith(expect.objectContaining({ memberId: 'u-77' }));
   });
 
   it('shows on-call hours as part of the total and outside calls beside it', async () => {
@@ -302,7 +380,9 @@ describe('MyHoursSummary on a member profile', () => {
 
     const year = await screen.findByRole('group', { name: 'This year' });
     expect(within(year).getByText('of which 12 hrs on call')).toBeInTheDocument();
-    expect(within(year).getByText(/\+4 hrs with other departments · 2 calls/)).toBeInTheDocument();
+    expect(within(year).getByText('40')).toBeInTheDocument();
+    expect(within(year).getByText('+4 with other departments')).toBeInTheDocument();
+    expect(within(year).getByText('4 shifts · 11 calls')).toBeInTheDocument();
   });
 
   it('asks for the chosen year of that member', async () => {

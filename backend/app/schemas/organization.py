@@ -1905,6 +1905,9 @@ class OrganizationProfileUpdate(BaseModel):
     """
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
+    # An explicit null — or a blank, which the validator turns into one —
+    # clears it, and readers then fall back to ``name``.
+    short_name: Optional[str] = Field(None, max_length=20)
     timezone: Optional[str] = Field(None, max_length=50)
     phone: Optional[str] = Field(None, max_length=20)
     email: Optional[str] = Field(None, max_length=255)
@@ -1915,6 +1918,13 @@ class OrganizationProfileUpdate(BaseModel):
     mailing_address: Optional[MailingAddressUpdate] = None
     physical_address_same: Optional[bool] = None
     physical_address: Optional[PhysicalAddressUpdate] = None
+
+    @field_validator("short_name", mode="before")
+    @classmethod
+    def _blank_short_name_is_none(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
 
 
 class OrganizationResponse(OrganizationBase):
