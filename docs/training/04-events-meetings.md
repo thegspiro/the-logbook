@@ -2609,6 +2609,10 @@ scheduling and communication.
 4. Under **Handling** (**Request Handling**), set:
    - **Default Coordinator** — the member assigned every new request. The
      list shows each member's rank by name ("Jordan Avery — Firefighter").
+     Only current members (active or probationary) are listed _(2026-11-19)_.
+     A default coordinator who has since left stays selected, marked
+     "(former member)", so saving the section does not swap them out — but
+     new requests will keep going to them until you choose someone current.
    - **Request Checklist** — your checklist steps, such as "Chief Approval",
      "Email Volunteer Signup" or "Prep Equipment". Use the up and down arrows
      to reorder them.
@@ -2683,7 +2687,9 @@ own email app. **More** holds the rest:
 In the panel you can also:
 
 1. **Assign or reassign** the coordinator, beside **Coordinator** under the
-   title.
+   title. Only current members are offered _(2026-11-19)_; choosing a former
+   member through an out-of-date screen is refused with "Only current members
+   can be chosen as coordinator".
 2. **Tick off checklist steps** as they are done. The first one ticked moves
    the request from **Submitted** to **In Progress**.
 3. **Schedule Event**: enter the **Start Date & Time**, **End Date & Time**
@@ -2718,36 +2724,68 @@ month**, **This quarter**, **This year** (the default), **Last 12 months** or
 **All time**. The **Community engagement** card on the dashboard opens this
 page on the dashboard's own period.
 
-| Figure             | What it counts                                                                |
-| ------------------ | ----------------------------------------------------------------------------- |
-| **Events held**    | Outreach events that have started; the line below says how many are scheduled |
-| **People reached** | Guests who signed in, plus estimates for events nobody signed in at (below)   |
-| **Member hours**   | Credited attendance time of members checked in, the same hours training uses  |
-| **Requests**       | Public requests received in the period, and how many of those are completed   |
+![The Community Engagement tab for this year: events held, people reached split into counted and estimated, member hours and requests completed, each with its change since last year; people reached by month; the breakdown by public request type and by department event type; and the recent outreach events table](./images/04-100-community-engagement.png)
+
+| Figure                 | What it counts                                                                     |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| **Events held**        | Outreach events that have started; the line below says how many are scheduled      |
+| **People reached**     | Guests counted, plus estimates for events where nothing was counted (below)        |
+| **Member hours**       | Credited attendance time of members checked in, the same hours training uses       |
+| **Requests completed** | Public requests completed in the period, whenever they arrived; and those received |
 
 An outreach event is any **Public Education**, **Fundraiser**, **Ceremony** or
 **Social** event, or any event a public request was scheduled onto, whatever
 its type. Cancelled events are left out.
 
-**Signed in, or estimated.** A school assembly rarely passes round a sign-in
-sheet, so for an event with no guest sign-ins **People reached** uses the
-audience size the requester gave on the request, and marks it **est.** An
-event that did record sign-ins counts them and nothing else. Members on duty
-are never counted as people reached. Where an event has both, the table shows
-the gap — **25 signed in, of ~30 expected** — and the chart heading totals it:
-how many signed in against how many requesters expected.
+**Counted, or estimated.** For each event, **People reached** takes the first
+of these that it has:
+
+1. A **guest headcount** recorded on the event (below), shown as **counted**.
+2. Guests who signed in, shown as **signed in**.
+3. The audience size the requester gave on the request, marked **est.**
+
+A headcount replaces the sign-ins rather than adding to them: it counts the
+room, and the people who stopped at the sheet were in it. Members on duty are
+never counted as people reached. Where an event has an actual figure and an
+expected one, the table shows the gap — **25 signed in, of ~30 expected** — and
+the chart heading totals it: how many were counted against how many requesters
+expected.
+
+**Requests completed.** A request counts in the period it was completed,
+whenever it arrived: one received in December and finished in January is
+January's. The line beneath gives the requests received in the period.
 
 **Change since last time.** Beside each figure is its change against the
 same stretch of the previous period — the first forty days of this quarter
 against the first forty of the last — so a period still under way is not
 compared with a finished one. **All time** has nothing to compare with.
 
-Under the figures, **People reached by month** stacks signed-in guests under
-estimates (by year for an all-time span over three years; hover or tap a bar
-for its numbers, or open **Show the figures**), **By type of outreach** ranks
-the three largest types and folds the rest into **Other**, and **Recent
-outreach events** lists the latest fifty with their crew and hours. **Export
-CSV** downloads that list.
+Under the figures:
+
+- **People reached by month** stacks counted guests under estimates (by year
+  for an all-time span over three years). Hover over or tap a bar for its
+  numbers, or open **Show the figures**.
+- **By type of outreach** has two parts, because they use two lists of names.
+  **Public requests** are grouped by what the requester asked for (Station
+  Tour, CPR / First Aid Class); **Department events** — ones no request asked
+  for — by event type (Public Education, Fundraiser). Each shows its three
+  largest types and folds the rest into **Other**.
+- **Recent outreach events** lists the latest fifty with their crew and hours.
+  **Export CSV** downloads every event in the period, not only the fifty, so a
+  spreadsheet totals to the figures on the screen.
+
+#### Recording a guest headcount
+
+For an event where guests did not sign in one by one — an assembly, a block
+party — open the event and enter the number in **Guest headcount** →
+**Guests counted**, then select **Save headcount**. **Clear** removes it.
+
+![The Guest headcount card on an event's page: the Guests counted box holding 22, with the Save headcount and Clear buttons](./images/04-101-guest-headcount.png)
+
+The card appears for officers who can manage events, on an outreach event that
+has started and is not cancelled. A headcount can be recorded or changed after
+the event's attendance is finalized: it is a count of the public, not members'
+credited time.
 
 ### Public Request Form
 

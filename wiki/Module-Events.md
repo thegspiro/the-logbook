@@ -1046,10 +1046,16 @@ modal (`EventTemplateForm`), active toggle and delete confirmation.
 - **`/events/:id/analytics`** — per-event analytics dashboard.
 - **QR Code Analytics** and **Community Engagement** tabs in the Events admin
   hub. Community Engagement (`GET /dashboard/community-engagement?period=`,
-  `events.manage`) reports events held, people reached — signed-in guests, or
-  the request's audience size where nobody signed in, reported separately —
-  member hours, requests received and completed, a monthly and by-type
-  breakdown and recent events, against the same span of the previous period.
+  `events.manage`) reports events held, people reached — a guest headcount
+  recorded on the event, else guest sign-ins, else the request's audience
+  size, reported separately — member hours, requests completed in the period
+  (dated by the request's activity log) and received in it, a monthly
+  breakdown, a by-type breakdown in two groups (public request types and
+  department event types) and recent events, against the same span of the
+  previous period. `GET /dashboard/community-engagement/events?period=` returns
+  every event in the period, for the export. An outreach event's **Guest
+  headcount** card (`PUT /events/{id}/guest-headcount`, `events.manage`) sets or
+  clears `events.guest_headcount`.
 
 ---
 
@@ -1081,7 +1087,12 @@ tab of the Events admin hub.
   categories (e.g. `fire_safety_demo`, `station_tour`, `school_visit`); the ID
   is generated from the label.
 - **Default coordinator assignment** — new requests auto-assign to a configured
-  coordinator, who receives an email.
+  coordinator, who receives an email. Since 2026-11-19 (#4380, #4432) the
+  default-coordinator and per-request coordinator pickers list current members
+  only (active or probationary), and `PATCH /events/settings` and
+  `PATCH /event-requests/{id}/assign` refuse a newly chosen former member with
+  a 400 "Only current members can be chosen as … coordinator". A coordinator
+  already saved who has since left is kept (shown "(former member)").
 - **Flexible date preferences** — exact dates, a general timeframe, or full
   flexibility.
 - **Configurable pipeline tasks** — custom, reorderable checklist steps (e.g.

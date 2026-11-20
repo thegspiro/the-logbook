@@ -1,6 +1,6 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12), 2026-09-17 (pass 13), 2026-10-06 (pass 14), 2026-10-13 (pass 15), 2026-10-15 (pass 16), 2026-10-19 (pass 17), 2026-10-23 (pass 18), 2026-10-26 (pass 19), 2026-10-29 (pass 20), 2026-11-02 (pass 21), 2026-11-06 (pass 22) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5, merged), [#2623](https://github.com/thegspiro/the-logbook/pull/2623) (pass 13 — rotation pass 6, merged), [#2969](https://github.com/thegspiro/the-logbook/pull/2969) (pass 14 — rotation pass 7, 0 fixed, 0 new findings), [#3185](https://github.com/thegspiro/the-logbook/pull/3185) (pass 15 — watchdog pickup, 1 fixed, 0 new findings), [#3289](https://github.com/thegspiro/the-logbook/pull/3289) (pass 16 — watchdog pickup, 0 fixed, 0 new findings), [#3434](https://github.com/thegspiro/the-logbook/pull/3434) (pass 17 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3589](https://github.com/thegspiro/the-logbook/pull/3589) (pass 18 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3740](https://github.com/thegspiro/the-logbook/pull/3740) (pass 19 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 20 (no PR — committed directly to `main` as `b6a86b4d4`, bypassing the branch/PR flow; its "Open PR" row said "PR (pending)" and the rotation table's row 13 was never flipped to ✅, which this pass corrects), [#3924](https://github.com/thegspiro/the-logbook/pull/3924) (pass 21, merged), pass 22 (this PR)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11), 2026-09-15 (pass 12), 2026-09-17 (pass 13), 2026-10-06 (pass 14), 2026-10-13 (pass 15), 2026-10-15 (pass 16), 2026-10-19 (pass 17), 2026-10-23 (pass 18), 2026-10-26 (pass 19), 2026-10-29 (pass 20), 2026-11-02 (pass 21), 2026-11-06 (pass 22), 2026-11-20 (pass 23) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4, merged), [#2565](https://github.com/thegspiro/the-logbook/pull/2565) (pass 12 — rotation pass 5, merged), [#2623](https://github.com/thegspiro/the-logbook/pull/2623) (pass 13 — rotation pass 6, merged), [#2969](https://github.com/thegspiro/the-logbook/pull/2969) (pass 14 — rotation pass 7, 0 fixed, 0 new findings), [#3185](https://github.com/thegspiro/the-logbook/pull/3185) (pass 15 — watchdog pickup, 1 fixed, 0 new findings), [#3289](https://github.com/thegspiro/the-logbook/pull/3289) (pass 16 — watchdog pickup, 0 fixed, 0 new findings), [#3434](https://github.com/thegspiro/the-logbook/pull/3434) (pass 17 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3589](https://github.com/thegspiro/the-logbook/pull/3589) (pass 18 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3740](https://github.com/thegspiro/the-logbook/pull/3740) (pass 19 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 20 (no PR — committed directly to `main` as `b6a86b4d4`, bypassing the branch/PR flow; its "Open PR" row said "PR (pending)" and the rotation table's row 13 was never flipped to ✅, which this pass corrects), [#3924](https://github.com/thegspiro/the-logbook/pull/3924) (pass 21, merged), [#4109](https://github.com/thegspiro/the-logbook/pull/4109) (pass 22, merged), pass 23 (this PR)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (94 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py`,
@@ -15,6 +15,170 @@ members-permission-gated and lives outside this module — not found under
 that tree changed this pass)
 **Migrations:** none through pass 18; pass 19 reviews
 `a8c3b50b6d9b_nfc_card_taps_and_auto_suspend`
+
+---
+
+## Pass 23 (2026-11-20, watchdog pickup) — Outside-apparatus agency merge reviewed (locking + org scoping verified), 0 fixed, 0 new findings
+
+**Watchdog pickup.** PR #4446 (Feature 12, Facilities, pass 16) had just
+merged (`c5a93595d`); a fresh `list_pull_requests` (state=open) found 0 PRs
+with a `claude/security-review-*` head branch, and the dedicated `/loop 30m
+/security-review` session remains unreachable. `PROGRESS.md`'s rotation
+table had rows 00–12 `✅` and row 13 (this feature) as the next `⬜`,
+confirmed directly against the table (not the narrative "Open PR" note,
+which can lag).
+
+### Prior art loaded (not re-derived)
+
+`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, `docs/module-audit/apparatus.md`
+and `docs/app-review/apparatus.md` (both re-grepped for `🚩`/`OPEN`/`FLAGGED` —
+zero open items in either), and this file's Pass 1–22 history. No open
+finding exists for this feature entering this pass; AP2-4 was resolved at
+pass 21 and nothing in this window touches the files it concerned.
+
+### Scope and delta
+
+Baseline: pass 22's merge commit (`0d2a8d2fa`, PR #4109) to current `main`
+(`c5a93595d`, PR #4446's merge — `git merge-base --is-ancestor 0d2a8d2fa HEAD`
+confirmed a genuine ancestor, no tree-diff workaround needed). `git diff
+--stat` restricted to every declared backend scope file returns exactly
+**two** changed files — `apparatus_service.py` (+18/−10) and
+`external_apparatus_service.py` (+204/−10) — confirming `apparatus.py`,
+`nfc_tags.py`, `evoc_level_service.py`, `driver_exception_service.py`,
+`nfc_tag_service.py`, `nfc_card_admin_service.py`, `nfc_card_status_sync.py`,
+`mcp/tools/apparatus.py`, `models/apparatus.py`, `models/nfc_tag.py`,
+`schemas/apparatus.py` and `schemas/nfc_tag.py` are byte-identical to pass 22
+(an explicit `git diff --stat` per file, not inferred from the commit log,
+which is dominated by unrelated merge-commit noise the same way pass 21/22
+describe).
+
+Both changed files were read in full against the diff:
+
+- **`apparatus_service.py`** — two independent fixes, both already landed by
+  ordinary feature commits rather than this rotation:
+  - A response-completeness fix in `archive_apparatus`
+    (`apparatus_service.py:977-982`), the same shape as Facilities pass 16's
+    `update_facility`/`restore_facility` fix: the method now returns the
+    fully-loaded record via the existing, already-org-scoped `get_apparatus`
+    instead of a bare `db.refresh()`'d object with unloaded relationships
+    that would raise `MissingGreenlet` on first lazy access (Pitfall #11:
+    correctness, not an authz change — `get_apparatus` was already
+    org-filtered before this pass).
+  - **`create_operator` now refuses a former member as a driver**
+    (`apparatus_service.py:1663-1675`): a new `User.is_active` check
+    (the hybrid property defined in `models/user.py:720-734` as
+    `status in ACTIVE_ACCOUNT_STATUSES and deleted_at is None` — exactly the
+    CLAUDE.md Pitfall #32 mechanism, not a literal `== ACTIVE` comparison, so
+    a probationary member is correctly still eligible) sitting after the
+    pre-existing `assert_in_org` XC-1 check on `operator_data.user_id`. Paired
+    on the frontend by `65459c896` (`OperatorModal.tsx`), which filters the
+    `GET /users` picker with the shared `isActiveAccount()` helper — the same
+    rule the platoon/applicant pickers use. Verified: a server-side refusal
+    exists independent of the picker hiding the option, so the fix is a real
+    guard, not merely a UI nicety. No existing operator row is touched;
+    members already certified before leaving keep their row, as the commit's
+    own comment states.
+- **`external_apparatus_service.py`** — a new `merge_agency` feature (fold
+  two differently-spelled agency records — e.g. "Arlington County" /
+  "Arlington County Fire Department" — into one, moving or combining their
+  units and relabelling every logged shift with the kept name) plus a
+  supporting change to `get_pickable_apparatus`. Read in full:
+  - **Tenant isolation (XC-3/XC-1):** `merge_agency(organization_id,
+source_id, target_id, ...)` loads both agency rows filtered on
+    `ExternalAgency.organization_id == org` and returns `None` (→ the
+    caller's `ensure_found` → 404) if either id does not resolve inside the
+    org — a cross-tenant source/target id cannot touch another org's rows.
+    Every unit move and every `ExternalShiftHours` relabel UPDATE is filtered
+    on `organization_id == org` as well, including the "detached" shift
+    branch (a shift whose unit was later deleted, matched only by
+    `agency_name == source.name`, still org-scoped).
+  - **Concurrency (Pitfall #27 shape):** both agency rows are loaded with
+    `.with_for_update()` before anything is mutated, so two officers merging
+    overlapping agencies at once serialize rather than each moving half the
+    units; `tests/test_external_agency_merge.py` (317 lines) covers the
+    merge's own correctness and `tests/test_external_agency_merge_race.py`
+    (334 lines, `pytest.mark.integration`, real connections) drives both
+    orderings of a shift-logged-during-a-merge race on `get_pickable_apparatus`'s
+    new shared lock against the merge's exclusive one. The race test's own
+    docstring names this as a review finding already fixed on a prior,
+    non-rotation PR (#4404) — re-verified here as still correctly locked, not
+    re-discovered.
+  - **`_same_named_unit`** resolves a duplicate by asking the database
+    (`ExternalApparatus.name ==`, with `.with_for_update()`, no `LIKE`) rather
+    than comparing in Python, matching the unique index's collation — no
+    injection surface, and the comment explains why a Python approximation
+    would be unsafe (it could disagree with the index and roll the
+    transaction back).
+  - **Audit trail:** the endpoint (`external_shift_hours.py:215-265`, not in
+    this feature's own declared file list but the one caller of the
+    in-scope `merge_agency` method, reviewed for that reason, same as pass
+    22's dashboard-tile review of an apparatus endpoint from outside its own
+    file) calls `service.merge_agency(..., commit=False)` and only commits
+    after writing the audit event, so the merge and the only surviving
+    record of the merged-away name (the relabel overwrites it on every
+    shift) land together or not at all. Gated on `require_permission
+("scheduling.manage")`, consistent with the rest of this file's routes.
+    This endpoint sits in Scheduling's (Feature 15) declared scope gap —
+    `PROGRESS.md`'s SCH-15 note already recommends formally adding
+    `external_shift_hours.py` to Scheduling's file list; not changed here,
+    since doing so is that feature's call, not this one's.
+  - **Schema:** `ExternalAgencyMerge.into_agency_id: UUID` — Pydantic-typed,
+    no raw string concatenation anywhere in the method.
+
+No migration touches `apparatus`/`nfc` tables in this window (`git diff
+--stat 0d2a8d2fa..HEAD -- backend/alembic/versions | grep -i
+'apparatus\|nfc'` → empty); the 80 migration-touching commits in the window
+are unrelated feature/join noise, the same pattern pass 21/22 describe.
+
+Frontend: `frontend/src/modules/apparatus` changed in 22 files (+2728/−1479),
+all from the repo-wide forms rollout (`FormField`/`useFieldErrors`/
+`useDiscardGuard`, batches 16/17/22/23 — an established, already-reviewed
+pattern elsewhere in the codebase) plus the paired `OperatorModal.tsx` picker
+filter above and a table-reflow class swap in `DocumentsTab.tsx`. Grepped the
+full frontend diff for `window.confirm`/`window.alert`/`window.prompt`,
+`dangerouslySetInnerHTML`, `eval(` and a bare `toHaveBeenCalledWith()` —
+zero hits.
+
+### Route inventory
+
+Re-enumerated **by AST** (not by diff): `apparatus.py` **94**, `nfc_tags.py`
+**11** — both unchanged from pass 22, confirming no route was silently added
+or removed despite the byte-identical files not being obvious from the
+commit log alone. `check_route_permissions.py --strict` (repo-wide): **327**
+routes (up from 303 at pass 22, from unrelated features landing in between),
+0 errors, 0 warnings.
+
+### Standing findings re-verified
+
+No open finding exists for this feature (confirmed against this file's own
+history and both `docs/module-audit/apparatus.md` / `docs/app-review/apparatus.md`,
+re-grepped, zero `🚩`/`OPEN`/`FLAGGED`).
+
+### Findings (pass 23)
+
+**0 fixed, 0 new findings.** Both reviewed backend changes are
+security-positive fixes already landed by their own feature commits
+(verified independently above, not taken on commit message): the former-
+member operator refusal closes a real gap using the correct
+`ACTIVE_ACCOUNT_STATUSES`/`is_active` mechanism (Pitfall #32), and the new
+agency-merge feature is org-scoped, lock-ordered correctly, and already
+carries its own race test for the one concurrency finding a prior,
+non-rotation PR (#4404) already caught and fixed.
+
+## Completion gate (pass 23)
+
+| Check                                                                                                                                                                                                | Result                                               |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                        | ✅ 0 violations                                      |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                 | ✅ 3288 files unchanged                              |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                            | ✅ clean                                             |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                    | ✅ 787 revisions, single head (`a541e82fef9f`)       |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                | ✅ 327 routes, 0 errors/0 warnings                   |
+| Scoped backend pytest (`-k "apparatus or nfc or evoc or driver_exception or external_agency"`)                                                                                                       | ✅ 1417 passed, 1 pre-existing skip (`py_vapid`)     |
+| Standing guard suites (capacity locking, org-scoping ratchet, LIKE escaping, CSV sweep, migration chain, `create_all`-table tolerance, account-status gates, log-call shape, baseline member grants) | ✅ 205 passed                                        |
+| `cd frontend && npm run typecheck`                                                                                                                                                                   | ✅ 0 errors                                          |
+| `cd frontend && npm run lint`                                                                                                                                                                        | ✅ 0 errors, 0 warnings (`eslint --max-warnings 10`) |
+| `npx vitest run src/modules/apparatus`                                                                                                                                                               | ✅ 150 passed (17 files, up from 123/15 at pass 22)  |
 
 ---
 

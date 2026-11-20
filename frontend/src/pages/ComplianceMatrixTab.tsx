@@ -847,8 +847,20 @@ const ComplianceMatrixTab: React.FC = () => {
                               />
                             </div>
                             <p className="text-theme-text-secondary mt-1 font-mono text-xs tabular-nums">
-                              {row.cell.progressLabel}
+                              {row.cell.progressSpoken ? (
+                                <>
+                                  <span className="sr-only">{row.cell.progressSpoken}</span>
+                                  <span aria-hidden="true">{row.cell.progressLabel}</span>
+                                </>
+                              ) : (
+                                row.cell.progressLabel
+                              )}
                             </p>
+                            {row.cell.totalLabel && (
+                              <p className="text-theme-text-muted font-mono text-xs tabular-nums">
+                                {row.cell.totalLabel}
+                              </p>
+                            )}
                           </div>
                           <span
                             className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${TONE_CLASSES[row.cell.tone].pill}`}

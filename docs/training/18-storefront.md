@@ -127,6 +127,13 @@ nothing, and you keep everything.
 
 Open the console and select **Store Settings**.
 
+**Saving** _(2026-11-20)_. **Save settings** at the foot of the page saves
+every section together, because the payment settings depend on each other. A
+value it would refuse, such as a tax rate over 100 or a notification recipient
+that is not an email address, is named under its own field, and a list at the
+top (**Fix these before saving the settings**) links to each. Nothing is saved
+until all of them are fixed. Leaving the page with unsaved changes asks first.
+
 ### Identity
 
 The **Storefront** section holds:

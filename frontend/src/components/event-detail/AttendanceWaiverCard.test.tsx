@@ -87,15 +87,22 @@ describe('AttendanceWaiverCard', () => {
     mockEligibility.mockResolvedValue(eligibility());
   });
 
-  it.each([['disabled'], ['not_counted'], ['exempt'], ['cancelled']])(
-    'renders nothing when the server refuses with %s',
-    async (code) => {
-      mockEligibility.mockResolvedValue(eligibility({ allowed: false, refusal_code: code, refusal: 'No.' }));
-      const { container } = render();
-      await vi.waitFor(() => expect(mockEligibility).toHaveBeenCalledWith('evt-1'));
-      expect(container).toBeEmptyDOMElement();
-    }
-  );
+  it.each([['disabled'], ['cancelled']])('renders nothing when the server refuses with %s', async (code) => {
+    mockEligibility.mockResolvedValue(eligibility({ allowed: false, refusal_code: code, refusal: 'No.' }));
+    const { container } = render();
+    await vi.waitFor(() => expect(mockEligibility).toHaveBeenCalledWith('evt-1'));
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it.each([
+    ['not_counted', 'This session does not count toward an attendance requirement that applies to you.'],
+    ['exempt', 'You are exempt from training requirements, so this session does not count against you.'],
+  ])('tells a member why there is nothing to excuse when the server refuses with %s', async (code, refusal) => {
+    mockEligibility.mockResolvedValue(eligibility({ allowed: false, refusal_code: code, refusal }));
+    render();
+    expect(await screen.findByRole('status')).toHaveTextContent(refusal);
+    expect(screen.queryByRole('button', { name: /Request to be excused/ })).not.toBeInTheDocument();
+  });
 
   it('tells a member who checked in why they cannot ask, in the server’s words', async () => {
     mockEligibility.mockResolvedValue(

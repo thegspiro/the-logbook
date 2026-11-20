@@ -99,12 +99,19 @@ export const RequirementMonthlyHours: React.FC<{ requirement: RequirementDetail 
   // read as 13 a month for a member who logged 3.
   const activeMonths = months.filter((m) => !m.waived);
   const activeHours = activeMonths.reduce((sum, m) => sum + m.value, 0);
-  const average = activeMonths.length > 0 ? activeHours / activeMonths.length : null;
+  // For hours the server sends this same average (monthly_average), which the
+  // card prints as its headline, so the panel prints the server's figure too.
+  // Shifts and calls have no server average, so they are still worked out here.
+  const serverAverage = hours?.length ? requirement.monthly_average : null;
+  const average =
+    serverAverage != null ? serverAverage : activeMonths.length > 0 ? activeHours / activeMonths.length : null;
   // The department's own annual level over the months in the window. The
   // unadjusted figure, not the waiver-prorated one on the card: leave months
   // shrink what a member owes, not the pace the department set.
   const annualLevel = requirement.original_required_hours ?? requirement.required_hours;
-  const pace = requirement.window_months ? annualLevel / requirement.window_months : null;
+  const serverPace = hours?.length ? requirement.monthly_needed : null;
+  const pace =
+    serverPace != null ? serverPace : requirement.window_months ? annualLevel / requirement.window_months : null;
   // Without a pace there is nothing to measure a month against, so fall back
   // to the busiest month rather than drawing every bar empty.
   const scale = pace && pace > 0 ? pace : Math.max(...months.map((m) => m.value), 1);

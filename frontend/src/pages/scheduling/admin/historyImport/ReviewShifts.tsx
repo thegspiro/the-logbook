@@ -158,7 +158,9 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
   const current = Math.min(page, Math.max(1, Math.ceil(shifts.length / PAGE_SIZE)));
   const shown = shifts.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
 
-  const decideExisting = (key: string, decision: MatchDecision) => onMappings({ existing_shifts: { [key]: decision } });
+  /** null clears an earlier answer, so the shift asks again. */
+  const decideExisting = (key: string, decision: MatchDecision | null) =>
+    onMappings({ existing_shifts: { [key]: decision } });
 
   return (
     <section aria-labelledby="review-shifts-heading" className="space-y-4">
@@ -257,6 +259,24 @@ const ReviewShifts: React.FC<ReviewShiftsProps> = ({
                         Import separately
                       </button>
                     </div>
+                  </div>
+                )}
+                {/* Only a reviewer's answer can be taken back. A match of 90% or
+                    more is joined without asking, so there is nothing to undo. */}
+                {(shift.existing_status === ExistingShiftStatus.ACCEPTED ||
+                  shift.existing_status === ExistingShiftStatus.SEPARATED) && (
+                  <div className="split-row-aside text-theme-text-secondary text-sm sm:text-right">
+                    {shift.existing_status === ExistingShiftStatus.ACCEPTED
+                      ? 'You chose to add these members to that shift.'
+                      : `You chose to import it as a separate shift (${shift.existing_confidence ?? 0}% match).`}{' '}
+                    <button
+                      type="button"
+                      className="underline"
+                      disabled={busy}
+                      onClick={() => decideExisting(shift.key, null)}
+                    >
+                      Undo
+                    </button>
                   </div>
                 )}
               </div>

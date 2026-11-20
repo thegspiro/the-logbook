@@ -138,6 +138,11 @@ GET    /api/v1/training/courses/{id}/classes               # List a course's syl
 POST   /api/v1/training/courses/{id}/classes               # Add a class to the syllabus (training.manage)
 PATCH  /api/v1/training/courses/{id}/classes/{class_id}    # Update one syllabus class (training.manage)
 DELETE /api/v1/training/courses/{id}/classes/{class_id}    # Remove a class; generated cohorts keep their copy (training.manage)
+GET    /api/v1/training/course-links                       # Unlinked record names, with suggested courses (training.manage)
+POST   /api/v1/training/course-links                       # Link one name's records to a course; recorded for undo (training.manage)
+POST   /api/v1/training/course-links/link-suggested        # Link every name that has a suggestion (training.manage)
+GET    /api/v1/training/course-links/history               # Recorded links, newest first (training.manage, 2026-11-19)
+POST   /api/v1/training/course-links/{link_id}/undo        # Undo a link once; records edited since are kept (training.manage, 2026-11-19)
 POST   /api/v1/training/courses/{id}/classes/reorder       # Set the syllabus order (order only, not the dates) (training.manage)
 POST   /api/v1/training/courses/{id}/classes/autofill      # Recompute every day offset from a meeting pattern (training.manage)
 GET    /api/v1/training/stats/user/{user_id}               # User training stats

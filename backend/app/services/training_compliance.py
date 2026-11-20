@@ -46,7 +46,9 @@ from app.services.training_waiver_service import (
     excused_month_reasons,
     fetch_org_waivers,
     get_rolling_period_months,
+    month_waivers,
     override_covers,
+    total_months_in_period,
 )
 from app.utils.hours import meets_required_hours
 from app.utils.membership import MemberStatus, canonical_member_status
@@ -192,6 +194,55 @@ def monthly_hours(
         key = (when.year, when.month)
         totals[key] = totals.get(key, 0.0) + float(record.hours_completed or 0)
     return _month_rows(totals, start, end, excused, "hours")
+
+
+@dataclass(frozen=True)
+class MonthlyPace:
+    """A member's average hours a month against the department's monthly pace.
+
+    ``average`` is the hours earned in the months nothing excused, over the
+    number of those months, or None when every month so far was excused.
+    Hours earned on leave still count toward the requirement's total. They are
+    left out here because the figure is the member's pace while active:
+    dividing 26 hours, 23 of them earned on leave, by the active months alone
+    would read as 13 a month for a member who logged 3.
+
+    ``needed`` is the requirement's unadjusted level over the months in its
+    whole window (72 over 12 is 6). Leave lowers what a member owes, not the
+    pace the department set, so the waiver-prorated target is not used.
+
+    Shown beside the total, never instead of it as the grade: compliance is
+    still decided on the total (owner decision, 2026-11-20).
+    """
+
+    average: Optional[float]
+    needed: Optional[float]
+
+
+def monthly_pace(
+    rows: Sequence[Mapping[str, Any]],
+    base_required: float,
+    window_start: Optional[date],
+    window_end: Optional[date],
+) -> MonthlyPace:
+    """The :class:`MonthlyPace` for the rows ``monthly_hours`` produced.
+
+    The one definition: the compliance matrix and My Training both report it,
+    so the two screens cannot print different averages for the same member.
+    """
+    active = [r for r in rows if not r.get("waived")]
+    average = (
+        round(sum(float(r.get("hours") or 0) for r in active) / len(active), 2)
+        if active
+        else None
+    )
+    months = (
+        total_months_in_period(window_start, window_end)
+        if window_start and window_end
+        else 0
+    )
+    needed = round(base_required / months, 2) if base_required > 0 and months else None
+    return MonthlyPace(average=average, needed=needed)
 
 
 def monthly_counts(
@@ -975,6 +1026,10 @@ class RequirementEvaluation:
     catch_up_deadline: Optional[str] = None
     # Met by a Chief's override rather than by the count (SESSION_ATTENDANCE).
     overridden: bool = False
+    # HOURS only: the member's average a month and the department's monthly
+    # pace (MonthlyPace). Displayed beside the total; never graded on.
+    monthly_average: Optional[float] = None
+    monthly_needed: Optional[float] = None
 
 
 def evaluate_member_requirement_detail(
@@ -1103,6 +1158,7 @@ def _grade_member_requirement(
         unit=None,
         base=None,
         waived=0,
+        pace: Optional[MonthlyPace] = None,
     ) -> RequirementEvaluation:
         # The months adjust_required prorated by, split by reason.
         reasons = excused_month_reasons(
@@ -1122,6 +1178,8 @@ def _grade_member_requirement(
             window_start=start_date.isoformat() if start_date else None,
             window_end=end_date.isoformat() if end_date else None,
             as_of=today.isoformat(),
+            monthly_average=pace.average if pace else None,
+            monthly_needed=pace.needed if pace else None,
         )
 
     # Filter completed records within the date window. Which records each
@@ -1160,13 +1218,27 @@ def _grade_member_requirement(
                 period_months=get_rolling_period_months(req),
             )
 
-        progress = {
+        progress: Dict[str, Any] = {
             "current": total_hours,
             "required": required,
             "unit": "hours",
             "base": base_required,
             "waived": waived_months,
         }
+        if start_date and end_date:
+            # Measured on the same month rows My Training's breakdown lists,
+            # through the evaluation date rather than the window's far end.
+            progress["pace"] = monthly_pace(
+                monthly_hours(
+                    type_matched,
+                    start_date,
+                    min(end_date, today),
+                    month_waivers(_waivers, start_date, end_date, str(req.id)),
+                ),
+                base_required,
+                start_date,
+                end_date,
+            )
 
         latest = (
             max(type_matched, key=lambda r: r.completion_date or date.min)

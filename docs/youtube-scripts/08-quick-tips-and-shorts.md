@@ -2517,8 +2517,12 @@ department timezone must observe daylight saving.
 **Audience:** Members, scheduling officers
 **Added:** 2026-09-30
 
-**[0:00 — SCREEN: My Shifts → Hours → **Shifts with other departments** → **Log
-outside shift**.]**
+**[0:00 — SCREEN: My Shifts → Hours → **All shifts** → **Log outside
+shift**.]**
+
+**[PRODUCTION NOTE — 2026-11-20. The "Shifts with other departments" card was
+folded into the **All shifts** list on the Hours view; the button and the
+dialog are unchanged. Re-shoot the opening frame only.]**
 
 > "Covered a shift on the next town's engine? Log it so it counts toward your
 > hours."

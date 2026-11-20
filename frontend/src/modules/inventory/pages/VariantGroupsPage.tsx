@@ -460,7 +460,7 @@ const VariantGroupsPage: React.FC = () => {
           <RefreshCw className="text-theme-text-muted h-8 w-8 animate-spin" />
         </div>
       ) : groups.length === 0 ? (
-        <div className="card-secondary py-16 text-center">
+        <div className="card-secondary px-4 py-16 text-center">
           <Ruler className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-muted mb-4">
             {showInactive ? 'No variant groups found.' : 'No active variant groups yet. Create one to get started.'}

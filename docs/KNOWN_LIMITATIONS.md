@@ -333,14 +333,14 @@ now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
   5160 alignment were fixed on 2026-11-09; see "Printing" in
   `docs/PDF_REPORTS.md`.)
 - **Minutes, the inventory impact plan and the election documents keep their
-  own layouts.** Minutes, the evaluation and the election documents are
-  numbered "Page N" rather than "Page X of Y" (except the ballot). The impact
-  plan, which had no footer at all, is numbered "Page X of Y" since
-  2026-11-17. Since 2026-11-16 every
-  one of them repeats the department's logo, name and the document's title at
-  the top of each later page, so a loose page is still identifiable. They
-  escape correctly and are audited; moving them onto the kit's footer is a
-  layout change, not a fix.
+  own layouts.** All of them are numbered "Page X of Y": the ballot always
+  was, the impact plan since 2026-11-17, and minutes, the evaluation,
+  certified results and the pre-meeting package since 2026-11-20. Since
+  2026-11-16 every one of them repeats the department's logo, name and the
+  document's title at the top of each later page, so a loose page is still
+  identifiable. They escape correctly and are audited; what remains is only
+  that they keep their own layouts rather than the report kit's, which is a
+  layout choice, not a defect.
 
 ## Medical Screening — What Is Still Plaintext at Rest (MS-18, 2026-11-05)
 
@@ -9667,6 +9667,14 @@ only because code and tests cite it by name; history in
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)
 
+> **Accepted 2026-11-01 (owner decision: leave as is — at-least-once, and
+> collectors deduplicate).** Deduplicate on `X-Logbook-First-Seq` /
+> `X-Logbook-Last-Seq`, the chain positions. The `First-Id` / `Last-Id`
+> headers named below were the right key when this was written; since
+> SEC2-28-10 (2026-10-12) rows ship in chain order and the ids in a batch need
+> not be contiguous or ascending (OPS-13). The text below is the original
+> finding.
+
 `audit_ship_service._get_or_create_state` reads the shipping watermark with
 `SELECT ... FOR UPDATE`, added by the security review (SEC2-28-9) because this
 task runs both on a schedule and via the manual
@@ -10730,13 +10738,20 @@ beyond the feature.
   restates every evaluation's credit, or removes it where evaluations no
   longer count; a member taken off a shift, or marked No-show, loses that
   shift's evaluation credit. A shift that has started cannot be deleted, so an
-  evaluated one never is. The agency case is left: tying credit to the
-  agency's switch would also take back every past credit when an agency is
-  switched off, which needs an owner ruling.
-- **Credit is not re-stated when an evaluation's combined scope shrinks.** An
-  evaluation re-saved after one of its programs drops out of the combined
-  scope (its form cleared while the enrollment stays active) keeps the credit
-  it gave that program until the evaluation is saved again with it.
+  evaluated one never is. **The agency case is accepted (owner decision,
+  2026-11-16: keep it).** An evaluation already credited keeps its credit when
+  its outside entry moves to an agency that does not evaluate shifts: tying
+  credit to the agency's switch would also take back every past credit when an
+  agency is switched off.
+- ~~**Credit is not re-stated when an evaluation's combined scope shrinks.**~~
+  Resolved 2026-11-16 (owner decision: take it back). An evaluation re-saved
+  after one of its programs drops out of the combined scope (its form cleared
+  while the enrollment stays active) now revokes the credit it gave that
+  program; the programs it still counts for keep theirs. The credit pass reads
+  what the evaluation credited from the ledger, so it needs no record of the
+  earlier scope. A shift's evaluations are fixed once it ends, so this arises
+  on a shift still under way or on an outside shift.
+  `tests/test_combined_scope_shrink.py`.
 - ~~**A deactivated evaluation form is still offered and required**~~
   Resolved 2026-11-14 (owner decision): a form a program or the general-form
   setting uses cannot be deactivated, and an inactive form cannot be newly
@@ -10753,6 +10768,29 @@ beyond the feature.
   2026-11-14: restore now applies only to a rejected entry and answers 400
   otherwise, as approve does for one that is not pending; restore, approve and
   reject all read the entry under a row lock.
+
+## OPS-14 — A Driver-Exception Requester Cannot Deny Their Own Request (2026-11-16, app review A9)
+
+`DriverExceptionService.review_exception` decides a pending driver
+qualification exception, approve or deny, and refuses when the reviewer raised
+the request or is the member it is for. It refuses a **denial** on the same
+grounds, with a message about approving, and the Driver Exceptions panel hides
+Deny as well as Approve ("another chief must decide").
+
+Elsewhere only the granting direction needs a second person. Finance states it
+outright ("Denial is left unguarded: withdrawing your own request is not a
+conflict"), training reviews guard approval only, and this service's own
+`revoke_exception` needs no second person because withdrawing permission is the
+safe direction. There is no other way to withdraw a pending exception, so a
+chief who raised one in error waits for another chief to deny it.
+
+Options:
+
+1. **Let the requester and the beneficiary deny** — wrap both guards in
+   `if approve:` in `review_exception` and show Deny on the panel. Approval
+   still needs another chief.
+2. **Keep it as is** — a safety exception is decided by another chief either
+   way — and change the backend's message, which says "approve" on a denial.
 
 ## D11 — Erasing a Member's Uploaded Files: What Remains (2026-11-16)
 

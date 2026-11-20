@@ -756,6 +756,18 @@ Outside Apparatus is new (2026-09-27). New footage needed.]**
 > A date fewer members logged stays an ordinary record. Running the same file
 > twice is safe, and the log tells you what became of every row."
 
+**[SCREEN: A committed step's "Undo this step" button; the "Undo the training records?" confirmation with its counts. ADDED 2026-11-20]**
+
+> "And if a step went in wrong — a subject mapped to the wrong course, a member
+> matched to the wrong person — every committed step has **Undo this step**. It
+> tells you how many records it will remove before it removes anything, keeps
+> any record an officer has already corrected, and goes in order: undo the
+> drills before the training they're built on. Then fix the decision and commit
+> again."
+
+**[EDITOR: The beat above is new (2026-11-20) and adds about 20 seconds; re-time
+Chapter 7.]**
+
 ### SALESFORCE SERVICE-ACCOUNT SYNC (22:30 – 24:30)
 
 **[SCREEN: Open the Salesforce card. Highlight Instance URL, Client ID, Client

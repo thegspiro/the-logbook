@@ -13,7 +13,7 @@ circulation).
 """
 
 from io import BytesIO
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle
@@ -42,8 +42,8 @@ def _multiline(text: Any) -> str:
     return esc(text).replace("\n", "<br/>")
 
 
-def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
-    """Lay out a finalized evaluation and return the PDF bytes.
+def _layout(record: Dict[str, Any], total_pages: Optional[int]) -> Tuple[bytes, int]:
+    """One layout pass: the PDF bytes, before PDF/A, and its page count.
 
     *record* keys: ``org_name``, ``logo``, ``title``, ``member_name``,
     ``evaluator_name``, ``period``, ``coverage``, ``excluded`` (list of
@@ -328,8 +328,22 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
     )
 
     footer = page_footer(
-        f"Member performance evaluation · {record.get('member_name') or ''}"
+        f"Member performance evaluation · {record.get('member_name') or ''}",
+        total_pages,
     )
     doc.build(story, onFirstPage=footer, onLaterPages=footer)
+    return buf.getvalue(), doc.page
+
+
+def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
+    """Lay out a finalized evaluation and return the PDF bytes.
+
+    See :func:`_layout` for the *record* keys.
+    """
+    # Laid out twice: the footer is drawn on the canvas, outside the frame, so
+    # it cannot change the layout, and the first pass's page count is the
+    # second's total.
+    _, pages = _layout(record, None)
+    pdf, _ = _layout(record, pages)
     # The finalized evaluation is a personnel record: archival PDF/A-2b.
-    return to_pdfa(buf.getvalue())
+    return to_pdfa(pdf)
