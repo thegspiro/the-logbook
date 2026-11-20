@@ -22,6 +22,7 @@ LocationService is mocked; no DB.
 from datetime import datetime, timedelta
 from datetime import timezone as tz
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -29,10 +30,19 @@ import pytest
 
 import app.api.v1.endpoints.locations as locations
 from app.models.event import CheckInWindowType
+from tests.clock_support import reread_each_test
 
 pytestmark = [pytest.mark.unit]
 
-NOW = datetime.now(tz.utc)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(tz.utc)
+    return {"NOW": now}
+
+
+(NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 LOC_ID = uuid4()
 
 

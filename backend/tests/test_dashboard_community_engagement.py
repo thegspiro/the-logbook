@@ -17,6 +17,7 @@ from app.api.v1.endpoints.dashboard import get_community_engagement
 _TOTALS = {
     "events_held": 0,
     "people_reached": 0,
+    "counted": 0,
     "signed_in": 0,
     "estimated": 0,
     "member_hours": 0.0,
@@ -31,7 +32,7 @@ _EMPTY_REPORT = {
     "current": _TOTALS,
     "previous": None,
     "upcoming_events": 0,
-    "turnout": {"events": 0, "signed_in": 0, "expected": 0},
+    "turnout": {"events": 0, "counted": 0, "signed_in": 0, "expected": 0},
     "granularity": "month",
     "by_period": [],
     "by_type": [],
