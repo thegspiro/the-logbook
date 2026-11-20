@@ -1192,6 +1192,19 @@ export const Standing = {
 } as const;
 export type Standing = (typeof Standing)[keyof typeof Standing];
 
+/**
+ * The text colour of a figure that carries a member's standing. One map for
+ * every screen that colours by the server's classification (the compliance
+ * matrix, both forecast tables), so the same member reads the same on each
+ * (CLAUDE.md pitfall #29). AA contrast in both themes.
+ */
+export const STANDING_TEXT_COLORS: Record<Standing, string> = {
+  [Standing.NON_COMPLIANT]: 'text-red-700 dark:text-red-300',
+  [Standing.AT_RISK]: 'text-orange-700 dark:text-orange-300',
+  [Standing.COMPLIANT]: 'text-green-700 dark:text-green-300',
+  [Standing.NOT_APPLICABLE]: 'text-theme-text-muted',
+};
+
 // ============================================
 // Email Service
 // ============================================
