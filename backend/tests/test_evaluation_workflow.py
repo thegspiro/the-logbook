@@ -3126,3 +3126,296 @@ class TestCrewSupervisor:
             assert (await client.get(url)).status_code == 404
             assert (await client.get(f"{url}/document")).status_code == 404
             assert (await client.get("/evaluations/crew")).json() == []
+
+
+def _approvals(*position_ids: str) -> dict:
+    """A workflow with one approval step per position id, in order."""
+    # WITH_APPROVAL_STEPS' own first two and last steps: ``_step`` is
+    # redefined further up this module as the database helper.
+    self_step, evaluator_step = WITH_APPROVAL_STEPS[0], WITH_APPROVAL_STEPS[1]
+    acknowledgement = WITH_APPROVAL_STEPS[-1]
+    return {
+        "steps": [
+            self_step,
+            evaluator_step,
+            *(
+                {
+                    "key": f"approval_{index}",
+                    "type": "approval",
+                    "label": f"Approval {index}",
+                    "actor": {"kind": "position", "position_id": position_id},
+                    "due_days": 40 + index,
+                }
+                for index, position_id in enumerate(position_ids, start=1)
+            ),
+            acknowledgement,
+        ]
+    }
+
+
+def _sign_body(user: User) -> dict:
+    return {
+        "signed_name": user.full_name,
+        "disposition": "signed",
+        "intent_confirmed": True,
+    }
+
+
+async def _submitted_by(
+    dept: _Dept, make_client: ClientFactory, url: str, evaluator: User
+) -> None:
+    """The member's self-evaluation and ``evaluator``'s part, submitted."""
+    member = await make_client(dept.member)
+    writer = await make_client(evaluator)
+    await member.put(f"{url}/parts/self_evaluation", json={"content": SELF_ANSWERS})
+    await member.post(f"{url}/parts/self_evaluation/submit")
+    await writer.put(f"{url}/parts/evaluator", json={"content": EVALUATOR_ANSWERS})
+    response = await writer.post(f"{url}/parts/evaluator/submit")
+    assert response.status_code == 200, response.text
+
+
+class TestSeparationOfDuties:
+    """Owner decision 2026-11-16 (ADV2-4): the evaluator never approves or
+    calibrates their own evaluation, nobody signs two approvals on one
+    revision, and a manager may name who acts on a step nobody eligible
+    holds."""
+
+    async def _at_approval(
+        self, dept: _Dept, make_client: ClientFactory, *position_ids: str
+    ) -> str:
+        template = await _template(
+            dept.db,
+            dept.org,
+            name=f"Approved {_uid()[:4]}",
+            workflow=_approvals(*position_ids),
+            member_class="operational",
+        )
+        detail = await _draft(
+            await make_client(dept.manager), dept, template_id=template.id
+        )
+        url = f"/evaluations/{detail['id']}"
+        await _submitted_by(dept, make_client, url, dept.evaluator)
+        return url
+
+    async def _assign(
+        self, client: AsyncClient, url: str, key: str, user: Optional[User]
+    ):
+        return await client.put(
+            f"{url}/steps/{key}/assignee",
+            json={"assignee_id": user.id if user else None},
+        )
+
+    async def test_the_evaluator_cannot_approve_their_own_evaluation(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        # The template's approval position is the one the evaluator holds:
+        # a department whose only Captain wrote the evaluation.
+        captain_position = dept.evaluator.positions[0].id
+        outbox.clear()
+        url = await self._at_approval(dept, make_client, captain_position)
+        evaluator = await make_client(dept.evaluator)
+
+        assert (await evaluator.get(url)).json()["viewer"]["can_sign"] is None
+        refused = await evaluator.post(f"{url}/sign", json=_sign_body(dept.evaluator))
+        assert refused.status_code == 403
+        assert (await _step(dept, url.rsplit("/", 1)[1], "approval_1")).status == "open"
+        # Nor is the evaluator asked to.
+        assert not [
+            notice
+            for notice in outbox.to(dept.evaluator, WAITING)
+            if "waiting for your approval" in notice["summary"]
+        ]
+
+    async def test_one_person_never_signs_two_approvals(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        chief = await _user(dept.db, dept.org, [], position_name="Chief")
+        deputy = await _user(dept.db, dept.org, [])
+        await dept.db.execute(
+            text("INSERT INTO user_positions (user_id, position_id) VALUES (:u, :p)"),
+            {"u": deputy.id, "p": chief.positions[0].id},
+        )
+        await dept.db.refresh(deputy, ["positions"])
+        position = chief.positions[0].id
+        url = await self._at_approval(dept, make_client, position, position)
+        chief_client = await make_client(chief)
+
+        signed = await chief_client.post(f"{url}/sign", json=_sign_body(chief))
+        assert signed.status_code == 200, signed.text
+        assert (await chief_client.get(url)).json()["viewer"]["can_sign"] is None
+        again = await chief_client.post(f"{url}/sign", json=_sign_body(chief))
+        assert again.status_code == 403
+
+        deputy_client = await make_client(deputy)
+        offered = (await deputy_client.get(url)).json()["viewer"]["can_sign"]
+        assert offered["step_key"] == "approval_2"
+
+    async def test_the_evaluator_cannot_calibrate_their_own_evaluation(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        captain = await _user(
+            dept.db, dept.org, ["evaluations.conduct", "evaluations.view_all"]
+        )
+        template = await _template(
+            dept.db, dept.org, name="Calibrated", workflow=WITH_CALIBRATION
+        )
+        detail = await _draft(
+            await make_client(dept.manager),
+            dept,
+            template_id=template.id,
+            evaluator_id=captain.id,
+        )
+        url = f"/evaluations/{detail['id']}"
+        await _submitted_by(dept, make_client, url, captain)
+        client = await make_client(captain)
+
+        assert (await client.get(url)).json()["viewer"]["can_calibrate"] is False
+        assert (await client.post(f"{url}/calibration/complete")).status_code == 403
+        # Another view_all holder still calibrates.
+        reader = await make_client(dept.reader)
+        assert (await reader.get(url)).json()["viewer"]["can_calibrate"] is True
+        assert (await reader.post(f"{url}/calibration/complete")).status_code == 200
+
+    async def test_a_manager_names_who_approves_and_only_they_may(
+        self, dept: _Dept, make_client: ClientFactory, outbox: _Outbox
+    ):
+        captain_position = dept.evaluator.positions[0].id
+        holder = await _user(dept.db, dept.org, [])
+        await dept.db.execute(
+            text("INSERT INTO user_positions (user_id, position_id) VALUES (:u, :p)"),
+            {"u": holder.id, "p": captain_position},
+        )
+        await dept.db.refresh(holder, ["positions"])
+        lieutenant = await _user(dept.db, dept.org, [])
+        url = await self._at_approval(dept, make_client, captain_position)
+        manager = await make_client(dept.manager)
+
+        listed = await manager.get(f"{url}/steps/approval_1/assignee-candidates")
+        assert listed.status_code == 200, listed.text
+        ids = {c["id"] for c in listed.json()["candidates"]}
+        assert lieutenant.id in ids
+        assert holder.id in ids
+        assert dept.member.id not in ids
+        assert dept.evaluator.id not in ids
+
+        outbox.clear()
+        assigned = await self._assign(manager, url, "approval_1", lieutenant)
+        assert assigned.status_code == 200, assigned.text
+        step = next(s for s in assigned.json()["steps"] if s["key"] == "approval_1")
+        assert step["assignee"] == {"id": lieutenant.id, "name": lieutenant.full_name}
+        # The open step's new signer is told; nobody else is.
+        assert len(outbox.to(lieutenant, WAITING)) == 1
+        assert outbox.to(holder, WAITING) == []
+
+        # The name replaces the position's holders: one now has no step on
+        # this evaluation, so it is not theirs to see.
+        holder_client = await make_client(holder)
+        assert (await holder_client.get(url)).status_code == 404
+        assert (
+            await holder_client.post(f"{url}/sign", json=_sign_body(holder))
+        ).status_code == 404
+        lieutenant_client = await make_client(lieutenant)
+        view = await lieutenant_client.get(url)
+        assert view.status_code == 200
+        assert view.json()["viewer"]["can_sign"]["step_key"] == "approval_1"
+        signed = await lieutenant_client.post(
+            f"{url}/sign", json=_sign_body(lieutenant)
+        )
+        assert signed.status_code == 200, signed.text
+
+        audit = (
+            await dept.db.execute(
+                select(AuditLog).where(
+                    AuditLog.event_type == "evaluation_step_assigned"
+                )
+            )
+        ).scalar_one()
+        assert audit.severity == "warning"
+        assert audit.event_data["assignee_id"] == lieutenant.id
+        assert audit.event_data["previous_assignee_id"] is None
+
+    async def test_a_named_calibrator_needs_no_view_all(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        template = await _template(
+            dept.db, dept.org, name="Calibrated", workflow=WITH_CALIBRATION
+        )
+        detail = await _draft(
+            await make_client(dept.manager), dept, template_id=template.id
+        )
+        url = f"/evaluations/{detail['id']}"
+        await _lock_evaluator(dept, make_client, url)
+        calibrator = await _user(dept.db, dept.org, [])
+        manager = await make_client(dept.manager)
+        assert (
+            await self._assign(manager, url, "calibration", calibrator)
+        ).status_code == 200
+
+        reader = await make_client(dept.reader)
+        assert (await reader.get(url)).json()["viewer"]["can_calibrate"] is False
+        assert (await reader.post(f"{url}/calibration/complete")).status_code == 403
+        named = await make_client(calibrator)
+        view = (await named.get(url)).json()
+        assert view["viewer"]["can_calibrate"] is True
+        assert any(p["kind"] == "evaluator" for p in view["parts"])
+        assert (await named.post(f"{url}/calibration/complete")).status_code == 200
+
+    async def test_clearing_the_name_hands_the_step_back(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        chief = await _user(dept.db, dept.org, [])
+        other = await _user(dept.db, dept.org, [])
+        url = await self._at_approval(dept, make_client, chief.positions[0].id)
+        manager = await make_client(dept.manager)
+        await self._assign(manager, url, "approval_1", other)
+        chief_client = await make_client(chief)
+        assert (await chief_client.get(url)).status_code == 404
+
+        cleared = await self._assign(manager, url, "approval_1", None)
+        assert cleared.status_code == 200
+        step = next(s for s in cleared.json()["steps"] if s["key"] == "approval_1")
+        assert step["assignee"] is None
+        assert (await chief_client.get(url)).json()["viewer"]["can_sign"] is not None
+
+    async def test_who_cannot_be_named_and_who_cannot_name(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        chief = await _user(dept.db, dept.org, [])
+        url = await self._at_approval(dept, make_client, chief.positions[0].id)
+        manager = await make_client(dept.manager)
+
+        for barred in (dept.evaluator, dept.member):
+            refused = await self._assign(manager, url, "approval_1", barred)
+            assert refused.status_code == 400, refused.text
+        not_assignable = await self._assign(manager, url, "evaluator", chief)
+        assert not_assignable.status_code == 400
+
+        stranger_org = await _org(dept.db)
+        outsider = await _user(dept.db, stranger_org, [])
+        assert (
+            await self._assign(manager, url, "approval_1", outsider)
+        ).status_code == 400
+
+        # A view_all holder without manage may not assign.
+        reader = await make_client(dept.reader)
+        assert (await self._assign(reader, url, "approval_1", chief)).status_code == 403
+
+        # A step already signed is not reassigned.
+        chief_client = await make_client(chief)
+        assert (
+            await chief_client.post(f"{url}/sign", json=_sign_body(chief))
+        ).status_code == 200
+        done = await self._assign(manager, url, "approval_1", dept.reader)
+        assert done.status_code == 400
+
+    @pytest.mark.real_stepup
+    async def test_assigning_requires_a_recent_re_verification(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        chief = await _user(dept.db, dept.org, [])
+        url = await self._at_approval(dept, make_client, chief.positions[0].id)
+        response = await self._assign(
+            await make_client(dept.manager), url, "approval_1", dept.reader
+        )
+        assert response.status_code == 403
+        assert response.headers.get("x-stepup-required") == "true"

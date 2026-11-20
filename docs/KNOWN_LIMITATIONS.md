@@ -1476,17 +1476,20 @@ the owner, because closing them changes how members get into their accounts:
   is; the email change itself is now ceiling-bound, step-up gated, audited and
   reported to the previous address.
 
-## Separation of Duties — Five Decisions Left Open (ADV-02, 2026-11-14)
+## Separation of Duties — Four Decisions Left Open (ADV-02, 2026-11-14)
 
 The adversarial pass over the month to 2026-11-14 found these items. Its
 findings are in `docs/security-review/ADV-02-adversarial-last-month.md`. Each
 fix changes a workflow some departments rely on, so the owner decides:
 
-- **One officer can conduct, calibrate and approve a personnel evaluation
-  (ADV2-4).** Only the subject is barred from the approval step and from
-  calibration. Refusing the evaluator stalls every evaluation where they are
-  the only holder of the step's position, because no action reassigns or skips
-  a step.
+- ~~**One officer can conduct, calibrate and approve a personnel evaluation
+  (ADV2-4).**~~ ✅ Resolved 2026-11-16 (owner: refuse, and add a reassign
+  action). The evaluator never approves or calibrates their own evaluation,
+  and nobody signs two approvals on one revision. Where that leaves nobody
+  eligible, an `evaluations.manage` holder names who takes the step, with
+  step-up. On upgrade, an evaluation already waiting on an approval whose only
+  position holder is its evaluator stays open until a manager names someone.
+  See `docs/EVALUATIONS_MODULE.md`.
 - **A shift officer can write their own close-out hours (ADV2-8).** Pre-shift
   work and event attendance refuse the self case. On a one-person shift nobody
   else could record it.
