@@ -220,12 +220,15 @@ days), so they can extend or close it. Each series is reminded once
 **Needs You** band ("Events needing your response") at the top. The band's
 overflow link narrows the grid to what needs a response.
 
-- **Mandatory events awaiting a response** — an unanswered mandatory event is
-  in the band only once it starts within the department's response window
-  (**Events settings → Attendance → Mandatory event responses**, 1–365 days,
-  default 60), so a recurring mandatory series does not ask about every
-  future occurrence at once. One whose RSVP deadline is under 48 hours away is
-  in the band regardless.
+- **Mandatory events awaiting a response** _(2026-11-16, #4338)_ — an
+  unanswered mandatory event is urgent (`action`) and in the band only once it
+  starts within the department's response window (**Events settings →
+  Attendance → Mandatory event responses**, 1–365 days, default 60), so a
+  recurring mandatory series does not ask about every future occurrence at
+  once. One whose RSVP deadline is under 48 hours away is in the band
+  regardless. An unparseable start is treated as inside the window.
+  `getEventUrgency` in `utils/eventHelpers.ts` is the one rule for the band and
+  the cards.
 - **Missed mandatory events** — `GET /events/missed-mandatory` supplies the
   mandatory events the caller did not attend, for the band's "missed" rows. A
   member who joined after an event ran, or who was not in its audience, is not
@@ -598,10 +601,12 @@ The real application form is what the follow-up email links to.
 
 At an event **with** the pipeline switch the page is email-first
 _(2026-10-25)_. The guest enters an email; an **active** applicant is shown their
-first name and last initial ("Is this you, Jane S.?") and confirms; a member
-account (active or probationary) is told to scan the member QR code; anyone else
-— including a withdrawn, rejected or on-hold applicant — is asked to see a member
-of staff. **The kiosk opens no new applicants at these events**, and the typed
+first name and last initial ("Is this you, Jane S.?") and confirms; anyone else
+— a member account, a withdrawn, rejected or on-hold applicant, or an unknown
+address — is asked to see a member of staff. _(2026-11-08)_ A member account
+used to be told to scan the member QR code, which let anyone holding the public
+link test which addresses belong to members; the audit row still records the
+true outcome. **The kiosk opens no new applicants at these events**, and the typed
 `guest-check-in` endpoint refuses them with `LB-EVT-006`, so hiding the form is
 not the only thing stopping it. The confirm call carries a ten-minute signed
 token bound to the applicant, event, room and department; the browser never
@@ -1029,10 +1034,16 @@ modal (`EventTemplateForm`), active toggle and delete confirmation.
 - **`/events/:id/analytics`** — per-event analytics dashboard.
 - **QR Code Analytics** and **Community Engagement** tabs in the Events admin
   hub. Community Engagement (`GET /dashboard/community-engagement?period=`,
-  `events.manage`) reports events held, people reached — signed-in guests, or
-  the request's audience size where nobody signed in, reported separately —
-  member hours, requests received and completed, a monthly and by-type
-  breakdown and recent events, against the same span of the previous period.
+  `events.manage`) reports events held, people reached — a guest headcount
+  recorded on the event, else guest sign-ins, else the request's audience
+  size, reported separately — member hours, requests completed in the period
+  (dated by the request's activity log) and received in it, a monthly
+  breakdown, a by-type breakdown in two groups (public request types and
+  department event types) and recent events, against the same span of the
+  previous period. `GET /dashboard/community-engagement/events?period=` returns
+  every event in the period, for the export. An outreach event's **Guest
+  headcount** card (`PUT /events/{id}/guest-headcount`, `events.manage`) sets or
+  clears `events.guest_headcount`.
 
 ---
 

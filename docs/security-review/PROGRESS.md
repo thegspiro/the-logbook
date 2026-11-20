@@ -16,7 +16,133 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this commit)** (branch `claude/security-review-inventory-p16` —
+**PR [#4452](https://github.com/thegspiro/the-logbook/pull/4452)** (branch
+`claude/security-review-apparatus-nfc-p23` — the bare
+`claude/security-review-apparatus-nfc` was tried first and opened as #4450,
+but `git ls-remote --heads origin 'refs/heads/claude/security-review-apparatus*'`
+only shows _live_ refs, and that name had actually been reused by several
+already-merged passes (15/17/18/19) whose remote heads GitHub had since
+deleted — exactly the branch-reuse CLAUDE.md Pitfall #24 warns against, and
+exactly why passes 21/22 had already moved to the `-pN` suffix. #4450 was
+closed and replaced by this PR, same commits, correct branch name — check a
+feature's own findings-file header for its actual prior branch names before
+trusting `ls-remote` alone next time):
+Feature 13 (Apparatus & NFC), pass 23 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable). PR #4446
+(Feature 12, Facilities, pass 16) had already merged (`c5a93595d`) before
+this iteration started. A fresh `list_pull_requests` (state `open`) found no
+`claude/security-review-*` head, and row 13 was confirmed as the next `⬜`
+row directly against the table (not the narrative note above, per this
+skill's own caution that the tracker can lag).
+
+**0 fixed, 0 new findings.** Baseline `0d2a8d2fa` (PR #4109's merge, pass 22) — a genuine ancestor of current `main` (`git merge-base
+--is-ancestor` succeeds). Real delta across the declared scope: exactly 2
+changed backend files (`apparatus_service.py` +18/−10,
+`external_apparatus_service.py` +204/−10; every other declared file
+byte-identical to pass 22). Both read in full: `apparatus_service.py`
+carries a response-completeness fix in `archive_apparatus` (same shape as
+Facilities pass 16's `update_facility`/`restore_facility`) and a new
+server-side refusal of former members as apparatus operators
+(`User.is_active`, the correct `ACTIVE_ACCOUNT_STATUSES` hybrid property —
+CLAUDE.md Pitfall #32 — not a literal `== ACTIVE`), paired with a matching
+frontend picker filter. `external_apparatus_service.py` adds a new
+"merge two outside-agency records" feature (`merge_agency`): both agency
+rows are locked before any mutation, every unit move and shift relabel is
+`organization_id`-filtered, an unresolvable source/target id 404s rather
+than leaking cross-tenant, and the one concurrency finding the feature
+needed (a shift logged mid-merge reading a stale agency name) was already
+fixed and tested — with a dedicated real-connection race test — on a prior,
+non-rotation PR (#4404), re-verified here as still correctly locked rather
+than re-discovered. Frontend: 22 files in `modules/apparatus` changed, all
+from the repo-wide forms-rollout pattern (`FormField`/`useFieldErrors`/
+`useDiscardGuard`) plus the paired `OperatorModal.tsx` picker filter; a full
+grep sweep of the diff found no blocking-dialog/XSS/bare-`toHaveBeenCalledWith()`
+pattern. 94+11=105 routes re-enumerated by AST, unchanged from pass 22; no
+migration in the window touches an `apparatus`/`nfc` table. Both
+`docs/module-audit/apparatus.md` and `docs/app-review/apparatus.md`
+re-grepped — zero open items in either. Full write-up:
+`docs/security-review/AP-13-apparatus-nfc.md`'s **Pass 23** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 787
+revisions, single head `a541e82fef9f`; `check_route_permissions.py --strict`
+— 327 routes, 0 errors/warnings; scoped backend pytest (`-k "apparatus or
+nfc or evoc or driver_exception or external_agency"`) — 1417 passed, 1
+pre-existing environment-only skip (`py_vapid`); standing guard suites
+(capacity locking, org-scoping ratchet, LIKE escaping, CSV sweep, migration
+chain, `create_all`-table tolerance, account-status gates, log-call shape,
+baseline member grants) — 205 passed; `npm run typecheck` — 0 errors;
+`npm run lint` — 0 errors, 0 warnings; `npx vitest run
+src/modules/apparatus` — 150 passed (17 files, up from 123/15 at pass 22).
+
+Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
+& shifts) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 16, PR #4446, merged), preserved for history</summary>
+
+**PR [#4446](https://github.com/thegspiro/the-logbook/pull/4446)** (branch `claude/security-review-facilities-p16` — the
+plain `claude/security-review-facilities` has multiple merged PRs against it
+going back to pass 1 and must not be reused per CLAUDE.md Pitfall #24; no
+`-pN`-suffixed branch for this feature survives on the remote (GitHub
+deletes a head on merge), so `-p16` — the next pass number per
+`FAC-12-facilities.md`'s most recent `## Pass 15` section — was confirmed
+free with `git ls-remote --heads origin 'refs/heads/claude/security-review-facilities-p*'`):
+Feature 12 (Facilities), pass 16 — watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable via `ListAgents`).
+PR #4445 (Feature 11, Inventory, pass 16) had already merged (`ff815adf9`)
+before this iteration started. A fresh `list_pull_requests` (state `open`)
+found no `claude/security-review-*` head, and row 12 was the next `⬜` row.
+
+**0 fixed, 0 new findings.** Baseline `2ff2abf75` (PR #4108's merge, pass 15) — unlike the last several passes, a genuine ancestor of current `main`
+(`git merge-base --is-ancestor` succeeds), so no tree-diff workaround was
+needed. Real delta across the declared scope (33 files, +3205/−1981): a
+`facilities_service.py` response-completeness fix (`update_facility`/
+`restore_facility` now return the fully-loaded record via the existing,
+already-org-scoped `get_facility` rather than a bare refreshed object with
+unloaded relationships — correctness, not an authz change); two changes in
+the shared `documents_service.py` (new History-document delete protection,
+a check-request receipt lock-order addition), both already reviewed for
+Documents & legal's own invariants by PR #4440 and confirmed here to read,
+write or refuse on no `facility_*` table or `FacilityDocument`/
+`FacilityPhoto` row; and a 29-file frontend forms-UX rollout (the
+established `FormField`/`useFieldErrors`/`saveExceptRefused`/
+`useDiscardGuard` pattern already seen on other features) whose actual
+wire-payload builders (`formToPayload`, `OverviewSection.tsx`'s inline
+update builder) are unchanged or already use `blankToNull`/`numberOrNull`
+correctly under Pitfall #1. 49 unrelated migrations landed in this window;
+none names a `facility_*` table. No new route (102, AST-confirmed
+unchanged from pass 15); `check_route_permissions.py --strict` — 327 routes
+repo-wide, 0 errors/warnings. No permission/role prop changed on any
+Facilities route; a full grep sweep of the frontend diff found no risky
+pattern (XSS, blocking dialogs, storage, raw fetch, banned locale methods).
+FAC-30 (P2, owner-accepted "leave as is") re-confirmed the only standing
+item. Full write-up: `docs/security-review/FAC-12-facilities.md`'s **Pass
+16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 786
+revisions, single head `0d54dd90d6ba`; `check_route_permissions.py --strict`
+— 327 routes, 0 errors/warnings; `pytest tests/ -k "facilit"` (run under
+`python3.13`) — 321 passed, 1 pre-existing environment-only skip
+(`py_vapid`); `pytest tests/test_capacity_locking.py
+tests/test_org_scoping_ratchet.py tests/test_like_escaping.py
+tests/test_csv_writer_sweep.py tests/test_alembic_migrations.py
+tests/test_migration_create_all_tables.py` — 175 passed; `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings; `npx vitest
+run src/modules/facilities` — 204 passed (23 files, up from 170/22 at pass
+15).
+
+Row 12 → ✅ (pending this PR's merge); next is Feature 13 (Apparatus &
+NFC) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 16, PR #4445, merged), preserved for history</summary>
+
+**PR [#4445](https://github.com/thegspiro/the-logbook/pull/4445)** (branch `claude/security-review-inventory-p16` —
 the plain `claude/security-review-inventory` has multiple merged **and**
 closed-unmerged PRs against it going back to pass 3, so it must not be
 reused per CLAUDE.md Pitfall #24; `-p16` is the next pass number per
@@ -80,8 +206,9 @@ passed**, 1 pre-existing environment-only skip (`py_vapid`), 0 failed; `npm
 run typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings; `npx
 vitest run src/modules/inventory` — 1983 passed (127 files).
 
-Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
-re-check `list_pull_requests` fresh rather than trusting this note.
+Row 11 → ✅ (merged as `ff815adf9`); next was Feature 12 (Facilities).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 16, PR #4440, merged), preserved for history</summary>
@@ -26797,8 +26924,8 @@ iteration's commit" rule.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ⬜     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                                                                                                                                         | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ✅     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                                                                                                                                         | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                                                                                                                                      | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                                                                                                             | ⬜     |
@@ -50868,3 +50995,63 @@ passed. `npm run typecheck` reports 0 errors, and `npm run lint` reports 0
 errors and 0 warnings.
 
 Row 17 → ✅ (pending this PR's merge). Next is Feature 18 (Training extended).
+
+### 2026-11-20 — Feature 12 (Facilities, pass 16) merged; Feature 13 (Apparatus & NFC, pass 23): watchdog pickup, 0 fixed, 0 new findings
+
+PR #4446 merged as `c5a93595d`. A fresh `list_pull_requests` (state=open)
+found no `claude/security-review-*` head, and row 13 was the next `⬜` row,
+confirmed directly against the table rather than against #4446's own
+narrative "next in the rotation" note (which named this same feature,
+consistent for once).
+
+Baseline `0d2a8d2fa` (PR #4109's merge, pass 22) — a genuine ancestor of
+current `main`. Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/apparatus.md` and `docs/app-review/apparatus.md` (both
+re-grepped for `🚩`/`OPEN`/`FLAGGED` — zero open items in either) and this
+feature's own `AP-13-apparatus-nfc.md` pass history before reading any code;
+no open finding existed entering this pass.
+
+Real delta: exactly two changed backend files, both read in full.
+`apparatus_service.py` (+18/−10) carries a response-completeness fix in
+`archive_apparatus` (the same shape as Facilities pass 16's
+`update_facility`/`restore_facility`) and a new server-side refusal of
+former members as apparatus operators, using the correct
+`User.is_active`/`ACTIVE_ACCOUNT_STATUSES` mechanism (CLAUDE.md Pitfall
+#32), paired with a matching `OperatorModal.tsx` picker filter.
+`external_apparatus_service.py` (+204/−10) adds a new feature — merging two
+differently-spelled records for the same outside agency — that locks both
+agency rows before mutating anything, filters every unit move and shift
+relabel by `organization_id`, 404s on a cross-tenant source/target id rather
+than leaking, and already carries a dedicated real-connection race test for
+the one concurrency finding the feature needed (a shift logged mid-merge
+reading a stale name), fixed and tested on a prior, non-rotation PR (#4404)
+and re-verified here as still correctly locked. Every other declared file
+(`apparatus.py`, `nfc_tags.py`, `evoc_level_service.py`,
+`driver_exception_service.py`, `nfc_tag_service.py`,
+`nfc_card_admin_service.py`, `nfc_card_status_sync.py`,
+`mcp/tools/apparatus.py`, both models, both schemas) is byte-identical to
+pass 22. 94+11=105 routes re-enumerated by AST, unchanged. No migration in
+the window touches an `apparatus`/`nfc` table. Frontend: 22 files in
+`modules/apparatus` changed, all from the repo-wide forms-rollout pattern
+plus the paired picker filter and a table-reflow class swap; a full grep
+sweep found no blocking-dialog/XSS/bare-`toHaveBeenCalledWith()` pattern.
+
+**0 fixed, 0 new findings** — both reviewed backend changes were already
+correct, security-positive fixes landed by their own feature commits rather
+than by this rotation. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`'s
+**Pass 23** section.
+
+**Completion gate:** `flake8`, `black --check` and `isort --check-only` on
+`app/ tests/ alembic/` all clean. `validate_migrations.py --strict` — 787
+revisions, single head `a541e82fef9f`. `check_route_permissions.py --strict`
+— 327 routes, 0 errors/warnings. Scoped backend pytest (`-k "apparatus or
+nfc or evoc or driver_exception or external_agency"`) — 1417 passed, 1
+pre-existing environment-only skip (`py_vapid`). Standing guard suites
+(capacity locking, org-scoping ratchet, LIKE escaping, CSV sweep, migration
+chain, `create_all`-table tolerance, account-status gates, log-call shape,
+baseline member grants) — 205 passed. `npm run typecheck` — 0 errors.
+`npm run lint` — 0 errors, 0 warnings. `npx vitest run src/modules/apparatus`
+— 150 passed (17 files, up from 123/15 at pass 22).
+
+Row 13 → ✅ (pending this PR's merge). Next is Feature 14 (Equipment check &
+shifts) — re-check `list_pull_requests` fresh rather than trusting this note.

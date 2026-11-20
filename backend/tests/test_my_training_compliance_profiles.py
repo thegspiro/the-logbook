@@ -24,6 +24,7 @@ import json
 import uuid
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -45,10 +46,19 @@ from app.mcp.principal import McpPrincipal, bind_principal
 from app.mcp.server import build_server
 from app.models.user import User
 from app.services.training_service import TrainingService
+from tests.clock_support import reread_each_test
 
 pytestmark = [pytest.mark.integration]
 
-_NOW = datetime.now(timezone.utc)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    return {"_NOW": now}
+
+
+(_NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 def _today() -> date:

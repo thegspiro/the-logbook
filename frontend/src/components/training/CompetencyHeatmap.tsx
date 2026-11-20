@@ -12,6 +12,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { competencyService } from '../../services/trainingServices';
 import useLoadData from '../../hooks/useLoadData';
+import { ScrollCueRow } from '../ux/ScrollCueRow';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate } from '../../utils/dateFormatting';
 import type { CompetencyHeatmap as HeatmapData, MemberCompetency } from '../../types/training';
@@ -153,14 +154,30 @@ export const CompetencyHeatmap: React.FC = () => {
             : 'No members or skills match these filters.'}
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full border-separate border-spacing-1 text-sm">
+        // A members × skills grid is read across and down at once, so it stays a
+        // grid on a phone rather than reflowing to cards. It scrolls both ways
+        // inside a bounded box: the member column is pinned to the left and the
+        // skill names to the top, so a cell deep in the grid can still be read
+        // against both. The cells sit 4px apart through their own padding, not
+        // border-spacing — spacing would leave gaps in the pinned header row
+        // for the coloured cells to show through as they scroll beneath it.
+        // Nothing inside takes focus, so the box itself does: without it a
+        // keyboard has no way to reach the rows and skills past its edges.
+        <ScrollCueRow
+          className="max-h-[70dvh] overflow-y-auto"
+          data-mobile-scroll-region
+          tabIndex={0}
+          role="group"
+          aria-label="Competency levels by member and skill"
+        >
+          <table className="min-w-full border-separate border-spacing-0 text-sm">
             <caption className="sr-only">Competency level by member and skill</caption>
             <thead>
               <tr>
                 <th
                   scope="col"
-                  className="text-theme-text-muted surface-opaque sticky left-0 text-left text-xs font-medium"
+                  data-scroll-pin
+                  className="text-theme-text-muted surface-opaque sticky top-0 left-0 z-30 p-0.5 pr-2 text-left align-bottom text-xs font-medium"
                 >
                   Member
                 </th>
@@ -168,7 +185,7 @@ export const CompetencyHeatmap: React.FC = () => {
                   <th
                     key={skill.id}
                     scope="col"
-                    className="text-theme-text-muted max-w-[8rem] text-left text-xs font-medium"
+                    className="text-theme-text-muted surface-opaque sticky top-0 z-20 max-w-[8rem] p-0.5 text-left align-bottom text-xs font-medium"
                   >
                     {skill.name}
                   </th>
@@ -178,11 +195,15 @@ export const CompetencyHeatmap: React.FC = () => {
             <tbody>
               {members.map((member) => (
                 <tr key={member.user_id}>
+                  {/* Capped at 7rem so a phone shows twice as many skills
+                      beside it. The name wraps rather than truncating: it is
+                      the only thing telling two rows apart, and a tooltip
+                      cannot be opened on a touch screen. */}
                   <th
                     scope="row"
-                    className="text-theme-text-primary surface-opaque sticky left-0 pr-2 text-left font-normal whitespace-nowrap"
+                    className="text-theme-text-primary surface-opaque sticky left-0 z-10 p-0.5 pr-2 text-left font-normal"
                   >
-                    {member.name}
+                    <span className="block max-w-28 break-words">{member.name}</span>
                   </th>
                   {skills.map((skill) => {
                     const cell = cellByMemberSkill.get(`${member.user_id}:${skill.id}`);
@@ -199,7 +220,7 @@ export const CompetencyHeatmap: React.FC = () => {
                           .join('. ')
                       : `${member.name} — ${skill.name}: not evaluated`;
                     return (
-                      <td key={skill.id} title={detail} aria-label={detail} className="p-0">
+                      <td key={skill.id} title={detail} aria-label={detail} className="p-0.5">
                         <span
                           className={`flex h-8 min-w-10 items-center justify-center rounded text-xs font-semibold ${
                             info ? info.color : 'border-theme-surface-border text-theme-text-muted border'
@@ -214,7 +235,7 @@ export const CompetencyHeatmap: React.FC = () => {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollCueRow>
       )}
     </section>
   );

@@ -47,15 +47,15 @@ The hub shows seven areas as cards. `?page=` selects the area and `&tab=` the
 destination; the areas are declared in
 `frontend/src/components/training/trainingAdminAreas.ts`.
 
-| Area (`?page=`)                         | Destinations (`&tab=`)                                                                                 |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| **Overview** (`dashboard`)              | Dashboard (`overview`), Compliance Matrix, Expiring Certs, Training Waivers                            |
-| **Records** (`records`)                 | Submissions to Review, Sessions, Course Cohorts, Shift Reports, Monthly Status                         |
-| **Curriculum** (`curriculum`)           | Requirements, Course Library, Programs (`pipelines`)                                                   |
-| **Evaluations** (`evaluations`)         | Skill Evaluations, Knowledge Tests, Skills Test Templates (`templates`), Skills Test Records (`tests`) |
-| **Program Management** (`enhancements`) | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                         |
-| **Compliance Reporting** (`compliance`) | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast                                   |
-| **Settings & Data** (`settings`)        | Manual Entry Rules, Integrations, Import Past Training, Headline Metrics (`metrics`)                   |
+| Area (`?page=`)                         | Destinations (`&tab=`)                                                                                                                                                         |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Overview** (`dashboard`)              | Dashboard (`overview`), Compliance Matrix, Expiring Certs, Training Waivers                                                                                                    |
+| **Records** (`records`)                 | Submissions to Review, Waiver Requests, Sessions, Course Cohorts, Shift Reports, Monthly Status                                                                                |
+| **Curriculum** (`curriculum`)           | Requirements, Course Library, Course Links, Programs (`pipelines`)                                                                                                             |
+| **Evaluations** (`evaluations`)         | Skill Evaluations, Knowledge Tests, Skills Test Templates (`templates`), Skills Test Records (`tests`)                                                                         |
+| **Program Management** (`enhancements`) | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                                                                                                 |
+| **Compliance Reporting** (`compliance`) | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast                                                                                                           |
+| **Settings & Data** (`settings`)        | Manual Entry, Practical Skills, Session Waivers, Shift Evaluations, Requirements (`requirements-link`), Compliance, Integrations, Import History, Headline Metrics (`metrics`) |
 
 Destination ids are unique across the hub, so a link is resolved by its
 `&tab=` first. Links that name the `setup` and `skills-testing` section ids, or

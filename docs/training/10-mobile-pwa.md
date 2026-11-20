@@ -114,7 +114,14 @@ You can also use the browser menu: **three-dot menu > Install The Logbook**
 Once installed, The Logbook runs on its own, outside the browser:
 
 - **No browser toolbar.** The app uses the whole screen. The phone's status bar
-  takes the app's dark red colour.
+  takes the colour of the app's navigation bar for the theme you picked in the
+  app — white in Light, dark navy in Dark — so the header and the bottom bar do
+  not sit on a band of another colour _(2026-11-15; it was dark red, and
+  followed the phone's own light or dark setting rather than the app's)_. On
+  Android, the gesture bar at the bottom of an installed app is dark navy
+  whatever the theme: Android takes that colour from the app when it is
+  installed, so an app installed before this change may keep dark red there
+  until it is reinstalled.
 - **Its own window.** It shows as a separate app in your app switcher, not as a
   browser tab.
 - **You stay signed in** between launches, within your department's sign-in

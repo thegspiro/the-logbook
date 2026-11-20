@@ -174,6 +174,10 @@ class Event(Base):
     actual_end_time: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )  # Recorded by secretary when event actually ends
+    # Guests a coordinator counted at an outreach event nobody signed in at —
+    # an assembly, a block party. Community Engagement reads it as the event's
+    # actual audience in place of guest sign-ins; NULL means nobody counted.
+    guest_headcount: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # RSVP settings
     requires_rsvp: Mapped[bool] = mapped_column(

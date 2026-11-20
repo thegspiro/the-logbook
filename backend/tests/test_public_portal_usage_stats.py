@@ -22,6 +22,7 @@ stuck at zero, which is the same defect in a new coat.
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -41,10 +42,19 @@ from app.models.public_portal import (
     PublicPortalAPIKey,
     PublicPortalConfig,
 )
+from tests.clock_support import reread_each_test
 
 pytestmark = [pytest.mark.integration]
 
-NOW = datetime.now(timezone.utc)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    return {"NOW": now}
+
+
+(NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 async def _make_config(db: AsyncSession, org_id: str) -> str:

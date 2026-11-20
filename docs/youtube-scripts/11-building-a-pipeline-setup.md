@@ -196,8 +196,11 @@ steps editor; toggle the eye icon closed on one of them.]**
 > a course imported from an outside provider should be able to satisfy this
 > requirement. Leave it off for requirements that must be delivered in-house."
 
-**[SCREEN: On the Create Session form, show the "Counts toward certification
-requirements" toggle.]**
+**[SCREEN: On the training-event form's **Training Info** step (Training Admin
+→ Create Session), show the "Counts toward certification requirements"
+checkbox.]** **[PRODUCTION NOTE — 2026-11-16. Create Session now opens the
+training-event form shared with Events → Create Event; re-shoot this cue on
+its Training Info step.]**
 
 > "And on the session side there's **'Counts toward certification requirements.'**
 > Leave it on for real, certification-grade delivery. Turn it off for an informal

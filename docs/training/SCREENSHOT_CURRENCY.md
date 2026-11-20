@@ -46,6 +46,57 @@ Nothing was captured by this pass.
 | 10 | Phone (390px): expense report line items as cards with the totals row; the inventory stock matrix with pinned Size column and scroll cue; message history as cards | Create |
 | 11, 12, 05, 01, 14 | Phone captures of expense line items, grant applications, inventory import preview, member import preview / Assigned Inventory, election integrity audit log | Optional; check any existing phone image of these tables (e.g. `10-05-mobile-inventory` is a different list and stays valid) |
 
+## Queued by the month review (October 16 – November 16)
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-month-review-october-16--november-16-2026).
+Nothing was captured.
+
+| Guide | Screen                                                                                                                                         | Action                                              |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| 01    | Leave Requests page (Ask for leave, To decide, Your requests); Leave of Absence settings with requests on; profile Leave card with Ask for leave | Create                                              |
+| 01    | `01-11-create-waiver` (Waivers page now carries a Leave Requests / Members Settings line)                                                         | Check                                               |
+| 02    | Session Waivers settings; event-page "Request to be excused" card and **Ask to be excused**; waiver request queue and decision page; My Waiver Requests | Create                                              |
+| 02    | Evaluation form builder sources grouped with "(turned off)" and the scoring-gap note; a figure with its counts; requirement modal with a custom tier; monthly shifts on My Training | Create                                              |
+| 02    | Any capture of the Settings & Data tab row (now Manual Entry, Compliance, Import History)                                                      | Check                                               |
+| 03    | Preceptor link dialog with QR code; outside shift row with **Preceptor link**; close-out "A shift evaluation is still needed for:"              | Create                                              |
+| 03    | `03-108`, `03-113` (outside-shift card has a button now)                                                                                         | Check                                               |
+| 04    | Documents History folder with **Managed in History**; draft request-form warning with its button; Email Templates **Meetings & Minutes** group | Create                                              |
+| 04    | `04-14-meeting-minutes` and Meeting Attendance: Voting column, Waiver requests / Waiver settings                                               | Check                                               |
+| 06    | Facility form inline error and discard dialog; Maintenance list with **Due soon**; Card Readers                                                | Create / Check                                      |
+| 08    | History: overview with all cards, Import a Roster, Review _file_, merge, Photos and Media, media item with Photo-use consent, document with Open the PDF, album with Show to members, Titles and clearance | Create; supersedes the History overview capture queued earlier |
+| 11    | Next year's budget card reading _Not entered yet_; a draft reopened from Submit; Deny request asking Keep editing / Discard changes             | Create                                              |
+| 12    | Add Task with **Assigned To (optional)**; `12-10-donors` (a view-only capture would show Managers only)                                         | Create / Check                                      |
+| 13    | Notification Rules tab with **Medical Screening Expiry**                                                                                       | Create                                              |
+| 14    | Create dialog **Who may vote** customized; Voter Eligibility per-type rows; ballot item **Voter rules for this item**; Meeting Attendance page; ballot link **You've already voted**; Results Report with **Send Me a Copy**; template **CC positions** | Create                                              |
+| 14    | `14-31-voter-eligibility-annual`, `14-07-eligibility-roster`                                                                                   | Replace                                             |
+| 18    | `18-04-my-orders-unpaid`                                                                                                                       | Replace                                             |
+| 18    | Admin order dialog Delivery and Cancel order; **Cancel ORD-…?** confirmation; cancelled order with Refund; checkout with Shipping address flagged | Create                                              |
+
+## Queued by the November 15 – 16 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-15--16-2026).
+Nothing was captured by this pass. The training-event form's own queue, written
+by #4347, is the next section down and is unchanged.
+
+| Guide | Screen                                                                                                                                                                | Action                                                                                       |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 14    | Elections list as an election manager: the **Elections pages** row (All Elections, Meeting Attendance, Settings) and no gear button in the header                      | Replace `14-01-elections-list`                                                               |
+| 14    | An open election's header at a desktop width: stages, Voting closes with time left, Turnout, Winner, **Close Election** beside the status badge, and the section links | Create                                                                                       |
+| 14    | The same header's section links on a closed election, **Integrity & Audit** current                                                                                   | Create                                                                                       |
+| 14    | **Integrity & Audit** section with its report loaded (no toggle)                                                                                                      | Replace `14-19-forensics-report`; rewrite its alt, which names the Forensics & Integrity panel |
+| 14    | Elections pages row at 390px with the short labels Elections / Attendance / Settings                                                                                  | Create                                                                                       |
+| 14    | `14-05-nominations-tab`, `14-07-eligibility-roster`, `14-17-election-results`, `14-25`, `14-26`, `14-27`: the tab strip is now a row of links under the header          | Check; replace any that shows the old tab strip or the controls panel's Open/Close buttons |
+| 02    | **Training Admin → Curriculum → Course Links** with two or more names, one showing **Also spelled …** and **Suggested:**, and **Link all suggested (N)**               | Create                                                                                       |
+| 02    | The Course Links confirmation: "Link "…" to …?" with **Link records** / **Not yet**                                                                                    | Create                                                                                       |
+| 02    | Requirement form with **Requirement Type** set to **Evaluated Calls** and the **Required evaluated calls** box                                                         | Create                                                                                       |
+| 02    | A program's requirement row reading "x / N calls on evaluations"                                                                                                      | Create                                                                                       |
+| 02    | Shift evaluation form editor refusing **Active** off: "'…' is still in use by …"                                                                                       | Create                                                                                       |
+| 02    | Training History record imported by the CSV wizard showing **Imported**                                                                                               | Fold into the November 8 – 10 "source line" capture                                          |
+| 04    | Events list with a weekly mandatory series: only the occurrences within two months in **Needs You**                                                                  | Check `04-01-events-list`; replace if its band shows mandatory events further out          |
+| 06    | Add Operator member list (only current members)                                                                                                                        | Check `06-23-add-operator-member-picker`; replace if a former member is in the list         |
+| 12    | Deadline text in its last two weeks (now red-800, red-400 in dark mode)                                                                                                | Check `12-02`, `12-03`, `12-05`; replace only where such a deadline is in frame              |
+| 10    | Phone status bar matching the navigation bar in Light and Dark                                                                                                        | Device photo only: Playwright does not draw the status bar. Optional                         |
+
 ## Queued by the November 14 – 15 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-14--15-2026).
