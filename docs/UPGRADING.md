@@ -311,6 +311,34 @@ malformed entry stops the backend from starting** (`python -m app.preflight`
 reports it): each entry must be an `http://` or `https://` URL with a host and
 no user name, password, query or fragment.
 
+### The backend needs `markdown-it-py`; History uploads need `pypdfium2` and `ffmpeg` (2026-11-02)
+
+The History module renders biographies and other long text as Markdown with
+`markdown-it-py`, pinned in `backend/requirements.txt` since 2026-11-02 and
+imported when the API's History routes load. Those routes register whether or
+not a department uses History, so **a backend started without the package fails
+at import and never serves a request**. Two later History additions need more
+on a host that runs the backend from source; neither stops a start:
+
+- **`pypdfium2`** (2026-11-14) draws the preview of a History document's first
+  page. It is imported only when a PDF is uploaded to History, so without it
+  the backend starts and that upload fails.
+- **`ffmpeg` and `ffprobe`** (2026-11-13) strip audio and video of their
+  metadata — a phone recording carries where it was made — and make a video's
+  poster frame. Without them History refuses audio and video uploads with
+  "Audio and video uploads need ffmpeg, which is not installed on this server";
+  photos and documents still upload.
+
+- **Docker (including Unraid Compose Manager and the single-image Unraid
+  template):** rebuild the backend image (`docker compose build backend` or
+  `--build`). The backend Dockerfile installs `requirements.txt` and the
+  `ffmpeg` package, and the combined image is built from it.
+- **Running from source:** run `pip install -r backend/requirements.txt`, and
+  install ffmpeg from the distribution (on Debian and Ubuntu,
+  `apt-get install --no-install-recommends ffmpeg`), before restarting.
+
+No data change.
+
 ### Leave and training-waiver reasons are encrypted at rest (2026-10-28)
 
 A migration (`b74bcce55c11`) runs on the next start and **encrypts every existing
@@ -802,6 +830,45 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### My Hours counts outside hours; Course Links and historical imports can be undone (2026-11-20)
+
+Nothing blocks a restart. Two additive migrations ship in this range, and
+`main` at `357402ed` has one head, `a541e82fef9f`:
+
+- `0d54dd90d6ba` creates `training_course_links` and
+  `training_course_link_records`, so a Course Links link can be undone. No
+  existing row changes. Links made before the upgrade were not recorded and
+  cannot be unlinked from the screen. The downgrade drops both tables and the
+  link history with them; the training records keep their courses.
+- `a541e82fef9f` adds the nullable `organizations.short_name` (up to 20
+  characters). Every existing department gets NULL and reads exactly as
+  before; the downgrade drops the column and any short name entered.
+
+Changes you will notice:
+
+- **My Hours and the profile's Shift & Call History include counted outside
+  hours** _(#4394)_. A member who logs shifts worked for other departments
+  sees higher headline totals than before, split by a two-colour bar. The
+  department's **Member Hours** report is unchanged. Set a **Short Name** in
+  **Settings → Profile** so the department's own shifts are labelled briefly in
+  the new **All shifts** list.
+- **Former members are refused on member-picker writes** _(#4380, #4432)_.
+  Pickers across training, events, communications, finance approvals and
+  grants no longer list members who have left. The server answers **400**,
+  "Only current members can be chosen as …", when a former member is sent as
+  an event request's coordinator, the events default coordinator, a grant
+  assignee, an instructor qualification's member, a lead instructor, or crew
+  on a shift report with no linked shift; a cohort skips one with a warning.
+  A record that already names a former member still saves unchanged. An
+  integration or script that assigns work to departed members now gets that
+  error instead of a stored row.
+- **Historical Data Import steps have Undo this step** _(#4353, #4389)_. An
+  undo removes what that committed step wrote, keeps records edited since, and
+  runs in order.
+- **Archiving a vehicle, or archiving or restoring a facility, no longer
+  returns an error after it worked** _(#4390)_; nor does reordering a training
+  program's requirements.
+
 ### My Training follows compliance profiles; scheduling notification settings are read back; a Source column on exports (2026-11-19)
 
 Nothing blocks a restart, and no migration ships in this range: `main` at
@@ -862,6 +929,76 @@ changes and the downgrade drops the column.
   shift awaiting close-out sees a lower figure than before, matching the Hours
   view.
 
+### Training: one form for Training events, evaluated calls, and evaluation credit that follows the shift (2026-11-16)
+
+Nothing blocks a restart. Migration `9d044fc1d81b` widens the training
+requirement type list by one value (`evaluated_calls`); migration
+`611204dcf8d1` adds the nullable column `shifts.evaluation_requirements`. No
+existing row changes, and nothing is backfilled.
+
+- **Create Session and Create Event share one training-event form.** Training
+  Admin's **Create Session** and **Events → Create Event** with the type
+  **Training** open the same four-step form, and an event's training details
+  are changed with **Edit training details** on its **Training details** card.
+  **Require instructor confirmation** is now **Require sign-off**, on the
+  **Training Info** step. A new Training event starts with RSVP **off**,
+  check-in opening **60** minutes before, and manual check-out **off** (the
+  old Create Session form started with RSVP on, 15 minutes and check-out on).
+- **Saving training details needs Manage all events.** A training manager
+  without it can still edit a Training event's schedule and settings, sees
+  **Training Info** read-only, and is shown a notice in place of **Create
+  Session**. Check that the officers who create drills hold that permission.
+- **Evaluation credit follows the shift.** Taking a member off an ended
+  shift, or marking them **No-show**, now takes back that shift's
+  shift-evaluation credit toward their program requirements. Changing a
+  requirement's type or its "leave out the lowest rating" setting restates
+  every evaluation's credit toward it.
+- **A department shift's evaluation list is fixed when it ends.** A shift
+  that ended before the upgrade is fixed from the settings in force the first
+  time it is read afterwards; the settings that applied when it ended cannot be
+  recovered.
+- **An evaluation form in use cannot be deactivated**; the refusal names the
+  program or setting that uses it.
+- **Downgrading** turns every **Evaluated Calls** requirement into a
+  **Checklist** requirement (which it was is lost), and drops the stored
+  evaluation lists, so ended shifts follow the current settings again.
+
+### Elections and minutes: ten notices become editable templates (2026-11-14)
+
+Migration `c4e81b7a2d95` only widens the template type list. Ten notices that
+were built in code — nominations open, you've been nominated, nomination
+accepted for you, proxy authorized, the pre-meeting package, minutes ready for
+review, action items assigned, the two action item reminders and the open
+action items digest — now appear under **Communications → Email Templates**,
+where a department can reword, preview, test-send or switch them off.
+
+- **Minutes and meeting notices now go out through the department's own mail
+  settings, logo and footer**, as every other templated email does.
+- **A template's default CC and BCC now apply to these ten** (see the
+  2026-11-11 entry below), except the pre-meeting package, which a secretary
+  sends by hand.
+- **A switched-off Pre-meeting package refuses to send** and says why, before
+  the PDF is built.
+- The election managers' delivery alarms (ballots, announcement, automatic
+  reminder not sent) stay in code and cannot be switched off.
+- The downgrade deletes these templates' rows, a department's edits included.
+
+### Shift evaluations: linked department requirements count evaluations, and no-show crew are excused (2026-11-14)
+
+No migration. Two changes to how shift evaluations are counted:
+
+- **A department requirement of type Evaluated shifts, Transports or Refusals
+  is credited from submitted shift evaluations, not training records.** Linked
+  into a program, such a requirement used to fall back to matching training
+  records by type. It now counts the member's submitted evaluations (once each,
+  however many programs one is scoped to), and **a training record no longer
+  satisfies it**. Members' standing on these requirements can change at the
+  upgrade, in either direction; every compliance screen reads the same count.
+- **Only Assigned and Confirmed crew need a trainee report or a shift
+  evaluation.** A trainee marked No-show, or still pending, no longer holds up
+  close-out, and close-out no longer drafts a report or asks an evaluation for
+  them.
+
 ### Leave reminders, an open-ended leave digest, and member leave requests (2026-11-14)
 
 Nothing blocks a restart. Migration `c8d2f61a7e34` creates three empty tables
@@ -888,6 +1025,26 @@ template type list by five values; no existing row changes.
   already sent may go out again after a later upgrade. Leaves an approved
   request created are kept.
 
+### Store: order statuses move forward, Cancelled cancels, and PayPal keeps its mode without new keys (2026-11-14)
+
+No migration. Three changes a store manager will meet:
+
+- **An order's status no longer moves backwards into its payment stages.**
+  Submitted, Awaiting payment and Paid follow the payments recorded against
+  the order, so a status pick that would move an order back — from Paid to
+  Awaiting payment, from Ordered to Paid, and so on — is refused with a
+  message, singly and in bulk. A settled order cannot be marked Submitted or
+  Awaiting payment at all. Ordered, Ready for pickup and Fulfilled may still
+  step back among themselves to correct a fulfilment mistake; leaving
+  Fulfilled clears the fulfilled date and quantities.
+- **Choosing Cancelled is a real cancellation.** It used to set the status
+  alone. It now records the cancel date and reason and emails the member the
+  cancellation notice, as **Cancel order** does.
+- **Switching the PayPal integration between sandbox and live needs that
+  mode's Client ID and secret in the same save**; a switch without them is
+  refused with a 422, since the two modes are different PayPal REST apps. The
+  PayPal card now has a **Settings** button.
+
 ### Members are emailed about their leave of absence (2026-11-14)
 
 Nothing blocks a restart. Migration `b4e7c2a91f06` widens the template type
@@ -908,6 +1065,59 @@ list by one value; no existing row changes.
   checked.
 - **Downgrading** deletes the new template's rows (a department's edits to it
   included) and narrows the type list again.
+
+### Elections: voter rules are set per member type, and can take a vote away from some members (2026-11-13)
+
+No migration: stored rules are converted when read and never rewritten.
+**Election Settings → Voter Eligibility** now sets who may vote as one row per
+member type — may vote, a waiting period, and up to four meeting-attendance
+rules — for each of four kinds of vote (regular business meeting, annual
+meeting, bylaws amendment, special meeting; each uses the regular set until
+given its own). A new election picks its rules with **Kind of vote**. The
+membership tier screen no longer offers **Can vote** or an attendance
+threshold; its stored values seed the rows until the secretary first saves
+Voter Eligibility. Elections created before the upgrade keep their old rules
+until they close.
+
+Two changes can only take a vote away, never give one:
+
+- **A tier's attendance threshold now also decides who is sent a ballot.** It
+  used to be checked only when the member tried to vote, so a member short of
+  it got a ballot link and was then refused. Now they are not sent one.
+- **Administrative and social members are held to their status row's waiting
+  period** as well as their class row's. Before, they waited only on their
+  class.
+
+Check the roster on a new election before sending ballots. A secretary's voter
+override still lets a member vote who fails the rules.
+
+### Training: a leave that keeps training requirements excuses no training, and a leave counts once (2026-11-13)
+
+No migration. A leave of absence recorded as applying to **meetings only**
+(the officer chose to keep the member's training requirements through it) used
+to reduce the member's training targets anyway. It now excuses nothing, so
+**those members' training targets go up** to what the officer meant them to be.
+The leave still shows wherever leaves are listed.
+
+Recording a leave also writes a matching training waiver, and the two were
+counted as two reasons, so every month read both "on leave" and "waived". The
+waiver is now read as that leave, so a month is counted once.
+
+### Shift evaluations: outside-agency preceptor links, and credit only for programs joined by the shift (2026-11-13)
+
+Migration `533f8aba187e` creates `shift_evaluation_links` (empty), adds
+`training_module_configs.shift_evaluation_link_days` with a server default of
+**7**, and adds the `shift_evaluation_preceptor_link` email template type. An
+outside agency's preceptor can now fill in a trainee's evaluation through a
+no-login link, emailed to them, that stays open that many days after the
+shift. The downgrade drops the table, so outstanding links stop working.
+
+- **An outside shift awaiting approval now shows "Evaluation needed"** where
+  an evaluation is due.
+- **A shift counts only toward programs the member had joined by the shift's
+  date.** An evaluation of an earlier shift no longer credits a program joined
+  afterwards, and **a requirement already marked complete can reopen** when a
+  re-sync leaves its credit short.
 
 ### Waiver requests nobody decides close after seven days (2026-11-13)
 
@@ -931,6 +1141,20 @@ Nothing blocks a restart, and no migration is involved.
 - **A waiver policy's CC positions are copied in the app only.** Holders get
   the bell, not an email; to email a copy of each decision, add the positions
   to the _Waiver Decided_ template's CC positions.
+
+### Shift decline and equipment-check alerts reach the Fire Chief, and only current members (2026-11-11)
+
+No migration. The positions a department picks to hear about a declined shift,
+and about a failed equipment check, were matched against position names as
+written: the setting's `chief` never matched the seeded **Fire Chief** position
+(`fire_chief`), so the Chief was never told. They are now matched by office,
+so the Fire Chief receives them, and only **current members** holding the
+position do (a former member left on a position no longer gets them).
+
+**A department that never saved its shift-decline settings now gets the
+defaults the settings screen shows**: alerts to holders of Chief, Deputy Chief
+and Captain. Before, an unsaved setting notified no position at all. Review
+**Scheduling settings → Notifications** if that is not wanted.
 
 ### Email templates: saved CC and BCC addresses start being used, and waiver requests are emailed (2026-11-11)
 
@@ -1155,6 +1379,28 @@ the next posting run:
 - A posting already waiting on a retry is resent under its original request
   id; if QuickBooks had created it, QuickBooks answers with that original
   (cash) Purchase rather than creating a Check beside it.
+
+### Training imports: a mapped course's hours are credited when the provider reported none (2026-11-06)
+
+A Target Solutions policy acknowledgment, and anything else a provider reports
+with zero hours, landed on the member's record as 0 hours even when it was
+mapped to a library course the department counts as an hour. Imports now take
+the mapped course's hours (its Credit Hours, or its duration when that is
+blank), and **mapping a course now updates the records already imported from
+it**.
+
+Migration `de53b573ad3c` backfills the records imported before the change. It
+updates a record only when the provider reported no hours, the record is still
+linked to the course its provider course is mapped to, it holds no hours and no
+credit hours, and the course credits some. Hours a provider did report, a
+record an officer re-linked by hand, and hours or credit an officer typed in
+are left alone.
+
+- **Expect compliance figures to rise** for members whose zero-hour imports
+  were holding them short of an hours requirement.
+- **The downgrade returns to zero** every record matching the same conditions
+  that holds exactly the course's hours, including one an officer set to that
+  figure by hand.
 
 ### Finance: an optional live QuickBooks Online connection (2026-11-06)
 
@@ -1752,6 +1998,18 @@ compliant. Migration `d6906e3dd76c` carries the data side.
   The link is not removed by a downgrade, and is harmless to the previous
   build.
 
+### The seeded Historian position can use the History module (2026-11-03)
+
+The History module brings three permissions, `history.view`, `history.manage`
+and `history.publish`. Migration `02c94bb742d6` adds all three to the seeded
+**Historian** position on every existing installation (the `is_system` row
+only; a position the department created is not touched), so a department that
+turns the module on finds its Historian able to use it. Members holding the
+Historian position therefore gain those rights at the upgrade. Remove them on
+the positions screen if your department does not want that. The downgrade
+takes the three grants back off the same seeded rows, including any an
+administrator added there by hand after the upgrade.
+
 ### Files stored before malware scanning are scanned now (2026-11-03)
 
 Upload scanning only ever covered new uploads, so files and images stored
@@ -1846,6 +2104,39 @@ and minutes adopted before adoptions were stamped give their meeting no
 approver or date. See
 [Events & Meetings](training/04-events-meetings.md#submitting-and-approving-minutes).
 
+### Evaluations: the seeded Chief position gains five evaluation permissions (2026-11-02)
+
+Member performance evaluations bring new permissions, and three migrations add
+them to the seeded **Fire Chief** position (the `is_system` row only), because
+that position stores its own copy of the rank's list:
+
+| Migration      | Grants                                        | What it allows                                                                          |
+| -------------- | --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `b65eaef983b9` | `evaluations.configure`, `evaluations.manage` | build evaluation templates and workflows; open and close review periods                 |
+| `1476abf56dd3` | `evaluations.conduct`, `evaluations.view_all` | be assigned as an evaluator; read every member's evaluations and complete calibration   |
+| `857291750c67` | `evaluations.delete`                          | delete an evaluation (the Chief only, owner decision 2026-11-02); the member is emailed |
+
+Whoever holds the Chief position gains all five at the upgrade. A position the
+department created is not touched, and the IT Manager already holds `*`. Each
+downgrade takes its grants back off the same seeded rows, including grants an
+administrator added there by hand afterwards.
+
+### A transferred applicant's screenings now count for the member (2026-11-02)
+
+A department that screens applicants before the membership election recorded
+those screenings against the prospect, and the transfer to membership left them
+there: the new member read "0 of N met" and owed screenings they had already
+passed. The transfer now files them under the member too, and migration
+`beedcad5b36a` does the same for every applicant transferred before the
+upgrade: each screening record of a transferred prospect that names no member
+gets the member the prospect became, when that member still exists in the
+department. Nothing is deleted, and the record keeps its prospect link.
+
+- **Members converted from applicants may change compliance standing at the
+  upgrade**, from "not compliant" to whatever the screenings they passed as
+  applicants say. This is the intended correction.
+- The downgrade clears exactly the links this migration or a transfer made.
+
 ### A month partly on leave now excuses the whole month by default (2026-11-02)
 
 Training compliance has a new department rule, **Months on leave** (Training
@@ -1883,6 +2174,67 @@ moment you upgrade**:
   rules (not eligible, or an attendance minimum).
 - A compliance profile with the **junior** membership type now matches members
   whose status is Junior; before, it matched nobody.
+
+### Applicants are assigned to case managers and interviewers; existing coordinators keep seeing everyone (2026-10-31)
+
+Case managers and interviewers are now assigned to individual applicants, and
+seeing every applicant takes the new `prospective_members.view_all`. Without
+it, a member sees only the applicants assigned to them — and nobody is assigned
+to anyone at the upgrade.
+
+So migration `c588f525fdbb` gives `prospective_members.view_all` to **every
+position holding `prospective_members.view` or `prospective_members.manage`,
+department-created positions included** (a position already holding `*` or
+`prospective_members.*` needs nothing). Everyone who saw the whole pipeline
+before the upgrade still does.
+
+- **To limit a committee position to its own applicants**, remove `view_all`
+  from it on the positions screen after the upgrade, and assign its members to
+  applicants.
+- A member assigned to an applicant is emailed (a new template type,
+  `application_assigned`). Nothing is sent at the upgrade itself; assignments
+  start empty.
+- The downgrade removes `view_all` from every position and drops the
+  assignments.
+
+### A member is checked in to a shift once; duplicate rows are merged (2026-10-31)
+
+Migration `1740b4886e52` adds a unique key on `shift_attendance (shift_id,
+user_id)`. Nothing at the database level stopped a member being recorded twice
+on one shift — two requests racing past the service's check, or a check-in
+plus an officer's close-out entry — so **the migration first merges any
+duplicates**. For each member recorded more than once on a shift it keeps the
+earliest-created row and gives it the earliest check-in, the latest check-out,
+and the **largest** duration and call count among the group, then deletes the
+others.
+
+- **Credited shift hours can fall** for a member who had duplicate rows: two
+  rows for the same stint used to count twice, and the merge keeps the longer
+  one rather than the sum. Two genuinely separate stints on one shift recorded
+  as two rows are also collapsed into one.
+- **Take the database backup first if that matters to you.** The downgrade
+  removes the key only; the deleted rows do not come back.
+
+### Weather alerts and generic webhooks start doing what they say (2026-10-29)
+
+Both integrations could be connected and passed their **Test**, and that was
+all they ever did. An installation that connected either before this release
+sees them start working at the upgrade:
+
+- **NWS Weather Alerts** checks the department's zone every 15 minutes and
+  announces each Severe or Extreme alert once: a **dashboard banner** while it
+  is active and a **bell notice to every current member**, both on by default,
+  and an email (the new optional **Severe weather alerts** kind), off by
+  default. Turn any of them off in the integration's settings.
+- **Generic Webhooks** are now sent `event.created`, `shift.created` and
+  `training.recorded`. A webhook's settings pick which; **none ticked means
+  all**, so a webhook connected earlier starts receiving every event at its
+  URL. Check that the receiving URL is still yours, or tick the events you
+  want, before upgrading. Each delivery is recorded in the integration's run
+  history.
+- Migration `f90b1124e6f4` only creates the empty `weather_alerts` table. The
+  downgrade drops it, so alerts still active after a later re-upgrade are
+  announced again.
 
 ### Election Settings gains a Voter Eligibility section (2026-10-29)
 
@@ -2459,6 +2811,27 @@ Three changes to how a session ends. None blocks a restart and none needs a migr
 A reverse proxy that strips unknown request headers needs nothing: the header only
 shortens the sender's own session.
 
+### Deleting a member keeps the skill tests and shift reports they filed on others, and no longer fails on apparatus history (2026-10-21)
+
+Two migrations change what permanently deleting a member does:
+
+- **`cbe0de50f202`**: `skill_tests.examiner_id` and
+  `shift_completion_reports.officer_id` were `NOT NULL` with
+  `ON DELETE CASCADE`, so deleting an examiner or field training officer **silently
+  deleted every skill test and shift report they had filed on other members**.
+  Both columns become nullable with `ON DELETE SET NULL`: the trainee's record
+  stays and reads with no examiner or officer. The downgrade restores the
+  cascade, and restores `NOT NULL` only when no row has lost its attribution.
+- **`7c8e6565e05e`**: a migration of 2026-02-14 meant to swap each apparatus
+  user-attribution column's foreign key (maintenance, fuel, status changes and
+  so on) for an `ON DELETE SET NULL` one, but added the new key beside the
+  original `RESTRICT` key. On an upgraded database, deleting a member who had
+  ever logged apparatus activity failed. The duplicate keys are dropped, so the
+  delete now succeeds and the apparatus history keeps its rows with no member
+  named. A fresh install never had the duplicates. The downgrade is a no-op.
+
+Neither changes an existing row.
+
 ### Positions named after a rank leave the member pickers (2026-10-21)
 
 Onboarding seeds Chief, Deputy Chief, Assistant Chief, Captain, Lieutenant,
@@ -2684,6 +3057,24 @@ The same release adds two things that need no action:
   no note. No existing line is converted. A device still running the previous
   app shows a Present line as a Works line and files its Pass / Fail, which the
   server stores the same way.
+
+### Medical supplies are filed under the storage area their location text names (2026-10-16)
+
+Medical supplies recorded where they are kept only as free text ("Medical
+Cabinet"), while the rest of Inventory files items under storage areas. The
+medical supply form now offers the storage areas, and migration
+`58522b08f6a7` carries the existing text across: a medical supply with no
+storage area is filed under an **active** storage area of the department whose
+name matches its text, ignoring case and extra spaces, **only when exactly one
+area matches**. Everything else is left as it was.
+
+- The free text is kept, as the note shown beside the area (hidden when it
+  merely repeats the area's name). The room is not touched.
+- A supply whose text matched no area, or several, still shows only its text;
+  file it by hand.
+- Migration `0bbf263a5ff0` also adds a per-supply **Kept on apparatus only** setting
+  (a LUCAS device or cardiac monitor that lives on the ambulance and has no
+  shelf stock). Every existing supply starts with it off.
 
 ### A weekly security report is emailed to the IT Manager (2026-10-16)
 

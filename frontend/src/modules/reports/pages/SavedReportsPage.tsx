@@ -494,7 +494,7 @@ export const SavedReportsPage: React.FC = () => {
             className="modal-panel-scroll w-full max-w-lg"
           >
             <form
-              className="modal-body space-y-4"
+              className="modal-body space-y-4 px-6 py-4"
               noValidate
               onSubmit={(e) => {
                 e.preventDefault();

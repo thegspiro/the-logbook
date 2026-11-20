@@ -56,7 +56,10 @@ program enrollments, external training integrations, and compliance reporting.
   **Not set up** instead of 100%; My Training, Programs and Course Library
   explain themselves to a member with nothing in them
 - **Competency Matrix** — Department readiness heat-map with color-coded
-  proficiency levels
+  proficiency levels. Since 2026-11-20 (#4413) it scrolls both ways inside a
+  bounded, keyboard-focusable box, with the member column pinned left and the
+  skill row pinned on top; member names wrap within a 7rem column instead of
+  truncating
 - **Expiring Certifications** — Tiered alerts at 90/60/30/7 days with
   escalation for expired certs
 - **Compliance Summary** — Per-member green/yellow/red compliance card on
@@ -68,6 +71,14 @@ program enrollments, external training integrations, and compliance reporting.
   proportional requirement adjustment. Supports permanent waivers (no end date),
   a New Member waiver type, and multi-select "Applies To" (Training + Meetings +
   Shifts can be combined)
+- **Session Waiver Requests** _(2026-11-11)_ — a member asks to be excused from
+  one training session that counts toward their attendance requirement
+  (**Request to be excused** on the event page; **My Training > My Waiver
+  Requests**). Policy at **Training Admin > Settings & Data > Session
+  Waivers**; deciders use **Training Admin > Records > Waiver Requests** or
+  `/attendance-waivers/{id}`, which never decides on load. Optional supporting
+  documents, emails at each step, a seven-day expiry. See
+  `backend/app/docs/TRAINING_WAIVERS.md`, "Session Waiver Requests"
 - **Bulk Record Creation** — Up to 500 records per request with duplicate
   detection (same member + course name + completion date within ±1 day)
 - **Rank & Station Snapshots** — `rank_at_completion` and
@@ -114,7 +125,7 @@ program enrollments, external training integrations, and compliance reporting.
 - **Manual Shift Report Page** — `/training/log-shift`, for departments without
   the Scheduling module
 - **Manual Entry Admin Config** — `ManualEntrySettingsPanel` (Training Admin →
-  Settings & Data → Manual Entry Rules) controls manual entry availability,
+  Settings & Data → Manual Entry) controls manual entry availability,
   allowed apparatus types, default start times, and default shift duration
 
 ---
@@ -151,7 +162,8 @@ fall short. Certification-style requirements now match records by the stored
 ### Types, frequency and targeting
 
 A requirement has a `requirement_type` (hours, courses, certification, shifts,
-calls, skills_evaluation, checklist, knowledge_test, session_attendance), a `frequency` (annual,
+calls, skills_evaluation, checklist, knowledge_test, evaluated_shifts,
+transports, refusals, evaluated_calls, session_attendance), a `frequency` (annual,
 biannual, quarterly, monthly, one_time) and a `due_date_type`
 (calendar_period, rolling, certification_period, fixed_date). `due_date` only
 means anything for `fixed_date`: create and update clear it for every other
@@ -236,6 +248,68 @@ checklist and knowledge test) is limited to legacy records
 (`name_match_until`) and compares stored match keys, not text; see
 [Compliance](Module-Compliance#one-definition-of-who-is-graded-and-how-2026-10-05).
 
+### Course Links: records that name no course _(2026-11-16, #4345)_
+
+Compliance credits a course or certification requirement only through a
+record's `course_id`. Records with a free-text name, and imported records whose
+name matched no library course, have none, and name matching is switched off
+for requirements created since 2026-10 (`name_match_until`). **Training Admin →
+Curriculum → Course Links** (`CourseLinksPanel`, a tab inside `/training/admin`)
+lists those names and lets an officer link each to a library course.
+
+- **Suggestions only** (owner decision, 2026-11-15). Compliance grading does
+  not fuzzy-match; nothing is linked until an officer confirms.
+- **Grouping.** `name_key` (in `app/services/training_course_links.py`) is the
+  provider-course normalizer followed by `training_match_key`, the key
+  certification grading uses, so case, punctuation, a trailing provider id and
+  a "CAPCE" prefix fold into one name. The suggestion comes from
+  `SuggestionCandidates` (0.85 similarity), the provider-course mapping's
+  matcher.
+- **Writes.** A link sets `course_id`, the course's category
+  (`course_category_id`) and training type on every record carrying the name
+  with `course_id IS NULL`, so a second link is a no-op and a hand-picked course
+  is kept. The spellings are read from the database, not the client; the course
+  must be active and in the caller's org (XC-1). A qualification-granting course
+  syncs through `QualificationService`. Both link endpoints are audited.
+- **Endpoints** (all `training.manage`): `GET /training/course-links`
+  (`search`, `offset`, `limit`), `POST /training/course-links` `{key,
+course_id}`, `POST /training/course-links/link-suggested`. Snake_case like the
+  rest of the module.
+
+**Undo and the attention badge** _(2026-11-19, #4389, migration
+`0d54dd90d6ba`)_:
+
+- **Recorded links.** Every link (single or link-all) writes a
+  `training_course_links` row (course, label, `name_key`, `record_count`,
+  `linked_by` / `linked_at`, `undone_by` / `undone_at`) and one
+  `training_course_link_records` row per record it changed, holding the
+  record's `previous_category_id` and `previous_training_type`. Both tables are
+  new; no existing row changes, so **links made before this revision have no
+  row and cannot be undone**.
+- **Undo** (`POST /training/course-links/{link_id}/undo`, `training.manage`,
+  audited as `training_course_link_undone`) locks the link row, then puts back
+  `course_id = NULL` and the previous category and type on each record still
+  on that course and not updated since the link. "Not updated since" is
+  `app/utils/edit_window.changed_since` with a two-minute `EDIT_TOLERANCE` —
+  the helper the historical import undo uses — so the link's own write does
+  not count as an edit. Records edited since are kept and counted (`kept` in
+  the response). Members' qualifications are recomputed from the records still
+  on the course, so a qualification only the link supported is removed. A link
+  can be undone once; a second attempt is a 400 ("That link has already been
+  undone.").
+- **History**: `GET /training/course-links/history` (`offset`, `limit`),
+  newest first; the panel shows it as **Recent links**, ten a page.
+- **Badge.** The training attention queue gains an `unlinked_course_names` row
+  ("N training names can be linked to a course", **Review links**) counting
+  only names with a suggested course — **Link all suggested** clears every
+  one, while an unmatchable name would hold the row open for good (owner
+  decision 2026-11-17). The hub maps it onto **Curriculum → Course Links**.
+  It is read live on each hub load, and the panel tells the hub to re-read
+  after a link, link-all or undo. A failure building this row is contained
+  and logged so it cannot drop the queue's other rows, and the suggestion
+  matcher skips pairs whose quick-ratio bound cannot reach 0.85 (2,000 names
+  against 200 courses: 12.3 s to 0.63 s).
+
 ### Freshness window
 
 `recency_days` demands that the completion itself be recent ("CPR taken within
@@ -305,6 +379,13 @@ forecast print N/A where a requirement does not apply.
   row (Fire, EMS, Hazmat, Rescue, …); categories carry an optional
   `registry_code` for NREMT NCCR areas, and category-based compliance (NCCR
   hours, the compliance matrix) reads it.
+- **Source.** `record_sources` labels a record by its provider, "Imported", or
+  The Logbook, reading the `imported_source_records` ledger. Since 2026-11-15
+  (#4344) both Training CSV importers (`POST /training/import/confirm` and
+  `POST /training/records/import-csv`) ledger each record under source system
+  `logbook.training-csv-import`, with the record's own id as `source_id`, in the
+  same transaction. Records they wrote earlier have no ledger row and read The
+  Logbook (see `docs/KNOWN_LIMITATIONS.md`).
 - **Start time.** `start_time` is stored on self-reported submissions and on
   the record an approval creates. A record without one reads blank rather than
   a guessed time.
@@ -889,6 +970,60 @@ offline queue covers an evaluation run with **no connectivity at all** (see
 
 ---
 
+## Shift Evaluations: credit and the frozen requirement list
+
+A submitted shift evaluation credits program requirements of type
+`evaluated_shifts` (one per evaluation), `transports`, `refusals` and, since
+2026-11-15 (#4314, migration `9d044fc1d81b`), `evaluated_calls`, which reads
+`statistics["calls"]`. `evaluated_calls` reuses the `required_calls` target
+column; every reader of that column for the `calls` type checks the type first,
+and `calls` stays fed by shift reports only, so nothing is counted twice. The
+shared table is `EVALUATION_REQUIREMENT_TARGETS` in
+`app/services/shift_evaluation_rules.py`.
+
+- **Frozen at shift end** (#4312, migration `611204dcf8d1`). After a department
+  shift ends, `ShiftEvaluationService._requirements` stores each crew member's
+  requirements in `shifts.evaluation_requirements` (nullable JSON, NULL = not
+  stored yet) on the first read; before it ends the list is computed live
+  (`_live_requirements`). Crew is always read live; forms are reloaded by id,
+  org-scoped. Close-out passes `store=False` so it does not commit inside its
+  shift lock; its own commit saves the value.
+- **Credit re-sync** (#4305). `sync_credit` credits a department-shift
+  evaluation only while its member holds a worked seat
+  (`WORKING_ASSIGNMENT_STATUSES`); `SchedulingService.update_assignment` and
+  `delete_assignment` re-sync. `update_training_requirement` calls
+  `sync_credit_for_requirement` when `requirement_type` or
+  `evaluation_excludes_lowest_rating` changes, revoking credit when the new
+  type takes none. Open: an outside entry moved to a non-evaluating agency, and
+  a combined evaluation whose scope shrinks (`docs/KNOWN_LIMITATIONS.md`).
+- **Forms in use** (#4302). `update_template` refuses `is_active: false` while
+  a program or the general-form setting names the form; an inactive form is
+  refused as a new general form or on program create/update (a program already
+  holding one keeps it). Existing 400s; no API shape change.
+- **Linked department requirements** (#4311, 2026-11-14). A department-level
+  `evaluated_shifts`, `transports` or `refusals` requirement linked into a
+  program is graded in `training_compliance.py` from
+  `load_evaluation_credits`, not from training records. An evaluation counted
+  for several programs counts once; general-form evaluations count.
+- **Worked crew only** (#4300). `WORKING_ASSIGNMENT_STATUSES` (Assigned,
+  Confirmed) decides who close-out asks for a trainee report or an evaluation;
+  no-show and pending crew are not asked and get no draft report.
+- **Review fixes** (#4275, 2026-11-13). A department shift counts only toward
+  enrollments begun by its date (`_Scope.as_of`); under required report review
+  a member with no report sees the evaluation once the shift is finalized; a
+  COMPLETED requirement keeps taking credit and reopens to In progress when
+  credit falls below target (a manual completion stays); waiver proration
+  rounds evaluation targets to whole units; an edit to a submitted evaluation
+  is held to the submission rules.
+- **Preceptor links** (#4264, migration `533f8aba187e`). For an outside shift,
+  the member or a training manager makes a single-use, no-login link
+  (`/shift-evaluation/:token`), shown as a QR code, copied or emailed (10
+  emails per member per hour). It stays open
+  `training_module_configs.shift_evaluation_link_days` (default 7, 1–60) after
+  the shift; one open link per evaluation; rejecting the shift or the member
+  leaving closes it. Outside shifts awaiting approval are now evaluated too;
+  credit and visibility wait for approval.
+
 ## Shift Completion Reports
 
 Officers file a report per trainee after a shift; an approved report credits
@@ -1019,7 +1154,7 @@ A descriptive scale with no labels falls back to numeric display (1–5).
 Scheduling module. Officers enter shift date, start/end times, apparatus, crew
 members, and trainee evaluations, with apparatus-specific skill/task
 auto-population. Availability, allowed apparatus types, default start times and
-default duration come from **Manual Entry Rules** in the admin hub.
+default duration come from **Manual Entry** in the admin hub.
 
 ---
 
@@ -1207,7 +1342,50 @@ requirement _count_ never moves. No print page shows the leave period, the
 waived months or the adjusted target — the sheet reports the outcome, not the
 allowance behind it.
 
+_(2026-11-13, #4272)_ A recorded leave and the training waiver it writes are
+read as one leave, not as months both on leave and waived. A leave marked
+`exempt_from_training_waiver` (Applies To without **Training Requirements**)
+now excuses no training month; before, it still did.
+
 ---
+
+## Former members in pickers _(2026-11-19, #4380, #4432)_
+
+`GET /users` returns every account, including the archived, retired, dropped
+and inactive members a roster import brings in. The training pickers that
+listed them all now offer current members only (`isActiveAccount`: active or
+probationary): cohort roster, add instructor qualification, manual shift
+report crew, training session lead instructor (a course's named instructor
+pre-fills only when it matches a current member) and the external-provider
+user mapping. A value already saved that names someone who has left stays in
+the select, marked "(former member)" (the mapping shows the stored name), so
+saving does not swap it out.
+
+The write paths behind them refuse a **newly chosen** former member with a 400
+"Only current members can be chosen as …" (`assert_current_members` in
+`app/utils/org_scoping.py`, which lets the record's stored ids through via
+`keep` and gives the same message for a former, deleted or other-org id):
+instructor qualification create, `POST /shift-completion/batch` with no
+linked shift, and the lead instructor on training-event create/edit and
+`POST /training/sessions` / `/recurring`. Cohort generation skips a former
+member with the warning "A selected member is no longer a current member."
+A batch linked to a scheduled shift and cohorts generated from class templates
+are not checked, because a member who worked the shift or was named on the
+template may have left since.
+
+## Phones and fixes, 2026-11-19 – 20
+
+- **Tables reflow to cards** (#4413): My Training's recent, self-reported and
+  History tables, the historical import preview and Member Training Status
+  use `rwd-table-wide` (cards on a tablet with the side navigation open too);
+  Expiring Certifications and the annual report's requirement analysis use
+  `rwd-table-narrow`. Held by `e2e/table-fit-training-phone.spec.ts`.
+- **Reordering a program's requirements** (#4390) answered 500 after the new
+  order had committed (the response lazy-loaded each link's requirement on the
+  async session). The service now eager-loads it.
+- **Headline Metrics settings** (#4426) no longer jump on a slow load: the
+  placeholder and loaded screen are keyed separately, so React replaces one
+  with the other instead of morphing it (a 0.35 layout shift on a phone).
 
 ## Cross-Module Connections
 

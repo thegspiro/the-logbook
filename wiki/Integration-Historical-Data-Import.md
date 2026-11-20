@@ -78,6 +78,31 @@ second run of the same file — or a later export from the same system that
 overlaps it — leaves those rows out, and a batch that somehow still carries one
 skips it. Use the same source system name each time for this to work.
 
+## Undoing a step
+
+_(2026-11-19)_ Each committed step has **Undo this step** on the import's page:
+administrative hours, training, company drills, the staffing roster, and shift
+hours (every committed shift review batch the import sent). It removes what
+the step wrote, using the same record-ID ledger that makes a second run safe,
+so the decisions can be changed and the step committed again. The confirmation
+counts what will go before anything does.
+
+- **In order.** Training waits for the company drills to be undone, because
+  the drill sessions hold its records; shift hours waits for the staffing
+  roster, which fills the shifts the hours made, and for any batch still in
+  review to be committed or discarded.
+- **Edited records stay.** A record whose last change is later than the commit
+  that wrote it is an officer's correction. It is kept, listed after the undo,
+  and keeps its ledger entry, so committing again does not write it twice.
+- **Former members the import created** are removed with the step unless
+  something else still refers to them.
+- **Shifts and seats the step reused** (rather than made) are left as they
+  are; a member the roster moved to another seat keeps that seat.
+
+API: `GET /integrations/historical-imports/{id}/undo` previews every step;
+`POST /integrations/historical-imports/{id}/undo/{step}` (`admin`, `training`, `drills`,
+`staffing`, `shifts`) undoes one. Both need `integrations.historical_import`.
+
 ## Training
 
 Open _Set up training_. The subject, instructor and "taught the class" columns

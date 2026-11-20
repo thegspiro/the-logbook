@@ -24,7 +24,7 @@ filed together with the minutes and should read as one set.
 
 from datetime import datetime
 from io import BytesIO
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle
@@ -183,12 +183,13 @@ def _kv(rows: List[List[str]], styles: Dict[str, ParagraphStyle]) -> Flowable:
     )
 
 
-def render_pre_meeting_package_pdf(
+def _layout(
     data: Dict[str, Any],
     meta: Dict[str, Any],
-    include_ineligibility_detail: bool = False,
-) -> BytesIO:
-    """Render the package *data* into a PDF, returning a BytesIO at pos 0.
+    include_ineligibility_detail: bool,
+    total_pages: Optional[int],
+) -> Tuple[bytes, int]:
+    """One layout pass: the PDF bytes and their page count.
 
     *data* is assembled by the service (no DB access here):
       ``election`` (dict of display fields), optional ``meeting`` dict,
@@ -610,10 +611,28 @@ def render_pre_meeting_package_pdf(
         ),
     ]
 
-    footer = page_footer(f"Pre-Meeting Package · {election.get('title') or ''}")
+    footer = page_footer(
+        f"Pre-Meeting Package · {election.get('title') or ''}", total_pages
+    )
     doc.build(story, onFirstPage=footer, onLaterPages=footer)
-    buf.seek(0)
-    return buf
+    return buf.getvalue(), doc.page
+
+
+def render_pre_meeting_package_pdf(
+    data: Dict[str, Any],
+    meta: Dict[str, Any],
+    include_ineligibility_detail: bool = False,
+) -> BytesIO:
+    """Render the pre-meeting package, returning a BytesIO at position 0.
+
+    See :func:`_layout` for *data*, *meta* and *include_ineligibility_detail*.
+    """
+    # Laid out twice: the footer is drawn on the canvas, outside the frame, so
+    # it cannot change the layout, and the first pass's page count is the
+    # second's total.
+    _, pages = _layout(data, meta, include_ineligibility_detail, None)
+    pdf, _ = _layout(data, meta, include_ineligibility_detail, pages)
+    return BytesIO(pdf)
 
 
 def _candidate_list(

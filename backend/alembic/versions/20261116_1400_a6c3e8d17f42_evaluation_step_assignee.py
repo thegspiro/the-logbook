@@ -1,7 +1,7 @@
 """A named assignee on an evaluation's approval or calibration step
 
 Revision ID: a6c3e8d17f42
-Revises: a541e82fef9f
+Revises: 790a86084359
 Create Date: 2026-11-16 14:00:00.000000
 
 ``evaluation_steps`` gains ``assignee_id`` (``String(36)``, nullable, foreign
@@ -29,7 +29,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a6c3e8d17f42"
-down_revision: Union[str, None] = "a541e82fef9f"
+down_revision: Union[str, None] = "790a86084359"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -198,6 +198,36 @@ that code (pitfall #29).
 A figure that cannot honestly be given is reported unavailable with a note,
 never as zero or 100%.
 
+`calls.response_pct` _(2026-11-13)_ divides over `Coverage.included()`, the
+stretches no exclusion touches: calls during a leave or a gap in membership
+count on neither side. `calls.responses`, `shifts.hours` and `shifts.count`
+still use the whole coverage. A rate already frozen into a snapshot keeps its
+old value.
+
+**Counts behind a figure** _(2026-11-13)_. Each source stores its supporting
+counts beside its value (`met` / `total`, `attended` / `held`, `responses` /
+`department_calls`, `capped`, `external_hours`, a waiver `breakdown`).
+`figureDetail()` in `utils/evaluationRecord.ts` and `figure_detail()` in
+`evaluation_document_service.py` word them alike ("75% · 6 of 8 meetings
+attended"); change both together. Older snapshots that hold the counts show
+them on screen; stored PDFs stay as signed.
+
+**In the builder** _(2026-11-14)_:
+
+- **Data shown with this item** groups sources by their catalogue `module`
+  (`groupDataSources()`), in catalogue order; an unknown module goes under
+  "Other". `events.meeting_attendance_pct` is tagged `meetings`; its key is
+  unchanged.
+- `GET /data-sources` sets `unavailable_reason` when the Training module is
+  off (training sources), the Scheduling module is off (shift and call
+  sources) or call tracking is off (call sources). Such a source reads
+  "(turned off)" and stays selectable, since a published template may use it.
+- `scoringGaps()` reports values no score band covers (below the first band,
+  between bands, above a closed top band, and an exclusive upper bound such
+  as exactly 100%) as "No rating is suggested for values …". Overlapping
+  bands are still refused by the backend.
+- The PDF's "Left out" dates use the page's date format.
+
 ### Waiver requests
 
 Four more sources show the member's requests to be excused from a session
@@ -213,8 +243,7 @@ Four more sources show the member's requests to be excused from a session
 Each reads `attendance_waiver_requests` for one workflow, counting a request
 by the date of the session it excuses, within the review period and the
 member's coverage: a session held between stints of membership is dropped, one
-held during a leave is kept. Business-meeting requests read zero until that
-workflow writes them.
+held during a leave is kept.
 
 The summary's value is the number of requests; beside it are `approved` (what
 counts toward the cap, a Chief's override of a denial included), `overridden`
@@ -234,9 +263,9 @@ attachment**: an evaluation is permanent, the member reads it, and any of the
 three may be medical. The rows are read column by column, so neither text is
 loaded at all. `attachment_on_file` says whether a file is on file for the
 request, read from `attendance_waiver_attachments`; never the file, its name
-or how many. The evaluation screens show the
-summary's count only; the breakdown is in the stored entry, and the history
-lines say what became of each request. Adding these sources changed the stored
+or how many. The evaluation screens and the PDF show the summary's
+`breakdown` beside the count _(2026-11-13)_, and the history lines say what
+became of each request. Adding these sources changed the stored
 shape of no existing entry, so `SNAPSHOT_VERSION` stays 2.
 
 ## Workflow

@@ -114,7 +114,14 @@ You can also use the browser menu: **three-dot menu > Install The Logbook**
 Once installed, The Logbook runs on its own, outside the browser:
 
 - **No browser toolbar.** The app uses the whole screen. The phone's status bar
-  takes the app's dark red colour.
+  takes the colour of the app's navigation bar for the theme you picked in the
+  app — white in Light, dark navy in Dark — so the header and the bottom bar do
+  not sit on a band of another colour _(2026-11-15; it was dark red, and
+  followed the phone's own light or dark setting rather than the app's)_. On
+  Android, the gesture bar at the bottom of an installed app is dark navy
+  whatever the theme: Android takes that colour from the app when it is
+  installed, so an app installed before this change may keep dark red there
+  until it is reinstalled.
 - **Its own window.** It shows as a separate app in your app switcher, not as a
   browser tab.
 - **You stay signed in** between launches, within your department's sign-in
@@ -352,6 +359,17 @@ screens adapt:
   own card, and a long email address under a member's name wraps instead of
   pushing the table off the screen. Coverage and Availability also become cards
   on a tablet with the side navigation open.
+  _(2026-11-20)_ Seven training tables followed: **My Training**'s recent
+  training, self-reported training and **History** tab, **Expiring
+  Certifications**, a member's **Training Status** page, the annual report's
+  requirement analysis and the **Historical Import** preview (where a long
+  email address now wraps). The three My Training tables and the import preview
+  also become cards on a tablet with the side navigation open.
+- **The competency heat-map stays a grid** _(2026-11-20)_: on a phone it
+  scrolls both ways inside its own box, with the member column pinned on the
+  left and the skill names pinned along the top, and a fading edge with a
+  chevron where there is more. Long member names wrap instead of being cut
+  off.
 - **The inventory stock matrix stays a grid** _(2026-11-17)_: its **Size**
   column stays pinned while the colours scroll, and a fading edge with a
   chevron shows there are more colours to the side.

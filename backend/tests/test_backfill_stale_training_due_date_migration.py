@@ -14,11 +14,14 @@ import importlib.util
 import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from tests.clock_support import reread_each_test
 
 pytestmark = [pytest.mark.integration]
 
@@ -43,7 +46,14 @@ def _uid() -> str:
     return str(uuid.uuid4())
 
 
-_NOW = datetime.now(timezone.utc)
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    return {"_NOW": now}
+
+
+(_NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 async def _insert_org(db_session: AsyncSession) -> str:
