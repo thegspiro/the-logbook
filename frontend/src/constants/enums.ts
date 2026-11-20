@@ -1410,12 +1410,12 @@ export const ATTENDANCE_WAIVER_STATUS_LABELS: Record<string, string> = {
 };
 
 export const ATTENDANCE_WAIVER_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30',
-  approved: 'bg-green-500/10 text-green-800 dark:text-green-300 border-green-500/30',
-  denied: 'bg-red-500/10 text-red-800 dark:text-red-300 border-red-500/30',
-  withdrawn: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
-  voided: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
-  expired: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
+  pending: 'bg-amber-500/10 text-amber-900 dark:text-amber-300 border-amber-500/30',
+  approved: 'bg-green-500/10 text-green-900 dark:text-green-300 border-green-500/30',
+  denied: 'bg-red-500/10 text-red-900 dark:text-red-300 border-red-500/30',
+  withdrawn: 'bg-gray-500/10 text-gray-900 dark:text-gray-300 border-gray-500/30',
+  voided: 'bg-gray-500/10 text-gray-900 dark:text-gray-300 border-gray-500/30',
+  expired: 'bg-gray-500/10 text-gray-900 dark:text-gray-300 border-gray-500/30',
 };
 
 /** When a request must arrive by (`AttendanceWaiverPolicy.deadline`). */
