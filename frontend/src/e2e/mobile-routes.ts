@@ -1509,6 +1509,21 @@ export const ALL_ROUTES: RouteCheck[] = [
 const routeFilter = process.env.MOBILE_ROUTE_FILTER;
 export const ROUTES = routeFilter ? ALL_ROUTES.filter(({ path }) => path.includes(routeFilter)) : ALL_ROUTES;
 
+/**
+ * One of `parts` contiguous slices of ROUTES, which between them hold every
+ * route exactly once.
+ *
+ * The three route-walking sweeps (accessibility, dialogs, presentation) each
+ * declare one test per slice. A sweep written as a single test cannot be
+ * divided by a shard or a worker count, and by 2026-11-19 the accessibility
+ * one had become a 55-72 minute CI job. The part counts are chosen so every
+ * sweep test takes about the same time, roughly ten minutes: `--shard`
+ * balances on the number of tests, so equal tests are what make its split an
+ * even one. See the `frontend-e2e` matrix in ci.yml.
+ */
+export const routesInPart = (part: number, parts: number): RouteCheck[] =>
+  ROUTES.filter((_, index) => Math.floor((index * parts) / ROUTES.length) === part);
+
 /** iPhone 14/15 class — the narrow end of what members actually carry. */
 export const PHONE = { width: 390, height: 844 };
 

@@ -1,6 +1,6 @@
 # Google Workspace Integration
 
-_(Added 2026-10-15)_
+_(Added 2026-10-15; Settings documented 2026-11-16)_
 
 The Google Workspace integration gives each applicant the department converts
 to a member a Google Workspace account at their department email address —
@@ -42,6 +42,8 @@ the two can be connected.
 5. Click **Test**. It lists one user, confirms the organizational unit exists, and reads each group — nothing is created or changed. Each failure names what to fix: delegation, an org unit that does not exist, or an unreadable group. A missing read-only scope is a note, not a failure.
 
 Each account created uses a Workspace license. Workspace for Nonprofits is free for eligible departments.
+
+**To change it later**, an organization administrator selects **Settings** on the connected card. The form opens with the saved admin, domain, organizational unit, groups and retirement setting. The key is never sent back: choose a key file only to replace it, and the saved key is kept otherwise. The save goes through `PATCH /integrations/{id}` and is checked as a connection is, so the domain must still match **Department Email**. It applies to the next member converted; accounts already created are not moved or changed.
 
 ---
 

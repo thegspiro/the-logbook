@@ -16,10 +16,154 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this commit)** (branch `claude/security-review-medical-screening` — the
-plain, no-suffix name: `git ls-remote --heads origin
-'refs/heads/claude/security-review-medical*'` returned nothing before this
-branch was pushed, so no pass suffix was needed per CLAUDE.md Pitfall #24):
+**PR (this commit)** (branch `claude/security-review-inventory-p16` —
+the plain `claude/security-review-inventory` has multiple merged **and**
+closed-unmerged PRs against it going back to pass 3, so it must not be
+reused per CLAUDE.md Pitfall #24; `-p16` is the next pass number per
+`INV-11-inventory.md`'s most recent `## Pass 15` section):
+Feature 11 (Inventory), pass 16 — watchdog pickup. PR #4440 (Feature 10,
+Documents & legal, pass 16) had merged before this iteration started. A
+fresh `list_pull_requests` (state `open`, perPage 100) found no
+`claude/security-review-*` head, and row 11 was the next `⬜` row.
+
+**0 fixed, 0 new findings — but a real, substantial delta: three already-
+shipped backend changes, all verified correct, plus a route-count
+correction.** Baseline resolution hit this repo's usual squash/orphan-merge
+artifact again: neither PR #4106's recorded merge commit (`3ed12fcb5`) nor
+its own branch head (`9e1b5cf41a`) is an ancestor of current `main` by
+`git merge-base --is-ancestor`, though both exist as reachable objects. The
+real delta was found with a direct tree diff between that branch head and
+`origin/main` (works regardless of ancestry), scoped to every declared file.
+
+AST-enumerating all six endpoint files gives **199** routes, not the 198
+pass 15 recorded — re-running the identical count against the actual
+pass-15 snapshot returns 199 there too, so this is pass 15's own miscount,
+not a route added since (same class as pass 17's 63→64 correction for Users
+& organizations). The tree diff adds zero new route decorators; the set is
+unchanged, and all 199 still carry a recognized auth dependency.
+
+Three backend changes, all in `inventory.py` plus one unrelated line in
+`inventory_service.py`, read in full and verified against the running code
+rather than assumed correct from the diff: (1) the inventory WebSocket's
+`?token=` query-param fallback was removed (a URL-borne bearer token reaches
+access logs) and a **new `inventory.manage` gate** was added before
+`ws_manager.connect()` — previously any authenticated org member could watch
+who holds/checks out which item, an INV-9-class over-exposure now closed;
+the frontend's `4003` handling already treated it as terminal, so no
+frontend change was needed. (2) the impact-plan PDF export is now
+audit-logged (it discloses member contact details) and its
+`Content-Disposition` filename is now quoted. (3)
+`GET /members/{user_id}/size-preferences` and `GET /my/size-preferences`
+return `null` instead of 404 for "no sizes saved" — the existing
+`_require_self_or_quartermaster` gate still runs first and unchanged, so
+this closes a logged-404-on-every-first-visit annoyance, not an authz gap.
+
+Frontend delta: 62 files, +6296/-2355, overwhelmingly the "Forms batch
+16–20" rollout and the inventory AAA contrast pass — swept in full for
+every injection/credential/storage pattern this checklist covers
+(`dangerouslySetInnerHTML`, `window.confirm`/`alert`/`prompt`,
+`localStorage.`, a hand-rolled `Authorization:` header, a new
+`axios.create`/bare `fetch(`, the banned locale-method/`date-fns` set,
+`eval(`, raw `innerHTML`): zero matches across all 6296 added lines.
+
+INV-16 and INV-17 (both MED, FLAGGED, owner decisions pending) and INV-22
+(owner-accepted) all re-confirmed OPEN and unaffected — none of their
+underlying functions appear in this window's backend diff. Full write-up:
+`docs/security-review/INV-11-inventory.md`'s **Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 786
+revisions, single head `0d54dd90d6ba`; `check_route_permissions.py --strict`
+(repo root) — 327 routes, 0 errors/warnings; scoped backend suite (`-k
+"inventory or nfc or kiosk or label"`, run under `python3.13`) — **2136
+passed**, 1 pre-existing environment-only skip (`py_vapid`), 0 failed; `npm
+run typecheck` — 0 errors; `npm run lint` — 0 errors, 0 warnings; `npx
+vitest run src/modules/inventory` — 1983 passed (127 files).
+
+Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 16, PR #4440, merged), preserved for history</summary>
+
+**PR [#4440](https://github.com/thegspiro/the-logbook/pull/4440)** (branch `claude/security-review-documents-legal-p16` —
+`claude/security-review-documents-legal` has multiple merged PRs against it
+(#3734, #3160, #2962, #2187) and must not be reused per CLAUDE.md Pitfall
+#24; `-p15` is also taken, so `-p16`, the next pass number per
+`DOC-10-documents-legal.md`'s most recent `## Pass 15` section):
+Feature 10 (Documents & legal), pass 16 — watchdog pickup. PR #4439
+(Feature 09, Medical screening, pass 16) had merged (`b7f84513dd`) before
+this iteration started. A fresh `list_pull_requests` (state `open`) found no
+`claude/security-review-*` head, and row 10 was the next `⬜` row. Re-checked
+immediately before pushing, per this run's own collision warning: still no
+`claude/security-review-documents-legal-p16` branch and no matching open PR.
+
+**1 fixed (DOC-32, LOW), 0 flagged — plus DOC-31, the one standing item
+pass 15 left OPEN, re-verified as now resolved.** Baseline `fb288610f0` (PR
+#4103's merge, pass 15) — pass 15's own recorded baseline commit
+(`2b1884237`) is not an ancestor of current `main` (the same squash/orphan-
+merge artifact this file keeps recording), so the real PR #4103 merge
+commit was used instead. Real delta across the declared scope: seven
+backend files and two frontend files, read in full —
+`documents_service.py`/`documents.py` gain a new, owner-approved boundary
+with the "History" feature (a catalogued document is a `documents` row in a
+protected system folder, refused for rename/move/delete from the Documents
+screens, and unreachable to upload/move into from there either);
+`legal_service.py`/`legal_documents.py`/`models/legal.py`/`schemas/legal.py`
+gain revert-history recording and editor attribution (owner decisions
+W54-3/W54-4); `document_service.py` gets a one-word label change. Two
+migrations reviewed in full, both table-existence-guarded and correct
+(Pitfall #26/#35). Routes re-enumerated by AST: still 26, no route gained or
+lost, every permission string unchanged from pass 15.
+
+DOC-31 (lock-order fix for Finance's receipt references) was pass 15's one
+standing OPEN item, re-confirmed against _its_ baseline — accurately, since
+the actual fix landed in commits outside that baseline despite carrying an
+earlier author-date (the same history-reordering class as the baseline-
+commit mismatch, just affecting a fix's landing time). Re-verified this pass
+directly against the running code, not merely `KNOWN_LIMITATIONS.md`'s
+say-so: the locking reads, the check-request extension and the indexed
+minutes clear are all present and both race-test files still pass.
+
+DOC-32 (new, LOW, FIXED): `delete_folder`'s cascade bulk-`DELETE`s documents
+with no per-row History check, unlike `delete_document`'s explicit refusal —
+not reachable today (a catalogued document only ever lives in the
+`is_system`-protected History root, which `delete_folder` already refuses
+on two independent checks), but the bulk delete itself had no check of its
+own. Fixed with the same refusal `delete_document` uses, re-checked right
+before any write; regression test constructs the otherwise-unreachable case
+directly and was seen failing (`DID NOT RAISE ValueError`) before the fix.
+Legal markup (`legalMarkup.ts`/`LegalMarkup.tsx`, public-reachable, outside
+this file's previously declared scope) reviewed directly: XSS-safe by
+construction (plain React text nodes, no `dangerouslySetInnerHTML`), not by
+sanitizing. Full write-up: `docs/security-review/DOC-10-documents-legal.md`'s
+**Pass 16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 786
+revisions, single head `0d54dd90d6ba`; `check_route_permissions.py --strict`
+(repo root) — 327 routes, 0 errors/warnings; scoped backend suite (`-k
+"document or legal or station_document or facility_folder or folder or
+admin_only or minutes_attachment or published_minutes"`, run under
+`python3.13`) — **826 passed**, 1 pre-existing environment-only skip
+(`py_vapid`), 0 failed; `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors, 0 warnings; `npx vitest run src/pages/DocumentsPage.test.tsx
+src/components/documents src/pages/LegalPage.test.tsx
+src/utils/fileTypeLabel.test.ts` — 74 passed (5 files).
+
+Row 10 → ✅ (pending this PR's merge); next is Feature 11 (Inventory) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 16, PR #4439, merged), preserved for history</summary>
+
+**PR [#4439](https://github.com/thegspiro/the-logbook/pull/4439)** (branch
+`claude/security-review-medical-screening` — the plain, no-suffix name:
+`git ls-remote --heads origin 'refs/heads/claude/security-review-medical*'`
+returned nothing before this branch was pushed, so no pass suffix was
+needed per CLAUDE.md Pitfall #24):
 Feature 09 (Medical screening, PHI), pass 16 — watchdog pickup. PR #4438
 (Feature 08, Membership pipeline, pass 17) had merged (`81ed96b021`) before
 this iteration started. A fresh `list_pull_requests` (state `open`) found no
@@ -74,8 +218,9 @@ revisions, single head `bbeb4867d393`; `check_route_permissions.py --strict`
 errors, 0 warnings; `npx vitest run src/modules/medical-screening` — 85
 passed (15 files).
 
-Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
-legal) — re-check `list_pull_requests` fresh rather than trusting this note.
+Row 09 → ✅ (merged); next was Feature 10 (Documents & legal).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 17, PR #4438, merged), preserved for history</summary>
@@ -26650,8 +26795,8 @@ iteration's commit" rule.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`, `leave_requests.py` (9 routes, added pass 17)                                                                                                                                                                 | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                                                                                                                            | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`, `screening_reminder_service.py` (added pass 16)                                                                                                                                                                               | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ⬜     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                                                                                                                          | ✅     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                                                                                                                             | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                                                                                                                           | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                                                                                                                                         | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                                                                                                                           | ⬜     |
@@ -26718,6 +26863,101 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-19 — Feature 10 (Documents & legal, pass 16) merged; Feature 11 (Inventory, pass 16) — watchdog pickup, 3 already-shipped backend changes verified correct, route-count correction, 0 fixed/0 new findings
+
+Watchdog pickup, running on its own 30-minute schedule rather than inside the
+dedicated `/loop 30m /security-review` session (unreachable). PR #4440
+(Feature 10, Documents & legal, pass 16) had merged before this iteration
+started. A fresh `list_pull_requests` (state `open`, perPage 100) found no
+head branch starting `claude/security-review-`; row 11 (Inventory) was the
+next `⬜` row.
+
+Baseline resolution hit the same squash/orphan-merge artifact this log keeps
+recording: neither PR #4106's recorded merge commit (`3ed12fcb5`) nor its
+own branch head (`9e1b5cf41a`) is an ancestor of current `main`. Rather than
+trust a path-scoped `git log` (broken for this exact reason on the last two
+passes), the delta was found with a direct tree diff between that branch
+head and `origin/main`, which works between any two commits regardless of
+shared ancestry.
+
+AST-enumerating all six endpoint files gives 199 routes. Re-running the same
+count against the pass-15 snapshot itself also returns 199 — pass 15's own
+"198" was a miscount, not a route added since; the tree diff confirms zero
+new route decorators and an identical set. All 199 still carry a recognized
+auth dependency.
+
+Three real backend changes, all already shipped and all verified correct
+against the running code: the inventory WebSocket dropped its `?token=`
+query-param fallback and gained a new `inventory.manage` gate before
+`ws_manager.connect()` (previously any authenticated org member could watch
+who holds/checks out which item — an INV-9-class over-exposure, now closed,
+with the frontend's existing `4003`-is-terminal handling needing no change);
+the impact-plan PDF export is now audit-logged and its filename is quoted;
+the two size-preferences GET routes return `null` instead of 404 for "none
+saved" (the `_require_self_or_quartermaster` gate is unchanged and still
+runs first — this closes a logged-404-on-every-visit annoyance, not an
+authz gap). The frontend's 62-file, +6296/-2355 delta (the "Forms batch
+16–20" rollout and the inventory AAA contrast pass) was swept in full for
+every injection/credential/storage pattern this checklist covers: zero
+matches. INV-16, INV-17 (both FLAGGED) and INV-22 (owner-accepted)
+re-confirmed OPEN, unaffected — none of their underlying functions appear in
+this window's diff. See `docs/security-review/INV-11-inventory.md`'s **Pass
+16** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 786
+revisions, single head `0d54dd90d6ba`; `check_route_permissions.py --strict`
+— 327 routes, 0 errors/warnings; scoped backend suite (`-k "inventory or nfc
+or kiosk or label"`) — 2136 passed, 1 pre-existing environment-only skip
+(`py_vapid`); `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run src/modules/inventory` — 1983 passed (127
+files).
+
+Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-19 — Feature 09 (Medical screening, PHI, pass 16) merged; Feature 10 (Documents & legal, pass 16) — watchdog pickup, DOC-31 confirmed resolved, 1 new finding fixed (DOC-32, LOW)
+
+Watchdog pickup, running on its own 30-minute schedule rather than inside the
+dedicated `/loop 30m /security-review` session (unreachable). PR #4439
+(Feature 09, Medical screening, pass 16) had merged (`b7f84513dd`) before
+this iteration started. A fresh `list_pull_requests` (state `open`) found no
+head branch starting `claude/security-review-`; row 10 (Documents & legal)
+was the next `⬜` row. Re-checked immediately before pushing: still no
+`claude/security-review-documents-legal-p16` branch or open PR.
+
+Pass 15's own recorded baseline (`2b1884237`) was again not an ancestor of
+current `main` (the same squash/orphan-merge artifact this log keeps
+recording); the real PR #4103 merge commit (`fb288610f0`) was used instead
+and is an ancestor. Real delta: seven backend files, two frontend files.
+Two owner-approved surfaces reviewed in full: a new boundary with the
+"History" feature (a catalogued document lives in a protected system
+folder and is refused for rename/move/delete from the Documents screens,
+with no path found to file one anywhere else) and legal-document revert/
+edit attribution (W54-3/W54-4), plus the new legal-markup renderer
+(`legalMarkup.ts`/`LegalMarkup.tsx`, public-reachable) confirmed XSS-safe
+by construction (plain React text nodes, no `dangerouslySetInnerHTML`).
+
+DOC-31 (Finance receipt lock-ordering), pass 15's one standing OPEN item,
+is now resolved — the fix landed in commits outside pass 15's baseline
+despite an earlier author-date (the same history-reordering class as the
+baseline mismatch, just affecting when a fix actually merged rather than
+when a review did). Re-verified directly against the running code: the
+NOWAIT locking reads, the check-request extension and the indexed minutes
+clear are all present and both race-test files still pass.
+
+New finding DOC-32 (LOW, FIXED): `delete_folder`'s cascade bulk-deletes
+documents with no per-row History check, unlike `delete_document`'s
+explicit refusal — not reachable today (the only writer of catalogued
+documents always files into the `is_system`-protected History root, which
+`delete_folder` already refuses on two independent checks), but the bulk
+delete had no check of its own, so a future change to either of those
+layers would have silently destroyed catalogued records. Fixed with the
+same refusal, re-checked before any write; regression test constructs the
+otherwise-unreachable case directly and was seen failing before the fix.
+Routes re-enumerated by AST: still 26, unchanged. Full write-up:
+`docs/security-review/DOC-10-documents-legal.md`'s **Pass 16** section.
 
 ### 2026-11-19 — Feature 08 (Membership pipeline, pass 17) merged; Feature 09 (Medical screening, PHI, pass 16) — watchdog pickup, found a real delta a git-history artifact had hidden (MS-18 now fully resolved, new reminder service reviewed), 0 fixed, 0 new findings
 

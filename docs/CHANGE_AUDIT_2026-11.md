@@ -100,6 +100,19 @@ Member dialog, phone table captures.
 **YouTube scripts:** 03 IT Manager and 14 Multi-class courses edited; others
 flagged in `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
 
+## Change audit: Google Workspace and Microsoft 365 Settings, November 16, 2026
+
+A documentation-only pass. Both directory integrations have had a **Settings**
+button for organization administrators, but neither guide 16 nor their wiki
+pages said what it does. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                           | Guide | Disposition                                                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------- |
+| **Settings** on a connected Google Workspace card: saved values prefilled, a key file chosen only to replace the stored key, the domain still checked against Department Email, and a save applying to the next member converted | 16    | Paragraph written; `16-30-google-workspace-settings` captured; `wiki/Integration-Google-Workspace.md` updated |
+| **Settings** on a connected Microsoft 365 card: every value but the secret prefilled, a blank secret kept, a new secret entered with its new expiry date, and clearing the license SKU leaving licensing to groups               | 16    | Paragraph written; `16-31-microsoft-365-settings` captured; `wiki/Integration-Microsoft-365.md` updated       |
+
+**Screenshots:** none queued.
+
 ## Change audit: Salesforce Settings, November 16, 2026
 
 A targeted pass for the **Settings** button on a connected Salesforce card.
