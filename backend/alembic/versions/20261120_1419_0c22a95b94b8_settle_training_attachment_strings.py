@@ -29,7 +29,7 @@ key: the upload routes write six keys, and the approval copy copies them.
 edits elsewhere cannot change what this revision does.
 
 Revision ID: 0c22a95b94b8
-Revises: a541e82fef9f
+Revises: 790a86084359
 Create Date: 2026-11-20 14:19:00.000000
 """
 
@@ -40,7 +40,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "0c22a95b94b8"
-down_revision: Union[str, None] = "a541e82fef9f"
+down_revision: Union[str, None] = "790a86084359"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
