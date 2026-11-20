@@ -5,22 +5,194 @@
 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-14 (pass 8),
 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26
 (pass 12), 2026-10-29 (pass 13), 2026-11-02 (pass 14), 2026-11-06
-(pass 15) · **PR:**
+(pass 15), 2026-11-20 (pass 16) · **PR:**
 [#1842](https://github.com/thegspiro/the-logbook/pull/1842) (pass 1),
 [#2625](https://github.com/thegspiro/the-logbook/pull/2625) (pass 6, 0
 fixed, 0 flagged, merged), [#2970](https://github.com/thegspiro/the-logbook/pull/2970)
 (pass 7, 0 fixed, 0 new findings), [#3195](https://github.com/thegspiro/the-logbook/pull/3195) (pass 8, 1 fixed, 0 flagged),
-[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), [#3435](https://github.com/thegspiro/the-logbook/pull/3435) (pass 10, 0 fixed, 0 new findings, merged), [#3602](https://github.com/thegspiro/the-logbook/pull/3602) (pass 11 — watchdog pickup, 0 fixed, 0 new findings), [#3741](https://github.com/thegspiro/the-logbook/pull/3741) (pass 12 — watchdog pickup, 0 fixed, 1 flagged, merged), [#3837](https://github.com/thegspiro/the-logbook/pull/3837) (pass 13 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3927](https://github.com/thegspiro/the-logbook/pull/3927) (pass 14 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 15 PR recorded in `PROGRESS.md`
+[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), [#3435](https://github.com/thegspiro/the-logbook/pull/3435) (pass 10, 0 fixed, 0 new findings, merged), [#3602](https://github.com/thegspiro/the-logbook/pull/3602) (pass 11 — watchdog pickup, 0 fixed, 0 new findings), [#3741](https://github.com/thegspiro/the-logbook/pull/3741) (pass 12 — watchdog pickup, 0 fixed, 1 flagged, merged), [#3837](https://github.com/thegspiro/the-logbook/pull/3837) (pass 13 — watchdog pickup, 0 fixed, 0 new findings, merged), [#3927](https://github.com/thegspiro/the-logbook/pull/3927) (pass 14 — watchdog pickup, 0 fixed, 0 new findings, merged), [#4111](https://github.com/thegspiro/the-logbook/pull/4111) (pass 15 — watchdog pickup, 0 fixed, 0 new findings, merged), pass 16 PR recorded in `PROGRESS.md`
 
 **Backend:** `api/v1/endpoints/equipment_check.py` (54 routes, unchanged from
 pass 10), `api/v1/endpoints/shift_completion.py` (22 routes, unchanged from
 pass 14),
-`services/equipment_check_service.py` (6,934 L, unchanged this pass),
-`services/shift_completion_service.py` (2,134 L, +332/−30 this pass)
+`services/equipment_check_service.py` (6,934 L, unchanged pass 15, +15/−23
+this pass), `services/shift_completion_service.py` (2,134 L, +332/−30
+pass 15, +10/−1 this pass)
 **Frontend:** in-app (no dedicated module directory)
-**Migrations:** none this iteration to this feature's own tables (a
-concurrently-landed migration adds columns to `TrainingRequirement` for the
-new, out-of-scope Shift Evaluations feature — see Pass 14 below)
+**Migrations:** none this iteration to this feature's own tables
+
+---
+
+## Pass 16 (2026-11-20) — real delta (defense-in-depth already landed elsewhere), 0 fixed, 0 new findings
+
+**Watchdog pickup.** No other Claude session is running on this machine
+(`ListAgents` → "No reachable agents"), consistent with the dedicated
+`/loop 30m /security-review` session remaining unreachable through every
+prior pass. PR [#4452](https://github.com/thegspiro/the-logbook/pull/4452)
+(Feature 13, Apparatus & NFC, pass 23) had just merged (`f0547e6ae`); a
+fresh `list_pull_requests` (state=open) found 0 PRs with a
+`claude/security-review-` head branch, and row 14 (Equipment check &
+shifts) was confirmed the next `⬜` row.
+
+**Baseline** `b26eb8b4f` (PR #4111's merge, pass 15) to head `f0547e6ae`
+(PR #4452's merge, current `main`) — a genuine ancestor
+(`git merge-base --is-ancestor` succeeds). `git diff --numstat` restricted
+to the six declared backend files shows real changes in four:
+`equipment_check.py` (+63/−7), `shift_completion.py` (+34/−11),
+`equipment_check_service.py` (+15/−23), `shift_completion_service.py`
+(+10/−1); both schema files are byte-identical to pass 15.
+
+### `equipment_check.py` — org-scoped a prior unscoped lookup, added export audit logging — already landed, not this rotation
+
+Commit `aee1fe14200` ("Fix escaped text in PDF table cells; audit
+member-data PDF exports", outside this rotation) did three things inside
+this feature's scope, all verified correct by reading the current code:
+
+- **XC-3 fix:** `export_pdf`'s check-detail branch's `checked_by` lookup —
+  previously a bare `select(UserModel).where(UserModel.id ==
+str(check.checked_by))` with no org filter — now also filters
+  `UserModel.organization_id == current_user.organization_id`. The id
+  originates from `check.checked_by` on an already org-scoped check record,
+  so this was defense-in-depth rather than a reachable cross-tenant read,
+  but it closes the gap outright. No prior pass's findings file names this
+  line, so it is recorded here as already-fixed rather than carried forward
+  as newly found.
+- **Audit logging (Pitfall #33):** a new `_audit_equipment_export` helper
+  fires one `log_audit_event` per CSV/PDF export
+  (`equipment_check_report_exported`), carrying `report_type`, `format`,
+  and the query parameters used (`apparatus_id`, `template_item_id`,
+  `check_id`, date range) — ids and enums only, no free text, matching the
+  pattern this rotation's other passes have checked for. A rejected export
+  (bad `report_type`) writes nothing, confirmed by the call sites sitting
+  after the validation branches.
+- **Defense in depth:** the CSV/PDF `Content-Disposition` filenames are now
+  quoted (`filename="…"`); both are built from a validated `report_type`
+  enum or an id slice, never free text, so this closes a theoretical gap
+  rather than a reachable one.
+- Unrelated to this feature's scope: the same commit also wrapped PDF
+  generation in `asyncio.to_thread` (an event-loop-blocking fix, not
+  security) and threads `generated_by=current_user.full_name` into the PDF
+  footer (the caller's own name, already known to them — no disclosure).
+
+No new route; `export_csv`/`export_pdf` are unchanged permission-wise
+(still `inventory.check_view`, the officer-only-view decision re-confirmed
+OPEN by pass 11 — see `docs/module-audit/equipment-check.md`'s EC-7
+residual, closed as an owner-accepted intra-org granularity call, not
+reopened here).
+
+### `shift_completion.py` — separation of duties tightened: a role reviewer may no longer review a report they filed, or one not awaiting review
+
+Commit `db7e4994566` ("Keep a role reviewer off shift reports they filed
+and reports not awaiting review", outside this rotation) extends
+`_not_about_reviewer` (previously: a role reviewer may not review a report
+_about_ themselves) to also exclude a report they _filed_
+(`report.officer_id`), and adds `_role_review_refusal`, which additionally
+refuses review of a report not in `("pending_review", "flagged")` — a
+training-manager-exempt role reviewer could previously reach
+`review_report`/`batch_review_reports` against a draft (not yet released
+by its officer) or an already-approved report. Both new checks run in
+`review_report` and `batch_review_reports`, replacing the narrower inline
+check; `training.manage` holders are unaffected ("as before," per the
+docstring, and confirmed — `_manages_training(user)` short-circuits both
+functions unchanged). This is checklist item 2's separation-of-duties rule
+(the reviewer cannot be the subject) extended to cover "cannot be the
+filer" too — a strict tightening, no new route, no permission string
+changed.
+
+### `equipment_check_service.py` — alert recipients now resolve through the shared, current-member-aware helper
+
+Commits `226930a207d` and `2cb04769af5` (outside this rotation) replace
+`_notify_on_failure`'s raw `org.settings.get("equipment_check_alerts",
+{})` dict reads with the typed `EquipmentCheckAlertSettings.from_stored()`
+(defaults on malformed JSON, Pitfall #19) and its direct
+`Role`/`user_positions` role-lookup query with
+`position_recipients.current_holder_ids()`. Read both helpers in full:
+`current_holder_ids` filters `Position.organization_id`,
+`User.organization_id`, `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` and
+`User.deleted_at.is_(None)` — **tighter** than the code it replaced, which
+joined on `Role.organization_id` alone and had no active-member filter at
+all, so a departed member holding the alerted role would have kept
+receiving equipment-check-failure notices naming other members' checks.
+Not a new finding (the prior behavior over-notified rather than leaked
+across tenants, and the fix already shipped), but recorded as the
+Pitfall #32-class gap it closed.
+
+### `shift_completion_service.py` — manual batch crew now validated in-org and current (XC-1 / Pitfall #32)
+
+Commit `d7637cde0a7` ("Refuse former members on the member-picker write
+paths", outside this rotation) adds `assert_current_members(self.db,
+crew_member_ids, organization_id, label="crew members")` before a manual
+batch report's crew is processed — but only `if not shift_id`, with a
+comment explaining why: a shift-linked batch's crew comes from the shift's
+own roster, where a member who has since left still correctly earns
+credit for work already performed, so checking there would wrongly refuse
+a legitimate credit. Read `assert_current_members` in full
+(`app/utils/org_scoping.py:129`): it is org- and status-scoped, raises
+`ValueError` (→ 400) rather than silently dropping, and takes a `keep` set
+(unused at this call site) so an existing record naming a now-former
+member is never retroactively broken. The matching frontend fix
+(`ManualShiftReportPage.tsx` now filters `userService.getUsers()` through
+`isActiveAccount()` before populating the crew picker) prevents the case
+client-side too, so the 400 is a backstop, not the primary guard.
+
+### Frontend — `useSessionDraft`/`sessionDrafts.ts` (new, 104 L) reviewed for PHI and storage discipline
+
+`ManualShiftReportPage.tsx` is the first adopter of a new shared hook. Read
+`frontend/src/utils/sessionDrafts.ts` and `hooks/useSessionDraft.ts` in
+full: `sessionStorage` (not `localStorage`, so a shared station computer
+keeps nothing past the tab), keys namespaced by signed-in user id (so a
+draft is never restored to a different member), every storage call
+wrapped in `try/catch` (a full or unavailable store degrades to "not
+drafted," never breaks the form), and `clearAllSessionDrafts()` is wired
+into `purgeLocalMemberData.ts`'s logout purge — confirmed by grep, not
+re-derived. The module docstring states the rule this feature's draft
+follows: no PHI is ever drafted, and `ManualShiftReportPage`'s own
+`ShiftReportDraft` interface comment says why this form's fields qualify
+(apparatus, times, call types, narrative, crew, evaluations — no medical
+or emergency-contact fields). `ShiftReportsTab.tsx`'s pre-existing
+`localStorage`-backed draft (`shiftReportDrafts.ts`, unchanged this pass)
+is a separate, older mechanism this pass did not migrate — noted, not
+flagged, since it predates this review and carries the same category of
+data.
+
+The rest of the frontend delta (`EquipmentCheckReportsPage.tsx`,
+`EquipmentCheckTemplateBuilder.tsx`, `ShiftReportPage.tsx`,
+`ShiftReportsTab.tsx`'s `StatGrid`/race-guard changes) is cosmetic
+(contrast-tier color bumps, `rwd-table` reflow classes, a shared
+`StatGrid` layout swap) or a stale-response race guard
+(`rosterFor` ref) with no security surface; read in full, no
+blocking-dialog/XSS/bare-`toHaveBeenCalledWith()` pattern found.
+
+**EC-17 re-confirmed OPEN/FLAGGED, unaffected.** The underlying gap (no
+forced re-review for a review-off department) is untouched by this
+window's changes; the separation-of-duties tightening above narrows _who_
+may review, not whether review is forced.
+
+**0 fixed, 0 new findings.** `docs/module-audit/equipment-check.md` and
+`docs/app-review/equipment-check.md` re-grepped for `🚩`/`OPEN`/`FLAGGED`
+— both zero for this feature (app-review's pass 5 explicitly closed the
+two items passes 3/4 had carried as still-flagged; module-audit carries no
+open marker at all). Route count re-confirmed unchanged (54 + 22 = 76, by
+AST decorator walk, matching pass 15). No migration in the window touches
+`shift_completion_reports`, `shift_template_equipment_checks`, or any
+`shift_equipment_check*` table (checked by content grep across every
+migration file changed in the window, not just filename).
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 788
+revisions, single head `790a86084359`; `check_route_permissions.py
+--strict` (repo root) — 327 routes, 0 errors/0 warnings; scoped backend
+pytest (`-k "equipment or shift_completion or shift_report"`, run under
+`python3.13`) — 587 passed, 1 pre-existing environment-only skip
+(`py_vapid`); standing guard suites (capacity locking, org-scoping
+ratchet, LIKE escaping, CSV sweep, migration chain, `create_all`-table
+tolerance, account-status gates, log-call shape, baseline member grants)
+— 203 passed; `npm run typecheck` — 0 errors; `npm run lint` — 0 errors,
+0 warnings; scoped `npx vitest run` (inventory module + this feature's
+own page/hook tests) — 2058 passed (132 files).
+
+Row 14 → ✅ (pending this PR's merge); next is Feature 15 (Scheduling) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ---
 
