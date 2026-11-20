@@ -56,7 +56,7 @@ describe('describePackageSendError (W50-59)', () => {
 
   it('falls back to the ordinary message when the 422 is not about an address', () => {
     const err = http422([{ field: 'message', message: 'Value is too long.' }]);
-    expect(describePackageSendError(err, SENT, FALLBACK)).toBe('message: Value is too long.');
+    expect(describePackageSendError(err, SENT, FALLBACK)).toBe('Message: Value is too long.');
   });
 
   it('falls back to the ordinary message for a non-validation failure', () => {

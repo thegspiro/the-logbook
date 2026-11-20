@@ -108,6 +108,15 @@ open now. The band clears itself as you respond. A member who joined after an
 event ran, or who was not in its audience, is never listed as having missed
 it.
 
+**How far ahead a mandatory event asks for your answer** _(2026-11-17)_. An
+unanswered mandatory event joins the band once it starts within your
+department's response window, so a recurring mandatory series does not ask
+about every future meeting at once; later ones appear as they come within
+range. The window is 60 days unless an event manager changes it under
+**Event settings → Attendance → Mandatory event responses** (1 to 365 days).
+An event whose RSVP deadline is less than two days away is always in the band,
+whatever the window.
+
 **An empty list.** When nothing is scheduled you see **No upcoming events
 yet**, a short explanation of what will appear here, and a link: **Take the
 short walkthrough in the Learning Center**. **No events found** means a
@@ -235,7 +244,9 @@ feed listing every change, such as "John Smith changed from Maybe to Going at
 **More tools on the attendee list (officers):**
 
 - **Print Roster** prints the attendee list for use at the door.
-- **Export CSV** downloads it.
+- **Export CSV** downloads it. _(2026-11-19)_ Its last column, **Source**,
+  reads **Imported** for a check-in the Historical Data Import wrote and **The
+  Logbook** for the rest.
 - **Send Reminders** sends a reminder to **Non-respondents only** (everyone
   who has not answered) or **All members**.
 
@@ -314,10 +325,11 @@ Nobody decides their own request.
 
 **Every request in one place.** When requests are waiting on your events, the
 Events page shows _"N attendance requests are waiting for you"_. It opens
-**Attendance Requests**, which lists every waiting request on events you
-organize or are alternate for, oldest first, with the same **Approve** and
-**Decline**. Officers who can manage events can switch between **My events**
-and **All events**.
+**Attendance Requests**, which lists every waiting request sent to you, oldest
+first, with the same **Approve** and **Decline**: those on events you organize
+or are alternate for, and any passed on to you because the event's organizers
+could not take it. Officers who can manage events can switch between **Sent to
+me** and **All events**.
 
 **Who is told.**
 
@@ -660,6 +672,27 @@ happens:
 - **The tap time is kept** as the true record of when they arrived.
 - The monitoring view lists everyone who tapped in before the start and how
   early they were. The same flag appears beside them on the attendance list.
+
+#### Members an officer checks in after the start _(2026-11-17)_
+
+When an officer, or the event's organizer or alternate, checks someone in from
+**Check In Members** after the event has started, the member is credited from
+the **scheduled start**, not from the moment of the click. Working down the
+list ten minutes in used to cost everyone near the bottom ten minutes they were
+present for. An officer checking someone in is vouching that they were there.
+
+- This is stored as the check-in itself, so the row does not read **(times
+  edited)** and is not shown as a correction on the approval page or the
+  monitoring dashboard.
+- **Self check-ins are unchanged.** A member who taps their ID card, scans the
+  QR code or uses their own check-in button late is still credited from the tap.
+- **A member who really did arrive late:** use **Edit Times** to set their
+  arrival. The time you actually clicked is still kept in the audit log.
+
+The dialog's own text now says this: _"Anyone you check in after it starts is
+credited from the scheduled start; use Edit Times for someone who arrived
+late."_ _Screenshot: create one of the Check In Members dialog showing this
+line (the guide has no image of the dialog yet)._
 
 There is nothing to correct for a member who simply turned up early. The list
 is there for the other case: somebody who really **was** working before the
@@ -1566,6 +1599,11 @@ can't undo this."_ — with **Cancel Events** and **Keep Events**.
 **Export to CSV** in the same **⋯** menu exports the whole list without
 selecting.
 
+Both event exports end with a **Source** column _(2026-11-19)_: **Imported**
+for an event the Historical Data Import created (from a staffing roster, or
+behind a drill from a training file) and **The Logbook** for the rest. It is
+the last column, so a spreadsheet that reads columns by position keeps working.
+
 ### Cancelling an event or a series
 
 **More → Cancel Event** asks for a reason (at least 10 characters) and offers
@@ -1755,10 +1793,18 @@ and who may see the list, is covered in
 | -------------------- | ------------------------------------------------------------------------------ |
 | **Visibility**       | Which event types and categories appear as filters (**Event Type Visibility**) |
 | **Categories**       | Your **Custom Event Categories** and their colours                             |
-| **Attendance**       | _"Who sees who's going; who takes requests"_                                   |
+| **Attendance**       | _"Who sees who's going; who takes requests"_, and **Mandatory event responses** |
 | **Hour Tracking**    | Mapping events to admin hours                                                  |
 | **Public Requests**  | Everything about outreach events the public asks for — see below               |
 | **Headline Metrics** | The four numbers at the top of the page                                        |
+
+**Mandatory event responses** _(2026-11-17)_, at the foot of **Attendance**,
+sets **Ask for a response … days before the event**: how close a mandatory
+event must be before an unanswered one appears in members' **Needs You** band.
+Enter a whole number from 1 to 365; the default is 60. It saves when you leave
+the box or press Enter, not on every keystroke, and a number outside the range
+shows an error under the box and is not saved. _Screenshot: create one of this
+section._
 
 **Public Requests** is the one section with pages of its own, listed in the
 order a request moves through them. It applies only to requests from the
@@ -3017,6 +3063,11 @@ have moved, been renamed or work differently.
   when they sign in at the door.
 - **Early check-ins are credited from the scheduled start.** The tap time is
   kept, and officers see how early it was.
+- **An officer's check-in after the start is credited from the scheduled
+  start** _(2026-11-17)_, not from the click. Use **Edit Times** for a member
+  who really arrived late.
+- **Mandatory events ask for a response only within the department's window**
+  _(60 days by default, set under Event settings → Attendance)_.
 - **The QR code is hidden until check-in can succeed.**
 - **Guests take seats.** A capped event fills sooner than it once did.
 - **"Require RSVP" means a response is expected**, not that only some events

@@ -26,8 +26,10 @@ import type {
   TrainingPreview,
   TrainingSettingsUpdate,
 } from '../../../modules/integrations/types/historicalImport';
+import { HistoricalUndoStep } from '../../../modules/integrations/types/historicalImport';
 import { formatNumber } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import StepUndo from './StepUndo';
 import MembersToDecide from './MembersToDecide';
 
 interface TrainingSectionProps {
@@ -118,7 +120,7 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({ detail }) => {
       title: 'Import the training records?',
       message: `This writes ${formatNumber(preview.pending_records)} completed training records${
         creating ? ` and creates ${creating} archived former-member records` : ''
-      }. ${formatNumber(preview.provider_matched)} rows a provider sync already recorded are left out. There is no batch undo; records are corrected one at a time.`,
+      }. ${formatNumber(preview.provider_matched)} rows a provider sync already recorded are left out. You can undo this step afterwards.`,
       confirmLabel: 'Import records',
       cancelLabel: 'Not yet',
     });
@@ -194,6 +196,13 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({ detail }) => {
               {preview.result.members_created ? ` and ${preview.result.members_created} former members` : ''}.
             </p>
           )}
+
+          <StepUndo
+            importId={importId}
+            step={HistoricalUndoStep.TRAINING}
+            noun="training records"
+            onUndone={() => void load(appliedSearch, page)}
+          />
 
           <div className="field-grid gap-4">
             {columnSelect('subject_column', 'Subject', 'What the class was; becomes the course name unless mapped.')}

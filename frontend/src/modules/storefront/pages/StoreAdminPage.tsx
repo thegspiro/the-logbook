@@ -17,6 +17,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { orderStatusLabel } from '../utils/orderStatus';
 import { useSearchParams } from 'react-router';
 import { CalendarClock, Clock3, Loader2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -433,10 +434,10 @@ const StoreAdminPage: React.FC = () => {
                             Latest update:{' '}
                             {order.events[order.events.length - 1]?.message ||
                               (order.events[order.events.length - 1]?.toStatus
-                                ? `Status changed to ${
-                                    ORDER_STATUS_LABELS[order.events[order.events.length - 1]?.toStatus ?? ''] ??
-                                    order.events[order.events.length - 1]?.toStatus
-                                  }`
+                                ? `Status changed to ${orderStatusLabel(
+                                    order.events[order.events.length - 1]?.toStatus ?? '',
+                                    order.fulfillmentMethod
+                                  )}`
                                 : 'Order activity recorded')}
                             {order.events[order.events.length - 1]?.createdAt
                               ? ` · ${formatDateTime(order.events[order.events.length - 1]?.createdAt, tz)}`
@@ -446,7 +447,7 @@ const StoreAdminPage: React.FC = () => {
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`badge ${ORDER_STATUS_BADGES[order.status] ?? ''}`}>
-                          {ORDER_STATUS_LABELS[order.status] ?? order.status}
+                          {orderStatusLabel(order.status, order.fulfillmentMethod)}
                         </span>
                         <span className={`badge ${PAYMENT_STATUS_BADGES[order.paymentStatus] ?? ''}`}>
                           {PAYMENT_STATUS_LABELS[order.paymentStatus] ?? order.paymentStatus}

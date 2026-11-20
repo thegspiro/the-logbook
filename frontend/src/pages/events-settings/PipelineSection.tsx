@@ -4,6 +4,7 @@ import type { PipelineTaskConfig } from '../../types/event';
 import type { PipelineSectionProps } from './types';
 import { useRanks } from '../../hooks/useRanks';
 import { displayNameOf } from '../../utils/memberName';
+import { isActiveAccount } from '../../constants/enums';
 
 const PipelineSection: React.FC<PipelineSectionProps> = ({
   settings,
@@ -22,6 +23,9 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
   const pipeline = settings.request_pipeline;
   // Inactive ranks too, so a member holding a retired rank still reads by its name.
   const { formatRank } = useRanks(false);
+  // Only a current member can be made the default coordinator. One who has
+  // since left stays listed while still saved, so the select shows who it is.
+  const coordinatorOptions = members.filter((m) => isActiveAccount(m.status) || m.id === pipeline.default_assignee_id);
 
   return (
     <div className="space-y-6">
@@ -47,10 +51,11 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
           className="form-input max-w-md"
         >
           <option value="">No default (manually assign)</option>
-          {members.map((m) => (
+          {coordinatorOptions.map((m) => (
             <option key={m.id} value={m.id}>
               {displayNameOf(m)}
               {m.rank ? ` — ${formatRank(m.rank)}` : ''}
+              {isActiveAccount(m.status) ? '' : ' (former member)'}
             </option>
           ))}
         </select>

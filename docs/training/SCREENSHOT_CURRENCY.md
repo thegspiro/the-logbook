@@ -1,5 +1,51 @@
 # Screenshot currency
 
+## Queued by the November 18 – 19 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-18--19-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 18 | Order dialog **Refund** section: **Amount to refund**, **Refund reason (shown to the member)**, **Record refund**; and the "Refund $… to <member>?" confirmation | Create |
+| 18 | Order dialog on an overpaid order: the "more than the order total has been recorded" line and **Refund the $… excess** | Create |
+| 18 | My Orders card with **Owed to you** | Create |
+| 18 | A shipped order's progress steps reading **Ready to ship** / **Shipped** | Create |
+| 18 | A cancelled order with the **Refund** section still shown (no Payment section) | Create; supersedes the November 14 – 15 row "only **Refund** left" |
+| 18 | **Record payment** refusing an amount above the balance | Optional |
+| 03 | Settings → **Notifications**, Equipment Check Alerts group with **Chief** and **Captain** ticked in a department that never saved it | Create. `03-38` and `03-39` stay valid (they show assignment and reminder groups) |
+| 03 | Scheduling Reports at 390px: **Coverage** and **Availability** as labelled cards (long email wrapping under the name) | Create. `03-14-scheduling-reports` shows Shift Compliance and stays valid |
+| 04 | **Attendance Requests** page with the **Sent to me** / **All events** toggle (was **My events**) and its new empty-state text | Create. `04-53-attendance-requests-card` is the event card and stays valid |
+| 02 | Event card or page for a session linked only to a deactivated attendance requirement, with no **Counts toward attendance** badge | Optional |
+| 02 | Training Admin → Integrations → **Sync History** with a run labelled **Manual pull** beside a **Scheduled pull** | Create. `02-42-external-integrations` stays valid |
+| 02 | **My Training** for a member on a compliance profile with its own required list: "X of Y requirements met" counting only the profile's requirements | Optional; `02-01-my-training` is a member with no profile and stays valid |
+| 05 | Add Item with a **Consumable** category chosen and **Tracking Type** switched to **Pool** | Create. `05-05-item-form-modal` (Structural PPE, Individual) stays valid |
+| 05 | Impact Planner PDF page footer "Inventory Impact Plan · Page 1 of N" | Optional (a PDF, not a screen) |
+| 14 | Election page **Link a meeting** panel listing a business meeting several weeks out among upcoming events | Optional |
+| 10 | An installed Android app in dark mode, showing the white gesture strip under the bottom bar | Optional; `10-12-mobile-bottom-nav` is a browser capture and stays valid |
+
+**No existing image is made wrong by this range.** The Source column is in
+CSV and PDF downloads only, so no on-screen report image changes.
+
+## Queued by the November 17 – 18 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-17--18-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 03 | Shift Planning → **Templates** tab: templates only, the heading's "make a pattern in **Shift patterns**" link, no Templates / Patterns switch | Check `03-12-shift-templates` and `03-129-template-reactivate`; replace either if it shows the old switch |
+| 03 | Shift Planning → **Patterns**: a pattern card with its **Edit** button; **Edit Pattern** open from it | Create; `03-133-pattern-form-template-inactive` was taken from the old Templates-tab form and should be re-shot from the Patterns tab |
+| 03 | My Shifts → **Past**: **Hours credited** / **Credited shifts** / **Avg hours/shift** tiles with "+N hrs awaiting close-out", a **Xh credited** pill and an amber **Xh · awaiting close-out** pill | Create (supersedes the 2026-11-09 Past row) |
+| 04 | **Check In Members** dialog with the new "credited from the scheduled start" line | Create |
+| 04 | Event settings → **Attendance** → **Mandatory event responses** with **Ask for a response** (60 days) and the error for an out-of-range value | Create |
+| 02 | Requirement **Member Categories** in a department with a Senior tier: **Operational members** selected, Senior ticked, the hint "Active, Probationary, Life and Senior Member" | Create (`02-135` stays valid for a department with no Senior tier) |
+| 02 | Cohort wizard Course step listing only courses with a syllabus | Check `02-104` series; create only if a course-step image is wanted |
+| 08 | A report's on-screen results as labelled cards (Certification Expiration or Member Roster); Training Summary as a table at desktop width | Create; also replace any report-results image showing a sideways-scrolling table |
+| 17 | **Anonymize Member** dialog, Removed list with **Certificates uploaded with their training reports** | Create |
+| 10 | Phone (390px): expense report line items as cards with the totals row; the inventory stock matrix with pinned Size column and scroll cue; message history as cards | Create |
+| 11, 12, 05, 01, 14 | Phone captures of expense line items, grant applications, inventory import preview, member import preview / Assigned Inventory, election integrity audit log | Optional; check any existing phone image of these tables (e.g. `10-05-mobile-inventory` is a different list and stays valid) |
+
 ## Queued by the November 14 – 15 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-14--15-2026).
@@ -307,6 +353,30 @@ store does not accept PayPal, so the choice is not in its frame.
 `18-08-store-paypal-fallback` pictures the fallback warning: the same choice,
 with the settings read answered as "connected account" and no connected
 PayPal integration.
+
+**`16-27-calcom-settings` added 2026-11-16**, with Cal.com's own **Settings**
+button. It uses the same mock (`showIntegrationConnected` in the manifest),
+with an example self-hosted base URL, `https://cal.oakvillefd.org/api/v1`,
+prefilled; it is not a real Cal.com server. The dialog is opened and never
+saved.
+
+**`16-28-documenso-settings` added 2026-11-16**, with Documenso's own
+**Settings** button, from the same mock with an example self-hosted base URL,
+`https://sign.oakvillefd.org/api/v1`; it is not a real Documenso server. The
+dialog is opened and never saved.
+
+**`16-29-salesforce-settings` added 2026-11-16**, with Salesforce's own
+**Settings** button, from the same mock with an example org,
+`https://oakvillefd.my.salesforce.com`, and its sync settings filled in; it is
+not a real Salesforce org. The frame is 1900px tall so the whole dialog fits.
+The dialog is opened and never saved.
+
+**`16-30-google-workspace-settings` and `16-31-microsoft-365-settings` added
+2026-11-16**, documenting the **Settings** button the two directory
+integrations already had. Same mock, with example values on
+`oakvillefd.example.org` and made-up tenant, client and SKU IDs; neither is a
+real tenant. Each captures the dialog alone. The dialogs are opened and never
+saved.
 
 ## The October 16 – November 1 queues, captured 2026-11-02
 

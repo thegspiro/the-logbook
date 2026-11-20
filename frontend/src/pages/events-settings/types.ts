@@ -41,6 +41,7 @@ export interface OrgMember {
   preferred_name?: string | null | undefined;
   display_name?: string | undefined;
   rank?: string;
+  status?: string | undefined;
 }
 
 /** Props for the request Handling page (the stored `request_pipeline`). */

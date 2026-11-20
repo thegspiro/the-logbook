@@ -812,5 +812,25 @@ describe('ShiftHistoryImportReviewPage', () => {
       // A decision taken in the dialog leaves it open on the same row.
       expect(await screen.findByRole('dialog')).toBeInTheDocument();
     });
+
+    it('keeps an excluded line in the dialog so the exclusion can be undone', async () => {
+      // As the backend answers it: excluding one line of an overlap settles
+      // the overlap, so the response names no issue joining the two lines.
+      const settled = rowsDraft([nth(rows, 0), nth(rows, 1), nth(rows, 2), fileRow('r5', 5, { excluded: true })], []);
+      mockGet.mockResolvedValue(rowsDraft(rows, [overlap]));
+      mockRow.mockResolvedValue(settled);
+      const user = userEvent.setup();
+      renderPage();
+      await openRows(user);
+
+      await user.click(screen.getByRole('button', { name: 'Edit line 4' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: 'Exclude line 5' }));
+
+      const include = await within(dialog).findByRole('button', { name: 'Include line 5' });
+      expect(within(dialog).getByText(/Line 5/)).toBeInTheDocument();
+      await user.click(include);
+      expect(mockRow).toHaveBeenLastCalledWith('imp-1', 'r5', { excluded: false });
+    });
   });
 });

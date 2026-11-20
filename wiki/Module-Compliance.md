@@ -100,6 +100,9 @@ instead of a red "0/0 — 0%" (W29-4, closing CMP4-4).
   overrides, the org's at-risk tier). Departments with profiles, or a compliant
   threshold under 100%, will see the card and the report move; stored reports
   keep their old figures.
+  Since 2026-11-16 (D10) profile narrowing also applies on a member's own **My
+  Training** page, the officer's view of that member, and the profile card, so a
+  profiled member no longer sees requirements the department does not grade them on.
 - **Not applicable members leave every percentage.** A member nothing grades
   (no requirement applies, a profile selects none, or all are in catch-up) shows
   **N/A**, not 100%. The dashboard percentage is blank when nobody is graded, and
