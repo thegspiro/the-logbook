@@ -318,6 +318,14 @@ async def bench(db_session: AsyncSession) -> AsyncGenerator[_Bench]:
 # is the contract here even though the response's JSON schema is not nullable.
 _CLEARS_BY_DESIGN = {("TrainingProgram", "prerequisite_program_ids")}
 
+# Declared on the body only so a request that sends it is refused at
+# body.attachments (refuse_attachment_writes): the upload routes are the
+# column's only writers, so a null is refused like any other value.
+_REFUSED_BY_DESIGN = {
+    ("TrainingRecord", "attachments"),
+    ("TrainingSubmission", "attachments"),
+}
+
 
 def _cases() -> dict[str, list[Any]]:
     refused: list[Any] = []
@@ -331,8 +339,10 @@ def _cases() -> dict[str, list[Any]]:
                 continue
             case = pytest.param(path, name, id=f"{model.__name__}.{name}")
             by_design = (model.__name__, name) in _CLEARS_BY_DESIGN
-            if not column.nullable or (
-                _response_needs_a_value(response, name) and not by_design
+            if (
+                not column.nullable
+                or (model.__name__, name) in _REFUSED_BY_DESIGN
+                or (_response_needs_a_value(response, name) and not by_design)
             ):
                 refused.append(case)
             else:
