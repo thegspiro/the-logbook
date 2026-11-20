@@ -85,6 +85,7 @@ docker compose up -d
 - **[Performance Evaluations](Module-Evaluations)** - Yearly evaluations and check-ins: forms, figures, signing, PDFs, responses
 - **[Prospective Members](Module-Prospective-Members)** - Applicant pipeline from inquiry to membership
 - **[Meeting Minutes](Module-Meeting-Minutes)** - Agendas, minutes, circulation and adoption
+- **[History](Module-History)** - Past members, the Honor Roll, roster import, person merge, photos and media, documents
 - **[Finance](Module-Finance)** - Budgets, purchase requests, approvals, dues
 - **[Label Printing](Module-Label-Printing)** - Thermal and sheet labels for inventory and equipment
 - **[Salesforce Integration](Integration-Salesforce)** - Bidirectional CRM sync _(2026-04-11)_

@@ -778,6 +778,13 @@ When an applicant has completed the pipeline, convert them to a member.
    - when you chose **Set it later**, or the email failed: the member "has no
      password they know yet. Set one with Reset Password in Member Management
      before they can sign in."
+   - _(2026-10-17)_ when the department provisions Google Workspace or
+     Microsoft 365 accounts, what happened to the new member's account: for
+     example _"Microsoft account (address) was created; its temporary password
+     went to the member's personal email."_ If it was not created, or its
+     password has not reached the member, the screen says so: retry
+     from the member's profile. See
+     [Integrations](./16-integrations.md).
 
 **One applicant, one account.** Two coordinators converting the same applicant
 at the same moment — or one person double-clicking — create exactly one member.

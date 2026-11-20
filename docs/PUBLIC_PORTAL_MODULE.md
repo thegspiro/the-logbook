@@ -154,6 +154,9 @@ GET /api/public/v1/organization/stats
 GET /api/public/v1/events/public
 - Upcoming, non-cancelled public education events
 - limit (1–100, default 10) and offset
+- location: the name of the facility picked from the department's locations,
+  else the free-text location (2026-11-08; before, a facility event
+  published no location)
 ```
 
 The same router also serves `GET /api/public/v1/application-status/{token}`,
