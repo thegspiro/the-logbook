@@ -76,6 +76,17 @@ describe('ExternalSyncHistoryPanel', () => {
     expect(mockGetSyncLogs).toHaveBeenCalledWith('p1', 25);
   });
 
+  it('labels a pull a person started as manual, and one the scheduler ran as scheduled', async () => {
+    mockGetSyncLogs.mockResolvedValue([
+      run({ id: 'run-manual', initiated_by: 'user-1', started_at: '2026-10-16T06:00:00Z' }),
+      run({ id: 'run-auto' }),
+    ]);
+    render(<ExternalSyncHistoryPanel providers={[provider('p1', 'Vector Solutions')]} />);
+
+    expect(await screen.findByText('Manual pull · Completed')).toBeInTheDocument();
+    expect(screen.getByText('Scheduled pull · Completed')).toBeInTheDocument();
+  });
+
   it('shows the classes a run brought in, naming matched members', async () => {
     const user = userEvent.setup();
     render(<ExternalSyncHistoryPanel providers={[provider('p1', 'Vector Solutions')]} />);

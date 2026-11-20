@@ -60,7 +60,7 @@ from app.services.training_program_service import TrainingProgramService
 from app.utils.call_type_matching import matching_call_types
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import reject_null_for_required
-from app.utils.org_scoping import assert_all_in_org
+from app.utils.org_scoping import assert_all_in_org, assert_current_members
 from app.utils.org_timezone import resolve_org_today
 
 #: ``settings["shift_reports"]["authorship"]`` value under which a shift's
@@ -917,6 +917,15 @@ class ShiftCompletionService:
         if trainee_evaluations:
             for ev in trainee_evaluations:
                 eval_map[ev["user_id"]] = ev
+
+        # A manual batch names its crew from the member picker, so it may name
+        # current members only. A batch linked to a scheduled shift takes its
+        # crew from that shift's roster: a member who worked it and has since
+        # left still earns the credit, so it is not checked here.
+        if not shift_id:
+            await assert_current_members(
+                self.db, crew_member_ids, organization_id, label="crew members"
+            )
 
         # Checked once, up front: create_report enforces the same rule, but a
         # batch catches its ValueError per member and would report every row

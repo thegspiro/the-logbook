@@ -502,6 +502,31 @@ class TestTheDocumentsModule:
         assert caught.value.status_code == 409
         assert _stored_files(uploads) == []
 
+    async def test_delete_folder_will_not_bulk_delete_a_history_document(
+        self, db_session, dept
+    ):
+        """Defense in depth: delete_folder's bulk ``DELETE`` has no per-row
+        check the way delete_document does. A catalogued document can only
+        reach an ordinary folder today by direct manipulation (the normal
+        upload/move paths all refuse it), but if one ever did, the cascade
+        must still refuse it rather than silently destroying the catalogued
+        row the one-at-a-time path protects."""
+        item = await _upload(db_session, dept)
+        folder = DocumentFolder(organization_id=dept.org_id, name="Ordinary Folder")
+        db_session.add(folder)
+        await db_session.flush()
+        document = await db_session.get(Document, item.id)
+        document.folder_id = folder.id
+        await db_session.flush()
+
+        with pytest.raises(ValueError, match="catalogued in History"):
+            await DocumentsService(db_session).delete_folder(
+                uuid.UUID(folder.id), dept.org_id, dept.historian
+            )
+
+        assert await db_session.get(Document, item.id) is not None
+        assert await db_session.get(DocumentFolder, folder.id) is not None
+
     async def test_a_subfolder_of_history_is_history_too(self, db_session, dept):
         service = DocumentsService(db_session)
         root = await service.ensure_history_folder(dept.org_id)

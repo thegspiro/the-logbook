@@ -1,0 +1,42 @@
+{
+  "script": "docs/youtube-scripts/08-quick-tips-and-shorts.md — SHORT 8B",
+  "title": "Are Your Certs Current?",
+  "callout": "Check your training status weekly",
+  "endCard": {
+    "headline": "Try The Logbook",
+    "sub": "Free & Open Source",
+    "url": "github.com/thegspiro/the-logbook"
+  },
+  "shots": [
+    {
+      "id": "hook",
+      "say": "How to check if your certifications are current, in one minute.",
+      "caption": "Are your certifications current?"
+    },
+    {
+      "id": "navigate",
+      "say": "Open More, then Training, then My Training.",
+      "caption": "More → Training → My Training"
+    },
+    {
+      "id": "colors",
+      "say": "Open Certifications. Green means current. Yellow means it expires soon, so renew it. Red means it has expired. Talk to your training officer.",
+      "caption": "Green current · Yellow expiring · Red expired"
+    },
+    {
+      "id": "dates",
+      "say": "Every certification shows its expiration date, and anything due in the next six months is listed at the top.",
+      "caption": "Due in the next 6 months? It's listed at the top"
+    },
+    {
+      "id": "submit",
+      "say": "Took a class somewhere else? Tap the Submit Training button to send it in for credit.",
+      "caption": "Took a class elsewhere? Submit Training"
+    },
+    {
+      "id": "outro",
+      "say": "Stay ahead of your certs. Your career depends on it.",
+      "caption": "Stay ahead of your certs"
+    }
+  ]
+}

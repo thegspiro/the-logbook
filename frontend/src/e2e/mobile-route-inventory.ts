@@ -919,14 +919,14 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/history/people',
     source: 'src/modules/history/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/history/people/new',
     source: 'src/modules/history/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/history/people/:personId',
@@ -949,8 +949,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/history/import',
     source: 'src/modules/history/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/history/import/:importId',
@@ -967,8 +967,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/history/media/upload',
     source: 'src/modules/history/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/history/media/:mediaId',
@@ -991,8 +991,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/history/documents/upload',
     source: 'src/modules/history/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/history/documents/:documentId',
@@ -1009,8 +1009,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/history/albums',
     source: 'src/modules/history/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/history/albums/:albumId',
@@ -1021,8 +1021,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/history/honor-roll',
     source: 'src/modules/history/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/history/clearance/:requestId',
@@ -1033,8 +1033,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/history/settings',
     source: 'src/modules/history/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized or configuration route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/medical-screening',
@@ -1213,23 +1213,20 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/minutes/attendance',
     source: 'src/modules/minutes/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      'secretary report built from the shared rwd-table, card and form-input utilities; /minutes is the representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/minutes/attendance/waiver-settings',
     source: 'src/modules/minutes/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      'the session waiver settings panel bound to the meeting workflow; its training twin under /training/admin covers the same form-input, toggle and card utilities',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/meetings/waiver-requests',
     source: 'src/modules/minutes/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      'the /attendance-waivers approver queue bound to the meeting workflow; it lists only requests routed to the viewer, so it is empty for the e2e member',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/meetings/waiver-requests/:id',
@@ -1241,16 +1238,14 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/minutes/outlines',
     source: 'src/modules/minutes/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      'outline list built from the shared card, btn-secondary and Modal utilities; /minutes is the representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/minutes/settings',
     source: 'src/modules/minutes/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      'settings screen built on the shared SettingsLayout, form-input and btn-primary utilities; /minutes is the representative module route',
+    coverage: 'ratchet',
+    detail: 'populated from helpers.ts fixtures and measured through the mobile presentation ratchet',
   },
   {
     path: '/minutes/:minutesId',

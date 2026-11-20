@@ -112,6 +112,11 @@ export interface InstructorOption {
   name: string;
   /** The name with the member's rank, as the picker lists them. */
   label: string;
+  /**
+   * No longer a current member. Kept so a session that already names them
+   * still shows them, but never offered or matched as a new instructor.
+   */
+  former?: boolean | undefined;
 }
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();

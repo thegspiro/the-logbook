@@ -15,6 +15,7 @@ from pydantic import (
     ConfigDict,
     EmailStr,
     Field,
+    TypeAdapter,
     field_validator,
     model_validator,
 )
@@ -663,6 +664,59 @@ class SchedulingNotificationSettings(BaseModel):
         default_factory=list,
         description="Additional email addresses to CC on decline emails",
     )
+
+
+_EMAIL_ADAPTER = TypeAdapter(EmailStr)
+
+
+def _is_email(value: Any) -> bool:
+    try:
+        _EMAIL_ADAPTER.validate_python(value)
+    except ValueError:
+        return False
+    return True
+
+
+class EquipmentCheckAlertSettings(BaseModel):
+    """Who hears that an equipment check failed (``equipment_check_alerts``).
+
+    The one definition of these defaults: the settings read reports them to
+    the scheduling notifications panel, and the failure-alert sender reads the
+    same model, so a department that never saved the panel is alerted exactly
+    as the panel shows (CLAUDE.md #19, #29). ``notify_roles`` holds the
+    panel's office keys; ``position_recipients.current_holder_ids`` expands
+    ``chief`` to the seeded ``fire_chief``.
+    """
+
+    notify_on_failure: bool = True
+    notify_roles: List[str] = Field(default_factory=lambda: ["chief", "captain"])
+    notify_shift_officer: bool = True
+    send_email: bool = False
+    cc_emails: List[EmailStr] = Field(default_factory=list)
+
+    @classmethod
+    def from_stored(cls, stored: Any) -> "EquipmentCheckAlertSettings":
+        """Rebuild from the stored JSON, keeping each well-formed value.
+
+        The column is free-form and is written without this model, so a
+        malformed value falls back to its default rather than raising: on the
+        settings read that would fail every setting of the organization, and
+        in the sender it would cost the alert.
+        """
+        if not isinstance(stored, dict):
+            return cls()
+        fields: Dict[str, Any] = {
+            key: stored[key]
+            for key in ("notify_on_failure", "notify_shift_officer", "send_email")
+            if isinstance(stored.get(key), bool)
+        }
+        roles = stored.get("notify_roles")
+        if isinstance(roles, list):
+            fields["notify_roles"] = [r for r in roles if isinstance(r, str)]
+        emails = stored.get("cc_emails")
+        if isinstance(emails, list):
+            fields["cc_emails"] = [e for e in emails if _is_email(e)]
+        return cls(**fields)
 
 
 class ChecklistTimingSettings(BaseModel):
@@ -1445,6 +1499,10 @@ class OrganizationSettings(BaseModel):
         default_factory=SchedulingNotificationSettings,
         description="Scheduling module notification settings",
     )
+    equipment_check_alerts: EquipmentCheckAlertSettings = Field(
+        default_factory=EquipmentCheckAlertSettings,
+        description="Who is alerted when an equipment check fails",
+    )
     member_drop_notifications: MemberDropNotificationSettings = Field(
         default_factory=MemberDropNotificationSettings,
         description="Configuration for drop/separation notifications (CC, personal email, template)",
@@ -1847,6 +1905,9 @@ class OrganizationProfileUpdate(BaseModel):
     """
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
+    # An explicit null — or a blank, which the validator turns into one —
+    # clears it, and readers then fall back to ``name``.
+    short_name: Optional[str] = Field(None, max_length=20)
     timezone: Optional[str] = Field(None, max_length=50)
     phone: Optional[str] = Field(None, max_length=20)
     email: Optional[str] = Field(None, max_length=255)
@@ -1857,6 +1918,13 @@ class OrganizationProfileUpdate(BaseModel):
     mailing_address: Optional[MailingAddressUpdate] = None
     physical_address_same: Optional[bool] = None
     physical_address: Optional[PhysicalAddressUpdate] = None
+
+    @field_validator("short_name", mode="before")
+    @classmethod
+    def _blank_short_name_is_none(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
 
 
 class OrganizationResponse(OrganizationBase):

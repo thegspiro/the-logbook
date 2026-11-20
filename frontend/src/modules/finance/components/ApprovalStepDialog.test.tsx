@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '@/test/utils';
 import { ApprovalStepDialog } from './ApprovalStepDialog';
@@ -117,5 +117,44 @@ describe('ApprovalStepDialog', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Keep editing' }));
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByLabelText(/Step name/)).toHaveValue('Board review 2');
+  });
+});
+
+describe('ApprovalStepDialog — specific member approver', () => {
+  const memberOptions: ApproverOptions = {
+    positions: [],
+    permissions: [],
+    users: [
+      { value: 'u1', label: 'Sam Ortiz' },
+      { value: 'u2', label: 'Lee Park', former: true },
+    ],
+  };
+  const renderMemberStep = (approverValue: string) =>
+    renderWithRouter(
+      <ApprovalStepDialog
+        mode="edit"
+        initialValues={{ ...EMPTY_STEP_FORM, name: 'Chief', approverType: ApproverType.SPECIFIC_USER, approverValue }}
+        approverOptions={memberOptions}
+        saving={false}
+        onClose={onClose}
+        onSubmit={onSubmit}
+      />
+    );
+  const offered = () =>
+    within(screen.getByLabelText(/^Specific member/))
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+
+  it('does not offer a former member', () => {
+    renderMemberStep('u1');
+
+    expect(offered()).toEqual(['Choose…', 'Sam Ortiz']);
+  });
+
+  it('keeps a stored approver who has since left, marked as a former member', () => {
+    renderMemberStep('u2');
+
+    expect(screen.getByLabelText(/^Specific member/)).toHaveValue('u2');
+    expect(offered()).toEqual(['Choose…', 'Sam Ortiz', 'Lee Park (former member)']);
   });
 });

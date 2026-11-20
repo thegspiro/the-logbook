@@ -513,6 +513,30 @@ those orders.]**
 > clears a balance without money — a replacement for a defective item, a comp. It's
 > recorded as a waiver, not a payment, so your totals still tell the truth."
 
+**[SCREEN: Record payment refusing an amount above the balance. Then the
+Refund section: Amount to refund, Refund reason (shown to the member), Record
+refund, and the confirmation "Refund $… to <member>?" — ADDED 2026-11-19
+PASS]**
+
+> "Two guard rails. **Record payment** won't take more than the balance — if
+> somebody sent too much, record what they owed and refund the rest. And
+> **Refund** isn't one tap any more: you type the amount and a reason the
+> member will see, and it asks before it records anything. Send the money back
+> the way it came in; the app only keeps the record."
+
+**[SCREEN: A shipped order's progress steps reading Ready to ship and
+Shipped.]**
+
+> "And if a member chose shipping, their order says **Ready to ship** and
+> **Shipped** instead of ready for pickup."
+
+**[PRODUCTION NOTE — 2026-11-19 PASS. New beat, about 25 seconds; re-time
+Chapter 6. Refund was a single tap that refunded everything before
+2026-11-18 (W67b-8); typed payments above the balance are refused (W67b-7); an
+applied PayPal payment can still overpay, and the order then offers "Refund
+the $… excess" — worth a line in Chapter 7 when it is next recorded. Shipped
+orders relabel per W67b-18.]**
+
 ### BULK (15:15 – 16:00)
 
 **[SCREEN: Selecting twelve orders, clicking "Mark selected paid", then a bulk

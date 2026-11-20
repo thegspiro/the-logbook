@@ -19,7 +19,10 @@ The Admin Hours module tracks administrative work hours for department members v
 - **NFC Tags** — _(2026-08-18)_ Write a category's clock-in URL to a reusable tag from `/admin-hours/categories/:id/qr-code`, and read one with **Tap Tag** on My Admin Hours. See [NFC Tags](#nfc-tags-2026-08-18) below
 - **Pagination & Filters** — Filter entries by status, category, member, and date range with paginated results
 - **Bulk Approve** — Select multiple pending entries and approve them in one action (your own entries are refused, as above)
-- **CSV Export** — Export filtered admin hours data to CSV for external reporting
+- **CSV Export** — Export filtered admin hours data to CSV for external reporting.
+  The export, and the Admin Hours report's downloads, end with a **Source**
+  column: **Imported** for `entry_method = import`, otherwise **The Logbook**
+  _(2026-11-19, #4355)_
 - **Dashboard Integration** — Admin hours summary widget on the main Dashboard page
 - **Reports Integration** — Admin hours data included in the Reports page
 - **Member Profile Integration** — Individual member's admin hours visible on their profile page

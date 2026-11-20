@@ -444,6 +444,22 @@ screening content, free-text reasons on leaves and waivers, dietary and
 accessibility notes on event RSVPs, and the original application with its
 interview notes and uploaded documents.
 
+**Certificates uploaded with self-reported training are deleted too**
+_(2026-11-17)_. The training record and submission stay, so the completion
+still counts, but the uploaded file is removed and downloading it returns
+"not found", as it does after the retention period. A file another record
+still uses is kept. The confirmation dialog now lists **Certificates uploaded
+with their training reports**. Files attached to a training record by an
+officer are department training evidence and are **kept**. _Screenshot:
+create one of the Anonymize Member dialog's Removed list showing the new
+line (the guide has no image of the dialog yet)._
+
+**Permanently deleting a member also removes their files** _(2026-11-17)_:
+the files on the training submissions, training records and attendance waiver
+documents the delete removes, once the delete has gone through. A refused
+delete removes nothing. Files in a member's personal Member Files folder and
+the separation letter in Documents are not touched by either action yet.
+
 ### What is kept
 
 Training completions and certifications, attendance and service hours,
@@ -551,6 +567,8 @@ A year later, the administrator opens Dana's archived record and selects
 - Her address, date of birth, photo and emergency contacts are gone.
 - Her original application is gone, including the interview notes and the copy
   of her driver's license uploaded during onboarding.
+- The CPR card she photographed and attached to a self-reported class is gone;
+  the training record it supported still counts.
 
 ### Step 5: The audit trail still tells the story
 

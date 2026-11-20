@@ -117,6 +117,8 @@ GET    /availability                    # Member availability (scheduling.assign
 GET    /my-shifts                       # Caller's shifts
 GET    /my-assignments                  # Caller's assignments, with embedded shift data
 GET    /my-hours-history                # Caller's hours (year's months, totals, all time, and `history`: every month on record)
+GET    /my-shift-history                # Caller's shifts in a year, own department's and outside, one row each
+GET    /members/{id}/shift-history      # The same for a member's profile (self, or scheduling.report)
 GET    /standing-shifts/preview         # Preview a standing series
 GET    /standing-shifts                 # Caller's standing claims
 POST   /standing-shifts                 # Create a standing claim
@@ -354,6 +356,7 @@ GET    /agencies                        # Outside departments (scheduling.manage
 POST   /agencies                        # (scheduling.manage)
 PATCH  /agencies/{agency_id}            # (scheduling.manage)
 DELETE /agencies/{agency_id}            # (scheduling.manage)
+POST   /agencies/{agency_id}/merge      # Fold into into_agency_id; relabels its shifts (scheduling.manage)
 POST   /agencies/{agency_id}/apparatus  # Add a unit (scheduling.manage)
 PATCH  /apparatus/{apparatus_id}        # (scheduling.manage)
 DELETE /apparatus/{apparatus_id}        # Refused once shifts are logged on it (scheduling.manage)
