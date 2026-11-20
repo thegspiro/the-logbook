@@ -11,7 +11,7 @@ vi.mock('../services/api', () => ({
 vi.mock('../hooks/useRanks', () => ({ useRanks: () => ({ formatRank: (rank: string) => rank }) }));
 
 import { EventTemplateForm } from './EventTemplateForm';
-import type { EventTemplate } from '../types/event';
+import type { EventTemplate, EventTemplateCreate } from '../types/event';
 
 // Every block starts from these; a block that needs others installs them in
 // its own beforeEach (pitfall #28).
@@ -362,6 +362,7 @@ describe('EventTemplateForm training details', () => {
     getUsers.mockResolvedValue([OWEN]);
   });
 
+  const sent = (onSubmit: ReturnType<typeof vi.fn>) => onSubmit.mock.calls[0]?.[0] as EventTemplateCreate;
   const save = (user: ReturnType<typeof userEvent.setup>) =>
     user.click(screen.getByRole('button', { name: 'Save Template' }));
 
@@ -449,14 +450,9 @@ describe('EventTemplateForm training details', () => {
     expect(screen.getByLabelText(/^Course/, { selector: 'select' })).toHaveValue(PUMP.id);
     expect(screen.getByLabelText(/Lead Instructor/)).toHaveValue(OWEN.id);
     await save(user);
-    expect(onSubmit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        training_details: expect.objectContaining({
-          course_id: PUMP.id,
-          credit_hours: 3,
-          credit_hours_source: 'course',
-        }),
-      })
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(sent(onSubmit).training_details).toEqual(
+      expect.objectContaining({ course_id: PUMP.id, credit_hours: 3, credit_hours_source: 'course' })
     );
   });
 
@@ -486,18 +482,17 @@ describe('EventTemplateForm training details', () => {
     expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(2);
     await save(user);
 
-    expect(onSubmit).toHaveBeenCalledWith(
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(sent(onSubmit).max_attendees).toBe(12);
+    expect(sent(onSubmit).training_details).toEqual(
       expect.objectContaining({
-        max_attendees: 12,
-        training_details: expect.objectContaining({
-          course_mode: 'library',
-          course_id: PUMP.id,
-          credit_hours: 2,
-          credit_hours_source: 'course',
-          instructor_id: OWEN.id,
-          issues_certification: true,
-          expiration_months: 24,
-        }),
+        course_mode: 'library',
+        course_id: PUMP.id,
+        credit_hours: 2,
+        credit_hours_source: 'course',
+        instructor_id: OWEN.id,
+        issues_certification: true,
+        expiration_months: 24,
       })
     );
   });
