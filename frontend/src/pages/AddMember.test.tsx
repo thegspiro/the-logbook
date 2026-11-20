@@ -624,7 +624,7 @@ describe('AddMember', { timeout: 20_000 }, () => {
       await user.click(screen.getByRole('button', { name: /save member/i }));
 
       expect(await screen.findByText('Password does not meet every rule listed below')).toBeInTheDocument();
-      // W11-12: each rule says in text whether it is met; the ✓/○ is hidden.
+      // W11-12: each rule says in text whether it is met; the icon is hidden.
       const rules = within(screen.getByRole('list', { name: 'Password rules' })).getAllByRole('listitem');
       const rule = (name: string) => rules.find((li) => li.textContent?.endsWith(name));
       expect(rule('No runs like 123 or abc')).toHaveTextContent('Not met: No runs like 123 or abc');
