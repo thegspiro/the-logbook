@@ -185,7 +185,11 @@ back.
    - **Priority** — Low, Medium, High or Critical
    - **Assigned To** — the member managing the application, chosen from the
      member list (the list needs permission to view members; without it the
-     field keeps whoever is already assigned)
+     field keeps whoever is already assigned). Only current members (active
+     or probationary) are listed _(2026-11-19)_. An application already
+     assigned to someone who has since left keeps them, shown as a former
+     member, and saves unchanged; newly choosing a former member is refused
+     ("Only current members can be chosen as the assignee").
    - once decided, **Amount Awarded**, **Submitted** and **Award Date**, and
      under **Reporting** the **Next Report Due** and **Final Report Due**
 3. Select **Create Application**. The application starts in **Researching**.

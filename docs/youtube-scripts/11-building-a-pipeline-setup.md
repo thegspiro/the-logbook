@@ -86,7 +86,14 @@ Fire Attack & Live-Fire, Certification.]**
 > "Now lay out the journey. Add your phases in order — **Orientation & Safety**,
 > **Fireground Skills**, **Fire Attack & Live-Fire**, **Certification**. Give
 > each a name, an optional description, and an optional per-phase time limit.
-> Drag to reorder any time."
+> Once the pipeline is saved, its page has up and down arrows to reorder
+> phases — and the requirements inside them — any time."
+
+> **2026-11-20 PASS:** the narration said "Drag to reorder"; nothing in the
+> pipeline builder drags. Phases and requirements are reordered with the
+> up and down arrow buttons ("Move phase up", "Move requirement up") on the
+> pipeline's page (reordering
+> requirements stopped showing a false error on 2026-11-19, #4390).
 
 ### THE MANUAL-ADVANCE FLAG (4:00 – 4:30)
 

@@ -2580,6 +2580,10 @@ scheduling and communication.
 4. Under **Handling** (**Request Handling**), set:
    - **Default Coordinator** — the member assigned every new request. The
      list shows each member's rank by name ("Jordan Avery — Firefighter").
+     Only current members (active or probationary) are listed _(2026-11-19)_.
+     A default coordinator who has since left stays selected, marked
+     "(former member)", so saving the section does not swap them out — but
+     new requests will keep going to them until you choose someone current.
    - **Request Checklist** — your checklist steps, such as "Chief Approval",
      "Email Volunteer Signup" or "Prep Equipment". Use the up and down arrows
      to reorder them.
@@ -2654,7 +2658,9 @@ own email app. **More** holds the rest:
 In the panel you can also:
 
 1. **Assign or reassign** the coordinator, beside **Coordinator** under the
-   title.
+   title. Only current members are offered _(2026-11-19)_; choosing a former
+   member through an out-of-date screen is refused with "Only current members
+   can be chosen as coordinator".
 2. **Tick off checklist steps** as they are done. The first one ticked moves
    the request from **Submitted** to **In Progress**.
 3. **Schedule Event**: enter the **Start Date & Time**, **End Date & Time**

@@ -786,7 +786,11 @@ or a chosen group.
    - **Everyone** — the whole department.
    - **By role** — one or more roles, such as Probationary Members.
    - **By status** — member statuses, such as Active or Leave.
-   - **Specific members** — people you pick from a searchable list.
+   - **Specific members** — people you pick from a searchable list. The list
+     offers current members only _(2026-11-20)_. When you edit a saved message
+     whose audience already names someone who has since left, they stay
+     listed, ticked and marked **(former member)**, so you can see them and
+     untick them rather than have them dropped without notice.
 5. If you like, tick **Pin to top**, **Keep in inbox after it is read** or
    **Require acknowledgment**. Set **Expires (optional)** and **Schedule for
    later (optional)** if needed.
