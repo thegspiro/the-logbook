@@ -286,7 +286,7 @@ const CommunityEngagementTab: React.FC = () => {
       </div>
 
       <section className="card rwd-table-container overflow-hidden p-0" aria-labelledby="ce-events-heading">
-        <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div>
             <h3 id="ce-events-heading" className="text-theme-text-primary text-sm font-semibold">
               Recent outreach events
@@ -297,7 +297,7 @@ const CommunityEngagementTab: React.FC = () => {
               </p>
             )}
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <a
               href={`/events/admin/community/print?period=${period}`}
               target="_blank"
