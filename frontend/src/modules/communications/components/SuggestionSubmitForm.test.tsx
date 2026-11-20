@@ -30,8 +30,8 @@ const box = (overrides: Partial<SuggestionBoxPublic> = {}): SuggestionBoxPublic 
 
 async function fillAndSubmit(buttonName: RegExp) {
   const user = userEvent.setup();
-  await user.type(screen.getByLabelText('Title'), 'Night drills');
-  await user.type(screen.getByLabelText('Details'), 'More of them');
+  await user.type(screen.getByLabelText(/^Title/), 'Night drills');
+  await user.type(screen.getByLabelText(/^Details/), 'More of them');
   await user.click(screen.getByRole('button', { name: buttonName }));
   return user;
 }
@@ -143,7 +143,7 @@ describe('SuggestionSubmitForm', () => {
     it('shows a follow-up question only on the answer it branches from', async () => {
       renderWithRouter(<SuggestionSubmitForm />);
       const user = userEvent.setup();
-      await user.selectOptions(await screen.findByLabelText('Suggestion box'), 'b1');
+      await user.selectOptions(await screen.findByLabelText(/^Suggestion box/), 'b1');
 
       expect(screen.queryByLabelText(/Where did it happen/)).not.toBeInTheDocument();
       await user.click(screen.getByRole('radio', { name: 'Yes' }));
@@ -155,7 +155,7 @@ describe('SuggestionSubmitForm', () => {
     it('previews the route and sends only the answers shown', async () => {
       renderWithRouter(<SuggestionSubmitForm />);
       const user = userEvent.setup();
-      await user.selectOptions(await screen.findByLabelText('Suggestion box'), 'b1');
+      await user.selectOptions(await screen.findByLabelText(/^Suggestion box/), 'b1');
       await user.click(screen.getByRole('radio', { name: 'Yes' }));
       await user.type(screen.getByLabelText(/Where did it happen/), 'Engine 2');
       await user.click(screen.getByRole('radio', { name: 'No' }));
@@ -175,7 +175,7 @@ describe('SuggestionSubmitForm', () => {
       mockSubmit.mockResolvedValue({ id: 's1', isAnonymous: false, followUpKey: null, boxName: 'General' });
       renderWithRouter(<SuggestionSubmitForm />);
       const user = userEvent.setup();
-      await user.selectOptions(await screen.findByLabelText('Suggestion box'), 'b1');
+      await user.selectOptions(await screen.findByLabelText(/^Suggestion box/), 'b1');
       await user.click(screen.getByRole('radio', { name: 'Yes' }));
       await user.type(screen.getByLabelText(/Where did it happen/), 'Engine 2');
       await user.click(screen.getByRole('radio', { name: 'No' }));
@@ -188,7 +188,7 @@ describe('SuggestionSubmitForm', () => {
     it('warns when going back and re-answering leads to a box that records names', async () => {
       renderWithRouter(<SuggestionSubmitForm />);
       const user = userEvent.setup();
-      await user.selectOptions(await screen.findByLabelText('Suggestion box'), 'b1');
+      await user.selectOptions(await screen.findByLabelText(/^Suggestion box/), 'b1');
       await user.click(screen.getByRole('radio', { name: 'No' }));
       await user.click(screen.getByRole('button', { name: 'Continue' }));
       await user.click(screen.getByLabelText(/Submit anonymously/));
@@ -209,7 +209,7 @@ describe('SuggestionSubmitForm', () => {
       mockSubmit.mockResolvedValue({ id: null, isAnonymous: true, followUpKey: null, boxName: 'Compliance' });
       renderWithRouter(<SuggestionSubmitForm />);
       const user = userEvent.setup();
-      await user.selectOptions(await screen.findByLabelText('Suggestion box'), 'b1');
+      await user.selectOptions(await screen.findByLabelText(/^Suggestion box/), 'b1');
       await user.click(screen.getByRole('radio', { name: 'Yes' }));
       await user.type(screen.getByLabelText(/Where did it happen/), 'Bay');
       await user.click(screen.getByRole('button', { name: 'Continue' }));
@@ -222,18 +222,18 @@ describe('SuggestionSubmitForm', () => {
     it('asks the questions first and the suggestion after, keeping answers on the way back', async () => {
       renderWithRouter(<SuggestionSubmitForm />);
       const user = userEvent.setup();
-      await user.selectOptions(await screen.findByLabelText('Suggestion box'), 'b1');
+      await user.selectOptions(await screen.findByLabelText(/^Suggestion box/), 'b1');
 
       expect(screen.getByRole('heading', { name: /Step 1 of 2/ })).toBeInTheDocument();
-      expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
-      expect(screen.queryByLabelText('Details')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Title/)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Details/)).not.toBeInTheDocument();
 
       await user.click(screen.getByRole('radio', { name: 'Yes' }));
       await user.type(screen.getByLabelText(/Where did it happen/), 'Engine 2');
       await user.click(screen.getByRole('button', { name: 'Continue' }));
 
       expect(screen.getByRole('heading', { name: /Step 2 of 2/ })).toHaveFocus();
-      expect(screen.getByLabelText('Title')).toBeInTheDocument();
+      expect(screen.getByLabelText(/^Title/)).toBeInTheDocument();
       expect(screen.queryByRole('radio', { name: 'Yes' })).not.toBeInTheDocument();
 
       await user.click(screen.getByRole('button', { name: 'Back to the questions' }));
@@ -244,19 +244,19 @@ describe('SuggestionSubmitForm', () => {
     it('does not continue past an unanswered required question', async () => {
       renderWithRouter(<SuggestionSubmitForm />);
       const user = userEvent.setup();
-      await user.selectOptions(await screen.findByLabelText('Suggestion box'), 'b1');
+      await user.selectOptions(await screen.findByLabelText(/^Suggestion box/), 'b1');
 
       await user.click(screen.getByRole('button', { name: 'Continue' }));
 
       expect(screen.getByRole('heading', { name: /Step 1 of 2/ })).toBeInTheDocument();
-      expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Title/)).not.toBeInTheDocument();
     });
 
     it('keeps a single page for a box with no questions', async () => {
       mockListBoxes.mockResolvedValue([box({ id: 'b3', name: 'Ideas' })]);
       renderWithRouter(<SuggestionSubmitForm />);
 
-      expect(await screen.findByLabelText('Title')).toBeInTheDocument();
+      expect(await screen.findByLabelText(/^Title/)).toBeInTheDocument();
       expect(screen.queryByRole('heading', { name: /Step/ })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
     });
@@ -275,11 +275,92 @@ describe('SuggestionSubmitForm', () => {
       const user = userEvent.setup();
 
       await user.click(await screen.findByRole('button', { name: 'Continue' }));
-      expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Title/)).not.toBeInTheDocument();
 
       await user.click(await screen.findByRole('button', { name: 'Riley Member' }));
       await user.click(screen.getByRole('button', { name: 'Continue' }));
-      expect(screen.getByLabelText('Title')).toBeInTheDocument();
+      expect(screen.getByLabelText(/^Title/)).toBeInTheDocument();
     });
+  });
+});
+
+describe('SuggestionSubmitForm — what is missing is named on its field (batch 24)', () => {
+  const asked = box({
+    id: 'b5',
+    name: 'Station issues',
+    intakeQuestions: [
+      { id: 'station', label: 'Which station?', type: 'text', required: true, options: [] },
+      { id: 'note', label: 'Anything else?', type: 'text', required: false, options: [] },
+    ],
+  });
+
+  beforeEach(() => {
+    mockListBoxes.mockReset();
+    mockSubmit.mockReset();
+  });
+
+  it('names an unanswered required question on the question, and focuses it', async () => {
+    mockListBoxes.mockResolvedValue([asked]);
+    renderWithRouter(<SuggestionSubmitForm />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Continue' }));
+
+    const station = screen.getByLabelText(/^Which station\?/);
+    expect(station).toHaveAccessibleDescription('Answer “Which station?”.');
+    expect(station).toHaveAttribute('aria-invalid', 'true');
+    expect(station).toHaveFocus();
+    expect(screen.getByLabelText(/^Anything else\?/)).not.toHaveAttribute('aria-invalid');
+
+    await user.type(station, 'Station 2');
+    expect(station).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('keeps Submit pressable and names a missing title and details on their fields', async () => {
+    mockListBoxes.mockResolvedValue([box()]);
+    renderWithRouter(<SuggestionSubmitForm />);
+    const user = userEvent.setup();
+
+    const submit = await screen.findByRole('button', { name: 'Submit' });
+    expect(submit).toBeEnabled();
+    await user.click(submit);
+
+    expect(screen.getByLabelText(/^Title/)).toHaveAccessibleDescription('Give your suggestion a title.');
+    expect(screen.getByLabelText(/^Details/)).toHaveAccessibleDescription('Describe your suggestion.');
+    expect(screen.getByLabelText(/^Title/)).toHaveFocus();
+    expect(mockSubmit).not.toHaveBeenCalled();
+  });
+
+  it('takes a refusal naming a question back to that question, keeping the suggestion typed', async () => {
+    mockListBoxes.mockResolvedValue([asked]);
+    mockSubmit.mockRejectedValue({
+      response: { status: 400, data: { detail: "'Which station?' needs a number." } },
+    });
+    renderWithRouter(<SuggestionSubmitForm />);
+    const user = userEvent.setup();
+
+    await user.type(await screen.findByLabelText(/^Which station\?/), 'two');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await fillAndSubmit(/^Submit$/);
+
+    const station = await screen.findByLabelText(/^Which station\?/);
+    expect(station).toHaveAccessibleDescription("'Which station?' needs a number.");
+    expect(station).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(screen.getByLabelText(/^Title/)).toHaveValue('Night drills');
+  });
+
+  it('says a refusal no field answers for in the form, by the button', async () => {
+    mockListBoxes.mockResolvedValue([box()]);
+    mockSubmit.mockRejectedValue({
+      response: { status: 400, data: { detail: 'This box does not accept anonymous submissions.' } },
+    });
+    renderWithRouter(<SuggestionSubmitForm />);
+    await screen.findByLabelText(/^Title/);
+
+    await fillAndSubmit(/^Submit$/);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('This box does not accept anonymous submissions.');
+    expect(screen.getByLabelText(/^Title/)).toHaveValue('Night drills');
   });
 });

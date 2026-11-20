@@ -16,7 +16,13 @@ import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from
 import { blankToNull } from '../../../utils/formValues';
 import { suggestionsService } from '../services/suggestionsService';
 import type { ReviewerOptions, SuggestionBoxAdmin } from '../types/suggestions';
-import { type EditableQuestion, withEditorIds } from '../utils/suggestionRouting';
+import {
+  type EditableQuestion,
+  type QuestionProblems,
+  questionProblemTarget,
+  questionProblems,
+  withEditorIds,
+} from '../utils/suggestionRouting';
 import IntakeQuestionsEditor from './IntakeQuestionsEditor';
 import ReviewerChecklist from './ReviewerChecklist';
 
@@ -31,7 +37,7 @@ interface SuggestionBoxFormModalProps {
 
 const ANONYMITY_MODES = Object.values(SuggestionAnonymityMode);
 
-type BoxField = 'name' | 'description' | 'anonymityMode' | 'reviewers';
+type BoxField = 'name' | 'description' | 'questions' | 'anonymityMode' | 'reviewers';
 
 /**
  * SuggestionBoxWrite in schemas/suggestion.py (camelCase on the wire). In the
@@ -41,6 +47,24 @@ type BoxField = 'name' | 'description' | 'anonymityMode' | 'reviewers';
 const BOX_FIELDS: FieldSpecs<BoxField> = {
   name: { id: 'box-name', label: 'Name' },
   description: { id: 'box-description', label: 'Description' },
+  // A 422 on a question reports its nested key (intakeQuestions.0.label);
+  // the last segment is what placeApiError reads, so the question keys are
+  // listed too. Nothing else in this form answers to them.
+  questions: {
+    id: 'box-questions',
+    label: 'Questions',
+    apiKeys: [
+      'intakeQuestions',
+      'label',
+      'options',
+      'helpText',
+      'value',
+      'routeToBoxId',
+      'conditionQuestionId',
+      'conditionOperator',
+      'conditionValue',
+    ],
+  },
   anonymityMode: { id: 'box-anonymity', label: 'Anonymity' },
   reviewers: {
     id: 'box-reviewers',
@@ -60,6 +84,8 @@ const storedValues = (box: SuggestionBoxAdmin, field: BoxField): Record<string, 
       return { name: box.name };
     case 'description':
       return { description: box.description ?? null };
+    case 'questions':
+      return { intakeQuestions: box.intakeQuestions ?? [] };
     case 'anonymityMode':
       return { anonymityMode: box.anonymityMode };
     case 'reviewers':
@@ -98,6 +124,21 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
   const errors = fieldErrors.errors;
   const [savedExcept, setSavedExcept] = useState(false);
   const clearError = (field: BoxField) => fieldErrors.setError(field, null);
+  const [problems, setProblems] = useState<Record<string, QuestionProblems>>({});
+
+  /** Editing the questions answers the flags on those it now settles. */
+  const changeQuestions = (next: EditableQuestion[]) => {
+    setQuestions(next);
+    if (Object.keys(problems).length === 0) return;
+    const now = questionProblems(next);
+    const still: Record<string, QuestionProblems> = {};
+    for (const id of Object.keys(problems)) {
+      const current = now[id];
+      if (current) still[id] = current;
+    }
+    setProblems(still);
+    if (Object.keys(still).length === 0) clearError('questions');
+  };
 
   // Everything the form would save, as text, so closing can tell whether it
   // would lose anything. The filters are search boxes, not part of the box.
@@ -133,8 +174,17 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
     return [...options.members, ...missing];
   }, [options.members, box]);
 
-  const showErrors = (next: FieldErrors<BoxField>) => {
+  const showErrors = (next: FieldErrors<BoxField>, flagged: Record<string, QuestionProblems> = problems) => {
     fieldErrors.setErrors(next);
+    const firstField = (Object.keys(BOX_FIELDS) as BoxField[]).find((field) => next[field]);
+    // A flagged question is focused on the control that needs the fix, not on
+    // the section around it.
+    const firstQuestion = questions.find((q) => flagged[q.id]);
+    const problem = firstQuestion ? flagged[firstQuestion.id] : undefined;
+    if (firstField === 'questions' && firstQuestion && problem) {
+      document.getElementById(questionProblemTarget(firstQuestion, problem))?.focus();
+      return;
+    }
     fieldErrors.focusFirst(next);
   };
 
@@ -148,8 +198,14 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
     let refused: FieldErrors<BoxField> = {};
     if (!name.trim()) refused.name = 'Enter a name for the box.';
     if (isActive && !hasReviewers) refused.reviewers = 'Choose at least one reviewer, or save the box as inactive.';
+    const flagged = questionProblems(questions);
+    setProblems(flagged);
+    if (Object.keys(flagged).length > 0) {
+      refused.questions =
+        Object.keys(flagged).length === 1 ? 'Fix the flagged question.' : 'Fix the flagged questions.';
+    }
     if (!box && Object.keys(refused).length > 0) {
-      showErrors(refused);
+      showErrors(refused, flagged);
       return;
     }
     const payload = {
@@ -190,7 +246,7 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
           saved = await suggestionsService.updateBox(box.id, keepingStored(box));
         }
         if (Object.keys(refused).length > 0) {
-          showErrors(refused);
+          showErrors(refused, flagged);
           setSavedExcept(true);
           return;
         }
@@ -204,7 +260,7 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
     } catch (err: unknown) {
       const mapped = placeApiError(BOX_FIELDS, err);
       if (mapped) {
-        showErrors({ ...refused, ...mapped.fieldErrors });
+        showErrors({ ...refused, ...mapped.fieldErrors }, flagged);
         fieldErrors.setFormError(mapped.unmatched.length ? mapped.unmatched.join(' ') : null);
       } else {
         // Said in the dialog, not in a toast behind it.
@@ -300,9 +356,12 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
             below it, and at the foot of a long modal it went unfound. */}
         <IntakeQuestionsEditor
           questions={questions}
-          onChange={setQuestions}
+          onChange={changeQuestions}
           routeTargets={routeTargets}
           anonymityMode={anonymityMode}
+          problems={problems}
+          // Only a refusal the questions themselves do not already show.
+          error={Object.keys(problems).length === 0 ? errors.questions : undefined}
         />
         <FormField
           label="Anonymity"

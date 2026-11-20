@@ -99,6 +99,10 @@ ORGANIZATION_FIELD_VARIABLES: Dict[str, str] = {
 ORGANIZATION_FIELDS_WITHOUT_VARIABLES: Dict[str, str] = {
     "id": "internal key",
     "slug": "internal key, and it appears in URLs rather than in prose",
+    "short_name": (
+        "an abbreviation for compact lists such as My Hours; an email names "
+        "the department in full through organization_name"
+    ),
     "type": "legacy duplicate of organization_type",
     "organization_type": "surfaced in readable form as organization_type_label",
     "identifier_type": "selects which identifier organization_identifier carries",

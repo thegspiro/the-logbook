@@ -68,6 +68,7 @@ from app.schemas.scheduling import (
     GenerateShiftsRequest,
     LateSignupOpenRequest,
     MemberHoursHistoryResponse,
+    MemberShiftHistoryResponse,
     OpenSwapPickupResponse,
     PlatoonBulkAssign,
     PlatoonBulkAssignResult,
@@ -169,7 +170,7 @@ from app.services.standing_shift_service import MAX_SERIES_DAYS, StandingShiftSe
 from app.utils.delete_outcome import set_delete_outcome
 from app.utils.hours import hours_from_minutes
 from app.utils.model_updates import apply_updates
-from app.utils.org_timezone import resolve_org_today
+from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.outreach_roles import normalize_staffing_roles
 from app.utils.positions import UnknownSeatError, normalize_stored_positions
 
@@ -3550,6 +3551,70 @@ async def get_member_hours_history(
     service = SchedulingService(db)
     return await service.get_my_hours_history(
         str(user_id), current_user.organization_id, year
+    )
+
+
+async def _resolve_shift_history_year(db: AsyncSession, organization_id, year):
+    if year is not None:
+        return year
+    tz = await resolve_scheduling_timezone(db, organization_id)
+    return datetime.now(tz).date().year
+
+
+@router.get("/my-shift-history", response_model=MemberShiftHistoryResponse)
+async def get_my_shift_history(
+    year: int | None = Query(None, ge=2000, le=2100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The caller's own shifts in one year: the department's own and those
+    logged with other departments, one row per shift.
+
+    The rows behind ``/my-hours-history``, on the same basis — the caller's
+    own record, so authentication is the only gate. Defaults to the current
+    year in the department's timezone.
+    """
+    service = SchedulingService(db)
+    return await service.get_member_shift_history(
+        current_user.id,
+        current_user.organization_id,
+        await _resolve_shift_history_year(db, current_user.organization_id, year),
+    )
+
+
+@router.get(
+    "/members/{user_id}/shift-history", response_model=MemberShiftHistoryResponse
+)
+async def get_member_shift_history(
+    user_id: UUID,
+    year: int | None = Query(None, ge=2000, le=2100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """One member's shifts in one year, for their profile — the rows behind
+    ``/members/{user_id}/hours-history``, under the same rule: the member may
+    read their own, anyone else needs ``scheduling.report``, and a member of
+    another organization reads as not found (pitfall #14).
+    """
+    if str(user_id) != str(current_user.id) and not user_has_permission(
+        current_user, "scheduling.report"
+    ):
+        raise HTTPException(status_code=403, detail="Not permitted")
+    member = (
+        await db.execute(
+            select(User.id).where(
+                User.id == str(user_id),
+                User.organization_id == str(current_user.organization_id),
+            )
+        )
+    ).scalar_one_or_none()
+    if member is None:
+        raise HTTPException(status_code=404, detail="Member not found")
+    service = SchedulingService(db)
+    return await service.get_member_shift_history(
+        str(user_id),
+        current_user.organization_id,
+        await _resolve_shift_history_year(db, current_user.organization_id, year),
     )
 
 

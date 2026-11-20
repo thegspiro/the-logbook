@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
-import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
 import { FormField, FIELD_ERROR_CLASS } from '../../../components/ux/FormField';
 import { enumLabel } from '../../../utils/displayValue';
 import { formCoercions } from '../../../utils/formValues';
@@ -42,6 +44,27 @@ const TEMPLATE_FIELDS: FieldSpecs<TemplateField> = {
   min_staffing: { id: 'template-min-staffing', label: 'Smallest crew', apiKeys: ['min_staffing'] },
 };
 
+const TEMPLATE_FIELD_ORDER = Object.keys(TEMPLATE_FIELDS) as TemplateField[];
+
+/**
+ * The payload keys each field writes. The shift's length is derived from its
+ * start and end, so a refused start or end also holds the length back: sending
+ * a length the times no longer agree with would store a shift that contradicts
+ * itself.
+ */
+const TEMPLATE_PAYLOAD_KEYS: Record<TemplateField, readonly string[]> = {
+  name: ['name'],
+  apparatus: ['apparatus_type', 'apparatus_id'],
+  start: ['start_time_of_day', 'duration_hours'],
+  end: ['end_time_of_day', 'duration_hours'],
+  duration: ['duration_hours'],
+  min_staffing: ['min_staffing'],
+};
+
+// shift_templates.name is String(200); the schema sets no limit of its own, so
+// a longer name failed at the database rather than on the field.
+const TEMPLATE_NAME_MAX = 200;
+
 const TEMPLATE_COLORS: { value: string; label: string }[] = [
   { value: '#2563eb', label: 'Blue' },
   { value: '#0d9488', label: 'Teal' },
@@ -56,7 +79,11 @@ const TEMPLATE_COLORS: { value: string; label: string }[] = [
 interface TemplateFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: Record<string, unknown>) => Promise<void>;
+  /**
+   * `keepOpen` marks an edit that saved with a refused field left out: the
+   * dialog stays open with that field flagged, and the list behind it refreshes.
+   */
+  onSubmit: (data: Record<string, unknown>, options?: { keepOpen?: boolean }) => Promise<void>;
   initialData?: TemplateFormData | undefined;
   title: string;
   apparatusOptions: ApparatusOption[];
@@ -72,11 +99,17 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
   apparatusOptions,
   apparatusSource,
 }) => {
-  const dialogRef = useDialog<HTMLDivElement>({ isOpen: isOpen, onClose });
-
   const [formData, setFormData] = useState<TemplateFormData>(
     () => initialData || newTemplateForm(getCachedShiftSettings())
   );
+  // What the dialog opened with; anything changed from it is unsaved work, so
+  // Escape, the X and Cancel ask before throwing it away (forms review F-6).
+  const [openedWith, setOpenedWith] = useState<TemplateFormData>(formData);
+  const isDirty = JSON.stringify(formData) !== JSON.stringify(openedWith);
+  const requestClose = useDiscardGuard({ isDirty, onClose });
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: isOpen, onClose: requestClose });
+  /** The field an edit was saved without, for the "saved, except" notice. */
+  const [savedExcept, setSavedExcept] = useState<TemplateField | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const positionOptions = getPositionOptions();
   const fieldErrors = useFieldErrors(TEMPLATE_FIELDS);
@@ -101,6 +134,8 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
   useEffect(() => {
     const next = initialData || newTemplateForm(getCachedShiftSettings());
     setFormData(next);
+    setOpenedWith(next);
+    setSavedExcept(null);
     const span = hoursBetweenTimesOfDay(next.start_time_of_day, next.end_time_of_day);
     const stated = parseFloat(next.duration_hours);
     setRunsMultipleDays(!isNaN(stated) && span !== null && stated - span > 0.01);
@@ -301,7 +336,12 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
       problems.min_staffing = 'Enter a crew size of 1 or more.';
     }
     fieldErrors.setFormError(null);
-    if (Object.keys(problems).length > 0) {
+    setSavedExcept(null);
+    // A new template is created only once nothing is refused. An edit is a
+    // single save (owner rule, 2026-11-05): a refused field is left out, so
+    // the template keeps its stored value, and the rest is saved.
+    const isEdit = initialData !== undefined;
+    if (Object.keys(problems).length > 0 && !isEdit) {
       fieldErrors.setErrors(problems);
       fieldErrors.focusFirst(problems);
       return;
@@ -361,8 +401,29 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
         };
         payload.positions = eventMeta;
       }
-      await onSubmit(payload);
-      onClose();
+      if (!isEdit) {
+        await onSubmit(payload);
+        onClose();
+        return;
+      }
+      const sentKeys = Object.keys(payload).length;
+      const { refused } = await saveExceptRefused<TemplateField, void>({
+        payload,
+        refused: problems,
+        keysFor: (field) => TEMPLATE_PAYLOAD_KEYS[field],
+        // A body missing any key had a field held back, so the dialog stays
+        // open on it rather than closing over the refusal.
+        send: (body) => (Object.keys(body).length < sentKeys ? onSubmit(body, { keepOpen: true }) : onSubmit(body)),
+        place: (err) => placeApiError(TEMPLATE_FIELDS, err),
+      });
+      const held = firstRefused(TEMPLATE_FIELD_ORDER, refused);
+      if (held === undefined) {
+        onClose();
+        return;
+      }
+      fieldErrors.setErrors(refused);
+      fieldErrors.focusFirst(refused);
+      setSavedExcept(held);
     } catch (err) {
       // A refusal lands on the field it names; the dialog stays open.
       fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Could not save the template. Try again.'));
@@ -379,9 +440,6 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="template-modal-title"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
     >
       {/* The whole panel used to be the scroll container, which put Save at the
           bottom of the scrolled content: on a short window the form ended
@@ -393,7 +451,12 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
           <h2 id="template-modal-title" className="text-theme-text-primary text-xl font-bold">
             {title}
           </h2>
-          <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
+          <button
+            type="button"
+            onClick={requestClose}
+            className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center"
+            aria-label="Close"
+          >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
@@ -406,7 +469,14 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
           className="flex min-h-0 flex-1 flex-col"
         >
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
-            <FormField id={TEMPLATE_FIELDS.name.id} label="Name" required error={fieldErrors.errors.name}>
+            <FormField
+              id={TEMPLATE_FIELDS.name.id}
+              label="Name"
+              required
+              error={fieldErrors.errors.name}
+              maxLength={TEMPLATE_NAME_MAX}
+              count={formData.name.length}
+            >
               {(field) => (
                 <input
                   {...field}
@@ -422,19 +492,17 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
               )}
             </FormField>
 
-            <div>
-              <label htmlFor="template-description" className="form-label">
-                Description
-              </label>
-              <textarea
-                id="template-description"
-                value={formData.description}
-                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                className="form-input"
-                rows={2}
-                placeholder="Optional description"
-              />
-            </div>
+            <FormField id="template-description" label="Description">
+              {(field) => (
+                <textarea
+                  {...field}
+                  value={formData.description}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                  className="form-input"
+                  rows={2}
+                />
+              )}
+            </FormField>
 
             {/* Category */}
             <div>
@@ -1123,12 +1191,18 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
               {fieldErrors.formError}
             </p>
           )}
+          {savedExcept && (
+            <p role="status" className="text-theme-text-secondary shrink-0 px-6 pt-3 text-sm">
+              Template saved, except {TEMPLATE_FIELDS[savedExcept].label.toLowerCase()}. Fix the flagged field and save
+              again to change it.
+            </p>
+          )}
 
           <div className="border-theme-surface-border flex shrink-0 justify-end gap-3 border-t p-6 pt-4">
             <button
               type="button"
-              onClick={onClose}
-              className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2"
+              onClick={requestClose}
+              className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 px-4 py-2"
             >
               Cancel
             </button>
