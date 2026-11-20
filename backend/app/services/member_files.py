@@ -12,7 +12,6 @@ self-report or training-record attachment calls it rather than restating it
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 
-from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,8 +61,8 @@ def confined_attachment_paths(
 class MemberFiles:
     """Every stored file a member's rows name, as plain strings.
 
-    Plain values on purpose: the hard delete reads this after its commit, and
-    nothing here may depend on an ORM instance surviving that.
+    Plain values on purpose: the hard delete queues these in its own
+    transaction and no ORM instance of the member's rows survives its commit.
     """
 
     submission_ids: list[str] = field(default_factory=list)
@@ -87,6 +86,23 @@ class MemberFiles:
         # Sets: an approved certificate is named by the submission and by the
         # record that copied it, and is one file.
         return self.self_report_paths | self.record_own_paths | self.waiver_paths
+
+    def paths_by_area(self) -> dict[str, StorageArea]:
+        """Every path in :attr:`all_paths` with the area it was confined to.
+
+        Taken from the sets above, never by confining a path again: the
+        legacy self-reports root sits inside the legacy training-records
+        root, and the collector's SELF_REPORTS-first classification is the
+        one answer. A path in two sets keeps its self-report area.
+        """
+        areas: dict[str, StorageArea] = {}
+        for path in self.waiver_paths:
+            areas[path] = StorageArea.ATTENDANCE_WAIVERS
+        for path in self.record_own_paths:
+            areas[path] = StorageArea.TRAINING_RECORDS
+        for path in self.self_report_paths:
+            areas[path] = StorageArea.SELF_REPORTS
+        return areas
 
     @property
     def own_rows(self) -> set[tuple[str, str]]:
@@ -204,57 +220,9 @@ async def referenced_elsewhere(
 
 @dataclass(frozen=True)
 class FileRemoval:
+    """What a removal pass did: files deleted, files it could not delete
+    (left queued), and files kept because another row still names them."""
+
     deleted: int = 0
     not_deleted: int = 0
     shared_kept: int = 0
-
-
-async def remove_files_after_hard_delete(
-    db: AsyncSession, user_id: str, organization_id: str, files: MemberFiles
-) -> FileRemoval:
-    """Delete the files a committed hard delete left behind. Never raises.
-
-    Runs after the commit, so a refused delete (a 409) has touched no file.
-    The member's rows are gone by now, so any reference still found belongs
-    to another row and its file is kept. If that check itself fails, nothing
-    is deleted: unable to tell, an orphan costs disk while a deleted file
-    another record needs loses evidence (the precedent is
-    ``AttendanceWaiverAttachments._abandon``).
-
-    A process killed between the commit and these deletes leaves orphans no
-    later run can find; closing that would need a durable pending-deletion
-    table (see docs/KNOWN_LIMITATIONS.md).
-    """
-    paths = files.all_paths
-    if not paths:
-        return FileRemoval()
-    try:
-        shared = await referenced_elsewhere(db, organization_id, paths, set())
-    except Exception:
-        logger.exception(
-            "Could not check file references after deleting member {}", user_id
-        )
-        return FileRemoval(not_deleted=len(paths))
-
-    deleted = not_deleted = 0
-    for path in sorted(paths - shared):
-        try:
-            gone = await file_storage.delete(path)
-        except Exception:
-            # delete() reports rather than raises, but a remote store's client
-            # is not this module's to vouch for, and the audit row must follow.
-            logger.exception("Could not remove a file of deleted member {}", user_id)
-            gone = False
-        if gone:
-            deleted += 1
-        else:
-            not_deleted += 1
-    if not_deleted:
-        logger.warning(
-            "{} file(s) of deleted member {} could not be removed",
-            not_deleted,
-            user_id,
-        )
-    return FileRemoval(
-        deleted=deleted, not_deleted=not_deleted, shared_kept=len(shared)
-    )
