@@ -39,6 +39,7 @@ const profile = (overrides: Partial<OrganizationProfile> = {}): OrganizationProf
   email: '',
   website: '',
   county: '',
+  short_name: '',
   founded_year: null,
   logo: STORED_LOGO,
   mailing_address: { line1: '', line2: '', city: '', state: '', zip: '' },

@@ -701,7 +701,10 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: ['settings.manage', 'notifications.manage', 'suggestions.manage', 'users.view_consents'],
-    expectText: 'Suggestion box',
+    // The box picker's label, which carries the required marker ("Suggestion
+    // box *"): with several boxes none is preselected, so it is the one text
+    // only the submit form shows.
+    expectText: 'Suggestion box *',
   },
   {
     path: '/communications/messages',

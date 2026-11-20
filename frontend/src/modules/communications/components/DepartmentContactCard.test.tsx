@@ -30,6 +30,7 @@ const profile = (overrides: Partial<OrganizationProfile> = {}): OrganizationProf
   email: 'info@example.org',
   website: 'https://example.org',
   county: '',
+  short_name: '',
   founded_year: null,
   logo: null,
   mailing_address: { line1: '100 Main Street', line2: '', city: 'Falls Church', state: 'VA', zip: '22046' },

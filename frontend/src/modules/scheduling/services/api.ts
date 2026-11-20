@@ -404,10 +404,53 @@ export interface MemberHoursHistory {
   current_month: MemberHoursMonth;
   previous_month: MemberHoursMonth;
   /**
+   * Every year on record, newest first, each with its twelve months — the
+   * headings of the shift list. Optional so an older backend still renders.
+   */
+  years?: MemberHoursYear[];
+  /** The department's short name, or its full name when none is set. */
+  department_label?: string | null;
+  /**
    * Every month with any attendance, oldest first — the buckets `months` and
    * `all_time` are cut from. Absent on responses from before it was added.
    */
   history?: MemberHoursMonth[];
+}
+
+export interface MemberHoursYear {
+  year: number;
+  totals: MemberHoursTotals;
+  /** Always twelve entries, January first. */
+  months: MemberHoursMonth[];
+}
+
+/** One of a member's shifts on the department's own schedule. */
+export interface MemberDepartmentShift {
+  shift_id: string;
+  /** YYYY-MM-DD. */
+  shift_date: string;
+  /** UTC instants. */
+  start_time: string;
+  end_time: string | null;
+  /** Attendance plus approved pre-shift work on this shift. */
+  hours: number;
+  /** Null until the shift is closed out: calls are recorded at finalization. */
+  calls: number | null;
+  /** False until an officer finalizes the shift; until then the hours count toward nothing. */
+  credited: boolean;
+  on_call: boolean;
+  unit: string | null;
+  template_name: string | null;
+  position: string | null;
+}
+
+/** A member's shifts in one year, both kinds, newest first within each list. */
+export interface MemberShiftHistory {
+  year: number;
+  department_shifts: MemberDepartmentShift[];
+  external_shifts: ExternalShiftEntry[];
+  /** Exceeds `external_shifts.length` only when the year holds more than one response returns. */
+  external_total: number;
 }
 
 export interface SchedulingWidgetSummary {
@@ -1057,6 +1100,21 @@ export const schedulingService = {
   async getMemberHoursHistory(userId: string, year?: number): Promise<MemberHoursHistory> {
     const response = await api.get<MemberHoursHistory>(
       `/scheduling/members/${encodeURIComponent(userId)}/hours-history`,
+      { params: year ? { year } : {} }
+    );
+    return response.data;
+  },
+  /** The caller's own shifts in one year, the department's and other departments'. */
+  async getMyShiftHistory(year?: number): Promise<MemberShiftHistory> {
+    const response = await api.get<MemberShiftHistory>('/scheduling/my-shift-history', {
+      params: year ? { year } : {},
+    });
+    return response.data;
+  },
+  /** Another member's shifts in one year, for their profile: theirs, or `scheduling.report`. */
+  async getMemberShiftHistory(userId: string, year?: number): Promise<MemberShiftHistory> {
+    const response = await api.get<MemberShiftHistory>(
+      `/scheduling/members/${encodeURIComponent(userId)}/shift-history`,
       { params: year ? { year } : {} }
     );
     return response.data;
