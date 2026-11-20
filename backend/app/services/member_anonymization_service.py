@@ -109,6 +109,7 @@ from app.services.member_files import (
 )
 from app.services.membership_pipeline_service import prospect_document_path
 from app.services.passkey_service import delete_all_passkeys
+from app.services.upload_relocation import areas_for
 from app.utils.sql_results import rows_affected
 
 _DEPARTED_STATUSES = {
@@ -424,7 +425,7 @@ class MemberAnonymizationService:
                         org_id,
                         removed | shared,
                         failed,
-                        _RECORD_AREAS,
+                        areas_for(StorageArea.TRAINING_RECORDS),
                     )
 
         return {
@@ -625,12 +626,6 @@ class MemberAnonymizationService:
         }
 
 
-# A record's entries in the order collect_member_files classifies them and
-# upload_relocation.candidate_areas resolves a record's references: an
-# approved certificate lives in the self-reports tree, nested in the records
-# one, so it is checked first.
-_RECORD_AREAS = (StorageArea.SELF_REPORTS, StorageArea.TRAINING_RECORDS)
-
 # The neutral name a kept entry gets, by the area its file confined to. The
 # stored name is server-chosen, so its extension is the only part of the
 # label that does not come from the uploader.
@@ -652,7 +647,7 @@ def _strip_entries(
 
     *areas* are the row kind's areas in the collector's order: a submission's
     entries confine to SELF_REPORTS only, a record's to SELF_REPORTS then
-    TRAINING_RECORDS (:data:`_RECORD_AREAS`). An entry is matched
+    TRAINING_RECORDS (``upload_relocation.areas_for``). An entry is matched
     in the first area it confines to, as ``collect_member_files`` matches it.
     """
     attachments = row.attachments
