@@ -379,6 +379,50 @@ describe('ComplianceOfficerDashboard', () => {
 
     expect(mockGetComplianceForecast).toHaveBeenCalledWith();
   });
+
+  describe('the forecast current column', () => {
+    beforeEach(() => {
+      // Pitfall #28: reset before installing this block's default so a queued
+      // one-shot from another block cannot leak in.
+      mockGetComplianceForecast.mockReset();
+      mockGetComplianceForecast.mockResolvedValue([
+        {
+          user_id: 'u-at-risk',
+          user_name: 'Ada Risk',
+          current_compliance_percentage: 85,
+          current_standing: 'at_risk',
+          forecast_30_days: 84,
+          forecast_60_days: 83,
+          forecast_90_days: 82,
+          at_risk_requirements: [],
+          expiring_certifications: [],
+        },
+        {
+          user_id: 'u-compliant',
+          user_name: 'Cy Lowbar',
+          current_compliance_percentage: 60,
+          current_standing: 'compliant',
+          forecast_30_days: 59,
+          forecast_60_days: 58,
+          forecast_90_days: 57,
+          at_risk_requirements: [],
+          expiring_certifications: [],
+        },
+      ]);
+    });
+
+    it('is coloured by the standing the server classified', async () => {
+      // The same member must read the same on this dashboard as on the
+      // Training Enhancements tab and the compliance matrix: by the
+      // department's or the profile's thresholds, not a fixed 80 / 50.
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="forecast" />);
+
+      const atRisk = await screen.findByText('85.0%');
+      expect(atRisk).toHaveClass('text-orange-700');
+      expect(atRisk).not.toHaveClass('text-green-500');
+      expect(screen.getByText('60.0%')).toHaveClass('text-green-700');
+    });
+  });
   // Every section reports a figure an officer acts on, so a 200 whose body is
   // not its declared shape (a captive portal's HTML page) must reach the
   // section's own error message — not crash the hub through the ErrorBoundary,

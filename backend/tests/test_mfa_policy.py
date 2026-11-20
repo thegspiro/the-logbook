@@ -422,6 +422,10 @@ STEPUP_HANDLERS = {
     # Destructive personnel action: deleting an evaluation removes a
     # personnel record for good (the deletion record stays).
     ("evaluations.py", "delete_evaluation"),
+    # Choosing who signs (owner decision 2026-11-16, ADV2-4): naming the one
+    # person who takes an approval or calibration step decides whose signature
+    # a personnel record carries, so it re-verifies as signing does.
+    ("evaluations.py", "assign_evaluation_step"),
 }
 
 
