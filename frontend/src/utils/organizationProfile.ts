@@ -14,6 +14,7 @@
 
 export const ORGANIZATION_PROFILE_MAX_LENGTH = {
   name: 255,
+  shortName: 20,
   phone: 20,
   email: 255,
   website: 255,

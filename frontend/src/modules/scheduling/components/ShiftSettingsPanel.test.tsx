@@ -26,8 +26,13 @@ const storeState = {
   setPlatoonsEnabled: vi.fn(),
 };
 
+// setState too: a feature save mirrors its answer into the store, and without
+// it every successful save in this file threw after the request had gone out.
 vi.mock('../store/schedulingStore', () => ({
-  useSchedulingStore: (selector?: (s: typeof storeState) => unknown) => (selector ? selector(storeState) : storeState),
+  useSchedulingStore: Object.assign(
+    (selector?: (s: typeof storeState) => unknown) => (selector ? selector(storeState) : storeState),
+    { setState: vi.fn() }
+  ),
 }));
 
 const mockUpdateFeatureSettings = vi.fn();
@@ -548,5 +553,75 @@ describe('ShiftSettingsPanel when the server refuses a write', () => {
     await user.click(screen.getByRole('button', { name: 'Save Settings' }));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to save settings'));
+  });
+});
+
+describe('ShiftSettingsPanel — the typed-number cards (batch 24)', () => {
+  const stored = {
+    platoons_enabled: false,
+    max_hours_per_window: 48,
+    hours_window_days: 7,
+    auto_generate_enabled: true,
+    auto_generate_weeks: 4,
+    require_end_of_shift_checks: false,
+    restrict_checkin_to_assigned: false,
+    signup_closes_minutes_before: 0,
+    late_signup_grace_minutes: 60,
+    enforce_evoc: true,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLoadShiftSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
+    vi.mocked(schedulingService.getFeatureSettings).mockResolvedValue(stored);
+    mockUpdateFeatureSettings.mockReset();
+    mockUpdateFeatureSettings.mockImplementation((patch: Record<string, unknown>) =>
+      Promise.resolve({ ...stored, ...patch })
+    );
+  });
+
+  it('names a cleared hours limit on the field instead of saving it as 0, and saves the window', async () => {
+    const user = userEvent.setup();
+    renderPanel('general');
+
+    const hours = await screen.findByLabelText('Hours limit');
+    await waitFor(() => expect(hours).toHaveValue(48));
+    await user.clear(hours);
+    const days = screen.getByLabelText('Window (days)');
+    await user.clear(days);
+    await user.type(days, '14');
+    await user.click(screen.getAllByRole('button', { name: 'Save' })[0] as HTMLElement);
+
+    await waitFor(() => expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({ hours_window_days: 14 }));
+    expect(hours).toHaveAccessibleDescription('Enter a whole number from 0 to 336.');
+    expect(hours).toHaveFocus();
+    expect(screen.getByRole('alert')).toHaveTextContent('Saved, except the flagged setting');
+  });
+
+  it('refuses weeks ahead out of range on the field, sending nothing', async () => {
+    const user = userEvent.setup();
+    renderPanel('general');
+
+    const weeks = await screen.findByLabelText('Weeks ahead');
+    await user.clear(weeks);
+    await user.type(weeks, '60');
+    await user.click(screen.getAllByRole('button', { name: 'Save' })[1] as HTMLElement);
+
+    expect(weeks).toHaveAccessibleDescription('Enter a whole number from 1 to 52.');
+    expect(mockUpdateFeatureSettings).not.toHaveBeenCalled();
+  });
+
+  it('keeps a refusal no field answers for in the card, not in a toast', async () => {
+    mockUpdateFeatureSettings.mockRejectedValue({ response: { status: 403, data: { detail: 'Not allowed.' } } });
+    const user = userEvent.setup();
+    renderPanel('general');
+
+    const weeks = await screen.findByLabelText('Weeks ahead');
+    await user.clear(weeks);
+    await user.type(weeks, '6');
+    await user.click(screen.getAllByRole('button', { name: 'Save' })[1] as HTMLElement);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not allowed.');
+    expect(toast.error).not.toHaveBeenCalled();
   });
 });
