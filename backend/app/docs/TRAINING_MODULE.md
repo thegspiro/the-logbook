@@ -781,7 +781,7 @@ POST   /api/v1/training/reports/export                      # Officer export (tr
 ```json
 {
   "user_id": "uuid",
-  "requirements_met": 5,
+  "requirements_met": 6,
   "requirements_total": 7,
   "certs_expiring_soon": 1,
   "certs_expired": 0,
@@ -791,6 +791,10 @@ POST   /api/v1/training/reports/export                      # Officer export (tr
   "active_certifications": 3
 }
 ```
+
+`compliance_status` is the member's Compliance Matrix standing (here 6 of 7,
+85.7%, under the default 100% / 75% thresholds: at risk). The certificate
+counts are informational and do not set it.
 
 ### Certification Alert Processing
 

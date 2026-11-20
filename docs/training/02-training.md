@@ -2356,10 +2356,9 @@ the same rules, so their figures agree:
   department never grades them on, and their "X of Y requirements met" and
   average progress disagreed with the Compliance Matrix. Nothing changes for a
   department without profiles, for a profile that sets only thresholds, or for
-  a member who matches no active profile. The profile card's green, yellow or
-  red colour still uses its own fixed rule, not the profile's thresholds, so it
-  can occasionally disagree with the matrix (see `docs/KNOWN_LIMITATIONS.md`,
-  "D10 follow-up").
+  a member who matches no active profile. Since 2026-11-20 the profile card's
+  green, yellow or red colour is the member's standing on the Compliance
+  Matrix as well (see [Compliance Summary](#compliance-summary)).
 - **A requirement limited to certain ranks applies to those ranks.** The
   **Required roles** on a requirement are **ranks**. Members of those ranks
   are graded on it on My Training, the matrix, the dashboard, the member
@@ -2994,15 +2993,30 @@ settings**.
 ## Compliance Summary
 
 Each member's profile page has a **compliance summary card** showing their
-training status at a glance:
+training status at a glance. Its colour is the member's standing on the
+**Compliance Matrix**, so the two always agree _(2026-11-20)_. The thresholds
+are those of the member's compliance profile when it sets its own, otherwise
+the department's compliance settings (100% compliant and 75% at risk when
+nothing is configured):
 
-| Indicator               | Meaning                                                           |
-| ----------------------- | ----------------------------------------------------------------- |
-| **Green (Compliant)**   | All requirements met, no certification problems                   |
-| **Yellow (At Risk)**    | Some requirements not met, or certifications expiring soon        |
-| **Red (Non-Compliant)** | An expired certification, or fewer than half the requirements met |
-| **Not Applicable**      | No requirement applies to the member, and nothing is expiring     |
-| **Exempt**              | The member is marked exempt from compliance tracking              |
+| Indicator               | Meaning                                                                   |
+| ----------------------- | ------------------------------------------------------------------------- |
+| **Green (Compliant)**   | Compliant on the matrix: meets the compliant threshold                    |
+| **Yellow (At Risk)**    | At risk on the matrix: below the compliant threshold, at or above at-risk |
+| **Red (Non-Compliant)** | Non-compliant on the matrix: below the at-risk threshold                  |
+| **Not Applicable**      | No requirement grades the member                                          |
+| **Exempt**              | The member is marked exempt from compliance tracking                      |
+
+The same colour shows on **My Crew** and on the member's printed training
+record.
+
+The expiring-certificate figure is shown for information and does not set the
+colour. An expired certificate lowers the standing when a requirement grades
+it, because that requirement then reads **Expired**. A certificate that a
+renewal has replaced, or that no requirement grades, does not. When the
+department leaves the current month out of compliance, a certificate that
+lapsed this month still counts as met until the month ends, while the
+figure already shows it as expired.
 
 The card also shows:
 

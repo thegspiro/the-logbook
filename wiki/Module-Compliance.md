@@ -30,11 +30,18 @@ The Compliance module provides organization-wide compliance tracking, reporting,
 
 ### Requirement Statuses
 
-| Status                  | Meaning                                                                |
-| ----------------------- | ---------------------------------------------------------------------- |
-| **Green (Compliant)**   | All requirements met, no certification issues                          |
-| **Yellow (At Risk)**    | Some requirements incomplete or certifications expiring within 90 days |
-| **Red (Non-Compliant)** | Expired certifications or fewer than 50% of requirements met           |
+The profile card shows the member's Compliance Matrix standing _(2026-11-20)_,
+against their compliance profile's thresholds or else the department's:
+
+| Status                  | Meaning                                                          |
+| ----------------------- | ---------------------------------------------------------------- |
+| **Green (Compliant)**   | Meets the compliant threshold                                    |
+| **Yellow (At Risk)**    | Below the compliant threshold, at or above the at-risk threshold |
+| **Red (Non-Compliant)** | Below the at-risk threshold                                      |
+| **Not Applicable**      | No requirement grades the member                                 |
+
+Certificate expiry counts are shown for information; an expired certificate
+lowers the standing only through a requirement that grades it.
 
 ### Waiver Adjustment Formula
 

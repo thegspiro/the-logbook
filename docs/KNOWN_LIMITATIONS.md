@@ -6947,18 +6947,45 @@ surfaced further gaps, all flagged rather than fixed in the same pass:
   on My Training. No migration. Tests:
   `tests/test_my_training_compliance_profiles.py`.
 - **The profile card's colour re-derives its thresholds (D10 follow-up) —
-  open, owner decision needed.** `get_compliance_summary` colours the card
-  red / yellow / green with its own fixed rule instead of
-  `classify_standing` with the matching profile's threshold overrides, so the
-  card can disagree with the matrix's standing for the same member (CLAUDE.md
-  pitfall #29). D10 narrowed its denominator only and left the colour rule
-  as it was; narrowing can still flip a member's colour. Remaining surfaces
-  that are not yet profile-aware, all officer-facing: the period roster
-  (`GET /training/records/member-status`, which also ignores profile
-  threshold overrides), the competency matrix, the compliance CSV/PDF export
-  cells, the compliance forecast and Scheduling's Shift Compliance report.
-  Separately, `optional_requirement_ids` has no reader, and two active
-  profiles of equal priority resolve in an undefined order.
+  ✅ fixed, owner decision 2026-11-20 ("card uses profile limits").**
+  `get_compliance_summary` coloured the card red / yellow / green with its own
+  fixed rule — red for any expired certificate or under half the requirements
+  met, yellow for any certificate expiring within 90 days or anything unmet —
+  so the card could disagree with the matrix's standing for the same member
+  (CLAUDE.md pitfall #29). It now colours the member by
+  `ComplianceGrading.classify` over the member's `ComplianceGrading.for_member`
+  grading: the matching profile's threshold overrides, else the department's
+  thresholds, and the department's threshold type — the matrix's own
+  standing. Compliant is green, at risk yellow, non-compliant red; not
+  applicable and exempt are unchanged. The profile card, My Crew and the
+  member training print page all show it. **Colours change in every
+  department, including one with no compliance configuration**: under the
+  default 100% / 75% thresholds a member meeting at least half but under 75%
+  now reads red (Non-Compliant) where the card read yellow; a member who meets
+  everything but holds a certificate expiring within 90 days reads green, not
+  yellow; a member whose only expired certificate is superseded by a renewal,
+  or graded by no requirement, reads by standing rather than red; a member
+  nothing grades reads Not Applicable whatever their certificates. A
+  department with lowered thresholds — on the configuration or on a profile —
+  and one using "all required" now see those honoured on the card. The
+  certificate counts stay in the response and on the card's Expiring Soon
+  tile for information. An expired certificate a requirement grades still
+  lowers the standing through that requirement's "expired" status, so under
+  lowered thresholds such a member can read yellow or green, as on the
+  matrix, while the tile still says "(1 expired)". The tile and the colour can
+  also differ for up to a month: with the current month left out of
+  compliance, the grader judges a certificate at the end of last month, so
+  one that lapsed this month is graded completed until the month ends, while
+  the tile counts it expired from its expiry date. No migration. Tests:
+  `tests/test_profile_card_standing.py`.
+- **Officer-facing compliance views are not compliance-profile-aware (D10
+  follow-up) — open.** The period roster (`GET
+/training/records/member-status`, which also ignores profile threshold
+  overrides), the competency matrix, the compliance CSV/PDF export cells, the
+  compliance forecast and Scheduling's Shift Compliance report still grade
+  every applicable requirement against the department's settings. Separately,
+  `optional_requirement_ids` has no reader, and two active profiles of equal
+  priority resolve in an undefined order.
 - **A requirement with zero currently-applicable members renders as a
   failing 0% (CMP4-4, LOW) — ✅ fixed 2026-09-29, workflow review W29-4.**
   `ComplianceOfficerDashboard.tsx` colored `requirement_analysis.compliance_pct`

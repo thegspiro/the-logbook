@@ -47,120 +47,122 @@ All examples assume **today is October 15, 2025** and the department has
 
 ## 1. Compliance Status Indicator
 
-Each member receives a compliance status shown on their profile card. The
-status is one of three levels:
+Each member's profile card (also shown on My Crew and the member training
+print page) carries the member's **standing on the Compliance Matrix** in
+traffic-light form. The card and the matrix use one rule, so they cannot
+disagree about a member (owner decision 2026-11-20):
 
-| Status   | Label         | Meaning                              |
-| -------- | ------------- | ------------------------------------ |
-| `green`  | Compliant     | All requirements met, no cert issues |
-| `yellow` | At Risk       | Partially met or certs expiring soon |
-| `red`    | Non-Compliant | Significant gaps or expired certs    |
+| Status           | Label          | Matrix standing                                   |
+| ---------------- | -------------- | ------------------------------------------------- |
+| `green`          | Compliant      | `compliant` — meets the compliant threshold       |
+| `yellow`         | At Risk        | `at_risk` — below it, at or above the at-risk one |
+| `red`            | Non-Compliant  | `non_compliant` — below the at-risk threshold     |
+| `not_applicable` | Not Applicable | nothing grades the member                         |
+| `exempt`         | Exempt         | the member is exempt from compliance tracking     |
 
 ### Decision Logic
 
+The requirements counted are the ones that grade the member: their
+highest-priority matching compliance profile narrows the set, then each
+requirement must apply to them by membership type, rank, position and join
+date. A requirement in the member's catch-up period, or a session-based one
+not yet held, counts neither way. `requirements_met` is the number graded
+completed; `requirements_total` the number graded at all.
+
+The thresholds are the matching profile's overrides, else the department's
+compliance settings, else 100% compliant / 75% at risk.
+
 ```
-IF certs_expired > 0
-   OR (requirements_total > 0 AND requirements_met < requirements_total × 0.5):
-     → RED  (Non-Compliant)
-
-ELSE IF certs_expiring_soon > 0
-   OR (requirements_total > 0 AND requirements_met < requirements_total):
-     → YELLOW  (At Risk)
-
+IF member is compliance-exempt:          → EXEMPT
+ELSE IF requirements_total = 0:          → NOT APPLICABLE
+pct = round(requirements_met / requirements_total × 100, 1)
+IF threshold type is "all required":
+     compliant = requirements_met ≥ requirements_total
 ELSE:
-     → GREEN  (Compliant)
+     compliant = pct ≥ compliant threshold
+IF compliant:                            → GREEN  (Compliant)
+ELSE IF pct ≥ at-risk threshold:         → YELLOW (At Risk)
+ELSE:                                    → RED    (Non-Compliant)
 ```
+
+Certificates affect the colour only through a requirement that grades them.
+A certification requirement whose latest matching certificate has expired is
+graded `expired`, which is unmet and lowers `pct`. The certificate counts
+(`certs_expired`, `certs_expiring_soon`) are reported for information on the
+card's Expiring Soon tile and do not set the colour.
 
 ### Example: Three Members, Three Statuses
 
-Riverside FD has 4 active requirements for the year. Here is where Maria,
-Jake, and Tom stand on October 15:
+Riverside FD has 4 active requirements for the year and no compliance
+profiles, with the default thresholds (100% compliant, 75% at risk). Here is
+where Maria, Jake, and Tom stand on October 15:
 
-**Maria Torres** has completed all 4 requirements and holds 2 certifications
-that do not expire until 2027:
+**Maria Torres** has completed all 4 requirements. One of her two
+certifications expires in 60 days:
 
 ```
-requirements_met   = 4
-requirements_total = 4
-certs_expired      = 0
-certs_expiring_soon= 0
-
-Check RED:  certs_expired (0) > 0?           No
-            requirements_met (4) < 4 × 0.5?  No  (4 ≥ 2)
-Check YELLOW: certs_expiring_soon (0) > 0?   No
-              requirements_met (4) < 4?       No
-→ GREEN (Compliant)
+requirements_met = 4, requirements_total = 4 → pct = 100.0
+100.0 ≥ 100 (compliant)                       → GREEN (Compliant)
 ```
+
+Her expiring certificate shows as "1" on the Expiring Soon tile; it does not
+turn her yellow, because nothing she is graded on has lapsed.
 
 **Jake Nguyen** has met 3 of 4 requirements. He still needs 6 more
-continuing-education hours to finish the annual hours requirement. He has no
-cert issues:
+continuing-education hours to finish the annual hours requirement:
 
 ```
-requirements_met   = 3
-requirements_total = 4
-certs_expired      = 0
-certs_expiring_soon= 0
-
-Check RED:  certs_expired (0) > 0?           No
-            requirements_met (3) < 4 × 0.5?  No  (3 ≥ 2)
-Check YELLOW: certs_expiring_soon (0) > 0?   No
-              requirements_met (3) < 4?       Yes
-→ YELLOW (At Risk)
+requirements_met = 3, requirements_total = 4 → pct = 75.0
+75.0 < 100 (compliant); 75.0 ≥ 75 (at risk)   → YELLOW (At Risk)
 ```
 
-Jake gets the yellow indicator even though he is close. The system does not
-distinguish between missing one requirement and missing three — any gap below
-the RED threshold triggers yellow.
-
-**Tom Raines** let his EMT certification expire last month and has only met
-1 of 4 requirements:
+**Tom Raines** has met 2 of 4. One of the two he has not met is the EMT
+certification requirement, whose certificate expired last month:
 
 ```
-requirements_met   = 1
-requirements_total = 4
-certs_expired      = 1
-certs_expiring_soon= 0
-
-Check RED:  certs_expired (1) > 0?  Yes
-→ RED (Non-Compliant)
+requirements_met = 2, requirements_total = 4 → pct = 50.0
+50.0 < 75 (at risk)                           → RED (Non-Compliant)
 ```
 
-Tom would be RED based on the expired cert alone. But even without it, he
-meets only 1 of 4 requirements (1 < 4 × 0.5 = 2), which independently
-triggers RED.
+Tom's expired certificate counts once, through the EMT requirement it fails.
+Had the department set its at-risk threshold to 50%, Tom would read yellow
+on the card, as he does on the matrix, and the tile would still say
+"(1 expired)".
 
 ### Edge Case: What if Carla Has Both an Expiring and an Expired Cert?
 
 Carla Mitchell holds two certifications: a Paramedic cert that expired
-last week and an ACLS cert expiring in 45 days. Even though the ACLS cert
-is merely "expiring soon," the already-expired Paramedic cert overrides
-everything:
+last week and an ACLS cert expiring in 45 days. The tile shows "1" expiring
+and "(1 expired)" either way. Her colour depends on what grades her:
 
-```
-certs_expired      = 1   (Paramedic)
-certs_expiring_soon= 1   (ACLS)
+- If a Paramedic certification requirement grades her, it reads `expired`,
+  which is unmet and lowers her percentage. She is red only if that takes
+  her below the at-risk threshold.
+- If no requirement grades the Paramedic cert — or a renewal has replaced
+  the expired record, since the grader reads the latest matching record —
+  it does not affect her colour.
+- The ACLS cert is still valid, so it never lowers her standing.
 
-Check RED: certs_expired (1) > 0?  Yes
-→ RED (Non-Compliant)
-```
-
-The expired certification always wins. Carla must renew the Paramedic cert
-before she can return to yellow or green, regardless of how many requirements
-she has met.
+**The tile and the colour can differ for up to a month.** When the
+department (or the requirement) leaves the current month out of compliance,
+the grader judges each requirement as of the end of last month. A
+certificate that lapsed earlier this month is graded completed until the
+month ends, while the tile counts it expired from its expiry date. The same
+gap exists on its last valid day: the tile counts a certificate expiring
+today as expired.
 
 ### Output Fields
 
-| Field                   | Type    | Description                                        |
-| ----------------------- | ------- | -------------------------------------------------- |
-| `requirements_met`      | integer | Count of requirements the member has satisfied     |
-| `requirements_total`    | integer | Total active requirements for the organization     |
-| `certs_expiring_soon`   | integer | Certs expiring within 90 days                      |
-| `certs_expired`         | integer | Certs already past expiration                      |
-| `compliance_status`     | string  | `green`, `yellow`, or `red`                        |
-| `compliance_label`      | string  | Human-readable label                               |
-| `hours_this_year`       | float   | Total training hours completed in the current year |
-| `active_certifications` | integer | Count of non-expired certifications                |
+| Field                   | Type    | Description                                                                           |
+| ----------------------- | ------- | ------------------------------------------------------------------------------------- |
+| `requirements_met`      | integer | Requirements that grade the member and are completed                                  |
+| `requirements_total`    | integer | Requirements that grade the member (profile-narrowed, applicable, not in catch-up)    |
+| `certs_expiring_soon`   | integer | Certificate records expiring within 90 days (informational)                           |
+| `certs_expired`         | integer | Certificate records past expiration, including any a renewal replaced (informational) |
+| `compliance_status`     | string  | `green`, `yellow`, `red`, `not_applicable`, or `exempt`                               |
+| `compliance_label`      | string  | `Compliant`, `At Risk`, `Non-Compliant`, `Not Applicable`, or `Exempt`                |
+| `hours_this_year`       | float   | Total training hours completed in the current year                                    |
+| `active_certifications` | integer | Count of non-expired certifications                                                   |
 
 **Source:** `GET /training/compliance-summary/{user_id}`
 (`backend/app/api/v1/endpoints/training.py`)
