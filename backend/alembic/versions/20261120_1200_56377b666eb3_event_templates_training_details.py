@@ -1,7 +1,7 @@
 """Event templates: add training details
 
 Revision ID: 56377b666eb3
-Revises: 790a86084359
+Revises: 0c22a95b94b8
 Create Date: 2026-11-20 12:00:00.000000
 
 Adds ``event_templates.training_details`` (JSON, nullable): the training
@@ -28,7 +28,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "56377b666eb3"
-down_revision: Union[str, None] = "790a86084359"
+down_revision: Union[str, None] = "0c22a95b94b8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
